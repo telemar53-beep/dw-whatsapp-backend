@@ -7,7 +7,11 @@ jest.mock('../channels/channel.repository');
 jest.mock('../conversations/inbound-message.service');
 jest.mock('../config/env');
 jest.mock('fs', () => ({
-  promises: { rm: jest.fn().mockResolvedValue(undefined) },
+  ...jest.requireActual('fs'),
+  promises: {
+    ...jest.requireActual('fs').promises,
+    rm: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 const path = require('path');

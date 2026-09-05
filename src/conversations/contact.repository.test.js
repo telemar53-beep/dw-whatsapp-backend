@@ -22,4 +22,15 @@ describe('contact repository', () => {
     const second = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
     expect(second.id).toBe(first.id);
   });
+
+  test('resolves to the same contact when called concurrently for a new phone number', async () => {
+    const [first, second] = await Promise.all([
+      findOrCreateContactByPhoneNumber('+5511955554444', 'Concurrent Contact'),
+      findOrCreateContactByPhoneNumber('+5511955554444', 'Concurrent Contact'),
+    ]);
+    expect(first.id).toBe(second.id);
+
+    const result = await getPool().query('SELECT count(*) FROM contacts WHERE phone_number = $1', ['+5511955554444']);
+    expect(Number(result.rows[0].count)).toBe(1);
+  });
 });

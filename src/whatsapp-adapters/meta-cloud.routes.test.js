@@ -1,10 +1,12 @@
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/inbound-message.service');
+jest.mock('../realtime/socket-server');
 const request = require('supertest');
 const express = require('express');
 const crypto = require('crypto');
 const { findChannelByMetaPhoneNumberId } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
+const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const metaCloudRoutes = require('./meta-cloud.routes');
 
 function buildApp() {
@@ -146,5 +148,116 @@ describe('POST /webhooks/meta', () => {
       .send('not json');
     expect(res.status).toBe(403);
     expect(ingestInboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('broadcasts queue:new when the conversation has no assigned agent', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1' });
+    ingestInboundMessage.mockResolvedValue({
+      conversation: { id: 'conv-1', assignedAgentId: null },
+      message: { id: 'msg-1', content: 'Ola' },
+    });
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
+                messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(broadcast).toHaveBeenCalledWith('queue:new', {
+      conversation: { id: 'conv-1', assignedAgentId: null },
+      message: { id: 'msg-1', content: 'Ola' },
+    });
+    expect(emitToAgent).not.toHaveBeenCalled();
+  });
+
+  test('emits message:new to the assigned agent when the conversation is already assigned', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1' });
+    ingestInboundMessage.mockResolvedValue({
+      conversation: { id: 'conv-1', assignedAgentId: 'agent-1' },
+      message: { id: 'msg-1', content: 'Ola' },
+    });
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
+                messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:new', {
+      conversation: { id: 'conv-1', assignedAgentId: 'agent-1' },
+      message: { id: 'msg-1', content: 'Ola' },
+    });
+    expect(broadcast).not.toHaveBeenCalled();
+  });
+
+  test('emits nothing when the message was a duplicate (idempotency short-circuit)', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1' });
+    ingestInboundMessage.mockResolvedValue({
+      conversation: { id: 'conv-1', assignedAgentId: null },
+      message: null,
+    });
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
+                messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(emitToAgent).not.toHaveBeenCalled();
   });
 });

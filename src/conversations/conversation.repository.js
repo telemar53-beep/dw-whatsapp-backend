@@ -34,7 +34,7 @@ async function createConversation(contactId, channelId) {
 async function claimConversation(conversationId, agentId) {
   const result = await getPool().query(
     `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, updated_at = now()
-     WHERE id = $1 AND assigned_agent_id IS NULL
+     WHERE id = $1 AND assigned_agent_id IS NULL AND status <> 'closed'
      RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
     [conversationId, agentId]
   );
@@ -49,7 +49,7 @@ async function claimConversation(conversationId, agentId) {
 async function transferConversation(conversationId, fromAgentId, toAgentId) {
   const result = await getPool().query(
     `UPDATE conversations SET assigned_agent_id = $2, updated_at = now()
-     WHERE id = $1 AND assigned_agent_id = $3
+     WHERE id = $1 AND assigned_agent_id = $3 AND status <> 'closed'
      RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
     [conversationId, toAgentId, fromAgentId]
   );

@@ -75,6 +75,24 @@ describe('conversation repository', () => {
     expect(transferred.assignedAgentId).toBe(agent2.id);
   });
 
+  test('claimConversation returns null for a closed conversation', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    await closeConversation(conversation.id);
+    const agent = await createAgent({ email: 'agent6@dw.com', password: 'secret123', role: 'agent' });
+    const claimed = await claimConversation(conversation.id, agent.id);
+    expect(claimed).toBeNull();
+  });
+
+  test('transferConversation returns null for a closed conversation even if assigned_agent_id still matches fromAgentId', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const agent1 = await createAgent({ email: 'agent7@dw.com', password: 'secret123', role: 'agent' });
+    const agent2 = await createAgent({ email: 'agent8@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent1.id);
+    await closeConversation(conversation.id);
+    const transferred = await transferConversation(conversation.id, agent1.id, agent2.id);
+    expect(transferred).toBeNull();
+  });
+
   test('closeConversation marks the conversation closed', async () => {
     const conversation = await createConversation(contactId, channelId);
     const closed = await closeConversation(conversation.id);

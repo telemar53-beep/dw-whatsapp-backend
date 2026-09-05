@@ -37,6 +37,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/conversations', conversationsRoutes);
 app.use('/webhooks', metaCloudRoutes);
 
+app.use((err, req, res, next) => {
+  console.error('Unhandled API error', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 if (require.main === module) {
   startOutboundWorker();
   app.listen(config.port, () => {

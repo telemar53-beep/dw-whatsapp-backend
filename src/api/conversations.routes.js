@@ -37,7 +37,7 @@ router.get('/mine', async (req, res) => {
 router.get('/:id/messages', async (req, res) => {
   const conversation = await getConversationWithContact(req.params.id);
   if (!conversation) {
-    return res.sendStatus(404);
+    return res.status(404).json({ error: 'Conversation not found' });
   }
   const messages = await listMessagesByConversation(req.params.id);
   res.json(messages);
@@ -58,7 +58,7 @@ router.post('/:id/messages', async (req, res) => {
   }
   const conversation = await getConversationWithContact(req.params.id);
   if (!conversation) {
-    return res.sendStatus(404);
+    return res.status(404).json({ error: 'Conversation not found' });
   }
   if (conversation.status === 'closed') {
     return res.status(409).json({ error: 'Conversation is closed' });
@@ -89,7 +89,7 @@ router.post('/:id/transfer', async (req, res) => {
 router.post('/:id/close', async (req, res) => {
   const conversation = await closeConversation(req.params.id, req.agent.agentId);
   if (!conversation) {
-    return res.sendStatus(404);
+    return res.status(404).json({ error: 'Conversation not found' });
   }
   res.json(conversation);
 });

@@ -89,6 +89,44 @@ describe('POST /webhooks/meta', () => {
     });
   });
 
+  test('responds 200 and continues processing when ingestInboundMessage fails for one message in a batch', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1' });
+    ingestInboundMessage.mockRejectedValueOnce(new Error('db unavailable')).mockResolvedValueOnce({});
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [
+                  { profile: { name: 'Carlos' }, wa_id: '5511999998888' },
+                  { profile: { name: 'Maria' }, wa_id: '5511999997777' },
+                ],
+                messages: [
+                  { from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } },
+                  { from: '5511999997777', id: 'wamid.DEF', type: 'text', text: { body: 'Oi' } },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    const res = await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(res.status).toBe(200);
+    expect(ingestInboundMessage).toHaveBeenCalledTimes(2);
+  });
+
   test('rejects a payload with an invalid signature', async () => {
     const bodyString = JSON.stringify({ entry: [] });
     const res = await request(buildApp())

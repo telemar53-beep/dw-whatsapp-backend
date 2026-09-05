@@ -24,17 +24,21 @@ router.post('/meta', async (req, res) => {
 
   const inboundMessages = parseInboundMessages(req.body);
   for (const inboundMessage of inboundMessages) {
-    const channel = await findChannelByMetaPhoneNumberId(inboundMessage.metaPhoneNumberId);
-    if (!channel) {
-      continue;
+    try {
+      const channel = await findChannelByMetaPhoneNumberId(inboundMessage.metaPhoneNumberId);
+      if (!channel) {
+        continue;
+      }
+      await ingestInboundMessage({
+        channelId: channel.id,
+        fromPhoneNumber: inboundMessage.fromPhoneNumber,
+        contactDisplayName: inboundMessage.contactDisplayName,
+        whatsappMessageId: inboundMessage.whatsappMessageId,
+        content: inboundMessage.content,
+      });
+    } catch (err) {
+      console.error('Failed to process inbound WhatsApp message', err);
     }
-    await ingestInboundMessage({
-      channelId: channel.id,
-      fromPhoneNumber: inboundMessage.fromPhoneNumber,
-      contactDisplayName: inboundMessage.contactDisplayName,
-      whatsappMessageId: inboundMessage.whatsappMessageId,
-      content: inboundMessage.content,
-    });
   }
   res.sendStatus(200);
 });

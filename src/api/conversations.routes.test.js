@@ -7,6 +7,7 @@ const {
   listWaitingConversations,
   listConversationsByAgent,
   getConversationWithContact,
+  claimConversation,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const conversationsRoutes = require('./conversations.routes');
@@ -73,5 +74,27 @@ describe('GET /api/conversations/:id/messages', () => {
       .get('/api/conversations/does-not-exist/messages')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /api/conversations/:id/claim', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('claims a waiting conversation for the requesting agent', async () => {
+    claimConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' });
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/claim')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(200);
+    expect(claimConversation).toHaveBeenCalledWith('conv-1', 'agent-1');
+    expect(res.body.status).toBe('assigned');
+  });
+
+  test('returns 409 when the conversation is already assigned or closed', async () => {
+    claimConversation.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/claim')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(409);
   });
 });

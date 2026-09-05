@@ -4,6 +4,7 @@ const {
   listWaitingConversations,
   listConversationsByAgent,
   getConversationWithContact,
+  claimConversation,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 
@@ -28,6 +29,14 @@ router.get('/:id/messages', async (req, res) => {
   }
   const messages = await listMessagesByConversation(req.params.id);
   res.json(messages);
+});
+
+router.post('/:id/claim', async (req, res) => {
+  const conversation = await claimConversation(req.params.id, req.agent.agentId);
+  if (!conversation) {
+    return res.status(409).json({ error: 'Conversation already assigned or closed' });
+  }
+  res.json(conversation);
 });
 
 module.exports = router;

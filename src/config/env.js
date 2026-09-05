@@ -1,5 +1,12 @@
 function loadConfig() {
-  const required = ['DATABASE_URL', 'JWT_SECRET', 'REDIS_URL', 'META_VERIFY_TOKEN', 'META_APP_SECRET'];
+  const required = [
+    'DATABASE_URL',
+    'JWT_SECRET',
+    'REDIS_URL',
+    'META_VERIFY_TOKEN',
+    'META_APP_SECRET',
+    'BAILEYS_SESSIONS_DIR',
+  ];
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
@@ -11,6 +18,7 @@ function loadConfig() {
     redisUrl: process.env.REDIS_URL,
     metaVerifyToken: process.env.META_VERIFY_TOKEN,
     metaAppSecret: process.env.META_APP_SECRET,
+    baileysSessionsDir: process.env.BAILEYS_SESSIONS_DIR,
   };
 }
 

@@ -17,6 +17,7 @@ describe('loadConfig', () => {
     process.env.REDIS_URL = 'redis://localhost:6379';
     process.env.META_VERIFY_TOKEN = 'verify-token';
     process.env.META_APP_SECRET = 'app-secret';
+    process.env.BAILEYS_SESSIONS_DIR = './.baileys-sessions';
   }
 
   test('throws when DATABASE_URL is missing', () => {
@@ -49,10 +50,16 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow('Missing required environment variables: META_APP_SECRET');
   });
 
+  test('throws when BAILEYS_SESSIONS_DIR is missing', () => {
+    setAllRequired();
+    delete process.env.BAILEYS_SESSIONS_DIR;
+    expect(() => loadConfig()).toThrow('Missing required environment variables: BAILEYS_SESSIONS_DIR');
+  });
+
   test('lists all missing variables together', () => {
     process.env = {};
     expect(() => loadConfig()).toThrow(
-      'Missing required environment variables: DATABASE_URL, JWT_SECRET, REDIS_URL, META_VERIFY_TOKEN, META_APP_SECRET'
+      'Missing required environment variables: DATABASE_URL, JWT_SECRET, REDIS_URL, META_VERIFY_TOKEN, META_APP_SECRET, BAILEYS_SESSIONS_DIR'
     );
   });
 
@@ -67,6 +74,7 @@ describe('loadConfig', () => {
       redisUrl: 'redis://localhost:6379',
       metaVerifyToken: 'verify-token',
       metaAppSecret: 'app-secret',
+      baileysSessionsDir: './.baileys-sessions',
     });
   });
 

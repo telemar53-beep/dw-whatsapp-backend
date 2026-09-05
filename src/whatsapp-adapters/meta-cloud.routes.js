@@ -3,7 +3,6 @@ const { loadConfig } = require('../config/env');
 const { verifyWebhookChallenge, verifySignature, parseInboundMessages } = require('./meta-cloud.adapter');
 const { findChannelByMetaPhoneNumberId } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
-const { emitToAgent, broadcast } = require('../realtime/socket-server');
 
 const router = express.Router();
 
@@ -30,26 +29,13 @@ router.post('/meta', async (req, res) => {
       if (!channel) {
         continue;
       }
-      const result = await ingestInboundMessage({
+      await ingestInboundMessage({
         channelId: channel.id,
         fromPhoneNumber: inboundMessage.fromPhoneNumber,
         contactDisplayName: inboundMessage.contactDisplayName,
         whatsappMessageId: inboundMessage.whatsappMessageId,
         content: inboundMessage.content,
       });
-      if (result.message) {
-        if (result.conversation.assignedAgentId) {
-          emitToAgent(result.conversation.assignedAgentId, 'message:new', {
-            conversation: result.conversation,
-            message: result.message,
-          });
-        } else {
-          broadcast('queue:new', {
-            conversation: result.conversation,
-            message: result.message,
-          });
-        }
-      }
     } catch (err) {
       console.error('Failed to process inbound WhatsApp message', err);
     }

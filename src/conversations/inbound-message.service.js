@@ -1,6 +1,7 @@
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { findOpenConversation, createConversation } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
+const { emitToAgent, broadcast } = require('../realtime/socket-server');
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -17,21 +18,30 @@ async function ingestInboundMessage({ channelId, fromPhoneNumber, contactDisplay
       conversation = await findOpenConversation(contact.id, channelId);
     }
   }
+
+  let message;
   try {
-    const message = await createMessage({
+    message = await createMessage({
       conversationId: conversation.id,
       direction: 'inbound',
       content,
       whatsappMessageId,
       status: 'received',
     });
-    return { contact, conversation, message };
   } catch (err) {
     if (err.code !== UNIQUE_VIOLATION) {
       throw err;
     }
     return { contact, conversation, message: null };
   }
+
+  if (conversation.assignedAgentId) {
+    emitToAgent(conversation.assignedAgentId, 'message:new', { conversation, message });
+  } else {
+    broadcast('queue:new', { conversation, message });
+  }
+
+  return { contact, conversation, message };
 }
 
 module.exports = { ingestInboundMessage };

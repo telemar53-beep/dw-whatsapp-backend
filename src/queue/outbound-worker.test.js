@@ -7,7 +7,7 @@ jest.mock('../whatsapp-adapters/meta-cloud.adapter');
 const { processOutboundQueue } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
-const { createMessage, updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
+const { updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
 const { sendTextMessage } = require('../whatsapp-adapters/meta-cloud.adapter');
 const { startOutboundWorker } = require('./outbound-worker');
 
@@ -25,10 +25,9 @@ describe('startOutboundWorker', () => {
   test('sends the message and records the whatsapp message id on success', async () => {
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
     findChannelById.mockResolvedValue({ id: 'channel-1', config: { phoneNumberId: '123', accessToken: 'tok' } });
-    createMessage.mockResolvedValue({ id: 'msg-1' });
     sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' });
 
-    await handler({ conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola cliente' });
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola cliente' });
 
     expect(sendTextMessage).toHaveBeenCalledWith(
       { id: 'channel-1', config: { phoneNumberId: '123', accessToken: 'tok' } },
@@ -42,11 +41,10 @@ describe('startOutboundWorker', () => {
   test('marks the message failed and rethrows when sending fails', async () => {
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
     findChannelById.mockResolvedValue({ id: 'channel-1', config: {} });
-    createMessage.mockResolvedValue({ id: 'msg-2' });
     sendTextMessage.mockRejectedValue(new Error('network error'));
 
     await expect(
-      handler({ conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+      handler({ messageId: 'msg-2', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
     ).rejects.toThrow('network error');
 
     expect(updateMessageStatus).toHaveBeenCalledWith('msg-2', 'failed');

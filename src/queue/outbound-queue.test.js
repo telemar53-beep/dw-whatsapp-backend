@@ -1,19 +1,48 @@
+const { getPool, closePool } = require('../db/pool');
+const { createChannel } = require('../channels/channel.repository');
+const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
+const { createConversation } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage, processOutboundQueue, closeOutboundQueue } = require('./outbound-queue');
 
 describe('outbound queue', () => {
+  let conversationId;
+  let channelId;
+
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE conversations, contacts, channels, messages CASCADE');
+    const contact = await findOrCreateContactByPhoneNumber('+5511911112222', 'Fila Teste');
+    const channel = await createChannel({
+      type: 'meta_cloud',
+      name: 'Canal Fila',
+      phoneNumber: '+5511999990020',
+      config: { phoneNumberId: '333', accessToken: 'tok3' },
+    });
+    conversationId = (await createConversation(contact.id, channel.id)).id;
+    channelId = channel.id;
+  });
+
   afterEach(async () => {
     await closeOutboundQueue();
   });
 
-  test('a job enqueued is delivered to the processor with the right data', (done) => {
+  afterAll(async () => {
+    await closePool();
+  });
+
+  test('creates a message row immediately and delivers its id to the processor', (done) => {
     processOutboundQueue((data) => {
       try {
-        expect(data).toEqual({ conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' });
+        expect(data.conversationId).toBe(conversationId);
+        expect(data.channelId).toBe(channelId);
+        expect(data.content).toBe('Ola');
+        expect(data.messageId).toBeDefined();
         done();
       } catch (err) {
         done(err);
       }
     });
-    enqueueOutboundMessage({ conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' });
+    enqueueOutboundMessage({ conversationId, channelId, content: 'Ola' }).then((message) => {
+      expect(message.status).toBe('sent');
+    });
   });
 });

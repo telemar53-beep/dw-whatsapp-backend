@@ -1,5 +1,6 @@
 const Queue = require('bull');
 const { loadConfig } = require('../config/env');
+const { createMessage } = require('../conversations/message.repository');
 
 let queue;
 
@@ -12,7 +13,18 @@ function getOutboundQueue() {
 }
 
 async function enqueueOutboundMessage({ conversationId, channelId, content }) {
-  return getOutboundQueue().add({ conversationId, channelId, content });
+  const message = await createMessage({
+    conversationId,
+    direction: 'outbound',
+    content,
+    whatsappMessageId: null,
+    status: 'sent',
+  });
+  await getOutboundQueue().add(
+    { messageId: message.id, conversationId, channelId, content },
+    { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
+  );
+  return message;
 }
 
 function processOutboundQueue(handler) {

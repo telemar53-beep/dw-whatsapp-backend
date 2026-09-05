@@ -1,21 +1,35 @@
-﻿const express = require('express');
-const dotenv = require('dotenv');
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const { loadConfig } = require('./config/env');
+const { getPool } = require('./db/pool');
+const authRoutes = require('./auth/auth.routes');
 
-dotenv.config();
-
+const config = loadConfig();
 const app = express();
-const PORT = process.env.PORT || 3000;
 
+app.use(cors());
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Servidor WhatsApp rodando' });
+app.get('/health', async (req, res) => {
+  try {
+    await getPool().query('SELECT 1');
+    res.json({ status: 'ok', db: 'ok' });
+  } catch (err) {
+    res.status(503).json({ status: 'ok', db: 'unreachable' });
+  }
 });
 
 app.get('/', (req, res) => {
   res.json({ message: 'API WhatsApp DW Telecom' });
 });
 
-app.listen(PORT, () => {
-  console.log('Servidor rodando na porta ' + PORT);
-});
+app.use('/api/auth', authRoutes);
+
+if (require.main === module) {
+  app.listen(config.port, () => {
+    console.log('Servidor rodando na porta ' + config.port);
+  });
+}
+
+module.exports = app;

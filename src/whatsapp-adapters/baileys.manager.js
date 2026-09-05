@@ -1,9 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const { loadConfig } = require('../config/env');
 const { createChannel, updateChannelStatus, listChannels } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
+
+function loadBaileysLib() {
+  return require('@whiskeysockets/baileys');
+}
 
 const connections = new Map();
 
@@ -78,7 +81,7 @@ async function handleConnectionUpdate(channel, update) {
       lastDisconnect && lastDisconnect.error && lastDisconnect.error.output
         ? lastDisconnect.error.output.statusCode
         : null;
-    if (statusCode === DisconnectReason.loggedOut) {
+    if (statusCode === loadBaileysLib().DisconnectReason.loggedOut) {
       connections.delete(channel.id);
       await updateChannelStatus(channel.id, 'disconnected');
       await clearSession(channel.id);
@@ -89,6 +92,7 @@ async function handleConnectionUpdate(channel, update) {
 }
 
 async function startBaileysConnection(channel) {
+  const { default: makeWASocket, useMultiFileAuthState } = loadBaileysLib();
   const { state, saveCreds } = await useMultiFileAuthState(sessionDirFor(channel.id));
   const sock = makeWASocket({ auth: state, logger: noopLogger, printQRInTerminal: false });
   connections.set(channel.id, { sock, qr: null });

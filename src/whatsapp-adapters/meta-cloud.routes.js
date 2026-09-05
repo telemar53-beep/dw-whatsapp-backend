@@ -18,7 +18,7 @@ router.get('/meta', (req, res) => {
 router.post('/meta', async (req, res) => {
   const config = loadConfig();
   const signature = req.headers['x-hub-signature-256'];
-  if (!verifySignature(req.rawBody, signature, config.metaAppSecret)) {
+  if (!req.rawBody || !verifySignature(req.rawBody, signature, config.metaAppSecret)) {
     return res.sendStatus(403);
   }
 

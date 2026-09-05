@@ -99,4 +99,14 @@ describe('POST /webhooks/meta', () => {
     expect(res.status).toBe(403);
     expect(ingestInboundMessage).not.toHaveBeenCalled();
   });
+
+  test('rejects a non-JSON content-type request even with a well-formed signature header', async () => {
+    const res = await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', 'sha256=' + '0'.repeat(64))
+      .set('Content-Type', 'text/plain')
+      .send('not json');
+    expect(res.status).toBe(403);
+    expect(ingestInboundMessage).not.toHaveBeenCalled();
+  });
 });

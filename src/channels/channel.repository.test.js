@@ -1,5 +1,11 @@
 const { getPool, closePool } = require('../db/pool');
-const { createChannel, findChannelById, findChannelByMetaPhoneNumberId } = require('./channel.repository');
+const {
+  createChannel,
+  findChannelById,
+  findChannelByMetaPhoneNumberId,
+  listChannels,
+  updateChannelStatus,
+} = require('./channel.repository');
 
 describe('channel repository', () => {
   beforeEach(async () => {
@@ -42,5 +48,49 @@ describe('channel repository', () => {
   test('findChannelByMetaPhoneNumberId returns null when not found', async () => {
     const channel = await findChannelByMetaPhoneNumberId('does-not-exist');
     expect(channel).toBeNull();
+  });
+
+  test('listChannels returns an empty array when there are no channels', async () => {
+    const channels = await listChannels();
+    expect(channels).toEqual([]);
+  });
+
+  test('listChannels returns all channels ordered by creation time', async () => {
+    const first = await createChannel({
+      type: 'meta_cloud',
+      name: 'Primeiro Canal',
+      phoneNumber: '+5511999990010',
+      config: { phoneNumberId: '1', accessToken: 'a' },
+    });
+    const second = await createChannel({
+      type: 'baileys',
+      name: 'Segundo Canal',
+      phoneNumber: '+5511999990011',
+      config: {},
+    });
+
+    const channels = await listChannels();
+
+    expect(channels.map((c) => c.id)).toEqual([first.id, second.id]);
+  });
+
+  test('updateChannelStatus updates and returns the channel with the new status', async () => {
+    const channel = await createChannel({
+      type: 'baileys',
+      name: 'Canal Baileys',
+      phoneNumber: '+5511999990012',
+      config: {},
+    });
+    expect(channel.status).toBe('disconnected');
+
+    const updated = await updateChannelStatus(channel.id, 'awaiting_qr');
+
+    expect(updated.status).toBe('awaiting_qr');
+    expect(updated.id).toBe(channel.id);
+  });
+
+  test('updateChannelStatus returns null when the channel does not exist', async () => {
+    const updated = await updateChannelStatus('00000000-0000-0000-0000-000000000000', 'connected');
+    expect(updated).toBeNull();
   });
 });

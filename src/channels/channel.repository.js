@@ -41,4 +41,27 @@ async function findChannelByMetaPhoneNumberId(phoneNumberId) {
   return toChannel(result.rows[0]);
 }
 
-module.exports = { createChannel, findChannelById, findChannelByMetaPhoneNumberId };
+async function listChannels() {
+  const result = await getPool().query(
+    'SELECT id, type, name, phone_number, config, status, created_at FROM channels ORDER BY created_at ASC'
+  );
+  return result.rows.map(toChannel);
+}
+
+async function updateChannelStatus(id, status) {
+  const result = await getPool().query(
+    `UPDATE channels SET status = $2 WHERE id = $1
+     RETURNING id, type, name, phone_number, config, status, created_at`,
+    [id, status]
+  );
+  if (result.rowCount === 0) return null;
+  return toChannel(result.rows[0]);
+}
+
+module.exports = {
+  createChannel,
+  findChannelById,
+  findChannelByMetaPhoneNumberId,
+  listChannels,
+  updateChannelStatus,
+};

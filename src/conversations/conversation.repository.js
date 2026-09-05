@@ -1,4 +1,4 @@
-const { getPool } = require('../db/pool');
+const { getPool, withTransaction } = require('../db/pool');
 
 function toConversation(row) {
   return {
@@ -32,47 +32,53 @@ async function createConversation(contactId, channelId) {
 }
 
 async function claimConversation(conversationId, agentId) {
-  const result = await getPool().query(
-    `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, updated_at = now()
-     WHERE id = $1 AND assigned_agent_id IS NULL AND status <> 'closed'
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
-    [conversationId, agentId]
-  );
-  if (result.rowCount === 0) return null;
-  await getPool().query(
-    `INSERT INTO conversation_events (conversation_id, event_type, to_agent_id) VALUES ($1, 'assigned', $2)`,
-    [conversationId, agentId]
-  );
-  return toConversation(result.rows[0]);
+  return withTransaction(async (client) => {
+    const result = await client.query(
+      `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, updated_at = now()
+       WHERE id = $1 AND assigned_agent_id IS NULL AND status <> 'closed'
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
+      [conversationId, agentId]
+    );
+    if (result.rowCount === 0) return null;
+    await client.query(
+      `INSERT INTO conversation_events (conversation_id, event_type, to_agent_id) VALUES ($1, 'assigned', $2)`,
+      [conversationId, agentId]
+    );
+    return toConversation(result.rows[0]);
+  });
 }
 
 async function transferConversation(conversationId, fromAgentId, toAgentId) {
-  const result = await getPool().query(
-    `UPDATE conversations SET assigned_agent_id = $2, updated_at = now()
-     WHERE id = $1 AND assigned_agent_id = $3 AND status <> 'closed'
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
-    [conversationId, toAgentId, fromAgentId]
-  );
-  if (result.rowCount === 0) return null;
-  await getPool().query(
-    `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, to_agent_id) VALUES ($1, 'transferred', $2, $3)`,
-    [conversationId, fromAgentId, toAgentId]
-  );
-  return toConversation(result.rows[0]);
+  return withTransaction(async (client) => {
+    const result = await client.query(
+      `UPDATE conversations SET assigned_agent_id = $2, updated_at = now()
+       WHERE id = $1 AND assigned_agent_id = $3 AND status <> 'closed'
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
+      [conversationId, toAgentId, fromAgentId]
+    );
+    if (result.rowCount === 0) return null;
+    await client.query(
+      `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, to_agent_id) VALUES ($1, 'transferred', $2, $3)`,
+      [conversationId, fromAgentId, toAgentId]
+    );
+    return toConversation(result.rows[0]);
+  });
 }
 
 async function closeConversation(conversationId) {
-  const result = await getPool().query(
-    `UPDATE conversations SET status = 'closed', updated_at = now()
-     WHERE id = $1 AND status <> 'closed'
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
-    [conversationId]
-  );
-  if (result.rowCount === 0) return null;
-  await getPool().query(`INSERT INTO conversation_events (conversation_id, event_type) VALUES ($1, 'closed')`, [
-    conversationId,
-  ]);
-  return toConversation(result.rows[0]);
+  return withTransaction(async (client) => {
+    const result = await client.query(
+      `UPDATE conversations SET status = 'closed', updated_at = now()
+       WHERE id = $1 AND status <> 'closed'
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
+      [conversationId]
+    );
+    if (result.rowCount === 0) return null;
+    await client.query(`INSERT INTO conversation_events (conversation_id, event_type) VALUES ($1, 'closed')`, [
+      conversationId,
+    ]);
+    return toConversation(result.rows[0]);
+  });
 }
 
 async function getConversationWithContact(conversationId) {

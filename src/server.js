@@ -7,7 +7,6 @@ const { getPool } = require('./db/pool');
 const authRoutes = require('./auth/auth.routes');
 const metaCloudRoutes = require('./whatsapp-adapters/meta-cloud.routes');
 const conversationsRoutes = require('./api/conversations.routes');
-const { startOutboundWorker } = require('./queue/outbound-worker');
 const { initSocketServer } = require('./realtime/socket-server');
 
 const config = loadConfig();
@@ -45,6 +44,7 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
+  const { startOutboundWorker } = require('./queue/outbound-worker');
   const httpServer = http.createServer(app);
   initSocketServer(httpServer);
   startOutboundWorker();

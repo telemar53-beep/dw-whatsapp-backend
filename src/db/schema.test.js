@@ -23,4 +23,23 @@ describe('database schema', () => {
     );
     expect(result.rowCount).toBe(1);
   });
+
+  test('channels has a phone_number column', async () => {
+    const pool = getPool();
+    const result = await pool.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_name = 'channels' AND column_name = 'phone_number'"
+    );
+    expect(result.rowCount).toBe(1);
+  });
+
+  test.each([
+    'channels_phone_number_unique',
+    'messages_conversation_id_created_at_idx',
+    'conversations_status_idx',
+    'conversations_assigned_agent_id_idx',
+  ])('index %s exists', async (indexName) => {
+    const pool = getPool();
+    const result = await pool.query('SELECT indexname FROM pg_indexes WHERE indexname = $1', [indexName]);
+    expect(result.rowCount).toBe(1);
+  });
 });

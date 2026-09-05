@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const { loadConfig } = require('./config/env');
 const { getPool } = require('./db/pool');
@@ -7,6 +8,7 @@ const authRoutes = require('./auth/auth.routes');
 const metaCloudRoutes = require('./whatsapp-adapters/meta-cloud.routes');
 const conversationsRoutes = require('./api/conversations.routes');
 const { startOutboundWorker } = require('./queue/outbound-worker');
+const { initSocketServer } = require('./realtime/socket-server');
 
 const config = loadConfig();
 const app = express();
@@ -43,8 +45,10 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
+  const httpServer = http.createServer(app);
+  initSocketServer(httpServer);
   startOutboundWorker();
-  app.listen(config.port, () => {
+  httpServer.listen(config.port, () => {
     console.log('Servidor rodando na porta ' + config.port);
   });
 }

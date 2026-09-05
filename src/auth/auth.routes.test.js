@@ -8,6 +8,10 @@ function buildApp() {
   const app = express();
   app.use(express.json());
   app.use('/api/auth', authRoutes);
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, next) => {
+    res.status(500).json({ error: 'Internal server error' });
+  });
   return app;
 }
 
@@ -26,9 +30,22 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(400);
   });
 
+  test('returns 400 when request body is empty', async () => {
+    const res = await request(buildApp()).post('/api/auth/login');
+    expect(res.status).toBe(400);
+  });
+
   test('returns 401 when login rejects', async () => {
-    login.mockRejectedValue(new Error('Invalid credentials'));
+    const err = new Error('Invalid credentials');
+    err.code = 'INVALID_CREDENTIALS';
+    login.mockRejectedValue(err);
     const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.com', password: 'wrong' });
     expect(res.status).toBe(401);
+  });
+
+  test('propagates a non-credentials error instead of returning 401', async () => {
+    login.mockRejectedValue(new Error('connection refused'));
+    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@dw.com', password: 'x' });
+    expect(res.status).toBe(500);
   });
 });

@@ -25,12 +25,14 @@ describe('auth service', () => {
   test('login throws when agent does not exist', async () => {
     findAgentByEmail.mockResolvedValue(null);
     await expect(login({ email: 'missing@dw.com', password: 'x' })).rejects.toThrow('Invalid credentials');
+    await expect(login({ email: 'missing@dw.com', password: 'x' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
   });
 
   test('login throws when password is wrong', async () => {
     const passwordHash = await bcrypt.hash('secret123', 10);
     findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
     await expect(login({ email: 'a@dw.com', password: 'wrong' })).rejects.toThrow('Invalid credentials');
+    await expect(login({ email: 'a@dw.com', password: 'wrong' })).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
   });
 
   test('verifyToken returns the decoded payload for a valid token', () => {

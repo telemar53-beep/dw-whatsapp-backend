@@ -4,14 +4,20 @@ const { findAgentByEmail } = require('../agents/agent.repository');
 
 const TOKEN_EXPIRY = '12h';
 
+function invalidCredentialsError() {
+  const err = new Error('Invalid credentials');
+  err.code = 'INVALID_CREDENTIALS';
+  return err;
+}
+
 async function login({ email, password }) {
   const agent = await findAgentByEmail(email);
   if (!agent) {
-    throw new Error('Invalid credentials');
+    throw invalidCredentialsError();
   }
   const matches = await bcrypt.compare(password, agent.passwordHash);
   if (!matches) {
-    throw new Error('Invalid credentials');
+    throw invalidCredentialsError();
   }
   const token = jwt.sign(
     { agentId: agent.id, role: agent.role },

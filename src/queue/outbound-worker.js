@@ -15,8 +15,8 @@ function startOutboundWorker() {
   processOutboundQueue(async ({ messageId, conversationId, channelId, content }) => {
     const conversation = await getConversationWithContact(conversationId);
     const channel = await findChannelById(channelId);
-    const adapter = ADAPTERS_BY_CHANNEL_TYPE[channel.type];
     try {
+      const adapter = ADAPTERS_BY_CHANNEL_TYPE[channel.type];
       const { whatsappMessageId } = await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content);
       const message = await recordMessageSent(messageId, whatsappMessageId);
       if (conversation.assignedAgentId) {

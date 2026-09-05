@@ -10,6 +10,7 @@ const {
   getConversationWithContact,
   claimConversation,
   transferConversation,
+  closeConversation,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -180,5 +181,26 @@ describe('POST /api/conversations/:id/transfer', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ toAgentId: 'agent-2' });
     expect(res.status).toBe(409);
+  });
+});
+
+describe('POST /api/conversations/:id/close', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('closes an open conversation', async () => {
+    closeConversation.mockResolvedValue({ id: 'conv-1', status: 'closed' });
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/close')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('closed');
+  });
+
+  test('returns 404 when the conversation does not exist or is already closed', async () => {
+    closeConversation.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/close')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(404);
   });
 });

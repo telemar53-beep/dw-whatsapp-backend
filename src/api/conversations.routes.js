@@ -6,6 +6,7 @@ const {
   getConversationWithContact,
   claimConversation,
   transferConversation,
+  closeConversation,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -69,6 +70,14 @@ router.post('/:id/transfer', async (req, res) => {
   const conversation = await transferConversation(req.params.id, req.agent.agentId, toAgentId);
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation is not currently assigned to you, or is closed' });
+  }
+  res.json(conversation);
+});
+
+router.post('/:id/close', async (req, res) => {
+  const conversation = await closeConversation(req.params.id);
+  if (!conversation) {
+    return res.sendStatus(404);
   }
   res.json(conversation);
 });

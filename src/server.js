@@ -5,6 +5,7 @@ const { loadConfig } = require('./config/env');
 const { getPool } = require('./db/pool');
 const authRoutes = require('./auth/auth.routes');
 const metaCloudRoutes = require('./whatsapp-adapters/meta-cloud.routes');
+const conversationsRoutes = require('./api/conversations.routes');
 const { startOutboundWorker } = require('./queue/outbound-worker');
 
 const config = loadConfig();
@@ -33,6 +34,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/conversations', conversationsRoutes);
 app.use('/webhooks', metaCloudRoutes);
 
 if (require.main === module) {

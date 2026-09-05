@@ -14,6 +14,21 @@ function getPool() {
   return pool;
 }
 
+async function withTransaction(fn) {
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function closePool() {
   if (pool) {
     await pool.end();
@@ -21,4 +36,4 @@ async function closePool() {
   }
 }
 
-module.exports = { getPool, closePool };
+module.exports = { getPool, closePool, withTransaction };

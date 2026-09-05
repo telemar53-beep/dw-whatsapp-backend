@@ -85,4 +85,32 @@ describe('ConversationView', () => {
     expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument();
   });
+
+  test('does not render the message input when the conversation is assigned to another agent or unassigned', () => {
+    const { rerender } = render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-OTHER' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.queryByPlaceholderText(/digite uma mensagem/i)).not.toBeInTheDocument();
+
+    rerender(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.queryByPlaceholderText(/digite uma mensagem/i)).not.toBeInTheDocument();
+  });
+
+  test('renders the message input when the conversation is assigned to me', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByPlaceholderText(/digite uma mensagem/i)).toBeInTheDocument();
+  });
 });

@@ -8,6 +8,12 @@ export class ApiError extends Error {
   }
 }
 
+let unauthorizedHandler = null;
+
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = handler;
+}
+
 export async function apiFetch(path, { method = 'GET', body, token } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) {
@@ -21,6 +27,9 @@ export async function apiFetch(path, { method = 'GET', body, token } = {}) {
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
+    if (response.status === 401 && unauthorizedHandler) {
+      unauthorizedHandler();
+    }
     throw new ApiError(response.status, data);
   }
   return data;

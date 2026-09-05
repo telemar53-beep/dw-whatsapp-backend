@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { apiFetch, ApiError, login, getQueue } from './api';
+import { apiFetch, ApiError, login, getQueue, setUnauthorizedHandler } from './api';
 
 beforeEach(() => {
   global.fetch = vi.fn();
@@ -83,6 +83,25 @@ describe('getQueue', () => {
       'http://localhost:3000/api/conversations/queue',
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }) })
     );
+  });
+});
+
+describe('apiFetch 401 handling', () => {
+  test('calls the registered unauthorized handler on a 401 response', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue({ ok: false, status: 401, text: () => Promise.resolve('{}') });
+
+    await expect(apiFetch('/api/conversations/queue', { token: 'expired' })).rejects.toMatchObject({ status: 401 });
+
+    expect(handler).toHaveBeenCalled();
+    setUnauthorizedHandler(null);
+  });
+
+  test('does not throw when no handler is registered', async () => {
+    setUnauthorizedHandler(null);
+    global.fetch.mockResolvedValue({ ok: false, status: 401, text: () => Promise.resolve('{}') });
+    await expect(apiFetch('/api/conversations/queue')).rejects.toMatchObject({ status: 401 });
   });
 });
 

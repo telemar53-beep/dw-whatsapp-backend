@@ -4,9 +4,10 @@ import { useChannels } from '../hooks/useChannels';
 
 function ChannelStatusBanner() {
   const { agent } = useAuth();
-  const { channels } = useChannels();
+  const isAdmin = agent?.role === 'admin';
+  const { channels } = useChannels(isAdmin);
 
-  if (agent.role !== 'admin') return null;
+  if (!isAdmin) return null;
 
   const problemChannels = channels.filter((c) => c.status !== 'connected');
   if (problemChannels.length === 0) return null;

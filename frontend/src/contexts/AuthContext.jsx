@@ -1,11 +1,16 @@
-import { createContext, useContext, useState, useCallback } from 'react';
-import { login as apiLogin } from '../services/api';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { login as apiLogin, setUnauthorizedHandler } from '../services/api';
 
 const AuthContext = createContext(null);
 
 function readStoredAgent() {
   const stored = localStorage.getItem('dw_agent');
-  return stored ? JSON.parse(stored) : null;
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return null;
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -27,6 +32,11 @@ export function AuthProvider({ children }) {
     setToken(null);
     setAgent(null);
   }, []);
+
+  useEffect(() => {
+    setUnauthorizedHandler(logout);
+    return () => setUnauthorizedHandler(null);
+  }, [logout]);
 
   return <AuthContext.Provider value={{ token, agent, login, logout }}>{children}</AuthContext.Provider>;
 }

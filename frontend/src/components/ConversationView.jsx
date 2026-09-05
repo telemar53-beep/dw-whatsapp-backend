@@ -53,7 +53,7 @@ function ConversationView({ conversation, onTransferClick }) {
           </div>
         ))}
       </div>
-      <MessageInput onSend={sendMessage} />
+      {isMine && <MessageInput onSend={sendMessage} />}
     </div>
   );
 }

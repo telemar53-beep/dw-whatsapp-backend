@@ -78,4 +78,24 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('token')).toHaveTextContent('tok-existing');
     expect(screen.getByTestId('role')).toHaveTextContent('agent');
   });
+
+  test('registers its logout function as the unauthorized handler on mount', () => {
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+    expect(api.setUnauthorizedHandler).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  test('does not throw and treats stored agent as absent when localStorage holds invalid JSON', () => {
+    localStorage.setItem('dw_token', 'tok-123');
+    localStorage.setItem('dw_agent', 'not-valid-json{{{');
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+    expect(screen.getByTestId('role')).toHaveTextContent('no-agent');
+  });
 });

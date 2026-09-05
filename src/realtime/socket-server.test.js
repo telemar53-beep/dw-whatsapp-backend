@@ -16,9 +16,10 @@ describe('socket server', () => {
     });
   });
 
-  afterEach((done) => {
-    closeSocketServer();
-    httpServer.close(done);
+  afterEach(() => {
+    return closeSocketServer().then(() => {
+      return new Promise((resolve) => httpServer.close(resolve));
+    });
   });
 
   function connect(token) {
@@ -75,6 +76,16 @@ describe('socket server', () => {
         done();
       });
       broadcast('announcement', { text: 'hi' });
+    });
+  });
+});
+
+describe('socket server module-level guards', () => {
+  test('emitToAgent and broadcast are no-ops before the server is initialized', () => {
+    // Ensure no server is initialized, regardless of test execution order.
+    return closeSocketServer().then(() => {
+      expect(() => emitToAgent('agent-x', 'some-event', {})).not.toThrow();
+      expect(() => broadcast('some-event', {})).not.toThrow();
     });
   });
 });

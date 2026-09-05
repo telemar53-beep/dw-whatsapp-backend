@@ -28,18 +28,22 @@ function getSocketServer() {
 }
 
 function emitToAgent(agentId, event, payload) {
-  getSocketServer().to(`agent:${agentId}`).emit(event, payload);
+  if (!io) return;
+  io.to(`agent:${agentId}`).emit(event, payload);
 }
 
 function broadcast(event, payload) {
-  getSocketServer().emit(event, payload);
+  if (!io) return;
+  io.emit(event, payload);
 }
 
 function closeSocketServer() {
   if (io) {
-    io.close();
+    const closing = io.close();
     io = undefined;
+    return closing;
   }
+  return Promise.resolve();
 }
 
 module.exports = { initSocketServer, getSocketServer, emitToAgent, broadcast, closeSocketServer };

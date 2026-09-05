@@ -10,6 +10,7 @@ const {
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { emitToAgent, broadcast } = require('../realtime/socket-server');
 
 const router = express.Router();
 
@@ -48,6 +49,8 @@ router.post('/:id/claim', async (req, res) => {
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation already assigned or closed' });
   }
+  broadcast('queue:removed', { conversationId: conversation.id });
+  emitToAgent(conversation.assignedAgentId, 'conversation:assigned', { conversation });
   res.json(conversation);
 });
 
@@ -83,6 +86,8 @@ router.post('/:id/transfer', async (req, res) => {
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation is not currently assigned to you, or is closed' });
   }
+  emitToAgent(req.agent.agentId, 'conversation:removed', { conversationId: conversation.id });
+  emitToAgent(toAgentId, 'conversation:assigned', { conversation });
   res.json(conversation);
 });
 
@@ -90,6 +95,11 @@ router.post('/:id/close', async (req, res) => {
   const conversation = await closeConversation(req.params.id, req.agent.agentId);
   if (!conversation) {
     return res.status(404).json({ error: 'Conversation not found' });
+  }
+  if (conversation.assignedAgentId) {
+    emitToAgent(conversation.assignedAgentId, 'conversation:closed', { conversationId: conversation.id });
+  } else {
+    broadcast('queue:removed', { conversationId: conversation.id });
   }
   res.json(conversation);
 });

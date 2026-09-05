@@ -1,6 +1,7 @@
 jest.mock('../conversations/conversation.repository');
 jest.mock('../conversations/message.repository');
 jest.mock('../queue/outbound-queue');
+jest.mock('../realtime/socket-server');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -14,6 +15,7 @@ const {
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const conversationsRoutes = require('./conversations.routes');
 
 function buildApp() {
@@ -116,6 +118,26 @@ describe('POST /api/conversations/:id/claim', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(409);
   });
+
+  test('broadcasts queue:removed and notifies the claiming agent on success', async () => {
+    claimConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/claim`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'conv-1' });
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:assigned', {
+      conversation: { id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' },
+    });
+  });
+
+  test('does not emit anything when claim fails', async () => {
+    claimConversation.mockResolvedValue(null);
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/claim`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(emitToAgent).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/conversations/:id/messages', () => {
@@ -212,6 +234,18 @@ describe('POST /api/conversations/:id/transfer', () => {
       .send({ toAgentId: 'agent-2' });
     expect(res.status).toBe(409);
   });
+
+  test('notifies both the previous and new agent on a successful transfer', async () => {
+    transferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:removed', { conversationId: 'conv-1' });
+    expect(emitToAgent).toHaveBeenCalledWith('agent-2', 'conversation:assigned', {
+      conversation: { id: 'conv-1', assignedAgentId: 'agent-2' },
+    });
+  });
 });
 
 describe('POST /api/conversations/:id/close', () => {
@@ -232,5 +266,23 @@ describe('POST /api/conversations/:id/close', () => {
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(404);
+  });
+
+  test('notifies the assigned agent when closing an assigned conversation', async () => {
+    closeConversation.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:closed', { conversationId: 'conv-1' });
+    expect(broadcast).not.toHaveBeenCalled();
+  });
+
+  test('broadcasts queue:removed when closing a conversation that was never assigned', async () => {
+    closeConversation.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: null });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'conv-1' });
+    expect(emitToAgent).not.toHaveBeenCalled();
   });
 });

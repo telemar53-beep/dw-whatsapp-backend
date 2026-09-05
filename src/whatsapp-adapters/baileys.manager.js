@@ -43,17 +43,35 @@ async function clearSession(channelId) {
   await fs.promises.rm(sessionDirFor(channelId), { recursive: true, force: true });
 }
 
+function resolveContactPhoneJid(key) {
+  const jid = key.remoteJid || '';
+  if (jid.endsWith('@g.us') || jid.endsWith('@broadcast')) {
+    return null;
+  }
+  if (jid.endsWith('@s.whatsapp.net')) {
+    return jid;
+  }
+  // WhatsApp's privacy-preserving "LID" addressing (@lid) replaces the
+  // phone-number JID for some contacts. Baileys exposes the traditional
+  // phone-number JID (when known) via remoteJidAlt.
+  if (key.remoteJidAlt && key.remoteJidAlt.endsWith('@s.whatsapp.net')) {
+    return key.remoteJidAlt;
+  }
+  return null;
+}
+
 async function handleMessagesUpsert(channel, { messages, type }) {
   if (type !== 'notify') return;
   for (const msg of messages) {
     if (msg.key.fromMe) continue;
-    if (!msg.key.remoteJid || !msg.key.remoteJid.endsWith('@s.whatsapp.net')) continue;
+    const phoneJid = resolveContactPhoneJid(msg.key);
+    if (!phoneJid) continue;
     const content = extractTextContent(msg.message);
     if (!content) continue;
     await ingestInboundMessage({
       channelId: channel.id,
-      fromPhoneNumber: jidToPhoneNumber(msg.key.remoteJid),
-      contactDisplayName: msg.pushName || null,
+      fromPhoneNumber: jidToPhoneNumber(phoneJid),
+      contactDisplayName: msg.pushName ? msg.pushName.trim() : null,
       whatsappMessageId: msg.key.id,
       content,
     });

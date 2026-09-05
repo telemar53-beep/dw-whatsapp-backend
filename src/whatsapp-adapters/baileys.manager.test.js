@@ -221,6 +221,53 @@ describe('baileys.manager', () => {
 
       expect(ingestInboundMessage).not.toHaveBeenCalled();
     });
+
+    test('resolves the real phone number via remoteJidAlt when the contact is addressed by LID', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: {
+              remoteJid: '60194419654878@lid',
+              remoteJidAlt: '559870079562@s.whatsapp.net',
+              fromMe: false,
+              id: 'LID_MSG_1',
+              addressingMode: 'lid',
+            },
+            pushName: 'Cliente LID  ',
+            message: { conversation: 'Oi, preciso de suporte' },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '559870079562',
+        contactDisplayName: 'Cliente LID',
+        whatsappMessageId: 'LID_MSG_1',
+        content: 'Oi, preciso de suporte',
+      });
+    });
+
+    test('ignores a LID-addressed message when no remoteJidAlt phone number is available', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: {
+              remoteJid: '60194419654878@lid',
+              fromMe: false,
+              id: 'LID_MSG_2',
+              addressingMode: 'lid',
+            },
+            pushName: 'Cliente Sem Alt',
+            message: { conversation: 'Mensagem sem remoteJidAlt' },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).not.toHaveBeenCalled();
+    });
   });
 
   describe('sendTextMessage', () => {

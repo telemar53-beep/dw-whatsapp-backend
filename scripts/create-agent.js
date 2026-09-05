@@ -13,4 +13,9 @@ async function main() {
   console.log('Agent created:', agent);
 }
 
-main().finally(() => closePool());
+main()
+  .catch((err) => {
+    console.error('Failed to create agent:', err.message);
+    process.exitCode = 1;
+  })
+  .finally(() => closePool());

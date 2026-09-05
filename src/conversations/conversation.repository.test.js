@@ -9,6 +9,8 @@ const {
   transferConversation,
   closeConversation,
   getConversationWithContact,
+  listWaitingConversations,
+  listConversationsByAgent,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -104,5 +106,33 @@ describe('conversation repository', () => {
     const result = await getConversationWithContact(conversation.id);
     expect(result.id).toBe(conversation.id);
     expect(result.contactPhoneNumber).toBe('+5511977776666');
+  });
+
+  test('listWaitingConversations returns only waiting conversations with contact info, oldest first', async () => {
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
+    const waitingConversation = await createConversation(contactId, channelId);
+    const assignedConversation = await createConversation(otherContact.id, channelId);
+    const agent = await createAgent({ email: 'listagent1@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(assignedConversation.id, agent.id);
+
+    const waiting = await listWaitingConversations();
+
+    expect(waiting.map((c) => c.id)).toEqual([waitingConversation.id]);
+    expect(waiting[0].contactPhoneNumber).toBe('+5511977776666');
+    expect(waiting[0].contactDisplayName).toBe('Joao');
+  });
+
+  test('listConversationsByAgent returns only that agent non-closed conversations', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'listagent2@dw.com', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'listagent3@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511911119999', 'Outra Pessoa');
+    const otherConversation = await createConversation(otherContact.id, channelId);
+    await claimConversation(otherConversation.id, otherAgent.id);
+
+    const mine = await listConversationsByAgent(agent.id);
+
+    expect(mine.map((c) => c.id)).toEqual([conversation.id]);
   });
 });

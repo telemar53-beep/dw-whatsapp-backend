@@ -95,6 +95,39 @@ async function getConversationWithContact(conversationId) {
   return { ...toConversation(row), contactPhoneNumber: row.contact_phone_number };
 }
 
+function toConversationSummary(row) {
+  return {
+    ...toConversation(row),
+    contactPhoneNumber: row.contact_phone_number,
+    contactDisplayName: row.contact_display_name,
+  };
+}
+
+async function listWaitingConversations() {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     WHERE c.status = 'waiting'
+     ORDER BY c.created_at ASC`
+  );
+  return result.rows.map(toConversationSummary);
+}
+
+async function listConversationsByAgent(agentId) {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     WHERE c.assigned_agent_id = $1 AND c.status <> 'closed'
+     ORDER BY c.updated_at DESC`,
+    [agentId]
+  );
+  return result.rows.map(toConversationSummary);
+}
+
 module.exports = {
   findOpenConversation,
   createConversation,
@@ -102,4 +135,6 @@ module.exports = {
   transferConversation,
   closeConversation,
   getConversationWithContact,
+  listWaitingConversations,
+  listConversationsByAgent,
 };

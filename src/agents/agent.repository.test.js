@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const { getPool, closePool } = require('../db/pool');
-const { createAgent, findAgentByEmail, findAgentById } = require('./agent.repository');
+const { createAgent, findAgentByEmail, findAgentById, listAgents } = require('./agent.repository');
 
 describe('agent repository', () => {
   beforeEach(async () => {
@@ -37,5 +37,15 @@ describe('agent repository', () => {
     const agent = await findAgentById(created.id);
     expect(agent.email).toBe('c@dw.com');
     expect(agent.passwordHash).toBeUndefined();
+  });
+
+  test('listAgents returns every agent ordered by email', async () => {
+    await createAgent({ email: 'zeta@dw.com', password: 'secret123', role: 'agent' });
+    await createAgent({ email: 'alpha@dw.com', password: 'secret123', role: 'admin' });
+
+    const agents = await listAgents();
+
+    expect(agents.map((a) => a.email)).toEqual(['alpha@dw.com', 'zeta@dw.com']);
+    expect(agents[0].passwordHash).toBeUndefined();
   });
 });

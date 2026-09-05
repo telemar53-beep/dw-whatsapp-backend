@@ -36,4 +36,11 @@ async function findAgentById(id) {
   return toPublicAgent(result.rows[0]);
 }
 
-module.exports = { createAgent, findAgentByEmail, findAgentById };
+async function listAgents() {
+  const result = await getPool().query(
+    'SELECT id, email, role, created_at FROM agents ORDER BY email ASC'
+  );
+  return result.rows.map(toPublicAgent);
+}
+
+module.exports = { createAgent, findAgentByEmail, findAgentById, listAgents };

@@ -11,6 +11,11 @@
         "pretest": "npm run migrate:test -- up",
         "test": "dotenv -e .env.test -o -- jest"
     },
+    "jest": {
+        "testEnvironment": "node",
+        "globalSetup": "./jest.global-setup.js",
+        "maxWorkers": 1
+    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/telemar53-beep/dw-whatsapp-backend.git"

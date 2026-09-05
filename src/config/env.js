@@ -1,5 +1,5 @@
 function loadConfig() {
-  const required = ['DATABASE_URL', 'JWT_SECRET'];
+  const required = ['DATABASE_URL', 'JWT_SECRET', 'REDIS_URL', 'META_VERIFY_TOKEN', 'META_APP_SECRET'];
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
@@ -8,6 +8,9 @@ function loadConfig() {
     port: Number(process.env.PORT) || 3000,
     databaseUrl: process.env.DATABASE_URL,
     jwtSecret: process.env.JWT_SECRET,
+    redisUrl: process.env.REDIS_URL,
+    metaVerifyToken: process.env.META_VERIFY_TOKEN,
+    metaAppSecret: process.env.META_APP_SECRET,
   };
 }
 

@@ -11,29 +11,67 @@ describe('loadConfig', () => {
     process.env = originalEnv;
   });
 
-  test('throws when DATABASE_URL is missing', () => {
-    delete process.env.DATABASE_URL;
+  function setAllRequired() {
+    process.env.DATABASE_URL = 'postgresql://localhost/test';
     process.env.JWT_SECRET = 'secret';
+    process.env.REDIS_URL = 'redis://localhost:6379';
+    process.env.META_VERIFY_TOKEN = 'verify-token';
+    process.env.META_APP_SECRET = 'app-secret';
+  }
+
+  test('throws when DATABASE_URL is missing', () => {
+    setAllRequired();
+    delete process.env.DATABASE_URL;
     expect(() => loadConfig()).toThrow('Missing required environment variables: DATABASE_URL');
   });
 
   test('throws when JWT_SECRET is missing', () => {
-    process.env.DATABASE_URL = 'postgresql://localhost/test';
+    setAllRequired();
     delete process.env.JWT_SECRET;
     expect(() => loadConfig()).toThrow('Missing required environment variables: JWT_SECRET');
   });
 
+  test('throws when REDIS_URL is missing', () => {
+    setAllRequired();
+    delete process.env.REDIS_URL;
+    expect(() => loadConfig()).toThrow('Missing required environment variables: REDIS_URL');
+  });
+
+  test('throws when META_VERIFY_TOKEN is missing', () => {
+    setAllRequired();
+    delete process.env.META_VERIFY_TOKEN;
+    expect(() => loadConfig()).toThrow('Missing required environment variables: META_VERIFY_TOKEN');
+  });
+
+  test('throws when META_APP_SECRET is missing', () => {
+    setAllRequired();
+    delete process.env.META_APP_SECRET;
+    expect(() => loadConfig()).toThrow('Missing required environment variables: META_APP_SECRET');
+  });
+
+  test('lists all missing variables together', () => {
+    process.env = {};
+    expect(() => loadConfig()).toThrow(
+      'Missing required environment variables: DATABASE_URL, JWT_SECRET, REDIS_URL, META_VERIFY_TOKEN, META_APP_SECRET'
+    );
+  });
+
   test('returns config with defaults when all required vars present', () => {
-    process.env.DATABASE_URL = 'postgresql://localhost/test';
-    process.env.JWT_SECRET = 'secret';
+    setAllRequired();
     delete process.env.PORT;
     const config = loadConfig();
-    expect(config).toEqual({ port: 3000, databaseUrl: 'postgresql://localhost/test', jwtSecret: 'secret' });
+    expect(config).toEqual({
+      port: 3000,
+      databaseUrl: 'postgresql://localhost/test',
+      jwtSecret: 'secret',
+      redisUrl: 'redis://localhost:6379',
+      metaVerifyToken: 'verify-token',
+      metaAppSecret: 'app-secret',
+    });
   });
 
   test('uses PORT env var when present', () => {
-    process.env.DATABASE_URL = 'postgresql://localhost/test';
-    process.env.JWT_SECRET = 'secret';
+    setAllRequired();
     process.env.PORT = '4000';
     const config = loadConfig();
     expect(config.port).toBe(4000);

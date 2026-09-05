@@ -1,8 +1,38 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { SocketProvider } from './contexts/SocketContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import AdminChannelsPage from './pages/AdminChannelsPage';
+
 function App() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <p className="text-gray-500">DW Telecom - carregando...</p>
-    </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <SocketProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/channels"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminChannelsPage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </SocketProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

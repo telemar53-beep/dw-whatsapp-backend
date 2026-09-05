@@ -7,6 +7,9 @@ function getPool() {
   if (!pool) {
     const config = loadConfig();
     pool = new Pool({ connectionString: config.databaseUrl });
+    pool.on('error', (err) => {
+      console.error('Unexpected error on idle postgres client', err);
+    });
   }
   return pool;
 }

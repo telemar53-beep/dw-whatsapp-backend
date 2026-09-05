@@ -94,7 +94,38 @@ no futuro sem reescrita, caso a operação justifique.
   exponencial) em falha de envio (rate limit, timeout).
 - **`realtime/`** — Socket.io. Emite eventos para os clientes conectados:
   nova mensagem, conversa entrou na fila, conversa atribuída/transferida,
-  atualização de status de canal (ex: Baileys caiu).
+  atualização de status de canal (ex: Baileys caiu). Implementado (v1):
+  conexão autenticada por JWT, uma sala por atendente (`agent:<agentId>`).
+  Sete eventos: `message:new`, `queue:new`, `queue:removed`,
+  `conversation:assigned`, `conversation:removed`, `conversation:closed`,
+  `message:updated`. **Contrato que o frontend precisa respeitar** (definido
+  na revisão final do plano de tempo real):
+  - `queue:new` é um *upsert* por `conversation.id`, não um "append". Uma
+    conversa ainda sem atendente pode gerar `queue:new` mais de uma vez (uma
+    por mensagem recebida enquanto estiver na fila) — o frontend deve
+    atualizar/substituir a entrada existente daquela conversa na lista, não
+    duplicá-la.
+  - `message:updated` pode chegar para uma conversa que já foi fechada
+    (o fechamento não limpa o atendente designado, então uma mensagem de
+    saída ainda em trânsito na fila continua notificando o último
+    atendente). O frontend deve ignorar silenciosamente eventos referentes a
+    uma conversa que não está mais na tela.
+  - Uma desconexão por token expirado (JWT de 12h) **não** reconecta
+    sozinha — o `socket.io-client` não tenta reconectar após uma rejeição do
+    middleware de autenticação. O frontend precisa tratar `connect_error`
+    obtendo um token novo (via login silencioso ou refresh) e chamando
+    `socket.connect()` manualmente.
+  - Emissão de eventos é *best-effort*: uma falha ao emitir nunca deve
+    impedir a operação de negócio correspondente (assumir, enviar, etc.) de
+    ser confirmada ao cliente HTTP.
+  - Escalonamento horizontal: a implementação atual usa o adaptador em
+    memória padrão do Socket.io (sem Redis pub/sub entre instâncias). Isso é
+    adequado enquanto o serviço rodar numa única instância Render (conforme
+    a decisão de monólito modular abaixo). Se a operação algum dia justificar
+    mais de uma instância, os eventos deixariam de alcançar clientes
+    conectados a outra instância **silenciosamente** (sem erro) — resolver
+    isso então com `@socket.io/redis-adapter` (o Redis já usado pelo Bull
+    pode ser reaproveitado).
 - **`api/`** — REST usado pelo frontend: login, listar conversas (fila +
   minhas conversas), obter histórico, enviar mensagem, assumir/transferir
   conversa.

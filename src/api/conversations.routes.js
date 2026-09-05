@@ -75,7 +75,7 @@ router.post('/:id/transfer', async (req, res) => {
 });
 
 router.post('/:id/close', async (req, res) => {
-  const conversation = await closeConversation(req.params.id);
+  const conversation = await closeConversation(req.params.id, req.agent.agentId);
   if (!conversation) {
     return res.sendStatus(404);
   }

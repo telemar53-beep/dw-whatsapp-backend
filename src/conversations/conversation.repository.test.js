@@ -79,8 +79,9 @@ describe('conversation repository', () => {
 
   test('claimConversation returns null for a closed conversation', async () => {
     const conversation = await createConversation(contactId, channelId);
-    await closeConversation(conversation.id);
-    const agent = await createAgent({ email: 'agent6@dw.com', password: 'secret123', role: 'agent' });
+    const closingAgent = await createAgent({ email: 'agent6@dw.com', password: 'secret123', role: 'agent' });
+    await closeConversation(conversation.id, closingAgent.id);
+    const agent = await createAgent({ email: 'agent6b@dw.com', password: 'secret123', role: 'agent' });
     const claimed = await claimConversation(conversation.id, agent.id);
     expect(claimed).toBeNull();
   });
@@ -90,15 +91,23 @@ describe('conversation repository', () => {
     const agent1 = await createAgent({ email: 'agent7@dw.com', password: 'secret123', role: 'agent' });
     const agent2 = await createAgent({ email: 'agent8@dw.com', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent1.id);
-    await closeConversation(conversation.id);
+    await closeConversation(conversation.id, agent1.id);
     const transferred = await transferConversation(conversation.id, agent1.id, agent2.id);
     expect(transferred).toBeNull();
   });
 
-  test('closeConversation marks the conversation closed', async () => {
+  test('closeConversation marks the conversation closed and records who closed it', async () => {
     const conversation = await createConversation(contactId, channelId);
-    const closed = await closeConversation(conversation.id);
+    const agent = await createAgent({ email: 'agent9@dw.com', password: 'secret123', role: 'agent' });
+    const closed = await closeConversation(conversation.id, agent.id);
     expect(closed.status).toBe('closed');
+
+    const events = await getPool().query(
+      `SELECT event_type, from_agent_id FROM conversation_events WHERE conversation_id = $1 AND event_type = 'closed'`,
+      [conversation.id]
+    );
+    expect(events.rows).toHaveLength(1);
+    expect(events.rows[0].from_agent_id).toBe(agent.id);
   });
 
   test('getConversationWithContact includes the contact phone number', async () => {

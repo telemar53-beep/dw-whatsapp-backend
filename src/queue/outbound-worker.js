@@ -3,6 +3,7 @@ const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
 const { sendTextMessage } = require('../whatsapp-adapters/meta-cloud.adapter');
+const { emitToAgent } = require('../realtime/socket-server');
 
 function startOutboundWorker() {
   processOutboundQueue(async ({ messageId, conversationId, channelId, content }) => {
@@ -10,9 +11,15 @@ function startOutboundWorker() {
     const channel = await findChannelById(channelId);
     try {
       const { whatsappMessageId } = await sendTextMessage(channel, conversation.contactPhoneNumber, content);
-      await recordMessageSent(messageId, whatsappMessageId);
+      const message = await recordMessageSent(messageId, whatsappMessageId);
+      if (conversation.assignedAgentId) {
+        emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
+      }
     } catch (err) {
-      await updateMessageStatus(messageId, 'failed');
+      const message = await updateMessageStatus(messageId, 'failed');
+      if (conversation.assignedAgentId) {
+        emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
+      }
       throw err;
     }
   });

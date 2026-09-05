@@ -46,6 +46,13 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
+  // Required lazily (not at module top-level): outbound-worker.js and
+  // baileys.manager.js transitively touch @whiskeysockets/baileys. The
+  // actual Jest/ESM incompatibility was fixed at its source inside
+  // baileys.manager.js, so this laziness isn't load-bearing anymore, but
+  // keeping requires for boot-only concerns out of the module's static
+  // import graph is harmless and avoids reintroducing the same class of
+  // problem if a future change reverts that fix.
   const { startOutboundWorker } = require('./queue/outbound-worker');
   const { startAllBaileysConnections } = require('./whatsapp-adapters/baileys.manager');
   const httpServer = http.createServer(app);

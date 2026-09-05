@@ -7,6 +7,8 @@ const baileysManager = require('../whatsapp-adapters/baileys.manager');
 
 const router = express.Router();
 
+const UNIQUE_VIOLATION = '23505';
+
 function authenticateQrRoute(req, res, next) {
   const header = req.headers.authorization;
   const headerToken = header && header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
@@ -44,18 +46,25 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
     return res.status(400).json({ error: 'type, name and phoneNumber are required' });
   }
 
-  if (type === 'meta_cloud') {
-    const { phoneNumberId, accessToken } = req.body;
-    if (!phoneNumberId || !accessToken) {
-      return res.status(400).json({ error: 'phoneNumberId and accessToken are required for meta_cloud channels' });
+  try {
+    if (type === 'meta_cloud') {
+      const { phoneNumberId, accessToken } = req.body;
+      if (!phoneNumberId || !accessToken) {
+        return res.status(400).json({ error: 'phoneNumberId and accessToken are required for meta_cloud channels' });
+      }
+      const channel = await createChannel({ type, name, phoneNumber, config: { phoneNumberId, accessToken } });
+      return res.status(201).json(channel);
     }
-    const channel = await createChannel({ type, name, phoneNumber, config: { phoneNumberId, accessToken } });
-    return res.status(201).json(channel);
-  }
 
-  if (type === 'baileys') {
-    const channel = await baileysManager.addBaileysChannel({ name, phoneNumber });
-    return res.status(201).json(channel);
+    if (type === 'baileys') {
+      const channel = await baileysManager.addBaileysChannel({ name, phoneNumber });
+      return res.status(201).json(channel);
+    }
+  } catch (err) {
+    if (err.code === UNIQUE_VIOLATION) {
+      return res.status(409).json({ error: 'A channel with this phone number already exists' });
+    }
+    throw err;
   }
 
   return res.status(400).json({ error: 'type must be meta_cloud or baileys' });

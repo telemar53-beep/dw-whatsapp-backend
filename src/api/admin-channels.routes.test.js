@@ -124,6 +124,23 @@ describe('POST /api/admin/channels', () => {
     expect(res.body.id).toBe('channel-3');
   });
 
+  test('returns 409 when the phone number is already in use', async () => {
+    createChannel.mockRejectedValue(Object.assign(new Error('duplicate key'), { code: '23505' }));
+
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({
+        type: 'meta_cloud',
+        name: 'Financeiro',
+        phoneNumber: '+5511999990002',
+        phoneNumberId: '999',
+        accessToken: 'tok',
+      });
+
+    expect(res.status).toBe(409);
+  });
+
   test('rejects an unknown channel type', async () => {
     const res = await request(buildApp())
       .post('/api/admin/channels')

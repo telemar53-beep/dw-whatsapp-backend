@@ -5,7 +5,7 @@
     "main": "index.js",
     "scripts": {
         "start": "node src/server.js",
-        "dev": "nodemon src/server.js",
+        "dev": "nodemon --ignore frontend/ src/server.js",
         "migrate": "node-pg-migrate",
         "migrate:test": "dotenv -e .env.test -o -- node-pg-migrate",
         "pretest": "npm run migrate:test -- up",

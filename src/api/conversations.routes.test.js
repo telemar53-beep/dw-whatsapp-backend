@@ -9,6 +9,7 @@ const {
   listConversationsByAgent,
   getConversationWithContact,
   claimConversation,
+  transferConversation,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -146,5 +147,38 @@ describe('POST /api/conversations/:id/messages', () => {
       .send({ content: 'Ola' });
     expect(res.status).toBe(403);
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/conversations/:id/transfer', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('transfers the conversation when the requester currently owns it', async () => {
+    transferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/transfer')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(res.status).toBe(200);
+    expect(transferConversation).toHaveBeenCalledWith('conv-1', 'agent-1', 'agent-2');
+    expect(res.body.assignedAgentId).toBe('agent-2');
+  });
+
+  test('returns 400 when toAgentId is missing', async () => {
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/transfer')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(transferConversation).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the requester does not currently own the conversation', async () => {
+    transferConversation.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/transfer')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(res.status).toBe(409);
   });
 });

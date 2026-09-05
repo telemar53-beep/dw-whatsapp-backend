@@ -19,9 +19,26 @@ Esse serviço está apresentando problemas frequentes. O objetivo deste projeto
 3 números **e** interface de atendimento multi-atendente.
 
 Já existe um repositório inicial (`dw-whatsapp-backend`), hospedado no Render
-(plano pago, com disco persistente disponível), com um servidor Express
-mínimo (health check) e dependências já escolhidas: `express`, `pg`,
-`ioredis`, `bull`, `axios`, `cors`.
+(plano Starter, 0.5 CPU / 512 MB RAM), com um servidor Express mínimo (health
+check) e dependências já escolhidas: `express`, `pg`, `ioredis`, `bull`,
+`axios`, `cors`.
+
+### Infraestrutura: estado atual e pendências
+
+Confirmado a partir da documentação técnica gerada em 05/09/2026:
+
+- Render: serviço `dw-whatsapp-backend`, plano Starter (0.5 CPU / 512 MB RAM),
+  deploy automático a cada push na branch `main`. **Ainda sem** Persistent
+  Disk anexado, sem instância de Postgres e sem instância de Redis
+  provisionadas — isso precisa ser feito antes de implementar persistência de
+  conversas, a fila de envio (Bull) e a sessão do Baileys.
+- **Decisão confirmada:** o terceiro número (não oficial) usa **Baileys**,
+  não Selenium/WhatsApp Web automatizado por navegador. Motivo: o plano
+  Starter tem apenas 512 MB de RAM, e rodar um Chromium via Selenium nesse
+  limite (concorrendo com o resto do backend) traria risco alto de estourar
+  memória e derrubar a sessão constantemente. Baileys fala o protocolo do
+  WhatsApp diretamente em JavaScript, sem navegador, e é compatível com esse
+  ambiente.
 
 Não há pressão de prazo — prioridade é construir algo robusto desde o início,
 mesmo que leve mais tempo.

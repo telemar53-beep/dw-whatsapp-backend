@@ -28,6 +28,7 @@
     },
     "homepage": "https://github.com/telemar53-beep/dw-whatsapp-backend#readme",
     "dependencies": {
+        "@whiskeysockets/baileys": "^7.0.0-rc14",
         "axios": "^1.20.0",
         "bcrypt": "^6.0.0",
         "bull": "^4.16.5",

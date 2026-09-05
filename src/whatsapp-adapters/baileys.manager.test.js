@@ -1,0 +1,266 @@
+jest.mock('@whiskeysockets/baileys', () => ({
+  default: jest.fn(),
+  useMultiFileAuthState: jest.fn(),
+  DisconnectReason: { loggedOut: 401 },
+}));
+jest.mock('../channels/channel.repository');
+jest.mock('../conversations/inbound-message.service');
+jest.mock('../config/env');
+jest.mock('fs', () => ({
+  promises: { rm: jest.fn().mockResolvedValue(undefined) },
+}));
+
+const path = require('path');
+const fs = require('fs');
+const baileysLib = require('@whiskeysockets/baileys');
+const { loadConfig } = require('../config/env');
+const { createChannel, updateChannelStatus, listChannels } = require('../channels/channel.repository');
+const { ingestInboundMessage } = require('../conversations/inbound-message.service');
+const manager = require('./baileys.manager');
+
+function createMockSock() {
+  const handlers = {};
+  return {
+    ev: {
+      on: jest.fn((event, handler) => {
+        handlers[event] = handler;
+      }),
+    },
+    sendMessage: jest.fn().mockResolvedValue({ key: { id: 'wamid.SENT1' } }),
+    handlers,
+  };
+}
+
+describe('baileys.manager', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    loadConfig.mockReturnValue({ baileysSessionsDir: '/sessions' });
+    baileysLib.useMultiFileAuthState.mockResolvedValue({ state: {}, saveCreds: jest.fn() });
+  });
+
+  describe('startBaileysConnection', () => {
+    test('opens the auth state from the per-channel session directory and creates a socket', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-1', type: 'baileys' };
+
+      await manager.startBaileysConnection(channel);
+
+      expect(baileysLib.useMultiFileAuthState).toHaveBeenCalledWith(path.join('/sessions', 'channel-1'));
+      expect(baileysLib.default).toHaveBeenCalledWith(expect.objectContaining({ auth: {} }));
+      expect(sock.ev.on).toHaveBeenCalledWith('creds.update', expect.any(Function));
+      expect(sock.ev.on).toHaveBeenCalledWith('connection.update', expect.any(Function));
+      expect(sock.ev.on).toHaveBeenCalledWith('messages.upsert', expect.any(Function));
+    });
+  });
+
+  describe('connection.update handling', () => {
+    let sock;
+    let channel;
+
+    beforeEach(async () => {
+      sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      channel = { id: 'channel-2', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+    });
+
+    test('stores the QR code and marks the channel as awaiting_qr', async () => {
+      await sock.handlers['connection.update']({ qr: 'qr-raw-string' });
+
+      expect(updateChannelStatus).toHaveBeenCalledWith('channel-2', 'awaiting_qr');
+      expect(manager.getQrForChannel('channel-2')).toBe('qr-raw-string');
+    });
+
+    test('clears the QR code and marks the channel as connected when the connection opens', async () => {
+      await sock.handlers['connection.update']({ qr: 'qr-raw-string' });
+      await sock.handlers['connection.update']({ connection: 'open' });
+
+      expect(updateChannelStatus).toHaveBeenCalledWith('channel-2', 'connected');
+      expect(manager.getQrForChannel('channel-2')).toBeNull();
+    });
+
+    test('marks the channel disconnected and deletes the session on a logout', async () => {
+      await sock.handlers['connection.update']({
+        connection: 'close',
+        lastDisconnect: { error: { output: { statusCode: 401 } } },
+      });
+
+      expect(updateChannelStatus).toHaveBeenCalledWith('channel-2', 'disconnected');
+      expect(fs.promises.rm).toHaveBeenCalledWith(path.join('/sessions', 'channel-2'), {
+        recursive: true,
+        force: true,
+      });
+      expect(baileysLib.default).toHaveBeenCalledTimes(1);
+    });
+
+    test('reconnects automatically on a recoverable disconnect', async () => {
+      await sock.handlers['connection.update']({
+        connection: 'close',
+        lastDisconnect: { error: { output: { statusCode: 500 } } },
+      });
+
+      expect(baileysLib.default).toHaveBeenCalledTimes(2);
+      expect(updateChannelStatus).not.toHaveBeenCalledWith('channel-2', 'disconnected');
+    });
+  });
+
+  describe('messages.upsert handling', () => {
+    let sock;
+
+    beforeEach(async () => {
+      sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      await manager.startBaileysConnection({ id: 'channel-3', type: 'baileys' });
+    });
+
+    test('ingests a text message received from a contact', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999998888@s.whatsapp.net', fromMe: false, id: 'BAILEYS_MSG_1' },
+            pushName: 'Cliente Baileys',
+            message: { conversation: 'Oi, preciso de ajuda' },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511999998888',
+        contactDisplayName: 'Cliente Baileys',
+        whatsappMessageId: 'BAILEYS_MSG_1',
+        content: 'Oi, preciso de ajuda',
+      });
+    });
+
+    test('ingests an extended text message (reply/quoted message)', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999997777@s.whatsapp.net', fromMe: false, id: 'BAILEYS_MSG_2' },
+            pushName: 'Outro Cliente',
+            message: { extendedTextMessage: { text: 'Respondendo aqui' } },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511999997777',
+        contactDisplayName: 'Outro Cliente',
+        whatsappMessageId: 'BAILEYS_MSG_2',
+        content: 'Respondendo aqui',
+      });
+    });
+
+    test('ignores messages sent by the connection itself', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999996666@s.whatsapp.net', fromMe: true, id: 'BAILEYS_MSG_3' },
+            message: { conversation: 'Eco do proprio envio' },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('ignores non-notify upsert types (history sync)', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'append',
+        messages: [
+          {
+            key: { remoteJid: '5511999995555@s.whatsapp.net', fromMe: false, id: 'X' },
+            message: { conversation: 'Old' },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('ignores messages without extractable text content', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999994444@s.whatsapp.net', fromMe: false, id: 'IMG1' },
+            message: { imageMessage: { caption: 'foto' } },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sendTextMessage', () => {
+    test('sends a text message through the active socket and returns the WhatsApp message id', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-4', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.sendTextMessage(channel, '5511999993333', 'Resposta via Baileys');
+
+      expect(sock.sendMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', { text: 'Resposta via Baileys' });
+      expect(result).toEqual({ whatsappMessageId: 'wamid.SENT1' });
+    });
+
+    test('throws when there is no active connection for the channel', async () => {
+      await expect(
+        manager.sendTextMessage({ id: 'channel-does-not-exist' }, '5511999992222', 'Oi')
+      ).rejects.toThrow('No active Baileys connection for channel channel-does-not-exist');
+    });
+  });
+
+  describe('addBaileysChannel', () => {
+    test('creates the channel row and starts its connection', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      createChannel.mockResolvedValue({
+        id: 'channel-5',
+        type: 'baileys',
+        name: 'WhatsApp Vendas',
+        phoneNumber: '+5511988887777',
+      });
+
+      const channel = await manager.addBaileysChannel({ name: 'WhatsApp Vendas', phoneNumber: '+5511988887777' });
+
+      expect(createChannel).toHaveBeenCalledWith({
+        type: 'baileys',
+        name: 'WhatsApp Vendas',
+        phoneNumber: '+5511988887777',
+        config: {},
+      });
+      expect(baileysLib.default).toHaveBeenCalled();
+      expect(channel).toEqual({
+        id: 'channel-5',
+        type: 'baileys',
+        name: 'WhatsApp Vendas',
+        phoneNumber: '+5511988887777',
+      });
+    });
+  });
+
+  describe('startAllBaileysConnections', () => {
+    test('starts a connection for every baileys channel and skips meta_cloud channels', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      listChannels.mockResolvedValue([
+        { id: 'channel-6', type: 'baileys' },
+        { id: 'channel-7', type: 'meta_cloud' },
+        { id: 'channel-8', type: 'baileys' },
+      ]);
+
+      await manager.startAllBaileysConnections();
+
+      expect(baileysLib.default).toHaveBeenCalledTimes(2);
+    });
+  });
+});

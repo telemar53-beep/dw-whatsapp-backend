@@ -7,12 +7,13 @@
         "start": "node src/server.js",
         "dev": "nodemon src/server.js",
         "migrate": "node-pg-migrate",
-        "migrate:test": "dotenv -e .env.test -- node-pg-migrate",
+        "migrate:test": "dotenv -e .env.test -o -- node-pg-migrate",
         "pretest": "npm run migrate:test -- up",
-        "test": "dotenv -e .env.test -- jest"
+        "test": "dotenv -e .env.test -o -- jest"
     },
     "jest": {
-        "testEnvironment": "node"
+        "testEnvironment": "node",
+        "globalSetup": "./jest.global-setup.js"
     },
     "repository": {
         "type": "git",

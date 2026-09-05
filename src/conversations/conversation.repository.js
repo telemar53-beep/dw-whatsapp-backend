@@ -85,15 +85,14 @@ async function closeConversation(conversationId, agentId) {
 async function getConversationWithContact(conversationId) {
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.created_at, c.updated_at,
-            ct.phone_number AS contact_phone_number
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      WHERE c.id = $1`,
     [conversationId]
   );
   if (result.rowCount === 0) return null;
-  const row = result.rows[0];
-  return { ...toConversation(row), contactPhoneNumber: row.contact_phone_number };
+  return toConversationSummary(result.rows[0]);
 }
 
 function toConversationSummary(row) {

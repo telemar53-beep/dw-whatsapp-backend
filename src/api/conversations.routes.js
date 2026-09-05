@@ -49,8 +49,9 @@ router.post('/:id/claim', async (req, res) => {
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation already assigned or closed' });
   }
+  const conversationWithContact = await getConversationWithContact(conversation.id);
   broadcast('queue:removed', { conversationId: conversation.id });
-  emitToAgent(conversation.assignedAgentId, 'conversation:assigned', { conversation });
+  emitToAgent(conversation.assignedAgentId, 'conversation:assigned', { conversation: conversationWithContact });
   res.json(conversation);
 });
 
@@ -86,8 +87,9 @@ router.post('/:id/transfer', async (req, res) => {
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation is not currently assigned to you, or is closed' });
   }
+  const conversationWithContact = await getConversationWithContact(conversation.id);
   emitToAgent(req.agent.agentId, 'conversation:removed', { conversationId: conversation.id });
-  emitToAgent(toAgentId, 'conversation:assigned', { conversation });
+  emitToAgent(toAgentId, 'conversation:assigned', { conversation: conversationWithContact });
   res.json(conversation);
 });
 

@@ -35,10 +35,16 @@ async function ingestInboundMessage({ channelId, fromPhoneNumber, contactDisplay
     return { contact, conversation, message: null };
   }
 
+  const conversationWithContact = {
+    ...conversation,
+    contactPhoneNumber: contact.phoneNumber,
+    contactDisplayName: contact.displayName,
+  };
+
   if (conversation.assignedAgentId) {
-    emitToAgent(conversation.assignedAgentId, 'message:new', { conversation, message });
+    emitToAgent(conversation.assignedAgentId, 'message:new', { conversation: conversationWithContact, message });
   } else {
-    broadcast('queue:new', { conversation, message });
+    broadcast('queue:new', { conversation: conversationWithContact, message });
   }
 
   return { contact, conversation, message };

@@ -110,11 +110,12 @@ describe('conversation repository', () => {
     expect(events.rows[0].from_agent_id).toBe(agent.id);
   });
 
-  test('getConversationWithContact includes the contact phone number', async () => {
+  test('getConversationWithContact includes the contact phone number and display name', async () => {
     const conversation = await createConversation(contactId, channelId);
     const result = await getConversationWithContact(conversation.id);
     expect(result.id).toBe(conversation.id);
     expect(result.contactPhoneNumber).toBe('+5511977776666');
+    expect(result.contactDisplayName).toBe('Joao');
   });
 
   test('listWaitingConversations returns only waiting conversations with contact info, oldest first', async () => {

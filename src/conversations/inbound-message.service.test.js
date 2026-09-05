@@ -12,7 +12,11 @@ describe('ingestInboundMessage', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('reuses an existing open conversation and broadcasts queue:new when unassigned', async () => {
-    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1' });
+    findOrCreateContactByPhoneNumber.mockResolvedValue({
+      id: 'contact-1',
+      phoneNumber: '+5511999998888',
+      displayName: 'Cliente',
+    });
     findOpenConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
     createMessage.mockResolvedValue({ id: 'msg-1' });
 
@@ -33,19 +37,28 @@ describe('ingestInboundMessage', () => {
       status: 'received',
     });
     expect(result).toEqual({
-      contact: { id: 'contact-1' },
+      contact: { id: 'contact-1', phoneNumber: '+5511999998888', displayName: 'Cliente' },
       conversation: { id: 'conv-1', assignedAgentId: null },
       message: { id: 'msg-1' },
     });
     expect(broadcast).toHaveBeenCalledWith('queue:new', {
-      conversation: { id: 'conv-1', assignedAgentId: null },
+      conversation: {
+        id: 'conv-1',
+        assignedAgentId: null,
+        contactPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+      },
       message: { id: 'msg-1' },
     });
     expect(emitToAgent).not.toHaveBeenCalled();
   });
 
   test('emits message:new to the assigned agent when the conversation is already assigned', async () => {
-    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1b' });
+    findOrCreateContactByPhoneNumber.mockResolvedValue({
+      id: 'contact-1b',
+      phoneNumber: '+5511999998888',
+      displayName: 'Cliente',
+    });
     findOpenConversation.mockResolvedValue({ id: 'conv-1b', assignedAgentId: 'agent-1' });
     createMessage.mockResolvedValue({ id: 'msg-1b' });
 
@@ -58,7 +71,12 @@ describe('ingestInboundMessage', () => {
     });
 
     expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:new', {
-      conversation: { id: 'conv-1b', assignedAgentId: 'agent-1' },
+      conversation: {
+        id: 'conv-1b',
+        assignedAgentId: 'agent-1',
+        contactPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+      },
       message: { id: 'msg-1b' },
     });
     expect(broadcast).not.toHaveBeenCalled();

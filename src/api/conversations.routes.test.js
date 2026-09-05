@@ -121,12 +121,25 @@ describe('POST /api/conversations/:id/claim', () => {
 
   test('broadcasts queue:removed and notifies the claiming agent on success', async () => {
     claimConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' });
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+      contactPhoneNumber: '+5511999998888',
+      contactDisplayName: 'Cliente',
+    });
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/claim`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'conv-1' });
     expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:assigned', {
-      conversation: { id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' },
+      conversation: {
+        id: 'conv-1',
+        status: 'assigned',
+        assignedAgentId: 'agent-1',
+        contactPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+      },
     });
   });
 
@@ -237,13 +250,24 @@ describe('POST /api/conversations/:id/transfer', () => {
 
   test('notifies both the previous and new agent on a successful transfer', async () => {
     transferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      assignedAgentId: 'agent-2',
+      contactPhoneNumber: '+5511999998888',
+      contactDisplayName: 'Cliente',
+    });
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ toAgentId: 'agent-2' });
     expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:removed', { conversationId: 'conv-1' });
     expect(emitToAgent).toHaveBeenCalledWith('agent-2', 'conversation:assigned', {
-      conversation: { id: 'conv-1', assignedAgentId: 'agent-2' },
+      conversation: {
+        id: 'conv-1',
+        assignedAgentId: 'agent-2',
+        contactPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+      },
     });
   });
 });

@@ -14,7 +14,8 @@
     "jest": {
         "testEnvironment": "node",
         "globalSetup": "./jest.global-setup.js",
-        "maxWorkers": 1
+        "maxWorkers": 1,
+        "testPathIgnorePatterns": ["/node_modules/", "[\\\\/]frontend[\\\\/]"]
     },
     "repository": {
         "type": "git",

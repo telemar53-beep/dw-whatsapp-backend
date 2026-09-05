@@ -39,6 +39,7 @@
         "jsonwebtoken": "^9.0.3",
         "node-pg-migrate": "^9.0.0",
         "pg": "^8.23.0",
+        "qrcode": "^1.5.4",
         "socket.io": "^4.8.3"
     },
     "devDependencies": {

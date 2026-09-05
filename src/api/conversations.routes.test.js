@@ -1,5 +1,6 @@
 jest.mock('../conversations/conversation.repository');
 jest.mock('../conversations/message.repository');
+jest.mock('../queue/outbound-queue');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -10,6 +11,7 @@ const {
   claimConversation,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
+const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const conversationsRoutes = require('./conversations.routes');
 
 function buildApp() {
@@ -96,5 +98,53 @@ describe('POST /api/conversations/:id/claim', () => {
       .post('/api/conversations/conv-1/claim')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(409);
+  });
+});
+
+describe('POST /api/conversations/:id/messages', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('enqueues a message when the requester is the assigned agent', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'msg-1', status: 'sent' });
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/messages')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'Ola cliente' });
+    expect(res.status).toBe(201);
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      channelId: 'channel-1',
+      content: 'Ola cliente',
+    });
+    expect(res.body).toEqual({ id: 'msg-1', status: 'sent' });
+  });
+
+  test('returns 400 when content is missing', async () => {
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/messages')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the conversation does not exist', async () => {
+    getConversationWithContact.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/conversations/does-not-exist/messages')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'Ola' });
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 403 when the requester is not the assigned agent', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-2' });
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/messages')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'Ola' });
+    expect(res.status).toBe(403);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 });

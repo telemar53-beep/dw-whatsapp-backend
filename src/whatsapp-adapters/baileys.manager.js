@@ -47,6 +47,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
   if (type !== 'notify') return;
   for (const msg of messages) {
     if (msg.key.fromMe) continue;
+    if (!msg.key.remoteJid || !msg.key.remoteJid.endsWith('@s.whatsapp.net')) continue;
     const content = extractTextContent(msg.message);
     if (!content) continue;
     await ingestInboundMessage({
@@ -86,8 +87,20 @@ async function handleConnectionUpdate(channel, update) {
       await updateChannelStatus(channel.id, 'disconnected');
       await clearSession(channel.id);
     } else {
+      closeExistingSocket(channel.id);
       await startBaileysConnection(channel);
     }
+  }
+}
+
+function closeExistingSocket(channelId) {
+  const entry = connections.get(channelId);
+  if (!entry || !entry.sock) return;
+  if (entry.sock.ev && typeof entry.sock.ev.removeAllListeners === 'function') {
+    entry.sock.ev.removeAllListeners();
+  }
+  if (typeof entry.sock.end === 'function') {
+    entry.sock.end(undefined);
   }
 }
 
@@ -97,15 +110,27 @@ async function startBaileysConnection(channel) {
   const sock = makeWASocket({ auth: state, logger: noopLogger, printQRInTerminal: false });
   connections.set(channel.id, { sock, qr: null });
   sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', (update) => handleConnectionUpdate(channel, update));
-  sock.ev.on('messages.upsert', (payload) => handleMessagesUpsert(channel, payload));
+  sock.ev.on('connection.update', (update) => {
+    handleConnectionUpdate(channel, update).catch((err) => {
+      console.error(`Failed to handle connection update for channel ${channel.id}`, err);
+    });
+  });
+  sock.ev.on('messages.upsert', (payload) => {
+    handleMessagesUpsert(channel, payload).catch((err) => {
+      console.error(`Failed to handle inbound Baileys message for channel ${channel.id}`, err);
+    });
+  });
   return sock;
 }
 
 async function startAllBaileysConnections() {
   const channels = await listChannels();
   for (const channel of channels.filter((c) => c.type === 'baileys')) {
-    await startBaileysConnection(channel);
+    try {
+      await startBaileysConnection(channel);
+    } catch (err) {
+      console.error(`Failed to start Baileys connection for channel ${channel.id}`, err);
+    }
   }
 }
 

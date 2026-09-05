@@ -201,6 +201,26 @@ describe('baileys.manager', () => {
 
       expect(ingestInboundMessage).not.toHaveBeenCalled();
     });
+
+    test('ignores group and broadcast JIDs even with valid text content', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '120363xxx@g.us', fromMe: false, id: 'GROUP1' },
+            pushName: 'Grupo Teste',
+            message: { conversation: 'Mensagem de grupo' },
+          },
+          {
+            key: { remoteJid: 'status@broadcast', fromMe: false, id: 'BROADCAST1' },
+            pushName: 'Status',
+            message: { conversation: 'Atualizacao de status' },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).not.toHaveBeenCalled();
+    });
   });
 
   describe('sendTextMessage', () => {

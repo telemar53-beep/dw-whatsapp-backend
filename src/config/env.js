@@ -19,6 +19,7 @@ function loadConfig() {
     metaVerifyToken: process.env.META_VERIFY_TOKEN,
     metaAppSecret: process.env.META_APP_SECRET,
     baileysSessionsDir: process.env.BAILEYS_SESSIONS_DIR,
+    frontendOrigin: process.env.FRONTEND_ORIGIN || null,
   };
 }
 

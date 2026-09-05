@@ -75,6 +75,7 @@ describe('loadConfig', () => {
       metaVerifyToken: 'verify-token',
       metaAppSecret: 'app-secret',
       baileysSessionsDir: './.baileys-sessions',
+      frontendOrigin: null,
     });
   });
 
@@ -83,5 +84,25 @@ describe('loadConfig', () => {
     process.env.PORT = '4000';
     const config = loadConfig();
     expect(config.port).toBe(4000);
+  });
+
+  test('frontendOrigin is null when FRONTEND_ORIGIN is not set', () => {
+    setAllRequired();
+    delete process.env.FRONTEND_ORIGIN;
+    const config = loadConfig();
+    expect(config.frontendOrigin).toBeNull();
+  });
+
+  test('frontendOrigin reflects FRONTEND_ORIGIN when set', () => {
+    setAllRequired();
+    process.env.FRONTEND_ORIGIN = 'https://dw-whatsapp-frontend.onrender.com';
+    const config = loadConfig();
+    expect(config.frontendOrigin).toBe('https://dw-whatsapp-frontend.onrender.com');
+  });
+
+  test('does not require FRONTEND_ORIGIN to be set', () => {
+    setAllRequired();
+    delete process.env.FRONTEND_ORIGIN;
+    expect(() => loadConfig()).not.toThrow();
   });
 });

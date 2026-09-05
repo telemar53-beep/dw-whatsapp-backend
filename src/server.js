@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const { loadConfig } = require('./config/env');
+const { getAllowedOrigins } = require('./config/cors-origins');
 const { getPool } = require('./db/pool');
 const authRoutes = require('./auth/auth.routes');
 const metaCloudRoutes = require('./whatsapp-adapters/meta-cloud.routes');
@@ -14,7 +15,7 @@ const { initSocketServer } = require('./realtime/socket-server');
 const config = loadConfig();
 const app = express();
 
-app.use(cors());
+app.use(cors({ origin: getAllowedOrigins() }));
 app.use(
   express.json({
     verify: (req, res, buf) => {

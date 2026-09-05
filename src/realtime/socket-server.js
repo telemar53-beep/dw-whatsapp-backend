@@ -1,10 +1,11 @@
 const { Server } = require('socket.io');
 const { verifyToken } = require('../auth/auth.service');
+const { getAllowedOrigins } = require('../config/cors-origins');
 
 let io;
 
 function initSocketServer(httpServer) {
-  io = new Server(httpServer, { cors: { origin: '*' } });
+  io = new Server(httpServer, { cors: { origin: getAllowedOrigins() } });
   io.use((socket, next) => {
     try {
       const payload = verifyToken(socket.handshake.auth && socket.handshake.auth.token);

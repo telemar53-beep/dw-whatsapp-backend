@@ -13,7 +13,16 @@ const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 
 const router = express.Router();
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 router.use(requireAuth);
+
+router.param('id', (req, res, next, id) => {
+  if (!UUID_PATTERN.test(id)) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+  next();
+});
 
 router.get('/queue', async (req, res) => {
   const conversations = await listWaitingConversations();

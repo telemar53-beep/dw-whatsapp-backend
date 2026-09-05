@@ -27,6 +27,13 @@ function tokenFor(agentId, role) {
   return jwt.sign({ agentId, role }, process.env.JWT_SECRET);
 }
 
+// :id must look like a UUID to pass the router.param('id', ...) guard, since the
+// conversations.id column is a Postgres UUID. Use two distinct valid-looking UUIDs:
+// one standing in for a real conversation reached by the route handler, and one
+// standing in for a conversation the mocked repository reports as not found.
+const CONVERSATION_ID = '11111111-1111-1111-1111-111111111111';
+const NON_EXISTENT_ID = '22222222-2222-2222-2222-222222222222';
+
 describe('GET /api/conversations/queue', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -66,7 +73,7 @@ describe('GET /api/conversations/:id/messages', () => {
     getConversationWithContact.mockResolvedValue({ id: 'conv-1' });
     listMessagesByConversation.mockResolvedValue([{ id: 'msg-1', content: 'Oi' }]);
     const res = await request(buildApp())
-      .get('/api/conversations/conv-1/messages')
+      .get(`/api/conversations/${CONVERSATION_ID}/messages`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual([{ id: 'msg-1', content: 'Oi' }]);
@@ -75,9 +82,17 @@ describe('GET /api/conversations/:id/messages', () => {
   test('returns 404 when the conversation does not exist', async () => {
     getConversationWithContact.mockResolvedValue(null);
     const res = await request(buildApp())
-      .get('/api/conversations/does-not-exist/messages')
+      .get(`/api/conversations/${NON_EXISTENT_ID}/messages`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(404);
+  });
+
+  test('returns 404 without querying the repository when :id is not a UUID', async () => {
+    const res = await request(buildApp())
+      .get('/api/conversations/not-a-uuid/messages')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(404);
+    expect(getConversationWithContact).not.toHaveBeenCalled();
   });
 });
 
@@ -87,17 +102,17 @@ describe('POST /api/conversations/:id/claim', () => {
   test('claims a waiting conversation for the requesting agent', async () => {
     claimConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' });
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/claim')
+      .post(`/api/conversations/${CONVERSATION_ID}/claim`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(200);
-    expect(claimConversation).toHaveBeenCalledWith('conv-1', 'agent-1');
+    expect(claimConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1');
     expect(res.body.status).toBe('assigned');
   });
 
   test('returns 409 when the conversation is already assigned or closed', async () => {
     claimConversation.mockResolvedValue(null);
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/claim')
+      .post(`/api/conversations/${CONVERSATION_ID}/claim`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(409);
   });
@@ -110,7 +125,7 @@ describe('POST /api/conversations/:id/messages', () => {
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' });
     enqueueOutboundMessage.mockResolvedValue({ id: 'msg-1', status: 'sent' });
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/messages')
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ content: 'Ola cliente' });
     expect(res.status).toBe(201);
@@ -124,7 +139,7 @@ describe('POST /api/conversations/:id/messages', () => {
 
   test('returns 400 when content is missing', async () => {
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/messages')
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({});
     expect(res.status).toBe(400);
@@ -134,7 +149,7 @@ describe('POST /api/conversations/:id/messages', () => {
   test('returns 404 when the conversation does not exist', async () => {
     getConversationWithContact.mockResolvedValue(null);
     const res = await request(buildApp())
-      .post('/api/conversations/does-not-exist/messages')
+      .post(`/api/conversations/${NON_EXISTENT_ID}/messages`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ content: 'Ola' });
     expect(res.status).toBe(404);
@@ -143,7 +158,7 @@ describe('POST /api/conversations/:id/messages', () => {
   test('returns 403 when the requester is not the assigned agent', async () => {
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-2' });
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/messages')
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ content: 'Ola' });
     expect(res.status).toBe(403);
@@ -158,7 +173,7 @@ describe('POST /api/conversations/:id/messages', () => {
       assignedAgentId: 'agent-1',
     });
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/messages')
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ content: 'Ola' });
     expect(res.status).toBe(409);
@@ -172,17 +187,17 @@ describe('POST /api/conversations/:id/transfer', () => {
   test('transfers the conversation when the requester currently owns it', async () => {
     transferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/transfer')
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ toAgentId: 'agent-2' });
     expect(res.status).toBe(200);
-    expect(transferConversation).toHaveBeenCalledWith('conv-1', 'agent-1', 'agent-2');
+    expect(transferConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1', 'agent-2');
     expect(res.body.assignedAgentId).toBe('agent-2');
   });
 
   test('returns 400 when toAgentId is missing', async () => {
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/transfer')
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({});
     expect(res.status).toBe(400);
@@ -192,7 +207,7 @@ describe('POST /api/conversations/:id/transfer', () => {
   test('returns 409 when the requester does not currently own the conversation', async () => {
     transferConversation.mockResolvedValue(null);
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/transfer')
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ toAgentId: 'agent-2' });
     expect(res.status).toBe(409);
@@ -205,7 +220,7 @@ describe('POST /api/conversations/:id/close', () => {
   test('closes an open conversation', async () => {
     closeConversation.mockResolvedValue({ id: 'conv-1', status: 'closed' });
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/close')
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('closed');
@@ -214,7 +229,7 @@ describe('POST /api/conversations/:id/close', () => {
   test('returns 404 when the conversation does not exist or is already closed', async () => {
     closeConversation.mockResolvedValue(null);
     const res = await request(buildApp())
-      .post('/api/conversations/conv-1/close')
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(404);
   });

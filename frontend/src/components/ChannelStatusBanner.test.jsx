@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import ChannelStatusBanner from './ChannelStatusBanner';
 import { useAuth } from '../contexts/AuthContext';
 import { useChannels } from '../hooks/useChannels';
@@ -11,18 +12,26 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+function renderBanner() {
+  return render(
+    <MemoryRouter>
+      <ChannelStatusBanner />
+    </MemoryRouter>
+  );
+}
+
 describe('ChannelStatusBanner', () => {
   test('renders nothing for a non-admin agent', () => {
     useAuth.mockReturnValue({ agent: { role: 'agent' } });
     useChannels.mockReturnValue({ channels: [{ id: 'ch1', name: 'Berg', status: 'disconnected' }], loading: false });
-    const { container } = render(<ChannelStatusBanner />);
+    const { container } = renderBanner();
     expect(container).toBeEmptyDOMElement();
   });
 
   test('renders nothing for an admin when every channel is connected', () => {
     useAuth.mockReturnValue({ agent: { role: 'admin' } });
     useChannels.mockReturnValue({ channels: [{ id: 'ch1', name: 'Berg', status: 'connected' }], loading: false });
-    const { container } = render(<ChannelStatusBanner />);
+    const { container } = renderBanner();
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -32,7 +41,7 @@ describe('ChannelStatusBanner', () => {
       channels: [{ id: 'ch1', name: 'Berg', status: 'disconnected' }],
       loading: false,
     });
-    render(<ChannelStatusBanner />);
+    renderBanner();
     expect(screen.getByText(/Berg/)).toBeInTheDocument();
     expect(screen.getByText(/desconectado/i)).toBeInTheDocument();
   });
@@ -43,7 +52,7 @@ describe('ChannelStatusBanner', () => {
       channels: [{ id: 'ch1', name: 'Berg', status: 'awaiting_qr' }],
       loading: false,
     });
-    render(<ChannelStatusBanner />);
+    renderBanner();
     expect(screen.getByText(/QR/)).toBeInTheDocument();
   });
 });

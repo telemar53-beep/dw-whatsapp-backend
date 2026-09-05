@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useChannels } from '../hooks/useChannels';
 
@@ -16,9 +17,9 @@ function ChannelStatusBanner() {
         <p key={channel.id}>
           Canal <strong>{channel.name}</strong> está{' '}
           {channel.status === 'awaiting_qr' ? 'aguardando leitura do QR code' : 'desconectado'} —{' '}
-          <a href="/admin/channels" className="underline">
+          <Link to="/admin/channels" className="underline">
             ver na administração de canais
-          </a>
+          </Link>
         </p>
       ))}
     </div>

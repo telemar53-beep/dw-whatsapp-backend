@@ -95,3 +95,23 @@ describe('parseInboundMessages', () => {
     expect(parseInboundMessages({})).toEqual([]);
   });
 });
+
+jest.mock('axios');
+const axios = require('axios');
+const { sendTextMessage } = require('./meta-cloud.adapter');
+
+describe('sendTextMessage', () => {
+  test('posts to the Graph API and returns the WhatsApp message id', async () => {
+    axios.post.mockResolvedValue({ data: { messages: [{ id: 'wamid.SENT123' }] } });
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+
+    const result = await sendTextMessage(channel, '5511999998888', 'Resposta do atendente');
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      { messaging_product: 'whatsapp', to: '5511999998888', type: 'text', text: { body: 'Resposta do atendente' } },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+    expect(result).toEqual({ whatsappMessageId: 'wamid.SENT123' });
+  });
+});

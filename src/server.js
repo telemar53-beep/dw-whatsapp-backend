@@ -5,6 +5,7 @@ const { loadConfig } = require('./config/env');
 const { getPool } = require('./db/pool');
 const authRoutes = require('./auth/auth.routes');
 const metaCloudRoutes = require('./whatsapp-adapters/meta-cloud.routes');
+const { startOutboundWorker } = require('./queue/outbound-worker');
 
 const config = loadConfig();
 const app = express();
@@ -35,6 +36,7 @@ app.use('/api/auth', authRoutes);
 app.use('/webhooks', metaCloudRoutes);
 
 if (require.main === module) {
+  startOutboundWorker();
   app.listen(config.port, () => {
     console.log('Servidor rodando na porta ' + config.port);
   });

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const axios = require('axios');
 
 function verifyWebhookChallenge(query, verifyToken) {
   if (query['hub.mode'] === 'subscribe' && query['hub.verify_token'] === verifyToken) {
@@ -49,4 +50,19 @@ function parseInboundMessages(webhookBody) {
   return messages;
 }
 
-module.exports = { verifyWebhookChallenge, verifySignature, parseInboundMessages };
+async function sendTextMessage(channel, toPhoneNumber, content) {
+  const { phoneNumberId, accessToken } = channel.config;
+  const response = await axios.post(
+    `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+    {
+      messaging_product: 'whatsapp',
+      to: toPhoneNumber,
+      type: 'text',
+      text: { body: content },
+    },
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  return { whatsappMessageId: response.data.messages[0].id };
+}
+
+module.exports = { verifyWebhookChallenge, verifySignature, parseInboundMessages, sendTextMessage };

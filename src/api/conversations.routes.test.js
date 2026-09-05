@@ -149,6 +149,21 @@ describe('POST /api/conversations/:id/messages', () => {
     expect(res.status).toBe(403);
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
+
+  test('returns 409 when the conversation is closed, even for the assigned agent', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      channelId: 'channel-1',
+      status: 'closed',
+      assignedAgentId: 'agent-1',
+    });
+    const res = await request(buildApp())
+      .post('/api/conversations/conv-1/messages')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'Ola' });
+    expect(res.status).toBe(409);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/conversations/:id/transfer', () => {

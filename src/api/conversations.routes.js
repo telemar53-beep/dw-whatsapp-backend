@@ -51,6 +51,9 @@ router.post('/:id/messages', async (req, res) => {
   if (!conversation) {
     return res.sendStatus(404);
   }
+  if (conversation.status === 'closed') {
+    return res.status(409).json({ error: 'Conversation is closed' });
+  }
   if (conversation.assignedAgentId !== req.agent.agentId) {
     return res.status(403).json({ error: 'Only the assigned agent can send messages on this conversation' });
   }

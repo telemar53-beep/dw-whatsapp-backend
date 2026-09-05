@@ -4,12 +4,19 @@ const cors = require('cors');
 const { loadConfig } = require('./config/env');
 const { getPool } = require('./db/pool');
 const authRoutes = require('./auth/auth.routes');
+const metaCloudRoutes = require('./whatsapp-adapters/meta-cloud.routes');
 
 const config = loadConfig();
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 app.get('/health', async (req, res) => {
   try {
@@ -25,6 +32,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/webhooks', metaCloudRoutes);
 
 if (require.main === module) {
   app.listen(config.port, () => {

@@ -27,6 +27,7 @@ vi.mock('recharts', () => ({
   YAxis: () => null,
   CartesianGrid: () => null,
   Tooltip: () => null,
+  Legend: () => null,
 }));
 
 function renderPage() {
@@ -84,6 +85,35 @@ describe('MetricsPage', () => {
     await screen.findAllByText(/"agentName":"Ana"/);
     expect(screen.getAllByText(/"agentName":"Ana"/)).toHaveLength(2);
     expect(screen.getByText(/"sectorName":"Financeiro"/)).toBeInTheDocument();
+  });
+
+  test('shows an empty-state message instead of charts when an admin has no data', async () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'admin',
+      byAgent: [],
+      bySector: [],
+    });
+    renderPage();
+
+    expect(await screen.findAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(3);
+    expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
+  });
+
+  test('shows charts for byAgent but an empty-state for bySector when only bySector is empty', async () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'admin',
+      byAgent: [{ agentId: 'a1', agentName: 'Ana', closedCount: 5, avgResolutionMinutes: 10, avgFirstResponseMinutes: 2 }],
+      bySector: [],
+    });
+    renderPage();
+
+    await screen.findAllByText(/"agentName":"Ana"/);
+    expect(screen.getAllByText(/"agentName":"Ana"/)).toHaveLength(2);
+    expect(screen.getByText('Nenhum atendimento fechado nesse período.')).toBeInTheDocument();
   });
 
   test('switching period refetches metrics with the new period', async () => {

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getMetrics } from '../services/api';
 
 const PERIODS = [
-  { value: 'today', label: 'Hoje' },
+  { value: 'today', label: 'Últimas 24 horas' },
   { value: '7d', label: 'Últimos 7 dias' },
   { value: '30d', label: 'Últimos 30 dias' },
 ];
@@ -65,40 +65,53 @@ function MetricsPage() {
         <div className="space-y-8">
           <div>
             <h2 className="mb-2 font-medium text-gray-700">Atendimentos por atendente</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data.byAgent}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="agentName" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="closedCount" name="Atendimentos" fill="#2563eb" />
-              </BarChart>
-            </ResponsiveContainer>
+            {data.byAgent.length === 0 ? (
+              <p className="text-sm text-gray-500">Nenhum atendimento fechado nesse período.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={data.byAgent}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="agentName" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="closedCount" name="Atendimentos" fill="#2563eb" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
           <div>
             <h2 className="mb-2 font-medium text-gray-700">Tempo médio por atendente (min)</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data.byAgent}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="agentName" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="avgResolutionMinutes" name="Tempo médio de atendimento" fill="#2563eb" />
-                <Bar dataKey="avgFirstResponseMinutes" name="Tempo médio de primeira resposta" fill="#f97316" />
-              </BarChart>
-            </ResponsiveContainer>
+            {data.byAgent.length === 0 ? (
+              <p className="text-sm text-gray-500">Nenhum atendimento fechado nesse período.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={data.byAgent}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="agentName" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="avgResolutionMinutes" name="Tempo médio de atendimento" fill="#2563eb" />
+                  <Bar dataKey="avgFirstResponseMinutes" name="Tempo médio de primeira resposta" fill="#f97316" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
           <div>
             <h2 className="mb-2 font-medium text-gray-700">Atendimentos por setor</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data.bySector}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="sectorName" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="closedCount" name="Atendimentos" fill="#16a34a" />
-              </BarChart>
-            </ResponsiveContainer>
+            {data.bySector.length === 0 ? (
+              <p className="text-sm text-gray-500">Nenhum atendimento fechado nesse período.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={data.bySector}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="sectorName" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="closedCount" name="Atendimentos" fill="#16a34a" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       )}

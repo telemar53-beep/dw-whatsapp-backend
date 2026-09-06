@@ -7,8 +7,8 @@ const router = express.Router();
 const PERIOD_HOURS = { today: 24, '7d': 7 * 24, '30d': 30 * 24 };
 
 function periodToSince(period) {
+  if (!Object.prototype.hasOwnProperty.call(PERIOD_HOURS, period)) return null;
   const hours = PERIOD_HOURS[period];
-  if (!hours) return null;
   return new Date(Date.now() - hours * 60 * 60 * 1000);
 }
 

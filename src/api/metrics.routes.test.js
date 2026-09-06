@@ -41,6 +41,15 @@ describe('GET /api/metrics', () => {
     expect(getMetricsForAgent).not.toHaveBeenCalled();
   });
 
+  test('returns 400 for a prototype-polluting period value', async () => {
+    const res = await request(buildApp())
+      .get('/api/metrics?period=constructor')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(400);
+    expect(getMetricsForAgent).not.toHaveBeenCalled();
+  });
+
   test('returns own metrics for a non-admin agent', async () => {
     getMetricsForAgent.mockResolvedValue({ closedCount: 3, avgResolutionMinutes: 12.5, avgFirstResponseMinutes: 4.2 });
 

@@ -6,6 +6,8 @@ jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
   saveMediaFile: jest.fn(),
 }));
+jest.mock('../channels/channel.repository');
+jest.mock('../conversations/contact.repository');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -17,10 +19,14 @@ const {
   transferConversation,
   closeConversation,
   listClosedConversationsByContact,
+  findOpenConversation,
+  createConversation,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
+const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
+const { findChannelById } = require('../channels/channel.repository');
 const conversationsRoutes = require('./conversations.routes');
 
 function buildApp() {
@@ -486,5 +492,121 @@ describe('POST /api/conversations/:id/close', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'conv-1' });
     expect(emitToAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/conversations/start', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const BAILEYS_CHANNEL = { id: 'channel-1', type: 'baileys', status: 'connected' };
+
+  test('returns 400 when channelId, phoneNumber or content is missing', async () => {
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ phoneNumber: '5598999990000', content: 'Oi' });
+    expect(res.status).toBe(400);
+    expect(findChannelById).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the channel does not exist', async () => {
+    findChannelById.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' });
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 400 when the channel is not a Baileys channel', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', status: 'connected' });
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/baileys/i);
+    expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when the Baileys channel is not connected', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'awaiting_qr' });
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not connected/i);
+  });
+
+  test('returns 400 when the phone number has no digits after normalization', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '+++', content: 'Oi' });
+    expect(res.status).toBe(400);
+    expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the contact already has an open conversation on this channel', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5598999990000' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-existing' });
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '(55) 98 99999-0000', content: 'Oi' });
+    expect(res.status).toBe(409);
+    expect(createConversation).not.toHaveBeenCalled();
+  });
+
+  test('creates, claims and enqueues the first message on the happy path', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5598999990000' });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: CONVERSATION_ID, contactId: 'contact-1', channelId: 'channel-1' });
+    claimConversation.mockResolvedValue({
+      id: CONVERSATION_ID,
+      contactId: 'contact-1',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+    });
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      contactId: 'contact-1',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+      contactPhoneNumber: '5598999990000',
+      contactDisplayName: null,
+    });
+
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '(55) 98 99999-0000', content: 'Oi, tudo bem?' });
+
+    expect(res.status).toBe(201);
+    expect(findOrCreateContactByPhoneNumber).toHaveBeenCalledWith('5598999990000', null);
+    expect(findOpenConversation).toHaveBeenCalledWith('contact-1', 'channel-1');
+    expect(createConversation).toHaveBeenCalledWith('contact-1', 'channel-1');
+    expect(claimConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1');
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      channelId: 'channel-1',
+      content: 'Oi, tudo bem?',
+    });
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:assigned', {
+      conversation: expect.objectContaining({ id: CONVERSATION_ID }),
+    });
+    expect(res.body).toEqual(expect.objectContaining({ id: CONVERSATION_ID, contactPhoneNumber: '5598999990000' }));
+  });
+
+  test('returns 401 without a token', async () => {
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' });
+    expect(res.status).toBe(401);
+    expect(findChannelById).not.toHaveBeenCalled();
   });
 });

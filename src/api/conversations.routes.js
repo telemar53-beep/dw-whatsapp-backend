@@ -9,11 +9,15 @@ const {
   transferConversation,
   closeConversation,
   listClosedConversationsByContact,
+  findOpenConversation,
+  createConversation,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { saveMediaFile, extensionForMimeType, messageTypeForMimeType } = require('../media/media-storage');
+const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
+const { findChannelById } = require('../channels/channel.repository');
 
 const router = express.Router();
 
@@ -49,6 +53,48 @@ router.get('/mine', async (req, res) => {
 router.get('/contacts/:contactId/history', async (req, res) => {
   const conversations = await listClosedConversationsByContact(req.params.contactId);
   res.json(conversations);
+});
+
+router.post('/start', async (req, res) => {
+  const { channelId, phoneNumber, content } = req.body || {};
+  if (!channelId || !phoneNumber || !content) {
+    return res.status(400).json({ error: 'channelId, phoneNumber and content are required' });
+  }
+
+  const channel = await findChannelById(channelId);
+  if (!channel) {
+    return res.status(404).json({ error: 'Channel not found' });
+  }
+  if (channel.type !== 'baileys') {
+    return res.status(400).json({ error: 'Starting a conversation is only supported for Baileys channels' });
+  }
+  if (channel.status !== 'connected') {
+    return res.status(400).json({ error: 'This channel is not connected' });
+  }
+
+  const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
+  if (!normalizedPhoneNumber) {
+    return res.status(400).json({ error: 'A valid phoneNumber is required' });
+  }
+
+  const contact = await findOrCreateContactByPhoneNumber(normalizedPhoneNumber, null);
+
+  const existing = await findOpenConversation(contact.id, channel.id);
+  if (existing) {
+    return res.status(409).json({ error: 'There is already an open conversation with this contact on this channel' });
+  }
+
+  const conversation = await createConversation(contact.id, channel.id);
+  const claimed = await claimConversation(conversation.id, req.agent.agentId);
+  if (!claimed) {
+    throw new Error('Failed to claim newly created conversation');
+  }
+  await enqueueOutboundMessage({ conversationId: claimed.id, channelId: channel.id, content });
+
+  const conversationWithContact = await getConversationWithContact(claimed.id);
+  emitToAgent(req.agent.agentId, 'conversation:assigned', { conversation: conversationWithContact });
+
+  res.status(201).json(conversationWithContact);
 });
 
 router.get('/:id/messages', async (req, res) => {

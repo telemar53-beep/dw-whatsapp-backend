@@ -5,6 +5,7 @@ const {
   findChannelByMetaPhoneNumberId,
   listChannels,
   updateChannelStatus,
+  updateChannelTriageEnabled,
 } = require('./channel.repository');
 
 describe('channel repository', () => {
@@ -92,5 +93,35 @@ describe('channel repository', () => {
   test('updateChannelStatus returns null when the channel does not exist', async () => {
     const updated = await updateChannelStatus('00000000-0000-0000-0000-000000000000', 'connected');
     expect(updated).toBeNull();
+  });
+
+  test('createChannel defaults triageEnabled to false', async () => {
+    const channel = await createChannel({
+      type: 'baileys',
+      name: 'Canal Sem Triagem',
+      phoneNumber: '+5511999990020',
+      config: {},
+    });
+    expect(channel.triageEnabled).toBe(false);
+  });
+
+  test('updateChannelTriageEnabled turns triage on and off', async () => {
+    const channel = await createChannel({
+      type: 'baileys',
+      name: 'Canal Com Triagem',
+      phoneNumber: '+5511999990021',
+      config: {},
+    });
+
+    const enabled = await updateChannelTriageEnabled(channel.id, true);
+    expect(enabled.triageEnabled).toBe(true);
+
+    const disabled = await updateChannelTriageEnabled(channel.id, false);
+    expect(disabled.triageEnabled).toBe(false);
+  });
+
+  test('updateChannelTriageEnabled returns null when the channel does not exist', async () => {
+    const result = await updateChannelTriageEnabled('00000000-0000-0000-0000-000000000000', true);
+    expect(result).toBeNull();
   });
 });

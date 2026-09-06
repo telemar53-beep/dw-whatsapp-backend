@@ -18,6 +18,7 @@ const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { saveMediaFile, extensionForMimeType, messageTypeForMimeType } = require('../media/media-storage');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findChannelById } = require('../channels/channel.repository');
+const baileysManager = require('../whatsapp-adapters/baileys.manager');
 
 const router = express.Router();
 
@@ -88,7 +89,12 @@ router.post('/start', async (req, res) => {
     return res.status(400).json({ error: 'A valid phoneNumber is required' });
   }
 
-  const contact = await findOrCreateContactByPhoneNumber(normalizedPhoneNumber, null);
+  const canonicalPhoneNumber = await baileysManager.resolveWhatsAppJid(channel, normalizedPhoneNumber);
+  if (!canonicalPhoneNumber) {
+    return res.status(400).json({ error: 'This phone number is not on WhatsApp' });
+  }
+
+  const contact = await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, null);
 
   const existing = await findOpenConversation(contact.id, channel.id);
   if (existing) {

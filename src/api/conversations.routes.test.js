@@ -8,9 +8,11 @@ jest.mock('../media/media-storage', () => ({
 }));
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/contact.repository');
+jest.mock('../whatsapp-adapters/baileys.manager');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const {
   listWaitingConversations,
   listConversationsByAgent,
@@ -569,8 +571,22 @@ describe('POST /api/conversations/start', () => {
     expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
   });
 
+  test('returns 400 when the phone number is not registered on WhatsApp', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    baileysManager.resolveWhatsAppJid.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not.*whatsapp/i);
+    expect(baileysManager.resolveWhatsAppJid).toHaveBeenCalledWith(BAILEYS_CHANNEL, '5598999990000');
+    expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
+  });
+
   test('returns 409 when the contact already has an open conversation on this channel', async () => {
     findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    baileysManager.resolveWhatsAppJid.mockResolvedValue('5598999990000');
     findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5598999990000' });
     findOpenConversation.mockResolvedValue({ id: 'conv-existing' });
     const res = await request(buildApp())
@@ -581,9 +597,12 @@ describe('POST /api/conversations/start', () => {
     expect(createConversation).not.toHaveBeenCalled();
   });
 
-  test('creates, claims and enqueues the first message on the happy path', async () => {
+  test('creates, claims and enqueues the first message on the happy path, using the canonical number WhatsApp reports', async () => {
     findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
-    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5598999990000' });
+    // The attendant types a number with the extra 9th digit; WhatsApp reports back
+    // the canonical form without it — the route must use WhatsApp's version, not the raw input.
+    baileysManager.resolveWhatsAppJid.mockResolvedValue('559899990000');
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '559899990000' });
     findOpenConversation.mockResolvedValue(null);
     createConversation.mockResolvedValue({ id: CONVERSATION_ID, contactId: 'contact-1', channelId: 'channel-1' });
     claimConversation.mockResolvedValue({
@@ -597,7 +616,7 @@ describe('POST /api/conversations/start', () => {
       contactId: 'contact-1',
       channelId: 'channel-1',
       assignedAgentId: 'agent-1',
-      contactPhoneNumber: '5598999990000',
+      contactPhoneNumber: '559899990000',
       contactDisplayName: null,
     });
 
@@ -607,7 +626,8 @@ describe('POST /api/conversations/start', () => {
       .send({ channelId: 'channel-1', phoneNumber: '(55) 98 99999-0000', content: 'Oi, tudo bem?' });
 
     expect(res.status).toBe(201);
-    expect(findOrCreateContactByPhoneNumber).toHaveBeenCalledWith('5598999990000', null);
+    expect(baileysManager.resolveWhatsAppJid).toHaveBeenCalledWith(BAILEYS_CHANNEL, '5598999990000');
+    expect(findOrCreateContactByPhoneNumber).toHaveBeenCalledWith('559899990000', null);
     expect(findOpenConversation).toHaveBeenCalledWith('contact-1', 'channel-1');
     expect(createConversation).toHaveBeenCalledWith('contact-1', 'channel-1');
     expect(claimConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1');
@@ -619,7 +639,7 @@ describe('POST /api/conversations/start', () => {
     expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:assigned', {
       conversation: expect.objectContaining({ id: CONVERSATION_ID }),
     });
-    expect(res.body).toEqual(expect.objectContaining({ id: CONVERSATION_ID, contactPhoneNumber: '5598999990000' }));
+    expect(res.body).toEqual(expect.objectContaining({ id: CONVERSATION_ID, contactPhoneNumber: '559899990000' }));
   });
 
   test('returns 401 without a token', async () => {

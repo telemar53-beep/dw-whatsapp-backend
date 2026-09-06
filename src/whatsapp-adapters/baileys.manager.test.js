@@ -37,6 +37,7 @@ function createMockSock() {
       }),
     },
     sendMessage: jest.fn().mockResolvedValue({ key: { id: 'wamid.SENT1' } }),
+    onWhatsApp: jest.fn(),
     handlers,
   };
 }
@@ -518,6 +519,39 @@ describe('baileys.manager', () => {
     test('throws when there is no active connection for the channel', async () => {
       await expect(
         manager.sendTextMessage({ id: 'channel-does-not-exist' }, '5511999992222', 'Oi')
+      ).rejects.toThrow('No active Baileys connection for channel channel-does-not-exist');
+    });
+  });
+
+  describe('resolveWhatsAppJid', () => {
+    test('resolves to the canonical phone number WhatsApp reports for the number', async () => {
+      const sock = createMockSock();
+      sock.onWhatsApp.mockResolvedValue([{ jid: '559885120338@s.whatsapp.net', exists: true }]);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-onwa-1', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.resolveWhatsAppJid(channel, '5598985120338');
+
+      expect(sock.onWhatsApp).toHaveBeenCalledWith('5598985120338');
+      expect(result).toBe('559885120338');
+    });
+
+    test('returns null when the number is not registered on WhatsApp', async () => {
+      const sock = createMockSock();
+      sock.onWhatsApp.mockResolvedValue([]);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-onwa-2', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.resolveWhatsAppJid(channel, '5511900000000');
+
+      expect(result).toBeNull();
+    });
+
+    test('throws when there is no active connection for the channel', async () => {
+      await expect(
+        manager.resolveWhatsAppJid({ id: 'channel-does-not-exist' }, '5511999992222')
       ).rejects.toThrow('No active Baileys connection for channel channel-does-not-exist');
     });
   });

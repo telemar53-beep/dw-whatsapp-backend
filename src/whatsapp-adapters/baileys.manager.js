@@ -301,11 +301,21 @@ function getQrForChannel(channelId) {
   return entry ? entry.qr : null;
 }
 
+async function resolveWhatsAppJid(channel, phoneNumber) {
+  const entry = connections.get(channel.id);
+  if (!entry) {
+    throw new Error(`No active Baileys connection for channel ${channel.id}`);
+  }
+  const [result] = await entry.sock.onWhatsApp(phoneNumber);
+  return result ? jidToPhoneNumber(result.jid) : null;
+}
+
 module.exports = {
   startAllBaileysConnections,
   startBaileysConnection,
   addBaileysChannel,
   sendTextMessage,
   sendMediaMessage,
+  resolveWhatsAppJid,
   getQrForChannel,
 };

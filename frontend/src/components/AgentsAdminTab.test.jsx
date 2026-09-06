@@ -135,6 +135,32 @@ describe('AgentsAdminTab', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  test('editing sectors: unchecking a checkbox and saving calls setAgentSectors with the sector removed', async () => {
+    const refresh = vi.fn();
+    useAgentsAdmin.mockReturnValue({
+      agents: [
+        { id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [{ id: 's1', name: 'Financeiro' }] },
+      ],
+      refresh,
+    });
+    useSectors.mockReturnValue({
+      sectors: [
+        { id: 's1', name: 'Financeiro' },
+        { id: 's2', name: 'Comercial' },
+      ],
+      refresh: vi.fn(),
+    });
+    api.setAgentSectors.mockResolvedValue({ ok: true });
+    render(<AgentsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /editar setores/i }));
+    await userEvent.click(screen.getByLabelText('Financeiro'));
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    await waitFor(() => expect(api.setAgentSectors).toHaveBeenCalledWith('a1', [], 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+  });
+
   test('canceling sector edits discards unsaved changes', async () => {
     useAgentsAdmin.mockReturnValue({
       agents: [

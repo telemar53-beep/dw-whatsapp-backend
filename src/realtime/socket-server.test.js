@@ -127,11 +127,14 @@ describe('socket server', () => {
       const onlineEvents = [];
       clientA.on('presence:online', (payload) => onlineEvents.push(payload));
       const firstTab = connect(tokenSame);
+      const firstTabOwnEvents = [];
+      firstTab.on('presence:online', (payload) => firstTabOwnEvents.push(payload));
       firstTab.on('connect', () => {
         const secondTab = connect(tokenSame);
         secondTab.on('connect', () => {
           setTimeout(() => {
             expect(onlineEvents).toEqual([{ agentId: 'agent-presence-f' }]);
+            expect(firstTabOwnEvents).toEqual([]);
             clientA.close();
             firstTab.close();
             secondTab.close();

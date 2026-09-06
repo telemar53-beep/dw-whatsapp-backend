@@ -19,6 +19,13 @@ function initSocketServer(httpServer) {
   io.on('connection', (socket) => {
     socket.join(`agent:${socket.agent.agentId}`);
     if (markAgentOnline(socket.agent.agentId)) {
+      // socket.broadcast.emit (not broadcast()/io.emit) deliberately excludes
+      // the connecting socket itself. Socket.io adds a socket to the
+      // namespace's socket set before this 'connection' handler runs, so a
+      // plain io.emit here would let the connecting client receive its own
+      // "you just came online" event. presence:offline below has no such
+      // risk: by the time 'disconnect' fires, the socket has already been
+      // removed from the namespace, so io.emit structurally cannot reach it.
       socket.broadcast.emit('presence:online', { agentId: socket.agent.agentId });
     }
     socket.on('disconnect', () => {

@@ -3,9 +3,11 @@ import { renderHook, act } from '@testing-library/react';
 import { usePresence } from './usePresence';
 import { useSocket } from '../contexts/SocketContext';
 import { useAuth } from '../contexts/AuthContext';
+import * as api from '../services/api';
 
 vi.mock('../contexts/SocketContext');
 vi.mock('../contexts/AuthContext');
+vi.mock('../services/api');
 
 function createFakeSocket() {
   const handlers = {};
@@ -24,7 +26,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fakeSocket = createFakeSocket();
   useSocket.mockReturnValue(fakeSocket);
-  useAuth.mockReturnValue({ agent: { id: 'self-1' } });
+  useAuth.mockReturnValue({ agent: { id: 'self-1' }, token: 'tok-123' });
 });
 
 describe('usePresence', () => {
@@ -65,5 +67,37 @@ describe('usePresence', () => {
     });
 
     expect(result.current).toEqual(new Set(['self-1']));
+  });
+
+  test('the very first connect event does not trigger a re-fetch', () => {
+    const agents = [{ id: 'a1', online: false }];
+    renderHook(() => usePresence(agents));
+
+    act(() => {
+      fakeSocket.trigger('connect');
+    });
+
+    expect(api.listAgents).not.toHaveBeenCalled();
+  });
+
+  test('a later reconnect re-fetches and re-seeds presence from a fresh snapshot', async () => {
+    const agents = [{ id: 'a1', online: false }];
+    api.listAgents.mockResolvedValue([{ id: 'a1', online: true }]);
+    const { result } = renderHook(() => usePresence(agents));
+    expect(result.current).toEqual(new Set(['self-1']));
+
+    // First connect: no re-fetch yet.
+    act(() => {
+      fakeSocket.trigger('connect');
+    });
+    expect(api.listAgents).not.toHaveBeenCalled();
+
+    // A later reconnect re-fetches and re-seeds.
+    await act(async () => {
+      fakeSocket.trigger('connect');
+    });
+
+    expect(api.listAgents).toHaveBeenCalledWith('tok-123');
+    expect(result.current).toEqual(new Set(['a1', 'self-1']));
   });
 });

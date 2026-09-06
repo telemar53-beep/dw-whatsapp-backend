@@ -14,6 +14,10 @@ import {
   getConversationHistory,
   listChannelsForAgent,
   startConversation,
+  listQuickReplies,
+  createQuickReply,
+  updateQuickReply,
+  deleteQuickReply,
 } from './api';
 
 beforeEach(() => {
@@ -230,6 +234,56 @@ describe('startConversation', () => {
         method: 'POST',
         body: JSON.stringify({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' }),
       })
+    );
+  });
+});
+
+describe('listQuickReplies', () => {
+  test('fetches the quick reply list for any authenticated agent', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('[]') });
+    await listQuickReplies('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/quick-replies',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+});
+
+describe('createQuickReply', () => {
+  test('posts the new quick reply payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await createQuickReply({ title: 'Boas-vindas', content: 'Olá!' }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/quick-replies',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ title: 'Boas-vindas', content: 'Olá!' }),
+      })
+    );
+  });
+});
+
+describe('updateQuickReply', () => {
+  test('patches the quick reply payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await updateQuickReply('qr-1', { title: 'Editado', content: 'Texto editado' }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/quick-replies/qr-1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ title: 'Editado', content: 'Texto editado' }),
+      })
+    );
+  });
+});
+
+describe('deleteQuickReply', () => {
+  test('sends a DELETE request for the quick reply', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
+    await deleteQuickReply('qr-1', 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/quick-replies/qr-1',
+      expect.objectContaining({ method: 'DELETE' })
     );
   });
 });

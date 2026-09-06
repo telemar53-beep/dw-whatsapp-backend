@@ -134,3 +134,19 @@ export function startConversation({ channelId, phoneNumber, content }, token) {
     token,
   });
 }
+
+export function listQuickReplies(token) {
+  return apiFetch('/api/quick-replies', { token });
+}
+
+export function createQuickReply(payload, token) {
+  return apiFetch('/api/admin/quick-replies', { method: 'POST', body: payload, token });
+}
+
+export function updateQuickReply(id, payload, token) {
+  return apiFetch(`/api/admin/quick-replies/${id}`, { method: 'PATCH', body: payload, token });
+}
+
+export function deleteQuickReply(id, token) {
+  return apiFetch(`/api/admin/quick-replies/${id}`, { method: 'DELETE', token });
+}

@@ -4,16 +4,19 @@ import userEvent from '@testing-library/user-event';
 import AdminChannelsPage from './AdminChannelsPage';
 import { useChannels } from '../hooks/useChannels';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
+import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useAuth } from '../contexts/AuthContext';
 
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
+vi.mock('../hooks/useQuickReplies');
 vi.mock('../contexts/AuthContext');
 
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
   useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
+  useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
 });
 
 describe('AdminChannelsPage', () => {
@@ -65,6 +68,27 @@ describe('AdminChannelsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /atendentes/i }));
 
     expect(screen.getByText('Ana')).toBeInTheDocument();
+    expect(screen.queryByText('Berg')).not.toBeInTheDocument();
+  });
+
+  test('switches to the Respostas rápidas tab and shows the quick-reply management UI', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    useQuickReplies.mockReturnValue({
+      quickReplies: [{ id: 'qr1', title: 'Boas-vindas', content: 'Olá!' }],
+      refresh: vi.fn(),
+    });
+    render(<AdminChannelsPage />);
+
+    expect(screen.getByText('Berg')).toBeInTheDocument();
+    expect(screen.queryByText('Boas-vindas')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /respostas rápidas/i }));
+
+    expect(screen.getByText('Boas-vindas')).toBeInTheDocument();
     expect(screen.queryByText('Berg')).not.toBeInTheDocument();
   });
 });

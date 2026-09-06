@@ -370,6 +370,91 @@ describe('baileys.manager', () => {
       });
     });
 
+    test('unwraps an ephemeral (disappearing-messages) envelope to find the real image content', async () => {
+      const { saveMediaFile } = require('../media/media-storage');
+      saveMediaFile.mockResolvedValue('generated-ephemeral-image.jpg');
+      baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-ephemeral-bytes'));
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999993333@s.whatsapp.net', fromMe: false, id: 'BAILEYS_EPHEMERAL_1' },
+            pushName: 'Cliente Efemero',
+            message: {
+              ephemeralMessage: {
+                message: { imageMessage: { mimetype: 'image/jpeg', caption: 'Foto temporaria' } },
+              },
+            },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511999993333',
+        contactDisplayName: 'Cliente Efemero',
+        whatsappMessageId: 'BAILEYS_EPHEMERAL_1',
+        messageType: 'image',
+        content: 'Foto temporaria',
+        mediaPath: 'generated-ephemeral-image.jpg',
+        mediaMimeType: 'image/jpeg',
+        mediaFilename: null,
+      });
+    });
+
+    test('unwraps a view-once envelope to find the real audio content', async () => {
+      const { saveMediaFile } = require('../media/media-storage');
+      saveMediaFile.mockResolvedValue('generated-viewonce-audio.ogg');
+      baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-viewonce-bytes'));
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999992222@s.whatsapp.net', fromMe: false, id: 'BAILEYS_VIEWONCE_1' },
+            pushName: 'Cliente Visualizacao Unica',
+            message: {
+              viewOnceMessageV2: {
+                message: { audioMessage: { mimetype: 'audio/ogg' } },
+              },
+            },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511999992222',
+        contactDisplayName: 'Cliente Visualizacao Unica',
+        whatsappMessageId: 'BAILEYS_VIEWONCE_1',
+        messageType: 'audio',
+        content: null,
+        mediaPath: 'generated-viewonce-audio.ogg',
+        mediaMimeType: 'audio/ogg',
+        mediaFilename: null,
+      });
+    });
+
+    test('logs the unrecognized message keys instead of failing silently with no trace', async () => {
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999991234@s.whatsapp.net', fromMe: false, id: 'BAILEYS_UNKNOWN_1' },
+            pushName: 'Cliente Desconhecido',
+            message: { reactionMessage: { text: '👍' } },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('reactionMessage'));
+      logSpy.mockRestore();
+    });
+
     test('ignores a media message sent by the connection itself (skips before any download work)', async () => {
       const { saveMediaFile } = require('../media/media-storage');
 

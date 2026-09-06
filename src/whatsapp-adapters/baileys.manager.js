@@ -69,6 +69,27 @@ function extractLocation(message) {
   };
 }
 
+// WhatsApp wraps the real content of disappearing, view-once, and
+// captioned-document messages inside one of these envelope types instead
+// of exposing imageMessage/audioMessage/etc. directly.
+const MESSAGE_WRAPPER_KEYS = [
+  'ephemeralMessage',
+  'viewOnceMessage',
+  'viewOnceMessageV2',
+  'viewOnceMessageV2Extension',
+  'documentWithCaptionMessage',
+];
+
+function unwrapMessage(message) {
+  let current = message;
+  while (current) {
+    const wrapperKey = MESSAGE_WRAPPER_KEYS.find((key) => current[key] && current[key].message);
+    if (!wrapperKey) break;
+    current = current[wrapperKey].message;
+  }
+  return current;
+}
+
 function sessionDirFor(channelId) {
   return path.join(loadConfig().baileysSessionsDir, channelId);
 }
@@ -102,8 +123,9 @@ async function handleMessagesUpsert(channel, { messages, type }) {
     if (!phoneJid) continue;
     const fromPhoneNumber = jidToPhoneNumber(phoneJid);
     const contactDisplayName = msg.pushName ? msg.pushName.trim() : null;
+    const innerMessage = unwrapMessage(msg.message);
 
-    const location = extractLocation(msg.message);
+    const location = extractLocation(innerMessage);
     if (location) {
       await ingestInboundMessage({
         channelId: channel.id,
@@ -117,7 +139,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       continue;
     }
 
-    const mediaInfo = extractMediaInfo(msg.message);
+    const mediaInfo = extractMediaInfo(innerMessage);
     if (mediaInfo) {
       const { downloadMediaMessage } = loadBaileysLib();
       const buffer = await downloadMediaMessage(msg, 'buffer', {});
@@ -136,8 +158,15 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       continue;
     }
 
-    const content = extractTextContent(msg.message);
-    if (!content) continue;
+    const content = extractTextContent(innerMessage);
+    if (!content) {
+      console.log(
+        `Unrecognized Baileys message type for channel ${channel.id}, keys: ${
+          innerMessage ? Object.keys(innerMessage).join(', ') : '(no message)'
+        }`
+      );
+      continue;
+    }
     await ingestInboundMessage({
       channelId: channel.id,
       fromPhoneNumber,

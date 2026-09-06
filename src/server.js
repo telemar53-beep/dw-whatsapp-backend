@@ -17,6 +17,7 @@ const adminAgentsRoutes = require('./api/admin-agents.routes');
 const adminQuickRepliesRoutes = require('./api/admin-quick-replies.routes');
 const adminSectorsRoutes = require('./api/admin-sectors.routes');
 const mediaRoutes = require('./api/media.routes');
+const metricsRoutes = require('./api/metrics.routes');
 const { initSocketServer } = require('./realtime/socket-server');
 
 const config = loadConfig();
@@ -55,6 +56,7 @@ app.use('/api/admin/agents', adminAgentsRoutes);
 app.use('/api/admin/quick-replies', adminQuickRepliesRoutes);
 app.use('/api/admin/sectors', adminSectorsRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/metrics', metricsRoutes);
 app.use('/webhooks', metaCloudRoutes);
 
 app.use((err, req, res, next) => {

@@ -26,7 +26,7 @@ function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <form onSubmit={handleSubmit} className="w-80 rounded bg-white p-6 shadow">
+      <form onSubmit={handleSubmit} className="w-[90vw] max-w-80 rounded bg-white p-6 shadow">
         <h1 className="mb-4 text-lg font-semibold text-gray-800">DW Telecom - Atendimento</h1>
         <label htmlFor="email" className="mb-1 block text-sm text-gray-600">
           Email

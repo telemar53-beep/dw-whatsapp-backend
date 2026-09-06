@@ -26,7 +26,7 @@ function ChangePasswordModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/40">
-      <div className="w-80 rounded bg-white p-4 shadow">
+      <div className="w-[90vw] max-w-80 rounded bg-white p-4 shadow">
         <h3 className="mb-3 font-semibold text-gray-800">Trocar minha senha</h3>
         {success ? (
           <>

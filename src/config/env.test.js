@@ -18,6 +18,7 @@ describe('loadConfig', () => {
     process.env.META_VERIFY_TOKEN = 'verify-token';
     process.env.META_APP_SECRET = 'app-secret';
     process.env.BAILEYS_SESSIONS_DIR = './.baileys-sessions';
+    process.env.MEDIA_STORAGE_DIR = './.media-storage';
   }
 
   test('throws when DATABASE_URL is missing', () => {
@@ -56,10 +57,16 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow('Missing required environment variables: BAILEYS_SESSIONS_DIR');
   });
 
+  test('throws when MEDIA_STORAGE_DIR is missing', () => {
+    setAllRequired();
+    delete process.env.MEDIA_STORAGE_DIR;
+    expect(() => loadConfig()).toThrow('Missing required environment variables: MEDIA_STORAGE_DIR');
+  });
+
   test('lists all missing variables together', () => {
     process.env = {};
     expect(() => loadConfig()).toThrow(
-      'Missing required environment variables: DATABASE_URL, JWT_SECRET, REDIS_URL, META_VERIFY_TOKEN, META_APP_SECRET, BAILEYS_SESSIONS_DIR'
+      'Missing required environment variables: DATABASE_URL, JWT_SECRET, REDIS_URL, META_VERIFY_TOKEN, META_APP_SECRET, BAILEYS_SESSIONS_DIR, MEDIA_STORAGE_DIR'
     );
   });
 
@@ -75,6 +82,7 @@ describe('loadConfig', () => {
       metaVerifyToken: 'verify-token',
       metaAppSecret: 'app-secret',
       baileysSessionsDir: './.baileys-sessions',
+      mediaStorageDir: './.media-storage',
       frontendOrigin: null,
     });
   });

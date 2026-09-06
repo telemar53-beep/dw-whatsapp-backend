@@ -3,3 +3,4 @@ node_modules/
 .env.test
 .worktrees/
 .baileys-sessions*/
+.media-storage*/

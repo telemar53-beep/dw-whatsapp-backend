@@ -6,6 +6,7 @@ function loadConfig() {
     'META_VERIFY_TOKEN',
     'META_APP_SECRET',
     'BAILEYS_SESSIONS_DIR',
+    'MEDIA_STORAGE_DIR',
   ];
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) {
@@ -19,6 +20,7 @@ function loadConfig() {
     metaVerifyToken: process.env.META_VERIFY_TOKEN,
     metaAppSecret: process.env.META_APP_SECRET,
     baileysSessionsDir: process.env.BAILEYS_SESSIONS_DIR,
+    mediaStorageDir: process.env.MEDIA_STORAGE_DIR,
     frontendOrigin: process.env.FRONTEND_ORIGIN || null,
   };
 }

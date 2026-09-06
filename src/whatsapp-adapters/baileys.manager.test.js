@@ -487,6 +487,119 @@ describe('baileys.manager', () => {
       });
     });
 
+    test('sends a video with a caption through the active socket', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-7', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      const { getMediaFilePath } = require('../media/media-storage');
+      getMediaFilePath.mockReturnValue('/fake/path/video.mp4');
+      const fs = require('fs');
+      fs.promises.readFile = jest.fn().mockResolvedValue(Buffer.from('fake-video-bytes'));
+
+      await manager.sendMediaMessage(channel, '5511999993333', {
+        messageType: 'video',
+        mediaPath: 'video.mp4',
+        mediaMimeType: 'video/mp4',
+        caption: 'Confira o video',
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', {
+        video: Buffer.from('fake-video-bytes'),
+        caption: 'Confira o video',
+      });
+    });
+
+    test('sends an audio message without a caption', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-8', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      const { getMediaFilePath } = require('../media/media-storage');
+      getMediaFilePath.mockReturnValue('/fake/path/audio.ogg');
+      const fs = require('fs');
+      fs.promises.readFile = jest.fn().mockResolvedValue(Buffer.from('fake-audio-bytes'));
+
+      await manager.sendMediaMessage(channel, '5511999993333', {
+        messageType: 'audio',
+        mediaPath: 'audio.ogg',
+        mediaMimeType: 'audio/ogg',
+        caption: 'Isso nao deveria aparecer',
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', {
+        audio: Buffer.from('fake-audio-bytes'),
+        mimetype: 'audio/ogg',
+      });
+    });
+
+    test('sends a sticker without a caption', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-9', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      const { getMediaFilePath } = require('../media/media-storage');
+      getMediaFilePath.mockReturnValue('/fake/path/sticker.webp');
+      const fs = require('fs');
+      fs.promises.readFile = jest.fn().mockResolvedValue(Buffer.from('fake-sticker-bytes'));
+
+      await manager.sendMediaMessage(channel, '5511999993333', {
+        messageType: 'sticker',
+        mediaPath: 'sticker.webp',
+        mediaMimeType: 'image/webp',
+        caption: 'Isso nao deveria aparecer',
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', {
+        sticker: Buffer.from('fake-sticker-bytes'),
+      });
+    });
+
+    test('sends a document with a caption included in the payload', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-10', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      const { getMediaFilePath } = require('../media/media-storage');
+      getMediaFilePath.mockReturnValue('/fake/path/doc.pdf');
+      const fs = require('fs');
+      fs.promises.readFile = jest.fn().mockResolvedValue(Buffer.from('fake-doc-bytes'));
+
+      await manager.sendMediaMessage(channel, '5511999993333', {
+        messageType: 'document',
+        mediaPath: 'doc.pdf',
+        mediaMimeType: 'application/pdf',
+        mediaFilename: 'resposta.pdf',
+        caption: 'Segue o documento solicitado',
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', {
+        document: Buffer.from('fake-doc-bytes'),
+        mimetype: 'application/pdf',
+        fileName: 'resposta.pdf',
+        caption: 'Segue o documento solicitado',
+      });
+    });
+
+    test('rejects for an unsupported media message type', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-11', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      const { getMediaFilePath } = require('../media/media-storage');
+      getMediaFilePath.mockReturnValue('/fake/path/file.bin');
+      const fs = require('fs');
+      fs.promises.readFile = jest.fn().mockResolvedValue(Buffer.from('fake-bytes'));
+
+      await expect(
+        manager.sendMediaMessage(channel, '5511999993333', {
+          messageType: 'foo',
+          mediaPath: 'file.bin',
+          mediaMimeType: 'application/octet-stream',
+        })
+      ).rejects.toThrow('Unsupported media message type: foo');
+    });
+
     test('throws when there is no active connection for the channel', async () => {
       await expect(
         manager.sendMediaMessage({ id: 'channel-does-not-exist' }, '5511999992222', { messageType: 'image', mediaPath: 'x.jpg' })

@@ -254,7 +254,9 @@ async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath
   } else if (messageType === 'audio') {
     payload = { audio: buffer, mimetype: mediaMimeType };
   } else if (messageType === 'document') {
-    payload = { document: buffer, mimetype: mediaMimeType, fileName: mediaFilename || 'arquivo' };
+    payload = caption
+      ? { document: buffer, mimetype: mediaMimeType, fileName: mediaFilename || 'arquivo', caption }
+      : { document: buffer, mimetype: mediaMimeType, fileName: mediaFilename || 'arquivo' };
   } else if (messageType === 'sticker') {
     payload = { sticker: buffer };
   } else {

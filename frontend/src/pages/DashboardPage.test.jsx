@@ -15,6 +15,7 @@ vi.mock('../hooks/useQueue');
 vi.mock('../hooks/useMyConversations');
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgents', () => ({ useAgents: () => [] }));
+vi.mock('../hooks/usePresence', () => ({ usePresence: () => new Set() }));
 vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../components/StartConversationModal', () => ({
@@ -154,5 +155,13 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue([]);
     renderDashboard();
     expect(screen.getByRole('link', { name: /métricas/i })).toBeInTheDocument();
+  });
+
+  test('renders the team panel', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.getByText('Equipe')).toBeInTheDocument();
+    expect(screen.getByText(/nenhum atendente cadastrado/i)).toBeInTheDocument();
   });
 });

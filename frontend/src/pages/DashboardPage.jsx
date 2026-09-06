@@ -10,6 +10,7 @@ import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import StartConversationModal from '../components/StartConversationModal';
+import TeamPanel from '../components/TeamPanel';
 
 function DashboardPage() {
   const { agent, logout } = useAuth();
@@ -63,6 +64,7 @@ function DashboardPage() {
           </button>
           <QueueList conversations={queue} onSelect={setSelectedId} />
           <MyConversationsList conversations={myConversations} onSelect={setSelectedId} />
+          <TeamPanel />
         </aside>
         <main className="flex-1">
           {selectedConversation ? (

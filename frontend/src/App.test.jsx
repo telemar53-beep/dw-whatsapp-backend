@@ -25,6 +25,7 @@ describe('App', () => {
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);
     api.listChannels.mockResolvedValue([]);
+    api.listAgents.mockResolvedValue([]);
 
     render(<App />);
 
@@ -42,6 +43,7 @@ describe('App', () => {
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);
     api.listChannels.mockResolvedValue([]);
+    api.listAgents.mockResolvedValue([]);
 
     render(<App />);
 

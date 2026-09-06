@@ -41,6 +41,7 @@ describe('StartConversationModal', () => {
     render(<StartConversationModal onClose={vi.fn()} onCreated={onCreated} />);
 
     await screen.findByText('Berg');
+    await userEvent.clear(screen.getByLabelText(/telefone/i));
     await userEvent.type(screen.getByLabelText(/telefone/i), '5598999990000');
     await userEvent.type(screen.getByLabelText(/mensagem/i), 'Oi, tudo bem?');
     await userEvent.click(screen.getByRole('button', { name: /iniciar/i }));
@@ -52,6 +53,13 @@ describe('StartConversationModal', () => {
       )
     );
     expect(onCreated).toHaveBeenCalledWith({ id: 'conv-new' });
+  });
+
+  test('pre-fills the phone field with the "55" country code', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(screen.getByLabelText(/telefone/i)).toHaveValue('55');
   });
 
   test('shows an error and keeps the modal open when the API rejects', async () => {

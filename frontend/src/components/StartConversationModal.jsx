@@ -6,7 +6,7 @@ function StartConversationModal({ onClose, onCreated }) {
   const { token } = useAuth();
   const [channels, setChannels] = useState([]);
   const [channelId, setChannelId] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('55');
   const [content, setContent] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);

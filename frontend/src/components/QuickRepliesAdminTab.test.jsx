@@ -48,7 +48,26 @@ describe('QuickRepliesAdminTab', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  test('canceling an edit discards unsaved changes', async () => {
+    useQuickReplies.mockReturnValue({
+      quickReplies: [{ id: 'qr-1', title: 'Boas-vindas', content: 'Olá!' }],
+      refresh: vi.fn(),
+    });
+    render(<QuickRepliesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /editar/i }));
+    const titleInput = screen.getByDisplayValue('Boas-vindas');
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, 'Rascunho abandonado');
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /editar/i }));
+    expect(screen.getByDisplayValue('Boas-vindas')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Rascunho abandonado')).not.toBeInTheDocument();
+  });
+
   test('deleting a quick reply calls deleteQuickReply and refreshes', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const refresh = vi.fn();
     useQuickReplies.mockReturnValue({
       quickReplies: [{ id: 'qr-1', title: 'Boas-vindas', content: 'Olá!' }],
@@ -61,5 +80,18 @@ describe('QuickRepliesAdminTab', () => {
 
     await waitFor(() => expect(api.deleteQuickReply).toHaveBeenCalledWith('qr-1', 'tok-123'));
     expect(refresh).toHaveBeenCalled();
+  });
+
+  test('does not delete when the confirmation is declined', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    useQuickReplies.mockReturnValue({
+      quickReplies: [{ id: 'qr-1', title: 'Boas-vindas', content: 'Olá!' }],
+      refresh: vi.fn(),
+    });
+    render(<QuickRepliesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
+
+    expect(api.deleteQuickReply).not.toHaveBeenCalled();
   });
 });

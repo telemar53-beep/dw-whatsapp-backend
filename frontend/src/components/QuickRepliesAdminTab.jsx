@@ -27,7 +27,24 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
     }
   }
 
+  function handleEditClick() {
+    setTitle(quickReply.title);
+    setContent(quickReply.content);
+    setError(null);
+    setEditing(true);
+  }
+
+  function handleCancel() {
+    setTitle(quickReply.title);
+    setContent(quickReply.content);
+    setError(null);
+    setEditing(false);
+  }
+
   async function handleDelete() {
+    if (!window.confirm(`Excluir a resposta rápida "${quickReply.title}"?`)) {
+      return;
+    }
     await deleteQuickReply(quickReply.id, token);
     onDeleted();
   }
@@ -56,7 +73,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
           >
             Salvar
           </button>
-          <button type="button" onClick={() => setEditing(false)} className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700">
+          <button type="button" onClick={handleCancel} className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700">
             Cancelar
           </button>
         </div>
@@ -71,7 +88,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
         <p className="text-sm text-gray-500">{quickReply.content}</p>
       </div>
       <div className="flex items-center gap-3">
-        <button onClick={() => setEditing(true)} className="text-sm text-blue-600 underline">
+        <button onClick={handleEditClick} className="text-sm text-blue-600 underline">
           Editar
         </button>
         <button onClick={handleDelete} className="text-sm text-red-600 underline">

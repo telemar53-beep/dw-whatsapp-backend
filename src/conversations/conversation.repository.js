@@ -69,9 +69,9 @@ async function closeConversation(conversationId, agentId) {
   return withTransaction(async (client) => {
     const result = await client.query(
       `UPDATE conversations SET status = 'closed', updated_at = now()
-       WHERE id = $1 AND status <> 'closed'
+       WHERE id = $1 AND assigned_agent_id = $2 AND status <> 'closed'
        RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
-      [conversationId]
+      [conversationId, agentId]
     );
     if (result.rowCount === 0) return null;
     await client.query(

@@ -470,12 +470,12 @@ describe('POST /api/conversations/:id/close', () => {
     expect(res.body.status).toBe('closed');
   });
 
-  test('returns 404 when the conversation does not exist or is already closed', async () => {
+  test('returns 409 when the conversation is not assigned to the caller, does not exist, or is already closed', async () => {
     closeConversation.mockResolvedValue(null);
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(409);
   });
 
   test('notifies the assigned agent when closing an assigned conversation', async () => {

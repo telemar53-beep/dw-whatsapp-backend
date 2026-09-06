@@ -202,7 +202,7 @@ router.post('/:id/transfer', async (req, res) => {
 router.post('/:id/close', async (req, res) => {
   const conversation = await closeConversation(req.params.id, req.agent.agentId);
   if (!conversation) {
-    return res.status(404).json({ error: 'Conversation not found' });
+    return res.status(409).json({ error: 'Conversation is not currently assigned to you, or is closed' });
   }
   if (conversation.assignedAgentId) {
     emitToAgent(conversation.assignedAgentId, 'conversation:closed', { conversationId: conversation.id });

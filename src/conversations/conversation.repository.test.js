@@ -81,6 +81,7 @@ describe('conversation repository', () => {
   test('claimConversation returns null for a closed conversation', async () => {
     const conversation = await createConversation(contactId, channelId);
     const closingAgent = await createAgent({ email: 'agent6@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, closingAgent.id);
     await closeConversation(conversation.id, closingAgent.id);
     const agent = await createAgent({ email: 'agent6b@dw.com', password: 'secret123', role: 'agent' });
     const claimed = await claimConversation(conversation.id, agent.id);
@@ -100,6 +101,7 @@ describe('conversation repository', () => {
   test('closeConversation marks the conversation closed and records who closed it', async () => {
     const conversation = await createConversation(contactId, channelId);
     const agent = await createAgent({ email: 'agent9@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
     const closed = await closeConversation(conversation.id, agent.id);
     expect(closed.status).toBe('closed');
 
@@ -109,6 +111,22 @@ describe('conversation repository', () => {
     );
     expect(events.rows).toHaveLength(1);
     expect(events.rows[0].from_agent_id).toBe(agent.id);
+  });
+
+  test('closeConversation returns null when called by an agent other than the assigned one', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const assignedAgent = await createAgent({ email: 'agent9b@dw.com', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'agent9c@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, assignedAgent.id);
+    const closed = await closeConversation(conversation.id, otherAgent.id);
+    expect(closed).toBeNull();
+  });
+
+  test('closeConversation returns null for a conversation that was never claimed', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'agent9d@dw.com', password: 'secret123', role: 'agent' });
+    const closed = await closeConversation(conversation.id, agent.id);
+    expect(closed).toBeNull();
   });
 
   test('getConversationWithContact includes the contact phone number and display name', async () => {

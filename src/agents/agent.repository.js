@@ -63,10 +63,19 @@ async function findAgentById(id) {
 }
 
 async function listAgents() {
-  const result = await getPool().query(
-    'SELECT id, name, email, role, active, created_at FROM agents ORDER BY email ASC'
-  );
-  return result.rows.map(toPublicAgent);
+  const result = await getPool().query(`
+    SELECT a.id, a.name, a.email, a.role, a.active, a.created_at,
+           COALESCE(
+             json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name) FILTER (WHERE s.id IS NOT NULL),
+             '[]'
+           ) AS sectors
+    FROM agents a
+    LEFT JOIN agent_sectors ags ON ags.agent_id = a.id
+    LEFT JOIN sectors s ON s.id = ags.sector_id
+    GROUP BY a.id
+    ORDER BY a.email ASC
+  `);
+  return result.rows.map((row) => ({ ...toPublicAgent(row), sectors: row.sectors }));
 }
 
 async function setAgentActive(id, active) {

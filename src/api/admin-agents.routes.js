@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
-const { listAgents, createAgent, setAgentActive } = require('../agents/agent.repository');
+const { listAgents, createAgent, setAgentActive, findAgentById } = require('../agents/agent.repository');
+const { setAgentSectors } = require('../sectors/sector.repository');
 
 const router = express.Router();
 
@@ -8,7 +9,14 @@ const UNIQUE_VIOLATION = '23505';
 const VALID_ROLES = ['agent', 'admin'];
 
 function toResponseShape(agent) {
-  return { id: agent.id, name: agent.name, email: agent.email, role: agent.role, active: agent.active };
+  return {
+    id: agent.id,
+    name: agent.name,
+    email: agent.email,
+    role: agent.role,
+    active: agent.active,
+    sectors: agent.sectors || [],
+  };
 }
 
 router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
@@ -48,6 +56,19 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     return res.status(404).json({ error: 'Agent not found' });
   }
   res.json(toResponseShape(agent));
+});
+
+router.put('/:id/sectors', requireAuth, requireRole('admin'), async (req, res) => {
+  const { sectorIds } = req.body || {};
+  if (!Array.isArray(sectorIds)) {
+    return res.status(400).json({ error: 'sectorIds must be an array' });
+  }
+  const agent = await findAgentById(req.params.id);
+  if (!agent) {
+    return res.status(404).json({ error: 'Agent not found' });
+  }
+  await setAgentSectors(req.params.id, sectorIds);
+  res.status(200).json({ ok: true });
 });
 
 module.exports = router;

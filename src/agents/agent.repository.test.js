@@ -8,10 +8,11 @@ const {
   setAgentActive,
   updateAgentPassword,
 } = require('./agent.repository');
+const { createSector, setAgentSectors } = require('../sectors/sector.repository');
 
 describe('agent repository', () => {
   beforeEach(async () => {
-    await getPool().query('TRUNCATE agents CASCADE');
+    await getPool().query('TRUNCATE agents, sectors CASCADE');
   });
 
   afterAll(async () => {
@@ -59,6 +60,25 @@ describe('agent repository', () => {
 
     expect(agents.map((a) => a.email)).toEqual(['alpha@dw.com', 'zeta@dw.com']);
     expect(agents[0].passwordHash).toBeUndefined();
+  });
+
+  test('listAgents includes each agent\'s assigned sectors', async () => {
+    const agent = await createAgent({ name: 'Fernanda', email: 'fernanda@dw.com', password: 'secret123', role: 'agent' });
+    const sector = await createSector({ name: 'Financeiro' });
+    await setAgentSectors(agent.id, [sector.id]);
+
+    const agents = await listAgents();
+
+    const found = agents.find((a) => a.id === agent.id);
+    expect(found.sectors).toEqual([{ id: sector.id, name: 'Financeiro' }]);
+  });
+
+  test('listAgents returns an empty sectors array for an agent with none', async () => {
+    await createAgent({ name: 'Gustavo', email: 'gustavo@dw.com', password: 'secret123', role: 'agent' });
+
+    const agents = await listAgents();
+
+    expect(agents[0].sectors).toEqual([]);
   });
 
   test('setAgentActive deactivates and reactivates an agent', async () => {

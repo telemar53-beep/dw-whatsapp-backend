@@ -42,6 +42,9 @@ function DashboardPage() {
               Administração
             </Link>
           )}
+          <Link to="/metrics" className="text-sm text-gray-500 hover:underline">
+            Métricas
+          </Link>
           <button onClick={() => setChangingPassword(true)} className="text-sm text-gray-500 hover:underline">
             Trocar senha
           </button>

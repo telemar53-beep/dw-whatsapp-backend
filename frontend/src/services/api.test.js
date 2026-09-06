@@ -23,6 +23,7 @@ import {
   updateSector,
   deleteSector,
   setAgentSectors,
+  getMetrics,
 } from './api';
 
 beforeEach(() => {
@@ -344,6 +345,17 @@ describe('setAgentSectors', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/admin/agents/agent-1/sectors',
       expect.objectContaining({ method: 'PUT', body: JSON.stringify({ sectorIds: ['sector-1', 'sector-2'] }) })
+    );
+  });
+});
+
+describe('getMetrics', () => {
+  test('fetches metrics for the given period', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await getMetrics('7d', 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/metrics?period=7d',
+      expect.objectContaining({ method: 'GET' })
     );
   });
 });

@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminChannelsPage from './pages/AdminChannelsPage';
+import MetricsPage from './pages/MetricsPage';
 
 function App() {
   return (
@@ -26,6 +27,14 @@ function App() {
               element={
                 <ProtectedRoute requireAdmin>
                   <AdminChannelsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/metrics"
+              element={
+                <ProtectedRoute>
+                  <MetricsPage />
                 </ProtectedRoute>
               }
             />

@@ -148,4 +148,11 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
     expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
   });
+
+  test('shows a Métricas link for any attendant', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.getByRole('link', { name: /métricas/i })).toBeInTheDocument();
+  });
 });

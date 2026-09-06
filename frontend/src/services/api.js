@@ -170,3 +170,7 @@ export function deleteSector(id, token) {
 export function setAgentSectors(agentId, sectorIds, token) {
   return apiFetch(`/api/admin/agents/${agentId}/sectors`, { method: 'PUT', body: { sectorIds }, token });
 }
+
+export function getMetrics(period, token) {
+  return apiFetch(`/api/metrics?period=${period}`, { token });
+}

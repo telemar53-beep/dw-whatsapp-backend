@@ -48,4 +48,22 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText(/DW Telecom - Atendimento/)).toBeInTheDocument());
     expect(screen.queryByText(/Administração de Canais/)).not.toBeInTheDocument();
   });
+
+  test('an authenticated non-admin can reach /metrics', async () => {
+    localStorage.setItem('dw_token', 'tok-123');
+    localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.com', role: 'agent' }));
+    window.history.pushState({}, '', '/metrics');
+    api.getQueue.mockResolvedValue([]);
+    api.getMyConversations.mockResolvedValue([]);
+    api.listChannels.mockResolvedValue([]);
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'agent',
+      own: { closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null },
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /métricas/i })).toBeInTheDocument();
+  });
 });

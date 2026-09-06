@@ -5,11 +5,13 @@ import AdminChannelsPage from './AdminChannelsPage';
 import { useChannels } from '../hooks/useChannels';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
 import { useQuickReplies } from '../hooks/useQuickReplies';
+import { useSectors } from '../hooks/useSectors';
 import { useAuth } from '../contexts/AuthContext';
 
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
 vi.mock('../hooks/useQuickReplies');
+vi.mock('../hooks/useSectors');
 vi.mock('../contexts/AuthContext');
 
 beforeEach(() => {
@@ -17,6 +19,7 @@ beforeEach(() => {
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
   useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
+  useSectors.mockReturnValue({ sectors: [], refresh: vi.fn() });
 });
 
 describe('AdminChannelsPage', () => {
@@ -68,6 +71,27 @@ describe('AdminChannelsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /atendentes/i }));
 
     expect(screen.getByText('Ana')).toBeInTheDocument();
+    expect(screen.queryByText('Berg')).not.toBeInTheDocument();
+  });
+
+  test('switches to the Setores tab and shows the sector management UI', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    useSectors.mockReturnValue({
+      sectors: [{ id: 'sector-1', name: 'Financeiro' }],
+      refresh: vi.fn(),
+    });
+    render(<AdminChannelsPage />);
+
+    expect(screen.getByText('Berg')).toBeInTheDocument();
+    expect(screen.queryByText('Financeiro')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /setores/i }));
+
+    expect(screen.getByText('Financeiro')).toBeInTheDocument();
     expect(screen.queryByText('Berg')).not.toBeInTheDocument();
   });
 

@@ -150,3 +150,19 @@ export function updateQuickReply(id, payload, token) {
 export function deleteQuickReply(id, token) {
   return apiFetch(`/api/admin/quick-replies/${id}`, { method: 'DELETE', token });
 }
+
+export function listSectors(token) {
+  return apiFetch('/api/sectors', { token });
+}
+
+export function createSector(payload, token) {
+  return apiFetch('/api/admin/sectors', { method: 'POST', body: payload, token });
+}
+
+export function updateSector(id, payload, token) {
+  return apiFetch(`/api/admin/sectors/${id}`, { method: 'PATCH', body: payload, token });
+}
+
+export function deleteSector(id, token) {
+  return apiFetch(`/api/admin/sectors/${id}`, { method: 'DELETE', token });
+}

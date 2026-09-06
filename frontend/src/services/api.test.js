@@ -18,6 +18,10 @@ import {
   createQuickReply,
   updateQuickReply,
   deleteQuickReply,
+  listSectors,
+  createSector,
+  updateSector,
+  deleteSector,
 } from './api';
 
 beforeEach(() => {
@@ -283,6 +287,50 @@ describe('deleteQuickReply', () => {
     await deleteQuickReply('qr-1', 'tok-123');
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/admin/quick-replies/qr-1',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+  });
+});
+
+describe('listSectors', () => {
+  test('fetches the sector list for any authenticated agent', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('[]') });
+    await listSectors('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/sectors',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+});
+
+describe('createSector', () => {
+  test('posts the new sector payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await createSector({ name: 'Financeiro' }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/sectors',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Financeiro' }) })
+    );
+  });
+});
+
+describe('updateSector', () => {
+  test('patches the sector payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await updateSector('sector-1', { name: 'Editado' }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/sectors/sector-1',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: 'Editado' }) })
+    );
+  });
+});
+
+describe('deleteSector', () => {
+  test('sends a DELETE request for the sector', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
+    await deleteSector('sector-1', 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/sectors/sector-1',
       expect.objectContaining({ method: 'DELETE' })
     );
   });

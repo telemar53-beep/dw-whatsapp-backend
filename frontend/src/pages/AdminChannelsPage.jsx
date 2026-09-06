@@ -4,6 +4,7 @@ import CreateChannelForm from '../components/CreateChannelForm';
 import QrCodeView from '../components/QrCodeView';
 import AgentsAdminTab from '../components/AgentsAdminTab';
 import QuickRepliesAdminTab from '../components/QuickRepliesAdminTab';
+import SectorsAdminTab from '../components/SectorsAdminTab';
 
 function AdminChannelsPage() {
   const { channels, refresh } = useChannels();
@@ -37,6 +38,14 @@ function AdminChannelsPage() {
         >
           Respostas rápidas
         </button>
+        <button
+          onClick={() => setActiveTab('sectors')}
+          className={`px-3 py-2 text-sm ${
+            activeTab === 'sectors' ? 'border-b-2 border-blue-600 font-semibold text-blue-600' : 'text-gray-500'
+          }`}
+        >
+          Setores
+        </button>
       </div>
       {activeTab === 'channels' ? (
         <div className="space-y-6">
@@ -61,8 +70,10 @@ function AdminChannelsPage() {
         </div>
       ) : activeTab === 'agents' ? (
         <AgentsAdminTab />
-      ) : (
+      ) : activeTab === 'quickReplies' ? (
         <QuickRepliesAdminTab />
+      ) : (
+        <SectorsAdminTab />
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 const express = require('express');
+const multer = require('multer');
 const { requireAuth } = require('../auth/auth.middleware');
 const {
   listWaitingConversations,
@@ -11,6 +12,7 @@ const {
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
+const { saveMediaFile, extensionForMimeType, messageTypeForMimeType } = require('../media/media-storage');
 
 const router = express.Router();
 
@@ -24,6 +26,14 @@ router.param('id', (req, res, next, id) => {
   }
   next();
 });
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+const MAX_SIZE_BY_MESSAGE_TYPE = {
+  image: 16 * 1024 * 1024,
+  audio: 16 * 1024 * 1024,
+  video: 16 * 1024 * 1024,
+  document: 100 * 1024 * 1024,
+};
 
 router.get('/queue', async (req, res) => {
   const conversations = await listWaitingConversations();
@@ -55,10 +65,11 @@ router.post('/:id/claim', async (req, res) => {
   res.json(conversation);
 });
 
-router.post('/:id/messages', async (req, res) => {
-  const { content } = req.body || {};
-  if (!content) {
-    return res.status(400).json({ error: 'content is required' });
+router.post('/:id/messages', upload.single('file'), async (req, res) => {
+  const content = (req.body && req.body.content) || null;
+  const file = req.file;
+  if (!content && !file) {
+    return res.status(400).json({ error: 'content or file is required' });
   }
   const conversation = await getConversationWithContact(req.params.id);
   if (!conversation) {
@@ -70,11 +81,26 @@ router.post('/:id/messages', async (req, res) => {
   if (conversation.assignedAgentId !== req.agent.agentId) {
     return res.status(403).json({ error: 'Only the assigned agent can send messages on this conversation' });
   }
-  const message = await enqueueOutboundMessage({
+
+  const messagePayload = {
     conversationId: conversation.id,
     channelId: conversation.channelId,
     content,
-  });
+  };
+
+  if (file) {
+    const messageType = messageTypeForMimeType(file.mimetype);
+    const maxSize = MAX_SIZE_BY_MESSAGE_TYPE[messageType] || MAX_SIZE_BY_MESSAGE_TYPE.document;
+    if (file.size > maxSize) {
+      return res.status(400).json({ error: `File exceeds the ${Math.round(maxSize / (1024 * 1024))}MB limit for ${messageType}` });
+    }
+    messagePayload.messageType = messageType;
+    messagePayload.mediaPath = await saveMediaFile(file.buffer, extensionForMimeType(file.mimetype));
+    messagePayload.mediaMimeType = file.mimetype;
+    messagePayload.mediaFilename = file.originalname;
+  }
+
+  const message = await enqueueOutboundMessage(messagePayload);
   res.status(201).json(message);
 });
 

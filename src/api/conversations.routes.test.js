@@ -2,6 +2,10 @@ jest.mock('../conversations/conversation.repository');
 jest.mock('../conversations/message.repository');
 jest.mock('../queue/outbound-queue');
 jest.mock('../realtime/socket-server');
+jest.mock('../media/media-storage', () => ({
+  ...jest.requireActual('../media/media-storage'),
+  saveMediaFile: jest.fn(),
+}));
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -212,6 +216,91 @@ describe('POST /api/conversations/:id/messages', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ content: 'Ola' });
     expect(res.status).toBe(409);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('accepts a multipart upload with an image file and no text content', async () => {
+    const { saveMediaFile } = require('../media/media-storage');
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      channelId: 'channel-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+    });
+    saveMediaFile.mockResolvedValue('generated-name.jpg');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'msg-1', messageType: 'image' });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .attach('file', Buffer.from('fake-image-bytes'), { filename: 'foto.jpg', contentType: 'image/jpeg' });
+
+    expect(res.status).toBe(201);
+    expect(saveMediaFile).toHaveBeenCalledWith(Buffer.from('fake-image-bytes'), '.jpg');
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      channelId: 'channel-1',
+      content: null,
+      messageType: 'image',
+      mediaPath: 'generated-name.jpg',
+      mediaMimeType: 'image/jpeg',
+      mediaFilename: 'foto.jpg',
+    });
+  });
+
+  test('accepts a multipart upload with both a file and a caption', async () => {
+    const { saveMediaFile } = require('../media/media-storage');
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      channelId: 'channel-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+    });
+    saveMediaFile.mockResolvedValue('generated-doc.pdf');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'msg-2', messageType: 'document' });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .field('content', 'Segue o comprovante')
+      .attach('file', Buffer.from('fake-pdf-bytes'), { filename: 'comprovante.pdf', contentType: 'application/pdf' });
+
+    expect(res.status).toBe(201);
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      channelId: 'channel-1',
+      content: 'Segue o comprovante',
+      messageType: 'document',
+      mediaPath: 'generated-doc.pdf',
+      mediaMimeType: 'application/pdf',
+      mediaFilename: 'comprovante.pdf',
+    });
+  });
+
+  test('rejects a request with neither content nor a file', async () => {
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('rejects a file larger than the type-specific size limit', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      channelId: 'channel-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+    });
+    const tooLarge = Buffer.alloc(17 * 1024 * 1024); // 17MB, over the 16MB image limit
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .attach('file', tooLarge, { filename: 'grande.jpg', contentType: 'image/jpeg' });
+
+    expect(res.status).toBe(400);
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 });

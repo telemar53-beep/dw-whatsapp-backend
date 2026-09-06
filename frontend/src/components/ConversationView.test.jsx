@@ -134,4 +134,23 @@ describe('ConversationView', () => {
     );
     expect(screen.getByPlaceholderText(/digite uma mensagem/i)).toBeInTheDocument();
   });
+
+  test('sending a message with an attached file calls sendMessage with both content and the file', async () => {
+    const sendMessage = vi.fn().mockResolvedValue({});
+    useConversationMessages.mockReturnValue({ messages: [], sendMessage });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    const fakeFile = new File(['bytes'], 'foto.jpg', { type: 'image/jpeg' });
+    const fileInput = document.querySelector('input[type="file"]');
+
+    await userEvent.upload(fileInput, fakeFile);
+    await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'Segue a foto');
+    await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('Segue a foto', fakeFile));
+  });
 });

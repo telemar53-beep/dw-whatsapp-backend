@@ -107,8 +107,22 @@ describe('useConversationMessages', () => {
       await result.current.sendMessage('Ola cliente');
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Ola cliente', 'tok-123');
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Ola cliente', 'tok-123', undefined);
     expect(result.current.messages).toEqual([{ id: 'm2', content: 'Ola cliente', status: 'sent' }]);
+  });
+
+  test('sendMessage forwards the file argument to the api call', async () => {
+    api.getMessages.mockResolvedValue([]);
+    api.sendMessage.mockResolvedValue({ id: 'm3', messageType: 'image' });
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toEqual([]));
+    const fakeFile = new File(['bytes'], 'foto.jpg', { type: 'image/jpeg' });
+
+    await act(async () => {
+      await result.current.sendMessage('Legenda', fakeFile);
+    });
+
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Legenda', 'tok-123', fakeFile);
   });
 
   test('resets the message list when the conversationId changes', async () => {

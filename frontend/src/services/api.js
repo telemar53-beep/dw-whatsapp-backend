@@ -15,14 +15,18 @@ export function setUnauthorizedHandler(handler) {
 }
 
 export async function apiFetch(path, { method = 'GET', body, token } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const headers = {};
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: isFormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
@@ -55,7 +59,15 @@ export function claimConversation(conversationId, token) {
   return apiFetch(`/api/conversations/${conversationId}/claim`, { method: 'POST', token });
 }
 
-export function sendMessage(conversationId, content, token) {
+export function sendMessage(conversationId, content, token, file) {
+  if (file) {
+    const formData = new FormData();
+    if (content) {
+      formData.append('content', content);
+    }
+    formData.append('file', file);
+    return apiFetch(`/api/conversations/${conversationId}/messages`, { method: 'POST', body: formData, token });
+  }
   return apiFetch(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
     body: { content },
@@ -85,4 +97,8 @@ export function listChannels(token) {
 
 export function createChannel(payload, token) {
   return apiFetch('/api/admin/channels', { method: 'POST', body: payload, token });
+}
+
+export function mediaUrl(messageId, token) {
+  return `${API_BASE_URL}/api/media/${messageId}?token=${token}`;
 }

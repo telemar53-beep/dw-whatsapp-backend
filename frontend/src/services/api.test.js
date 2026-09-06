@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { apiFetch, ApiError, login, getQueue, setUnauthorizedHandler } from './api';
+import { apiFetch, ApiError, login, getQueue, setUnauthorizedHandler, sendMessage, mediaUrl } from './api';
 
 beforeEach(() => {
   global.fetch = vi.fn();
@@ -52,6 +52,19 @@ describe('apiFetch', () => {
     global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
     const result = await apiFetch('/health');
     expect(result).toBeNull();
+  });
+
+  test('sends a FormData body as-is, without a Content-Type header or JSON.stringify', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    const formData = new FormData();
+    formData.append('content', 'Legenda');
+
+    await apiFetch('/api/conversations/abc/messages', { method: 'POST', body: formData, token: 'tok-123' });
+
+    const callArgs = global.fetch.mock.calls[0][1];
+    expect(callArgs.body).toBe(formData);
+    expect(callArgs.headers['Content-Type']).toBeUndefined();
+    expect(callArgs.headers.Authorization).toBe('Bearer tok-123');
   });
 });
 
@@ -111,5 +124,11 @@ describe('ApiError', () => {
     expect(err.status).toBe(404);
     expect(err.body).toEqual({ error: 'Not found' });
     expect(err.message).toBe('Not found');
+  });
+});
+
+describe('mediaUrl', () => {
+  test('builds a URL with the message id and token as query string', () => {
+    expect(mediaUrl('msg-123', 'tok-abc')).toBe('http://localhost:3000/api/media/msg-123?token=tok-abc');
   });
 });

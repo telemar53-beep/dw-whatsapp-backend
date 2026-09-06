@@ -2,9 +2,14 @@ jest.mock('@whiskeysockets/baileys', () => ({
   default: jest.fn(),
   useMultiFileAuthState: jest.fn(),
   DisconnectReason: { loggedOut: 401 },
+  downloadMediaMessage: jest.fn(),
 }));
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/inbound-message.service');
+jest.mock('../media/media-storage', () => ({
+  ...jest.requireActual('../media/media-storage'),
+  saveMediaFile: jest.fn(),
+}));
 jest.mock('../config/env');
 jest.mock('fs', () => ({
   ...jest.requireActual('fs'),
@@ -135,6 +140,7 @@ describe('baileys.manager', () => {
         fromPhoneNumber: '5511999998888',
         contactDisplayName: 'Cliente Baileys',
         whatsappMessageId: 'BAILEYS_MSG_1',
+        messageType: 'text',
         content: 'Oi, preciso de ajuda',
       });
     });
@@ -156,6 +162,7 @@ describe('baileys.manager', () => {
         fromPhoneNumber: '5511999997777',
         contactDisplayName: 'Outro Cliente',
         whatsappMessageId: 'BAILEYS_MSG_2',
+        messageType: 'text',
         content: 'Respondendo aqui',
       });
     });
@@ -194,7 +201,7 @@ describe('baileys.manager', () => {
         messages: [
           {
             key: { remoteJid: '5511999994444@s.whatsapp.net', fromMe: false, id: 'IMG1' },
-            message: { imageMessage: { caption: 'foto' } },
+            message: { contactMessage: { displayName: 'Contato' } },
           },
         ],
       });
@@ -245,6 +252,7 @@ describe('baileys.manager', () => {
         fromPhoneNumber: '559870079562',
         contactDisplayName: 'Cliente LID',
         whatsappMessageId: 'LID_MSG_1',
+        messageType: 'text',
         content: 'Oi, preciso de suporte',
       });
     });
@@ -267,6 +275,93 @@ describe('baileys.manager', () => {
       });
 
       expect(ingestInboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('downloads and saves an image message with a caption', async () => {
+      const { saveMediaFile } = require('../media/media-storage');
+      saveMediaFile.mockResolvedValue('generated-image.jpg');
+      baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-image-bytes'));
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999998888@s.whatsapp.net', fromMe: false, id: 'BAILEYS_IMG_1' },
+            pushName: 'Cliente Baileys',
+            message: { imageMessage: { mimetype: 'image/jpeg', caption: 'Comprovante' } },
+          },
+        ],
+      });
+
+      expect(baileysLib.downloadMediaMessage).toHaveBeenCalled();
+      expect(saveMediaFile).toHaveBeenCalledWith(Buffer.from('fake-image-bytes'), '.jpg');
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511999998888',
+        contactDisplayName: 'Cliente Baileys',
+        whatsappMessageId: 'BAILEYS_IMG_1',
+        messageType: 'image',
+        content: 'Comprovante',
+        mediaPath: 'generated-image.jpg',
+        mediaMimeType: 'image/jpeg',
+        mediaFilename: null,
+      });
+    });
+
+    test('downloads a document message with a filename', async () => {
+      const { saveMediaFile } = require('../media/media-storage');
+      saveMediaFile.mockResolvedValue('generated-doc.pdf');
+      baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-doc-bytes'));
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999997777@s.whatsapp.net', fromMe: false, id: 'BAILEYS_DOC_1' },
+            pushName: 'Outro Cliente',
+            message: { documentMessage: { mimetype: 'application/pdf', fileName: 'comprovante.pdf' } },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511999997777',
+        contactDisplayName: 'Outro Cliente',
+        whatsappMessageId: 'BAILEYS_DOC_1',
+        messageType: 'document',
+        content: null,
+        mediaPath: 'generated-doc.pdf',
+        mediaMimeType: 'application/pdf',
+        mediaFilename: 'comprovante.pdf',
+      });
+    });
+
+    test('ingests a location message with coordinates and no media download', async () => {
+      const { saveMediaFile } = require('../media/media-storage');
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999996666@s.whatsapp.net', fromMe: false, id: 'BAILEYS_LOC_1' },
+            pushName: 'Cliente Localização',
+            message: { locationMessage: { degreesLatitude: -3.119, degreesLongitude: -60.021 } },
+          },
+        ],
+      });
+
+      expect(saveMediaFile).not.toHaveBeenCalled();
+      expect(baileysLib.downloadMediaMessage).not.toHaveBeenCalled();
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511999996666',
+        contactDisplayName: 'Cliente Localização',
+        whatsappMessageId: 'BAILEYS_LOC_1',
+        messageType: 'location',
+        locationLatitude: -3.119,
+        locationLongitude: -60.021,
+      });
     });
   });
 

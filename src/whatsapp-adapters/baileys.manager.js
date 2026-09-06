@@ -3,6 +3,7 @@ const path = require('path');
 const { loadConfig } = require('../config/env');
 const { createChannel, updateChannelStatus, listChannels } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
+const { saveMediaFile, extensionForMimeType } = require('../media/media-storage');
 
 function loadBaileysLib() {
   return require('@whiskeysockets/baileys');
@@ -33,6 +34,39 @@ function extractTextContent(message) {
     return message.extendedTextMessage.text;
   }
   return null;
+}
+
+function extractMediaInfo(message) {
+  if (!message) return null;
+  if (message.imageMessage) {
+    return { type: 'image', mimeType: message.imageMessage.mimetype, caption: message.imageMessage.caption || null, filename: null };
+  }
+  if (message.documentMessage) {
+    return {
+      type: 'document',
+      mimeType: message.documentMessage.mimetype,
+      caption: message.documentMessage.caption || null,
+      filename: message.documentMessage.fileName || null,
+    };
+  }
+  if (message.audioMessage) {
+    return { type: 'audio', mimeType: message.audioMessage.mimetype, caption: null, filename: null };
+  }
+  if (message.videoMessage) {
+    return { type: 'video', mimeType: message.videoMessage.mimetype, caption: message.videoMessage.caption || null, filename: null };
+  }
+  if (message.stickerMessage) {
+    return { type: 'sticker', mimeType: message.stickerMessage.mimetype, caption: null, filename: null };
+  }
+  return null;
+}
+
+function extractLocation(message) {
+  if (!message || !message.locationMessage) return null;
+  return {
+    latitude: message.locationMessage.degreesLatitude,
+    longitude: message.locationMessage.degreesLongitude,
+  };
 }
 
 function sessionDirFor(channelId) {
@@ -66,13 +100,50 @@ async function handleMessagesUpsert(channel, { messages, type }) {
     if (msg.key.fromMe) continue;
     const phoneJid = resolveContactPhoneJid(msg.key);
     if (!phoneJid) continue;
+    const fromPhoneNumber = jidToPhoneNumber(phoneJid);
+    const contactDisplayName = msg.pushName ? msg.pushName.trim() : null;
+
+    const location = extractLocation(msg.message);
+    if (location) {
+      await ingestInboundMessage({
+        channelId: channel.id,
+        fromPhoneNumber,
+        contactDisplayName,
+        whatsappMessageId: msg.key.id,
+        messageType: 'location',
+        locationLatitude: location.latitude,
+        locationLongitude: location.longitude,
+      });
+      continue;
+    }
+
+    const mediaInfo = extractMediaInfo(msg.message);
+    if (mediaInfo) {
+      const { downloadMediaMessage } = loadBaileysLib();
+      const buffer = await downloadMediaMessage(msg, 'buffer', {});
+      const mediaPath = await saveMediaFile(buffer, extensionForMimeType(mediaInfo.mimeType));
+      await ingestInboundMessage({
+        channelId: channel.id,
+        fromPhoneNumber,
+        contactDisplayName,
+        whatsappMessageId: msg.key.id,
+        messageType: mediaInfo.type,
+        content: mediaInfo.caption,
+        mediaPath,
+        mediaMimeType: mediaInfo.mimeType,
+        mediaFilename: mediaInfo.filename,
+      });
+      continue;
+    }
+
     const content = extractTextContent(msg.message);
     if (!content) continue;
     await ingestInboundMessage({
       channelId: channel.id,
-      fromPhoneNumber: jidToPhoneNumber(phoneJid),
-      contactDisplayName: msg.pushName ? msg.pushName.trim() : null,
+      fromPhoneNumber,
+      contactDisplayName,
       whatsappMessageId: msg.key.id,
+      messageType: 'text',
       content,
     });
   }
@@ -134,7 +205,7 @@ async function startBaileysConnection(channel) {
     });
   });
   sock.ev.on('messages.upsert', (payload) => {
-    handleMessagesUpsert(channel, payload).catch((err) => {
+    return handleMessagesUpsert(channel, payload).catch((err) => {
       console.error(`Failed to handle inbound Baileys message for channel ${channel.id}`, err);
     });
   });

@@ -25,6 +25,27 @@ describe('ConversationView', () => {
     expect(screen.getByText('Oi, preciso de ajuda')).toBeInTheDocument();
   });
 
+  test('renders an image attachment alongside a caption', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [
+        { id: 'm1', direction: 'inbound', messageType: 'image', mediaPath: 'foo.jpg', content: 'Comprovante', mediaFilename: null },
+      ],
+      sendMessage: vi.fn(),
+    });
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+    expect(screen.getByText('Comprovante')).toBeInTheDocument();
+    expect(screen.getByRole('img')).toBeInTheDocument();
+  });
+
+  test('renders a location message without a text bubble', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm2', direction: 'inbound', messageType: 'location', locationLatitude: -3.1, locationLongitude: -60.0, content: null }],
+      sendMessage: vi.fn(),
+    });
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+    expect(screen.getByRole('link', { name: /ver localiza/i })).toBeInTheDocument();
+  });
+
   test('shows the Assumir button when the conversation is unassigned', () => {
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
     expect(screen.getByRole('button', { name: /assumir/i })).toBeInTheDocument();

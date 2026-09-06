@@ -2,6 +2,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { claimConversation, closeConversation } from '../services/api';
 import MessageInput from './MessageInput';
+import MessageAttachment from './MessageAttachment';
 
 function ConversationView({ conversation, onTransferClick }) {
   const { token, agent } = useAuth();
@@ -45,11 +46,12 @@ function ConversationView({ conversation, onTransferClick }) {
         {messages.map((message) => (
           <div
             key={message.id}
-            className={`max-w-xs rounded px-3 py-2 text-sm ${
+            className={`max-w-xs space-y-1 rounded px-3 py-2 text-sm ${
               message.direction === 'inbound' ? 'bg-gray-100 text-gray-800' : 'ml-auto bg-blue-100 text-gray-800'
             }`}
           >
-            {message.content}
+            {message.content && <p>{message.content}</p>}
+            <MessageAttachment message={message} />
           </div>
         ))}
       </div>

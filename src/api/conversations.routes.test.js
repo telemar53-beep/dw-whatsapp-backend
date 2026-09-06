@@ -286,6 +286,52 @@ describe('POST /api/conversations/:id/messages', () => {
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 
+  test('accepts a multipart upload with an audio file and no caption', async () => {
+    const { saveMediaFile } = require('../media/media-storage');
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      channelId: 'channel-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+    });
+    saveMediaFile.mockResolvedValue('generated-audio.ogg');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'msg-3', messageType: 'audio' });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .attach('file', Buffer.from('fake-audio-bytes'), { filename: 'audio.ogg', contentType: 'audio/ogg' });
+
+    expect(res.status).toBe(201);
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      channelId: 'channel-1',
+      content: null,
+      messageType: 'audio',
+      mediaPath: 'generated-audio.ogg',
+      mediaMimeType: 'audio/ogg',
+      mediaFilename: 'audio.ogg',
+    });
+  });
+
+  test('rejects an audio upload that also includes a caption', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      channelId: 'channel-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+    });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .field('content', 'texto')
+      .attach('file', Buffer.from('fake-audio-bytes'), { filename: 'audio.ogg', contentType: 'audio/ogg' });
+
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
   test('rejects a file larger than the type-specific size limit', async () => {
     getConversationWithContact.mockResolvedValue({
       id: CONVERSATION_ID,

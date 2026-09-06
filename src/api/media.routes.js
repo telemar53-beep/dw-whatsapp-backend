@@ -25,6 +25,12 @@ router.get('/:messageId', authenticateMediaRoute, async (req, res) => {
   if (!message || !message.mediaPath) {
     return res.status(404).json({ error: 'Media not found' });
   }
+  if (message.mediaMimeType) {
+    res.type(message.mediaMimeType);
+  }
+  if (message.messageType === 'document' && message.mediaFilename) {
+    res.setHeader('Content-Disposition', `attachment; filename="${message.mediaFilename.replace(/"/g, '')}"`);
+  }
   res.sendFile(getMediaFilePath(message.mediaPath), (err) => {
     if (err && !res.headersSent) {
       res.status(404).json({ error: 'Media not found' });

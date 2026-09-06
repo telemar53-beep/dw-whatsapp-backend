@@ -32,7 +32,7 @@ function messageTypeForMimeType(mimeType) {
 }
 
 async function saveMediaFile(buffer, extension) {
-  const dir = loadConfig().mediaStorageDir;
+  const dir = path.resolve(loadConfig().mediaStorageDir);
   await fs.promises.mkdir(dir, { recursive: true });
   const relativePath = `${crypto.randomUUID()}${extension || ''}`;
   await fs.promises.writeFile(path.join(dir, relativePath), buffer);
@@ -40,7 +40,12 @@ async function saveMediaFile(buffer, extension) {
 }
 
 function getMediaFilePath(relativePath) {
-  return path.join(loadConfig().mediaStorageDir, relativePath);
+  const baseDir = path.resolve(loadConfig().mediaStorageDir);
+  const fullPath = path.resolve(baseDir, relativePath);
+  if (!fullPath.startsWith(baseDir + path.sep) && fullPath !== baseDir) {
+    throw new Error('Invalid media path');
+  }
+  return fullPath;
 }
 
 module.exports = { saveMediaFile, getMediaFilePath, extensionForMimeType, messageTypeForMimeType };

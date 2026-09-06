@@ -75,4 +75,23 @@ describe('GET /api/media/:messageId', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(404);
   });
+
+  test('sets Content-Type from the stored mime type and Content-Disposition with the real filename for documents', async () => {
+    findMessageById.mockResolvedValue({
+      id: 'msg-3',
+      mediaPath: 'whatever.pdf',
+      mediaMimeType: 'application/pdf',
+      messageType: 'document',
+      mediaFilename: 'comprovante.pdf',
+    });
+    getMediaFilePath.mockReturnValue(tempFile);
+
+    const res = await request(buildApp())
+      .get('/api/media/msg-3')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('application/pdf');
+    expect(res.headers['content-disposition']).toContain('comprovante.pdf');
+  });
 });

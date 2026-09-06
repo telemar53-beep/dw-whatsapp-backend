@@ -94,6 +94,9 @@ router.post('/:id/messages', upload.single('file'), async (req, res) => {
     if (file.size > maxSize) {
       return res.status(400).json({ error: `File exceeds the ${Math.round(maxSize / (1024 * 1024))}MB limit for ${messageType}` });
     }
+    if ((messageType === 'audio' || messageType === 'sticker') && content) {
+      return res.status(400).json({ error: 'Audio and sticker messages cannot include a caption; send the text as a separate message' });
+    }
     messagePayload.messageType = messageType;
     messagePayload.mediaPath = await saveMediaFile(file.buffer, extensionForMimeType(file.mimetype));
     messagePayload.mediaMimeType = file.mimetype;

@@ -49,6 +49,26 @@ describe('media-storage', () => {
     });
   });
 
+  describe('getMediaFilePath path resolution and containment', () => {
+    test('returns an absolute path even when MEDIA_STORAGE_DIR is configured as a relative path', () => {
+      const relativeDirName = 'some-relative-media-dir-for-test';
+      const originalCwd = process.cwd();
+      process.chdir(tempDir);
+      try {
+        process.env.MEDIA_STORAGE_DIR = `./${relativeDirName}`;
+        const result = getMediaFilePath('some-file.jpg');
+        expect(path.isAbsolute(result)).toBe(true);
+      } finally {
+        process.chdir(originalCwd);
+        fs.rmSync(path.join(tempDir, relativeDirName), { recursive: true, force: true });
+      }
+    });
+
+    test('throws when relativePath would escape the configured storage directory', () => {
+      expect(() => getMediaFilePath('../../etc/passwd')).toThrow('Invalid media path');
+    });
+  });
+
   describe('extensionForMimeType', () => {
     test.each([
       ['image/jpeg', '.jpg'],

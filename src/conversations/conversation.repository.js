@@ -7,14 +7,26 @@ function toConversation(row) {
     channelId: row.channel_id,
     status: row.status,
     assignedAgentId: row.assigned_agent_id,
+    sectorId: row.sector_id,
+    triageState: row.triage_state,
+    triageAttempts: row.triage_attempts,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
+function toConversationSummary(row) {
+  return {
+    ...toConversation(row),
+    contactPhoneNumber: row.contact_phone_number,
+    contactDisplayName: row.contact_display_name,
+    sectorName: row.sector_name,
+  };
+}
+
 async function findOpenConversation(contactId, channelId) {
   const result = await getPool().query(
-    `SELECT id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at
+    `SELECT id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at
      FROM conversations WHERE contact_id = $1 AND channel_id = $2 AND status <> 'closed'`,
     [contactId, channelId]
   );
@@ -22,11 +34,11 @@ async function findOpenConversation(contactId, channelId) {
   return toConversation(result.rows[0]);
 }
 
-async function createConversation(contactId, channelId) {
+async function createConversation(contactId, channelId, triageState = null) {
   const result = await getPool().query(
-    `INSERT INTO conversations (contact_id, channel_id) VALUES ($1, $2)
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
-    [contactId, channelId]
+    `INSERT INTO conversations (contact_id, channel_id, triage_state) VALUES ($1, $2, $3)
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
+    [contactId, channelId, triageState]
   );
   return toConversation(result.rows[0]);
 }
@@ -34,9 +46,9 @@ async function createConversation(contactId, channelId) {
 async function claimConversation(conversationId, agentId) {
   return withTransaction(async (client) => {
     const result = await client.query(
-      `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, updated_at = now()
+      `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, triage_state = 'completed', updated_at = now()
        WHERE id = $1 AND assigned_agent_id IS NULL AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
       [conversationId, agentId]
     );
     if (result.rowCount === 0) return null;
@@ -53,7 +65,7 @@ async function transferConversation(conversationId, fromAgentId, toAgentId) {
     const result = await client.query(
       `UPDATE conversations SET assigned_agent_id = $2, updated_at = now()
        WHERE id = $1 AND assigned_agent_id = $3 AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
       [conversationId, toAgentId, fromAgentId]
     );
     if (result.rowCount === 0) return null;
@@ -70,7 +82,7 @@ async function closeConversation(conversationId, agentId) {
     const result = await client.query(
       `UPDATE conversations SET status = 'closed', updated_at = now()
        WHERE id = $1 AND assigned_agent_id = $2 AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
       [conversationId, agentId]
     );
     if (result.rowCount === 0) return null;
@@ -82,12 +94,36 @@ async function closeConversation(conversationId, agentId) {
   });
 }
 
+async function completeTriage(conversationId, sectorId) {
+  const result = await getPool().query(
+    `UPDATE conversations SET sector_id = $2, triage_state = 'completed', updated_at = now()
+     WHERE id = $1
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
+    [conversationId, sectorId]
+  );
+  if (result.rowCount === 0) return null;
+  return toConversation(result.rows[0]);
+}
+
+async function incrementTriageAttempts(conversationId) {
+  const result = await getPool().query(
+    `UPDATE conversations SET triage_attempts = triage_attempts + 1, updated_at = now()
+     WHERE id = $1
+     RETURNING triage_attempts`,
+    [conversationId]
+  );
+  if (result.rowCount === 0) return 0;
+  return result.rows[0].triage_attempts;
+}
+
 async function getConversationWithContact(conversationId) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.created_at, c.updated_at,
-            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            s.name AS sector_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
      WHERE c.id = $1`,
     [conversationId]
   );
@@ -95,20 +131,14 @@ async function getConversationWithContact(conversationId) {
   return toConversationSummary(result.rows[0]);
 }
 
-function toConversationSummary(row) {
-  return {
-    ...toConversation(row),
-    contactPhoneNumber: row.contact_phone_number,
-    contactDisplayName: row.contact_display_name,
-  };
-}
-
 async function listWaitingConversations() {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.created_at, c.updated_at,
-            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            s.name AS sector_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
      WHERE c.status = 'waiting'
      ORDER BY c.created_at ASC`
   );
@@ -117,10 +147,12 @@ async function listWaitingConversations() {
 
 async function listConversationsByAgent(agentId) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.created_at, c.updated_at,
-            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            s.name AS sector_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
      WHERE c.assigned_agent_id = $1 AND c.status <> 'closed'
      ORDER BY c.updated_at DESC`,
     [agentId]
@@ -152,6 +184,8 @@ module.exports = {
   claimConversation,
   transferConversation,
   closeConversation,
+  completeTriage,
+  incrementTriageAttempts,
   getConversationWithContact,
   listWaitingConversations,
   listConversationsByAgent,

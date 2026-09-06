@@ -2,6 +2,7 @@ const { getPool, closePool } = require('../db/pool');
 const { createChannel } = require('../channels/channel.repository');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { createAgent } = require('../agents/agent.repository');
+const { createSector } = require('../sectors/sector.repository');
 const {
   findOpenConversation,
   createConversation,
@@ -12,6 +13,8 @@ const {
   listWaitingConversations,
   listConversationsByAgent,
   listClosedConversationsByContact,
+  completeTriage,
+  incrementTriageAttempts,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -19,7 +22,7 @@ describe('conversation repository', () => {
   let channelId;
 
   beforeEach(async () => {
-    await getPool().query('TRUNCATE conversations, contacts, channels, agents, conversation_events CASCADE');
+    await getPool().query('TRUNCATE conversations, contacts, channels, agents, conversation_events, sectors CASCADE');
     const contact = await findOrCreateContactByPhoneNumber('+5511977776666', 'Joao');
     const channel = await createChannel({
       type: 'meta_cloud',
@@ -195,5 +198,86 @@ describe('conversation repository', () => {
     expect(history[0].channelName).toBe('Canal Baileys Teste');
     expect(history[0].channelType).toBe('baileys');
     expect(history[1].channelName).toBe('Canal Teste');
+  });
+
+  test('createConversation defaults triageState to null when not provided', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    expect(conversation.triageState).toBeNull();
+    expect(conversation.triageAttempts).toBe(0);
+    expect(conversation.sectorId).toBeNull();
+  });
+
+  test('createConversation stores a provided triageState', async () => {
+    const conversation = await createConversation(contactId, channelId, 'pending');
+    expect(conversation.triageState).toBe('pending');
+  });
+
+  test('claimConversation completes any pending triage as part of the claim', async () => {
+    const conversation = await createConversation(contactId, channelId, 'pending');
+    const agent = await createAgent({ email: 'triageagent@dw.com', password: 'secret123', role: 'agent' });
+
+    const claimed = await claimConversation(conversation.id, agent.id);
+
+    expect(claimed.triageState).toBe('completed');
+  });
+
+  test('completeTriage sets the sector and marks triage completed', async () => {
+    const sector = await createSector({ name: 'Financeiro' });
+    const conversation = await createConversation(contactId, channelId, 'pending');
+
+    const updated = await completeTriage(conversation.id, sector.id);
+
+    expect(updated.sectorId).toBe(sector.id);
+    expect(updated.triageState).toBe('completed');
+  });
+
+  test('completeTriage accepts a null sectorId for the fallback-to-general-queue case', async () => {
+    const conversation = await createConversation(contactId, channelId, 'pending');
+
+    const updated = await completeTriage(conversation.id, null);
+
+    expect(updated.sectorId).toBeNull();
+    expect(updated.triageState).toBe('completed');
+  });
+
+  test('incrementTriageAttempts increases the counter and returns the new value', async () => {
+    const conversation = await createConversation(contactId, channelId, 'pending');
+
+    const first = await incrementTriageAttempts(conversation.id);
+    const second = await incrementTriageAttempts(conversation.id);
+
+    expect(first).toBe(1);
+    expect(second).toBe(2);
+  });
+
+  test('getConversationWithContact includes the sector name when a sector is set', async () => {
+    const sector = await createSector({ name: 'Suporte' });
+    const conversation = await createConversation(contactId, channelId);
+    await completeTriage(conversation.id, sector.id);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.sectorId).toBe(sector.id);
+    expect(result.sectorName).toBe('Suporte');
+  });
+
+  test('getConversationWithContact has a null sectorName when no sector is set', async () => {
+    const conversation = await createConversation(contactId, channelId);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.sectorId).toBeNull();
+    expect(result.sectorName).toBeNull();
+  });
+
+  test('listWaitingConversations includes the sector name for a triaged conversation', async () => {
+    const sector = await createSector({ name: 'Comercial' });
+    const conversation = await createConversation(contactId, channelId);
+    await completeTriage(conversation.id, sector.id);
+
+    const waiting = await listWaitingConversations();
+
+    expect(waiting[0].sectorId).toBe(sector.id);
+    expect(waiting[0].sectorName).toBe('Comercial');
   });
 });

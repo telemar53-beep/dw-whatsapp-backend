@@ -337,6 +337,57 @@ describe('baileys.manager', () => {
       });
     });
 
+    test.each(['audio', 'video', 'sticker'])('downloads and saves a %s message', async (type) => {
+      const { saveMediaFile } = require('../media/media-storage');
+      saveMediaFile.mockResolvedValue(`generated-${type}.bin`);
+      baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from(`fake-${type}-bytes`));
+
+      const messageKey = `${type}Message`;
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999991111@s.whatsapp.net', fromMe: false, id: `BAILEYS_${type.toUpperCase()}_1` },
+            pushName: 'Cliente Baileys',
+            message: { [messageKey]: { mimetype: `application/${type}-test` } },
+          },
+        ],
+      });
+
+      expect(baileysLib.downloadMediaMessage).toHaveBeenCalled();
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511999991111',
+        contactDisplayName: 'Cliente Baileys',
+        whatsappMessageId: `BAILEYS_${type.toUpperCase()}_1`,
+        messageType: type,
+        content: null,
+        mediaPath: `generated-${type}.bin`,
+        mediaMimeType: `application/${type}-test`,
+        mediaFilename: null,
+      });
+    });
+
+    test('ignores a media message sent by the connection itself (skips before any download work)', async () => {
+      const { saveMediaFile } = require('../media/media-storage');
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999990000@s.whatsapp.net', fromMe: true, id: 'BAILEYS_ECHO_IMG_1' },
+            pushName: 'Cliente Baileys',
+            message: { imageMessage: { mimetype: 'image/jpeg', caption: 'Comprovante' } },
+          },
+        ],
+      });
+
+      expect(baileysLib.downloadMediaMessage).not.toHaveBeenCalled();
+      expect(saveMediaFile).not.toHaveBeenCalled();
+      expect(ingestInboundMessage).not.toHaveBeenCalled();
+    });
+
     test('ingests a location message with coordinates and no media download', async () => {
       const { saveMediaFile } = require('../media/media-storage');
 

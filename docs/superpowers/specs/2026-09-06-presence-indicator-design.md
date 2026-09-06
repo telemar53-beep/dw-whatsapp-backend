@@ -117,10 +117,16 @@ por `name`. Inserido no `DashboardPage.jsx`, na barra lateral esquerda
   reconecta automaticamente, exceto após um erro de autenticação por JWT
   expirado, caso já documentado no projeto). Aceitável para o estado efêmero
   que isso é; não precisa de persistência.
-- **Latência de detecção de queda de conexão:** uma queda real de rede pode
-  levar alguns segundos para o Socket.io detectar (timeout de ping do
-  protocolo) — o indicador pode ficar "verde" por poucos segundos após uma
-  desconexão abrupta. Latência inerente do protocolo, sem ação necessária.
+- **Latência de detecção de queda de conexão:** uma queda abrupta de rede
+  (sem um frame de close, ex: notebook suspenso, Wi-Fi caindo) só é
+  detectada quando o timeout de ping do Socket.io expira — com a
+  configuração padrão deste projeto (`pingInterval` 25s + `pingTimeout`
+  20s, nenhum valor customizado em `initSocketServer`), isso pode levar até
+  **~45 segundos** no pior caso, não "poucos segundos". O indicador pode
+  ficar "verde" por até esse tempo após uma desconexão abrupta. Latência
+  inerente do protocolo com a configuração padrão; ajustável no futuro
+  reduzindo `pingInterval`/`pingTimeout` se esse tempo se mostrar longo
+  demais na prática, mas não é necessário para esta entrega.
 
 ## Próximos passos
 

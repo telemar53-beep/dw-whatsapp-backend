@@ -58,4 +58,19 @@ describe('DashboardPage', () => {
     renderDashboard();
     expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
   });
+
+  test('shows an Administração link for an admin agent', () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'admin' }, logout: vi.fn() });
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.getByRole('link', { name: /administração/i })).toBeInTheDocument();
+  });
+
+  test('hides the Administração link for a non-admin agent', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.queryByRole('link', { name: /administração/i })).not.toBeInTheDocument();
+  });
 });

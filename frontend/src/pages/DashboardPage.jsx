@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
@@ -9,7 +10,7 @@ import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
 
 function DashboardPage() {
-  const { logout } = useAuth();
+  const { agent, logout } = useAuth();
   const queue = useQueue();
   const myConversations = useMyConversations();
   const [selectedId, setSelectedId] = useState(null);
@@ -22,9 +23,16 @@ function DashboardPage() {
       <ChannelStatusBanner />
       <header className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
         <h1 className="font-semibold text-gray-800">DW Telecom - Atendimento</h1>
-        <button onClick={logout} className="text-sm text-gray-500 hover:underline">
-          Sair
-        </button>
+        <div className="flex items-center gap-4">
+          {agent?.role === 'admin' && (
+            <Link to="/admin/channels" className="text-sm text-gray-500 hover:underline">
+              Administração
+            </Link>
+          )}
+          <button onClick={logout} className="text-sm text-gray-500 hover:underline">
+            Sair
+          </button>
+        </div>
       </header>
       <div className="flex flex-1 overflow-hidden">
         <aside className="w-64 space-y-4 overflow-y-auto border-r border-gray-200 p-3">

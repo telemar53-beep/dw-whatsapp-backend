@@ -9,6 +9,7 @@ const authRoutes = require('./auth/auth.routes');
 const metaCloudRoutes = require('./whatsapp-adapters/meta-cloud.routes');
 const conversationsRoutes = require('./api/conversations.routes');
 const agentsRoutes = require('./api/agents.routes');
+const channelsRoutes = require('./api/channels.routes');
 const adminChannelsRoutes = require('./api/admin-channels.routes');
 const adminAgentsRoutes = require('./api/admin-agents.routes');
 const mediaRoutes = require('./api/media.routes');
@@ -42,6 +43,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/conversations', conversationsRoutes);
 app.use('/api/agents', agentsRoutes);
+app.use('/api/channels', channelsRoutes);
 app.use('/api/admin/channels', adminChannelsRoutes);
 app.use('/api/admin/agents', adminAgentsRoutes);
 app.use('/api/media', mediaRoutes);

@@ -20,7 +20,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 p-3">
         <div className="flex items-center gap-2">
-          <button onClick={onBack} className="rounded px-2 py-1 text-gray-500 md:hidden" aria-label="Voltar para a lista">
+          <button onClick={onBack} className="rounded p-3 text-gray-500 md:hidden" aria-label="Voltar para a lista">
             ←
           </button>
           <h3 className="font-semibold text-gray-800">Conversa</h3>
@@ -62,11 +62,11 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         {messages.map((message) => (
           <div
             key={message.id}
-            className={`max-w-[85%] space-y-1 rounded px-3 py-2 text-sm ${
+            className={`max-w-[85%] space-y-1 rounded px-3 py-2 text-sm md:max-w-xs ${
               message.direction === 'inbound' ? 'bg-gray-100 text-gray-800' : 'ml-auto bg-blue-100 text-gray-800'
             }`}
           >
-            {message.content && <p>{message.content}</p>}
+            {message.content && <p className="break-words">{message.content}</p>}
             <MessageAttachment message={message} />
           </div>
         ))}

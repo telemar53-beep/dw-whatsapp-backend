@@ -199,6 +199,14 @@ describe('DashboardPage', () => {
     await userEvent.click(screen.getByText('Carlos'));
 
     expect(container.querySelector('header').className).toMatch(/\bhidden\b/);
+    expect(container.querySelector('[data-testid="channel-banner-wrapper"]').className).toMatch(/\bhidden\b/);
+  });
+
+  test('uses the dynamic viewport height unit so mobile browser chrome cannot cover the composer', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    const { container } = renderDashboard();
+    expect(container.firstChild.className).toContain('h-dvh');
   });
 
   test('renders the team panel', () => {

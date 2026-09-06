@@ -18,13 +18,13 @@ function MessageAttachment({ message }) {
   const url = mediaUrl(message.id, token);
 
   if (message.messageType === 'image' || message.messageType === 'sticker') {
-    return <img src={url} alt={message.mediaFilename || 'Imagem'} className="max-w-xs rounded" />;
+    return <img src={url} alt={message.mediaFilename || 'Imagem'} className="max-w-full rounded" />;
   }
   if (message.messageType === 'audio') {
-    return <audio controls src={url} className="max-w-xs" />;
+    return <audio controls src={url} className="max-w-full" />;
   }
   if (message.messageType === 'video') {
-    return <video controls src={url} className="max-w-xs rounded" />;
+    return <video controls src={url} className="max-w-full rounded" />;
   }
   if (message.messageType === 'document') {
     return (

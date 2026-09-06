@@ -20,6 +20,7 @@ describe('MessageAttachment', () => {
     render(<MessageAttachment message={{ id: 'm2', messageType: 'image', mediaPath: 'foo.jpg', mediaFilename: null }} />);
     const img = screen.getByRole('img');
     expect(img.src).toBe('http://localhost:3000/api/media/m2?token=tok-123');
+    expect(img.className).toContain('max-w-full');
   });
 
   test('renders a sticker the same way as an image', () => {
@@ -31,11 +32,13 @@ describe('MessageAttachment', () => {
     render(<MessageAttachment message={{ id: 'm4', messageType: 'audio', mediaPath: 'baz.ogg' }} />);
     expect(document.querySelector('audio')).toBeInTheDocument();
     expect(document.querySelector('audio').src).toBe('http://localhost:3000/api/media/m4?token=tok-123');
+    expect(document.querySelector('audio').className).toContain('max-w-full');
   });
 
   test('renders a video player', () => {
     render(<MessageAttachment message={{ id: 'm5', messageType: 'video', mediaPath: 'qux.mp4' }} />);
     expect(document.querySelector('video')).toBeInTheDocument();
+    expect(document.querySelector('video').className).toContain('max-w-full');
   });
 
   test('renders a document download link with the filename', () => {

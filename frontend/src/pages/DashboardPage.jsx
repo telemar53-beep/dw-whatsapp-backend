@@ -33,8 +33,8 @@ function DashboardPage() {
   }, [queue, myConversations, pendingConversation]);
 
   return (
-    <div className="flex h-screen flex-col">
-      <div className={selectedConversation ? 'hidden md:block' : ''}>
+    <div className="flex h-dvh flex-col">
+      <div data-testid="channel-banner-wrapper" className={selectedConversation ? 'hidden md:block' : ''}>
         <ChannelStatusBanner />
       </div>
       <header

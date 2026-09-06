@@ -85,7 +85,7 @@ function MessageInput({ onSend, quickReplies = [] }) {
 
   return (
     <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3">
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
         <input
           type="file"
           ref={fileInputRef}
@@ -122,7 +122,7 @@ function MessageInput({ onSend, quickReplies = [] }) {
             🎤
           </button>
         )}
-        <div className="relative">
+        <div>
           <button
             type="button"
             onClick={() => setShowingQuickReplies((prev) => !prev)}

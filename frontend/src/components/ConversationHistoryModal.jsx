@@ -41,7 +41,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
                     message.direction === 'inbound' ? 'bg-gray-100 text-gray-800' : 'ml-auto bg-blue-100 text-gray-800'
                   }`}
                 >
-                  {message.content && <p>{message.content}</p>}
+                  {message.content && <p className="break-words">{message.content}</p>}
                   <MessageAttachment message={message} />
                 </div>
               ))}

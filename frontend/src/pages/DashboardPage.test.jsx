@@ -114,4 +114,35 @@ describe('DashboardPage', () => {
 
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
   });
+
+  test('clears the pending conversation once it appears in myConversations, so a later close is not masked by stale state', async () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    const { rerender } = renderDashboard();
+
+    await userEvent.click(screen.getByRole('button', { name: /iniciar conversa/i }));
+    await userEvent.click(screen.getByText('Mock Start Conversation'));
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
+
+    // The real conversation:assigned socket event lands — myConversations now has it.
+    useMyConversations.mockReturnValue([
+      { id: 'conv-new', contactPhoneNumber: '5598999990000', assignedAgentId: 'agent-1', status: 'assigned' },
+    ]);
+    rerender(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
+
+    // The conversation is later closed for real — it drops out of myConversations.
+    useMyConversations.mockReturnValue([]);
+    rerender(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
+  });
 });

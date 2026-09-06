@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
@@ -24,6 +24,12 @@ function DashboardPage() {
   const selectedConversation =
     [...queue, ...myConversations].find((c) => c.id === selectedId) ||
     (pendingConversation && pendingConversation.id === selectedId ? pendingConversation : null);
+
+  useEffect(() => {
+    if (pendingConversation && [...queue, ...myConversations].some((c) => c.id === pendingConversation.id)) {
+      setPendingConversation(null);
+    }
+  }, [queue, myConversations, pendingConversation]);
 
   return (
     <div className="flex h-screen flex-col">

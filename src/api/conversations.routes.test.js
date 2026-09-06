@@ -509,6 +509,26 @@ describe('POST /api/conversations/start', () => {
     expect(findChannelById).not.toHaveBeenCalled();
   });
 
+  test('returns 400 when phoneNumber is not a string', async () => {
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: 5598999990000, content: 'Oi' });
+    expect(res.status).toBe(400);
+    expect(findChannelById).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the channel id is not validly formatted', async () => {
+    const dbError = new Error('invalid input syntax for type uuid');
+    dbError.code = '22P02';
+    findChannelById.mockRejectedValue(dbError);
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'not-a-uuid', phoneNumber: '5598999990000', content: 'Oi' });
+    expect(res.status).toBe(404);
+  });
+
   test('returns 404 when the channel does not exist', async () => {
     findChannelById.mockResolvedValue(null);
     const res = await request(buildApp())

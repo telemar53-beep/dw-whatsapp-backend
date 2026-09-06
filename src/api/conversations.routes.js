@@ -60,8 +60,19 @@ router.post('/start', async (req, res) => {
   if (!channelId || !phoneNumber || !content) {
     return res.status(400).json({ error: 'channelId, phoneNumber and content are required' });
   }
+  if (typeof phoneNumber !== 'string') {
+    return res.status(400).json({ error: 'phoneNumber must be a string' });
+  }
 
-  const channel = await findChannelById(channelId);
+  let channel;
+  try {
+    channel = await findChannelById(channelId);
+  } catch (err) {
+    if (err.code === '22P02') {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+    throw err;
+  }
   if (!channel) {
     return res.status(404).json({ error: 'Channel not found' });
   }

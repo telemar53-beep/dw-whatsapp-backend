@@ -77,4 +77,22 @@ describe('StartConversationModal', () => {
     await userEvent.click(await screen.findByRole('button', { name: /cancelar/i }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  test('shows a loading message before the channel fetch resolves', () => {
+    let resolvePromise;
+    api.listChannelsForAgent.mockReturnValue(new Promise((resolve) => { resolvePromise = resolve; }));
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(screen.getByText(/carregando canais/i)).toBeInTheDocument();
+    resolvePromise([]);
+  });
+
+  test('shows a distinct error message when the channel fetch fails, not the empty-list message', async () => {
+    api.listChannelsForAgent.mockRejectedValue(new Error('network error'));
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(await screen.findByText(/não foi possível carregar os canais/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nenhum canal baileys conectado/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /iniciar/i })).toBeDisabled();
+  });
 });

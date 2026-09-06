@@ -10,6 +10,8 @@ function StartConversationModal({ onClose, onCreated }) {
   const [content, setContent] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     listChannelsForAgent(token)
@@ -20,7 +22,10 @@ function StartConversationModal({ onClose, onCreated }) {
           setChannelId(eligible[0].id);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setLoadError(true);
+      })
+      .finally(() => setLoading(false));
   }, [token]);
 
   async function handleSubmit(event) {
@@ -46,7 +51,11 @@ function StartConversationModal({ onClose, onCreated }) {
             <label htmlFor="start-conversation-channel" className="mb-1 block text-sm text-gray-600">
               Canal
             </label>
-            {channels.length === 0 ? (
+            {loading ? (
+              <p className="text-sm text-gray-500">Carregando canais...</p>
+            ) : loadError ? (
+              <p className="text-sm text-red-600">Não foi possível carregar os canais. Feche e tente novamente.</p>
+            ) : channels.length === 0 ? (
               <p className="text-sm text-gray-500">Nenhum canal Baileys conectado no momento.</p>
             ) : (
               <select
@@ -91,7 +100,7 @@ function StartConversationModal({ onClose, onCreated }) {
           <div className="flex gap-2">
             <button
               type="submit"
-              disabled={submitting || channels.length === 0}
+              disabled={submitting || loading || loadError || channels.length === 0}
               className="flex-1 rounded bg-blue-600 py-2 text-sm text-white disabled:opacity-50"
             >
               Iniciar

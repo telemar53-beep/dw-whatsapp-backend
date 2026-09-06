@@ -82,10 +82,16 @@ router.get('/:id/qr', authenticateQrRoute, async (req, res) => {
   const qrImageDataUrl = await QRCode.toDataURL(qr);
   res.status(200).send(`<!DOCTYPE html>
 <html>
-<head><title>QR - ${channel.name}</title></head>
+<head>
+<title>QR - ${channel.name}</title>
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { display: flex; align-items: center; justify-content: center; }
+  img { max-width: 100%; max-height: 100%; }
+</style>
+</head>
 <body>
-<h1>Escaneie o QR code no WhatsApp: ${channel.name}</h1>
-<img src="${qrImageDataUrl}" alt="QR code" />
+<img src="${qrImageDataUrl}" alt="QR code - ${channel.name}" />
 </body>
 </html>`);
 });

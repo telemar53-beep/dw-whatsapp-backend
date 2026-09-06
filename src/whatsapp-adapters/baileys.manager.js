@@ -3,7 +3,7 @@ const path = require('path');
 const { loadConfig } = require('../config/env');
 const { createChannel, updateChannelStatus, listChannels } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
-const { saveMediaFile, extensionForMimeType } = require('../media/media-storage');
+const { saveMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
 
 function loadBaileysLib() {
   return require('@whiskeysockets/baileys');
@@ -238,6 +238,33 @@ async function sendTextMessage(channel, toPhoneNumber, content) {
   return { whatsappMessageId: sent.key.id };
 }
 
+async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath, mediaMimeType, mediaFilename, caption }) {
+  const entry = connections.get(channel.id);
+  if (!entry) {
+    throw new Error(`No active Baileys connection for channel ${channel.id}`);
+  }
+  const buffer = await fs.promises.readFile(getMediaFilePath(mediaPath));
+  const jid = `${toPhoneNumber}@s.whatsapp.net`;
+
+  let payload;
+  if (messageType === 'image') {
+    payload = caption ? { image: buffer, caption } : { image: buffer };
+  } else if (messageType === 'video') {
+    payload = caption ? { video: buffer, caption } : { video: buffer };
+  } else if (messageType === 'audio') {
+    payload = { audio: buffer, mimetype: mediaMimeType };
+  } else if (messageType === 'document') {
+    payload = { document: buffer, mimetype: mediaMimeType, fileName: mediaFilename || 'arquivo' };
+  } else if (messageType === 'sticker') {
+    payload = { sticker: buffer };
+  } else {
+    throw new Error(`Unsupported media message type: ${messageType}`);
+  }
+
+  const sent = await entry.sock.sendMessage(jid, payload);
+  return { whatsappMessageId: sent.key.id };
+}
+
 function getQrForChannel(channelId) {
   const entry = connections.get(channelId);
   return entry ? entry.qr : null;
@@ -248,5 +275,6 @@ module.exports = {
   startBaileysConnection,
   addBaileysChannel,
   sendTextMessage,
+  sendMediaMessage,
   getQrForChannel,
 };

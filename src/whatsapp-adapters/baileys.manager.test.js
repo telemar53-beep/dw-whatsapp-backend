@@ -9,6 +9,7 @@ jest.mock('../conversations/inbound-message.service');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
   saveMediaFile: jest.fn(),
+  getMediaFilePath: jest.fn(),
 }));
 jest.mock('../config/env');
 jest.mock('fs', () => ({
@@ -432,6 +433,63 @@ describe('baileys.manager', () => {
     test('throws when there is no active connection for the channel', async () => {
       await expect(
         manager.sendTextMessage({ id: 'channel-does-not-exist' }, '5511999992222', 'Oi')
+      ).rejects.toThrow('No active Baileys connection for channel channel-does-not-exist');
+    });
+  });
+
+  describe('sendMediaMessage', () => {
+    test('sends an image with a caption through the active socket', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-5', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      const { getMediaFilePath } = require('../media/media-storage');
+      getMediaFilePath.mockReturnValue('/fake/path/image.jpg');
+      const fs = require('fs');
+      fs.promises.readFile = jest.fn().mockResolvedValue(Buffer.from('fake-image-bytes'));
+
+      const result = await manager.sendMediaMessage(channel, '5511999993333', {
+        messageType: 'image',
+        mediaPath: 'image.jpg',
+        mediaMimeType: 'image/jpeg',
+        caption: 'Resposta do atendente',
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', {
+        image: Buffer.from('fake-image-bytes'),
+        caption: 'Resposta do atendente',
+      });
+      expect(result).toEqual({ whatsappMessageId: 'wamid.SENT1' });
+    });
+
+    test('sends a document with a filename and no caption', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-6', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      const { getMediaFilePath } = require('../media/media-storage');
+      getMediaFilePath.mockReturnValue('/fake/path/doc.pdf');
+      const fs = require('fs');
+      fs.promises.readFile = jest.fn().mockResolvedValue(Buffer.from('fake-doc-bytes'));
+
+      await manager.sendMediaMessage(channel, '5511999993333', {
+        messageType: 'document',
+        mediaPath: 'doc.pdf',
+        mediaMimeType: 'application/pdf',
+        mediaFilename: 'resposta.pdf',
+        caption: null,
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', {
+        document: Buffer.from('fake-doc-bytes'),
+        mimetype: 'application/pdf',
+        fileName: 'resposta.pdf',
+      });
+    });
+
+    test('throws when there is no active connection for the channel', async () => {
+      await expect(
+        manager.sendMediaMessage({ id: 'channel-does-not-exist' }, '5511999992222', { messageType: 'image', mediaPath: 'x.jpg' })
       ).rejects.toThrow('No active Baileys connection for channel channel-does-not-exist');
     });
   });

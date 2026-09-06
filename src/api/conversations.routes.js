@@ -104,6 +104,14 @@ router.post('/:id/messages', upload.single('file'), async (req, res) => {
   res.status(201).json(message);
 });
 
+// eslint-disable-next-line no-unused-vars
+router.use('/:id/messages', (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ error: 'File exceeds the 100MB upload limit' });
+  }
+  next(err);
+});
+
 router.post('/:id/transfer', async (req, res) => {
   const { toAgentId } = req.body || {};
   if (!toAgentId) {

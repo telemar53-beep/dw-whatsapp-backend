@@ -303,6 +303,24 @@ describe('POST /api/conversations/:id/messages', () => {
     expect(res.status).toBe(400);
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
+
+  test('rejects a file larger than multer\'s own 100MB global cap with a 400, not a 500', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      channelId: 'channel-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+    });
+    const overGlobalCap = Buffer.alloc(101 * 1024 * 1024); // 101MB, over multer's 100MB global cap
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .attach('file', overGlobalCap, { filename: 'gigante.pdf', contentType: 'application/pdf' });
+
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/conversations/:id/transfer', () => {

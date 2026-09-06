@@ -46,21 +46,25 @@ function parseInboundMessages(webhookBody) {
           messages.push({ ...base, messageType: 'text', content: message.text.body });
         } else if (MEDIA_MESSAGE_TYPES.includes(message.type)) {
           const media = message[message.type];
-          messages.push({
-            ...base,
-            messageType: message.type,
-            mediaId: media.id,
-            mediaMimeType: media.mime_type,
-            mediaFilename: media.filename || null,
-            content: media.caption || null,
-          });
+          if (media) {
+            messages.push({
+              ...base,
+              messageType: message.type,
+              mediaId: media.id,
+              mediaMimeType: media.mime_type,
+              mediaFilename: media.filename || null,
+              content: media.caption || null,
+            });
+          }
         } else if (message.type === 'location') {
-          messages.push({
-            ...base,
-            messageType: 'location',
-            latitude: message.location.latitude,
-            longitude: message.location.longitude,
-          });
+          if (message.location) {
+            messages.push({
+              ...base,
+              messageType: 'location',
+              latitude: message.location.latitude,
+              longitude: message.location.longitude,
+            });
+          }
         }
       }
     }

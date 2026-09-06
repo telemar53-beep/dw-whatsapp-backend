@@ -220,6 +220,76 @@ describe('parseInboundMessages', () => {
     ]);
   });
 
+  test('skips a media message missing its per-type sub-object, without throwing, alongside a valid message', () => {
+    const webhookBody = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
+                messages: [
+                  { from: '5511999998888', id: 'wamid.BADIMG', type: 'image' },
+                  { from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    let result;
+    expect(() => {
+      result = parseInboundMessages(webhookBody);
+    }).not.toThrow();
+    expect(result).toEqual([
+      {
+        metaPhoneNumberId: '1234567890',
+        fromPhoneNumber: '5511999998888',
+        contactDisplayName: 'Carlos',
+        whatsappMessageId: 'wamid.ABC',
+        messageType: 'text',
+        content: 'Ola',
+      },
+    ]);
+  });
+
+  test('skips a location message missing its location sub-object, without throwing, alongside a valid message', () => {
+    const webhookBody = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [],
+                messages: [
+                  { from: '5511999998888', id: 'wamid.BADLOC', type: 'location' },
+                  { from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    let result;
+    expect(() => {
+      result = parseInboundMessages(webhookBody);
+    }).not.toThrow();
+    expect(result).toEqual([
+      {
+        metaPhoneNumberId: '1234567890',
+        fromPhoneNumber: '5511999998888',
+        contactDisplayName: null,
+        whatsappMessageId: 'wamid.ABC',
+        messageType: 'text',
+        content: 'Ola',
+      },
+    ]);
+  });
+
   test('ignores unsupported message types (e.g. reactions)', () => {
     const webhookBody = {
       entry: [

@@ -24,7 +24,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black/40">
-      <div className="max-h-[80vh] w-96 overflow-y-auto rounded bg-white p-4 shadow">
+      <div className="max-h-[80vh] w-[90vw] max-w-96 overflow-y-auto rounded bg-white p-4 shadow">
         {selected ? (
           <>
             <button onClick={() => setSelected(null)} className="mb-3 text-sm text-blue-600 underline">
@@ -37,7 +37,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
               {messages.map((message) => (
                 <div
                   key={message.id}
-                  className={`max-w-xs space-y-1 rounded px-3 py-2 text-sm ${
+                  className={`max-w-[85%] space-y-1 rounded px-3 py-2 text-sm ${
                     message.direction === 'inbound' ? 'bg-gray-100 text-gray-800' : 'ml-auto bg-blue-100 text-gray-800'
                   }`}
                 >

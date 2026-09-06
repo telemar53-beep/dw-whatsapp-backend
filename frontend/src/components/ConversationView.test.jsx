@@ -173,4 +173,17 @@ describe('ConversationView', () => {
     await waitFor(() => expect(api.getConversationHistory).toHaveBeenCalledWith('contact-1', 'tok-123'));
     expect(await screen.findByText('Atendimentos anteriores')).toBeInTheDocument();
   });
+
+  test('shows a back button that calls onBack when clicked', async () => {
+    const onBack = vi.fn();
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+        onBack={onBack}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
+    expect(onBack).toHaveBeenCalled();
+  });
 });

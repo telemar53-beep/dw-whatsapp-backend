@@ -7,7 +7,7 @@ import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
 import ConversationHistoryModal from './ConversationHistoryModal';
 
-function ConversationView({ conversation, onTransferClick }) {
+function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
   const { messages, sendMessage } = useConversationMessages(conversation.id);
   const { quickReplies } = useQuickReplies();
@@ -18,9 +18,14 @@ function ConversationView({ conversation, onTransferClick }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-gray-200 p-3">
-        <h3 className="font-semibold text-gray-800">Conversa</h3>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 p-3">
+        <div className="flex items-center gap-2">
+          <button onClick={onBack} className="rounded px-2 py-1 text-gray-500 md:hidden" aria-label="Voltar para a lista">
+            ←
+          </button>
+          <h3 className="font-semibold text-gray-800">Conversa</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowingHistory(true)}
             className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700"
@@ -57,7 +62,7 @@ function ConversationView({ conversation, onTransferClick }) {
         {messages.map((message) => (
           <div
             key={message.id}
-            className={`max-w-xs space-y-1 rounded px-3 py-2 text-sm ${
+            className={`max-w-[85%] space-y-1 rounded px-3 py-2 text-sm ${
               message.direction === 'inbound' ? 'bg-gray-100 text-gray-800' : 'ml-auto bg-blue-100 text-gray-800'
             }`}
           >

@@ -470,8 +470,10 @@ git commit -m "feat: include name and live online status in GET /api/agents"
 - Modify: `frontend/src/pages/DashboardPage.test.jsx:13-19` (the `vi.mock` block) and add one new test at the end of the `describe('DashboardPage', ...)` block
 
 **Interfaces:**
-- Consumes: `GET /api/agents` now returns `{ id, name, email, role, online }` per agent (Task 2) via the existing `listAgents(token)` in `frontend/src/services/api.js` (unchanged) and the existing `useAgents()` hook in `frontend/src/hooks/useAgents.js` (unchanged — it already just returns whatever the API sends). Consumes the `presence:online`/`presence:offline` socket events from Task 1, and the existing `useSocket()` from `frontend/src/contexts/SocketContext.jsx`.
+- Consumes: `GET /api/agents` now returns `{ id, name, email, role, online }` per agent (Task 2) via the existing `listAgents(token)` in `frontend/src/services/api.js` (unchanged) and the existing `useAgents()` hook in `frontend/src/hooks/useAgents.js` (unchanged — it already just returns whatever the API sends). Consumes the `presence:online`/`presence:offline` socket events from Task 1, and the existing `useSocket()` from `frontend/src/contexts/SocketContext.jsx`. Also consumes the existing `useAuth()` from `frontend/src/contexts/AuthContext.jsx` (already used elsewhere in this project) — see the note below on why.
 - Produces: `usePresence(agents)` → a `Set` of online agent ids, for any future consumer. `TeamPanel` (no props — it calls `useAgents()` and `usePresence()` itself, same self-contained pattern as `TransferModal`).
+
+**Note carried from Task 1's review (ruling, not optional):** Task 1's implementer found that the server cannot broadcast a `presence:online` event back to the very socket that just triggered it — `io.emit`-based broadcast (what the plan originally specified) caused a connecting client to spuriously receive its own "online" event due to Socket.io's internal packet ordering, so Task 1 correctly switched to `socket.broadcast.emit` (excludes the sender) for `presence:online` specifically. The consequence: **a viewer never receives their own `presence:online` event.** If `GET /api/agents`'s initial snapshot happens to be fetched before that viewer's own socket handshake completes server-side, their own row in `TeamPanel` would show as offline and — since no event will ever arrive to correct it — would stay wrong until a full page reload. `usePresence` must defend against this: it always treats the current authenticated agent (from `useAuth()`) as online, regardless of what the initial snapshot or any socket event says. This is why `useAuth()` is a new dependency of this hook.
 
 - [ ] **Step 1: Write the failing test for `usePresence`**
 
@@ -482,8 +484,10 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { usePresence } from './usePresence';
 import { useSocket } from '../contexts/SocketContext';
+import { useAuth } from '../contexts/AuthContext';
 
 vi.mock('../contexts/SocketContext');
+vi.mock('../contexts/AuthContext');
 
 function createFakeSocket() {
   const handlers = {};
@@ -502,40 +506,47 @@ beforeEach(() => {
   vi.clearAllMocks();
   fakeSocket = createFakeSocket();
   useSocket.mockReturnValue(fakeSocket);
+  useAuth.mockReturnValue({ agent: { id: 'self-1' } });
 });
 
 describe('usePresence', () => {
-  test('seeds the online set from the agents list online field', () => {
+  test('seeds the online set from the agents list online field, plus the current agent', () => {
     const agents = [
       { id: 'a1', online: true },
       { id: 'a2', online: false },
     ];
     const { result } = renderHook(() => usePresence(agents));
-    expect(result.current).toEqual(new Set(['a1']));
+    expect(result.current).toEqual(new Set(['a1', 'self-1']));
+  });
+
+  test('always includes the current agent as online, even if the initial snapshot missed it', () => {
+    const agents = [{ id: 'self-1', online: false }];
+    const { result } = renderHook(() => usePresence(agents));
+    expect(result.current.has('self-1')).toBe(true);
   });
 
   test('presence:online adds the agent to the online set', () => {
     const agents = [{ id: 'a1', online: false }];
     const { result } = renderHook(() => usePresence(agents));
-    expect(result.current).toEqual(new Set());
+    expect(result.current).toEqual(new Set(['self-1']));
 
     act(() => {
       fakeSocket.trigger('presence:online', { agentId: 'a1' });
     });
 
-    expect(result.current).toEqual(new Set(['a1']));
+    expect(result.current).toEqual(new Set(['self-1', 'a1']));
   });
 
   test('presence:offline removes the agent from the online set', () => {
     const agents = [{ id: 'a1', online: true }];
     const { result } = renderHook(() => usePresence(agents));
-    expect(result.current).toEqual(new Set(['a1']));
+    expect(result.current).toEqual(new Set(['a1', 'self-1']));
 
     act(() => {
       fakeSocket.trigger('presence:offline', { agentId: 'a1' });
     });
 
-    expect(result.current).toEqual(new Set());
+    expect(result.current).toEqual(new Set(['self-1']));
   });
 });
 ```
@@ -552,14 +563,23 @@ Create `frontend/src/hooks/usePresence.js`:
 ```js
 import { useState, useEffect } from 'react';
 import { useSocket } from '../contexts/SocketContext';
+import { useAuth } from '../contexts/AuthContext';
 
 export function usePresence(agents) {
   const socket = useSocket();
+  const { agent } = useAuth();
   const [onlineIds, setOnlineIds] = useState(() => new Set());
 
   useEffect(() => {
-    setOnlineIds(new Set(agents.filter((agent) => agent.online).map((agent) => agent.id)));
-  }, [agents]);
+    const seeded = new Set(agents.filter((a) => a.online).map((a) => a.id));
+    // The server never broadcasts a socket's own presence:online event back to
+    // itself (see socket-server.js), so the initial snapshot can race and miss
+    // the current agent — always assume the viewer is online.
+    if (agent) {
+      seeded.add(agent.id);
+    }
+    setOnlineIds(seeded);
+  }, [agents, agent]);
 
   useEffect(() => {
     if (!socket) return undefined;
@@ -591,7 +611,7 @@ export function usePresence(agents) {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run (from `frontend/`): `npx vitest run src/hooks/usePresence.test.jsx`
-Expected: PASS, 3/3 tests
+Expected: PASS, 4/4 tests
 
 - [ ] **Step 5: Commit**
 

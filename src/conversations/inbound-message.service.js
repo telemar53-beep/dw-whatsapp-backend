@@ -5,7 +5,19 @@ const { emitToAgent, broadcast } = require('../realtime/socket-server');
 
 const UNIQUE_VIOLATION = '23505';
 
-async function ingestInboundMessage({ channelId, fromPhoneNumber, contactDisplayName, whatsappMessageId, content }) {
+async function ingestInboundMessage({
+  channelId,
+  fromPhoneNumber,
+  contactDisplayName,
+  whatsappMessageId,
+  content,
+  messageType,
+  mediaPath,
+  mediaMimeType,
+  mediaFilename,
+  locationLatitude,
+  locationLongitude,
+}) {
   const contact = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   let conversation = await findOpenConversation(contact.id, channelId);
   if (!conversation) {
@@ -27,6 +39,12 @@ async function ingestInboundMessage({ channelId, fromPhoneNumber, contactDisplay
       content,
       whatsappMessageId,
       status: 'received',
+      messageType,
+      mediaPath,
+      mediaMimeType,
+      mediaFilename,
+      locationLatitude,
+      locationLongitude,
     });
   } catch (err) {
     if (err.code !== UNIQUE_VIOLATION) {

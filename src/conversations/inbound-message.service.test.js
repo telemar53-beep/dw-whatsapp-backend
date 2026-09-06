@@ -185,4 +185,73 @@ describe('ingestInboundMessage', () => {
     expect(emitToAgent).not.toHaveBeenCalled();
     expect(broadcast).not.toHaveBeenCalled();
   });
+
+  test('passes media fields through to createMessage and the emitted payload', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-7', phoneNumber: '+5511999992222', displayName: 'Cliente Mídia' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-7', assignedAgentId: null });
+    createMessage.mockResolvedValue({ id: 'msg-7', messageType: 'image', mediaPath: 'abc.jpg' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999992222',
+      contactDisplayName: 'Cliente Mídia',
+      whatsappMessageId: 'wamid.IMG',
+      content: 'Comprovante',
+      messageType: 'image',
+      mediaPath: 'abc.jpg',
+      mediaMimeType: 'image/jpeg',
+      mediaFilename: null,
+    });
+
+    expect(createMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-7',
+      direction: 'inbound',
+      content: 'Comprovante',
+      whatsappMessageId: 'wamid.IMG',
+      status: 'received',
+      messageType: 'image',
+      mediaPath: 'abc.jpg',
+      mediaMimeType: 'image/jpeg',
+      mediaFilename: null,
+      locationLatitude: undefined,
+      locationLongitude: undefined,
+    });
+    expect(broadcast).toHaveBeenCalledWith('queue:new', {
+      conversation: {
+        id: 'conv-7',
+        assignedAgentId: null,
+        contactPhoneNumber: '+5511999992222',
+        contactDisplayName: 'Cliente Mídia',
+      },
+      message: { id: 'msg-7', messageType: 'image', mediaPath: 'abc.jpg' },
+    });
+  });
+
+  test('defaults messageType-related fields to undefined when not provided (plain text still works)', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-8' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-8', assignedAgentId: null });
+    createMessage.mockResolvedValue({ id: 'msg-8' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999991111',
+      contactDisplayName: 'Cliente Texto',
+      whatsappMessageId: 'wamid.TXT',
+      content: 'Oi',
+    });
+
+    expect(createMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-8',
+      direction: 'inbound',
+      content: 'Oi',
+      whatsappMessageId: 'wamid.TXT',
+      status: 'received',
+      messageType: undefined,
+      mediaPath: undefined,
+      mediaMimeType: undefined,
+      mediaFilename: undefined,
+      locationLatitude: undefined,
+      locationLongitude: undefined,
+    });
+  });
 });

@@ -12,16 +12,29 @@ function getOutboundQueue() {
   return queue;
 }
 
-async function enqueueOutboundMessage({ conversationId, channelId, content }) {
+async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename }) {
   const message = await createMessage({
     conversationId,
     direction: 'outbound',
-    content,
+    content: content || null,
     whatsappMessageId: null,
     status: 'sent',
+    messageType: messageType || 'text',
+    mediaPath,
+    mediaMimeType,
+    mediaFilename,
   });
   await getOutboundQueue().add(
-    { messageId: message.id, conversationId, channelId, content },
+    {
+      messageId: message.id,
+      conversationId,
+      channelId,
+      content: message.content,
+      messageType: message.messageType,
+      mediaPath: message.mediaPath,
+      mediaMimeType: message.mediaMimeType,
+      mediaFilename: message.mediaFilename,
+    },
     { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
   );
   return message;

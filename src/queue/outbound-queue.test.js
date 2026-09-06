@@ -45,4 +45,28 @@ describe('outbound queue', () => {
       expect(message.status).toBe('sent');
     });
   });
+
+  test('passes media fields through to the created message and the queued job', (done) => {
+    processOutboundQueue((data) => {
+      try {
+        expect(data.messageType).toBe('image');
+        expect(data.mediaPath).toBe('some-file.jpg');
+        expect(data.mediaMimeType).toBe('image/jpeg');
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    enqueueOutboundMessage({
+      conversationId,
+      channelId,
+      content: 'Aqui está',
+      messageType: 'image',
+      mediaPath: 'some-file.jpg',
+      mediaMimeType: 'image/jpeg',
+      mediaFilename: null,
+    }).then((message) => {
+      expect(message.messageType).toBe('image');
+    });
+  });
 });

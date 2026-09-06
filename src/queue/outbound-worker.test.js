@@ -117,4 +117,48 @@ describe('startOutboundWorker', () => {
       message: { id: 'msg-2', status: 'failed' },
     });
   });
+
+  test('sends via sendMediaMessage when the message has a non-text messageType', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({
+      id: 'channel-1',
+      type: 'meta_cloud',
+      config: { phoneNumberId: '123', accessToken: 'tok' },
+    });
+    metaCloudAdapter.sendMediaMessage.mockResolvedValue({ whatsappMessageId: 'wamid.MEDIA1' });
+
+    await handler({
+      messageId: 'msg-4',
+      conversationId: 'conv-1',
+      channelId: 'channel-1',
+      content: 'Aqui está',
+      messageType: 'image',
+      mediaPath: 'file.jpg',
+      mediaMimeType: 'image/jpeg',
+      mediaFilename: null,
+    });
+
+    expect(metaCloudAdapter.sendMediaMessage).toHaveBeenCalledWith(
+      { id: 'channel-1', type: 'meta_cloud', config: { phoneNumberId: '123', accessToken: 'tok' } },
+      '5511999998888',
+      { messageType: 'image', mediaPath: 'file.jpg', mediaMimeType: 'image/jpeg', mediaFilename: null, caption: 'Aqui está' }
+    );
+    expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();
+    expect(recordMessageSent).toHaveBeenCalledWith('msg-4', 'wamid.MEDIA1');
+  });
+
+  test('sends via sendTextMessage when messageType is text or absent', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.TXT1' });
+
+    await handler({ messageId: 'msg-5', conversationId: 'conv-1', channelId: 'channel-1', content: 'Oi', messageType: 'text' });
+
+    expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalledWith(
+      { id: 'channel-1', type: 'meta_cloud', config: {} },
+      '5511999998888',
+      'Oi'
+    );
+    expect(metaCloudAdapter.sendMediaMessage).not.toHaveBeenCalled();
+  });
 });

@@ -12,12 +12,21 @@ const ADAPTERS_BY_CHANNEL_TYPE = {
 };
 
 function startOutboundWorker() {
-  processOutboundQueue(async ({ messageId, conversationId, channelId, content }) => {
+  processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename }) => {
     const conversation = await getConversationWithContact(conversationId);
     const channel = await findChannelById(channelId);
     try {
       const adapter = ADAPTERS_BY_CHANNEL_TYPE[channel.type];
-      const { whatsappMessageId } = await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content);
+      const { whatsappMessageId } =
+        messageType && messageType !== 'text'
+          ? await adapter.sendMediaMessage(channel, conversation.contactPhoneNumber, {
+              messageType,
+              mediaPath,
+              mediaMimeType,
+              mediaFilename,
+              caption: content,
+            })
+          : await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content);
       const message = await recordMessageSent(messageId, whatsappMessageId);
       if (conversation.assignedAgentId) {
         emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });

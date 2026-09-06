@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
+import { useQuickReplies } from '../hooks/useQuickReplies';
 import { claimConversation, closeConversation } from '../services/api';
 import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
@@ -9,6 +10,7 @@ import ConversationHistoryModal from './ConversationHistoryModal';
 function ConversationView({ conversation, onTransferClick }) {
   const { token, agent } = useAuth();
   const { messages, sendMessage } = useConversationMessages(conversation.id);
+  const { quickReplies } = useQuickReplies();
   const [showingHistory, setShowingHistory] = useState(false);
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
@@ -64,7 +66,7 @@ function ConversationView({ conversation, onTransferClick }) {
           </div>
         ))}
       </div>
-      {isMine && <MessageInput onSend={sendMessage} />}
+      {isMine && <MessageInput onSend={sendMessage} quickReplies={quickReplies} />}
       {showingHistory && (
         <ConversationHistoryModal contactId={conversation.contactId} onClose={() => setShowingHistory(false)} />
       )}

@@ -7,13 +7,14 @@ function pickSupportedAudioMimeType() {
   return AUDIO_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate));
 }
 
-function MessageInput({ onSend }) {
+function MessageInput({ onSend, quickReplies = [] }) {
   const [content, setContent] = useState('');
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [showingQuickReplies, setShowingQuickReplies] = useState(false);
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -121,6 +122,42 @@ function MessageInput({ onSend }) {
             🎤
           </button>
         )}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowingQuickReplies((prev) => !prev)}
+            title="Respostas rápidas"
+            aria-label="Respostas rápidas"
+            className="rounded border border-gray-300 px-3 py-2"
+            disabled={recording}
+          >
+            💬
+          </button>
+          {showingQuickReplies && (
+            <div className="absolute bottom-full left-0 z-10 mb-1 w-64 rounded border border-gray-200 bg-white p-2 shadow">
+              {quickReplies.length === 0 ? (
+                <p className="text-sm text-gray-500">Nenhuma resposta cadastrada</p>
+              ) : (
+                <ul className="space-y-1">
+                  {quickReplies.map((quickReply) => (
+                    <li key={quickReply.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setContent(quickReply.content);
+                          setShowingQuickReplies(false);
+                        }}
+                        className="w-full rounded px-2 py-1 text-left text-sm hover:bg-gray-50"
+                      >
+                        {quickReply.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
         <input
           type="text"
           value={content}

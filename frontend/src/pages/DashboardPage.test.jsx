@@ -8,6 +8,7 @@ import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
 import { useChannels } from '../hooks/useChannels';
 import { useConversationMessages } from '../hooks/useConversationMessages';
+import { useQuickReplies } from '../hooks/useQuickReplies';
 
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useQueue');
@@ -15,6 +16,7 @@ vi.mock('../hooks/useMyConversations');
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgents', () => ({ useAgents: () => [] }));
 vi.mock('../hooks/useConversationMessages');
+vi.mock('../hooks/useQuickReplies');
 vi.mock('../components/StartConversationModal', () => ({
   default: ({ onCreated }) => (
     <button
@@ -36,6 +38,7 @@ beforeEach(() => {
   // stubbed out here so selecting a conversation doesn't trigger a real,
   // unmocked fetch via the real useConversationMessages/services/api.
   useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
+  useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
 });
 
 function renderDashboard() {

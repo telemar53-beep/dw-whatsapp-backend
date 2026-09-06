@@ -4,10 +4,12 @@ import userEvent from '@testing-library/user-event';
 import ConversationView from './ConversationView';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
+import { useQuickReplies } from '../hooks/useQuickReplies';
 import * as api from '../services/api';
 
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useConversationMessages');
+vi.mock('../hooks/useQuickReplies');
 vi.mock('../services/api');
 
 beforeEach(() => {
@@ -17,6 +19,7 @@ beforeEach(() => {
     messages: [{ id: 'm1', direction: 'inbound', content: 'Oi, preciso de ajuda' }],
     sendMessage: vi.fn(),
   });
+  useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
 });
 
 describe('ConversationView', () => {

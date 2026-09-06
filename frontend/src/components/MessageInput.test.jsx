@@ -99,4 +99,28 @@ describe('MessageInput', () => {
     await waitFor(() => expect(onSend).toHaveBeenCalledWith('Oi', null));
     expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
   });
+
+  test('selecting a quick reply fills the message field, replacing what was typed', async () => {
+    const onSend = vi.fn();
+    const quickReplies = [
+      { id: 'qr-1', title: 'Boas-vindas', content: 'Olá! Como posso ajudar?' },
+      { id: 'qr-2', title: 'Encerramento', content: 'Foi um prazer atender você!' },
+    ];
+    render(<MessageInput onSend={onSend} quickReplies={quickReplies} />);
+
+    await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'rascunho');
+    await userEvent.click(screen.getByRole('button', { name: /respostas rápidas/i }));
+    await userEvent.click(screen.getByText('Boas-vindas'));
+
+    expect(screen.getByPlaceholderText(/digite uma mensagem/i)).toHaveValue('Olá! Como posso ajudar?');
+    expect(screen.queryByText('Encerramento')).not.toBeInTheDocument();
+  });
+
+  test('shows a message when there are no quick replies registered', async () => {
+    render(<MessageInput onSend={vi.fn()} quickReplies={[]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /respostas rápidas/i }));
+
+    expect(screen.getByText(/nenhuma resposta cadastrada/i)).toBeInTheDocument();
+  });
 });

@@ -102,4 +102,26 @@ describe('sector repository', () => {
     const result = await getPool().query('SELECT sector_id FROM agent_sectors WHERE agent_id = $1', [agent.id]);
     expect(result.rows).toEqual([]);
   });
+
+  test('deleting a sector removes its memberships from agent_sectors', async () => {
+    const agent = await createAgent({ email: 'sector-cascade1@dw.com', password: 'secret123', role: 'agent' });
+    const sector = await createSector({ name: 'Financeiro' });
+    await setAgentSectors(agent.id, [sector.id]);
+
+    await deleteSector(sector.id);
+
+    const result = await getPool().query('SELECT * FROM agent_sectors WHERE agent_id = $1', [agent.id]);
+    expect(result.rows).toEqual([]);
+  });
+
+  test('deleting an agent removes their memberships from agent_sectors', async () => {
+    const agent = await createAgent({ email: 'sector-cascade2@dw.com', password: 'secret123', role: 'agent' });
+    const sector = await createSector({ name: 'Comercial' });
+    await setAgentSectors(agent.id, [sector.id]);
+
+    await getPool().query('DELETE FROM agents WHERE id = $1', [agent.id]);
+
+    const result = await getPool().query('SELECT * FROM agent_sectors WHERE sector_id = $1', [sector.id]);
+    expect(result.rows).toEqual([]);
+  });
 });

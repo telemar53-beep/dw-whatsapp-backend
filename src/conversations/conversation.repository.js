@@ -128,6 +128,24 @@ async function listConversationsByAgent(agentId) {
   return result.rows.map(toConversationSummary);
 }
 
+async function listClosedConversationsByContact(contactId) {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.created_at, c.updated_at,
+            ch.name AS channel_name, ch.type AS channel_type
+     FROM conversations c
+     JOIN channels ch ON ch.id = c.channel_id
+     WHERE c.contact_id = $1 AND c.status = 'closed'
+     ORDER BY c.updated_at DESC
+     LIMIT 50`,
+    [contactId]
+  );
+  return result.rows.map((row) => ({
+    ...toConversation(row),
+    channelName: row.channel_name,
+    channelType: row.channel_type,
+  }));
+}
+
 module.exports = {
   findOpenConversation,
   createConversation,
@@ -137,4 +155,5 @@ module.exports = {
   getConversationWithContact,
   listWaitingConversations,
   listConversationsByAgent,
+  listClosedConversationsByContact,
 };

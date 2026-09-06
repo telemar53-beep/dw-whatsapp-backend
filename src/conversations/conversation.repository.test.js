@@ -11,6 +11,7 @@ const {
   getConversationWithContact,
   listWaitingConversations,
   listConversationsByAgent,
+  listClosedConversationsByContact,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -144,5 +145,37 @@ describe('conversation repository', () => {
     const mine = await listConversationsByAgent(agent.id);
 
     expect(mine.map((c) => c.id)).toEqual([conversation.id]);
+  });
+
+  test('listClosedConversationsByContact returns only closed conversations, most recent first', async () => {
+    const agent = await createAgent({ email: 'histagent1@dw.com', password: 'secret123', role: 'agent' });
+    const older = await createConversation(contactId, channelId);
+    await claimConversation(older.id, agent.id);
+    await closeConversation(older.id, agent.id);
+
+    const stillOpen = await createConversation(contactId, channelId);
+    await claimConversation(stillOpen.id, agent.id);
+
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511900001111', 'Outro Cliente');
+    const otherContactConversation = await createConversation(otherContact.id, channelId);
+    await claimConversation(otherContactConversation.id, agent.id);
+    await closeConversation(otherContactConversation.id, agent.id);
+
+    const secondChannel = await createChannel({
+      type: 'baileys',
+      name: 'Canal Baileys Teste',
+      phoneNumber: '+5511999991234',
+      config: {},
+    });
+    const newer = await createConversation(contactId, secondChannel.id);
+    await claimConversation(newer.id, agent.id);
+    await closeConversation(newer.id, agent.id);
+
+    const history = await listClosedConversationsByContact(contactId);
+
+    expect(history.map((c) => c.id)).toEqual([newer.id, older.id]);
+    expect(history[0].channelName).toBe('Canal Baileys Teste');
+    expect(history[0].channelType).toBe('baileys');
+    expect(history[1].channelName).toBe('Canal Teste');
   });
 });

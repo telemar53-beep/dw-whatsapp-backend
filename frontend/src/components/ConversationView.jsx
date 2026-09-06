@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { claimConversation, closeConversation } from '../services/api';
 import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
+import ConversationHistoryModal from './ConversationHistoryModal';
 
 function ConversationView({ conversation, onTransferClick }) {
   const { token, agent } = useAuth();
   const { messages, sendMessage } = useConversationMessages(conversation.id);
+  const [showingHistory, setShowingHistory] = useState(false);
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
   const isMine = conversation.assignedAgentId === agent.id;
@@ -16,6 +19,12 @@ function ConversationView({ conversation, onTransferClick }) {
       <div className="flex items-center justify-between border-b border-gray-200 p-3">
         <h3 className="font-semibold text-gray-800">Conversa</h3>
         <div className="flex gap-2">
+          <button
+            onClick={() => setShowingHistory(true)}
+            className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700"
+          >
+            Ver atendimentos anteriores
+          </button>
           {isUnassigned && (
             <button
               onClick={() => claimConversation(conversation.id, token)}
@@ -56,6 +65,9 @@ function ConversationView({ conversation, onTransferClick }) {
         ))}
       </div>
       {isMine && <MessageInput onSend={sendMessage} />}
+      {showingHistory && (
+        <ConversationHistoryModal contactId={conversation.contactId} onClose={() => setShowingHistory(false)} />
+      )}
     </div>
   );
 }

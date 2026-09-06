@@ -8,6 +8,7 @@ const {
   claimConversation,
   transferConversation,
   closeConversation,
+  listClosedConversationsByContact,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -42,6 +43,11 @@ router.get('/queue', async (req, res) => {
 
 router.get('/mine', async (req, res) => {
   const conversations = await listConversationsByAgent(req.agent.agentId);
+  res.json(conversations);
+});
+
+router.get('/contacts/:contactId/history', async (req, res) => {
+  const conversations = await listClosedConversationsByContact(req.params.contactId);
   res.json(conversations);
 });
 

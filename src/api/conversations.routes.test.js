@@ -16,6 +16,7 @@ const {
   claimConversation,
   transferConversation,
   closeConversation,
+  listClosedConversationsByContact,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -69,6 +70,30 @@ describe('GET /api/conversations/mine', () => {
     expect(res.status).toBe(200);
     expect(listConversationsByAgent).toHaveBeenCalledWith('agent-1');
     expect(res.body).toEqual([{ id: 'conv-2', assignedAgentId: 'agent-1' }]);
+  });
+});
+
+describe('GET /api/conversations/contacts/:contactId/history', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('returns the closed conversation history for a contact', async () => {
+    listClosedConversationsByContact.mockResolvedValue([
+      { id: 'conv-old', channelName: 'Berg', channelType: 'baileys', updatedAt: new Date() },
+    ]);
+    const res = await request(buildApp())
+      .get('/api/conversations/contacts/contact-1/history')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(200);
+    expect(listClosedConversationsByContact).toHaveBeenCalledWith('contact-1');
+    expect(res.body).toEqual([
+      { id: 'conv-old', channelName: 'Berg', channelType: 'baileys', updatedAt: expect.any(String) },
+    ]);
+  });
+
+  test('returns 401 without a token', async () => {
+    const res = await request(buildApp()).get('/api/conversations/contacts/contact-1/history');
+    expect(res.status).toBe(401);
+    expect(listClosedConversationsByContact).not.toHaveBeenCalled();
   });
 });
 

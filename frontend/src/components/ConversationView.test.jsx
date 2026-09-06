@@ -153,4 +153,21 @@ describe('ConversationView', () => {
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('Segue a foto', fakeFile));
   });
+
+  test('opens the previous-conversations history modal for the conversation contact', async () => {
+    api.getConversationHistory.mockResolvedValue([
+      { id: 'conv-old', channelName: 'Berg', channelType: 'baileys', updatedAt: '2026-08-01T12:00:00.000Z' },
+    ]);
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', contactId: 'contact-1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /ver atendimentos anteriores/i }));
+
+    await waitFor(() => expect(api.getConversationHistory).toHaveBeenCalledWith('contact-1', 'tok-123'));
+    expect(await screen.findByText('Atendimentos anteriores')).toBeInTheDocument();
+  });
 });

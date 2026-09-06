@@ -11,6 +11,7 @@ import {
   createAgent,
   setAgentActive,
   changePassword,
+  getConversationHistory,
 } from './api';
 
 beforeEach(() => {
@@ -177,6 +178,17 @@ describe('setAgentActive', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/admin/agents/agent-1',
       expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ active: false }) })
+    );
+  });
+});
+
+describe('getConversationHistory', () => {
+  test('fetches the closed conversation history for a contact', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('[]') });
+    await getConversationHistory('contact-1', 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/conversations/contacts/contact-1/history',
+      expect.objectContaining({ method: 'GET' })
     );
   });
 });

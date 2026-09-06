@@ -55,6 +55,10 @@ export function getMessages(conversationId, token) {
   return apiFetch(`/api/conversations/${conversationId}/messages`, { token });
 }
 
+export function getConversationHistory(contactId, token) {
+  return apiFetch(`/api/conversations/contacts/${contactId}/history`, { token });
+}
+
 export function claimConversation(conversationId, token) {
   return apiFetch(`/api/conversations/${conversationId}/claim`, { method: 'POST', token });
 }

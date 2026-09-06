@@ -94,4 +94,18 @@ describe('QuickRepliesAdminTab', () => {
 
     expect(api.deleteQuickReply).not.toHaveBeenCalled();
   });
+
+  test('shows an error message when deleting fails', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    useQuickReplies.mockReturnValue({
+      quickReplies: [{ id: 'qr-1', title: 'Boas-vindas', content: 'Olá!' }],
+      refresh: vi.fn(),
+    });
+    api.deleteQuickReply.mockRejectedValue({ body: { error: 'Falha ao excluir' } });
+    render(<QuickRepliesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
+
+    expect(await screen.findByText('Falha ao excluir')).toBeInTheDocument();
+  });
 });

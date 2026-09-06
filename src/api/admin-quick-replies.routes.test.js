@@ -61,6 +61,34 @@ describe('POST /api/admin/quick-replies', () => {
     expect(res.status).toBe(403);
     expect(createQuickReply).not.toHaveBeenCalled();
   });
+
+  test('returns 400 when title is only whitespace', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/quick-replies')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ title: '   ', content: 'Olá!' });
+
+    expect(res.status).toBe(400);
+    expect(createQuickReply).not.toHaveBeenCalled();
+  });
+
+  test('trims leading and trailing whitespace before creating', async () => {
+    createQuickReply.mockResolvedValue({
+      id: 'qr-1',
+      title: 'Boas-vindas',
+      content: 'Olá!',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const res = await request(buildApp())
+      .post('/api/admin/quick-replies')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ title: '  Boas-vindas  ', content: '  Olá!  ' });
+
+    expect(res.status).toBe(201);
+    expect(createQuickReply).toHaveBeenCalledWith({ title: 'Boas-vindas', content: 'Olá!' });
+  });
 });
 
 describe('PATCH /api/admin/quick-replies/:id', () => {
@@ -114,6 +142,34 @@ describe('PATCH /api/admin/quick-replies/:id', () => {
 
     expect(res.status).toBe(403);
     expect(updateQuickReply).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when title is only whitespace', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/quick-replies/qr-1')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ title: '   ', content: 'Texto editado' });
+
+    expect(res.status).toBe(400);
+    expect(updateQuickReply).not.toHaveBeenCalled();
+  });
+
+  test('trims leading and trailing whitespace before updating', async () => {
+    updateQuickReply.mockResolvedValue({
+      id: 'qr-1',
+      title: 'Editado',
+      content: 'Texto editado',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/quick-replies/qr-1')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ title: '  Editado  ', content: '  Texto editado  ' });
+
+    expect(res.status).toBe(200);
+    expect(updateQuickReply).toHaveBeenCalledWith('qr-1', { title: 'Editado', content: 'Texto editado' });
   });
 });
 

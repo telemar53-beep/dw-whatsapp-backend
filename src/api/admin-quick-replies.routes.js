@@ -9,7 +9,9 @@ const {
 const router = express.Router();
 
 router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
-  const { title, content } = req.body || {};
+  const { title: rawTitle, content: rawContent } = req.body || {};
+  const title = (rawTitle || '').trim();
+  const content = (rawContent || '').trim();
   if (!title || !content) {
     return res.status(400).json({ error: 'title and content are required' });
   }
@@ -18,7 +20,9 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  const { title, content } = req.body || {};
+  const { title: rawTitle, content: rawContent } = req.body || {};
+  const title = (rawTitle || '').trim();
+  const content = (rawContent || '').trim();
   if (!title || !content) {
     return res.status(400).json({ error: 'title and content are required' });
   }

@@ -134,7 +134,7 @@ function MessageInput({ onSend, quickReplies = [] }) {
             💬
           </button>
           {showingQuickReplies && (
-            <div className="absolute bottom-full left-0 z-10 mb-1 w-64 rounded border border-gray-200 bg-white p-2 shadow">
+            <div className="absolute bottom-full left-0 z-10 mb-1 max-h-64 w-64 overflow-y-auto rounded border border-gray-200 bg-white p-2 shadow">
               {quickReplies.length === 0 ? (
                 <p className="text-sm text-gray-500">Nenhuma resposta cadastrada</p>
               ) : (

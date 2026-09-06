@@ -11,6 +11,8 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   const [content, setContent] = useState(quickReply.content);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleSave(event) {
     event.preventDefault();
@@ -45,8 +47,15 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
     if (!window.confirm(`Excluir a resposta rápida "${quickReply.title}"?`)) {
       return;
     }
-    await deleteQuickReply(quickReply.id, token);
-    onDeleted();
+    setDeleteError(null);
+    setDeleting(true);
+    try {
+      await deleteQuickReply(quickReply.id, token);
+      onDeleted();
+    } catch (err) {
+      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleting(false);
+    }
   }
 
   if (editing) {
@@ -82,19 +91,22 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   }
 
   return (
-    <div className="flex items-center justify-between rounded border border-gray-200 p-3">
-      <div>
-        <p className="font-medium text-gray-800">{quickReply.title}</p>
-        <p className="text-sm text-gray-500">{quickReply.content}</p>
+    <div className="rounded border border-gray-200 p-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-medium text-gray-800">{quickReply.title}</p>
+          <p className="text-sm text-gray-500">{quickReply.content}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={handleEditClick} className="text-sm text-blue-600 underline">
+            Editar
+          </button>
+          <button onClick={handleDelete} disabled={deleting} className="text-sm text-red-600 underline disabled:opacity-50">
+            Excluir
+          </button>
+        </div>
       </div>
-      <div className="flex items-center gap-3">
-        <button onClick={handleEditClick} className="text-sm text-blue-600 underline">
-          Editar
-        </button>
-        <button onClick={handleDelete} className="text-sm text-red-600 underline">
-          Excluir
-        </button>
-      </div>
+      {deleteError && <p className="mt-1 text-sm text-red-600">{deleteError}</p>}
     </div>
   );
 }

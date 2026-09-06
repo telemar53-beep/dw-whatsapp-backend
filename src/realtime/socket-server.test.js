@@ -2,12 +2,14 @@ const http = require('http');
 const jwt = require('jsonwebtoken');
 const { io: ioClient } = require('socket.io-client');
 const { initSocketServer, emitToAgent, broadcast, closeSocketServer } = require('./socket-server');
+const { resetPresence } = require('./presence');
 
 describe('socket server', () => {
   let httpServer;
   let port;
 
   beforeEach((done) => {
+    resetPresence();
     httpServer = http.createServer();
     initSocketServer(httpServer);
     httpServer.listen(0, () => {
@@ -76,6 +78,67 @@ describe('socket server', () => {
         done();
       });
       broadcast('announcement', { text: 'hi' });
+    });
+  });
+
+  test('connecting broadcasts presence:online to already-connected clients', (done) => {
+    const tokenA = jwt.sign({ agentId: 'agent-presence-a', role: 'agent' }, process.env.JWT_SECRET);
+    const tokenB = jwt.sign({ agentId: 'agent-presence-b', role: 'agent' }, process.env.JWT_SECRET);
+    const clientA = connect(tokenA);
+    let clientB;
+    clientA.on('connect', () => {
+      clientA.on('presence:online', (payload) => {
+        expect(payload).toEqual({ agentId: 'agent-presence-b' });
+        clientA.close();
+        clientB.close();
+        done();
+      });
+      clientB = connect(tokenB);
+    });
+  });
+
+  test('disconnecting broadcasts presence:offline once the last connection for that agent closes', (done) => {
+    const tokenA = jwt.sign({ agentId: 'agent-presence-c', role: 'agent' }, process.env.JWT_SECRET);
+    const tokenB = jwt.sign({ agentId: 'agent-presence-d', role: 'agent' }, process.env.JWT_SECRET);
+    const clientA = connect(tokenA);
+    const clientB = connect(tokenB);
+    let connectedCount = 0;
+
+    function onBothConnected() {
+      connectedCount += 1;
+      if (connectedCount !== 2) return;
+      clientA.on('presence:offline', (payload) => {
+        expect(payload).toEqual({ agentId: 'agent-presence-d' });
+        clientA.close();
+        done();
+      });
+      clientB.close();
+    }
+
+    clientA.on('connect', onBothConnected);
+    clientB.on('connect', onBothConnected);
+  });
+
+  test('a second connection from the same agent does not trigger a duplicate presence:online', (done) => {
+    const tokenA = jwt.sign({ agentId: 'agent-presence-e', role: 'agent' }, process.env.JWT_SECRET);
+    const tokenSame = jwt.sign({ agentId: 'agent-presence-f', role: 'agent' }, process.env.JWT_SECRET);
+    const clientA = connect(tokenA);
+    clientA.on('connect', () => {
+      const onlineEvents = [];
+      clientA.on('presence:online', (payload) => onlineEvents.push(payload));
+      const firstTab = connect(tokenSame);
+      firstTab.on('connect', () => {
+        const secondTab = connect(tokenSame);
+        secondTab.on('connect', () => {
+          setTimeout(() => {
+            expect(onlineEvents).toEqual([{ agentId: 'agent-presence-f' }]);
+            clientA.close();
+            firstTab.close();
+            secondTab.close();
+            done();
+          }, 100);
+        });
+      });
     });
   });
 });

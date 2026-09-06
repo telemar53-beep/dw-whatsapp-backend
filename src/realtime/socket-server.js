@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const { verifyToken } = require('../auth/auth.service');
 const { getAllowedOrigins } = require('../config/cors-origins');
+const { markAgentOnline, markAgentOffline } = require('./presence');
 
 let io;
 
@@ -17,6 +18,14 @@ function initSocketServer(httpServer) {
   });
   io.on('connection', (socket) => {
     socket.join(`agent:${socket.agent.agentId}`);
+    if (markAgentOnline(socket.agent.agentId)) {
+      socket.broadcast.emit('presence:online', { agentId: socket.agent.agentId });
+    }
+    socket.on('disconnect', () => {
+      if (markAgentOffline(socket.agent.agentId)) {
+        broadcast('presence:offline', { agentId: socket.agent.agentId });
+      }
+    });
   });
   return io;
 }

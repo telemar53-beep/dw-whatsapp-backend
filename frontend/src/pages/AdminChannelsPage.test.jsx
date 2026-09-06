@@ -60,7 +60,7 @@ describe('AdminChannelsPage', () => {
       refresh: vi.fn(),
     });
     useAgentsAdmin.mockReturnValue({
-      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true }],
+      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [] }],
       refresh: vi.fn(),
     });
     render(<AdminChannelsPage />);

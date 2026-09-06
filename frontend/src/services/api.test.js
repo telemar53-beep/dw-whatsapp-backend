@@ -22,6 +22,7 @@ import {
   createSector,
   updateSector,
   deleteSector,
+  setAgentSectors,
 } from './api';
 
 beforeEach(() => {
@@ -332,6 +333,17 @@ describe('deleteSector', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/admin/sectors/sector-1',
       expect.objectContaining({ method: 'DELETE' })
+    );
+  });
+});
+
+describe('setAgentSectors', () => {
+  test('puts the sector ids for an agent', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await setAgentSectors('agent-1', ['sector-1', 'sector-2'], 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/agents/agent-1/sectors',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ sectorIds: ['sector-1', 'sector-2'] }) })
     );
   });
 });

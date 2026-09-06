@@ -166,3 +166,7 @@ export function updateSector(id, payload, token) {
 export function deleteSector(id, token) {
   return apiFetch(`/api/admin/sectors/${id}`, { method: 'DELETE', token });
 }
+
+export function setAgentSectors(agentId, sectorIds, token) {
+  return apiFetch(`/api/admin/agents/${agentId}/sectors`, { method: 'PUT', body: { sectorIds }, token });
+}

@@ -1,8 +1,8 @@
 jest.mock('../agents/agent.repository');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { findAgentByEmail } = require('../agents/agent.repository');
-const { login, verifyToken } = require('./auth.service');
+const { findAgentByEmail, findAgentByIdWithPasswordHash, updateAgentPassword } = require('../agents/agent.repository');
+const { login, verifyToken, changePassword } = require('./auth.service');
 
 describe('auth service', () => {
   beforeEach(() => {
@@ -44,5 +44,46 @@ describe('auth service', () => {
 
   test('verifyToken throws for an invalid token', () => {
     expect(() => verifyToken('not-a-token')).toThrow();
+  });
+
+  test('login throws ACCOUNT_DISABLED when the agent is deactivated', async () => {
+    const passwordHash = await bcrypt.hash('secret123', 10);
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', active: false, passwordHash });
+
+    await expect(login({ email: 'a@dw.com', password: 'secret123' })).rejects.toMatchObject({
+      code: 'ACCOUNT_DISABLED',
+    });
+  });
+
+  test('login succeeds when active is not explicitly false (legacy rows)', async () => {
+    const passwordHash = await bcrypt.hash('secret123', 10);
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
+
+    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+
+    expect(result.token).toBeDefined();
+  });
+
+  describe('changePassword', () => {
+    test('updates the password when the current password matches', async () => {
+      const currentHash = await bcrypt.hash('oldpassword123', 10);
+      findAgentByIdWithPasswordHash.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', passwordHash: currentHash });
+
+      await changePassword({ agentId: 'agent-1', currentPassword: 'oldpassword123', newPassword: 'newpassword456' });
+
+      expect(updateAgentPassword).toHaveBeenCalledWith('agent-1', expect.any(String));
+      const newHash = updateAgentPassword.mock.calls[0][1];
+      expect(await bcrypt.compare('newpassword456', newHash)).toBe(true);
+    });
+
+    test('throws INVALID_CURRENT_PASSWORD when the current password is wrong', async () => {
+      const currentHash = await bcrypt.hash('oldpassword123', 10);
+      findAgentByIdWithPasswordHash.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', passwordHash: currentHash });
+
+      await expect(
+        changePassword({ agentId: 'agent-1', currentPassword: 'wrongpassword', newPassword: 'newpassword456' })
+      ).rejects.toMatchObject({ code: 'INVALID_CURRENT_PASSWORD' });
+      expect(updateAgentPassword).not.toHaveBeenCalled();
+    });
   });
 });

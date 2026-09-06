@@ -102,3 +102,19 @@ export function createChannel(payload, token) {
 export function mediaUrl(messageId, token) {
   return `${API_BASE_URL}/api/media/${messageId}?token=${token}`;
 }
+
+export function listAgentsAdmin(token) {
+  return apiFetch('/api/admin/agents', { token });
+}
+
+export function createAgent(payload, token) {
+  return apiFetch('/api/admin/agents', { method: 'POST', body: payload, token });
+}
+
+export function setAgentActive(agentId, active, token) {
+  return apiFetch(`/api/admin/agents/${agentId}`, { method: 'PATCH', body: { active }, token });
+}
+
+export function changePassword(currentPassword, newPassword, token) {
+  return apiFetch('/api/auth/password', { method: 'PUT', body: { currentPassword, newPassword }, token });
+}

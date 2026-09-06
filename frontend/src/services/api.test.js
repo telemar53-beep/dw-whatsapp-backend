@@ -1,5 +1,17 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { apiFetch, ApiError, login, getQueue, setUnauthorizedHandler, sendMessage, mediaUrl } from './api';
+import {
+  apiFetch,
+  ApiError,
+  login,
+  getQueue,
+  setUnauthorizedHandler,
+  sendMessage,
+  mediaUrl,
+  listAgentsAdmin,
+  createAgent,
+  setAgentActive,
+  changePassword,
+} from './api';
 
 beforeEach(() => {
   global.fetch = vi.fn();
@@ -130,5 +142,55 @@ describe('ApiError', () => {
 describe('mediaUrl', () => {
   test('builds a URL with the message id and token as query string', () => {
     expect(mediaUrl('msg-123', 'tok-abc')).toBe('http://localhost:3000/api/media/msg-123?token=tok-abc');
+  });
+});
+
+describe('listAgentsAdmin', () => {
+  test('fetches the admin agent list', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('[]') });
+    await listAgentsAdmin('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/agents',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+});
+
+describe('createAgent', () => {
+  test('posts the new agent payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await createAgent({ name: 'Ana', email: 'ana@dw.com', password: 'temp123', role: 'agent' }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/agents',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ name: 'Ana', email: 'ana@dw.com', password: 'temp123', role: 'agent' }),
+      })
+    );
+  });
+});
+
+describe('setAgentActive', () => {
+  test('patches the agent active flag', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await setAgentActive('agent-1', false, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/agents/agent-1',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ active: false }) })
+    );
+  });
+});
+
+describe('changePassword', () => {
+  test('puts the current and new password', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await changePassword('oldpass', 'newpass', 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/auth/password',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ currentPassword: 'oldpass', newPassword: 'newpass' }),
+      })
+    );
   });
 });

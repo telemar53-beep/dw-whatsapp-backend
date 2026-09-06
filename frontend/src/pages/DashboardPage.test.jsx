@@ -73,4 +73,16 @@ describe('DashboardPage', () => {
     renderDashboard();
     expect(screen.queryByRole('link', { name: /administração/i })).not.toBeInTheDocument();
   });
+
+  test('opens the change-password modal from the header', async () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+
+    expect(screen.queryByText(/trocar minha senha/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^trocar senha$/i }));
+
+    expect(screen.getByText(/trocar minha senha/i)).toBeInTheDocument();
+  });
 });

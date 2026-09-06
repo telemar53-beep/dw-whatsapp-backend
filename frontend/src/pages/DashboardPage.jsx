@@ -8,6 +8,7 @@ import MyConversationsList from '../components/MyConversationsList';
 import ConversationView from '../components/ConversationView';
 import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 function DashboardPage() {
   const { agent, logout } = useAuth();
@@ -15,6 +16,7 @@ function DashboardPage() {
   const myConversations = useMyConversations();
   const [selectedId, setSelectedId] = useState(null);
   const [transferringId, setTransferringId] = useState(null);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const selectedConversation = [...queue, ...myConversations].find((c) => c.id === selectedId) || null;
 
@@ -29,6 +31,9 @@ function DashboardPage() {
               Administração
             </Link>
           )}
+          <button onClick={() => setChangingPassword(true)} className="text-sm text-gray-500 hover:underline">
+            Trocar senha
+          </button>
           <button onClick={logout} className="text-sm text-gray-500 hover:underline">
             Sair
           </button>
@@ -50,6 +55,7 @@ function DashboardPage() {
         </main>
       </div>
       {transferringId && <TransferModal conversationId={transferringId} onClose={() => setTransferringId(null)} />}
+      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
     </div>
   );
 }

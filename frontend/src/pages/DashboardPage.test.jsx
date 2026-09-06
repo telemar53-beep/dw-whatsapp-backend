@@ -157,6 +157,50 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('link', { name: /métricas/i })).toBeInTheDocument();
   });
 
+  test('shows the list and hides the conversation panel on mobile when nothing is selected', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    const { container } = renderDashboard();
+    const aside = container.querySelector('aside');
+    const main = container.querySelector('main');
+    expect(aside.className).not.toMatch(/\bhidden\b/);
+    expect(main.className).toMatch(/\bhidden\b/);
+  });
+
+  test('shows the conversation panel and hides the list on mobile when a conversation is selected', async () => {
+    useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
+    useMyConversations.mockReturnValue([]);
+    const { container } = renderDashboard();
+    await userEvent.click(screen.getByText('Carlos'));
+
+    const aside = container.querySelector('aside');
+    const main = container.querySelector('main');
+    expect(main.className).not.toMatch(/\bhidden\b/);
+    expect(aside.className).toMatch(/\bhidden\b/);
+  });
+
+  test('clicking the back button in the conversation view returns to the list', async () => {
+    useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
+    useMyConversations.mockReturnValue([]);
+    const { container } = renderDashboard();
+    await userEvent.click(screen.getByText('Carlos'));
+    expect(container.querySelector('main').className).not.toMatch(/\bhidden\b/);
+
+    await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
+
+    expect(container.querySelector('main').className).toMatch(/\bhidden\b/);
+    expect(container.querySelector('aside').className).not.toMatch(/\bhidden\b/);
+  });
+
+  test('hides the dashboard header on mobile when a conversation is selected', async () => {
+    useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
+    useMyConversations.mockReturnValue([]);
+    const { container } = renderDashboard();
+    await userEvent.click(screen.getByText('Carlos'));
+
+    expect(container.querySelector('header').className).toMatch(/\bhidden\b/);
+  });
+
   test('renders the team panel', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);

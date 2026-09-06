@@ -34,10 +34,14 @@ function DashboardPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <ChannelStatusBanner />
-      <header className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
+      <div className={selectedConversation ? 'hidden md:block' : ''}>
+        <ChannelStatusBanner />
+      </div>
+      <header
+        className={`${selectedConversation ? 'hidden md:flex' : 'flex'} items-center justify-between border-b border-gray-200 px-4 py-2`}
+      >
         <h1 className="font-semibold text-gray-800">DW Telecom - Atendimento</h1>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           {agent?.role === 'admin' && (
             <Link to="/admin/channels" className="text-sm text-gray-500 hover:underline">
               Administração
@@ -55,7 +59,9 @@ function DashboardPage() {
         </div>
       </header>
       <div className="flex flex-1 overflow-hidden">
-        <aside className="w-64 space-y-4 overflow-y-auto border-r border-gray-200 p-3">
+        <aside
+          className={`${selectedConversation ? 'hidden' : 'block'} w-full space-y-4 overflow-y-auto border-r border-gray-200 p-3 md:block md:w-64`}
+        >
           <button
             onClick={() => setStartingConversation(true)}
             className="w-full rounded bg-green-600 px-3 py-2 text-sm text-white"
@@ -66,9 +72,13 @@ function DashboardPage() {
           <MyConversationsList conversations={myConversations} onSelect={setSelectedId} />
           <TeamPanel />
         </aside>
-        <main className="flex-1">
+        <main className={`${selectedConversation ? 'block' : 'hidden'} flex-1 md:block`}>
           {selectedConversation ? (
-            <ConversationView conversation={selectedConversation} onTransferClick={setTransferringId} />
+            <ConversationView
+              conversation={selectedConversation}
+              onTransferClick={setTransferringId}
+              onBack={() => setSelectedId(null)}
+            />
           ) : (
             <p className="flex h-full items-center justify-center text-gray-400">
               Selecione uma conversa na lista ao lado.

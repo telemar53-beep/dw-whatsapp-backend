@@ -1,10 +1,20 @@
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/inbound-message.service');
+jest.mock('../media/media-storage', () => ({
+  ...jest.requireActual('../media/media-storage'),
+  saveMediaFile: jest.fn(),
+}));
+jest.mock('./meta-cloud.adapter', () => ({
+  ...jest.requireActual('./meta-cloud.adapter'),
+  downloadMetaMedia: jest.fn(),
+}));
 const request = require('supertest');
 const express = require('express');
 const crypto = require('crypto');
 const { findChannelByMetaPhoneNumberId } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
+const { saveMediaFile } = require('../media/media-storage');
+const { downloadMetaMedia } = require('./meta-cloud.adapter');
 const metaCloudRoutes = require('./meta-cloud.routes');
 
 function buildApp() {
@@ -85,7 +95,13 @@ describe('POST /webhooks/meta', () => {
       fromPhoneNumber: '5511999998888',
       contactDisplayName: 'Carlos',
       whatsappMessageId: 'wamid.ABC',
+      messageType: 'text',
       content: 'Ola',
+      mediaPath: undefined,
+      mediaMimeType: undefined,
+      mediaFilename: undefined,
+      locationLatitude: undefined,
+      locationLongitude: undefined,
     });
   });
 
@@ -146,5 +162,106 @@ describe('POST /webhooks/meta', () => {
       .send('not json');
     expect(res.status).toBe(403);
     expect(ingestInboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('downloads and saves media before ingesting an image message', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1', config: { accessToken: 'tok-meta' } });
+    ingestInboundMessage.mockResolvedValue({});
+    downloadMetaMedia.mockResolvedValue(Buffer.from('fake-image-bytes'));
+    saveMediaFile.mockResolvedValue('generated-name.jpg');
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
+                messages: [
+                  {
+                    from: '5511999998888',
+                    id: 'wamid.IMG',
+                    type: 'image',
+                    image: { id: 'MEDIA123', mime_type: 'image/jpeg', caption: 'Comprovante' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    const res = await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(res.status).toBe(200);
+    expect(downloadMetaMedia).toHaveBeenCalledWith('MEDIA123', 'tok-meta');
+    expect(saveMediaFile).toHaveBeenCalledWith(Buffer.from('fake-image-bytes'), '.jpg');
+    expect(ingestInboundMessage).toHaveBeenCalledWith({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      contactDisplayName: 'Carlos',
+      whatsappMessageId: 'wamid.IMG',
+      messageType: 'image',
+      content: 'Comprovante',
+      mediaPath: 'generated-name.jpg',
+      mediaMimeType: 'image/jpeg',
+      mediaFilename: null,
+      locationLatitude: undefined,
+      locationLongitude: undefined,
+    });
+  });
+
+  test('ingests a location message without touching media storage', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1', config: {} });
+    ingestInboundMessage.mockResolvedValue({});
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [],
+                messages: [
+                  { from: '5511999998888', id: 'wamid.LOC', type: 'location', location: { latitude: -3.1, longitude: -60.0 } },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(downloadMetaMedia).not.toHaveBeenCalled();
+    expect(ingestInboundMessage).toHaveBeenCalledWith({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      contactDisplayName: null,
+      whatsappMessageId: 'wamid.LOC',
+      messageType: 'location',
+      content: undefined,
+      mediaPath: undefined,
+      mediaMimeType: undefined,
+      mediaFilename: undefined,
+      locationLatitude: -3.1,
+      locationLongitude: -60.0,
+    });
   });
 });

@@ -22,6 +22,8 @@ function verifySignature(rawBody, signatureHeader, appSecret) {
   return crypto.timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
+const MEDIA_MESSAGE_TYPES = ['image', 'document', 'audio', 'video', 'sticker'];
+
 function parseInboundMessages(webhookBody) {
   const messages = [];
   const entries = webhookBody.entry || [];
@@ -34,16 +36,32 @@ function parseInboundMessages(webhookBody) {
         contactsById[contact.wa_id] = contact.profile && contact.profile.name;
       }
       for (const message of value.messages || []) {
-        if (message.type !== 'text') {
-          continue;
-        }
-        messages.push({
+        const base = {
           metaPhoneNumberId: phoneNumberId,
           fromPhoneNumber: message.from,
           contactDisplayName: contactsById[message.from] || null,
           whatsappMessageId: message.id,
-          content: message.text.body,
-        });
+        };
+        if (message.type === 'text') {
+          messages.push({ ...base, messageType: 'text', content: message.text.body });
+        } else if (MEDIA_MESSAGE_TYPES.includes(message.type)) {
+          const media = message[message.type];
+          messages.push({
+            ...base,
+            messageType: message.type,
+            mediaId: media.id,
+            mediaMimeType: media.mime_type,
+            mediaFilename: media.filename || null,
+            content: media.caption || null,
+          });
+        } else if (message.type === 'location') {
+          messages.push({
+            ...base,
+            messageType: 'location',
+            latitude: message.location.latitude,
+            longitude: message.location.longitude,
+          });
+        }
       }
     }
   }
@@ -65,4 +83,15 @@ async function sendTextMessage(channel, toPhoneNumber, content) {
   return { whatsappMessageId: response.data.messages[0].id };
 }
 
-module.exports = { verifyWebhookChallenge, verifySignature, parseInboundMessages, sendTextMessage };
+async function downloadMetaMedia(mediaId, accessToken) {
+  const metaResponse = await axios.get(`https://graph.facebook.com/v20.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const fileResponse = await axios.get(metaResponse.data.url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    responseType: 'arraybuffer',
+  });
+  return Buffer.from(fileResponse.data);
+}
+
+module.exports = { verifyWebhookChallenge, verifySignature, parseInboundMessages, sendTextMessage, downloadMetaMedia };

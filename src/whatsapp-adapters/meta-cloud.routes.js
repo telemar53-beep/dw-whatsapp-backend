@@ -1,8 +1,9 @@
 const express = require('express');
 const { loadConfig } = require('../config/env');
-const { verifyWebhookChallenge, verifySignature, parseInboundMessages } = require('./meta-cloud.adapter');
+const { verifyWebhookChallenge, verifySignature, parseInboundMessages, downloadMetaMedia } = require('./meta-cloud.adapter');
 const { findChannelByMetaPhoneNumberId } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
+const { saveMediaFile, extensionForMimeType } = require('../media/media-storage');
 
 const router = express.Router();
 
@@ -29,12 +30,23 @@ router.post('/meta', async (req, res) => {
       if (!channel) {
         continue;
       }
+      let mediaPath;
+      if (inboundMessage.mediaId) {
+        const buffer = await downloadMetaMedia(inboundMessage.mediaId, channel.config.accessToken);
+        mediaPath = await saveMediaFile(buffer, extensionForMimeType(inboundMessage.mediaMimeType));
+      }
       await ingestInboundMessage({
         channelId: channel.id,
         fromPhoneNumber: inboundMessage.fromPhoneNumber,
         contactDisplayName: inboundMessage.contactDisplayName,
         whatsappMessageId: inboundMessage.whatsappMessageId,
+        messageType: inboundMessage.messageType,
         content: inboundMessage.content,
+        mediaPath,
+        mediaMimeType: inboundMessage.mediaMimeType,
+        mediaFilename: inboundMessage.mediaFilename,
+        locationLatitude: inboundMessage.latitude,
+        locationLongitude: inboundMessage.longitude,
       });
     } catch (err) {
       console.error('Failed to process inbound WhatsApp message', err);

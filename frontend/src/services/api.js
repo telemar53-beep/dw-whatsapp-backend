@@ -122,3 +122,15 @@ export function setAgentActive(agentId, active, token) {
 export function changePassword(currentPassword, newPassword, token) {
   return apiFetch('/api/auth/password', { method: 'PUT', body: { currentPassword, newPassword }, token });
 }
+
+export function listChannelsForAgent(token) {
+  return apiFetch('/api/channels', { token });
+}
+
+export function startConversation({ channelId, phoneNumber, content }, token) {
+  return apiFetch('/api/conversations/start', {
+    method: 'POST',
+    body: { channelId, phoneNumber, content },
+    token,
+  });
+}

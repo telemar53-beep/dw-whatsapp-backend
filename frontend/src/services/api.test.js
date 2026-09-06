@@ -12,6 +12,8 @@ import {
   setAgentActive,
   changePassword,
   getConversationHistory,
+  listChannelsForAgent,
+  startConversation,
 } from './api';
 
 beforeEach(() => {
@@ -202,6 +204,31 @@ describe('changePassword', () => {
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({ currentPassword: 'oldpass', newPassword: 'newpass' }),
+      })
+    );
+  });
+});
+
+describe('listChannelsForAgent', () => {
+  test('fetches the channel list for any authenticated agent', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('[]') });
+    await listChannelsForAgent('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/channels',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+});
+
+describe('startConversation', () => {
+  test('posts the new conversation payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await startConversation({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/conversations/start',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' }),
       })
     );
   });

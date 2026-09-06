@@ -9,6 +9,7 @@ import ConversationView from '../components/ConversationView';
 import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
 import ChangePasswordModal from '../components/ChangePasswordModal';
+import StartConversationModal from '../components/StartConversationModal';
 
 function DashboardPage() {
   const { agent, logout } = useAuth();
@@ -17,8 +18,12 @@ function DashboardPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [transferringId, setTransferringId] = useState(null);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [startingConversation, setStartingConversation] = useState(false);
+  const [pendingConversation, setPendingConversation] = useState(null);
 
-  const selectedConversation = [...queue, ...myConversations].find((c) => c.id === selectedId) || null;
+  const selectedConversation =
+    [...queue, ...myConversations].find((c) => c.id === selectedId) ||
+    (pendingConversation && pendingConversation.id === selectedId ? pendingConversation : null);
 
   return (
     <div className="flex h-screen flex-col">
@@ -41,6 +46,12 @@ function DashboardPage() {
       </header>
       <div className="flex flex-1 overflow-hidden">
         <aside className="w-64 space-y-4 overflow-y-auto border-r border-gray-200 p-3">
+          <button
+            onClick={() => setStartingConversation(true)}
+            className="w-full rounded bg-green-600 px-3 py-2 text-sm text-white"
+          >
+            Iniciar conversa
+          </button>
           <QueueList conversations={queue} onSelect={setSelectedId} />
           <MyConversationsList conversations={myConversations} onSelect={setSelectedId} />
         </aside>
@@ -56,6 +67,16 @@ function DashboardPage() {
       </div>
       {transferringId && <TransferModal conversationId={transferringId} onClose={() => setTransferringId(null)} />}
       {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
+      {startingConversation && (
+        <StartConversationModal
+          onClose={() => setStartingConversation(false)}
+          onCreated={(conversation) => {
+            setPendingConversation(conversation);
+            setSelectedId(conversation.id);
+            setStartingConversation(false);
+          }}
+        />
+      )}
     </div>
   );
 }

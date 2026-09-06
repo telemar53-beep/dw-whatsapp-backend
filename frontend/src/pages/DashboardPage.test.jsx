@@ -15,6 +15,17 @@ vi.mock('../hooks/useMyConversations');
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgents', () => ({ useAgents: () => [] }));
 vi.mock('../hooks/useConversationMessages');
+vi.mock('../components/StartConversationModal', () => ({
+  default: ({ onCreated }) => (
+    <button
+      onClick={() =>
+        onCreated({ id: 'conv-new', contactPhoneNumber: '5598999990000', assignedAgentId: 'agent-1', status: 'assigned' })
+      }
+    >
+      Mock Start Conversation
+    </button>
+  ),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -84,5 +95,23 @@ describe('DashboardPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /^trocar senha$/i }));
 
     expect(screen.getByText(/trocar minha senha/i)).toBeInTheDocument();
+  });
+
+  test('shows an Iniciar conversa button for any attendant', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.getByRole('button', { name: /iniciar conversa/i })).toBeInTheDocument();
+  });
+
+  test('starting a conversation opens it immediately, even before it appears in myConversations', async () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('button', { name: /iniciar conversa/i }));
+    await userEvent.click(screen.getByText('Mock Start Conversation'));
+
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
   });
 });

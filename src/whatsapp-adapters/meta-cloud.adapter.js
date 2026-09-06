@@ -1,5 +1,8 @@
 const crypto = require('crypto');
 const axios = require('axios');
+const fs = require('fs');
+const FormData = require('form-data');
+const { getMediaFilePath } = require('../media/media-storage');
 
 function verifyWebhookChallenge(query, verifyToken) {
   if (query['hub.mode'] === 'subscribe' && query['hub.verify_token'] === verifyToken) {
@@ -87,6 +90,30 @@ async function sendTextMessage(channel, toPhoneNumber, content) {
   return { whatsappMessageId: response.data.messages[0].id };
 }
 
+async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath, mediaMimeType, mediaFilename, caption }) {
+  const { phoneNumberId, accessToken } = channel.config;
+  const buffer = await fs.promises.readFile(getMediaFilePath(mediaPath));
+
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('file', buffer, { filename: mediaFilename || 'file', contentType: mediaMimeType });
+  const uploadResponse = await axios.post(`https://graph.facebook.com/v20.0/${phoneNumberId}/media`, form, {
+    headers: { ...form.getHeaders(), Authorization: `Bearer ${accessToken}` },
+  });
+
+  const mediaId = uploadResponse.data.id;
+  const messagePayload = {
+    messaging_product: 'whatsapp',
+    to: toPhoneNumber,
+    type: messageType,
+    [messageType]: caption ? { id: mediaId, caption } : { id: mediaId },
+  };
+  const response = await axios.post(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, messagePayload, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return { whatsappMessageId: response.data.messages[0].id };
+}
+
 async function downloadMetaMedia(mediaId, accessToken) {
   const metaResponse = await axios.get(`https://graph.facebook.com/v20.0/${mediaId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -98,4 +125,11 @@ async function downloadMetaMedia(mediaId, accessToken) {
   return Buffer.from(fileResponse.data);
 }
 
-module.exports = { verifyWebhookChallenge, verifySignature, parseInboundMessages, sendTextMessage, downloadMetaMedia };
+module.exports = {
+  verifyWebhookChallenge,
+  verifySignature,
+  parseInboundMessages,
+  sendTextMessage,
+  downloadMetaMedia,
+  sendMediaMessage,
+};

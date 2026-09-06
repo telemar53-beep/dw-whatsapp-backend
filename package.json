@@ -15,7 +15,10 @@
         "testEnvironment": "node",
         "globalSetup": "./jest.global-setup.js",
         "maxWorkers": 1,
-        "testPathIgnorePatterns": ["/node_modules/", "[\\\\/]frontend[\\\\/]"]
+        "testPathIgnorePatterns": [
+            "/node_modules/",
+            "[\\\\/]frontend[\\\\/]"
+        ]
     },
     "repository": {
         "type": "git",
@@ -36,6 +39,7 @@
         "cors": "^2.8.6",
         "dotenv": "^17.4.2",
         "express": "^5.2.1",
+        "form-data": "^4.0.6",
         "ioredis": "^6.0.0",
         "jsonwebtoken": "^9.0.3",
         "node-pg-migrate": "^9.0.0",

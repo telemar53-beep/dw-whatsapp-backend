@@ -335,7 +335,7 @@ describe('downloadMetaMedia', () => {
 
 jest.mock('axios');
 const axios = require('axios');
-const { sendTextMessage, downloadMetaMedia } = require('./meta-cloud.adapter');
+const { sendTextMessage, downloadMetaMedia, sendMediaMessage } = require('./meta-cloud.adapter');
 
 describe('sendTextMessage', () => {
   test('posts to the Graph API and returns the WhatsApp message id', async () => {
@@ -350,5 +350,81 @@ describe('sendTextMessage', () => {
       { headers: { Authorization: 'Bearer token-abc' } }
     );
     expect(result).toEqual({ whatsappMessageId: 'wamid.SENT123' });
+  });
+});
+
+jest.mock('fs');
+const fs = require('fs');
+jest.mock('../media/media-storage');
+const { getMediaFilePath } = require('../media/media-storage');
+
+describe('sendMediaMessage', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('uploads the file then sends a message referencing the returned media id', async () => {
+    getMediaFilePath.mockReturnValue('/fake/path/to/file');
+    fs.promises = { readFile: jest.fn().mockResolvedValue(Buffer.from('fake-image-bytes')) };
+    axios.post
+      .mockResolvedValueOnce({ data: { id: 'UPLOADED_MEDIA_ID' } })
+      .mockResolvedValueOnce({ data: { messages: [{ id: 'wamid.SENT_IMG' }] } });
+
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+    const result = await sendMediaMessage(channel, '5511999998888', {
+      messageType: 'image',
+      mediaPath: 'abc.jpg',
+      mediaMimeType: 'image/jpeg',
+      mediaFilename: null,
+      caption: 'Resposta do atendente',
+    });
+
+    expect(axios.post).toHaveBeenNthCalledWith(
+      1,
+      'https://graph.facebook.com/v20.0/1234567890/media',
+      expect.anything(),
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token-abc' }) })
+    );
+    expect(axios.post).toHaveBeenNthCalledWith(
+      2,
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      {
+        messaging_product: 'whatsapp',
+        to: '5511999998888',
+        type: 'image',
+        image: { id: 'UPLOADED_MEDIA_ID', caption: 'Resposta do atendente' },
+      },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+    expect(result).toEqual({ whatsappMessageId: 'wamid.SENT_IMG' });
+  });
+
+  test('omits caption from the message payload when there is none', async () => {
+    getMediaFilePath.mockReturnValue('/fake/path/to/file');
+    fs.promises = { readFile: jest.fn().mockResolvedValue(Buffer.from('fake-doc-bytes')) };
+    axios.post
+      .mockResolvedValueOnce({ data: { id: 'UPLOADED_MEDIA_ID_2' } })
+      .mockResolvedValueOnce({ data: { messages: [{ id: 'wamid.SENT_DOC' }] } });
+
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+    await sendMediaMessage(channel, '5511999998888', {
+      messageType: 'document',
+      mediaPath: 'doc.pdf',
+      mediaMimeType: 'application/pdf',
+      mediaFilename: 'comprovante.pdf',
+      caption: null,
+    });
+
+    expect(axios.post).toHaveBeenNthCalledWith(
+      2,
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      {
+        messaging_product: 'whatsapp',
+        to: '5511999998888',
+        type: 'document',
+        document: { id: 'UPLOADED_MEDIA_ID_2' },
+      },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
   });
 });

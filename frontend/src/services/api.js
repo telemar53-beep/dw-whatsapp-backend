@@ -226,3 +226,15 @@ export function deleteTemplateAdmin(id, token) {
 export function syncTemplatesAdmin(wabaId, token) {
   return apiFetch('/api/admin/templates/sync', { method: 'POST', body: { wabaId }, token });
 }
+
+export function listCities(token) {
+  return apiFetch('/api/cities', { token });
+}
+
+export function createCity(payload, token) {
+  return apiFetch('/api/admin/cities', { method: 'POST', body: payload, token });
+}
+
+export function deleteCity(id, token) {
+  return apiFetch(`/api/admin/cities/${id}`, { method: 'DELETE', token });
+}

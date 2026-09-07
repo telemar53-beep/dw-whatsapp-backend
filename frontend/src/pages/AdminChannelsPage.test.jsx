@@ -6,6 +6,7 @@ import { useChannels } from '../hooks/useChannels';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useSectors } from '../hooks/useSectors';
+import { useCities } from '../hooks/useCities';
 import { useTriage } from '../hooks/useTriage';
 import { useTemplates } from '../hooks/useTemplates';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,6 +16,7 @@ vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useSectors');
+vi.mock('../hooks/useCities');
 vi.mock('../hooks/useTriage');
 vi.mock('../hooks/useTemplates');
 vi.mock('../contexts/AuthContext');
@@ -26,6 +28,7 @@ beforeEach(() => {
   useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useSectors.mockReturnValue({ sectors: [], refresh: vi.fn() });
+  useCities.mockReturnValue({ cities: [], refresh: vi.fn() });
   useTriage.mockReturnValue({ config: { questionText: 'Q', confirmationText: 'C', maxAttempts: 2 }, options: [], refresh: vi.fn() });
   useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
 });
@@ -100,6 +103,27 @@ describe('AdminChannelsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /setores/i }));
 
     expect(screen.getByText('Financeiro')).toBeInTheDocument();
+    expect(screen.queryByText('Berg')).not.toBeInTheDocument();
+  });
+
+  test('switches to the Cidades tab and shows the city management UI', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    useCities.mockReturnValue({
+      cities: [{ id: 'city-1', name: 'Bahia' }],
+      refresh: vi.fn(),
+    });
+    render(<AdminChannelsPage />);
+
+    expect(screen.getByText('Berg')).toBeInTheDocument();
+    expect(screen.queryByText('Bahia')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /cidades/i }));
+
+    expect(screen.getByText('Bahia')).toBeInTheDocument();
     expect(screen.queryByText('Berg')).not.toBeInTheDocument();
   });
 

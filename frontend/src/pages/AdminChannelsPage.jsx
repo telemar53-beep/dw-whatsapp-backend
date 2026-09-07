@@ -6,6 +6,7 @@ import QrCodeView from '../components/QrCodeView';
 import AgentsAdminTab from '../components/AgentsAdminTab';
 import QuickRepliesAdminTab from '../components/QuickRepliesAdminTab';
 import SectorsAdminTab from '../components/SectorsAdminTab';
+import CitiesAdminTab from '../components/CitiesAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
 import TemplatesAdminTab from '../components/TemplatesAdminTab';
 import { setChannelTriageEnabled, setChannelWabaId } from '../services/api';
@@ -15,6 +16,7 @@ const TABS = [
   { value: 'agents', label: 'Atendentes' },
   { value: 'quickReplies', label: 'Respostas rápidas' },
   { value: 'sectors', label: 'Setores' },
+  { value: 'cities', label: 'Cidades' },
   { value: 'triage', label: 'Triagem' },
   { value: 'templates', label: 'Templates' },
 ];
@@ -172,6 +174,8 @@ function AdminChannelsPage() {
           <QuickRepliesAdminTab />
         ) : activeTab === 'sectors' ? (
           <SectorsAdminTab />
+        ) : activeTab === 'cities' ? (
+          <CitiesAdminTab />
         ) : activeTab === 'triage' ? (
           <TriageAdminTab />
         ) : (

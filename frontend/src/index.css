@@ -4,10 +4,11 @@
   --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  --color-ink-950: #060b16;
-  --color-ink-900: #0e1b33;
-  --color-ink-800: #152a52;
-  --color-teal-signal: #2dd4c7;
+  --color-ink-950: #0b1220;
+  --color-sky-mist: #cfe9ee;
+  --color-teal-mist: #bfe0d6;
+  --color-sand-mist: #eddab0;
+  --color-teal-signal: #0d9488;
   --color-amber-signal: #f2a93c;
   --color-amber-signal-dark: #d9861f;
 }

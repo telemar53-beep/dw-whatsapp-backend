@@ -1,6 +1,6 @@
 const { getPool } = require('../db/pool');
 
-const COLUMNS = `id, waba_id, meta_template_id, name, language, category, body_text, variable_count, status, rejection_reason, created_at`;
+const COLUMNS = `id, waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type, status, rejection_reason, created_at`;
 
 function toTemplate(row) {
   return {
@@ -12,6 +12,7 @@ function toTemplate(row) {
     category: row.category,
     bodyText: row.body_text,
     variableCount: row.variable_count,
+    headerType: row.header_type,
     status: row.status,
     rejectionReason: row.rejection_reason,
     createdAt: row.created_at,
@@ -43,12 +44,21 @@ async function findTemplateByMetaTemplateId(metaTemplateId) {
   return toTemplate(result.rows[0]);
 }
 
-async function createTemplateRecord({ wabaId, metaTemplateId, name, language, category, bodyText, variableCount }) {
+async function findTemplateByNameAndWaba(name, wabaId) {
   const result = await getPool().query(
-    `INSERT INTO message_templates (waba_id, meta_template_id, name, language, category, body_text, variable_count)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `SELECT ${COLUMNS} FROM message_templates WHERE name = $1 AND waba_id = $2 ORDER BY created_at ASC LIMIT 1`,
+    [name, wabaId]
+  );
+  if (result.rowCount === 0) return null;
+  return toTemplate(result.rows[0]);
+}
+
+async function createTemplateRecord({ wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType }) {
+  const result = await getPool().query(
+    `INSERT INTO message_templates (waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING ${COLUMNS}`,
-    [wabaId, metaTemplateId, name, language, category, bodyText, variableCount]
+    [wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType || null]
   );
   return toTemplate(result.rows[0]);
 }
@@ -74,6 +84,7 @@ module.exports = {
   listApprovedTemplatesByWabaId,
   findTemplateById,
   findTemplateByMetaTemplateId,
+  findTemplateByNameAndWaba,
   createTemplateRecord,
   updateTemplateStatusByMetaTemplateId,
   deleteTemplateRecord,

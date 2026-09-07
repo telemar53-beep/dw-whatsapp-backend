@@ -7,10 +7,11 @@ const {
   createTemplateRecord,
   updateTemplateStatusByMetaTemplateId,
   deleteTemplateRecord,
+  findTemplateByNameAndWaba,
 } = require('./template.repository');
 
 beforeEach(async () => {
-  await getPool().query('TRUNCATE message_templates');
+  await getPool().query('TRUNCATE message_templates CASCADE');
 });
 
 afterAll(async () => {
@@ -38,6 +39,7 @@ describe('createTemplateRecord', () => {
       category: 'UTILITY',
       bodyText: 'Olá {{1}}, sua fatura de {{2}} venceu.',
       variableCount: 2,
+      headerType: null,
       status: 'PENDING',
       rejectionReason: null,
       createdAt: expect.any(Date),
@@ -55,6 +57,22 @@ describe('createTemplateRecord', () => {
         category: 'UTILITY', bodyText: 'Outro corpo', variableCount: 0,
       })
     ).rejects.toMatchObject({ code: '23505' });
+  });
+
+  test('accepts an optional headerType', async () => {
+    const template = await createTemplateRecord({
+      wabaId: 'waba-1', metaTemplateId: 'meta-h1', name: 'com_cabecalho', language: 'pt_BR',
+      category: 'UTILITY', bodyText: 'Corpo {{1}}', variableCount: 1, headerType: 'document',
+    });
+    expect(template.headerType).toBe('document');
+  });
+
+  test('defaults headerType to null when not given', async () => {
+    const template = await createTemplateRecord({
+      wabaId: 'waba-1', metaTemplateId: 'meta-h2', name: 'sem_cabecalho', language: 'pt_BR',
+      category: 'UTILITY', bodyText: 'Corpo', variableCount: 0,
+    });
+    expect(template.headerType).toBeNull();
   });
 });
 
@@ -132,5 +150,25 @@ describe('deleteTemplateRecord', () => {
 
   test('returns false when the id does not exist', async () => {
     expect(await deleteTemplateRecord('00000000-0000-0000-0000-000000000000')).toBe(false);
+  });
+});
+
+describe('findTemplateByNameAndWaba', () => {
+  test('finds a template by exact name and wabaId', async () => {
+    const created = await createTemplateRecord({
+      wabaId: 'waba-1', metaTemplateId: 'meta-n1', name: 'aviso_cobranca', language: 'pt_BR',
+      category: 'UTILITY', bodyText: 'Corpo', variableCount: 0,
+    });
+    const found = await findTemplateByNameAndWaba('aviso_cobranca', 'waba-1');
+    expect(found.id).toBe(created.id);
+  });
+
+  test('returns null when no template matches the name for that wabaId', async () => {
+    await createTemplateRecord({
+      wabaId: 'waba-1', metaTemplateId: 'meta-n2', name: 'aviso_cobranca', language: 'pt_BR',
+      category: 'UTILITY', bodyText: 'Corpo', variableCount: 0,
+    });
+    expect(await findTemplateByNameAndWaba('aviso_cobranca', 'waba-2')).toBeNull();
+    expect(await findTemplateByNameAndWaba('outro_nome', 'waba-1')).toBeNull();
   });
 });

@@ -196,10 +196,10 @@ git commit -m "feat: add message_templates table and template validation helpers
 
 - [ ] **Step 8: Write the failing repository tests**
 
-Check the top of an existing repository test file that already sets up a real test-database connection (e.g. `src/triage/triage.repository.test.js` or `src/channels/channel.repository.test.js`) for this project's exact `beforeAll`/`afterAll`/`TRUNCATE` conventions before writing this file, and mirror them exactly — this project always runs repository tests against the real `.env.test` Postgres database, never a mock.
+This project's repository tests always run against the real `.env.test` Postgres database, never a mock — `src/triage/triage.repository.test.js` is the exact convention to mirror: import `closePool` alongside `getPool` from `../db/pool`, and tear down with `afterAll(async () => { await closePool(); });`, never `getPool().end()` directly (that leaves the module's cached pool singleton pointing at a closed connection for anything else that calls `getPool()` afterward in the same test file).
 
 ```js
-const { getPool } = require('../db/pool');
+const { getPool, closePool } = require('../db/pool');
 const {
   listTemplates,
   listApprovedTemplatesByWabaId,
@@ -215,7 +215,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  await getPool().end();
+  await closePool();
 });
 
 describe('createTemplateRecord', () => {
@@ -550,7 +550,16 @@ git add src/channels/channel.repository.js src/channels/channel.repository.test.
 git commit -m "feat: add wabaId lookup and update to channel repository"
 ```
 
-- [ ] **Step 6: Write the failing admin-channels route tests**
+- [ ] **Step 6: Update the two existing tests that create a meta_cloud channel without a wabaId**
+
+Two existing tests in this file's `describe('POST /api/admin/channels', ...)` block send a `type: 'meta_cloud'` body with no `wabaId` and expect success — they will break once `wabaId` becomes required. Update both:
+
+- `'creates a meta_cloud channel'`: add `wabaId: 'waba-1'` to the `.send({...})` payload, and add `wabaId: 'waba-1'` inside the `config` object in the `expect(createChannel).toHaveBeenCalledWith({...})` assertion.
+- `'returns 409 when the phone number is already in use'`: add `wabaId: 'waba-1'` to its `.send({...})` payload (no assertion on `createChannel`'s call args here, so only the request body needs the addition).
+
+Do not change any other existing test in this file.
+
+- [ ] **Step 7: Write the failing admin-channels route tests**
 
 Read `src/api/admin-channels.routes.test.js`'s existing `buildApp`/`tokenFor` helpers first (mirror `admin-triage.routes.test.js`'s pattern read during Task 1 if this file uses something different), then add:
 
@@ -630,12 +639,12 @@ describe('PATCH /api/admin/channels/:id (wabaId)', () => {
 
 Add `createChannel`, `listChannels`, `updateChannelWabaId` to whatever this test file's existing `jest.mock('../channels/channel.repository')` destructure already imports (it must already mock this module for the existing `updateChannelTriageEnabled` tests — extend that same destructure, don't add a second mock call).
 
-- [ ] **Step 7: Run the tests to verify they fail**
+- [ ] **Step 8: Run the tests to verify they fail**
 
 Run: `npm test -- admin-channels.routes.test.js`
-Expected: FAIL (wabaId validation and response field don't exist yet).
+Expected: FAIL — the two updated pre-existing tests fail with 400 (missing wabaId), and the new tests fail (wabaId validation and response field don't exist yet).
 
-- [ ] **Step 8: Implement the route changes**
+- [ ] **Step 9: Implement the route changes**
 
 In `src/api/admin-channels.routes.js`, update the `require` line to add `updateChannelWabaId`:
 
@@ -714,12 +723,12 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
 });
 ```
 
-- [ ] **Step 9: Run the tests to verify they pass, including pre-existing ones**
+- [ ] **Step 10: Run the tests to verify they pass, including pre-existing ones**
 
 Run: `npm test -- admin-channels.routes.test.js`
 Expected: PASS — including every pre-existing test in this file (the pre-existing triage-toggle tests must still pass unchanged, since a lone `{triageEnabled: true}` body still takes the exact same code path as before).
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add src/api/admin-channels.routes.js src/api/admin-channels.routes.test.js
@@ -1474,6 +1483,13 @@ describe('DELETE /api/admin/templates/:id', () => {
     const res = await request(buildApp()).delete('/api/admin/templates/tpl-1').set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
     expect(res.status).toBe(404);
   });
+
+  test('returns 502 with Meta\'s own error message when the Meta delete call fails', async () => {
+    deleteTemplate.mockRejectedValue({ response: { data: { error: { message: 'Object does not exist' } } } });
+    const res = await request(buildApp()).delete('/api/admin/templates/tpl-1').set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe('Object does not exist');
+  });
 });
 
 describe('POST /api/admin/templates/sync', () => {
@@ -1551,11 +1567,19 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  const deleted = await deleteTemplate(req.params.id);
-  if (!deleted) {
-    return res.status(404).json({ error: 'Template not found' });
+  try {
+    const deleted = await deleteTemplate(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    res.status(204).send();
+  } catch (err) {
+    const metaMessage = metaErrorMessage(err);
+    if (metaMessage) {
+      return res.status(502).json({ error: metaMessage });
+    }
+    throw err;
   }
-  res.status(204).send();
 });
 
 router.post('/sync', requireAuth, requireRole('admin'), async (req, res) => {
@@ -1584,7 +1608,7 @@ module.exports = router;
 - [ ] **Step 9: Run the tests to verify they pass**
 
 Run: `npm test -- admin-templates.routes.test.js`
-Expected: PASS, all 12 tests green.
+Expected: PASS, all 13 tests green.
 
 - [ ] **Step 10: Mount both routers in `src/server.js`**
 
@@ -1627,29 +1651,55 @@ git commit -m "feat: add admin CRUD and sync routes for message templates"
 
 - [ ] **Step 1: Write the failing webhook test**
 
-Read `src/whatsapp-adapters/meta-cloud.routes.test.js`'s existing `POST /webhooks/meta` test setup first (it already builds a signed request body and mocks `findChannelByMetaPhoneNumberId`/`ingestInboundMessage`), then add, mocking `../templates/template.service` alongside the file's existing mocks:
+This file's existing helpers are `buildApp()` and `sign(bodyString, secret)` — a signing helper, not a full request-building one. Every existing `POST /webhooks/meta` test builds its own request manually:
 
 ```js
-jest.mock('../templates/template.service');
+const bodyString = JSON.stringify(payload);
+const signature = sign(bodyString, 'app-secret');
+const res = await request(buildApp())
+  .post('/webhooks/meta')
+  .set('X-Hub-Signature-256', signature)
+  .set('Content-Type', 'application/json')
+  .send(bodyString);
+```
+
+The existing `beforeEach` in `describe('POST /webhooks/meta', ...)` already sets `process.env.META_APP_SECRET = 'app-secret'` — reuse that same secret. Add `jest.mock('../templates/template.service')` alongside this file's existing `jest.mock(...)` calls at the top, and add a new `describe` block using the same request-building style:
+
+```js
 const { applyTemplateStatusUpdates } = require('../templates/template.service');
 
 describe('POST /webhooks/meta (template status updates)', () => {
   test('forwards the webhook body to applyTemplateStatusUpdates', async () => {
-    const body = { entry: [{ id: 'waba-1', changes: [{ field: 'message_template_status_update', value: { message_template_id: '123', event: 'APPROVED' } }] }] };
-    const res = await postSignedWebhook(body); // reuse this file's existing helper for a correctly-signed POST — check its exact name/signature before writing this test
+    const payload = { entry: [{ id: 'waba-1', changes: [{ field: 'message_template_status_update', value: { message_template_id: '123', event: 'APPROVED' } }] }] };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    const res = await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
     expect(res.status).toBe(200);
-    expect(applyTemplateStatusUpdates).toHaveBeenCalledWith(body);
+    expect(applyTemplateStatusUpdates).toHaveBeenCalledWith(payload);
   });
 
   test('still returns 200 when applyTemplateStatusUpdates throws', async () => {
     applyTemplateStatusUpdates.mockRejectedValue(new Error('boom'));
-    const res = await postSignedWebhook({ entry: [] });
+    const payload = { entry: [] };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    const res = await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
     expect(res.status).toBe(200);
   });
 });
 ```
-
-If this test file has no existing reusable signed-POST helper, write the request the same way its existing `POST /webhooks/meta` tests already do (computing the `x-hub-signature-256` header the same way) rather than inventing a new helper.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -1889,9 +1939,13 @@ git commit -m "feat: send WhatsApp template messages from the outbound worker"
 **Interfaces:**
 - Consumes: `findTemplateById` (Task 1's `template.repository.js`), `substituteVariables` (Task 1's `template-validator.js`), the extended `enqueueOutboundMessage` (Task 7).
 
-- [ ] **Step 1: Read the existing `POST /start` tests first**
+- [ ] **Step 1: Read the existing `POST /start` tests, then update the one that no longer applies**
 
-Before writing anything, read every existing test in `src/api/conversations.routes.test.js` under `describe('POST /start', ...)` (or equivalent) — this task changes the top-level validation from requiring `content` unconditionally to requiring it only for Baileys, so at least one existing test (the one that currently expects `{channelId, phoneNumber}` with no `content` to 400 with `'channelId, phoneNumber and content are required'`) needs its expected error message updated, not just left to fail. Update every existing assertion that names that exact error string.
+Read every existing test in `src/api/conversations.routes.test.js` under `describe('POST /api/conversations/start', ...)` first. Ten of the eleven existing tests there keep passing unchanged under this task's restructuring (they either fail before reaching the new branch point, or exercise the Baileys path exactly as before with no behavior change). Exactly one needs updating:
+
+`'returns 400 when the channel is not a Baileys channel'` currently mocks `findChannelById` to return a `meta_cloud` channel and asserts `res.body.error` matches `/baileys/i` — that assertion is about to become false, since `meta_cloud` is a supported channel type now (it just requires a template instead of `content`). This test's real purpose — reject an unsupported channel type outright — still exists in the restructured route, just needs a channel type that is actually unsupported. Change this test to mock `findChannelById` returning `{ id: 'channel-1', type: 'sms', status: 'connected' }` (or any type string that is neither `baileys` nor `meta_cloud`) and assert `res.body.error` matches `/unsupported channel type/i` instead. Do not remove this test — repurpose it.
+
+Do not change any of the other ten existing tests in this `describe` block.
 
 - [ ] **Step 2: Write the failing new tests**
 
@@ -2150,34 +2204,40 @@ export function setChannelWabaId(id, wabaId, token) {
 }
 ```
 
-- [ ] **Step 2: Write the failing `CreateChannelForm` test**
+- [ ] **Step 2: Update the existing `CreateChannelForm` meta_cloud test**
 
-Read `frontend/src/components/CreateChannelForm.test.jsx`'s existing `meta_cloud` test first, then add:
+This file's existing test `'creates a meta_cloud channel with all fields'` fills in name/phone/phoneNumberId/accessToken and submits, asserting `api.createChannel` was called WITHOUT a `wabaId` key. Once `wabaId` becomes a `required` input, that test's submit will silently no-op (a `required` field left empty blocks the form's `submit` event from ever firing, even under `userEvent`, so `api.createChannel` never gets called and the test's `waitFor` times out) — update it in place, don't add a duplicate new test:
 
 ```jsx
-test('includes wabaId in the payload for a meta_cloud channel', async () => {
-  const onCreated = vi.fn();
-  api.createChannel.mockResolvedValue({});
-  render(<CreateChannelForm onCreated={onCreated} />);
+test('creates a meta_cloud channel with all fields', async () => {
+  api.createChannel.mockResolvedValue({ id: 'ch2' });
+  render(<CreateChannelForm onCreated={vi.fn()} />);
 
   await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'meta_cloud');
-  await userEvent.type(screen.getByLabelText(/^nome$/i), 'Oficial');
+  await userEvent.type(screen.getByLabelText(/^nome/i), 'Suporte');
   await userEvent.type(screen.getByLabelText(/telefone/i), '+5511999990000');
   await userEvent.type(screen.getByLabelText(/phone number id/i), '123456');
-  await userEvent.type(screen.getByLabelText(/access token/i), 'tok-abc');
+  await userEvent.type(screen.getByLabelText(/access token/i), 'tok-meta');
   await userEvent.type(screen.getByLabelText(/waba id/i), 'waba-1');
   await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 
   await waitFor(() =>
     expect(api.createChannel).toHaveBeenCalledWith(
-      { type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', phoneNumberId: '123456', accessToken: 'tok-abc', wabaId: 'waba-1' },
+      {
+        type: 'meta_cloud',
+        name: 'Suporte',
+        phoneNumber: '+5511999990000',
+        phoneNumberId: '123456',
+        accessToken: 'tok-meta',
+        wabaId: 'waba-1',
+      },
       'tok-123'
     )
   );
 });
 ```
 
-Match this file's existing mock-token constant (`'tok-123'` or whatever it already uses — check its `useAuth` mock before assuming).
+Do not change any other existing test in this file.
 
 - [ ] **Step 3: Run the test to verify it fails**
 

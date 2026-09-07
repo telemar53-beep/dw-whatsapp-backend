@@ -1,16 +1,18 @@
 const { getPool, closePool } = require('../db/pool');
 const { createChannel } = require('../channels/channel.repository');
+const { createCity } = require('../cities/city.repository');
 const { createConversation } = require('./conversation.repository');
 const {
   findOrCreateContactByPhoneNumber,
   setContactAvatarPath,
   findContactById,
+  updateContact,
   listContactsMissingAvatarForBaileysBackfill,
 } = require('./contact.repository');
 
 describe('contact repository', () => {
   beforeEach(async () => {
-    await getPool().query('TRUNCATE contacts CASCADE');
+    await getPool().query('TRUNCATE contacts, cities CASCADE');
   });
 
   afterAll(async () => {
@@ -63,6 +65,31 @@ describe('contact repository', () => {
   test('findContactById returns null for an unknown id', async () => {
     const found = await findContactById('00000000-0000-0000-0000-000000000000');
     expect(found).toBeNull();
+  });
+
+  test('updateContact updates the display name and city', async () => {
+    const city = await createCity({ name: 'Bahia' });
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+
+    const updated = await updateContact(contact.id, { displayName: 'Maria Editada', cityId: city.id });
+
+    expect(updated.displayName).toBe('Maria Editada');
+    expect(updated.cityId).toBe(city.id);
+  });
+
+  test('updateContact with cityId null removes the city', async () => {
+    const city = await createCity({ name: 'Bahia' });
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+    await updateContact(contact.id, { displayName: 'Maria', cityId: city.id });
+
+    const updated = await updateContact(contact.id, { displayName: 'Maria', cityId: null });
+
+    expect(updated.cityId).toBeNull();
+  });
+
+  test('updateContact returns null when the id does not exist', async () => {
+    const updated = await updateContact('00000000-0000-0000-0000-000000000000', { displayName: 'X', cityId: null });
+    expect(updated).toBeNull();
   });
 
   describe('listContactsMissingAvatarForBaileysBackfill', () => {

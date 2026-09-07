@@ -64,6 +64,11 @@ describe('createTemplate', () => {
     });
     expect(result.id).toBe('local-1');
   });
+
+  test('rejects a bodyText with a variable gap as a TemplateValidationError, not a bare Error', async () => {
+    await expect(createTemplate({ ...validInput, bodyText: 'Olá {{1}}, veja {{3}}.' })).rejects.toThrow(TemplateValidationError);
+    expect(metaCloudAdapter.createMetaTemplate).not.toHaveBeenCalled();
+  });
 });
 
 describe('listApprovedTemplatesForChannel', () => {
@@ -119,6 +124,18 @@ describe('deleteTemplate', () => {
     const result = await deleteTemplate('tpl-1');
 
     expect(metaCloudAdapter.deleteMetaTemplate).not.toHaveBeenCalled();
+    expect(deleteTemplateRecord).toHaveBeenCalledWith('tpl-1');
+    expect(result).toBe(true);
+  });
+
+  test('still deletes the local row when the Meta delete call itself throws', async () => {
+    findTemplateById.mockResolvedValue({ id: 'tpl-1', wabaId: 'waba-1', name: 'x', metaTemplateId: 'meta-1' });
+    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', config: { accessToken: 'tok', wabaId: 'waba-1' } });
+    metaCloudAdapter.deleteMetaTemplate.mockRejectedValue(new Error('Object does not exist'));
+    deleteTemplateRecord.mockResolvedValue(true);
+
+    const result = await deleteTemplate('tpl-1');
+
     expect(deleteTemplateRecord).toHaveBeenCalledWith('tpl-1');
     expect(result).toBe(true);
   });

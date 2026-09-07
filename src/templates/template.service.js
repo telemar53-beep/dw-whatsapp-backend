@@ -29,7 +29,12 @@ async function createTemplate({ channelId, name, category, language, bodyText })
   if (!bodyText) {
     throw new TemplateValidationError('bodyText is required');
   }
-  const variableCount = extractVariableCount(bodyText);
+  let variableCount;
+  try {
+    variableCount = extractVariableCount(bodyText);
+  } catch (err) {
+    throw new TemplateValidationError(err.message);
+  }
 
   const channel = await findChannelById(channelId);
   if (!channel || channel.type !== 'meta_cloud') {
@@ -55,7 +60,11 @@ async function deleteTemplate(id) {
   if (!template) return false;
   const channel = await findChannelByWabaId(template.wabaId);
   if (channel) {
-    await metaCloudAdapter.deleteMetaTemplate(channel, { name: template.name, metaTemplateId: template.metaTemplateId });
+    try {
+      await metaCloudAdapter.deleteMetaTemplate(channel, { name: template.name, metaTemplateId: template.metaTemplateId });
+    } catch (err) {
+      console.warn(`Failed to delete template ${template.metaTemplateId} from Meta; deleting local record anyway`, err.message);
+    }
   }
   return deleteTemplateRecord(id);
 }

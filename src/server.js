@@ -19,6 +19,8 @@ const adminSectorsRoutes = require('./api/admin-sectors.routes');
 const adminTriageRoutes = require('./api/admin-triage.routes');
 const mediaRoutes = require('./api/media.routes');
 const metricsRoutes = require('./api/metrics.routes');
+const templatesRoutes = require('./api/templates.routes');
+const adminTemplatesRoutes = require('./api/admin-templates.routes');
 const { initSocketServer } = require('./realtime/socket-server');
 
 const config = loadConfig();
@@ -59,6 +61,8 @@ app.use('/api/admin/sectors', adminSectorsRoutes);
 app.use('/api/admin/triage', adminTriageRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/metrics', metricsRoutes);
+app.use('/api/templates', templatesRoutes);
+app.use('/api/admin/templates', adminTemplatesRoutes);
 app.use('/webhooks', metaCloudRoutes);
 
 app.use((err, req, res, next) => {

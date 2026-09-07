@@ -2,7 +2,7 @@ const express = require('express');
 const QRCode = require('qrcode');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
 const { verifyToken } = require('../auth/auth.service');
-const { listChannels, createChannel, findChannelById, updateChannelTriageEnabled } = require('../channels/channel.repository');
+const { listChannels, createChannel, findChannelById, updateChannelTriageEnabled, updateChannelWabaId } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 
 const router = express.Router();
@@ -37,6 +37,7 @@ router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
       phoneNumber: channel.phoneNumber,
       status: channel.status,
       triageEnabled: channel.triageEnabled,
+      wabaId: channel.type === 'meta_cloud' ? channel.config.wabaId : undefined,
     }))
   );
 });
@@ -49,11 +50,11 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
 
   try {
     if (type === 'meta_cloud') {
-      const { phoneNumberId, accessToken } = req.body;
-      if (!phoneNumberId || !accessToken) {
-        return res.status(400).json({ error: 'phoneNumberId and accessToken are required for meta_cloud channels' });
+      const { phoneNumberId, accessToken, wabaId } = req.body;
+      if (!phoneNumberId || !accessToken || !wabaId) {
+        return res.status(400).json({ error: 'phoneNumberId, accessToken and wabaId are required for meta_cloud channels' });
       }
-      const channel = await createChannel({ type, name, phoneNumber, config: { phoneNumberId, accessToken } });
+      const channel = await createChannel({ type, name, phoneNumber, config: { phoneNumberId, accessToken, wabaId } });
       return res.status(201).json(channel);
     }
 
@@ -72,13 +73,28 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  const { triageEnabled } = req.body || {};
-  if (typeof triageEnabled !== 'boolean') {
-    return res.status(400).json({ error: 'triageEnabled must be a boolean' });
+  const { triageEnabled, wabaId } = req.body || {};
+  if (triageEnabled === undefined && wabaId === undefined) {
+    return res.status(400).json({ error: 'triageEnabled or wabaId is required' });
   }
-  const channel = await updateChannelTriageEnabled(req.params.id, triageEnabled);
-  if (!channel) {
-    return res.status(404).json({ error: 'Channel not found' });
+  let channel;
+  if (triageEnabled !== undefined) {
+    if (typeof triageEnabled !== 'boolean') {
+      return res.status(400).json({ error: 'triageEnabled must be a boolean' });
+    }
+    channel = await updateChannelTriageEnabled(req.params.id, triageEnabled);
+    if (!channel) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+  }
+  if (wabaId !== undefined) {
+    if (typeof wabaId !== 'string' || !wabaId.trim()) {
+      return res.status(400).json({ error: 'wabaId must be a non-empty string' });
+    }
+    channel = await updateChannelWabaId(req.params.id, wabaId.trim());
+    if (!channel) {
+      return res.status(404).json({ error: 'Channel not found or not a meta_cloud channel' });
+    }
   }
   res.json({
     id: channel.id,
@@ -87,6 +103,7 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     phoneNumber: channel.phoneNumber,
     status: channel.status,
     triageEnabled: channel.triageEnabled,
+    wabaId: channel.type === 'meta_cloud' ? channel.config.wabaId : undefined,
   });
 });
 

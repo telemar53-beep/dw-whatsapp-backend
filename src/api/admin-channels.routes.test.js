@@ -5,7 +5,7 @@ const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const QRCode = require('qrcode');
-const { listChannels, createChannel, findChannelById, updateChannelTriageEnabled } = require('../channels/channel.repository');
+const { listChannels, createChannel, findChannelById, updateChannelTriageEnabled, updateChannelWabaId } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const adminChannelsRoutes = require('./admin-channels.routes');
 
@@ -88,6 +88,7 @@ describe('POST /api/admin/channels', () => {
         phoneNumber: '+5511999990002',
         phoneNumberId: '999',
         accessToken: 'tok',
+        wabaId: 'waba-1',
       });
 
     expect(res.status).toBe(201);
@@ -95,7 +96,7 @@ describe('POST /api/admin/channels', () => {
       type: 'meta_cloud',
       name: 'Financeiro',
       phoneNumber: '+5511999990002',
-      config: { phoneNumberId: '999', accessToken: 'tok' },
+      config: { phoneNumberId: '999', accessToken: 'tok', wabaId: 'waba-1' },
     });
   });
 
@@ -144,6 +145,7 @@ describe('POST /api/admin/channels', () => {
         phoneNumber: '+5511999990002',
         phoneNumberId: '999',
         accessToken: 'tok',
+        wabaId: 'waba-1',
       });
 
     expect(res.status).toBe(409);
@@ -290,5 +292,77 @@ describe('PATCH /api/admin/channels/:id', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ triageEnabled: true });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('POST /api/admin/channels (meta_cloud, wabaId required)', () => {
+  test('returns 400 when wabaId is missing for a meta_cloud channel', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', phoneNumberId: '123', accessToken: 'tok' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/wabaId/);
+  });
+
+  test('creates the channel with wabaId stored in config when all fields are given', async () => {
+    createChannel.mockResolvedValue({
+      id: 'ch-1', type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000',
+      config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' }, status: 'disconnected', triageEnabled: false,
+    });
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' });
+    expect(res.status).toBe(201);
+    expect(createChannel).toHaveBeenCalledWith({
+      type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000',
+      config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' },
+    });
+  });
+});
+
+describe('GET /api/admin/channels (wabaId in response)', () => {
+  test('includes wabaId for a meta_cloud channel and omits it for a baileys channel', async () => {
+    listChannels.mockResolvedValue([
+      { id: 'ch-1', type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', config: { wabaId: 'waba-1' }, status: 'disconnected', triageEnabled: false },
+      { id: 'ch-2', type: 'baileys', name: 'Berg', phoneNumber: '+5511999991111', config: {}, status: 'connected', triageEnabled: false },
+    ]);
+    const res = await request(buildApp()).get('/api/admin/channels').set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+    expect(res.body[0].wabaId).toBe('waba-1');
+    expect(res.body[1].wabaId).toBeUndefined();
+  });
+});
+
+describe('PATCH /api/admin/channels/:id (wabaId)', () => {
+  test('updates wabaId when given', async () => {
+    updateChannelWabaId.mockResolvedValue({
+      id: 'ch-1', type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000',
+      config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'new-waba' }, status: 'disconnected', triageEnabled: false,
+    });
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ wabaId: 'new-waba' });
+    expect(res.status).toBe(200);
+    expect(res.body.wabaId).toBe('new-waba');
+    expect(updateChannelWabaId).toHaveBeenCalledWith('ch-1', 'new-waba');
+  });
+
+  test('returns 400 when neither triageEnabled nor wabaId is given', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 when updateChannelWabaId finds no matching meta_cloud channel', async () => {
+    updateChannelWabaId.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ wabaId: 'new-waba' });
+    expect(res.status).toBe(404);
   });
 });

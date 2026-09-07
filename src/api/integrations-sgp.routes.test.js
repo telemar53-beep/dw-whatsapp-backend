@@ -1,5 +1,6 @@
 jest.mock('../integrations/sgp-integration.repository');
 jest.mock('../channels/channel.repository');
+jest.mock('../templates/template.repository');
 jest.mock('../conversations/contact.repository');
 jest.mock('../conversations/conversation.repository');
 jest.mock('../queue/outbound-queue');
@@ -13,6 +14,7 @@ const {
   createSgpDispatch,
 } = require('../integrations/sgp-integration.repository');
 const { findChannelById } = require('../channels/channel.repository');
+const { findTemplateByNameAndWaba } = require('../templates/template.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findOpenConversation, createConversation, getConversationWithContact } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -66,12 +68,6 @@ describe('GET /api/integrations/sgp/messages', () => {
 
   test('returns 400 when the integration is disabled', async () => {
     verifySgpApiKey.mockResolvedValue({ status: 'disabled' });
-    const res = await request(buildApp()).get('/api/integrations/sgp/messages').query(VALID_QUERY);
-    expect(res.status).toBe(400);
-  });
-
-  test('returns 400 when no api key has been generated yet', async () => {
-    verifySgpApiKey.mockResolvedValue({ status: 'no_key' });
     const res = await request(buildApp()).get('/api/integrations/sgp/messages').query(VALID_QUERY);
     expect(res.status).toBe(400);
   });
@@ -222,6 +218,80 @@ describe('GET /api/integrations/sgp/messages', () => {
 
       expect(emitToAgent).not.toHaveBeenCalled();
       expect(getConversationWithContact).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('with a valid token for a template-mode integration', () => {
+    const TEMPLATE_CHANNEL = { id: 'channel-2', type: 'meta_cloud', status: 'connected', config: { phoneNumberId: '999', accessToken: 'tok', wabaId: 'waba-1' } };
+    const TEMPLATE = { id: 'tpl-1', name: 'aviso_cobranca', language: 'pt_BR', variableCount: 2, headerType: null };
+
+    beforeEach(() => {
+      verifySgpApiKey.mockResolvedValue({ status: 'ok', channelId: 'channel-2', mode: 'template', defaultTemplateId: null });
+      findChannelById.mockResolvedValue(TEMPLATE_CHANNEL);
+      findTemplateByNameAndWaba.mockResolvedValue(TEMPLATE);
+    });
+
+    test('sends a template message with parsed variables, without checking channel connectivity or resolveWhatsAppJid', async () => {
+      const res = await request(buildApp())
+        .get('/api/integrations/sgp/messages')
+        .query({ phoneNumber: '5598999990000', content: 'variables=João|150,00||template=aviso_cobranca', token: 'the-key' });
+
+      expect(baileysManager.resolveWhatsAppJid).not.toHaveBeenCalled();
+      expect(findTemplateByNameAndWaba).toHaveBeenCalledWith('aviso_cobranca', 'waba-1');
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+        conversationId: 'conv-1', channelId: 'channel-2', content: null,
+        templateName: 'aviso_cobranca', templateLanguage: 'pt_BR', templateVariables: ['João', '150,00'],
+        headerType: null, headerLink: null,
+      });
+      expect(res.status).toBe(200);
+    });
+
+    test('sends a template message with a header when the payload includes one and it matches the template', async () => {
+      findTemplateByNameAndWaba.mockResolvedValue({ ...TEMPLATE, name: 'aviso_com_anexo', variableCount: 1, headerType: 'document' });
+
+      const res = await request(buildApp())
+        .get('/api/integrations/sgp/messages')
+        .query({ phoneNumber: '5598999990000', content: 'variables=João||header_link=https://boleto.link/x.pdf||header_type=document||template=aviso_com_anexo', token: 'the-key' });
+
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+        conversationId: 'conv-1', channelId: 'channel-2', content: null,
+        templateName: 'aviso_com_anexo', templateLanguage: 'pt_BR', templateVariables: ['João'],
+        headerType: 'document', headerLink: 'https://boleto.link/x.pdf',
+      });
+      expect(res.status).toBe(200);
+    });
+
+    test('returns 400 when the content is not a valid template payload', async () => {
+      const res = await request(buildApp())
+        .get('/api/integrations/sgp/messages')
+        .query({ phoneNumber: '5598999990000', content: 'isso não é o formato certo', token: 'the-key' });
+      expect(res.status).toBe(400);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('returns 400 when the template name is not found', async () => {
+      findTemplateByNameAndWaba.mockResolvedValue(null);
+      const res = await request(buildApp())
+        .get('/api/integrations/sgp/messages')
+        .query({ phoneNumber: '5598999990000', content: 'variables=João|150,00||template=nao_existe', token: 'the-key' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/not found/i);
+    });
+
+    test('returns 400 when the variable count does not match', async () => {
+      const res = await request(buildApp())
+        .get('/api/integrations/sgp/messages')
+        .query({ phoneNumber: '5598999990000', content: 'variables=SóUmaVariavel||template=aviso_cobranca', token: 'the-key' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/variable/i);
+    });
+
+    test('returns 400 when the header_type in the payload does not match the registered template', async () => {
+      const res = await request(buildApp())
+        .get('/api/integrations/sgp/messages')
+        .query({ phoneNumber: '5598999990000', content: 'variables=João|150,00||header_link=https://x.pdf||header_type=image||template=aviso_cobranca', token: 'the-key' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/header/i);
     });
   });
 });

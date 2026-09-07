@@ -1,6 +1,8 @@
 const express = require('express');
 const { verifySgpApiKey, findSgpDispatchByReferenceId, createSgpDispatch } = require('../integrations/sgp-integration.repository');
+const { parseSgpTemplatePayload, SgpTemplatePayloadError } = require('../integrations/sgp-template-payload-parser');
 const { findChannelById } = require('../channels/channel.repository');
+const { findTemplateByNameAndWaba } = require('../templates/template.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findOpenConversation, createConversation, getConversationWithContact } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -22,13 +24,11 @@ async function requireSgpApiKey(req, res, next) {
   if (verification.status === 'disabled') {
     return res.status(400).json({ error: 'SGP integration is not enabled' });
   }
-  if (verification.status === 'no_key') {
-    return res.status(400).json({ error: 'No API key has been generated for the SGP integration yet' });
-  }
   if (verification.status === 'invalid') {
     return res.status(401).json({ error: 'Invalid API key' });
   }
   req.sgpChannelId = verification.channelId;
+  req.sgpMode = verification.mode;
   next();
 }
 
@@ -54,17 +54,62 @@ router.get('/messages', requireSgpApiKey, async (req, res) => {
   }
 
   const channel = await findChannelById(req.sgpChannelId);
-  if (!channel || channel.status !== 'connected') {
-    return res.status(400).json({ error: 'The configured channel is not connected' });
+  if (!channel) {
+    return res.status(400).json({ error: 'The configured channel no longer exists' });
   }
 
-  const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
-  if (!normalizedPhoneNumber) {
-    return res.status(400).json({ error: 'A valid phoneNumber is required' });
-  }
-  const canonicalPhoneNumber = await baileysManager.resolveWhatsAppJid(channel, normalizedPhoneNumber);
-  if (!canonicalPhoneNumber) {
-    return res.status(400).json({ error: 'This phone number is not on WhatsApp' });
+  let canonicalPhoneNumber;
+  let outboundPayload;
+
+  if (req.sgpMode === 'template') {
+    const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
+    if (!normalizedPhoneNumber) {
+      return res.status(400).json({ error: 'A valid phoneNumber is required' });
+    }
+    canonicalPhoneNumber = normalizedPhoneNumber;
+
+    let payload;
+    try {
+      payload = parseSgpTemplatePayload(content);
+    } catch (err) {
+      if (err instanceof SgpTemplatePayloadError) {
+        return res.status(400).json({ error: err.message });
+      }
+      throw err;
+    }
+
+    const template = await findTemplateByNameAndWaba(payload.templateName, channel.config.wabaId);
+    if (!template) {
+      return res.status(400).json({ error: `Template "${payload.templateName}" not found for this channel` });
+    }
+    if (payload.variables.length !== template.variableCount) {
+      return res.status(400).json({ error: `Template "${template.name}" requires exactly ${template.variableCount} variable(s)` });
+    }
+    if ((payload.headerType || null) !== (template.headerType || null)) {
+      return res.status(400).json({ error: `Template "${template.name}" header type mismatch` });
+    }
+
+    outboundPayload = {
+      content: null,
+      templateName: template.name,
+      templateLanguage: template.language,
+      templateVariables: payload.variables,
+      headerType: payload.headerType,
+      headerLink: payload.headerLink,
+    };
+  } else {
+    if (channel.status !== 'connected') {
+      return res.status(400).json({ error: 'The configured channel is not connected' });
+    }
+    const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
+    if (!normalizedPhoneNumber) {
+      return res.status(400).json({ error: 'A valid phoneNumber is required' });
+    }
+    canonicalPhoneNumber = await baileysManager.resolveWhatsAppJid(channel, normalizedPhoneNumber);
+    if (!canonicalPhoneNumber) {
+      return res.status(400).json({ error: 'This phone number is not on WhatsApp' });
+    }
+    outboundPayload = { content };
   }
 
   const contact = await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, null);
@@ -79,7 +124,7 @@ router.get('/messages', requireSgpApiKey, async (req, res) => {
     }
   }
 
-  const message = await enqueueOutboundMessage({ conversationId: conversation.id, channelId: channel.id, content });
+  const message = await enqueueOutboundMessage({ conversationId: conversation.id, channelId: channel.id, ...outboundPayload });
 
   if (conversation.assignedAgentId) {
     const conversationWithContact = await getConversationWithContact(conversation.id);

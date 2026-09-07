@@ -207,6 +207,23 @@ describe('conversation repository', () => {
     expect(result.lastMessageContent).toBeNull();
     expect(result.lastMessageType).toBeNull();
     expect(result.lastMessageAt).toBeNull();
+    expect(result.lastMessageStatus).toBeNull();
+    expect(result.lastMessageDirection).toBeNull();
+  });
+
+  test('getConversationWithContact includes the last message status and direction', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    await createMessage({
+      conversationId: conversation.id,
+      direction: 'outbound',
+      content: 'Como posso ajudar?',
+      status: 'delivered',
+    });
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.lastMessageStatus).toBe('delivered');
+    expect(result.lastMessageDirection).toBe('outbound');
   });
 
   test('getConversationWithContact surfaces the message type when a media message has no caption', async () => {
@@ -277,6 +294,8 @@ describe('conversation repository', () => {
     expect(waiting[0].lastMessageContent).toBe('Oi, tudo bem?');
     expect(waiting[0].lastMessageType).toBe('text');
     expect(waiting[0].lastMessageAt).toBeDefined();
+    expect(waiting[0].lastMessageStatus).toBe('received');
+    expect(waiting[0].lastMessageDirection).toBe('inbound');
   });
 
   test('listConversationsByAgent returns only that agent non-closed conversations', async () => {
@@ -332,6 +351,8 @@ describe('conversation repository', () => {
 
     expect(mine[0].lastMessageContent).toBe('Como posso ajudar?');
     expect(mine[0].lastMessageType).toBe('text');
+    expect(mine[0].lastMessageStatus).toBe('sent');
+    expect(mine[0].lastMessageDirection).toBe('outbound');
   });
 
   test('listClosedConversationsByContact returns only closed conversations, most recent first', async () => {

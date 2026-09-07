@@ -251,4 +251,44 @@ describe('ConversationListItem', () => {
     );
     expect(screen.queryByText(/^\d{2}:\d{2}$/)).not.toBeInTheDocument();
   });
+
+  test('shows the delivery status ticks next to the preview for the agent\'s own outbound message', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            lastMessageContent: 'Como posso ajudar?',
+            lastMessageDirection: 'outbound',
+            lastMessageStatus: 'delivered',
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByTitle('Entregue')).toBeInTheDocument();
+  });
+
+  test('shows no status ticks for an inbound last message from the contact', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            lastMessageContent: 'Oi, tudo bem?',
+            lastMessageDirection: 'inbound',
+            lastMessageStatus: 'received',
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.queryByTitle('Enviado')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Entregue')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Lido')).not.toBeInTheDocument();
+  });
 });

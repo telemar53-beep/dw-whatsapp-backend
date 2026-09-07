@@ -4,6 +4,7 @@ const { verifyWebhookChallenge, verifySignature, parseInboundMessages, downloadM
 const { findChannelByMetaPhoneNumberId } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
 const { applyTemplateStatusUpdates } = require('../templates/template.service');
+const { applyMessageStatusUpdates } = require('../conversations/message-status.service');
 const { saveMediaFile, extensionForMimeType } = require('../media/media-storage');
 
 const router = express.Router();
@@ -57,6 +58,11 @@ router.post('/meta', async (req, res) => {
     await applyTemplateStatusUpdates(req.body);
   } catch (err) {
     console.error('Failed to process template status update webhook', err);
+  }
+  try {
+    await applyMessageStatusUpdates(req.body);
+  } catch (err) {
+    console.error('Failed to process message status update webhook', err);
   }
   res.sendStatus(200);
 });

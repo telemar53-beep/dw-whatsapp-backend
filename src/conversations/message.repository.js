@@ -69,6 +69,20 @@ async function updateMessageStatus(messageId, status) {
   return toMessage(result.rows[0]);
 }
 
+const STATUS_RANK_SQL = `CASE status WHEN 'sent' THEN 1 WHEN 'delivered' THEN 2 WHEN 'read' THEN 3 WHEN 'failed' THEN 4 ELSE 0 END`;
+
+async function advanceMessageStatus(whatsappMessageId, status) {
+  const result = await getPool().query(
+    `UPDATE messages SET status = $2
+     WHERE whatsapp_message_id = $1
+       AND ${STATUS_RANK_SQL} < (CASE $2 WHEN 'sent' THEN 1 WHEN 'delivered' THEN 2 WHEN 'read' THEN 3 WHEN 'failed' THEN 4 ELSE 0 END)
+     RETURNING ${MESSAGE_COLUMNS}`,
+    [whatsappMessageId, status]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
 async function recordMessageSent(messageId, whatsappMessageId) {
   const result = await getPool().query(
     `UPDATE messages SET whatsapp_message_id = $2 WHERE id = $1 RETURNING ${MESSAGE_COLUMNS}`,
@@ -95,6 +109,7 @@ async function findMessageById(id) {
 module.exports = {
   createMessage,
   updateMessageStatus,
+  advanceMessageStatus,
   recordMessageSent,
   listMessagesByConversation,
   findMessageById,

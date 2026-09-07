@@ -26,6 +26,8 @@ function toConversationSummary(row) {
     sectorName: row.sector_name,
     lastMessageContent: row.last_message_content,
     lastMessageType: row.last_message_type,
+    lastMessageStatus: row.last_message_status,
+    lastMessageDirection: row.last_message_direction,
     lastMessageAt: row.last_message_at,
   };
 }
@@ -129,13 +131,15 @@ async function getConversationWithContact(conversationId) {
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
             s.name AS sector_name,
-            lm.content AS last_message_content, lm.message_type AS last_message_type, lm.created_at AS last_message_at
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
      LEFT JOIN LATERAL (
-       SELECT content, message_type, created_at
+       SELECT content, message_type, status, direction, created_at
        FROM messages m
        WHERE m.conversation_id = c.id
        ORDER BY m.created_at DESC
@@ -155,13 +159,15 @@ async function listWaitingConversations() {
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
             s.name AS sector_name,
-            lm.content AS last_message_content, lm.message_type AS last_message_type, lm.created_at AS last_message_at
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
      LEFT JOIN LATERAL (
-       SELECT content, message_type, created_at
+       SELECT content, message_type, status, direction, created_at
        FROM messages m
        WHERE m.conversation_id = c.id
        ORDER BY m.created_at DESC
@@ -180,13 +186,15 @@ async function listConversationsByAgent(agentId) {
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
             s.name AS sector_name,
-            lm.content AS last_message_content, lm.message_type AS last_message_type, lm.created_at AS last_message_at
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
      LEFT JOIN LATERAL (
-       SELECT content, message_type, created_at
+       SELECT content, message_type, status, direction, created_at
        FROM messages m
        WHERE m.conversation_id = c.id
        ORDER BY m.created_at DESC

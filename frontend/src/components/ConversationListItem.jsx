@@ -1,4 +1,5 @@
 import ContactAvatar from './ContactAvatar';
+import MessageStatusTicks from './MessageStatusTicks';
 
 const MEDIA_TYPE_LABELS = {
   image: '📷 Foto',
@@ -48,7 +49,12 @@ function ConversationListItem({ conversation, onSelect }) {
               )}
             </div>
           </div>
-          <p className="truncate text-xs text-gray-500">{previewText}</p>
+          <p className="flex items-center gap-1 truncate text-xs text-gray-500">
+            {conversation.lastMessageDirection === 'outbound' && (
+              <MessageStatusTicks status={conversation.lastMessageStatus} />
+            )}
+            <span className="truncate">{previewText}</span>
+          </p>
         </div>
       </button>
     </li>

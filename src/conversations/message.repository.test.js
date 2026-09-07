@@ -8,6 +8,7 @@ const {
   recordMessageSent,
   listMessagesByConversation,
   findMessageById,
+  advanceMessageStatus,
 } = require('./message.repository');
 
 describe('message repository', () => {
@@ -143,5 +144,56 @@ describe('message repository', () => {
   test('findMessageById returns null when not found', async () => {
     const found = await findMessageById('00000000-0000-0000-0000-000000000000');
     expect(found).toBeNull();
+  });
+
+  describe('advanceMessageStatus', () => {
+    test('moves the status forward when found by whatsapp message id', async () => {
+      await createMessage({
+        conversationId,
+        direction: 'outbound',
+        content: 'Resposta',
+        whatsappMessageId: 'wamid.STATUS1',
+        status: 'sent',
+      });
+
+      const updated = await advanceMessageStatus('wamid.STATUS1', 'delivered');
+
+      expect(updated.status).toBe('delivered');
+    });
+
+    test('advances again from delivered to read', async () => {
+      await createMessage({
+        conversationId,
+        direction: 'outbound',
+        content: 'Resposta',
+        whatsappMessageId: 'wamid.STATUS2',
+        status: 'delivered',
+      });
+
+      const updated = await advanceMessageStatus('wamid.STATUS2', 'read');
+
+      expect(updated.status).toBe('read');
+    });
+
+    test('ignores an out-of-order status that would move the message backward', async () => {
+      await createMessage({
+        conversationId,
+        direction: 'outbound',
+        content: 'Resposta',
+        whatsappMessageId: 'wamid.STATUS3',
+        status: 'read',
+      });
+
+      const result = await advanceMessageStatus('wamid.STATUS3', 'delivered');
+
+      expect(result).toBeNull();
+      const stillRead = await findMessageById((await listMessagesByConversation(conversationId))[0].id);
+      expect(stillRead.status).toBe('read');
+    });
+
+    test('returns null when no message has that whatsapp message id', async () => {
+      const result = await advanceMessageStatus('wamid.UNKNOWN', 'delivered');
+      expect(result).toBeNull();
+    });
   });
 });

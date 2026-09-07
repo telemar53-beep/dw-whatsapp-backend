@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { verifyWebhookChallenge, verifySignature, parseInboundMessages } = require('./meta-cloud.adapter');
+const { verifyWebhookChallenge, verifySignature, parseInboundMessages, parseStatusUpdates } = require('./meta-cloud.adapter');
 
 describe('verifyWebhookChallenge', () => {
   test('returns the challenge when mode and token match', () => {
@@ -513,6 +513,51 @@ describe('sendTemplateMessage', () => {
       },
       { headers: { Authorization: 'Bearer token-abc' } }
     );
+  });
+});
+
+describe('parseStatusUpdates', () => {
+  test('extracts a delivery status update', () => {
+    const webhookBody = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                statuses: [{ id: 'wamid.ABC', status: 'delivered', timestamp: '1700000000', recipient_id: '5511999998888' }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    expect(parseStatusUpdates(webhookBody)).toEqual([{ whatsappMessageId: 'wamid.ABC', status: 'delivered' }]);
+  });
+
+  test.each(['sent', 'delivered', 'read', 'failed'])('accepts a "%s" status', (status) => {
+    const webhookBody = {
+      entry: [{ changes: [{ value: { statuses: [{ id: 'wamid.ABC', status }] } }] }],
+    };
+    expect(parseStatusUpdates(webhookBody)).toEqual([{ whatsappMessageId: 'wamid.ABC', status }]);
+  });
+
+  test('ignores an unrecognized status value', () => {
+    const webhookBody = {
+      entry: [{ changes: [{ value: { statuses: [{ id: 'wamid.ABC', status: 'deleted' }] } }] }],
+    };
+    expect(parseStatusUpdates(webhookBody)).toEqual([]);
+  });
+
+  test('ignores changes with no statuses array (e.g. an inbound message change)', () => {
+    const webhookBody = {
+      entry: [{ changes: [{ value: { messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Oi' } }] } }] }],
+    };
+    expect(parseStatusUpdates(webhookBody)).toEqual([]);
+  });
+
+  test('returns an empty array when there are no entries', () => {
+    expect(parseStatusUpdates({})).toEqual([]);
   });
 });
 

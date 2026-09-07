@@ -163,6 +163,23 @@ async function sendTemplateMessage(channel, toPhoneNumber, { name, language, var
   return { whatsappMessageId: response.data.messages[0].id };
 }
 
+const MESSAGE_STATUS_VALUES = new Set(['sent', 'delivered', 'read', 'failed']);
+
+function parseStatusUpdates(webhookBody) {
+  const updates = [];
+  const entries = webhookBody.entry || [];
+  for (const entry of entries) {
+    for (const change of entry.changes || []) {
+      const value = change.value || {};
+      for (const status of value.statuses || []) {
+        if (!MESSAGE_STATUS_VALUES.has(status.status)) continue;
+        updates.push({ whatsappMessageId: status.id, status: status.status });
+      }
+    }
+  }
+  return updates;
+}
+
 function parseTemplateStatusUpdates(webhookBody) {
   const updates = [];
   const entries = webhookBody.entry || [];
@@ -185,6 +202,7 @@ module.exports = {
   verifyWebhookChallenge,
   verifySignature,
   parseInboundMessages,
+  parseStatusUpdates,
   sendTextMessage,
   downloadMetaMedia,
   sendMediaMessage,

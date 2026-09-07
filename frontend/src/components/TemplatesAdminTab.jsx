@@ -25,20 +25,26 @@ function TemplateRow({ template, onDeleted }) {
   }
 
   return (
-    <div className="rounded border border-gray-200 p-3">
+    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-gray-800">{template.name}</p>
-          <p className="text-sm text-gray-500">
+          <p className="font-medium text-ink-950">{template.name}</p>
+          <p className="text-sm text-ink-950/55">
             <span>{template.language}</span> · <span>{template.category}</span> · <span>{template.status}</span>
           </p>
           {template.rejectionReason && <p className="text-sm text-red-600">{template.rejectionReason}</p>}
         </div>
-        <button onClick={handleDelete} disabled={deleting} className="text-sm text-red-600 underline disabled:opacity-50">
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+        >
           Excluir
         </button>
       </div>
-      {deleteError && <p className="mt-1 text-sm text-red-600">{deleteError}</p>}
+      {deleteError && (
+        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+      )}
     </div>
   );
 }
@@ -96,32 +102,41 @@ function TemplatesAdminTab() {
 
   return (
     <div className="space-y-6">
-      {wabaIds.map((wabaId) => (
-        <button
-          key={wabaId}
-          onClick={() => handleSync(wabaId)}
-          className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700"
-        >
-          Sincronizar agora ({wabaId})
-        </button>
-      ))}
-      {syncError && <p className="text-sm text-red-600">{syncError}</p>}
+      {wabaIds.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {wabaIds.map((wabaId) => (
+            <button
+              key={wabaId}
+              onClick={() => handleSync(wabaId)}
+              className="rounded-lg border border-teal-signal/30 bg-teal-signal/10 px-3 py-1.5 text-sm font-medium text-teal-signal transition hover:bg-teal-signal/15"
+            >
+              Sincronizar agora ({wabaId})
+            </button>
+          ))}
+        </div>
+      )}
+      {syncError && (
+        <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{syncError}</p>
+      )}
       <div className="space-y-3">
         {templates.map((template) => (
           <TemplateRow key={template.id} template={template} onDeleted={refresh} />
         ))}
       </div>
-      <form onSubmit={handleCreate} className="space-y-3 rounded border border-gray-200 p-4">
-        <h3 className="font-semibold text-gray-800">Cadastrar novo template</h3>
+      <form
+        onSubmit={handleCreate}
+        className="space-y-3 rounded-2xl border border-white/70 bg-white/50 p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      >
+        <h3 className="font-display text-base font-semibold text-ink-950">Cadastrar novo template</h3>
         <div>
-          <label htmlFor="template-channel" className="mb-1 block text-sm text-gray-600">
+          <label htmlFor="template-channel" className="mb-1.5 block text-sm font-medium text-ink-950/70">
             Canal
           </label>
           <select
             id="template-channel"
             value={channelId}
             onChange={(e) => setChannelId(e.target.value)}
-            className="w-full rounded border border-gray-300 px-3 py-2"
+            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
             required
           >
             {metaCloudChannels.map((channel) => (
@@ -132,7 +147,7 @@ function TemplatesAdminTab() {
           </select>
         </div>
         <div>
-          <label htmlFor="template-name" className="mb-1 block text-sm text-gray-600">
+          <label htmlFor="template-name" className="mb-1.5 block text-sm font-medium text-ink-950/70">
             Nome
           </label>
           <input
@@ -140,38 +155,38 @@ function TemplatesAdminTab() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="fatura_vencida"
-            className="w-full rounded border border-gray-300 px-3 py-2"
+            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
             required
           />
         </div>
         <div>
-          <label htmlFor="template-category" className="mb-1 block text-sm text-gray-600">
+          <label htmlFor="template-category" className="mb-1.5 block text-sm font-medium text-ink-950/70">
             Categoria
           </label>
           <select
             id="template-category"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded border border-gray-300 px-3 py-2"
+            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
           >
             <option value="UTILITY">Utilidade</option>
             <option value="MARKETING">Marketing</option>
           </select>
         </div>
         <div>
-          <label htmlFor="template-language" className="mb-1 block text-sm text-gray-600">
+          <label htmlFor="template-language" className="mb-1.5 block text-sm font-medium text-ink-950/70">
             Idioma
           </label>
           <input
             id="template-language"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="w-full rounded border border-gray-300 px-3 py-2"
+            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
             required
           />
         </div>
         <div>
-          <label htmlFor="template-body" className="mb-1 block text-sm text-gray-600">
+          <label htmlFor="template-body" className="mb-1.5 block text-sm font-medium text-ink-950/70">
             Corpo da mensagem
           </label>
           <textarea
@@ -179,12 +194,18 @@ function TemplatesAdminTab() {
             value={bodyText}
             onChange={(e) => setBodyText(e.target.value)}
             placeholder="Olá {{1}}, sua fatura de {{2}} venceu."
-            className="w-full rounded border border-gray-300 px-3 py-2"
+            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
             required
           />
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="submit" disabled={submitting} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">
+        {error && (
+          <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>
+        )}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
           Cadastrar
         </button>
       </form>

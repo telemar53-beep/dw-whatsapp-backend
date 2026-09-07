@@ -6,6 +6,9 @@ import { updateTriageOption, deleteTriageOption } from '../services/api';
 import TriageConfigForm from './TriageConfigForm';
 import CreateTriageOptionForm from './CreateTriageOptionForm';
 
+const inputClass =
+  'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
+
 function TriageOptionRow({ option, onSaved, onDeleted }) {
   const { token } = useAuth();
   const { sectors } = useSectors();
@@ -67,21 +70,19 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
 
   if (editing) {
     return (
-      <form onSubmit={handleSave} className="space-y-2 rounded border border-gray-200 p-3">
+      <form
+        onSubmit={handleSave}
+        className="space-y-3 rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      >
         <input
           type="number"
           min="1"
           value={optionNumber}
           onChange={(e) => setOptionNumber(e.target.value)}
-          className="w-32 rounded border border-gray-300 px-3 py-2"
+          className={`w-32 ${inputClass}`}
           required
         />
-        <select
-          value={sectorId}
-          onChange={(e) => setSectorId(e.target.value)}
-          className="w-full rounded border border-gray-300 px-3 py-2"
-          required
-        >
+        <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className={inputClass} required>
           {sectors.map((sector) => (
             <option key={sector.id} value={sector.id}>
               {sector.name}
@@ -91,19 +92,23 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
         <input
           value={keywords}
           onChange={(e) => setKeywords(e.target.value)}
-          className="w-full rounded border border-gray-300 px-3 py-2"
+          className={inputClass}
           placeholder="financeiro, conta, fatura, boleto"
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={submitting}
-            className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+            className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>
-          <button type="button" onClick={handleCancel} className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700">
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+          >
             Cancelar
           </button>
         </div>
@@ -112,24 +117,30 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
   }
 
   return (
-    <div className="rounded border border-gray-200 p-3">
+    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-gray-800">
+          <p className="font-medium text-ink-950">
             {option.optionNumber} - {option.sectorName}
           </p>
-          <p className="text-sm text-gray-500">{option.keywords.join(', ') || 'Sem frases-gatilho'}</p>
+          <p className="text-sm text-ink-950/55">{option.keywords.join(', ') || 'Sem frases-gatilho'}</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={handleEditClick} className="text-sm text-blue-600 underline">
+          <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
             Editar
           </button>
-          <button onClick={handleDelete} disabled={deleting} className="text-sm text-red-600 underline disabled:opacity-50">
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+          >
             Excluir
           </button>
         </div>
       </div>
-      {deleteError && <p className="mt-1 text-sm text-red-600">{deleteError}</p>}
+      {deleteError && (
+        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+      )}
     </div>
   );
 }
@@ -138,13 +149,13 @@ function TriageAdminTab() {
   const { config, options, refresh } = useTriage();
 
   if (!config) {
-    return <p className="text-sm text-gray-500">Carregando...</p>;
+    return <p className="text-sm text-ink-950/55">Carregando...</p>;
   }
 
   return (
     <div className="space-y-6">
       {options.length === 0 && (
-        <p className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
+        <p className="rounded-lg border border-amber-300 bg-amber-50/80 px-3 py-2 text-sm text-amber-800">
           Nenhuma opção cadastrada — a triagem não será executada em nenhum canal, mesmo com o toggle ligado.
         </p>
       )}

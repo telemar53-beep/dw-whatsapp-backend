@@ -4,6 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { updateQuickReply, deleteQuickReply } from '../services/api';
 import CreateQuickReplyForm from './CreateQuickReplyForm';
 
+const inputClass =
+  'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
+
 function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   const { token } = useAuth();
   const [editing, setEditing] = useState(false);
@@ -60,29 +63,36 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
 
   if (editing) {
     return (
-      <form onSubmit={handleSave} className="space-y-2 rounded border border-gray-200 p-3">
+      <form
+        onSubmit={handleSave}
+        className="space-y-2 rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      >
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full rounded border border-gray-300 px-3 py-2"
+          className={inputClass}
           required
         />
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          className="w-full rounded border border-gray-300 px-3 py-2"
+          className={inputClass}
           required
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={submitting}
-            className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+            className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>
-          <button type="button" onClick={handleCancel} className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700">
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+          >
             Cancelar
           </button>
         </div>
@@ -91,22 +101,28 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   }
 
   return (
-    <div className="rounded border border-gray-200 p-3">
+    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-gray-800">{quickReply.title}</p>
-          <p className="text-sm text-gray-500">{quickReply.content}</p>
+          <p className="font-medium text-ink-950">{quickReply.title}</p>
+          <p className="text-sm text-ink-950/55">{quickReply.content}</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={handleEditClick} className="text-sm text-blue-600 underline">
+          <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
             Editar
           </button>
-          <button onClick={handleDelete} disabled={deleting} className="text-sm text-red-600 underline disabled:opacity-50">
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+          >
             Excluir
           </button>
         </div>
       </div>
-      {deleteError && <p className="mt-1 text-sm text-red-600">{deleteError}</p>}
+      {deleteError && (
+        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+      )}
     </div>
   );
 }

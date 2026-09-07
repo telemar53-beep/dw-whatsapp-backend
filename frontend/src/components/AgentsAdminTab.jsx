@@ -43,50 +43,65 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
   }
 
   return (
-    <div className="rounded border border-gray-200 p-3">
+    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-gray-800">{agentRow.name}</p>
-          <p className="text-sm text-gray-500">
+          <p className="font-medium text-ink-950">{agentRow.name}</p>
+          <p className="text-sm text-ink-950/55">
             {agentRow.email} — {agentRow.role === 'admin' ? 'Administrador' : 'Atendente'}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-ink-950/55">
             Setores: {agentRow.sectors.length > 0 ? agentRow.sectors.map((s) => s.name).join(', ') : 'Nenhum setor'}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`text-sm ${agentRow.active ? 'text-green-600' : 'text-gray-400'}`}>
+          <span className={`text-sm font-medium ${agentRow.active ? 'text-teal-signal' : 'text-ink-950/40'}`}>
             {agentRow.active ? 'Ativo' : 'Desativado'}
           </span>
-          <button onClick={handleEditSectorsClick} className="text-sm text-blue-600 underline">
+          <button
+            onClick={handleEditSectorsClick}
+            className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+          >
             Editar setores
           </button>
           {agentRow.id !== currentAgent?.id && (
-            <button onClick={() => onToggleActive(agentRow)} className="text-sm text-blue-600 underline">
+            <button
+              onClick={() => onToggleActive(agentRow)}
+              className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+            >
               {agentRow.active ? 'Desativar' : 'Reativar'}
             </button>
           )}
         </div>
       </div>
       {editingSectors && (
-        <div className="mt-2 space-y-2 border-t border-gray-200 pt-2">
+        <div className="mt-3 space-y-2 rounded-2xl border border-white/70 bg-white/50 p-3 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
           {sectors.map((sector) => (
-            <label key={sector.id} className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={selectedIds.includes(sector.id)} onChange={() => toggleSector(sector.id)} />
+            <label key={sector.id} className="flex items-center gap-2 text-sm text-ink-950/70">
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(sector.id)}
+                onChange={() => toggleSector(sector.id)}
+                className="h-4 w-4 accent-teal-signal"
+              />
               {sector.name}
             </label>
           ))}
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
           <div className="flex gap-2">
             <button
               type="button"
               onClick={handleSaveSectors}
               disabled={submitting}
-              className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+              className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Salvar
             </button>
-            <button type="button" onClick={handleCancel} className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+            >
               Cancelar
             </button>
           </div>

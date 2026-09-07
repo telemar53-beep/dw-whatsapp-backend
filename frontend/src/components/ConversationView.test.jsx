@@ -186,4 +186,28 @@ describe('ConversationView', () => {
     await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
     expect(onBack).toHaveBeenCalled();
   });
+
+  test('shows the contact name and avatar in the header', () => {
+    render(
+      <ConversationView
+        conversation={{
+          id: 'c1',
+          contactId: 'contact-1',
+          status: 'waiting',
+          assignedAgentId: null,
+          contactDisplayName: 'Carlos',
+          contactPhoneNumber: '+5511999990000',
+          contactAvatarPath: 'avatars/c1.jpg',
+        }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.getByRole('img')).toBeInTheDocument();
+  });
+
+  test('falls back to "Conversa" in the header when the contact has no name or phone number yet', () => {
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+    expect(screen.getByText('Conversa')).toBeInTheDocument();
+  });
 });

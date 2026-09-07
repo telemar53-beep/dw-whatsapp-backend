@@ -107,6 +107,10 @@ export function mediaUrl(messageId, token) {
   return `${API_BASE_URL}/api/media/${messageId}?token=${token}`;
 }
 
+export function avatarUrl(contactId, token) {
+  return `${API_BASE_URL}/api/contacts/${contactId}/avatar?token=${token}`;
+}
+
 export function listAgentsAdmin(token) {
   return apiFetch('/api/admin/agents', { token });
 }

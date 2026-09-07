@@ -500,7 +500,10 @@ describe('POST /api/conversations/:id/close', () => {
 });
 
 describe('POST /api/conversations/start', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    baileysManager.fetchContactAvatarForChannel.mockResolvedValue(undefined);
+  });
 
   const BAILEYS_CHANNEL = { id: 'channel-1', type: 'baileys', status: 'connected' };
 
@@ -642,6 +645,66 @@ describe('POST /api/conversations/start', () => {
       conversation: expect.objectContaining({ id: CONVERSATION_ID }),
     });
     expect(res.body).toEqual(expect.objectContaining({ id: CONVERSATION_ID, contactPhoneNumber: '559899990000' }));
+  });
+
+  test('fires off a fire-and-forget avatar fetch when the contact was just created on a Baileys channel', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    baileysManager.resolveWhatsAppJid.mockResolvedValue('559899990001');
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-new-1', phoneNumber: '559899990001', wasCreated: true });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: CONVERSATION_ID, contactId: 'contact-new-1', channelId: 'channel-1' });
+    claimConversation.mockResolvedValue({
+      id: CONVERSATION_ID,
+      contactId: 'contact-new-1',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+    });
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      contactId: 'contact-new-1',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+      contactPhoneNumber: '559899990001',
+      contactDisplayName: null,
+    });
+
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '559899990001', content: 'Oi' });
+
+    expect(res.status).toBe(201);
+    expect(baileysManager.fetchContactAvatarForChannel).toHaveBeenCalledWith(BAILEYS_CHANNEL, 'contact-new-1', '559899990001');
+  });
+
+  test('does not fetch an avatar when the contact already existed', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    baileysManager.resolveWhatsAppJid.mockResolvedValue('559899990002');
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-2', phoneNumber: '559899990002', wasCreated: false });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: CONVERSATION_ID, contactId: 'contact-2', channelId: 'channel-1' });
+    claimConversation.mockResolvedValue({
+      id: CONVERSATION_ID,
+      contactId: 'contact-2',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+    });
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      contactId: 'contact-2',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+      contactPhoneNumber: '559899990002',
+      contactDisplayName: null,
+    });
+
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '559899990002', content: 'Oi' });
+
+    expect(res.status).toBe(201);
+    expect(baileysManager.fetchContactAvatarForChannel).not.toHaveBeenCalled();
   });
 
   test('returns 401 without a token', async () => {

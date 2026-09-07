@@ -19,7 +19,8 @@ async function ingestInboundMessage({
   locationLatitude,
   locationLongitude,
 }) {
-  const contact = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
+  const { wasCreated, ...contact } = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
+  const contactJustCreated = Boolean(wasCreated);
   let conversation = await findOpenConversation(contact.id, channelId);
   let justCreated = false;
   if (!conversation) {
@@ -49,7 +50,7 @@ async function ingestInboundMessage({
     });
   } catch (err) {
     if (err.code !== UNIQUE_VIOLATION) throw err;
-    return { contact, conversation, message: null };
+    return { contact, conversation, message: null, contactJustCreated };
   }
   if (justCreated && conversation.triageState === 'pending') {
     await sendTriageQuestion(conversation.id, channelId);
@@ -62,7 +63,7 @@ async function ingestInboundMessage({
   } else {
     broadcast('queue:new', { conversation: conversationWithContact, message });
   }
-  return { contact, conversation, message };
+  return { contact, conversation, message, contactJustCreated };
 }
 
 module.exports = { ingestInboundMessage };

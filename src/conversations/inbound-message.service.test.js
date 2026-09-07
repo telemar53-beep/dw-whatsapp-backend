@@ -51,6 +51,7 @@ describe('ingestInboundMessage', () => {
       contact: { id: 'contact-1', phoneNumber: '+5511999998888', displayName: 'Cliente' },
       conversation: { id: 'conv-1', assignedAgentId: null },
       message: { id: 'msg-1' },
+      contactJustCreated: false,
     });
     expect(broadcast).toHaveBeenCalledWith('queue:new', {
       conversation: {
@@ -281,6 +282,7 @@ describe('ingestInboundMessage', () => {
       contact: { id: 'contact-5' },
       conversation: { id: 'conv-5', assignedAgentId: null },
       message: null,
+      contactJustCreated: false,
     });
     expect(emitToAgent).not.toHaveBeenCalled();
     expect(broadcast).not.toHaveBeenCalled();
@@ -380,5 +382,40 @@ describe('ingestInboundMessage', () => {
       locationLatitude: undefined,
       locationLongitude: undefined,
     });
+  });
+
+  test('reports contactJustCreated as true when the contact repository reports a new contact', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-13', wasCreated: true });
+    findOpenConversation.mockResolvedValue({ id: 'conv-13', assignedAgentId: null });
+    createMessage.mockResolvedValue({ id: 'msg-13' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-13', assignedAgentId: null });
+
+    const result = await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999990010',
+      contactDisplayName: 'Cliente Novo',
+      whatsappMessageId: 'wamid.NEW1',
+      content: 'Oi',
+    });
+
+    expect(result.contactJustCreated).toBe(true);
+    expect(result.contact).toEqual({ id: 'contact-13' });
+  });
+
+  test('reports contactJustCreated as false when reusing an existing contact', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-14', wasCreated: false });
+    findOpenConversation.mockResolvedValue({ id: 'conv-14', assignedAgentId: null });
+    createMessage.mockResolvedValue({ id: 'msg-14' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-14', assignedAgentId: null });
+
+    const result = await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999990011',
+      contactDisplayName: 'Cliente Existente',
+      whatsappMessageId: 'wamid.NEW2',
+      content: 'Oi',
+    });
+
+    expect(result.contactJustCreated).toBe(false);
   });
 });

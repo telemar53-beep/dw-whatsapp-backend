@@ -127,12 +127,16 @@ export function listChannelsForAgent(token) {
   return apiFetch('/api/channels', { token });
 }
 
-export function startConversation({ channelId, phoneNumber, content }, token) {
+export function startConversation({ channelId, phoneNumber, content, templateId, templateVariables }, token) {
   return apiFetch('/api/conversations/start', {
     method: 'POST',
-    body: { channelId, phoneNumber, content },
+    body: { channelId, phoneNumber, content, templateId, templateVariables },
     token,
   });
+}
+
+export function listTemplatesForChannel(channelId, token) {
+  return apiFetch(`/api/templates?channelId=${channelId}`, { token });
 }
 
 export function listQuickReplies(token) {

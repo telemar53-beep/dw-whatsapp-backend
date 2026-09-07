@@ -7,13 +7,15 @@ import AgentsAdminTab from '../components/AgentsAdminTab';
 import QuickRepliesAdminTab from '../components/QuickRepliesAdminTab';
 import SectorsAdminTab from '../components/SectorsAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
-import { setChannelTriageEnabled } from '../services/api';
+import { setChannelTriageEnabled, setChannelWabaId } from '../services/api';
 
 function AdminChannelsPage() {
   const { token } = useAuth();
   const { channels, refresh } = useChannels();
   const [activeTab, setActiveTab] = useState('channels');
   const [triageToggleError, setTriageToggleError] = useState(null);
+  const [wabaIdDrafts, setWabaIdDrafts] = useState({});
+  const [wabaIdError, setWabaIdError] = useState(null);
 
   async function handleToggleTriage(channelId, triageEnabled) {
     setTriageToggleError(null);
@@ -22,6 +24,16 @@ function AdminChannelsPage() {
       refresh();
     } catch (err) {
       setTriageToggleError((err.body && err.body.error) || 'Falha ao atualizar a triagem deste canal');
+    }
+  }
+
+  async function handleSaveWabaId(channelId) {
+    setWabaIdError(null);
+    try {
+      await setChannelWabaId(channelId, wabaIdDrafts[channelId], token);
+      refresh();
+    } catch (err) {
+      setWabaIdError((err.body && err.body.error) || 'Falha ao atualizar o WABA ID');
     }
   }
 
@@ -73,6 +85,7 @@ function AdminChannelsPage() {
       {activeTab === 'channels' ? (
         <div className="space-y-6">
           {triageToggleError && <p className="text-sm text-red-600">{triageToggleError}</p>}
+          {wabaIdError && <p className="text-sm text-red-600">{wabaIdError}</p>}
           <div className="space-y-3">
             {channels.map((channel) => (
               <div key={channel.id} className="rounded border border-gray-200 p-3">
@@ -94,6 +107,25 @@ function AdminChannelsPage() {
                   />
                   Usar triagem automática
                 </label>
+                {channel.type === 'meta_cloud' && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <label htmlFor={`waba-id-${channel.id}`} className="text-sm text-gray-600">
+                      WABA ID
+                    </label>
+                    <input
+                      id={`waba-id-${channel.id}`}
+                      value={wabaIdDrafts[channel.id] ?? channel.wabaId ?? ''}
+                      onChange={(e) => setWabaIdDrafts((prev) => ({ ...prev, [channel.id]: e.target.value }))}
+                      className="rounded border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <button
+                      onClick={() => handleSaveWabaId(channel.id)}
+                      className="rounded bg-gray-200 px-2 py-1 text-sm text-gray-700"
+                    >
+                      Salvar WABA ID
+                    </button>
+                  </div>
+                )}
                 <QrCodeView channel={channel} onRefresh={refresh} />
               </div>
             ))}

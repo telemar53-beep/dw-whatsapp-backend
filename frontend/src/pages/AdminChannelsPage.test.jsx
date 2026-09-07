@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AdminChannelsPage from './AdminChannelsPage';
 import { useChannels } from '../hooks/useChannels';
@@ -8,7 +8,7 @@ import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useSectors } from '../hooks/useSectors';
 import { useTriage } from '../hooks/useTriage';
 import { useAuth } from '../contexts/AuthContext';
-import { setChannelTriageEnabled } from '../services/api';
+import { setChannelTriageEnabled, setChannelWabaId } from '../services/api';
 
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
@@ -160,5 +160,32 @@ describe('AdminChannelsPage', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /usar triagem automática/i }));
 
     expect(await screen.findByText('Canal não encontrado')).toBeInTheDocument();
+  });
+
+  test('lets an admin edit the WABA ID of a meta_cloud channel', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', status: 'disconnected', triageEnabled: false, wabaId: 'old-waba' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    setChannelWabaId.mockResolvedValue({});
+    render(<AdminChannelsPage />);
+
+    const input = screen.getByLabelText(/waba id/i);
+    await userEvent.clear(input);
+    await userEvent.type(input, 'new-waba');
+    await userEvent.click(screen.getByRole('button', { name: /salvar waba id/i }));
+
+    await waitFor(() => expect(setChannelWabaId).toHaveBeenCalledWith('ch1', 'new-waba', 'tok-123'));
+  });
+
+  test('does not show a WABA ID field for a baileys channel', () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<AdminChannelsPage />);
+    expect(screen.queryByLabelText(/waba id/i)).not.toBeInTheDocument();
   });
 });

@@ -3,6 +3,7 @@ const { loadConfig } = require('../config/env');
 const { verifyWebhookChallenge, verifySignature, parseInboundMessages, downloadMetaMedia } = require('./meta-cloud.adapter');
 const { findChannelByMetaPhoneNumberId } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
+const { applyTemplateStatusUpdates } = require('../templates/template.service');
 const { saveMediaFile, extensionForMimeType } = require('../media/media-storage');
 
 const router = express.Router();
@@ -51,6 +52,11 @@ router.post('/meta', async (req, res) => {
     } catch (err) {
       console.error('Failed to process inbound WhatsApp message', err);
     }
+  }
+  try {
+    await applyTemplateStatusUpdates(req.body);
+  } catch (err) {
+    console.error('Failed to process template status update webhook', err);
   }
   res.sendStatus(200);
 });

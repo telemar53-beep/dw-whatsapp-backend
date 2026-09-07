@@ -1,5 +1,6 @@
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/inbound-message.service');
+jest.mock('../templates/template.service');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
   saveMediaFile: jest.fn(),
@@ -13,6 +14,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { findChannelByMetaPhoneNumberId } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
+const { applyTemplateStatusUpdates } = require('../templates/template.service');
 const { saveMediaFile } = require('../media/media-storage');
 const { downloadMetaMedia } = require('./meta-cloud.adapter');
 const metaCloudRoutes = require('./meta-cloud.routes');
@@ -263,5 +265,37 @@ describe('POST /webhooks/meta', () => {
       locationLatitude: -3.1,
       locationLongitude: -60.0,
     });
+  });
+});
+
+describe('POST /webhooks/meta (template status updates)', () => {
+  test('forwards the webhook body to applyTemplateStatusUpdates', async () => {
+    const payload = { entry: [{ id: 'waba-1', changes: [{ field: 'message_template_status_update', value: { message_template_id: '123', event: 'APPROVED' } }] }] };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    const res = await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(res.status).toBe(200);
+    expect(applyTemplateStatusUpdates).toHaveBeenCalledWith(payload);
+  });
+
+  test('still returns 200 when applyTemplateStatusUpdates throws', async () => {
+    applyTemplateStatusUpdates.mockRejectedValue(new Error('boom'));
+    const payload = { entry: [] };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    const res = await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(res.status).toBe(200);
   });
 });

@@ -42,6 +42,17 @@ async function findChannelByMetaPhoneNumberId(phoneNumberId) {
   return toChannel(result.rows[0]);
 }
 
+async function findChannelByWabaId(wabaId) {
+  const result = await getPool().query(
+    `SELECT id, type, name, phone_number, config, status, triage_enabled, created_at FROM channels
+     WHERE type = 'meta_cloud' AND config->>'wabaId' = $1
+     LIMIT 1`,
+    [wabaId]
+  );
+  if (result.rowCount === 0) return null;
+  return toChannel(result.rows[0]);
+}
+
 async function listChannels() {
   const result = await getPool().query(
     'SELECT id, type, name, phone_number, config, status, triage_enabled, created_at FROM channels ORDER BY created_at ASC'
@@ -69,11 +80,23 @@ async function updateChannelTriageEnabled(id, triageEnabled) {
   return toChannel(result.rows[0]);
 }
 
+async function updateChannelWabaId(id, wabaId) {
+  const result = await getPool().query(
+    `UPDATE channels SET config = jsonb_set(config, '{wabaId}', to_jsonb($2::text)) WHERE id = $1 AND type = 'meta_cloud'
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, created_at`,
+    [id, wabaId]
+  );
+  if (result.rowCount === 0) return null;
+  return toChannel(result.rows[0]);
+}
+
 module.exports = {
   createChannel,
   findChannelById,
   findChannelByMetaPhoneNumberId,
+  findChannelByWabaId,
   listChannels,
   updateChannelStatus,
   updateChannelTriageEnabled,
+  updateChannelWabaId,
 };

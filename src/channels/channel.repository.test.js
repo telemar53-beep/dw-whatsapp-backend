@@ -3,9 +3,11 @@ const {
   createChannel,
   findChannelById,
   findChannelByMetaPhoneNumberId,
+  findChannelByWabaId,
   listChannels,
   updateChannelStatus,
   updateChannelTriageEnabled,
+  updateChannelWabaId,
 } = require('./channel.repository');
 
 describe('channel repository', () => {
@@ -123,5 +125,46 @@ describe('channel repository', () => {
   test('updateChannelTriageEnabled returns null when the channel does not exist', async () => {
     const result = await updateChannelTriageEnabled('00000000-0000-0000-0000-000000000000', true);
     expect(result).toBeNull();
+  });
+});
+
+describe('findChannelByWabaId', () => {
+  test('finds a meta_cloud channel by its configured wabaId', async () => {
+    const created = await createChannel({
+      type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000',
+      config: { phoneNumberId: '1234567890', accessToken: 'tok', wabaId: 'waba-abc' },
+    });
+    const found = await findChannelByWabaId('waba-abc');
+    expect(found.id).toBe(created.id);
+  });
+
+  test('returns null when no channel has that wabaId', async () => {
+    expect(await findChannelByWabaId('does-not-exist')).toBeNull();
+  });
+
+  test('never matches a baileys channel', async () => {
+    await createChannel({ type: 'baileys', name: 'Berg', phoneNumber: '+5511999991111', config: {} });
+    expect(await findChannelByWabaId(undefined)).toBeNull();
+  });
+});
+
+describe('updateChannelWabaId', () => {
+  test('updates the wabaId of an existing meta_cloud channel', async () => {
+    const created = await createChannel({
+      type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999992222',
+      config: { phoneNumberId: '1234567890', accessToken: 'tok', wabaId: 'old-waba' },
+    });
+    const updated = await updateChannelWabaId(created.id, 'new-waba');
+    expect(updated.config.wabaId).toBe('new-waba');
+    expect(updated.config.phoneNumberId).toBe('1234567890');
+  });
+
+  test('returns null for a baileys channel', async () => {
+    const created = await createChannel({ type: 'baileys', name: 'Berg', phoneNumber: '+5511999993333', config: {} });
+    expect(await updateChannelWabaId(created.id, 'waba-x')).toBeNull();
+  });
+
+  test('returns null for a non-existent id', async () => {
+    expect(await updateChannelWabaId('00000000-0000-0000-0000-000000000000', 'waba-x')).toBeNull();
   });
 });

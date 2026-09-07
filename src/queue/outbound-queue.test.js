@@ -69,4 +69,35 @@ describe('outbound queue', () => {
       expect(message.messageType).toBe('image');
     });
   });
+
+  test('passes template fields through to the queued job', (done) => {
+    processOutboundQueue((data) => {
+      try {
+        expect(data.templateName).toBe('fatura_vencida');
+        expect(data.templateLanguage).toBe('pt_BR');
+        expect(data.templateVariables).toEqual(['João', 'R$150,00']);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    enqueueOutboundMessage({
+      conversationId, channelId, content: 'Olá João, sua fatura de R$150,00 venceu.',
+      templateName: 'fatura_vencida', templateLanguage: 'pt_BR', templateVariables: ['João', 'R$150,00'],
+    });
+  });
+
+  test('defaults template fields to null when not a template message', (done) => {
+    processOutboundQueue((data) => {
+      try {
+        expect(data.templateName).toBeNull();
+        expect(data.templateLanguage).toBeNull();
+        expect(data.templateVariables).toBeNull();
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    enqueueOutboundMessage({ conversationId, channelId, content: 'Mensagem normal' });
+  });
 });

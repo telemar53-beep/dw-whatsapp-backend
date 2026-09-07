@@ -4,7 +4,7 @@ jest.mock('./message.repository');
 jest.mock('../realtime/socket-server');
 jest.mock('../triage/triage.service');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
-const { findOpenConversation, createConversation, getConversationWithContact } = require('./conversation.repository');
+const { findOpenConversation, createConversation, getConversationWithContact, activateConversation } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
@@ -417,5 +417,62 @@ describe('ingestInboundMessage', () => {
     });
 
     expect(result.contactJustCreated).toBe(false);
+  });
+
+  test("activates a silent conversation on the customer's first reply and broadcasts queue:new", async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-sgp-1' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-sgp-1', assignedAgentId: null, status: 'silent' });
+    activateConversation.mockResolvedValue({ id: 'conv-sgp-1', assignedAgentId: null, status: 'waiting' });
+    createMessage.mockResolvedValue({ id: 'msg-sgp-1' });
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-sgp-1',
+      assignedAgentId: null,
+      status: 'waiting',
+      contactPhoneNumber: '+5511999990099',
+    });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999990099',
+      contactDisplayName: 'Cliente SGP',
+      whatsappMessageId: 'wamid.SGP1',
+      content: 'Já paguei, obrigado!',
+    });
+
+    expect(activateConversation).toHaveBeenCalledWith('conv-sgp-1');
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(createMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-sgp-1',
+      direction: 'inbound',
+      content: 'Já paguei, obrigado!',
+      whatsappMessageId: 'wamid.SGP1',
+      status: 'received',
+    });
+    expect(broadcast).toHaveBeenCalledWith('queue:new', {
+      conversation: {
+        id: 'conv-sgp-1',
+        assignedAgentId: null,
+        status: 'waiting',
+        contactPhoneNumber: '+5511999990099',
+      },
+      message: { id: 'msg-sgp-1' },
+    });
+  });
+
+  test('does not call activateConversation when the existing conversation is not silent', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-sgp-2' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-sgp-2', assignedAgentId: null, status: 'waiting' });
+    createMessage.mockResolvedValue({ id: 'msg-sgp-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-sgp-2', assignedAgentId: null, status: 'waiting' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999990098',
+      contactDisplayName: 'Cliente Normal',
+      whatsappMessageId: 'wamid.NORM1',
+      content: 'Oi',
+    });
+
+    expect(activateConversation).not.toHaveBeenCalled();
   });
 });

@@ -242,3 +242,15 @@ export function createCity(payload, token) {
 export function deleteCity(id, token) {
   return apiFetch(`/api/admin/cities/${id}`, { method: 'DELETE', token });
 }
+
+export function getSgpIntegration(token) {
+  return apiFetch('/api/admin/integrations/sgp', { token });
+}
+
+export function saveSgpIntegration(payload, token) {
+  return apiFetch('/api/admin/integrations/sgp', { method: 'PUT', body: payload, token });
+}
+
+export function rotateSgpIntegrationKey(token) {
+  return apiFetch('/api/admin/integrations/sgp/rotate-key', { method: 'POST', token });
+}

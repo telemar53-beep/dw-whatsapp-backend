@@ -42,11 +42,11 @@ async function findOpenConversation(contactId, channelId) {
   return toConversation(result.rows[0]);
 }
 
-async function createConversation(contactId, channelId, triageState = null) {
+async function createConversation(contactId, channelId, triageState = null, status = 'waiting') {
   const result = await getPool().query(
-    `INSERT INTO conversations (contact_id, channel_id, triage_state) VALUES ($1, $2, $3)
+    `INSERT INTO conversations (contact_id, channel_id, triage_state, status) VALUES ($1, $2, $3, $4)
      RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
-    [contactId, channelId, triageState]
+    [contactId, channelId, triageState, status]
   );
   return toConversation(result.rows[0]);
 }
@@ -122,6 +122,17 @@ async function incrementTriageAttempts(conversationId) {
   );
   if (result.rowCount === 0) return 0;
   return result.rows[0].triage_attempts;
+}
+
+async function activateConversation(conversationId) {
+  const result = await getPool().query(
+    `UPDATE conversations SET status = 'waiting', updated_at = now()
+     WHERE id = $1 AND status = 'silent'
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
+    [conversationId]
+  );
+  if (result.rowCount === 0) return null;
+  return toConversation(result.rows[0]);
 }
 
 async function getConversationWithContact(conversationId) {
@@ -233,6 +244,7 @@ module.exports = {
   closeConversation,
   completeTriage,
   incrementTriageAttempts,
+  activateConversation,
   getConversationWithContact,
   listWaitingConversations,
   listConversationsByAgent,

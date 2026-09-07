@@ -1,5 +1,5 @@
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
-const { findOpenConversation, createConversation, getConversationWithContact } = require('./conversation.repository');
+const { findOpenConversation, createConversation, getConversationWithContact, activateConversation } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
@@ -22,6 +22,9 @@ async function ingestInboundMessage({
   const { wasCreated, ...contact } = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   const contactJustCreated = Boolean(wasCreated);
   let conversation = await findOpenConversation(contact.id, channelId);
+  if (conversation && conversation.status === 'silent') {
+    conversation = await activateConversation(conversation.id);
+  }
   let justCreated = false;
   if (!conversation) {
     const startTriage = await shouldStartTriage(channelId);

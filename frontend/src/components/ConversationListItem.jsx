@@ -1,8 +1,30 @@
 import ContactAvatar from './ContactAvatar';
 
+const MEDIA_TYPE_LABELS = {
+  image: '📷 Foto',
+  audio: '🎤 Áudio',
+  video: '🎥 Vídeo',
+  document: '📄 Documento',
+  sticker: '😀 Figurinha',
+  location: '📍 Localização',
+};
+
+function getPreviewText(conversation) {
+  if (conversation.lastMessageContent) return conversation.lastMessageContent;
+  if (conversation.lastMessageType) return MEDIA_TYPE_LABELS[conversation.lastMessageType] || conversation.contactPhoneNumber;
+  return conversation.contactPhoneNumber;
+}
+
+function formatMessageTime(lastMessageAt) {
+  if (!lastMessageAt) return null;
+  return new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
 function ConversationListItem({ conversation, onSelect }) {
   const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
   const displayLabel = conversation.contactCityName ? `${nameLabel} - ${conversation.contactCityName}` : nameLabel;
+  const previewText = getPreviewText(conversation);
+  const messageTime = formatMessageTime(conversation.lastMessageAt);
 
   return (
     <li>
@@ -18,12 +40,15 @@ function ConversationListItem({ conversation, onSelect }) {
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="font-medium text-gray-800">{displayLabel}</p>
-            {conversation.sectorName && (
-              <span className="shrink-0 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{conversation.sectorName}</span>
-            )}
+            <p className="truncate font-medium text-gray-800">{displayLabel}</p>
+            <div className="flex shrink-0 items-center gap-2">
+              {messageTime && <span className="text-xs text-gray-400">{messageTime}</span>}
+              {conversation.sectorName && (
+                <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{conversation.sectorName}</span>
+              )}
+            </div>
           </div>
-          <p className="text-xs text-gray-500">{conversation.contactPhoneNumber}</p>
+          <p className="truncate text-xs text-gray-500">{previewText}</p>
         </div>
       </button>
     </li>

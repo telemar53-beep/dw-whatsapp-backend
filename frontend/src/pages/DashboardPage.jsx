@@ -95,7 +95,7 @@ function DashboardPage() {
       </header>
       <div className="flex flex-1 overflow-hidden">
         <aside
-          className={`${selectedConversation ? 'hidden' : 'block'} w-full space-y-4 overflow-y-auto border-r border-gray-200 p-3 md:block md:w-64`}
+          className={`${selectedConversation ? 'hidden' : 'block'} w-full space-y-4 overflow-y-auto border-r border-gray-200 p-3 md:block md:w-96`}
         >
           <button
             onClick={() => setStartingConversation(true)}

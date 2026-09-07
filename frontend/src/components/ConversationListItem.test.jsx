@@ -152,4 +152,103 @@ describe('ConversationListItem', () => {
     expect(screen.getByText('Conversa - Bahia')).toBeInTheDocument();
     expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
   });
+
+  test('shows the last message content as a preview', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            lastMessageContent: 'Oi, tudo bem?',
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('Oi, tudo bem?')).toBeInTheDocument();
+    expect(screen.queryByText('+5511999990000')).not.toBeInTheDocument();
+  });
+
+  test('shows a media type label as the preview when the last message has no caption', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'A', lastMessageType: 'image', lastMessageContent: null }}
+          onSelect={vi.fn()}
+        />
+        <ConversationListItem
+          conversation={{ id: 'c2', contactDisplayName: 'B', lastMessageType: 'audio', lastMessageContent: null }}
+          onSelect={vi.fn()}
+        />
+        <ConversationListItem
+          conversation={{ id: 'c3', contactDisplayName: 'C', lastMessageType: 'video', lastMessageContent: null }}
+          onSelect={vi.fn()}
+        />
+        <ConversationListItem
+          conversation={{ id: 'c4', contactDisplayName: 'D', lastMessageType: 'document', lastMessageContent: null }}
+          onSelect={vi.fn()}
+        />
+        <ConversationListItem
+          conversation={{ id: 'c5', contactDisplayName: 'E', lastMessageType: 'sticker', lastMessageContent: null }}
+          onSelect={vi.fn()}
+        />
+        <ConversationListItem
+          conversation={{ id: 'c6', contactDisplayName: 'F', lastMessageType: 'location', lastMessageContent: null }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('📷 Foto')).toBeInTheDocument();
+    expect(screen.getByText('🎤 Áudio')).toBeInTheDocument();
+    expect(screen.getByText('🎥 Vídeo')).toBeInTheDocument();
+    expect(screen.getByText('📄 Documento')).toBeInTheDocument();
+    expect(screen.getByText('😀 Figurinha')).toBeInTheDocument();
+    expect(screen.getByText('📍 Localização')).toBeInTheDocument();
+  });
+
+  test('falls back to the phone number as the preview when there is no last message yet', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('+5511999990000')).toBeInTheDocument();
+  });
+
+  test('shows the last message time next to the name', () => {
+    const lastMessageAt = '2026-09-07T14:27:00.000Z';
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            lastMessageContent: 'Oi',
+            lastMessageAt,
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    const expectedTime = new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    expect(screen.getByText(expectedTime)).toBeInTheDocument();
+  });
+
+  test('shows no time when the conversation has no last message', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000', lastMessageAt: null }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.queryByText(/^\d{2}:\d{2}$/)).not.toBeInTheDocument();
+  });
 });

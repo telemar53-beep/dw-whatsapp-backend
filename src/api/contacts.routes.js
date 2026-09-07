@@ -1,6 +1,7 @@
 const express = require('express');
 const { verifyToken } = require('../auth/auth.service');
-const { findContactById } = require('../conversations/contact.repository');
+const { requireAuth } = require('../auth/auth.middleware');
+const { findContactById, updateContact } = require('../conversations/contact.repository');
 const { getMediaFilePath } = require('../media/media-storage');
 
 const router = express.Router();
@@ -31,6 +32,16 @@ router.get('/:contactId/avatar', authenticateContactRoute, async (req, res) => {
       res.status(404).json({ error: 'Avatar not found' });
     }
   });
+});
+
+router.patch('/:id', requireAuth, async (req, res) => {
+  const { displayName: rawDisplayName, cityId } = req.body || {};
+  const displayName = typeof rawDisplayName === 'string' ? rawDisplayName.trim() || null : null;
+  const contact = await updateContact(req.params.id, { displayName, cityId: cityId || null });
+  if (!contact) {
+    return res.status(404).json({ error: 'Contact not found' });
+  }
+  res.json(contact);
 });
 
 module.exports = router;

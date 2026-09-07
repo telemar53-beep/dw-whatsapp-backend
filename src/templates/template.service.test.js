@@ -19,6 +19,7 @@ const {
   deleteTemplate,
   syncTemplatesForWaba,
   applyTemplateStatusUpdates,
+  registerExistingTemplate,
   TemplateValidationError,
 } = require('./template.service');
 
@@ -223,5 +224,72 @@ describe('applyTemplateStatusUpdates', () => {
     await applyTemplateStatusUpdates({ entry: [] });
 
     expect(updateTemplateStatusByMetaTemplateId).not.toHaveBeenCalled();
+  });
+});
+
+describe('registerExistingTemplate', () => {
+  const validInput = { channelId: 'ch-1', name: 'aviso_cobranca', language: 'pt_BR' };
+
+  test('rejects an invalid name without calling Meta', async () => {
+    await expect(registerExistingTemplate({ ...validInput, name: 'Aviso Cobranca' })).rejects.toThrow(TemplateValidationError);
+    expect(metaCloudAdapter.listMetaTemplates).not.toHaveBeenCalled();
+  });
+
+  test('rejects an invalid headerType', async () => {
+    await expect(registerExistingTemplate({ ...validInput, headerType: 'audio' })).rejects.toThrow(TemplateValidationError);
+  });
+
+  test('rejects when language is missing', async () => {
+    await expect(registerExistingTemplate({ channelId: 'ch-1', name: 'aviso_cobranca' })).rejects.toThrow(TemplateValidationError);
+  });
+
+  test('rejects when the channel is not meta_cloud', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'baileys', config: {} });
+    await expect(registerExistingTemplate(validInput)).rejects.toThrow(TemplateValidationError);
+  });
+
+  test('rejects when the meta_cloud channel has no wabaId configured', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: {} });
+    await expect(registerExistingTemplate(validInput)).rejects.toThrow(TemplateValidationError);
+  });
+
+  test('rejects when no template matches the given name and language', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    metaCloudAdapter.listMetaTemplates.mockResolvedValue([{ id: 'meta-1', name: 'outro', language: 'pt_BR', category: 'UTILITY', components: [] }]);
+    await expect(registerExistingTemplate(validInput)).rejects.toThrow(TemplateValidationError);
+  });
+
+  test('finds the matching template by name+language and registers it locally without calling Meta to create anything', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    metaCloudAdapter.listMetaTemplates.mockResolvedValue([
+      { id: 984, name: 'aviso_cobranca', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', components: [{ type: 'BODY', text: 'Olá {{1}}, valor {{2}}' }] },
+    ]);
+    createTemplateRecord.mockResolvedValue({ id: 'local-1', name: 'aviso_cobranca' });
+
+    const result = await registerExistingTemplate({ ...validInput, headerType: 'document' });
+
+    expect(metaCloudAdapter.createMetaTemplate).not.toHaveBeenCalled();
+    expect(createTemplateRecord).toHaveBeenCalledWith({
+      wabaId: 'waba-1', metaTemplateId: '984', name: 'aviso_cobranca', language: 'pt_BR',
+      category: 'UTILITY', bodyText: 'Olá {{1}}, valor {{2}}', variableCount: 2, headerType: 'document',
+    });
+    expect(result.id).toBe('local-1');
+  });
+
+  test('rejects a matched template whose body has a variable gap', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    metaCloudAdapter.listMetaTemplates.mockResolvedValue([
+      { id: 1, name: 'aviso_cobranca', language: 'pt_BR', category: 'UTILITY', components: [{ type: 'BODY', text: 'Olá {{1}}, veja {{3}}' }] },
+    ]);
+    await expect(registerExistingTemplate(validInput)).rejects.toThrow(TemplateValidationError);
+    expect(createTemplateRecord).not.toHaveBeenCalled();
+  });
+
+  test('rejects a matched template with no BODY component', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    metaCloudAdapter.listMetaTemplates.mockResolvedValue([
+      { id: 1, name: 'aviso_cobranca', language: 'pt_BR', category: 'UTILITY', components: [{ type: 'HEADER', format: 'DOCUMENT' }] },
+    ]);
+    await expect(registerExistingTemplate(validInput)).rejects.toThrow(TemplateValidationError);
   });
 });

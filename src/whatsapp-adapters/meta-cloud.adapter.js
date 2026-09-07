@@ -139,7 +139,7 @@ async function listMetaTemplates(channel) {
   const { accessToken, wabaId } = channel.config;
   const response = await axios.get(`https://graph.facebook.com/v20.0/${wabaId}/message_templates`, {
     headers: { Authorization: `Bearer ${accessToken}` },
-    params: { fields: 'id,name,language,category,status,rejected_reason' },
+    params: { fields: 'id,name,language,category,status,rejected_reason,components' },
   });
   return response.data.data;
 }

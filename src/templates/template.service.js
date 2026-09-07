@@ -12,6 +12,7 @@ const { isValidTemplateName, extractVariableCount } = require('./template-valida
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 
 const CATEGORIES = ['MARKETING', 'UTILITY'];
+const HEADER_TYPES = ['document', 'image', 'video'];
 const KNOWN_STATUSES = new Set(['PENDING', 'APPROVED', 'REJECTED', 'PAUSED', 'DISABLED']);
 
 class TemplateValidationError extends Error {}
@@ -56,6 +57,55 @@ async function createTemplate({ channelId, name, category, language, bodyText })
     }
     throw err;
   }
+}
+
+async function registerExistingTemplate({ channelId, name, language, headerType }) {
+  if (!isValidTemplateName(name)) {
+    throw new TemplateValidationError('Template name must contain only lowercase letters, numbers, and underscores');
+  }
+  if (!language) {
+    throw new TemplateValidationError('language is required');
+  }
+  if (headerType && !HEADER_TYPES.includes(headerType)) {
+    throw new TemplateValidationError('headerType must be document, image, or video');
+  }
+
+  const channel = await findChannelById(channelId);
+  if (!channel || channel.type !== 'meta_cloud') {
+    throw new TemplateValidationError('channelId must reference a meta_cloud channel');
+  }
+  if (!channel.config.wabaId) {
+    throw new TemplateValidationError('This channel has no WABA configured yet');
+  }
+
+  const metaTemplates = await metaCloudAdapter.listMetaTemplates(channel);
+  const match = metaTemplates.find((t) => t.name === name && t.language === language);
+  if (!match) {
+    throw new TemplateValidationError('No template with this name and language was found for this WABA');
+  }
+
+  const bodyComponent = (match.components || []).find((c) => c.type === 'BODY');
+  if (!bodyComponent || !bodyComponent.text) {
+    throw new TemplateValidationError('The matched template has no body text to register');
+  }
+
+  let variableCount;
+  try {
+    variableCount = extractVariableCount(bodyComponent.text);
+  } catch (err) {
+    throw new TemplateValidationError(err.message);
+  }
+
+  return createTemplateRecord({
+    wabaId: channel.config.wabaId,
+    metaTemplateId: String(match.id),
+    name,
+    language,
+    category: match.category,
+    bodyText: bodyComponent.text,
+    variableCount,
+    headerType: headerType || null,
+  });
 }
 
 async function listApprovedTemplatesForChannel(channelId) {
@@ -116,5 +166,6 @@ module.exports = {
   deleteTemplate,
   syncTemplatesForWaba,
   applyTemplateStatusUpdates,
+  registerExistingTemplate,
   TemplateValidationError,
 };

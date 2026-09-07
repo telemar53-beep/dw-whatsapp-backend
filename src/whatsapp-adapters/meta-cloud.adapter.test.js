@@ -448,17 +448,21 @@ describe('createMetaTemplate', () => {
 });
 
 describe('listMetaTemplates', () => {
-  test('fetches the WABA template list with the expected fields', async () => {
-    axios.get.mockResolvedValue({ data: { data: [{ id: 'meta-tpl-1', name: 'a', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejected_reason: null }] } });
+  test('fetches the WABA template list including components', async () => {
+    axios.get.mockResolvedValue({
+      data: { data: [{ id: 'meta-tpl-1', name: 'a', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejected_reason: null, components: [{ type: 'BODY', text: 'Olá {{1}}' }] }] },
+    });
     const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
 
     const result = await listMetaTemplates(channel);
 
     expect(axios.get).toHaveBeenCalledWith('https://graph.facebook.com/v20.0/waba-1/message_templates', {
       headers: { Authorization: 'Bearer token-abc' },
-      params: { fields: 'id,name,language,category,status,rejected_reason' },
+      params: { fields: 'id,name,language,category,status,rejected_reason,components' },
     });
-    expect(result).toEqual([{ id: 'meta-tpl-1', name: 'a', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejected_reason: null }]);
+    expect(result).toEqual([
+      { id: 'meta-tpl-1', name: 'a', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejected_reason: null, components: [{ type: 'BODY', text: 'Olá {{1}}' }] },
+    ]);
   });
 });
 

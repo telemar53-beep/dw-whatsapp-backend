@@ -25,6 +25,7 @@ const metricsRoutes = require('./api/metrics.routes');
 const templatesRoutes = require('./api/templates.routes');
 const adminTemplatesRoutes = require('./api/admin-templates.routes');
 const integrationsSgpRoutes = require('./api/integrations-sgp.routes');
+const adminIntegrationsRoutes = require('./api/admin-integrations.routes');
 const { initSocketServer } = require('./realtime/socket-server');
 
 const config = loadConfig();
@@ -66,6 +67,7 @@ app.use('/api/admin/quick-replies', adminQuickRepliesRoutes);
 app.use('/api/admin/sectors', adminSectorsRoutes);
 app.use('/api/admin/cities', adminCitiesRoutes);
 app.use('/api/admin/triage', adminTriageRoutes);
+app.use('/api/admin/integrations', adminIntegrationsRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/templates', templatesRoutes);

@@ -36,6 +36,9 @@ router.get('/:contactId/avatar', authenticateContactRoute, async (req, res) => {
 
 router.patch('/:id', requireAuth, async (req, res) => {
   const { displayName: rawDisplayName, cityId } = req.body || {};
+  if (rawDisplayName !== undefined && rawDisplayName !== null && typeof rawDisplayName !== 'string') {
+    return res.status(400).json({ error: 'displayName must be a string or null' });
+  }
   const displayName = typeof rawDisplayName === 'string' ? rawDisplayName.trim() || null : null;
   const contact = await updateContact(req.params.id, { displayName, cityId: cityId || null });
   if (!contact) {

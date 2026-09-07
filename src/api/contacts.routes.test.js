@@ -119,6 +119,16 @@ describe('PATCH /api/contacts/:id', () => {
     expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: null, cityId: null });
   });
 
+  test('returns 400 when displayName is not a string', async () => {
+    const res = await request(buildApp())
+      .patch('/api/contacts/contact-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ displayName: 12345 });
+
+    expect(res.status).toBe(400);
+    expect(updateContact).not.toHaveBeenCalled();
+  });
+
   test('returns 401 without a token', async () => {
     const res = await request(buildApp()).patch('/api/contacts/contact-1').send({ displayName: 'Maria' });
     expect(res.status).toBe(401);

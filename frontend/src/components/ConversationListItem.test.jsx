@@ -134,4 +134,22 @@ describe('ConversationListItem', () => {
     expect(screen.getByText('Carlos')).toBeInTheDocument();
     expect(screen.queryByText(/Carlos -/)).not.toBeInTheDocument();
   });
+
+  test('falls back to "Conversa" when there is neither a display name nor a phone number', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: null,
+            contactPhoneNumber: null,
+            contactCityName: 'Bahia',
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('Conversa - Bahia')).toBeInTheDocument();
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+  });
 });

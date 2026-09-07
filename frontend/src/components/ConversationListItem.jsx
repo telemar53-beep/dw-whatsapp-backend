@@ -1,7 +1,7 @@
 import ContactAvatar from './ContactAvatar';
 
 function ConversationListItem({ conversation, onSelect }) {
-  const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber;
+  const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
   const displayLabel = conversation.contactCityName ? `${nameLabel} - ${conversation.contactCityName}` : nameLabel;
 
   return (

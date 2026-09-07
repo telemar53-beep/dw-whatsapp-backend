@@ -17,6 +17,7 @@ const {
   listClosedConversationsByContact,
   completeTriage,
   incrementTriageAttempts,
+  activateConversation,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -466,5 +467,29 @@ describe('conversation repository', () => {
     const result = await incrementTriageAttempts(conversation.id);
 
     expect(result).toBe(0);
+  });
+
+  test('createConversation accepts an explicit status', async () => {
+    const conversation = await createConversation(contactId, channelId, null, 'silent');
+    expect(conversation.status).toBe('silent');
+  });
+
+  test('activateConversation flips a silent conversation to waiting', async () => {
+    const created = await createConversation(contactId, channelId, null, 'silent');
+    const activated = await activateConversation(created.id);
+    expect(activated.status).toBe('waiting');
+    const found = await findOpenConversation(contactId, channelId);
+    expect(found.status).toBe('waiting');
+  });
+
+  test('activateConversation returns null for a conversation that is not silent', async () => {
+    const created = await createConversation(contactId, channelId);
+    const result = await activateConversation(created.id);
+    expect(result).toBeNull();
+  });
+
+  test('activateConversation returns null for a non-existent conversation id', async () => {
+    const result = await activateConversation('00000000-0000-0000-0000-000000000000');
+    expect(result).toBeNull();
   });
 });

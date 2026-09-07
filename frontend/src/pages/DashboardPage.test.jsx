@@ -36,10 +36,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'agent' }, logout: vi.fn() });
   useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
-  // DashboardPage's own wiring is what this file tests — ConversationView's
-  // internals (already covered by Task 7's ConversationView.test.jsx) are
-  // stubbed out here so selecting a conversation doesn't trigger a real,
-  // unmocked fetch via the real useConversationMessages/services/api.
   useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted: vi.fn() });
@@ -54,18 +50,69 @@ function renderDashboard() {
 }
 
 describe('DashboardPage', () => {
-  test('renders both the queue and my-conversations lists', () => {
+  test('shows my conversations in the Andamento tab by default', () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos' }]);
     useMyConversations.mockReturnValue([{ id: 'c2', contactDisplayName: 'Maria' }]);
     renderDashboard();
-    expect(screen.getByText('Carlos')).toBeInTheDocument();
     expect(screen.getByText('Maria')).toBeInTheDocument();
+    expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
   });
 
-  test('selecting a conversation from the queue opens the conversation view', async () => {
+  test('shows the queue in the Espera tab after clicking it', async () => {
+    useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos' }]);
+    useMyConversations.mockReturnValue([{ id: 'c2', contactDisplayName: 'Maria' }]);
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
+
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.queryByText('Maria')).not.toBeInTheDocument();
+  });
+
+  test('separates conversations still in automatic triage into the Automação tab', async () => {
+    useQueue.mockReturnValue([
+      { id: 'c1', contactDisplayName: 'Aguardando', triageState: null },
+      { id: 'c2', contactDisplayName: 'Em Triagem', triageState: 'pending' },
+    ]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
+    expect(screen.getByText('Aguardando')).toBeInTheDocument();
+    expect(screen.queryByText('Em Triagem')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /automação/i }));
+    expect(screen.getByText('Em Triagem')).toBeInTheDocument();
+    expect(screen.queryByText('Aguardando')).not.toBeInTheDocument();
+  });
+
+  test('shows a badge with the count on each tab', () => {
+    useQueue.mockReturnValue([
+      { id: 'c1', contactDisplayName: 'Aguardando', triageState: null },
+      { id: 'c2', contactDisplayName: 'Em Triagem', triageState: 'pending' },
+    ]);
+    useMyConversations.mockReturnValue([{ id: 'c3', contactDisplayName: 'Minha' }]);
+    renderDashboard();
+
+    expect(screen.getByRole('button', { name: /andamento/i }).textContent).toContain('1');
+    expect(screen.getByRole('button', { name: /espera/i }).textContent).toContain('1');
+    expect(screen.getByRole('button', { name: /automação/i }).textContent).toContain('1');
+  });
+
+  test('does not show a badge on a tab with no items', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+
+    const inProgressButton = screen.getByRole('button', { name: /andamento/i });
+    expect(inProgressButton.querySelector('span')).not.toBeInTheDocument();
+  });
+
+  test('selecting a conversation from the Espera tab opens the conversation view', async () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
     useMyConversations.mockReturnValue([]);
     renderDashboard();
+    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
     await userEvent.click(screen.getByText('Carlos'));
     expect(screen.getByRole('button', { name: /assumir/i })).toBeInTheDocument();
   });
@@ -131,7 +178,6 @@ describe('DashboardPage', () => {
     await userEvent.click(screen.getByText('Mock Start Conversation'));
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
 
-    // The real conversation:assigned socket event lands — myConversations now has it.
     useMyConversations.mockReturnValue([
       { id: 'conv-new', contactPhoneNumber: '5598999990000', assignedAgentId: 'agent-1', status: 'assigned' },
     ]);
@@ -142,7 +188,6 @@ describe('DashboardPage', () => {
     );
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
 
-    // The conversation is later closed for real — it drops out of myConversations.
     useMyConversations.mockReturnValue([]);
     rerender(
       <MemoryRouter>
@@ -174,6 +219,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
     useMyConversations.mockReturnValue([]);
     const { container } = renderDashboard();
+    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
     await userEvent.click(screen.getByText('Carlos'));
 
     const aside = container.querySelector('aside');
@@ -186,6 +232,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
     useMyConversations.mockReturnValue([]);
     const { container } = renderDashboard();
+    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
     await userEvent.click(screen.getByText('Carlos'));
     expect(container.querySelector('main').className).not.toMatch(/\bhidden\b/);
 
@@ -199,6 +246,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
     useMyConversations.mockReturnValue([]);
     const { container } = renderDashboard();
+    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
     await userEvent.click(screen.getByText('Carlos'));
 
     expect(container.querySelector('header').className).toMatch(/\bhidden\b/);

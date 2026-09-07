@@ -13,16 +13,41 @@ import ChangePasswordModal from '../components/ChangePasswordModal';
 import StartConversationModal from '../components/StartConversationModal';
 import TeamPanel from '../components/TeamPanel';
 
+const TABS = [
+  { value: 'inProgress', label: 'Andamento' },
+  { value: 'waiting', label: 'Espera' },
+  { value: 'automation', label: 'Automação' },
+];
+
+function TabBadge({ count }) {
+  if (count === 0) return null;
+  return (
+    <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-bold text-white">
+      {count}
+    </span>
+  );
+}
+
 function DashboardPage() {
   const { agent, logout } = useAuth();
   const queue = useQueue();
   const myConversations = useMyConversations();
   const { muted, toggleMuted } = useQueueNotificationSound();
+  const [activeTab, setActiveTab] = useState('inProgress');
   const [selectedId, setSelectedId] = useState(null);
   const [transferringId, setTransferringId] = useState(null);
   const [changingPassword, setChangingPassword] = useState(false);
   const [startingConversation, setStartingConversation] = useState(false);
   const [pendingConversation, setPendingConversation] = useState(null);
+
+  const waitingConversations = queue.filter((c) => c.triageState !== 'pending');
+  const automationConversations = queue.filter((c) => c.triageState === 'pending');
+
+  const tabCounts = {
+    inProgress: myConversations.length,
+    waiting: waitingConversations.length,
+    automation: automationConversations.length,
+  };
 
   const selectedConversation =
     [...queue, ...myConversations].find((c) => c.id === selectedId) ||
@@ -78,8 +103,37 @@ function DashboardPage() {
           >
             Iniciar conversa
           </button>
-          <QueueList conversations={queue} onSelect={setSelectedId} />
-          <MyConversationsList conversations={myConversations} onSelect={setSelectedId} />
+          <div className="flex rounded border border-gray-200">
+            {TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={`flex-1 px-2 py-2 text-xs font-medium ${
+                  activeTab === tab.value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {tab.label}
+                <TabBadge count={tabCounts[tab.value]} />
+              </button>
+            ))}
+          </div>
+          {activeTab === 'inProgress' && <MyConversationsList conversations={myConversations} onSelect={setSelectedId} />}
+          {activeTab === 'waiting' && (
+            <QueueList
+              conversations={waitingConversations}
+              onSelect={setSelectedId}
+              title="Espera"
+              emptyMessage="Nenhuma conversa aguardando."
+            />
+          )}
+          {activeTab === 'automation' && (
+            <QueueList
+              conversations={automationConversations}
+              onSelect={setSelectedId}
+              title="Automação"
+              emptyMessage="Nenhuma conversa em triagem automática."
+            />
+          )}
           <TeamPanel />
         </aside>
         <main className={`${selectedConversation ? 'block' : 'hidden'} flex-1 md:block`}>

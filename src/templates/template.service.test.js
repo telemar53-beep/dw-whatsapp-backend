@@ -65,6 +65,30 @@ describe('createTemplate', () => {
     expect(result.id).toBe('local-1');
   });
 
+  test('rolls back the Meta-side template when the local insert fails, then rethrows', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' } });
+    metaCloudAdapter.createMetaTemplate.mockResolvedValue({ metaTemplateId: 'meta-tpl-9', status: 'PENDING' });
+    const dbError = new Error('connection lost');
+    createTemplateRecord.mockRejectedValue(dbError);
+
+    await expect(createTemplate(validInput)).rejects.toThrow('connection lost');
+
+    expect(metaCloudAdapter.deleteMetaTemplate).toHaveBeenCalledWith(
+      { id: 'ch-1', type: 'meta_cloud', config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' } },
+      { name: 'fatura_vencida', metaTemplateId: 'meta-tpl-9' }
+    );
+  });
+
+  test('still rethrows the original DB error even if the Meta rollback itself fails', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' } });
+    metaCloudAdapter.createMetaTemplate.mockResolvedValue({ metaTemplateId: 'meta-tpl-9', status: 'PENDING' });
+    const dbError = new Error('connection lost');
+    createTemplateRecord.mockRejectedValue(dbError);
+    metaCloudAdapter.deleteMetaTemplate.mockRejectedValue(new Error('meta also down'));
+
+    await expect(createTemplate(validInput)).rejects.toThrow('connection lost');
+  });
+
   test('rejects a bodyText with a variable gap as a TemplateValidationError, not a bare Error', async () => {
     await expect(createTemplate({ ...validInput, bodyText: 'Olá {{1}}, veja {{3}}.' })).rejects.toThrow(TemplateValidationError);
     expect(metaCloudAdapter.createMetaTemplate).not.toHaveBeenCalled();
@@ -145,15 +169,15 @@ describe('syncTemplatesForWaba', () => {
   test('updates local status for each template Meta returns', async () => {
     findChannelByWabaId.mockResolvedValue({ id: 'ch-1', config: { accessToken: 'tok', wabaId: 'waba-1' } });
     metaCloudAdapter.listMetaTemplates.mockResolvedValue([
-      { id: 'meta-1', status: 'APPROVED' },
-      { id: 'meta-2', status: 'REJECTED' },
+      { id: 'meta-1', status: 'APPROVED', rejected_reason: null },
+      { id: 'meta-2', status: 'REJECTED', rejected_reason: 'INVALID_FORMAT' },
     ]);
     listTemplates.mockResolvedValue([{ id: 'tpl-1' }, { id: 'tpl-2' }]);
 
     const result = await syncTemplatesForWaba('waba-1');
 
     expect(updateTemplateStatusByMetaTemplateId).toHaveBeenCalledWith('meta-1', { status: 'APPROVED', rejectionReason: null });
-    expect(updateTemplateStatusByMetaTemplateId).toHaveBeenCalledWith('meta-2', { status: 'REJECTED', rejectionReason: null });
+    expect(updateTemplateStatusByMetaTemplateId).toHaveBeenCalledWith('meta-2', { status: 'REJECTED', rejectionReason: 'INVALID_FORMAT' });
     expect(result).toEqual([{ id: 'tpl-1' }, { id: 'tpl-2' }]);
   });
 

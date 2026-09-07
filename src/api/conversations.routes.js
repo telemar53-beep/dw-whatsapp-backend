@@ -123,6 +123,9 @@ router.post('/start', async (req, res) => {
     if (variables.length !== template.variableCount) {
       return res.status(400).json({ error: `This template requires exactly ${template.variableCount} variable(s)` });
     }
+    if (variables.some((v) => typeof v !== 'string' || !v.trim())) {
+      return res.status(400).json({ error: 'Each template variable must be a non-empty string' });
+    }
     canonicalPhoneNumber = normalizedPhoneNumber;
     outboundPayload = {
       content: substituteVariables(template.bodyText, variables),

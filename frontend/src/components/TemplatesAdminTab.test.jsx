@@ -60,6 +60,29 @@ describe('TemplatesAdminTab', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  test('selects the first meta_cloud channel automatically once channels finish loading, without touching the dropdown', async () => {
+    const refresh = vi.fn();
+    useTemplates.mockReturnValue({ templates: [], refresh });
+    useChannels.mockReturnValue({ channels: [] });
+    const { rerender } = render(<TemplatesAdminTab />);
+
+    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }] });
+    rerender(<TemplatesAdminTab />);
+
+    api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-2', name: 'boas_vindas', status: 'PENDING' });
+    await userEvent.type(screen.getByLabelText(/^nome$/i), 'boas_vindas');
+    await userEvent.type(screen.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.type(screen.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createTemplateAdmin).toHaveBeenCalledWith(
+        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá, bem-vindo!' },
+        'tok-123'
+      )
+    );
+  });
+
   test('shows the Meta error message when creation fails', async () => {
     useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
     api.createTemplateAdmin.mockRejectedValue({ body: { error: 'Invalid parameter' } });

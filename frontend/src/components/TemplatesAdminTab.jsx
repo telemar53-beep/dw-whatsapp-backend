@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTemplates } from '../hooks/useTemplates';
 import { useChannels } from '../hooks/useChannels';
@@ -49,7 +49,7 @@ function TemplatesAdminTab() {
   const { channels } = useChannels();
   const metaCloudChannels = channels.filter((channel) => channel.type === 'meta_cloud');
 
-  const [channelId, setChannelId] = useState(metaCloudChannels[0]?.id || '');
+  const [channelId, setChannelId] = useState('');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('UTILITY');
   const [language, setLanguage] = useState('');
@@ -59,6 +59,14 @@ function TemplatesAdminTab() {
   const [syncError, setSyncError] = useState(null);
 
   const wabaIds = [...new Set(metaCloudChannels.map((channel) => channel.wabaId).filter(Boolean))];
+
+  const firstMetaCloudChannelId = metaCloudChannels[0]?.id;
+
+  useEffect(() => {
+    if (!channelId && firstMetaCloudChannelId) {
+      setChannelId(firstMetaCloudChannelId);
+    }
+  }, [firstMetaCloudChannelId, channelId]);
 
   async function handleCreate(event) {
     event.preventDefault();

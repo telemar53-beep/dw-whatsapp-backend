@@ -707,6 +707,17 @@ describe('POST /start (meta_cloud)', () => {
     expect(res.status).toBe(400);
   });
 
+  test('returns 400 when a variable is not a non-empty string', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    findTemplateById.mockResolvedValue(approvedTemplate);
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'tpl-1', templateVariables: ['João', '  '] });
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
   test('starts the conversation, substitutes variables, and enqueues the template send', async () => {
     findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
     findTemplateById.mockResolvedValue(approvedTemplate);

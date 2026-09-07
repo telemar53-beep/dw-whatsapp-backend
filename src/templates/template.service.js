@@ -46,7 +46,16 @@ async function createTemplate({ channelId, name, category, language, bodyText })
 
   const { metaTemplateId } = await metaCloudAdapter.createMetaTemplate(channel, { name, category, language, bodyText });
 
-  return createTemplateRecord({ wabaId: channel.config.wabaId, metaTemplateId, name, language, category, bodyText, variableCount });
+  try {
+    return await createTemplateRecord({ wabaId: channel.config.wabaId, metaTemplateId, name, language, category, bodyText, variableCount });
+  } catch (err) {
+    try {
+      await metaCloudAdapter.deleteMetaTemplate(channel, { name, metaTemplateId });
+    } catch (rollbackErr) {
+      console.warn(`Failed to roll back orphaned Meta template ${metaTemplateId} after a local insert failure`, rollbackErr.message);
+    }
+    throw err;
+  }
 }
 
 async function listApprovedTemplatesForChannel(channelId) {
@@ -80,7 +89,7 @@ async function syncTemplatesForWaba(wabaId) {
       console.warn(`Ignoring unknown template status "${metaTemplate.status}" for meta_template_id ${metaTemplate.id}`);
       continue;
     }
-    await updateTemplateStatusByMetaTemplateId(String(metaTemplate.id), { status: metaTemplate.status, rejectionReason: null });
+    await updateTemplateStatusByMetaTemplateId(String(metaTemplate.id), { status: metaTemplate.status, rejectionReason: metaTemplate.rejected_reason || null });
   }
   return listTemplates();
 }

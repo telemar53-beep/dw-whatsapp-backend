@@ -9,6 +9,7 @@ function CreateChannelForm({ onCreated }) {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [wabaId, setWabaId] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -17,13 +18,14 @@ function CreateChannelForm({ onCreated }) {
     setError(null);
     setSubmitting(true);
     const payload =
-      type === 'meta_cloud' ? { type, name, phoneNumber, phoneNumberId, accessToken } : { type, name, phoneNumber };
+      type === 'meta_cloud' ? { type, name, phoneNumber, phoneNumberId, accessToken, wabaId } : { type, name, phoneNumber };
     try {
       await createChannel(payload, token);
       setName('');
       setPhoneNumber('');
       setPhoneNumberId('');
       setAccessToken('');
+      setWabaId('');
       onCreated();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao cadastrar canal');
@@ -96,6 +98,18 @@ function CreateChannelForm({ onCreated }) {
               id="accessToken"
               value={accessToken}
               onChange={(e) => setAccessToken(e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="wabaId" className="mb-1 block text-sm text-gray-600">
+              WABA ID
+            </label>
+            <input
+              id="wabaId"
+              value={wabaId}
+              onChange={(e) => setWabaId(e.target.value)}
               className="w-full rounded border border-gray-300 px-3 py-2"
               required
             />

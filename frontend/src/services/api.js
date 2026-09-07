@@ -198,3 +198,7 @@ export function deleteTriageOption(id, token) {
 export function setChannelTriageEnabled(channelId, triageEnabled, token) {
   return apiFetch(`/api/admin/channels/${channelId}`, { method: 'PATCH', body: { triageEnabled }, token });
 }
+
+export function setChannelWabaId(id, wabaId, token) {
+  return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { wabaId }, token });
+}

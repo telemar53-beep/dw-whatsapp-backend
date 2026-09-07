@@ -52,6 +52,7 @@ describe('CreateChannelForm', () => {
     await userEvent.type(screen.getByLabelText(/telefone/i), '+5511999990000');
     await userEvent.type(screen.getByLabelText(/phone number id/i), '123456');
     await userEvent.type(screen.getByLabelText(/access token/i), 'tok-meta');
+    await userEvent.type(screen.getByLabelText(/waba id/i), 'waba-1');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 
     await waitFor(() =>
@@ -62,6 +63,7 @@ describe('CreateChannelForm', () => {
           phoneNumber: '+5511999990000',
           phoneNumberId: '123456',
           accessToken: 'tok-meta',
+          wabaId: 'waba-1',
         },
         'tok-123'
       )

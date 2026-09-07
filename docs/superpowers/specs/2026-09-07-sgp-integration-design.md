@@ -36,7 +36,7 @@ CREATE TABLE platform_integrations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   platform TEXT NOT NULL CHECK (platform IN ('sgp')),
   channel_id UUID NOT NULL REFERENCES channels(id),
-  api_key_hash TEXT NOT NULL,
+  api_key_hash TEXT,
   enabled BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -48,7 +48,9 @@ Um registro por `platform` (singleton por enquanto — uma integração SGP
 só). O `channel_id` deve apontar para um canal do tipo `baileys` (validado
 na rota de admin, não via constraint de banco, já que `channels.type` não
 tem índice/constraint parcial hoje e não vale a pena criar um só para
-isso).
+isso). `api_key_hash` é nulável: `NULL` significa "canal escolhido mas
+nenhuma chave gerada ainda" (o endpoint do SGP rejeita com 400 nesse
+estado, distinto de "integração desativada").
 
 ### Nova tabela `sgp_dispatches` (idempotência + log)
 

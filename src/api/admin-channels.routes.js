@@ -2,7 +2,7 @@ const express = require('express');
 const QRCode = require('qrcode');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
 const { verifyToken } = require('../auth/auth.service');
-const { listChannels, createChannel, findChannelById } = require('../channels/channel.repository');
+const { listChannels, createChannel, findChannelById, updateChannelTriageEnabled } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 
 const router = express.Router();
@@ -36,6 +36,7 @@ router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
       name: channel.name,
       phoneNumber: channel.phoneNumber,
       status: channel.status,
+      triageEnabled: channel.triageEnabled,
     }))
   );
 });
@@ -68,6 +69,25 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
   }
 
   return res.status(400).json({ error: 'type must be meta_cloud or baileys' });
+});
+
+router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const { triageEnabled } = req.body || {};
+  if (typeof triageEnabled !== 'boolean') {
+    return res.status(400).json({ error: 'triageEnabled must be a boolean' });
+  }
+  const channel = await updateChannelTriageEnabled(req.params.id, triageEnabled);
+  if (!channel) {
+    return res.status(404).json({ error: 'Channel not found' });
+  }
+  res.json({
+    id: channel.id,
+    type: channel.type,
+    name: channel.name,
+    phoneNumber: channel.phoneNumber,
+    status: channel.status,
+    triageEnabled: channel.triageEnabled,
+  });
 });
 
 router.get('/:id/qr', authenticateQrRoute, async (req, res) => {

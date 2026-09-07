@@ -5,7 +5,7 @@ const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const QRCode = require('qrcode');
-const { listChannels, createChannel, findChannelById } = require('../channels/channel.repository');
+const { listChannels, createChannel, findChannelById, updateChannelTriageEnabled } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const adminChannelsRoutes = require('./admin-channels.routes');
 
@@ -32,6 +32,7 @@ describe('GET /api/admin/channels', () => {
         phoneNumber: '+5511999990001',
         config: { phoneNumberId: '1', accessToken: 'tok' },
         status: 'connected',
+        triageEnabled: false,
       },
     ]);
 
@@ -41,7 +42,14 @@ describe('GET /api/admin/channels', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
-      { id: 'channel-1', type: 'meta_cloud', name: 'Suporte', phoneNumber: '+5511999990001', status: 'connected' },
+      {
+        id: 'channel-1',
+        type: 'meta_cloud',
+        name: 'Suporte',
+        phoneNumber: '+5511999990001',
+        status: 'connected',
+        triageEnabled: false,
+      },
     ]);
   });
 
@@ -222,5 +230,65 @@ describe('GET /api/admin/channels/:id/qr', () => {
       .get('/api/admin/channels/channel-6/qr')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('PATCH /api/admin/channels/:id', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('toggles triageEnabled on', async () => {
+    updateChannelTriageEnabled.mockResolvedValue({
+      id: 'channel-1',
+      type: 'baileys',
+      name: 'Suporte',
+      phoneNumber: '+5511999990001',
+      status: 'connected',
+      triageEnabled: true,
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ triageEnabled: true });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelTriageEnabled).toHaveBeenCalledWith('channel-1', true);
+    expect(res.body).toEqual({
+      id: 'channel-1',
+      type: 'baileys',
+      name: 'Suporte',
+      phoneNumber: '+5511999990001',
+      status: 'connected',
+      triageEnabled: true,
+    });
+  });
+
+  test('returns 400 when triageEnabled is not a boolean', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ triageEnabled: 'yes' });
+
+    expect(res.status).toBe(400);
+    expect(updateChannelTriageEnabled).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the channel does not exist', async () => {
+    updateChannelTriageEnabled.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/does-not-exist')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ triageEnabled: true });
+
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ triageEnabled: true });
+    expect(res.status).toBe(403);
   });
 });

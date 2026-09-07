@@ -42,7 +42,7 @@ describe('GET /api/contacts/:contactId/avatar', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
 
     expect(res.status).toBe(200);
-    expect(res.text).toBe('conteudo de imagem falso');
+    expect(res.body.toString()).toBe('conteudo de imagem falso');
     expect(res.headers['content-type']).toBe('image/jpeg');
   });
 

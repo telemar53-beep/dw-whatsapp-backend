@@ -139,11 +139,11 @@ As três queries de `conversation.repository.js` que já juntam `contacts`
 (`getConversationWithContact`, `listWaitingConversations`,
 `listConversationsByAgent`) ganham um `LEFT JOIN cities ci ON ci.id =
 ct.city_id` e dois campos novos: `contactCityId` (o id bruto, usado para
-pré-preencher o select do modal de edição) e `cityName` (o nome já
+pré-preencher o select do modal de edição) e `contactCityName` (o nome já
 resolvido, usado só para exibição). `listClosedConversationsByContact`
 continua fora — nem hoje junta `contacts`.
 
-Sempre que `cityName` existir, o nome exibido vira `"Nome - Cidade"` (ou
+Sempre que `contactCityName` existir, o nome exibido vira `"Nome - Cidade"` (ou
 `"Telefone - Cidade"` se não houver nome) em `ConversationListItem.jsx`
 (fila e minhas conversas) e no cabeçalho de `ConversationView.jsx`. Sem
 cidade, mostra só o nome/telefone, como hoje. A lógica de montar essa
@@ -164,7 +164,7 @@ do `ContactAvatar`).
   atualiza nome e cidade; `updateContact` com `cityId: null` remove a
   cidade; `toContact`/`findContactById` incluem `cityId`.
 - **`conversation.repository.test.js`** (existente, estendido):
-  `contactCityId`/`cityName` aparecem corretamente nas 3 queries afetadas,
+  `contactCityId`/`contactCityName` aparecem corretamente nas 3 queries afetadas,
   incluindo o caso sem cidade (`null`/`null`).
 - **`DashboardPage.test.jsx`** (existente, reescrito nos testes que
   assumiam as duas listas sempre visíveis): clicar em cada aba mostra só

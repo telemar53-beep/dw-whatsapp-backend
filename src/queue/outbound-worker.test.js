@@ -185,4 +185,23 @@ describe('startOutboundWorker', () => {
     expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalled();
     expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.NEW1');
   });
+
+  test('sends via sendTemplateMessage when the job carries a templateName', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.TPL1' });
+
+    await handler({
+      messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Olá João, sua fatura venceu.',
+      templateName: 'fatura_vencida', templateLanguage: 'pt_BR', templateVariables: ['João'],
+    });
+
+    expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledWith(
+      { id: 'channel-1', type: 'meta_cloud', config: {} },
+      '5511999998888',
+      { name: 'fatura_vencida', language: 'pt_BR', variables: ['João'] }
+    );
+    expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();
+    expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.TPL1');
+  });
 });

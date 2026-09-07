@@ -7,6 +7,7 @@ import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useSectors } from '../hooks/useSectors';
 import { useTriage } from '../hooks/useTriage';
+import { useTemplates } from '../hooks/useTemplates';
 import { useAuth } from '../contexts/AuthContext';
 import { setChannelTriageEnabled, setChannelWabaId } from '../services/api';
 
@@ -15,6 +16,7 @@ vi.mock('../hooks/useAgentsAdmin');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useSectors');
 vi.mock('../hooks/useTriage');
+vi.mock('../hooks/useTemplates');
 vi.mock('../contexts/AuthContext');
 vi.mock('../services/api');
 
@@ -25,6 +27,7 @@ beforeEach(() => {
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useSectors.mockReturnValue({ sectors: [], refresh: vi.fn() });
   useTriage.mockReturnValue({ config: { questionText: 'Q', confirmationText: 'C', maxAttempts: 2 }, options: [], refresh: vi.fn() });
+  useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
 });
 
 describe('AdminChannelsPage', () => {
@@ -187,5 +190,19 @@ describe('AdminChannelsPage', () => {
     });
     render(<AdminChannelsPage />);
     expect(screen.queryByLabelText(/waba id/i)).not.toBeInTheDocument();
+  });
+
+  test('switches to the Templates tab and shows the templates management UI', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', status: 'disconnected', wabaId: 'waba-1' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    render(<AdminChannelsPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /templates/i }));
+
+    expect(screen.getByText(/cadastrar novo template/i)).toBeInTheDocument();
   });
 });

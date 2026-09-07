@@ -7,6 +7,7 @@ import AgentsAdminTab from '../components/AgentsAdminTab';
 import QuickRepliesAdminTab from '../components/QuickRepliesAdminTab';
 import SectorsAdminTab from '../components/SectorsAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
+import TemplatesAdminTab from '../components/TemplatesAdminTab';
 import { setChannelTriageEnabled, setChannelWabaId } from '../services/api';
 
 function AdminChannelsPage() {
@@ -81,6 +82,14 @@ function AdminChannelsPage() {
         >
           Triagem
         </button>
+        <button
+          onClick={() => setActiveTab('templates')}
+          className={`px-3 py-2 text-sm ${
+            activeTab === 'templates' ? 'border-b-2 border-blue-600 font-semibold text-blue-600' : 'text-gray-500'
+          }`}
+        >
+          Templates
+        </button>
       </div>
       {activeTab === 'channels' ? (
         <div className="space-y-6">
@@ -138,8 +147,10 @@ function AdminChannelsPage() {
         <QuickRepliesAdminTab />
       ) : activeTab === 'sectors' ? (
         <SectorsAdminTab />
-      ) : (
+      ) : activeTab === 'triage' ? (
         <TriageAdminTab />
+      ) : (
+        <TemplatesAdminTab />
       )}
     </div>
   );

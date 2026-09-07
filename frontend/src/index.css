@@ -11,6 +11,7 @@
   --color-teal-signal: #0d9488;
   --color-amber-signal: #f2a93c;
   --color-amber-signal-dark: #d9861f;
+  --color-indigo-signal: #3d6fb4;
 }
 
 @keyframes login-rise {

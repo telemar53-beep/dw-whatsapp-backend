@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const { loadConfig } = require('../config/env');
 const { createChannel, updateChannelStatus, listChannels } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
+const { setContactAvatarPath } = require('../conversations/contact.repository');
 const { saveMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
 
 function loadBaileysLib() {
@@ -115,8 +117,28 @@ function resolveContactPhoneJid(key) {
   return null;
 }
 
+async function fetchAndStoreContactAvatar(sock, phoneJid, contactId) {
+  try {
+    const url = await sock.profilePictureUrl(phoneJid, 'image');
+    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    const avatarPath = await saveMediaFile(Buffer.from(response.data), '.jpg');
+    await setContactAvatarPath(contactId, avatarPath);
+  } catch (err) {
+    console.log(`Could not fetch profile photo for contact ${contactId}: ${err.message}`);
+  }
+}
+
+async function fetchContactAvatarForChannel(channel, contactId, phoneNumber) {
+  const entry = connections.get(channel.id);
+  if (!entry) {
+    throw new Error(`No active Baileys connection for channel ${channel.id}`);
+  }
+  await fetchAndStoreContactAvatar(entry.sock, `${phoneNumber}@s.whatsapp.net`, contactId);
+}
+
 async function handleMessagesUpsert(channel, { messages, type }) {
   if (type !== 'notify') return;
+  const entry = connections.get(channel.id);
   for (const msg of messages) {
     if (msg.key.fromMe) continue;
     const phoneJid = resolveContactPhoneJid(msg.key);
@@ -127,7 +149,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
 
     const location = extractLocation(innerMessage);
     if (location) {
-      await ingestInboundMessage({
+      const result = await ingestInboundMessage({
         channelId: channel.id,
         fromPhoneNumber,
         contactDisplayName,
@@ -136,6 +158,9 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         locationLatitude: location.latitude,
         locationLongitude: location.longitude,
       });
+      if (result.contactJustCreated && entry) {
+        fetchAndStoreContactAvatar(entry.sock, phoneJid, result.contact.id);
+      }
       continue;
     }
 
@@ -144,7 +169,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       const { downloadMediaMessage } = loadBaileysLib();
       const buffer = await downloadMediaMessage(msg, 'buffer', {});
       const mediaPath = await saveMediaFile(buffer, extensionForMimeType(mediaInfo.mimeType));
-      await ingestInboundMessage({
+      const result = await ingestInboundMessage({
         channelId: channel.id,
         fromPhoneNumber,
         contactDisplayName,
@@ -155,6 +180,9 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         mediaMimeType: mediaInfo.mimeType,
         mediaFilename: mediaInfo.filename,
       });
+      if (result.contactJustCreated && entry) {
+        fetchAndStoreContactAvatar(entry.sock, phoneJid, result.contact.id);
+      }
       continue;
     }
 
@@ -167,7 +195,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       );
       continue;
     }
-    await ingestInboundMessage({
+    const result = await ingestInboundMessage({
       channelId: channel.id,
       fromPhoneNumber,
       contactDisplayName,
@@ -175,6 +203,9 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       messageType: 'text',
       content,
     });
+    if (result.contactJustCreated && entry) {
+      fetchAndStoreContactAvatar(entry.sock, phoneJid, result.contact.id);
+    }
   }
 }
 
@@ -318,4 +349,5 @@ module.exports = {
   sendMediaMessage,
   resolveWhatsAppJid,
   getQrForChannel,
+  fetchContactAvatarForChannel,
 };

@@ -10,28 +10,10 @@ const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const router = express.Router();
 const UNIQUE_VIOLATION = '23505';
 
-// Temporary diagnostic logging while we confirm the exact shape of the SGP
-// "HTTP Generico" gateway request (method, header vs. body auth placement,
-// field names) — remove once confirmed.
-router.use((req, res, next) => {
-  if (process.env.NODE_ENV !== 'test') {
-    console.log(
-      '[SGP DEBUG] %s %s headers=%s query=%s body=%s',
-      req.method,
-      req.originalUrl,
-      JSON.stringify(req.headers),
-      JSON.stringify(req.query),
-      JSON.stringify(req.body)
-    );
-  }
-  next();
-});
-
 async function requireSgpApiKey(req, res, next) {
-  const header = req.headers.authorization;
-  const apiKey = header && header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
+  const apiKey = typeof req.query.token === 'string' ? req.query.token : null;
   if (!apiKey) {
-    return res.status(401).json({ error: 'Missing authorization token' });
+    return res.status(401).json({ error: 'Missing token' });
   }
   const verification = await verifySgpApiKey(apiKey);
   if (verification.status === 'not_configured') {
@@ -50,25 +32,25 @@ async function requireSgpApiKey(req, res, next) {
   next();
 }
 
-router.post('/messages', requireSgpApiKey, async (req, res) => {
-  const { phoneNumber, content, referenceId } = req.body || {};
+router.get('/messages', requireSgpApiKey, async (req, res) => {
+  const { phoneNumber, content, referenceId } = req.query;
   if (typeof phoneNumber !== 'string' || !phoneNumber.trim()) {
     return res.status(400).json({ error: 'phoneNumber is required' });
   }
   if (typeof content !== 'string' || !content.trim()) {
     return res.status(400).json({ error: 'content is required' });
   }
-  if (typeof referenceId !== 'string' || !referenceId.trim()) {
-    return res.status(400).json({ error: 'referenceId is required' });
-  }
+  const hasReferenceId = typeof referenceId === 'string' && referenceId.trim().length > 0;
 
-  const existingDispatch = await findSgpDispatchByReferenceId(referenceId);
-  if (existingDispatch) {
-    return res.status(200).json({
-      conversationId: existingDispatch.conversationId,
-      messageId: existingDispatch.messageId,
-      duplicate: true,
-    });
+  if (hasReferenceId) {
+    const existingDispatch = await findSgpDispatchByReferenceId(referenceId);
+    if (existingDispatch) {
+      return res.status(200).json({
+        conversationId: existingDispatch.conversationId,
+        messageId: existingDispatch.messageId,
+        duplicate: true,
+      });
+    }
   }
 
   const channel = await findChannelById(req.sgpChannelId);
@@ -104,15 +86,15 @@ router.post('/messages', requireSgpApiKey, async (req, res) => {
     emitToAgent(conversation.assignedAgentId, 'message:new', { conversation: conversationWithContact, message });
   }
 
-  let dispatch;
-  try {
-    dispatch = await createSgpDispatch({ referenceId, conversationId: conversation.id, messageId: message.id });
-  } catch (err) {
-    if (err.code !== UNIQUE_VIOLATION) throw err;
-    dispatch = await findSgpDispatchByReferenceId(referenceId);
+  if (hasReferenceId) {
+    try {
+      await createSgpDispatch({ referenceId, conversationId: conversation.id, messageId: message.id });
+    } catch (err) {
+      if (err.code !== UNIQUE_VIOLATION) throw err;
+    }
   }
 
-  res.status(202).json({ conversationId: dispatch.conversationId, messageId: dispatch.messageId });
+  res.status(200).json({ conversationId: conversation.id, messageId: message.id });
 });
 
 module.exports = router;

@@ -100,4 +100,33 @@ describe('outbound queue', () => {
     });
     enqueueOutboundMessage({ conversationId, channelId, content: 'Mensagem normal' });
   });
+
+  test('passes header fields through to the queued job', (done) => {
+    processOutboundQueue((data) => {
+      try {
+        expect(data.headerType).toBe('document');
+        expect(data.headerLink).toBe('https://boleto.link/xyz.pdf');
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    enqueueOutboundMessage({
+      conversationId, channelId, content: 'Olá João', templateName: 'aviso_cobranca', templateLanguage: 'pt_BR',
+      templateVariables: ['João'], headerType: 'document', headerLink: 'https://boleto.link/xyz.pdf',
+    });
+  });
+
+  test('defaults header fields to null when not provided', (done) => {
+    processOutboundQueue((data) => {
+      try {
+        expect(data.headerType).toBeNull();
+        expect(data.headerLink).toBeNull();
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    enqueueOutboundMessage({ conversationId, channelId, content: 'Mensagem normal' });
+  });
 });

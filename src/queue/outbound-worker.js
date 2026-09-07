@@ -12,7 +12,7 @@ const ADAPTERS_BY_CHANNEL_TYPE = {
 };
 
 function startOutboundWorker() {
-  processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables }) => {
+  processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables, headerType, headerLink }) => {
     const existingMessage = await findMessageById(messageId);
     if (existingMessage && existingMessage.whatsappMessageId) return;
     const conversation = await getConversationWithContact(conversationId);
@@ -24,6 +24,8 @@ function startOutboundWorker() {
             name: templateName,
             language: templateLanguage,
             variables: templateVariables || [],
+            headerType,
+            headerLink,
           })
         : messageType && messageType !== 'text'
           ? await adapter.sendMediaMessage(channel, conversation.contactPhoneNumber, {

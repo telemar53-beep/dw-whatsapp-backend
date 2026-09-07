@@ -12,7 +12,7 @@ function getOutboundQueue() {
   return queue;
 }
 
-async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables }) {
+async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables, headerType, headerLink }) {
   const message = await createMessage({
     conversationId,
     direction: 'outbound',
@@ -37,6 +37,8 @@ async function enqueueOutboundMessage({ conversationId, channelId, content, mess
       templateName: templateName || null,
       templateLanguage: templateLanguage || null,
       templateVariables: templateVariables || null,
+      headerType: headerType || null,
+      headerLink: headerLink || null,
     },
     { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
   );

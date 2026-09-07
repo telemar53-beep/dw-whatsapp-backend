@@ -20,6 +20,7 @@ function toConversationSummary(row) {
     ...toConversation(row),
     contactPhoneNumber: row.contact_phone_number,
     contactDisplayName: row.contact_display_name,
+    contactAvatarPath: row.contact_avatar_path,
     sectorName: row.sector_name,
   };
 }
@@ -120,6 +121,7 @@ async function getConversationWithContact(conversationId) {
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
             s.name AS sector_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
@@ -135,6 +137,7 @@ async function listWaitingConversations() {
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
             s.name AS sector_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
@@ -149,6 +152,7 @@ async function listConversationsByAgent(agentId) {
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
             s.name AS sector_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id

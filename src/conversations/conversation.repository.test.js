@@ -1,6 +1,6 @@
 const { getPool, closePool } = require('../db/pool');
 const { createChannel } = require('../channels/channel.repository');
-const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
+const { findOrCreateContactByPhoneNumber, setContactAvatarPath } = require('./contact.repository');
 const { createAgent } = require('../agents/agent.repository');
 const { createSector } = require('../sectors/sector.repository');
 const {
@@ -140,6 +140,19 @@ describe('conversation repository', () => {
     expect(result.contactDisplayName).toBe('Joao');
   });
 
+  test('getConversationWithContact includes the contact avatar path', async () => {
+    await setContactAvatarPath(contactId, 'avatars/joao.jpg');
+    const conversation = await createConversation(contactId, channelId);
+    const result = await getConversationWithContact(conversation.id);
+    expect(result.contactAvatarPath).toBe('avatars/joao.jpg');
+  });
+
+  test('getConversationWithContact has a null contactAvatarPath when the contact has no photo', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const result = await getConversationWithContact(conversation.id);
+    expect(result.contactAvatarPath).toBeNull();
+  });
+
   test('listWaitingConversations returns only waiting conversations with contact info, oldest first', async () => {
     const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
     const waitingConversation = await createConversation(contactId, channelId);
@@ -154,6 +167,15 @@ describe('conversation repository', () => {
     expect(waiting[0].contactDisplayName).toBe('Joao');
   });
 
+  test('listWaitingConversations includes the contact avatar path', async () => {
+    await setContactAvatarPath(contactId, 'avatars/joao.jpg');
+    await createConversation(contactId, channelId);
+
+    const waiting = await listWaitingConversations();
+
+    expect(waiting[0].contactAvatarPath).toBe('avatars/joao.jpg');
+  });
+
   test('listConversationsByAgent returns only that agent non-closed conversations', async () => {
     const conversation = await createConversation(contactId, channelId);
     const agent = await createAgent({ email: 'listagent2@dw.com', password: 'secret123', role: 'agent' });
@@ -166,6 +188,17 @@ describe('conversation repository', () => {
     const mine = await listConversationsByAgent(agent.id);
 
     expect(mine.map((c) => c.id)).toEqual([conversation.id]);
+  });
+
+  test('listConversationsByAgent includes the contact avatar path', async () => {
+    await setContactAvatarPath(contactId, 'avatars/joao.jpg');
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'listagent4@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+
+    const mine = await listConversationsByAgent(agent.id);
+
+    expect(mine[0].contactAvatarPath).toBe('avatars/joao.jpg');
   });
 
   test('listClosedConversationsByContact returns only closed conversations, most recent first', async () => {

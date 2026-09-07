@@ -2,14 +2,19 @@ jest.mock('./contact.repository');
 jest.mock('./conversation.repository');
 jest.mock('./message.repository');
 jest.mock('../realtime/socket-server');
+jest.mock('../triage/triage.service');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { findOpenConversation, createConversation } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
+const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
 describe('ingestInboundMessage', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    shouldStartTriage.mockResolvedValue(false);
+  });
 
   test('reuses an existing open conversation and broadcasts queue:new when unassigned', async () => {
     findOrCreateContactByPhoneNumber.mockResolvedValue({
@@ -96,8 +101,99 @@ describe('ingestInboundMessage', () => {
       content: 'Ola',
     });
 
-    expect(createConversation).toHaveBeenCalledWith('contact-2', 'channel-1');
+    expect(createConversation).toHaveBeenCalledWith('contact-2', 'channel-1', null);
     expect(result.conversation).toEqual({ id: 'conv-2', assignedAgentId: null });
+  });
+
+  test('starts triage by sending the question when a new conversation begins on a channel with triage enabled', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-9', phoneNumber: '+5511999990000', displayName: 'Novo Cliente' });
+    findOpenConversation.mockResolvedValue(null);
+    shouldStartTriage.mockResolvedValue(true);
+    createConversation.mockResolvedValue({ id: 'conv-9', assignedAgentId: null, triageState: 'pending' });
+    createMessage.mockResolvedValue({ id: 'msg-9' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999990000',
+      contactDisplayName: 'Novo Cliente',
+      whatsappMessageId: 'wamid.TRIAGE1',
+      content: 'Oi',
+    });
+
+    expect(createConversation).toHaveBeenCalledWith('contact-9', 'channel-1', 'pending');
+    expect(sendTriageQuestion).toHaveBeenCalledWith('conv-9', 'channel-1');
+    expect(processTriageReply).not.toHaveBeenCalled();
+  });
+
+  test('processes a reply through triage when an existing conversation still has triage pending', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-10', phoneNumber: '+5511999990001', displayName: 'Cliente Triagem' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-10', assignedAgentId: null, triageState: 'pending' });
+    createMessage.mockResolvedValue({ id: 'msg-10' });
+    processTriageReply.mockResolvedValue({ id: 'conv-10', assignedAgentId: null, sectorId: 'sector-1', triageState: 'completed' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999990001',
+      contactDisplayName: 'Cliente Triagem',
+      whatsappMessageId: 'wamid.TRIAGE2',
+      content: '1',
+    });
+
+    expect(shouldStartTriage).not.toHaveBeenCalled();
+    expect(processTriageReply).toHaveBeenCalledWith(
+      { id: 'conv-10', assignedAgentId: null, triageState: 'pending' },
+      'channel-1',
+      '1'
+    );
+    expect(sendTriageQuestion).not.toHaveBeenCalled();
+    expect(broadcast).toHaveBeenCalledWith('queue:new', {
+      conversation: {
+        id: 'conv-10',
+        assignedAgentId: null,
+        sectorId: 'sector-1',
+        triageState: 'completed',
+        contactPhoneNumber: '+5511999990001',
+        contactDisplayName: 'Cliente Triagem',
+      },
+      message: { id: 'msg-10' },
+    });
+  });
+
+  test('does not process triage for a duplicate webhook redelivery even if triage is pending', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-11' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-11', assignedAgentId: null, triageState: 'pending' });
+    const uniqueViolation = Object.assign(new Error('duplicate key'), { code: '23505' });
+    createMessage.mockRejectedValue(uniqueViolation);
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999990002',
+      contactDisplayName: 'Reenvio Triagem',
+      whatsappMessageId: 'wamid.TRIAGE3',
+      content: '1',
+    });
+
+    expect(processTriageReply).not.toHaveBeenCalled();
+    expect(sendTriageQuestion).not.toHaveBeenCalled();
+  });
+
+  test('does not start triage for a new conversation when the channel does not have it enabled', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-12' });
+    findOpenConversation.mockResolvedValue(null);
+    shouldStartTriage.mockResolvedValue(false);
+    createConversation.mockResolvedValue({ id: 'conv-12', assignedAgentId: null, triageState: null });
+    createMessage.mockResolvedValue({ id: 'msg-12' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999990003',
+      contactDisplayName: 'Cliente Normal',
+      whatsappMessageId: 'wamid.NOTRIAGE',
+      content: 'Oi',
+    });
+
+    expect(createConversation).toHaveBeenCalledWith('contact-12', 'channel-1', null);
+    expect(sendTriageQuestion).not.toHaveBeenCalled();
   });
 
   test('falls back to the existing conversation when createConversation races on a unique violation', async () => {

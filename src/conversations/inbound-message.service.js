@@ -2,6 +2,7 @@ const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { findOpenConversation, createConversation } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
+const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -20,9 +21,12 @@ async function ingestInboundMessage({
 }) {
   const contact = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   let conversation = await findOpenConversation(contact.id, channelId);
+  let justCreated = false;
   if (!conversation) {
+    const startTriage = await shouldStartTriage(channelId);
     try {
-      conversation = await createConversation(contact.id, channelId);
+      conversation = await createConversation(contact.id, channelId, startTriage ? 'pending' : null);
+      justCreated = true;
     } catch (err) {
       if (err.code !== UNIQUE_VIOLATION) {
         throw err;
@@ -51,6 +55,12 @@ async function ingestInboundMessage({
       throw err;
     }
     return { contact, conversation, message: null };
+  }
+
+  if (justCreated && conversation.triageState === 'pending') {
+    await sendTriageQuestion(conversation.id, channelId);
+  } else if (!justCreated && conversation.triageState === 'pending') {
+    conversation = await processTriageReply(conversation, channelId, content);
   }
 
   const conversationWithContact = {

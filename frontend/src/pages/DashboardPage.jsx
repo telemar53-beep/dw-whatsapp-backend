@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
+import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import QueueList from '../components/QueueList';
 import MyConversationsList from '../components/MyConversationsList';
 import ConversationView from '../components/ConversationView';
@@ -16,6 +17,7 @@ function DashboardPage() {
   const { agent, logout } = useAuth();
   const queue = useQueue();
   const myConversations = useMyConversations();
+  const { muted, toggleMuted } = useQueueNotificationSound();
   const [selectedId, setSelectedId] = useState(null);
   const [transferringId, setTransferringId] = useState(null);
   const [changingPassword, setChangingPassword] = useState(false);
@@ -50,6 +52,14 @@ function DashboardPage() {
           <Link to="/metrics" className="text-sm text-gray-500 hover:underline">
             Métricas
           </Link>
+          <button
+            onClick={toggleMuted}
+            aria-pressed={muted}
+            title={muted ? 'Ativar som de notificações' : 'Mutar som de notificações'}
+            className="text-sm text-gray-500 hover:underline"
+          >
+            {muted ? '🔕 Som mutado' : '🔔 Som ativado'}
+          </button>
           <button onClick={() => setChangingPassword(true)} className="text-sm text-gray-500 hover:underline">
             Trocar senha
           </button>

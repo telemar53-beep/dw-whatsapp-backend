@@ -9,6 +9,7 @@ import { useMyConversations } from '../hooks/useMyConversations';
 import { useChannels } from '../hooks/useChannels';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
+import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useQueue');
@@ -18,6 +19,7 @@ vi.mock('../hooks/useAgents', () => ({ useAgents: () => [] }));
 vi.mock('../hooks/usePresence', () => ({ usePresence: () => new Set() }));
 vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
+vi.mock('../hooks/useQueueNotificationSound');
 vi.mock('../components/StartConversationModal', () => ({
   default: ({ onCreated }) => (
     <button
@@ -40,6 +42,7 @@ beforeEach(() => {
   // unmocked fetch via the real useConversationMessages/services/api.
   useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
+  useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted: vi.fn() });
 });
 
 function renderDashboard() {
@@ -215,5 +218,32 @@ describe('DashboardPage', () => {
     renderDashboard();
     expect(screen.getByText('Equipe')).toBeInTheDocument();
     expect(screen.getByText(/nenhum atendente cadastrado/i)).toBeInTheDocument();
+  });
+
+  test('shows the sound toggle button reflecting the unmuted state', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.getByRole('button', { name: /som ativado/i })).toBeInTheDocument();
+  });
+
+  test('shows the sound toggle button reflecting the muted state', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    useQueueNotificationSound.mockReturnValue({ muted: true, toggleMuted: vi.fn() });
+    renderDashboard();
+    expect(screen.getByRole('button', { name: /som mutado/i })).toBeInTheDocument();
+  });
+
+  test('clicking the sound toggle button calls toggleMuted', async () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    const toggleMuted = vi.fn();
+    useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted });
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('button', { name: /som ativado/i }));
+
+    expect(toggleMuted).toHaveBeenCalledTimes(1);
   });
 });

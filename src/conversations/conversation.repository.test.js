@@ -492,4 +492,21 @@ describe('conversation repository', () => {
     const result = await activateConversation('00000000-0000-0000-0000-000000000000');
     expect(result).toBeNull();
   });
+
+  test('listWaitingConversations does not return silent conversations', async () => {
+    await createConversation(contactId, channelId, null, 'silent');
+
+    const waiting = await listWaitingConversations();
+
+    expect(waiting).toEqual([]);
+  });
+
+  test('findOpenConversation finds a silent conversation', async () => {
+    const created = await createConversation(contactId, channelId, null, 'silent');
+
+    const found = await findOpenConversation(contactId, channelId);
+
+    expect(found.id).toBe(created.id);
+    expect(found.status).toBe('silent');
+  });
 });

@@ -2,8 +2,9 @@ const express = require('express');
 const { verifySgpApiKey, findSgpDispatchByReferenceId, createSgpDispatch } = require('../integrations/sgp-integration.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
-const { findOpenConversation, createConversation } = require('../conversations/conversation.repository');
+const { findOpenConversation, createConversation, getConversationWithContact } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { emitToAgent } = require('../realtime/socket-server');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 
 const router = express.Router();
@@ -80,6 +81,11 @@ router.post('/messages', requireSgpApiKey, async (req, res) => {
   }
 
   const message = await enqueueOutboundMessage({ conversationId: conversation.id, channelId: channel.id, content });
+
+  if (conversation.assignedAgentId) {
+    const conversationWithContact = await getConversationWithContact(conversation.id);
+    emitToAgent(conversation.assignedAgentId, 'message:new', { conversation: conversationWithContact, message });
+  }
 
   let dispatch;
   try {

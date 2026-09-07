@@ -4,6 +4,7 @@ jest.mock('../conversations/contact.repository');
 jest.mock('../conversations/conversation.repository');
 jest.mock('../queue/outbound-queue');
 jest.mock('../whatsapp-adapters/baileys.manager');
+jest.mock('../realtime/socket-server');
 const request = require('supertest');
 const express = require('express');
 const {
@@ -13,8 +14,9 @@ const {
 } = require('../integrations/sgp-integration.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
-const { findOpenConversation, createConversation } = require('../conversations/conversation.repository');
+const { findOpenConversation, createConversation, getConversationWithContact } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { emitToAgent } = require('../realtime/socket-server');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const integrationsSgpRoutes = require('./integrations-sgp.routes');
 
@@ -222,6 +224,33 @@ describe('POST /api/integrations/sgp/messages', () => {
 
       expect(res.status).toBe(202);
       expect(res.body).toEqual({ conversationId: 'conv-1', messageId: 'msg-1' });
+    });
+
+    test('emits message:new to the assigned agent when reusing an already-assigned conversation', async () => {
+      findOpenConversation.mockResolvedValue({ id: 'conv-assigned', status: 'assigned', assignedAgentId: 'agent-9' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-assigned', assignedAgentId: 'agent-9' });
+
+      await request(buildApp())
+        .post('/api/integrations/sgp/messages')
+        .set('Authorization', 'Bearer key')
+        .send(VALID_BODY);
+
+      expect(emitToAgent).toHaveBeenCalledWith('agent-9', 'message:new', {
+        conversation: { id: 'conv-assigned', assignedAgentId: 'agent-9' },
+        message: { id: 'msg-1' },
+      });
+    });
+
+    test('does not emit anything when the reused conversation has no assigned agent', async () => {
+      findOpenConversation.mockResolvedValue({ id: 'conv-silent', status: 'silent', assignedAgentId: null });
+
+      await request(buildApp())
+        .post('/api/integrations/sgp/messages')
+        .set('Authorization', 'Bearer key')
+        .send(VALID_BODY);
+
+      expect(emitToAgent).not.toHaveBeenCalled();
+      expect(getConversationWithContact).not.toHaveBeenCalled();
     });
   });
 });

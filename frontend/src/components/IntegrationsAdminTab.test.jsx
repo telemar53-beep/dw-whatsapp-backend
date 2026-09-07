@@ -81,4 +81,21 @@ describe('IntegrationsAdminTab', () => {
 
     expect(await screen.findByText('Falha ao salvar')).toBeInTheDocument();
   });
+
+  test('unchecking Ativo and saving sends enabled: false', async () => {
+    const refresh = vi.fn();
+    useSgpIntegration.mockReturnValue({
+      integration: { configured: true, channelId: 'channel-1', enabled: true, hasApiKey: true },
+      refresh,
+    });
+    api.saveSgpIntegration.mockResolvedValue({ configured: true, channelId: 'channel-1', enabled: false, hasApiKey: true });
+    render(<IntegrationsAdminTab />);
+
+    await userEvent.click(screen.getByLabelText(/ativo/i));
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    await waitFor(() =>
+      expect(api.saveSgpIntegration).toHaveBeenCalledWith({ channelId: 'channel-1', enabled: false }, 'tok-123')
+    );
+  });
 });

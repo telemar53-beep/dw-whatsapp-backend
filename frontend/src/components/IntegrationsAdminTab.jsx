@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSgpIntegration } from '../hooks/useSgpIntegration';
 import { useChannels } from '../hooks/useChannels';
@@ -22,19 +22,23 @@ function IntegrationsAdminTab() {
   const [rotating, setRotating] = useState(false);
   const [generatedKey, setGeneratedKey] = useState(null);
 
-  const selectedChannelId = channelId || (integration && integration.channelId) || '';
-  const selectedEnabled = channelId ? enabled : integration ? integration.enabled !== false : enabled;
+  useEffect(() => {
+    if (integration && integration.configured) {
+      setChannelId(integration.channelId);
+      setEnabled(integration.enabled);
+    }
+  }, [integration]);
 
   async function handleSave(event) {
     event.preventDefault();
-    if (!selectedChannelId) {
+    if (!channelId) {
       setError('Escolha um canal');
       return;
     }
     setError(null);
     setSaving(true);
     try {
-      await saveSgpIntegration({ channelId: selectedChannelId, enabled: selectedEnabled }, token);
+      await saveSgpIntegration({ channelId, enabled }, token);
       await refresh();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao salvar a integração');
@@ -66,7 +70,7 @@ function IntegrationsAdminTab() {
           <label htmlFor="sgp-channel" className={labelClass}>
             Canal
           </label>
-          <select id="sgp-channel" value={selectedChannelId} onChange={(e) => setChannelId(e.target.value)} className={inputClass}>
+          <select id="sgp-channel" value={channelId} onChange={(e) => setChannelId(e.target.value)} className={inputClass}>
             <option value="">Selecione um canal</option>
             {baileysChannels.map((channel) => (
               <option key={channel.id} value={channel.id}>
@@ -78,7 +82,7 @@ function IntegrationsAdminTab() {
         <label className="flex items-center gap-2 text-sm text-ink-950/70">
           <input
             type="checkbox"
-            checked={selectedEnabled}
+            checked={enabled}
             onChange={(e) => setEnabled(e.target.checked)}
             className="h-4 w-4 accent-teal-signal"
           />

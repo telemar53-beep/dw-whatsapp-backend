@@ -1483,13 +1483,6 @@ describe('DELETE /api/admin/templates/:id', () => {
     const res = await request(buildApp()).delete('/api/admin/templates/tpl-1').set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
     expect(res.status).toBe(404);
   });
-
-  test('returns 502 with Meta\'s own error message when the Meta delete call fails', async () => {
-    deleteTemplate.mockRejectedValue({ response: { data: { error: { message: 'Object does not exist' } } } });
-    const res = await request(buildApp()).delete('/api/admin/templates/tpl-1').set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
-    expect(res.status).toBe(502);
-    expect(res.body.error).toBe('Object does not exist');
-  });
 });
 
 describe('POST /api/admin/templates/sync', () => {
@@ -1567,19 +1560,11 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  try {
-    const deleted = await deleteTemplate(req.params.id);
-    if (!deleted) {
-      return res.status(404).json({ error: 'Template not found' });
-    }
-    res.status(204).send();
-  } catch (err) {
-    const metaMessage = metaErrorMessage(err);
-    if (metaMessage) {
-      return res.status(502).json({ error: metaMessage });
-    }
-    throw err;
+  const deleted = await deleteTemplate(req.params.id);
+  if (!deleted) {
+    return res.status(404).json({ error: 'Template not found' });
   }
+  res.status(204).send();
 });
 
 router.post('/sync', requireAuth, requireRole('admin'), async (req, res) => {
@@ -1608,7 +1593,7 @@ module.exports = router;
 - [ ] **Step 9: Run the tests to verify they pass**
 
 Run: `npm test -- admin-templates.routes.test.js`
-Expected: PASS, all 13 tests green.
+Expected: PASS, all 12 tests green.
 
 - [ ] **Step 10: Mount both routers in `src/server.js`**
 

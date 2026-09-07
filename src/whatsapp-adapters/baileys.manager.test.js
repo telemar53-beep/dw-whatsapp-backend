@@ -175,6 +175,90 @@ describe('baileys.manager', () => {
       });
     });
 
+    test('ingests a buttons message from a verified business account', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511988887777@s.whatsapp.net', fromMe: false, id: 'BAILEYS_BTN_1' },
+            pushName: 'Banco Exemplo',
+            message: {
+              buttonsMessage: {
+                contentText: 'Seu cartao foi aprovado. Toque no botao abaixo para ativar.',
+                footerText: 'Banco Exemplo',
+                buttons: [{ buttonId: '1', buttonText: { displayText: 'Ativar' }, type: 1 }],
+              },
+            },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511988887777',
+        contactDisplayName: 'Banco Exemplo',
+        whatsappMessageId: 'BAILEYS_BTN_1',
+        messageType: 'text',
+        content: 'Seu cartao foi aprovado. Toque no botao abaixo para ativar.',
+      });
+    });
+
+    test('ingests a hydrated template message from a verified business account', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511988886666@s.whatsapp.net', fromMe: false, id: 'BAILEYS_TPL_1' },
+            pushName: 'Banco Exemplo',
+            message: {
+              templateMessage: {
+                hydratedFourRowTemplate: {
+                  hydratedContentText: 'Sua fatura vence em 3 dias.',
+                  hydratedButtons: [{ quickReplyButton: { displayText: 'Ver fatura', id: '1' } }],
+                },
+              },
+            },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511988886666',
+        contactDisplayName: 'Banco Exemplo',
+        whatsappMessageId: 'BAILEYS_TPL_1',
+        messageType: 'text',
+        content: 'Sua fatura vence em 3 dias.',
+      });
+    });
+
+    test('ingests an interactive message from a verified business account', async () => {
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511988885555@s.whatsapp.net', fromMe: false, id: 'BAILEYS_INT_1' },
+            pushName: 'Empresa Exemplo',
+            message: {
+              interactiveMessage: {
+                body: { text: 'Seu treino de hoje esta liberado.' },
+                footer: { text: 'Empresa Exemplo' },
+              },
+            },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith({
+        channelId: 'channel-3',
+        fromPhoneNumber: '5511988885555',
+        contactDisplayName: 'Empresa Exemplo',
+        whatsappMessageId: 'BAILEYS_INT_1',
+        messageType: 'text',
+        content: 'Seu treino de hoje esta liberado.',
+      });
+    });
+
     test('ignores messages sent by the connection itself', async () => {
       await sock.handlers['messages.upsert']({
         type: 'notify',

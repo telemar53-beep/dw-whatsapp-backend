@@ -35,6 +35,22 @@ function extractTextContent(message) {
   if (message.extendedTextMessage && message.extendedTextMessage.text) {
     return message.extendedTextMessage.text;
   }
+  // Verified/official WhatsApp Business accounts (banks, delivery, etc.)
+  // commonly send button/template/interactive messages instead of plain
+  // text. This project has no button-tap support, so only the body text
+  // is extracted; the buttons themselves are dropped.
+  if (message.buttonsMessage) {
+    return message.buttonsMessage.contentText || message.buttonsMessage.text || null;
+  }
+  if (message.templateMessage) {
+    const hydrated = message.templateMessage.hydratedFourRowTemplate || message.templateMessage.hydratedTemplate;
+    if (hydrated && hydrated.hydratedContentText) {
+      return hydrated.hydratedContentText;
+    }
+  }
+  if (message.interactiveMessage && message.interactiveMessage.body) {
+    return message.interactiveMessage.body.text || null;
+  }
   return null;
 }
 

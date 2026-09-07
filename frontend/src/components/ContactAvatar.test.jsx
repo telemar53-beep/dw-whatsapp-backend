@@ -27,4 +27,19 @@ describe('ContactAvatar', () => {
     render(<ContactAvatar contactId="c1" avatarPath={null} displayName={null} phoneNumber="+5511999990000" />);
     expect(screen.getByText('5')).toBeInTheDocument();
   });
+
+  test('falls back to a question mark when there is neither a display name nor a phone number', () => {
+    render(<ContactAvatar contactId="c1" avatarPath={null} displayName={null} phoneNumber={null} />);
+    expect(screen.getByText('?')).toBeInTheDocument();
+  });
+
+  test('falls back to a question mark when the phone number has no digits after stripping', () => {
+    render(<ContactAvatar contactId="c1" avatarPath={null} displayName={null} phoneNumber="+" />);
+    expect(screen.getByText('?')).toBeInTheDocument();
+  });
+
+  test('falls back past a whitespace-only display name to the phone digit', () => {
+    render(<ContactAvatar contactId="c1" avatarPath={null} displayName="   " phoneNumber="+5511999990000" />);
+    expect(screen.getByText('5')).toBeInTheDocument();
+  });
 });

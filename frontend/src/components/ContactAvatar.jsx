@@ -2,7 +2,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { avatarUrl } from '../services/api';
 
 function initialFor(displayName, phoneNumber) {
-  if (displayName) return displayName.trim().charAt(0).toUpperCase();
+  const trimmedName = displayName ? displayName.trim() : '';
+  if (trimmedName) return trimmedName.charAt(0).toUpperCase();
   if (phoneNumber) {
     const digitsOnly = phoneNumber.replace(/\D/g, '');
     if (digitsOnly) return digitsOnly.charAt(0);

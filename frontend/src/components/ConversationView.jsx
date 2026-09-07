@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
@@ -16,6 +16,11 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const [showingHistory, setShowingHistory] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const [contactOverride, setContactOverride] = useState(null);
+
+  useEffect(() => {
+    setContactOverride(null);
+    setEditingContact(false);
+  }, [conversation.id]);
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
   const isMine = conversation.assignedAgentId === agent.id;
@@ -93,7 +98,11 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
       )}
       {editingContact && (
         <EditContactModal
-          conversation={conversation}
+          conversation={{
+            ...conversation,
+            contactDisplayName: contactOverride ? contactOverride.displayName : conversation.contactDisplayName,
+            contactCityId: contactOverride ? contactOverride.cityId : conversation.contactCityId,
+          }}
           onClose={() => setEditingContact(false)}
           onSaved={(updated) => setContactOverride(updated)}
         />

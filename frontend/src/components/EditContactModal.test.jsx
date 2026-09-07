@@ -62,7 +62,7 @@ describe('EditContactModal', () => {
         'tok-123'
       )
     );
-    expect(onSaved).toHaveBeenCalledWith({ displayName: 'Carlos Editado', cityName: 'São Luís' });
+    expect(onSaved).toHaveBeenCalledWith({ displayName: 'Carlos Editado', cityId: 'city-2', cityName: 'São Luís' });
     expect(onClose).toHaveBeenCalled();
   });
 

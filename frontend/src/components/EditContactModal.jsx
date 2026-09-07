@@ -18,7 +18,7 @@ function EditContactModal({ conversation, onClose, onSaved }) {
     try {
       const updated = await updateContact(conversation.contactId, { displayName, cityId: cityId || null }, token);
       const cityName = updated.cityId ? cities.find((c) => c.id === updated.cityId)?.name || null : null;
-      onSaved({ displayName: updated.displayName, cityName });
+      onSaved({ displayName: updated.displayName, cityId: updated.cityId, cityName });
       onClose();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao salvar');

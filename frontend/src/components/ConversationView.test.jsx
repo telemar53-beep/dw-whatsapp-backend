@@ -243,4 +243,30 @@ describe('ConversationView', () => {
 
     await waitFor(() => expect(screen.getByText('Carlos Editado')).toBeInTheDocument());
   });
+
+  test('does not carry a contact-name override over to a different conversation', async () => {
+    api.updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Carlos Editado', cityId: null });
+    const { rerender } = render(
+      <ConversationView
+        conversation={{ id: 'c1', contactId: 'contact-1', status: 'waiting', assignedAgentId: null, contactDisplayName: 'Carlos' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /editar cliente/i }));
+    await userEvent.clear(screen.getByLabelText(/nome/i));
+    await userEvent.type(screen.getByLabelText(/nome/i), 'Carlos Editado');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    await waitFor(() => expect(screen.getByText('Carlos Editado')).toBeInTheDocument());
+
+    rerender(
+      <ConversationView
+        conversation={{ id: 'c2', contactId: 'contact-2', status: 'waiting', assignedAgentId: null, contactDisplayName: 'Maria' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Maria')).toBeInTheDocument();
+    expect(screen.queryByText('Carlos Editado')).not.toBeInTheDocument();
+  });
 });

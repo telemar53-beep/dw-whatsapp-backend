@@ -111,6 +111,10 @@ export function avatarUrl(contactId, token) {
   return `${API_BASE_URL}/api/contacts/${contactId}/avatar?token=${token}`;
 }
 
+export function updateContact(id, payload, token) {
+  return apiFetch(`/api/contacts/${id}`, { method: 'PATCH', body: payload, token });
+}
+
 export function listAgentsAdmin(token) {
   return apiFetch('/api/admin/agents', { token });
 }

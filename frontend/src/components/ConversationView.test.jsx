@@ -5,11 +5,13 @@ import ConversationView from './ConversationView';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
+import { useCities } from '../hooks/useCities';
 import * as api from '../services/api';
 
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
+vi.mock('../hooks/useCities');
 vi.mock('../services/api');
 
 beforeEach(() => {
@@ -20,6 +22,7 @@ beforeEach(() => {
     sendMessage: vi.fn(),
   });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
+  useCities.mockReturnValue({ cities: [], refresh: vi.fn() });
 });
 
 describe('ConversationView', () => {
@@ -209,5 +212,35 @@ describe('ConversationView', () => {
   test('falls back to "Conversa" in the header when the contact has no name or phone number yet', () => {
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
     expect(screen.getByText('Conversa')).toBeInTheDocument();
+  });
+
+  test('clicking the contact name/avatar opens the edit-contact modal', async () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', contactId: 'contact-1', status: 'waiting', assignedAgentId: null, contactDisplayName: 'Carlos' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /editar cliente/i }));
+
+    expect(screen.getByText('Editar cliente')).toBeInTheDocument();
+  });
+
+  test('saving in the edit-contact modal updates the header immediately', async () => {
+    api.updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Carlos Editado', cityId: null });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', contactId: 'contact-1', status: 'waiting', assignedAgentId: null, contactDisplayName: 'Carlos' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /editar cliente/i }));
+    await userEvent.clear(screen.getByLabelText(/nome/i));
+    await userEvent.type(screen.getByLabelText(/nome/i), 'Carlos Editado');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    await waitFor(() => expect(screen.getByText('Carlos Editado')).toBeInTheDocument());
   });
 });

@@ -7,15 +7,22 @@ import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
 import ConversationHistoryModal from './ConversationHistoryModal';
 import ContactAvatar from './ContactAvatar';
+import EditContactModal from './EditContactModal';
 
 function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
   const { messages, sendMessage } = useConversationMessages(conversation.id);
   const { quickReplies } = useQuickReplies();
   const [showingHistory, setShowingHistory] = useState(false);
+  const [editingContact, setEditingContact] = useState(false);
+  const [contactOverride, setContactOverride] = useState(null);
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
   const isMine = conversation.assignedAgentId === agent.id;
+  const displayName = contactOverride ? contactOverride.displayName : conversation.contactDisplayName;
+  const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;
+  const nameLabel = displayName || conversation.contactPhoneNumber || 'Conversa';
+  const headerLabel = cityName ? `${nameLabel} - ${cityName}` : nameLabel;
 
   return (
     <div className="flex h-full flex-col">
@@ -24,15 +31,15 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           <button onClick={onBack} className="rounded p-3 text-gray-500 md:hidden" aria-label="Voltar para a lista">
             ←
           </button>
-          <ContactAvatar
-            contactId={conversation.contactId}
-            avatarPath={conversation.contactAvatarPath}
-            displayName={conversation.contactDisplayName}
-            phoneNumber={conversation.contactPhoneNumber}
-          />
-          <h3 className="font-semibold text-gray-800">
-            {conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa'}
-          </h3>
+          <button onClick={() => setEditingContact(true)} className="flex items-center gap-2" aria-label="Editar cliente">
+            <ContactAvatar
+              contactId={conversation.contactId}
+              avatarPath={conversation.contactAvatarPath}
+              displayName={displayName}
+              phoneNumber={conversation.contactPhoneNumber}
+            />
+            <h3 className="font-semibold text-gray-800">{headerLabel}</h3>
+          </button>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -83,6 +90,13 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
       {isMine && <MessageInput onSend={sendMessage} quickReplies={quickReplies} />}
       {showingHistory && (
         <ConversationHistoryModal contactId={conversation.contactId} onClose={() => setShowingHistory(false)} />
+      )}
+      {editingContact && (
+        <EditContactModal
+          conversation={conversation}
+          onClose={() => setEditingContact(false)}
+          onSaved={(updated) => setContactOverride(updated)}
+        />
       )}
     </div>
   );

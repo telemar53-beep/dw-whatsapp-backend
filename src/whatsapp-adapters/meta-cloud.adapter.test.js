@@ -518,6 +518,41 @@ describe('sendTemplateMessage', () => {
       { headers: { Authorization: 'Bearer token-abc' } }
     );
   });
+
+  test('includes a header component with the media link when headerType/headerLink are provided', async () => {
+    axios.post.mockResolvedValue({ data: { messages: [{ id: 'wamid.TPL3' }] } });
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+
+    await sendTemplateMessage(channel, '5511999998888', {
+      name: 'aviso_cobranca', language: 'pt_BR', variables: ['João', 'R$150,00'],
+      headerType: 'document', headerLink: 'https://boleto.link/xyz.pdf',
+    });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      {
+        messaging_product: 'whatsapp', to: '5511999998888', type: 'template',
+        template: {
+          name: 'aviso_cobranca', language: { code: 'pt_BR' },
+          components: [
+            { type: 'header', parameters: [{ type: 'document', document: { link: 'https://boleto.link/xyz.pdf' } }] },
+            { type: 'body', parameters: [{ type: 'text', text: 'João' }, { type: 'text', text: 'R$150,00' }] },
+          ],
+        },
+      },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+  });
+
+  test('omits the header component when headerType/headerLink are not provided', async () => {
+    axios.post.mockResolvedValue({ data: { messages: [{ id: 'wamid.TPL4' }] } });
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+
+    await sendTemplateMessage(channel, '5511999998888', { name: 'boas_vindas', language: 'pt_BR', variables: [] });
+
+    const lastCall = axios.post.mock.calls[axios.post.mock.calls.length - 1];
+    expect(lastCall[1].template.components.some((c) => c.type === 'header')).toBe(false);
+  });
 });
 
 describe('parseStatusUpdates', () => {

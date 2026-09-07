@@ -152,9 +152,15 @@ async function deleteMetaTemplate(channel, { name, metaTemplateId }) {
   });
 }
 
-async function sendTemplateMessage(channel, toPhoneNumber, { name, language, variables }) {
+async function sendTemplateMessage(channel, toPhoneNumber, { name, language, variables, headerType, headerLink }) {
   const { phoneNumberId, accessToken } = channel.config;
-  const components = variables.length > 0 ? [{ type: 'body', parameters: variables.map((v) => ({ type: 'text', text: v })) }] : [];
+  const components = [];
+  if (headerType && headerLink) {
+    components.push({ type: 'header', parameters: [{ type: headerType, [headerType]: { link: headerLink } }] });
+  }
+  if (variables.length > 0) {
+    components.push({ type: 'body', parameters: variables.map((v) => ({ type: 'text', text: v })) });
+  }
   const response = await axios.post(
     `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
     { messaging_product: 'whatsapp', to: toPhoneNumber, type: 'template', template: { name, language: { code: language }, components } },

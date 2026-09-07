@@ -24,6 +24,12 @@ import {
   deleteSector,
   setAgentSectors,
   getMetrics,
+  getTriage,
+  updateTriageConfig,
+  createTriageOption,
+  updateTriageOption,
+  deleteTriageOption,
+  setChannelTriageEnabled,
 } from './api';
 
 beforeEach(() => {
@@ -356,6 +362,81 @@ describe('getMetrics', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/metrics?period=7d',
       expect.objectContaining({ method: 'GET' })
+    );
+  });
+});
+
+describe('getTriage', () => {
+  test('fetches the triage configuration and options', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await getTriage('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/triage',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+});
+
+describe('updateTriageConfig', () => {
+  test('puts the triage config payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await updateTriageConfig({ questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/triage/config',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 }),
+      })
+    );
+  });
+});
+
+describe('createTriageOption', () => {
+  test('posts the new triage option payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await createTriageOption({ optionNumber: 1, sectorId: 'sector-1', keywords: ['fatura'] }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/triage/options',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ optionNumber: 1, sectorId: 'sector-1', keywords: ['fatura'] }),
+      })
+    );
+  });
+});
+
+describe('updateTriageOption', () => {
+  test('patches the triage option payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await updateTriageOption('opt-1', { optionNumber: 2, sectorId: 'sector-2', keywords: ['internet'] }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/triage/options/opt-1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ optionNumber: 2, sectorId: 'sector-2', keywords: ['internet'] }),
+      })
+    );
+  });
+});
+
+describe('deleteTriageOption', () => {
+  test('sends a DELETE request for the triage option', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
+    await deleteTriageOption('opt-1', 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/triage/options/opt-1',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+  });
+});
+
+describe('setChannelTriageEnabled', () => {
+  test('patches the channel triageEnabled flag', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await setChannelTriageEnabled('channel-1', true, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/channels/channel-1',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ triageEnabled: true }) })
     );
   });
 });

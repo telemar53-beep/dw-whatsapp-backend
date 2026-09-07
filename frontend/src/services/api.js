@@ -174,3 +174,27 @@ export function setAgentSectors(agentId, sectorIds, token) {
 export function getMetrics(period, token) {
   return apiFetch(`/api/metrics?period=${period}`, { token });
 }
+
+export function getTriage(token) {
+  return apiFetch('/api/admin/triage', { token });
+}
+
+export function updateTriageConfig(payload, token) {
+  return apiFetch('/api/admin/triage/config', { method: 'PUT', body: payload, token });
+}
+
+export function createTriageOption(payload, token) {
+  return apiFetch('/api/admin/triage/options', { method: 'POST', body: payload, token });
+}
+
+export function updateTriageOption(id, payload, token) {
+  return apiFetch(`/api/admin/triage/options/${id}`, { method: 'PATCH', body: payload, token });
+}
+
+export function deleteTriageOption(id, token) {
+  return apiFetch(`/api/admin/triage/options/${id}`, { method: 'DELETE', token });
+}
+
+export function setChannelTriageEnabled(channelId, triageEnabled, token) {
+  return apiFetch(`/api/admin/channels/${channelId}`, { method: 'PATCH', body: { triageEnabled }, token });
+}

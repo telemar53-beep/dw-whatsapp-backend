@@ -4,6 +4,7 @@ const { findOrCreateContactByPhoneNumber, setContactAvatarPath, updateContact } 
 const { createAgent } = require('../agents/agent.repository');
 const { createSector } = require('../sectors/sector.repository');
 const { createCity } = require('../cities/city.repository');
+const { createMessage } = require('./message.repository');
 const {
   findOpenConversation,
   createConversation,
@@ -174,6 +175,59 @@ describe('conversation repository', () => {
     expect(result.contactCityName).toBeNull();
   });
 
+  test('getConversationWithContact includes the most recent message preview and time', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    await createMessage({
+      conversationId: conversation.id,
+      direction: 'inbound',
+      content: 'Primeira mensagem',
+      whatsappMessageId: 'wamid.preview1',
+      status: 'received',
+    });
+    await createMessage({
+      conversationId: conversation.id,
+      direction: 'inbound',
+      content: 'Segunda mensagem',
+      whatsappMessageId: 'wamid.preview2',
+      status: 'received',
+    });
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.lastMessageContent).toBe('Segunda mensagem');
+    expect(result.lastMessageType).toBe('text');
+    expect(result.lastMessageAt).toBeDefined();
+  });
+
+  test('getConversationWithContact has null last-message fields when the conversation has no messages yet', async () => {
+    const conversation = await createConversation(contactId, channelId);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.lastMessageContent).toBeNull();
+    expect(result.lastMessageType).toBeNull();
+    expect(result.lastMessageAt).toBeNull();
+  });
+
+  test('getConversationWithContact surfaces the message type when a media message has no caption', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    await createMessage({
+      conversationId: conversation.id,
+      direction: 'inbound',
+      content: null,
+      whatsappMessageId: 'wamid.preview3',
+      status: 'received',
+      messageType: 'image',
+      mediaPath: 'foo.jpg',
+      mediaMimeType: 'image/jpeg',
+    });
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.lastMessageContent).toBeNull();
+    expect(result.lastMessageType).toBe('image');
+  });
+
   test('listWaitingConversations returns only waiting conversations with contact info, oldest first', async () => {
     const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
     const waitingConversation = await createConversation(contactId, channelId);
@@ -206,6 +260,23 @@ describe('conversation repository', () => {
 
     expect(waiting[0].contactCityId).toBe(city.id);
     expect(waiting[0].contactCityName).toBe('Bahia');
+  });
+
+  test('listWaitingConversations includes the last message preview and time', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    await createMessage({
+      conversationId: conversation.id,
+      direction: 'inbound',
+      content: 'Oi, tudo bem?',
+      whatsappMessageId: 'wamid.preview4',
+      status: 'received',
+    });
+
+    const waiting = await listWaitingConversations();
+
+    expect(waiting[0].lastMessageContent).toBe('Oi, tudo bem?');
+    expect(waiting[0].lastMessageType).toBe('text');
+    expect(waiting[0].lastMessageAt).toBeDefined();
   });
 
   test('listConversationsByAgent returns only that agent non-closed conversations', async () => {
@@ -244,6 +315,23 @@ describe('conversation repository', () => {
 
     expect(mine[0].contactCityId).toBe(city.id);
     expect(mine[0].contactCityName).toBe('Bahia');
+  });
+
+  test('listConversationsByAgent includes the last message preview and time', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'listagent6@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+    await createMessage({
+      conversationId: conversation.id,
+      direction: 'outbound',
+      content: 'Como posso ajudar?',
+      status: 'sent',
+    });
+
+    const mine = await listConversationsByAgent(agent.id);
+
+    expect(mine[0].lastMessageContent).toBe('Como posso ajudar?');
+    expect(mine[0].lastMessageType).toBe('text');
   });
 
   test('listClosedConversationsByContact returns only closed conversations, most recent first', async () => {

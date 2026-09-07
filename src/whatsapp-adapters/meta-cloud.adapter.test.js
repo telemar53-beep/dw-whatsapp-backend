@@ -335,7 +335,7 @@ describe('downloadMetaMedia', () => {
 
 jest.mock('axios');
 const axios = require('axios');
-const { sendTextMessage, downloadMetaMedia, sendMediaMessage } = require('./meta-cloud.adapter');
+const { sendTextMessage, downloadMetaMedia, sendMediaMessage, createMetaTemplate, listMetaTemplates, deleteMetaTemplate, sendTemplateMessage, parseTemplateStatusUpdates } = require('./meta-cloud.adapter');
 
 describe('sendTextMessage', () => {
   test('posts to the Graph API and returns the WhatsApp message id', async () => {
@@ -426,5 +426,117 @@ describe('sendMediaMessage', () => {
       },
       { headers: { Authorization: 'Bearer token-abc' } }
     );
+  });
+});
+
+describe('createMetaTemplate', () => {
+  test('posts the template to the Graph API and returns its id and status', async () => {
+    axios.post.mockResolvedValue({ data: { id: 'meta-tpl-1', status: 'PENDING' } });
+    const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
+
+    const result = await createMetaTemplate(channel, {
+      name: 'fatura_vencida', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá {{1}}, sua fatura venceu.',
+    });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/waba-1/message_templates',
+      { name: 'fatura_vencida', category: 'UTILITY', language: 'pt_BR', components: [{ type: 'BODY', text: 'Olá {{1}}, sua fatura venceu.' }] },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+    expect(result).toEqual({ metaTemplateId: 'meta-tpl-1', status: 'PENDING' });
+  });
+});
+
+describe('listMetaTemplates', () => {
+  test('fetches the WABA template list with the expected fields', async () => {
+    axios.get.mockResolvedValue({ data: { data: [{ id: 'meta-tpl-1', name: 'a', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED' }] } });
+    const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
+
+    const result = await listMetaTemplates(channel);
+
+    expect(axios.get).toHaveBeenCalledWith('https://graph.facebook.com/v20.0/waba-1/message_templates', {
+      headers: { Authorization: 'Bearer token-abc' },
+      params: { fields: 'id,name,language,category,status' },
+    });
+    expect(result).toEqual([{ id: 'meta-tpl-1', name: 'a', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED' }]);
+  });
+});
+
+describe('deleteMetaTemplate', () => {
+  test('calls the delete endpoint with name and hsm_id', async () => {
+    axios.delete.mockResolvedValue({ data: { success: true } });
+    const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
+
+    await deleteMetaTemplate(channel, { name: 'fatura_vencida', metaTemplateId: 'meta-tpl-1' });
+
+    expect(axios.delete).toHaveBeenCalledWith('https://graph.facebook.com/v20.0/waba-1/message_templates', {
+      headers: { Authorization: 'Bearer token-abc' },
+      params: { name: 'fatura_vencida', hsm_id: 'meta-tpl-1' },
+    });
+  });
+});
+
+describe('sendTemplateMessage', () => {
+  test('sends a template message with substituted body parameters', async () => {
+    axios.post.mockResolvedValue({ data: { messages: [{ id: 'wamid.TPL1' }] } });
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+
+    const result = await sendTemplateMessage(channel, '5511999998888', {
+      name: 'fatura_vencida', language: 'pt_BR', variables: ['João', 'R$150,00'],
+    });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      {
+        messaging_product: 'whatsapp', to: '5511999998888', type: 'template',
+        template: {
+          name: 'fatura_vencida', language: { code: 'pt_BR' },
+          components: [{ type: 'body', parameters: [{ type: 'text', text: 'João' }, { type: 'text', text: 'R$150,00' }] }],
+        },
+      },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+    expect(result).toEqual({ whatsappMessageId: 'wamid.TPL1' });
+  });
+
+  test('sends an empty components array for a template with zero variables', async () => {
+    axios.post.mockResolvedValue({ data: { messages: [{ id: 'wamid.TPL2' }] } });
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+
+    await sendTemplateMessage(channel, '5511999998888', { name: 'boas_vindas', language: 'pt_BR', variables: [] });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      {
+        messaging_product: 'whatsapp', to: '5511999998888', type: 'template',
+        template: { name: 'boas_vindas', language: { code: 'pt_BR' }, components: [] },
+      },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+  });
+});
+
+describe('parseTemplateStatusUpdates', () => {
+  test('extracts a template status update event', () => {
+    const webhookBody = {
+      entry: [{ id: 'waba-1', changes: [{ field: 'message_template_status_update', value: { message_template_id: '123', message_template_name: 'fatura_vencida', event: 'APPROVED' } }] }],
+    };
+    expect(parseTemplateStatusUpdates(webhookBody)).toEqual([{ metaTemplateId: '123', event: 'APPROVED', reason: null }]);
+  });
+
+  test('includes the rejection reason when present', () => {
+    const webhookBody = {
+      entry: [{ id: 'waba-1', changes: [{ field: 'message_template_status_update', value: { message_template_id: '456', event: 'REJECTED', reason: 'INVALID_FORMAT' } }] }],
+    };
+    expect(parseTemplateStatusUpdates(webhookBody)).toEqual([{ metaTemplateId: '456', event: 'REJECTED', reason: 'INVALID_FORMAT' }]);
+  });
+
+  test('ignores changes for other fields (e.g. messages)', () => {
+    const webhookBody = { entry: [{ id: 'waba-1', changes: [{ field: 'messages', value: { messages: [] } }] }] };
+    expect(parseTemplateStatusUpdates(webhookBody)).toEqual([]);
+  });
+
+  test('returns an empty array when there are no entries', () => {
+    expect(parseTemplateStatusUpdates({})).toEqual([]);
   });
 });

@@ -125,6 +125,62 @@ async function downloadMetaMedia(mediaId, accessToken) {
   return Buffer.from(fileResponse.data);
 }
 
+async function createMetaTemplate(channel, { name, category, language, bodyText }) {
+  const { accessToken, wabaId } = channel.config;
+  const response = await axios.post(
+    `https://graph.facebook.com/v20.0/${wabaId}/message_templates`,
+    { name, category, language, components: [{ type: 'BODY', text: bodyText }] },
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  return { metaTemplateId: response.data.id, status: response.data.status };
+}
+
+async function listMetaTemplates(channel) {
+  const { accessToken, wabaId } = channel.config;
+  const response = await axios.get(`https://graph.facebook.com/v20.0/${wabaId}/message_templates`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { fields: 'id,name,language,category,status' },
+  });
+  return response.data.data;
+}
+
+async function deleteMetaTemplate(channel, { name, metaTemplateId }) {
+  const { accessToken, wabaId } = channel.config;
+  await axios.delete(`https://graph.facebook.com/v20.0/${wabaId}/message_templates`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { name, hsm_id: metaTemplateId },
+  });
+}
+
+async function sendTemplateMessage(channel, toPhoneNumber, { name, language, variables }) {
+  const { phoneNumberId, accessToken } = channel.config;
+  const components = variables.length > 0 ? [{ type: 'body', parameters: variables.map((v) => ({ type: 'text', text: v })) }] : [];
+  const response = await axios.post(
+    `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+    { messaging_product: 'whatsapp', to: toPhoneNumber, type: 'template', template: { name, language: { code: language }, components } },
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  return { whatsappMessageId: response.data.messages[0].id };
+}
+
+function parseTemplateStatusUpdates(webhookBody) {
+  const updates = [];
+  const entries = webhookBody.entry || [];
+  for (const entry of entries) {
+    for (const change of entry.changes || []) {
+      if (change.field !== 'message_template_status_update') continue;
+      const value = change.value || {};
+      if (!value.message_template_id) continue;
+      updates.push({
+        metaTemplateId: String(value.message_template_id),
+        event: value.event,
+        reason: value.reason || null,
+      });
+    }
+  }
+  return updates;
+}
+
 module.exports = {
   verifyWebhookChallenge,
   verifySignature,
@@ -132,4 +188,9 @@ module.exports = {
   sendTextMessage,
   downloadMetaMedia,
   sendMediaMessage,
+  createMetaTemplate,
+  listMetaTemplates,
+  deleteMetaTemplate,
+  sendTemplateMessage,
+  parseTemplateStatusUpdates,
 };

@@ -1,8 +1,9 @@
 const { getPool, closePool } = require('../db/pool');
 const { createChannel } = require('../channels/channel.repository');
-const { findOrCreateContactByPhoneNumber, setContactAvatarPath } = require('./contact.repository');
+const { findOrCreateContactByPhoneNumber, setContactAvatarPath, updateContact } = require('./contact.repository');
 const { createAgent } = require('../agents/agent.repository');
 const { createSector } = require('../sectors/sector.repository');
+const { createCity } = require('../cities/city.repository');
 const {
   findOpenConversation,
   createConversation,
@@ -22,7 +23,7 @@ describe('conversation repository', () => {
   let channelId;
 
   beforeEach(async () => {
-    await getPool().query('TRUNCATE conversations, contacts, channels, agents, conversation_events, sectors CASCADE');
+    await getPool().query('TRUNCATE conversations, contacts, channels, agents, conversation_events, sectors, cities CASCADE');
     const contact = await findOrCreateContactByPhoneNumber('+5511977776666', 'Joao');
     const channel = await createChannel({
       type: 'meta_cloud',
@@ -153,6 +154,26 @@ describe('conversation repository', () => {
     expect(result.contactAvatarPath).toBeNull();
   });
 
+  test('getConversationWithContact includes the contact city', async () => {
+    const city = await createCity({ name: 'Bahia' });
+    await updateContact(contactId, { displayName: 'Joao', cityId: city.id });
+    const conversation = await createConversation(contactId, channelId);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.contactCityId).toBe(city.id);
+    expect(result.contactCityName).toBe('Bahia');
+  });
+
+  test('getConversationWithContact has null contactCityId/contactCityName when the contact has no city', async () => {
+    const conversation = await createConversation(contactId, channelId);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.contactCityId).toBeNull();
+    expect(result.contactCityName).toBeNull();
+  });
+
   test('listWaitingConversations returns only waiting conversations with contact info, oldest first', async () => {
     const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
     const waitingConversation = await createConversation(contactId, channelId);
@@ -174,6 +195,17 @@ describe('conversation repository', () => {
     const waiting = await listWaitingConversations();
 
     expect(waiting[0].contactAvatarPath).toBe('avatars/joao.jpg');
+  });
+
+  test('listWaitingConversations includes the contact city', async () => {
+    const city = await createCity({ name: 'Bahia' });
+    await updateContact(contactId, { displayName: 'Joao', cityId: city.id });
+    await createConversation(contactId, channelId);
+
+    const waiting = await listWaitingConversations();
+
+    expect(waiting[0].contactCityId).toBe(city.id);
+    expect(waiting[0].contactCityName).toBe('Bahia');
   });
 
   test('listConversationsByAgent returns only that agent non-closed conversations', async () => {
@@ -199,6 +231,19 @@ describe('conversation repository', () => {
     const mine = await listConversationsByAgent(agent.id);
 
     expect(mine[0].contactAvatarPath).toBe('avatars/joao.jpg');
+  });
+
+  test('listConversationsByAgent includes the contact city', async () => {
+    const city = await createCity({ name: 'Bahia' });
+    await updateContact(contactId, { displayName: 'Joao', cityId: city.id });
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'listagent5@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+
+    const mine = await listConversationsByAgent(agent.id);
+
+    expect(mine[0].contactCityId).toBe(city.id);
+    expect(mine[0].contactCityName).toBe('Bahia');
   });
 
   test('listClosedConversationsByContact returns only closed conversations, most recent first', async () => {

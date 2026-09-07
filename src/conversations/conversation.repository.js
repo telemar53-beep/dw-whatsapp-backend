@@ -21,6 +21,8 @@ function toConversationSummary(row) {
     contactPhoneNumber: row.contact_phone_number,
     contactDisplayName: row.contact_display_name,
     contactAvatarPath: row.contact_avatar_path,
+    contactCityId: row.contact_city_id,
+    contactCityName: row.contact_city_name,
     sectorName: row.sector_name,
   };
 }
@@ -122,10 +124,12 @@ async function getConversationWithContact(conversationId) {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
             s.name AS sector_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
      WHERE c.id = $1`,
     [conversationId]
   );
@@ -138,10 +142,12 @@ async function listWaitingConversations() {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
             s.name AS sector_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
      WHERE c.status = 'waiting'
      ORDER BY c.created_at ASC`
   );
@@ -153,10 +159,12 @@ async function listConversationsByAgent(agentId) {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
             s.name AS sector_name
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
      WHERE c.assigned_agent_id = $1 AND c.status <> 'closed'
      ORDER BY c.updated_at DESC`,
     [agentId]

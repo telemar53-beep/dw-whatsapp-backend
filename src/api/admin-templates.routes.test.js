@@ -14,13 +14,14 @@ jest.mock('../templates/template.service', () => {
     createTemplate: jest.fn(),
     deleteTemplate: jest.fn(),
     syncTemplatesForWaba: jest.fn(),
+    registerExistingTemplate: jest.fn(),
   };
 });
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { listTemplates } = require('../templates/template.repository');
-const { createTemplate, deleteTemplate, syncTemplatesForWaba, TemplateValidationError } = require('../templates/template.service');
+const { createTemplate, deleteTemplate, syncTemplatesForWaba, registerExistingTemplate, TemplateValidationError } = require('../templates/template.service');
 const adminTemplatesRoutes = require('./admin-templates.routes');
 
 function buildApp() {
@@ -137,5 +138,63 @@ describe('POST /api/admin/templates/sync', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
       .send({ wabaId: 'waba-1' });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/admin/templates/register-existing', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('returns 400 when channelId, name or language is missing', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/templates/register-existing')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ channelId: 'ch-1', name: 'aviso_cobranca' });
+    expect(res.status).toBe(400);
+    expect(registerExistingTemplate).not.toHaveBeenCalled();
+  });
+
+  test('registers the template and returns 201', async () => {
+    registerExistingTemplate.mockResolvedValue({ id: 'tpl-1', name: 'aviso_cobranca', headerType: 'document' });
+
+    const res = await request(buildApp())
+      .post('/api/admin/templates/register-existing')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ channelId: 'ch-1', name: 'aviso_cobranca', language: 'pt_BR', headerType: 'document' });
+
+    expect(registerExistingTemplate).toHaveBeenCalledWith({ channelId: 'ch-1', name: 'aviso_cobranca', language: 'pt_BR', headerType: 'document' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id: 'tpl-1', name: 'aviso_cobranca', headerType: 'document' });
+  });
+
+  test('returns 400 for a TemplateValidationError', async () => {
+    registerExistingTemplate.mockRejectedValue(new TemplateValidationError('No template found'));
+
+    const res = await request(buildApp())
+      .post('/api/admin/templates/register-existing')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ channelId: 'ch-1', name: 'aviso_cobranca', language: 'pt_BR' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('No template found');
+  });
+
+  test('returns 409 on a duplicate (wabaId, name, language) unique violation', async () => {
+    registerExistingTemplate.mockRejectedValue(Object.assign(new Error('duplicate'), { code: '23505' }));
+
+    const res = await request(buildApp())
+      .post('/api/admin/templates/register-existing')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ channelId: 'ch-1', name: 'aviso_cobranca', language: 'pt_BR' });
+
+    expect(res.status).toBe(409);
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/templates/register-existing')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', name: 'aviso_cobranca', language: 'pt_BR' });
+    expect(res.status).toBe(403);
+    expect(registerExistingTemplate).not.toHaveBeenCalled();
   });
 });

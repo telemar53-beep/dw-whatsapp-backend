@@ -1,7 +1,7 @@
 const express = require('express');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
 const { listTemplates } = require('../templates/template.repository');
-const { createTemplate, deleteTemplate, syncTemplatesForWaba, TemplateValidationError } = require('../templates/template.service');
+const { createTemplate, deleteTemplate, syncTemplatesForWaba, registerExistingTemplate, TemplateValidationError } = require('../templates/template.service');
 
 const router = express.Router();
 
@@ -21,6 +21,29 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
   }
   try {
     const template = await createTemplate({ channelId, name, category, language, bodyText });
+    res.status(201).json(template);
+  } catch (err) {
+    if (err instanceof TemplateValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'A template with this name and language already exists for this WABA' });
+    }
+    const metaMessage = metaErrorMessage(err);
+    if (metaMessage) {
+      return res.status(502).json({ error: metaMessage });
+    }
+    throw err;
+  }
+});
+
+router.post('/register-existing', requireAuth, requireRole('admin'), async (req, res) => {
+  const { channelId, name, language, headerType } = req.body || {};
+  if (!channelId || !name || !language) {
+    return res.status(400).json({ error: 'channelId, name and language are required' });
+  }
+  try {
+    const template = await registerExistingTemplate({ channelId, name, language, headerType: headerType || null });
     res.status(201).json(template);
   } catch (err) {
     if (err instanceof TemplateValidationError) {

@@ -24,6 +24,7 @@ const mediaRoutes = require('./api/media.routes');
 const metricsRoutes = require('./api/metrics.routes');
 const templatesRoutes = require('./api/templates.routes');
 const adminTemplatesRoutes = require('./api/admin-templates.routes');
+const integrationsSgpRoutes = require('./api/integrations-sgp.routes');
 const { initSocketServer } = require('./realtime/socket-server');
 
 const config = loadConfig();
@@ -69,6 +70,7 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/templates', templatesRoutes);
 app.use('/api/admin/templates', adminTemplatesRoutes);
+app.use('/api/integrations/sgp', integrationsSgpRoutes);
 app.use('/webhooks', metaCloudRoutes);
 
 app.use((err, req, res, next) => {

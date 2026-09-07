@@ -1,7 +1,15 @@
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationListItem from './ConversationListItem';
+import { useAuth } from '../contexts/AuthContext';
+
+vi.mock('../contexts/AuthContext');
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  useAuth.mockReturnValue({ token: 'tok-123' });
+});
 
 describe('ConversationListItem', () => {
   test('shows the contact name and phone number', () => {
@@ -53,5 +61,42 @@ describe('ConversationListItem', () => {
     );
     await userEvent.click(screen.getByText('Carlos'));
     expect(onSelect).toHaveBeenCalledWith('c1');
+  });
+
+  test('shows the contact avatar photo when contactAvatarPath is set', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactId: 'contact-1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            contactAvatarPath: 'avatars/c1.jpg',
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByRole('img')).toBeInTheDocument();
+  });
+
+  test('shows a placeholder initial when there is no contactAvatarPath', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactId: 'contact-1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            contactAvatarPath: null,
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('C')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 });

@@ -6,6 +6,7 @@ import { claimConversation, closeConversation } from '../services/api';
 import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
 import ConversationHistoryModal from './ConversationHistoryModal';
+import ContactAvatar from './ContactAvatar';
 
 function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
@@ -23,7 +24,15 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           <button onClick={onBack} className="rounded p-3 text-gray-500 md:hidden" aria-label="Voltar para a lista">
             ←
           </button>
-          <h3 className="font-semibold text-gray-800">Conversa</h3>
+          <ContactAvatar
+            contactId={conversation.contactId}
+            avatarPath={conversation.contactAvatarPath}
+            displayName={conversation.contactDisplayName}
+            phoneNumber={conversation.contactPhoneNumber}
+          />
+          <h3 className="font-semibold text-gray-800">
+            {conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa'}
+          </h3>
         </div>
         <div className="flex flex-wrap gap-2">
           <button

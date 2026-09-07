@@ -97,7 +97,7 @@ async function closeConversation(conversationId, agentId) {
 async function completeTriage(conversationId, sectorId) {
   const result = await getPool().query(
     `UPDATE conversations SET sector_id = $2, triage_state = 'completed', updated_at = now()
-     WHERE id = $1
+     WHERE id = $1 AND triage_state = 'pending'
      RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
     [conversationId, sectorId]
   );
@@ -108,7 +108,7 @@ async function completeTriage(conversationId, sectorId) {
 async function incrementTriageAttempts(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET triage_attempts = triage_attempts + 1, updated_at = now()
-     WHERE id = $1
+     WHERE id = $1 AND triage_state = 'pending'
      RETURNING triage_attempts`,
     [conversationId]
   );

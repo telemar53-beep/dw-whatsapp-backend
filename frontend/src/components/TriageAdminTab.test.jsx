@@ -108,4 +108,24 @@ describe('TriageAdminTab', () => {
     await waitFor(() => expect(api.deleteTriageOption).toHaveBeenCalledWith('opt-1', 'tok-123'));
     expect(refresh).toHaveBeenCalled();
   });
+
+  test('shows a warning when no triage options are configured', () => {
+    useTriage.mockReturnValue({
+      config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
+      options: [],
+      refresh: vi.fn(),
+    });
+    render(<TriageAdminTab />);
+    expect(screen.getByText(/nenhuma opção cadastrada/i)).toBeInTheDocument();
+  });
+
+  test('does not show the no-options warning when at least one option exists', () => {
+    useTriage.mockReturnValue({
+      config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
+      options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: [] }],
+      refresh: vi.fn(),
+    });
+    render(<TriageAdminTab />);
+    expect(screen.queryByText(/nenhuma opção cadastrada/i)).not.toBeInTheDocument();
+  });
 });

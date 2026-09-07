@@ -29,13 +29,16 @@ async function processTriageReply(conversation, channelId, replyText) {
 
   if (matched) {
     const updated = await completeTriage(conversation.id, matched.sectorId);
+    if (!updated) return conversation;
     await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: config.confirmationText });
     return updated;
   }
 
   const attempts = await incrementTriageAttempts(conversation.id);
+  if (attempts === 0) return conversation;
   if (attempts >= config.maxAttempts) {
     const updated = await completeTriage(conversation.id, null);
+    if (!updated) return conversation;
     await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: config.confirmationText });
     return updated;
   }

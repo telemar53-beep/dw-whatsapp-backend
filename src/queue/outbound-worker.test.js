@@ -9,7 +9,7 @@ jest.mock('../realtime/socket-server');
 const { processOutboundQueue } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
-const { updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
+const { findMessageById, updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const { emitToAgent } = require('../realtime/socket-server');
@@ -20,6 +20,7 @@ describe('startOutboundWorker', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    findMessageById.mockResolvedValue(null);
     processOutboundQueue.mockImplementation((h) => {
       handler = h;
     });
@@ -160,5 +161,28 @@ describe('startOutboundWorker', () => {
       'Oi'
     );
     expect(metaCloudAdapter.sendMediaMessage).not.toHaveBeenCalled();
+  });
+
+  test('skips sending when the message already has a recorded whatsappMessageId', async () => {
+    findMessageById.mockResolvedValue({ id: 'msg-1', whatsappMessageId: 'wamid.ALREADY_SENT' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola cliente' });
+
+    expect(getConversationWithContact).not.toHaveBeenCalled();
+    expect(findChannelById).not.toHaveBeenCalled();
+    expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();
+    expect(baileysManager.sendTextMessage).not.toHaveBeenCalled();
+  });
+
+  test('sends normally when the message exists but has no whatsappMessageId yet', async () => {
+    findMessageById.mockResolvedValue({ id: 'msg-1', whatsappMessageId: null });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.NEW1' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola cliente' });
+
+    expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalled();
+    expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.NEW1');
   });
 });

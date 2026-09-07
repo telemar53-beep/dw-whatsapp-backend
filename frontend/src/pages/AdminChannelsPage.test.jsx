@@ -8,6 +8,7 @@ import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useSectors } from '../hooks/useSectors';
 import { useTriage } from '../hooks/useTriage';
 import { useAuth } from '../contexts/AuthContext';
+import { setChannelTriageEnabled } from '../services/api';
 
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
@@ -15,6 +16,7 @@ vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useSectors');
 vi.mock('../hooks/useTriage');
 vi.mock('../contexts/AuthContext');
+vi.mock('../services/api');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -144,5 +146,19 @@ describe('AdminChannelsPage', () => {
     });
     render(<AdminChannelsPage />);
     expect(screen.getByRole('checkbox', { name: /usar triagem automática/i })).toBeChecked();
+  });
+
+  test('shows an error message when toggling triage fails', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', triageEnabled: false }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    setChannelTriageEnabled.mockRejectedValue({ body: { error: 'Canal não encontrado' } });
+    render(<AdminChannelsPage />);
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /usar triagem automática/i }));
+
+    expect(await screen.findByText('Canal não encontrado')).toBeInTheDocument();
   });
 });

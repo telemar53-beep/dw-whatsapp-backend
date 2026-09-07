@@ -143,6 +143,11 @@ function TriageAdminTab() {
 
   return (
     <div className="space-y-6">
+      {options.length === 0 && (
+        <p className="rounded border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
+          Nenhuma opção cadastrada — a triagem não será executada em nenhum canal, mesmo com o toggle ligado.
+        </p>
+      )}
       <TriageConfigForm config={config} onSaved={refresh} />
       <div className="space-y-3">
         {options.map((option) => (

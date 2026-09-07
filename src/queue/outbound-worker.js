@@ -1,7 +1,7 @@
 const { processOutboundQueue } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
-const { updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
+const { findMessageById, updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const { emitToAgent } = require('../realtime/socket-server');
@@ -13,6 +13,8 @@ const ADAPTERS_BY_CHANNEL_TYPE = {
 
 function startOutboundWorker() {
   processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename }) => {
+    const existingMessage = await findMessageById(messageId);
+    if (existingMessage && existingMessage.whatsappMessageId) return;
     const conversation = await getConversationWithContact(conversationId);
     const channel = await findChannelById(channelId);
     try {

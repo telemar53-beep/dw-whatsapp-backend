@@ -4,7 +4,7 @@ jest.mock('./message.repository');
 jest.mock('../realtime/socket-server');
 jest.mock('../triage/triage.service');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
-const { findOpenConversation, createConversation } = require('./conversation.repository');
+const { findOpenConversation, createConversation, getConversationWithContact } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
@@ -24,6 +24,12 @@ describe('ingestInboundMessage', () => {
     });
     findOpenConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
     createMessage.mockResolvedValue({ id: 'msg-1' });
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      assignedAgentId: null,
+      contactPhoneNumber: '+5511999998888',
+      contactDisplayName: 'Cliente',
+    });
 
     const result = await ingestInboundMessage({
       channelId: 'channel-1',
@@ -66,6 +72,12 @@ describe('ingestInboundMessage', () => {
     });
     findOpenConversation.mockResolvedValue({ id: 'conv-1b', assignedAgentId: 'agent-1' });
     createMessage.mockResolvedValue({ id: 'msg-1b' });
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1b',
+      assignedAgentId: 'agent-1',
+      contactPhoneNumber: '+5511999998888',
+      contactDisplayName: 'Cliente',
+    });
 
     await ingestInboundMessage({
       channelId: 'channel-1',
@@ -92,6 +104,7 @@ describe('ingestInboundMessage', () => {
     findOpenConversation.mockResolvedValue(null);
     createConversation.mockResolvedValue({ id: 'conv-2', assignedAgentId: null });
     createMessage.mockResolvedValue({ id: 'msg-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-2', assignedAgentId: null });
 
     const result = await ingestInboundMessage({
       channelId: 'channel-1',
@@ -111,6 +124,7 @@ describe('ingestInboundMessage', () => {
     shouldStartTriage.mockResolvedValue(true);
     createConversation.mockResolvedValue({ id: 'conv-9', assignedAgentId: null, triageState: 'pending' });
     createMessage.mockResolvedValue({ id: 'msg-9' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-9', assignedAgentId: null, triageState: 'pending' });
 
     await ingestInboundMessage({
       channelId: 'channel-1',
@@ -130,6 +144,14 @@ describe('ingestInboundMessage', () => {
     findOpenConversation.mockResolvedValue({ id: 'conv-10', assignedAgentId: null, triageState: 'pending' });
     createMessage.mockResolvedValue({ id: 'msg-10' });
     processTriageReply.mockResolvedValue({ id: 'conv-10', assignedAgentId: null, sectorId: 'sector-1', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-10',
+      assignedAgentId: null,
+      sectorId: 'sector-1',
+      triageState: 'completed',
+      contactPhoneNumber: '+5511999990001',
+      contactDisplayName: 'Cliente Triagem',
+    });
 
     await ingestInboundMessage({
       channelId: 'channel-1',
@@ -183,6 +205,7 @@ describe('ingestInboundMessage', () => {
     shouldStartTriage.mockResolvedValue(false);
     createConversation.mockResolvedValue({ id: 'conv-12', assignedAgentId: null, triageState: null });
     createMessage.mockResolvedValue({ id: 'msg-12' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-12', assignedAgentId: null, triageState: null });
 
     await ingestInboundMessage({
       channelId: 'channel-1',
@@ -204,6 +227,7 @@ describe('ingestInboundMessage', () => {
     const uniqueViolation = Object.assign(new Error('duplicate key'), { code: '23505' });
     createConversation.mockRejectedValue(uniqueViolation);
     createMessage.mockResolvedValue({ id: 'msg-3' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-3', assignedAgentId: null });
 
     const result = await ingestInboundMessage({
       channelId: 'channel-1',
@@ -286,6 +310,12 @@ describe('ingestInboundMessage', () => {
     findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-7', phoneNumber: '+5511999992222', displayName: 'Cliente Mídia' });
     findOpenConversation.mockResolvedValue({ id: 'conv-7', assignedAgentId: null });
     createMessage.mockResolvedValue({ id: 'msg-7', messageType: 'image', mediaPath: 'abc.jpg' });
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-7',
+      assignedAgentId: null,
+      contactPhoneNumber: '+5511999992222',
+      contactDisplayName: 'Cliente Mídia',
+    });
 
     await ingestInboundMessage({
       channelId: 'channel-1',
@@ -327,6 +357,7 @@ describe('ingestInboundMessage', () => {
     findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-8' });
     findOpenConversation.mockResolvedValue({ id: 'conv-8', assignedAgentId: null });
     createMessage.mockResolvedValue({ id: 'msg-8' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-8', assignedAgentId: null });
 
     await ingestInboundMessage({
       channelId: 'channel-1',

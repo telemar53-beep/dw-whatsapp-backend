@@ -13,10 +13,16 @@ function AdminChannelsPage() {
   const { token } = useAuth();
   const { channels, refresh } = useChannels();
   const [activeTab, setActiveTab] = useState('channels');
+  const [triageToggleError, setTriageToggleError] = useState(null);
 
   async function handleToggleTriage(channelId, triageEnabled) {
-    await setChannelTriageEnabled(channelId, triageEnabled, token);
-    refresh();
+    setTriageToggleError(null);
+    try {
+      await setChannelTriageEnabled(channelId, triageEnabled, token);
+      refresh();
+    } catch (err) {
+      setTriageToggleError((err.body && err.body.error) || 'Falha ao atualizar a triagem deste canal');
+    }
   }
 
   return (
@@ -66,6 +72,7 @@ function AdminChannelsPage() {
       </div>
       {activeTab === 'channels' ? (
         <div className="space-y-6">
+          {triageToggleError && <p className="text-sm text-red-600">{triageToggleError}</p>}
           <div className="space-y-3">
             {channels.map((channel) => (
               <div key={channel.id} className="rounded border border-gray-200 p-3">

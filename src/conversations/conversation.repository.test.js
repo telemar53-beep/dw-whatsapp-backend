@@ -252,7 +252,7 @@ describe('conversation repository', () => {
 
   test('getConversationWithContact includes the sector name when a sector is set', async () => {
     const sector = await createSector({ name: 'Suporte' });
-    const conversation = await createConversation(contactId, channelId);
+    const conversation = await createConversation(contactId, channelId, 'pending');
     await completeTriage(conversation.id, sector.id);
 
     const result = await getConversationWithContact(conversation.id);
@@ -272,12 +272,33 @@ describe('conversation repository', () => {
 
   test('listWaitingConversations includes the sector name for a triaged conversation', async () => {
     const sector = await createSector({ name: 'Comercial' });
-    const conversation = await createConversation(contactId, channelId);
+    const conversation = await createConversation(contactId, channelId, 'pending');
     await completeTriage(conversation.id, sector.id);
 
     const waiting = await listWaitingConversations();
 
     expect(waiting[0].sectorId).toBe(sector.id);
     expect(waiting[0].sectorName).toBe('Comercial');
+  });
+
+  test('completeTriage does not affect a conversation whose triage is not pending', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('+5511999990000', 'Cliente Sem Triagem 1');
+    const channel = await createChannel({ name: 'Canal', type: 'baileys', phoneNumber: '+5511999998888', config: {} });
+    const sector = await createSector({ name: 'Financeiro' });
+    const conversation = await createConversation(contact.id, channel.id, null);
+
+    const result = await completeTriage(conversation.id, sector.id);
+
+    expect(result).toBeNull();
+  });
+
+  test('incrementTriageAttempts does not affect a conversation whose triage is not pending', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('+5511999990001', 'Cliente Sem Triagem 2');
+    const channel = await createChannel({ name: 'Canal 2', type: 'baileys', phoneNumber: '+5511999998889', config: {} });
+    const conversation = await createConversation(contact.id, channel.id, null);
+
+    const result = await incrementTriageAttempts(conversation.id);
+
+    expect(result).toBe(0);
   });
 });

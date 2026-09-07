@@ -123,8 +123,10 @@ async function fetchAndStoreContactAvatar(sock, phoneJid, contactId) {
     const response = await axios.get(url, { responseType: 'arraybuffer' });
     const avatarPath = await saveMediaFile(Buffer.from(response.data), '.jpg');
     await setContactAvatarPath(contactId, avatarPath);
+    return true;
   } catch (err) {
     console.error(`Could not fetch profile photo for contact ${contactId}`, err);
+    return false;
   }
 }
 
@@ -133,7 +135,7 @@ async function fetchContactAvatarForChannel(channel, contactId, phoneNumber) {
   if (!entry) {
     throw new Error(`No active Baileys connection for channel ${channel.id}`);
   }
-  await fetchAndStoreContactAvatar(entry.sock, `${phoneNumber}@s.whatsapp.net`, contactId);
+  return fetchAndStoreContactAvatar(entry.sock, `${phoneNumber}@s.whatsapp.net`, contactId);
 }
 
 async function handleMessagesUpsert(channel, { messages, type }) {

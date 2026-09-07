@@ -21,8 +21,8 @@ async function main() {
   for (const { contactId, phoneNumber, channelId } of contacts) {
     try {
       const channel = await findChannelById(channelId);
-      await fetchContactAvatarForChannel(channel, contactId, phoneNumber);
-      console.log(`Fetched avatar for contact ${contactId}`);
+      const fetched = await fetchContactAvatarForChannel(channel, contactId, phoneNumber);
+      console.log(fetched ? `Fetched avatar for contact ${contactId}` : `No photo available for contact ${contactId}`);
     } catch (err) {
       console.log(`Skipped contact ${contactId}: ${err.message}`);
     }

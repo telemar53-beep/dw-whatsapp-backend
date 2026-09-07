@@ -654,10 +654,24 @@ describe('baileys.manager', () => {
       const channel = { id: 'channel-backfill-1', type: 'baileys' };
       await manager.startBaileysConnection(channel);
 
-      await manager.fetchContactAvatarForChannel(channel, 'contact-backfill-1', '5511999995555');
+      const result = await manager.fetchContactAvatarForChannel(channel, 'contact-backfill-1', '5511999995555');
 
       expect(sock.profilePictureUrl).toHaveBeenCalledWith('5511999995555@s.whatsapp.net', 'image');
       expect(setContactAvatarPath).toHaveBeenCalledWith('contact-backfill-1', 'generated-avatar-2.jpg');
+      expect(result).toBe(true);
+    });
+
+    test('resolves to false when the photo is unavailable, without throwing', async () => {
+      const sock = createMockSock();
+      sock.profilePictureUrl.mockRejectedValue(new Error('item-not-found'));
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-backfill-2', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.fetchContactAvatarForChannel(channel, 'contact-backfill-2', '5511999995556');
+
+      expect(result).toBe(false);
+      expect(setContactAvatarPath).not.toHaveBeenCalled();
     });
 
     test('throws when there is no active connection for the channel', async () => {

@@ -202,3 +202,19 @@ export function setChannelTriageEnabled(channelId, triageEnabled, token) {
 export function setChannelWabaId(id, wabaId, token) {
   return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { wabaId }, token });
 }
+
+export function listTemplatesAdmin(token) {
+  return apiFetch('/api/admin/templates', { token });
+}
+
+export function createTemplateAdmin(data, token) {
+  return apiFetch('/api/admin/templates', { method: 'POST', body: data, token });
+}
+
+export function deleteTemplateAdmin(id, token) {
+  return apiFetch(`/api/admin/templates/${id}`, { method: 'DELETE', token });
+}
+
+export function syncTemplatesAdmin(wabaId, token) {
+  return apiFetch('/api/admin/templates/sync', { method: 'POST', body: { wabaId }, token });
+}

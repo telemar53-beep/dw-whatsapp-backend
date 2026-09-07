@@ -99,4 +99,39 @@ describe('ConversationListItem', () => {
     expect(screen.getByText('C')).toBeInTheDocument();
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
+
+  test('shows the city suffix after the name when the contact has one', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            contactCityName: 'Bahia',
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('Carlos - Bahia')).toBeInTheDocument();
+  });
+
+  test('shows just the name when the contact has no city', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            contactCityName: null,
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.queryByText(/Carlos -/)).not.toBeInTheDocument();
+  });
 });

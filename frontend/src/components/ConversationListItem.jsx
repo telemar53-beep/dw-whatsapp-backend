@@ -1,6 +1,9 @@
 import ContactAvatar from './ContactAvatar';
 
 function ConversationListItem({ conversation, onSelect }) {
+  const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber;
+  const displayLabel = conversation.contactCityName ? `${nameLabel} - ${conversation.contactCityName}` : nameLabel;
+
   return (
     <li>
       <button
@@ -15,9 +18,7 @@ function ConversationListItem({ conversation, onSelect }) {
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="font-medium text-gray-800">
-              {conversation.contactDisplayName || conversation.contactPhoneNumber}
-            </p>
+            <p className="font-medium text-gray-800">{displayLabel}</p>
             {conversation.sectorName && (
               <span className="shrink-0 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{conversation.sectorName}</span>
             )}

@@ -6,12 +6,14 @@ import { useChannels } from '../hooks/useChannels';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useSectors } from '../hooks/useSectors';
+import { useTriage } from '../hooks/useTriage';
 import { useAuth } from '../contexts/AuthContext';
 
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useSectors');
+vi.mock('../hooks/useTriage');
 vi.mock('../contexts/AuthContext');
 
 beforeEach(() => {
@@ -20,6 +22,7 @@ beforeEach(() => {
   useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useSectors.mockReturnValue({ sectors: [], refresh: vi.fn() });
+  useTriage.mockReturnValue({ config: { questionText: 'Q', confirmationText: 'C', maxAttempts: 2 }, options: [], refresh: vi.fn() });
 });
 
 describe('AdminChannelsPage', () => {
@@ -114,5 +117,32 @@ describe('AdminChannelsPage', () => {
 
     expect(screen.getByText('Boas-vindas')).toBeInTheDocument();
     expect(screen.queryByText('Berg')).not.toBeInTheDocument();
+  });
+
+  test('switches to the Triagem tab and shows the triage configuration UI', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', triageEnabled: false }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<AdminChannelsPage />);
+
+    expect(screen.getByText('Berg')).toBeInTheDocument();
+    expect(screen.queryByText(/pergunta de triagem/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /triagem/i }));
+
+    expect(screen.getByText(/pergunta de triagem/i)).toBeInTheDocument();
+    expect(screen.queryByText('Berg')).not.toBeInTheDocument();
+  });
+
+  test('shows a checkbox per channel to toggle automatic triage', () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', triageEnabled: true }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<AdminChannelsPage />);
+    expect(screen.getByRole('checkbox', { name: /usar triagem automática/i })).toBeChecked();
   });
 });

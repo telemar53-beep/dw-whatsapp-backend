@@ -1,14 +1,23 @@
 import { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { useChannels } from '../hooks/useChannels';
 import CreateChannelForm from '../components/CreateChannelForm';
 import QrCodeView from '../components/QrCodeView';
 import AgentsAdminTab from '../components/AgentsAdminTab';
 import QuickRepliesAdminTab from '../components/QuickRepliesAdminTab';
 import SectorsAdminTab from '../components/SectorsAdminTab';
+import TriageAdminTab from '../components/TriageAdminTab';
+import { setChannelTriageEnabled } from '../services/api';
 
 function AdminChannelsPage() {
+  const { token } = useAuth();
   const { channels, refresh } = useChannels();
   const [activeTab, setActiveTab] = useState('channels');
+
+  async function handleToggleTriage(channelId, triageEnabled) {
+    await setChannelTriageEnabled(channelId, triageEnabled, token);
+    refresh();
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
@@ -46,6 +55,14 @@ function AdminChannelsPage() {
         >
           Setores
         </button>
+        <button
+          onClick={() => setActiveTab('triage')}
+          className={`px-3 py-2 text-sm ${
+            activeTab === 'triage' ? 'border-b-2 border-blue-600 font-semibold text-blue-600' : 'text-gray-500'
+          }`}
+        >
+          Triagem
+        </button>
       </div>
       {activeTab === 'channels' ? (
         <div className="space-y-6">
@@ -62,6 +79,14 @@ function AdminChannelsPage() {
                   </div>
                   <span className="text-sm text-gray-500">{channel.status}</span>
                 </div>
+                <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={!!channel.triageEnabled}
+                    onChange={(e) => handleToggleTriage(channel.id, e.target.checked)}
+                  />
+                  Usar triagem automática
+                </label>
                 <QrCodeView channel={channel} onRefresh={refresh} />
               </div>
             ))}
@@ -72,8 +97,10 @@ function AdminChannelsPage() {
         <AgentsAdminTab />
       ) : activeTab === 'quickReplies' ? (
         <QuickRepliesAdminTab />
-      ) : (
+      ) : activeTab === 'sectors' ? (
         <SectorsAdminTab />
+      ) : (
+        <TriageAdminTab />
       )}
     </div>
   );

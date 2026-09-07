@@ -19,6 +19,8 @@ const { saveMediaFile, extensionForMimeType, messageTypeForMimeType } = require(
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
+const { findTemplateById } = require('../templates/template.repository');
+const { substituteVariables } = require('../templates/template-validator');
 
 const router = express.Router();
 
@@ -57,9 +59,9 @@ router.get('/contacts/:contactId/history', async (req, res) => {
 });
 
 router.post('/start', async (req, res) => {
-  const { channelId, phoneNumber, content } = req.body || {};
-  if (!channelId || !phoneNumber || !content) {
-    return res.status(400).json({ error: 'channelId, phoneNumber and content are required' });
+  const { channelId, phoneNumber } = req.body || {};
+  if (!channelId || !phoneNumber) {
+    return res.status(400).json({ error: 'channelId and phoneNumber are required' });
   }
   if (typeof phoneNumber !== 'string') {
     return res.status(400).json({ error: 'phoneNumber must be a string' });
@@ -77,11 +79,8 @@ router.post('/start', async (req, res) => {
   if (!channel) {
     return res.status(404).json({ error: 'Channel not found' });
   }
-  if (channel.type !== 'baileys') {
-    return res.status(400).json({ error: 'Starting a conversation is only supported for Baileys channels' });
-  }
-  if (channel.status !== 'connected') {
-    return res.status(400).json({ error: 'This channel is not connected' });
+  if (channel.type !== 'baileys' && channel.type !== 'meta_cloud') {
+    return res.status(400).json({ error: 'Unsupported channel type' });
   }
 
   const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
@@ -89,9 +88,48 @@ router.post('/start', async (req, res) => {
     return res.status(400).json({ error: 'A valid phoneNumber is required' });
   }
 
-  const canonicalPhoneNumber = await baileysManager.resolveWhatsAppJid(channel, normalizedPhoneNumber);
-  if (!canonicalPhoneNumber) {
-    return res.status(400).json({ error: 'This phone number is not on WhatsApp' });
+  let canonicalPhoneNumber;
+  let outboundPayload;
+
+  if (channel.type === 'baileys') {
+    const { content } = req.body || {};
+    if (!content) {
+      return res.status(400).json({ error: 'content is required' });
+    }
+    if (channel.status !== 'connected') {
+      return res.status(400).json({ error: 'This channel is not connected' });
+    }
+    canonicalPhoneNumber = await baileysManager.resolveWhatsAppJid(channel, normalizedPhoneNumber);
+    if (!canonicalPhoneNumber) {
+      return res.status(400).json({ error: 'This phone number is not on WhatsApp' });
+    }
+    outboundPayload = { content };
+  } else {
+    const { templateId, templateVariables } = req.body || {};
+    if (!templateId) {
+      return res.status(400).json({ error: 'templateId is required' });
+    }
+    const template = await findTemplateById(templateId);
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    if (template.status !== 'APPROVED') {
+      return res.status(400).json({ error: 'This template is not approved' });
+    }
+    if (template.wabaId !== channel.config.wabaId) {
+      return res.status(400).json({ error: "This template does not belong to this channel's WABA" });
+    }
+    const variables = Array.isArray(templateVariables) ? templateVariables : [];
+    if (variables.length !== template.variableCount) {
+      return res.status(400).json({ error: `This template requires exactly ${template.variableCount} variable(s)` });
+    }
+    canonicalPhoneNumber = normalizedPhoneNumber;
+    outboundPayload = {
+      content: substituteVariables(template.bodyText, variables),
+      templateName: template.name,
+      templateLanguage: template.language,
+      templateVariables: variables,
+    };
   }
 
   const contact = await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, null);
@@ -106,7 +144,7 @@ router.post('/start', async (req, res) => {
   if (!claimed) {
     throw new Error('Failed to claim newly created conversation');
   }
-  await enqueueOutboundMessage({ conversationId: claimed.id, channelId: channel.id, content });
+  await enqueueOutboundMessage({ conversationId: claimed.id, channelId: channel.id, ...outboundPayload });
 
   const conversationWithContact = await getConversationWithContact(claimed.id);
   emitToAgent(req.agent.agentId, 'conversation:assigned', { conversation: conversationWithContact });

@@ -9,6 +9,7 @@ jest.mock('../media/media-storage', () => ({
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/contact.repository');
 jest.mock('../whatsapp-adapters/baileys.manager');
+jest.mock('../templates/template.repository');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -29,6 +30,7 @@ const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findChannelById } = require('../channels/channel.repository');
+const { findTemplateById } = require('../templates/template.repository');
 const conversationsRoutes = require('./conversations.routes');
 
 function buildApp() {
@@ -541,13 +543,13 @@ describe('POST /api/conversations/start', () => {
   });
 
   test('returns 400 when the channel is not a Baileys channel', async () => {
-    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', status: 'connected' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'sms', status: 'connected' });
     const res = await request(buildApp())
       .post('/api/conversations/start')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/baileys/i);
+    expect(res.body.error).toMatch(/unsupported channel type/i);
     expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
   });
 
@@ -648,5 +650,99 @@ describe('POST /api/conversations/start', () => {
       .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' });
     expect(res.status).toBe(401);
     expect(findChannelById).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /start (meta_cloud)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const approvedTemplate = { id: 'tpl-1', wabaId: 'waba-1', name: 'fatura_vencida', language: 'pt_BR', bodyText: 'Olá {{1}}, sua fatura de {{2}} venceu.', variableCount: 2, status: 'APPROVED' };
+
+  test('returns 400 when templateId is missing', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 when the template does not exist', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    findTemplateById.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'missing' });
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 400 when the template is not approved', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    findTemplateById.mockResolvedValue({ ...approvedTemplate, status: 'PENDING' });
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'tpl-1', templateVariables: ['João', 'R$150'] });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when the template belongs to a different WABA than the channel', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-OTHER' } });
+    findTemplateById.mockResolvedValue(approvedTemplate);
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'tpl-1', templateVariables: ['João', 'R$150'] });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when the variable count does not match', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    findTemplateById.mockResolvedValue(approvedTemplate);
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'tpl-1', templateVariables: ['João'] });
+    expect(res.status).toBe(400);
+  });
+
+  test('starts the conversation, substitutes variables, and enqueues the template send', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    findTemplateById.mockResolvedValue(approvedTemplate);
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5511999990000' });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: 'conv-1' });
+    claimConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'tpl-1', templateVariables: ['João', 'R$150,00'] });
+
+    expect(res.status).toBe(201);
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-1', channelId: 'ch-1',
+      content: 'Olá João, sua fatura de R$150,00 venceu.',
+      templateName: 'fatura_vencida', templateLanguage: 'pt_BR', templateVariables: ['João', 'R$150,00'],
+    });
+  });
+
+  test('does not call baileysManager.resolveWhatsAppJid for a meta_cloud channel', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    findTemplateById.mockResolvedValue(approvedTemplate);
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5511999990000' });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: 'conv-1' });
+    claimConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+
+    await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'tpl-1', templateVariables: ['João', 'R$150,00'] });
+
+    expect(baileysManager.resolveWhatsAppJid).not.toHaveBeenCalled();
   });
 });

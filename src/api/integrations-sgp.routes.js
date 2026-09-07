@@ -10,6 +10,23 @@ const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const router = express.Router();
 const UNIQUE_VIOLATION = '23505';
 
+// Temporary diagnostic logging while we confirm the exact shape of the SGP
+// "HTTP Generico" gateway request (method, header vs. body auth placement,
+// field names) — remove once confirmed.
+router.use((req, res, next) => {
+  if (process.env.NODE_ENV !== 'test') {
+    console.log(
+      '[SGP DEBUG] %s %s headers=%s query=%s body=%s',
+      req.method,
+      req.originalUrl,
+      JSON.stringify(req.headers),
+      JSON.stringify(req.query),
+      JSON.stringify(req.body)
+    );
+  }
+  next();
+});
+
 async function requireSgpApiKey(req, res, next) {
   const header = req.headers.authorization;
   const apiKey = header && header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;

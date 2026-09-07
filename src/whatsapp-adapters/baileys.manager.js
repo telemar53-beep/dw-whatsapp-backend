@@ -124,7 +124,7 @@ async function fetchAndStoreContactAvatar(sock, phoneJid, contactId) {
     const avatarPath = await saveMediaFile(Buffer.from(response.data), '.jpg');
     await setContactAvatarPath(contactId, avatarPath);
   } catch (err) {
-    console.log(`Could not fetch profile photo for contact ${contactId}: ${err.message}`);
+    console.error(`Could not fetch profile photo for contact ${contactId}`, err);
   }
 }
 
@@ -160,6 +160,8 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       });
       if (result.contactJustCreated && entry) {
         fetchAndStoreContactAvatar(entry.sock, phoneJid, result.contact.id);
+      } else if (result.contactJustCreated) {
+        console.log(`Skipping avatar fetch for contact ${result.contact.id}: no active connection for channel ${channel.id}`);
       }
       continue;
     }
@@ -182,6 +184,8 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       });
       if (result.contactJustCreated && entry) {
         fetchAndStoreContactAvatar(entry.sock, phoneJid, result.contact.id);
+      } else if (result.contactJustCreated) {
+        console.log(`Skipping avatar fetch for contact ${result.contact.id}: no active connection for channel ${channel.id}`);
       }
       continue;
     }
@@ -205,6 +209,8 @@ async function handleMessagesUpsert(channel, { messages, type }) {
     });
     if (result.contactJustCreated && entry) {
       fetchAndStoreContactAvatar(entry.sock, phoneJid, result.contact.id);
+    } else if (result.contactJustCreated) {
+      console.log(`Skipping avatar fetch for contact ${result.contact.id}: no active connection for channel ${channel.id}`);
     }
   }
 }

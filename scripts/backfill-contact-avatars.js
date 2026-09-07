@@ -19,8 +19,8 @@ async function main() {
   console.log(`Found ${contacts.length} contact(s) missing an avatar.`);
 
   for (const { contactId, phoneNumber, channelId } of contacts) {
-    const channel = await findChannelById(channelId);
     try {
+      const channel = await findChannelById(channelId);
       await fetchContactAvatarForChannel(channel, contactId, phoneNumber);
       console.log(`Fetched avatar for contact ${contactId}`);
     } catch (err) {
@@ -37,4 +37,7 @@ main()
     console.error('Backfill failed:', err.message);
     process.exitCode = 1;
   })
-  .finally(() => closePool());
+  .finally(async () => {
+    await closePool();
+    process.exit(process.exitCode || 0);
+  });

@@ -136,6 +136,11 @@ router.post('/start', async (req, res) => {
   }
 
   const contact = await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, null);
+  if (channel.type === 'baileys' && contact.wasCreated) {
+    baileysManager.fetchContactAvatarForChannel(channel, contact.id, canonicalPhoneNumber).catch((err) => {
+      console.error(`Could not fetch profile photo for contact ${contact.id}`, err);
+    });
+  }
 
   const existing = await findOpenConversation(contact.id, channel.id);
   if (existing) {

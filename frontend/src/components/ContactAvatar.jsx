@@ -25,7 +25,10 @@ function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber }) {
   }
 
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-semibold text-white">
+    <span
+      aria-hidden="true"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-semibold text-white"
+    >
       {initialFor(displayName, phoneNumber)}
     </span>
   );

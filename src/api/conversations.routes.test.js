@@ -25,7 +25,7 @@ const {
   findOpenConversation,
   createConversation,
 } = require('../conversations/conversation.repository');
-const { listMessagesByConversation } = require('../conversations/message.repository');
+const { listMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
@@ -400,6 +400,100 @@ describe('POST /api/conversations/:id/messages', () => {
       .attach('file', overGlobalCap, { filename: 'gigante.pdf', contentType: 'application/pdf' });
 
     expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('accepts a repliedToMessageId and passes it to enqueueOutboundMessage', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' });
+    findMessageById.mockResolvedValue({
+      id: 'msg-original',
+      conversationId: 'conv-1',
+      content: 'Qual o valor?',
+      whatsappMessageId: 'wamid.ORIG1',
+    });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'msg-reply', status: 'sent' });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'R$150,00', repliedToMessageId: 'msg-original' });
+
+    expect(res.status).toBe(201);
+    expect(findMessageById).toHaveBeenCalledWith('msg-original');
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      channelId: 'channel-1',
+      content: 'R$150,00',
+      repliedToMessageId: 'msg-original',
+    });
+  });
+
+  test('returns 400 when repliedToMessageId does not exist', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' });
+    findMessageById.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'R$150,00', repliedToMessageId: 'does-not-exist' });
+
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when repliedToMessageId belongs to a different conversation', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' });
+    findMessageById.mockResolvedValue({
+      id: 'msg-original',
+      conversationId: 'conv-OTHER',
+      content: 'Qual o valor?',
+      whatsappMessageId: 'wamid.ORIG1',
+    });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'R$150,00', repliedToMessageId: 'msg-original' });
+
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when repliedToMessageId points to a message with no text content', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' });
+    findMessageById.mockResolvedValue({
+      id: 'msg-original',
+      conversationId: 'conv-1',
+      content: null,
+      whatsappMessageId: 'wamid.ORIG1',
+    });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'R$150,00', repliedToMessageId: 'msg-original' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/text/i);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when repliedToMessageId points to a message not yet delivered', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' });
+    findMessageById.mockResolvedValue({
+      id: 'msg-original',
+      conversationId: 'conv-1',
+      content: 'Ainda na fila',
+      whatsappMessageId: null,
+    });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'R$150,00', repliedToMessageId: 'msg-original' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/delivered/i);
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 });

@@ -12,7 +12,7 @@ const {
   findOpenConversation,
   createConversation,
 } = require('../conversations/conversation.repository');
-const { listMessagesByConversation } = require('../conversations/message.repository');
+const { listMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { saveMediaFile, extensionForMimeType, messageTypeForMimeType } = require('../media/media-storage');
@@ -191,6 +191,7 @@ router.post('/:id/claim', async (req, res) => {
 router.post('/:id/messages', upload.single('file'), async (req, res) => {
   const content = (req.body && req.body.content) || null;
   const file = req.file;
+  const repliedToMessageId = (req.body && req.body.repliedToMessageId) || null;
   if (!content && !file) {
     return res.status(400).json({ error: 'content or file is required' });
   }
@@ -205,11 +206,27 @@ router.post('/:id/messages', upload.single('file'), async (req, res) => {
     return res.status(403).json({ error: 'Only the assigned agent can send messages on this conversation' });
   }
 
+  if (repliedToMessageId) {
+    const repliedTo = await findMessageById(repliedToMessageId);
+    if (!repliedTo || repliedTo.conversationId !== conversation.id) {
+      return res.status(400).json({ error: 'repliedToMessageId does not belong to this conversation' });
+    }
+    if (!repliedTo.content) {
+      return res.status(400).json({ error: 'Only messages with text can be replied to' });
+    }
+    if (!repliedTo.whatsappMessageId) {
+      return res.status(400).json({ error: 'This message has not been delivered yet; wait before replying to it' });
+    }
+  }
+
   const messagePayload = {
     conversationId: conversation.id,
     channelId: conversation.channelId,
     content,
   };
+  if (repliedToMessageId) {
+    messagePayload.repliedToMessageId = repliedToMessageId;
+  }
 
   if (file) {
     const messageType = messageTypeForMimeType(file.mimetype);

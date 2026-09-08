@@ -146,6 +146,79 @@ describe('message repository', () => {
     expect(found).toBeNull();
   });
 
+  test('createMessage stores a reply reference when repliedToMessageId is provided', async () => {
+    const original = await createMessage({
+      conversationId,
+      direction: 'inbound',
+      content: 'Qual o valor da fatura?',
+      whatsappMessageId: 'wamid.ORIG1',
+      status: 'received',
+    });
+    const reply = await createMessage({
+      conversationId,
+      direction: 'outbound',
+      content: 'R$150,00',
+      whatsappMessageId: null,
+      status: 'sent',
+      repliedToMessageId: original.id,
+    });
+    expect(reply.repliedToMessageId).toBe(original.id);
+  });
+
+  test('createMessage leaves repliedToMessageId null when not provided', async () => {
+    const message = await createMessage({
+      conversationId,
+      direction: 'inbound',
+      content: 'Oi',
+      whatsappMessageId: 'wamid.NOREPLY1',
+      status: 'received',
+    });
+    expect(message.repliedToMessageId).toBeNull();
+  });
+
+  describe('listMessagesByConversation reply previews', () => {
+    test('includes a repliedToPreview for a message that replies to another', async () => {
+      const original = await createMessage({
+        conversationId,
+        direction: 'inbound',
+        content: 'Qual o valor da fatura?',
+        whatsappMessageId: 'wamid.ORIG2',
+        status: 'received',
+      });
+      await createMessage({
+        conversationId,
+        direction: 'outbound',
+        content: 'R$150,00',
+        whatsappMessageId: null,
+        status: 'sent',
+        repliedToMessageId: original.id,
+      });
+
+      const messages = await listMessagesByConversation(conversationId);
+      const replyMessage = messages.find((m) => m.content === 'R$150,00');
+
+      expect(replyMessage.repliedToPreview).toEqual({
+        content: 'Qual o valor da fatura?',
+        direction: 'inbound',
+      });
+    });
+
+    test('repliedToPreview is null for a message that does not reply to anything', async () => {
+      await createMessage({
+        conversationId,
+        direction: 'inbound',
+        content: 'Mensagem solta',
+        whatsappMessageId: 'wamid.SOLTA1',
+        status: 'received',
+      });
+
+      const messages = await listMessagesByConversation(conversationId);
+      const message = messages.find((m) => m.content === 'Mensagem solta');
+
+      expect(message.repliedToPreview).toBeNull();
+    });
+  });
+
   describe('advanceMessageStatus', () => {
     test('moves the status forward when found by whatsapp message id', async () => {
       await createMessage({

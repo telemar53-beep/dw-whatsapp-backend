@@ -14,13 +14,23 @@ function toMessage(row) {
     locationLongitude: row.location_longitude !== null ? Number(row.location_longitude) : null,
     whatsappMessageId: row.whatsapp_message_id,
     status: row.status,
+    repliedToMessageId: row.replied_to_message_id,
     createdAt: row.created_at,
+  };
+}
+
+function toMessageWithReplyPreview(row) {
+  return {
+    ...toMessage(row),
+    repliedToPreview: row.replied_to_message_id
+      ? { content: row.replied_to_content, direction: row.replied_to_direction }
+      : null,
   };
 }
 
 const MESSAGE_COLUMNS = `id, conversation_id, direction, content, whatsapp_message_id, status,
        message_type, media_path, media_mime_type, media_filename,
-       location_latitude, location_longitude, created_at`;
+       location_latitude, location_longitude, replied_to_message_id, created_at`;
 
 async function createMessage({
   conversationId,
@@ -34,14 +44,15 @@ async function createMessage({
   mediaFilename,
   locationLatitude,
   locationLongitude,
+  repliedToMessageId,
 }) {
   const result = await getPool().query(
     `INSERT INTO messages (
        conversation_id, direction, content, whatsapp_message_id, status,
        message_type, media_path, media_mime_type, media_filename,
-       location_latitude, location_longitude
+       location_latitude, location_longitude, replied_to_message_id
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING ${MESSAGE_COLUMNS}`,
     [
       conversationId,
@@ -55,6 +66,7 @@ async function createMessage({
       mediaFilename || null,
       locationLatitude != null ? locationLatitude : null,
       locationLongitude != null ? locationLongitude : null,
+      repliedToMessageId || null,
     ]
   );
   return toMessage(result.rows[0]);
@@ -94,10 +106,17 @@ async function recordMessageSent(messageId, whatsappMessageId) {
 
 async function listMessagesByConversation(conversationId) {
   const result = await getPool().query(
-    `SELECT ${MESSAGE_COLUMNS} FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC`,
+    `SELECT m.id, m.conversation_id, m.direction, m.content, m.whatsapp_message_id, m.status,
+            m.message_type, m.media_path, m.media_mime_type, m.media_filename,
+            m.location_latitude, m.location_longitude, m.replied_to_message_id, m.created_at,
+            rm.content AS replied_to_content, rm.direction AS replied_to_direction
+     FROM messages m
+     LEFT JOIN messages rm ON rm.id = m.replied_to_message_id
+     WHERE m.conversation_id = $1
+     ORDER BY m.created_at ASC`,
     [conversationId]
   );
-  return result.rows.map(toMessage);
+  return result.rows.map(toMessageWithReplyPreview);
 }
 
 async function findMessageById(id) {

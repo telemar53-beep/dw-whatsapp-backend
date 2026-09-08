@@ -264,7 +264,8 @@ describe('registerExistingTemplate', () => {
     metaCloudAdapter.listMetaTemplates.mockResolvedValue([
       { id: 984, name: 'aviso_cobranca', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', components: [{ type: 'BODY', text: 'Olá {{1}}, valor {{2}}' }] },
     ]);
-    createTemplateRecord.mockResolvedValue({ id: 'local-1', name: 'aviso_cobranca' });
+    createTemplateRecord.mockResolvedValue({ id: 'local-1', metaTemplateId: '984', name: 'aviso_cobranca', status: 'PENDING' });
+    updateTemplateStatusByMetaTemplateId.mockResolvedValue({ id: 'local-1', metaTemplateId: '984', name: 'aviso_cobranca', status: 'APPROVED' });
 
     const result = await registerExistingTemplate({ ...validInput, headerType: 'document' });
 
@@ -273,7 +274,22 @@ describe('registerExistingTemplate', () => {
       wabaId: 'waba-1', metaTemplateId: '984', name: 'aviso_cobranca', language: 'pt_BR',
       category: 'UTILITY', bodyText: 'Olá {{1}}, valor {{2}}', variableCount: 2, headerType: 'document',
     });
+    expect(updateTemplateStatusByMetaTemplateId).toHaveBeenCalledWith('984', { status: 'APPROVED', rejectionReason: null });
     expect(result.id).toBe('local-1');
+    expect(result.status).toBe('APPROVED');
+  });
+
+  test('skips the status sync and returns the created row when Meta reports an unrecognized status', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    metaCloudAdapter.listMetaTemplates.mockResolvedValue([
+      { id: 984, name: 'aviso_cobranca', language: 'pt_BR', category: 'UTILITY', status: 'IN_APPEAL', components: [{ type: 'BODY', text: 'Olá {{1}}, valor {{2}}' }] },
+    ]);
+    createTemplateRecord.mockResolvedValue({ id: 'local-1', metaTemplateId: '984', name: 'aviso_cobranca', status: 'PENDING' });
+
+    const result = await registerExistingTemplate(validInput);
+
+    expect(updateTemplateStatusByMetaTemplateId).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'local-1', metaTemplateId: '984', name: 'aviso_cobranca', status: 'PENDING' });
   });
 
   test('rejects a matched template whose body has a variable gap', async () => {

@@ -96,7 +96,7 @@ async function registerExistingTemplate({ channelId, name, language, headerType 
     throw new TemplateValidationError(err.message);
   }
 
-  return createTemplateRecord({
+  const created = await createTemplateRecord({
     wabaId: channel.config.wabaId,
     metaTemplateId: String(match.id),
     name,
@@ -106,6 +106,13 @@ async function registerExistingTemplate({ channelId, name, language, headerType 
     variableCount,
     headerType: headerType || null,
   });
+  // The row lands on the DB default 'PENDING'; adopt the real Meta status so an already-approved
+  // template is immediately usable by the approved-template pickers and by POST /conversations/start.
+  if (KNOWN_STATUSES.has(match.status)) {
+    return updateTemplateStatusByMetaTemplateId(created.metaTemplateId, { status: match.status, rejectionReason: match.rejected_reason || null });
+  }
+  console.warn(`Ignoring unknown template status "${match.status}" for meta_template_id ${match.id}`);
+  return created;
 }
 
 async function listApprovedTemplatesForChannel(channelId) {

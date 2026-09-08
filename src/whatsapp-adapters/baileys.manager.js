@@ -313,16 +313,30 @@ async function addBaileysChannel({ name, phoneNumber }) {
   return channel;
 }
 
-async function sendTextMessage(channel, toPhoneNumber, content) {
+function buildQuotedOptions(jid, { repliedToWhatsappMessageId, repliedToDirection, repliedToContent } = {}) {
+  if (!repliedToWhatsappMessageId) return undefined;
+  return {
+    quoted: {
+      key: { remoteJid: jid, id: repliedToWhatsappMessageId, fromMe: repliedToDirection === 'outbound' },
+      message: { conversation: repliedToContent },
+    },
+  };
+}
+
+async function sendTextMessage(channel, toPhoneNumber, content, replyContext = {}) {
   const entry = connections.get(channel.id);
   if (!entry) {
     throw new Error(`No active Baileys connection for channel ${channel.id}`);
   }
-  const sent = await entry.sock.sendMessage(`${toPhoneNumber}@s.whatsapp.net`, { text: content });
+  const jid = `${toPhoneNumber}@s.whatsapp.net`;
+  const options = buildQuotedOptions(jid, replyContext);
+  const sent = options
+    ? await entry.sock.sendMessage(jid, { text: content }, options)
+    : await entry.sock.sendMessage(jid, { text: content });
   return { whatsappMessageId: sent.key.id };
 }
 
-async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath, mediaMimeType, mediaFilename, caption }) {
+async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath, mediaMimeType, mediaFilename, caption, ...replyContext }) {
   const entry = connections.get(channel.id);
   if (!entry) {
     throw new Error(`No active Baileys connection for channel ${channel.id}`);
@@ -347,7 +361,8 @@ async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath
     throw new Error(`Unsupported media message type: ${messageType}`);
   }
 
-  const sent = await entry.sock.sendMessage(jid, payload);
+  const options = buildQuotedOptions(jid, replyContext);
+  const sent = options ? await entry.sock.sendMessage(jid, payload, options) : await entry.sock.sendMessage(jid, payload);
   return { whatsappMessageId: sent.key.id };
 }
 

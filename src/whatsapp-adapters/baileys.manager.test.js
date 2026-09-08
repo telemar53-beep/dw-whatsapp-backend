@@ -687,6 +687,44 @@ describe('baileys.manager', () => {
       expect(result).toEqual({ whatsappMessageId: 'wamid.SENT1' });
     });
 
+    test('sends a quoted reply when reply context is provided', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-4', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      await manager.sendTextMessage(channel, '5511999993333', 'R$150,00', {
+        repliedToWhatsappMessageId: 'wamid.ORIG1',
+        repliedToDirection: 'inbound',
+        repliedToContent: 'Qual o valor?',
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith(
+        '5511999993333@s.whatsapp.net',
+        { text: 'R$150,00' },
+        { quoted: { key: { remoteJid: '5511999993333@s.whatsapp.net', id: 'wamid.ORIG1', fromMe: false }, message: { conversation: 'Qual o valor?' } } }
+      );
+    });
+
+    test('marks fromMe true when replying to an outbound message', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-4', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      await manager.sendTextMessage(channel, '5511999993333', 'Confirmado', {
+        repliedToWhatsappMessageId: 'wamid.ORIG2',
+        repliedToDirection: 'outbound',
+        repliedToContent: 'Já registramos o pagamento',
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith(
+        '5511999993333@s.whatsapp.net',
+        { text: 'Confirmado' },
+        expect.objectContaining({ quoted: expect.objectContaining({ key: expect.objectContaining({ fromMe: true }) }) })
+      );
+    });
+
     test('throws when there is no active connection for the channel', async () => {
       await expect(
         manager.sendTextMessage({ id: 'channel-does-not-exist' }, '5511999992222', 'Oi')
@@ -907,6 +945,33 @@ describe('baileys.manager', () => {
         fileName: 'resposta.pdf',
         caption: 'Segue o documento solicitado',
       });
+    });
+
+    test('sends a quoted reply when reply context is provided', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-5', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      const { getMediaFilePath } = require('../media/media-storage');
+      getMediaFilePath.mockReturnValue('/fake/path/image.jpg');
+      const fs = require('fs');
+      fs.promises.readFile = jest.fn().mockResolvedValue(Buffer.from('fake-image-bytes'));
+
+      await manager.sendMediaMessage(channel, '5511999993333', {
+        messageType: 'image',
+        mediaPath: 'image.jpg',
+        mediaMimeType: 'image/jpeg',
+        caption: 'Segue o comprovante',
+        repliedToWhatsappMessageId: 'wamid.ORIG3',
+        repliedToDirection: 'inbound',
+        repliedToContent: 'Manda o comprovante',
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith(
+        '5511999993333@s.whatsapp.net',
+        { image: Buffer.from('fake-image-bytes'), caption: 'Segue o comprovante' },
+        { quoted: { key: { remoteJid: '5511999993333@s.whatsapp.net', id: 'wamid.ORIG3', fromMe: false }, message: { conversation: 'Manda o comprovante' } } }
+      );
     });
 
     test('rejects for an unsupported media message type', async () => {

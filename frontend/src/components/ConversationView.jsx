@@ -17,10 +17,12 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const [showingHistory, setShowingHistory] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const [contactOverride, setContactOverride] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null);
 
   useEffect(() => {
     setContactOverride(null);
     setEditingContact(false);
+    setReplyingTo(null);
   }, [conversation.id]);
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
@@ -29,6 +31,11 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;
   const nameLabel = displayName || conversation.contactPhoneNumber || 'Conversa';
   const headerLabel = cityName ? `${nameLabel} - ${cityName}` : nameLabel;
+
+  async function handleSend(content, file, repliedToMessageId) {
+    await sendMessage(content, file, repliedToMessageId);
+    setReplyingTo(null);
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -85,24 +92,52 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         </div>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-3">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`max-w-[85%] space-y-1 rounded px-3 py-2 text-sm md:max-w-xs ${
-              message.direction === 'inbound' ? 'bg-gray-100 text-gray-800' : 'ml-auto bg-blue-100 text-gray-800'
-            }`}
-          >
-            {message.content && <p className="break-words">{message.content}</p>}
-            <MessageAttachment message={message} />
-            {message.direction === 'outbound' && (
-              <div className="flex justify-end">
-                <MessageStatusTicks status={message.status} />
+        {messages.map((message) => {
+          const repliedToLabel = message.repliedToPreview
+            ? message.repliedToPreview.direction === 'outbound'
+              ? 'Você'
+              : displayName || conversation.contactPhoneNumber || 'Conversa'
+            : null;
+          return (
+            <div
+              key={message.id}
+              className={`max-w-[85%] space-y-1 rounded px-3 py-2 text-sm md:max-w-xs ${
+                message.direction === 'inbound' ? 'bg-gray-100 text-gray-800' : 'ml-auto bg-blue-100 text-gray-800'
+              }`}
+            >
+              {message.repliedToPreview && (
+                <div className="rounded border-l-2 border-gray-400 bg-black/5 px-2 py-1 text-xs text-gray-600">
+                  <p className="font-medium">{repliedToLabel}</p>
+                  <p className="truncate">{message.repliedToPreview.content}</p>
+                </div>
+              )}
+              {message.content && <p className="break-words">{message.content}</p>}
+              <MessageAttachment message={message} />
+              <div className="flex items-center justify-end gap-2">
+                {isMine && message.content && (
+                  <button
+                    onClick={() => setReplyingTo(message)}
+                    aria-label="Responder"
+                    title="Responder"
+                    className="text-xs text-gray-500 hover:underline"
+                  >
+                    ↩
+                  </button>
+                )}
+                {message.direction === 'outbound' && <MessageStatusTicks status={message.status} />}
               </div>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
-      {isMine && <MessageInput onSend={sendMessage} quickReplies={quickReplies} />}
+      {isMine && (
+        <MessageInput
+          onSend={handleSend}
+          quickReplies={quickReplies}
+          replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
+        />
+      )}
       {showingHistory && (
         <ConversationHistoryModal contactId={conversation.contactId} onClose={() => setShowingHistory(false)} />
       )}

@@ -182,7 +182,7 @@ describe('ConversationView', () => {
     await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'Segue a foto');
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
 
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('Segue a foto', fakeFile));
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('Segue a foto', fakeFile, null));
   });
 
   test('opens the previous-conversations history modal for the conversation contact', async () => {
@@ -314,5 +314,102 @@ describe('ConversationView', () => {
 
     expect(screen.getByText('Maria')).toBeInTheDocument();
     expect(screen.queryByText('Carlos Editado')).not.toBeInTheDocument();
+  });
+
+  test('shows a reply button on a message with content when the conversation is mine', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'inbound', content: 'Qual o valor da fatura?' }],
+      sendMessage: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: /responder/i })).toBeInTheDocument();
+  });
+
+  test('shows no reply button when the conversation is not mine', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'inbound', content: 'Qual o valor da fatura?' }],
+      sendMessage: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('button', { name: /responder/i })).not.toBeInTheDocument();
+  });
+
+  test('clicking the reply button on a message stages it, and sending clears it', async () => {
+    const sendMessage = vi.fn().mockResolvedValue({});
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'inbound', content: 'Qual o valor da fatura?' }],
+      sendMessage,
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /responder/i }));
+    expect(screen.getAllByText('Qual o valor da fatura?').length).toBeGreaterThan(1);
+
+    await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'R$150,00');
+    await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('R$150,00', null, 'm1'));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /cancelar resposta/i })).not.toBeInTheDocument());
+  });
+
+  test('shows a quoted preview on a message that has repliedToPreview', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [
+        {
+          id: 'm2',
+          direction: 'outbound',
+          content: 'R$150,00',
+          repliedToPreview: { content: 'Qual o valor da fatura?', direction: 'inbound' },
+        },
+      ],
+      sendMessage: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Carlos' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Qual o valor da fatura?')).toBeInTheDocument();
+    // 'Carlos' legitimately appears twice — once in the header, once as the quote's label —
+    // so this must NOT use the singular getByText (it throws on more than one match).
+    expect(screen.getAllByText('Carlos').length).toBeGreaterThan(1);
+  });
+
+  test('labels a quoted reply to your own earlier message as "Você"', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [
+        {
+          id: 'm2',
+          direction: 'outbound',
+          content: 'Confirmado',
+          repliedToPreview: { content: 'Já registramos o pagamento', direction: 'outbound' },
+        },
+      ],
+      sendMessage: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Carlos' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Você')).toBeInTheDocument();
+    expect(screen.getByText('Já registramos o pagamento')).toBeInTheDocument();
   });
 });

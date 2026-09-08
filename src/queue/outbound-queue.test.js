@@ -9,6 +9,9 @@ describe('outbound queue', () => {
   let channelId;
 
   beforeEach(async () => {
+    // Drain before each test too, not just after: a run that starts from an already-polluted
+    // queue (e.g. a prior crashed run) would otherwise fail its first test before self-healing.
+    await getOutboundQueue().obliterate({ force: true });
     await getPool().query('TRUNCATE conversations, contacts, channels, messages CASCADE');
     const contact = await findOrCreateContactByPhoneNumber('+5511911112222', 'Fila Teste');
     const channel = await createChannel({

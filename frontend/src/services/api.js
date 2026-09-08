@@ -63,18 +63,21 @@ export function claimConversation(conversationId, token) {
   return apiFetch(`/api/conversations/${conversationId}/claim`, { method: 'POST', token });
 }
 
-export function sendMessage(conversationId, content, token, file) {
+export function sendMessage(conversationId, content, token, file, repliedToMessageId) {
   if (file) {
     const formData = new FormData();
     if (content) {
       formData.append('content', content);
     }
     formData.append('file', file);
+    if (repliedToMessageId) {
+      formData.append('repliedToMessageId', repliedToMessageId);
+    }
     return apiFetch(`/api/conversations/${conversationId}/messages`, { method: 'POST', body: formData, token });
   }
   return apiFetch(`/api/conversations/${conversationId}/messages`, {
     method: 'POST',
-    body: { content },
+    body: repliedToMessageId ? { content, repliedToMessageId } : { content },
     token,
   });
 }

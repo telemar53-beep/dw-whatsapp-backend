@@ -36,8 +36,8 @@ export function useConversationMessages(conversationId) {
   }, [socket, conversationId]);
 
   const sendMessage = useCallback(
-    async (content, file) => {
-      const created = await apiSendMessage(conversationId, content, token, file);
+    async (content, file, repliedToMessageId) => {
+      const created = await apiSendMessage(conversationId, content, token, file, repliedToMessageId);
       setMessages((prev) => [...prev, created]);
       return created;
     },

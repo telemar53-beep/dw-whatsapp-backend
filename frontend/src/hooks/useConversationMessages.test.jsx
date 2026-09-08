@@ -107,7 +107,7 @@ describe('useConversationMessages', () => {
       await result.current.sendMessage('Ola cliente');
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Ola cliente', 'tok-123', undefined);
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Ola cliente', 'tok-123', undefined, undefined);
     expect(result.current.messages).toEqual([{ id: 'm2', content: 'Ola cliente', status: 'sent' }]);
   });
 
@@ -122,7 +122,18 @@ describe('useConversationMessages', () => {
       await result.current.sendMessage('Legenda', fakeFile);
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Legenda', 'tok-123', fakeFile);
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Legenda', 'tok-123', fakeFile, undefined);
+  });
+
+  test('sendMessage forwards the repliedToMessageId argument to the api call', async () => {
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    api.sendMessage.mockResolvedValue({ id: 'm4', content: 'R$150,00', status: 'sent' });
+
+    await act(async () => {
+      await result.current.sendMessage('R$150,00', undefined, 'msg-original');
+    });
+
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'R$150,00', 'tok-123', undefined, 'msg-original');
   });
 
   test('resets the message list when the conversationId changes', async () => {

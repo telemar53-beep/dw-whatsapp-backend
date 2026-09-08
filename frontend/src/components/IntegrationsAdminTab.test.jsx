@@ -2,100 +2,111 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import IntegrationsAdminTab from './IntegrationsAdminTab';
-import { useSgpIntegration } from '../hooks/useSgpIntegration';
+import { useSgpIntegrations } from '../hooks/useSgpIntegrations';
 import { useChannels } from '../hooks/useChannels';
+import { useTemplates } from '../hooks/useTemplates';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
 
-vi.mock('../hooks/useSgpIntegration');
+vi.mock('../hooks/useSgpIntegrations');
 vi.mock('../hooks/useChannels');
+vi.mock('../hooks/useTemplates');
 vi.mock('../contexts/AuthContext');
 vi.mock('../services/api');
 
 const BAILEYS_CHANNEL = { id: 'channel-1', type: 'baileys', name: 'Berg' };
 const META_CHANNEL = { id: 'channel-2', type: 'meta_cloud', name: 'Oficial' };
+const APPROVED_TEMPLATE = { id: 'tpl-1', name: 'aviso_cobranca', status: 'APPROVED' };
 
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123' });
   useChannels.mockReturnValue({ channels: [BAILEYS_CHANNEL, META_CHANNEL] });
+  useTemplates.mockReturnValue({ templates: [APPROVED_TEMPLATE] });
 });
 
 describe('IntegrationsAdminTab', () => {
-  test('only lists Baileys channels in the dropdown', () => {
-    useSgpIntegration.mockReturnValue({ integration: { configured: false }, refresh: vi.fn() });
+  test('lists existing integrations with their channel name and mode label', () => {
+    useSgpIntegrations.mockReturnValue({
+      integrations: [{ id: 'int-1', description: 'Baileys principal', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true }],
+      refresh: vi.fn(),
+    });
     render(<IntegrationsAdminTab />);
-
-    expect(screen.getByRole('option', { name: 'Berg' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Oficial' })).not.toBeInTheDocument();
+    expect(screen.getByText('Baileys principal')).toBeInTheDocument();
+    expect(screen.getByText(/Berg/)).toBeInTheDocument();
+    expect(screen.getByText(/Texto livre/)).toBeInTheDocument();
   });
 
-  test('saves the chosen channel', async () => {
-    const refresh = vi.fn();
-    useSgpIntegration.mockReturnValue({ integration: { configured: false }, refresh });
-    api.saveSgpIntegration.mockResolvedValue({ configured: true, channelId: 'channel-1', enabled: true, hasApiKey: false });
+  test('the template selector only appears after choosing a meta_cloud channel', async () => {
+    useSgpIntegrations.mockReturnValue({ integrations: [], refresh: vi.fn() });
     render(<IntegrationsAdminTab />);
 
-    await userEvent.selectOptions(screen.getByLabelText(/canal/i), 'channel-1');
-    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    expect(screen.queryByLabelText(/template padrão/i)).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText(/^canal$/i), 'channel-2');
+
+    expect(screen.getByLabelText(/template padrão/i)).toBeInTheDocument();
+  });
+
+  test('creates a new freetext integration for a baileys channel', async () => {
+    const refresh = vi.fn();
+    useSgpIntegrations.mockReturnValue({ integrations: [], refresh });
+    api.createSgpIntegration.mockResolvedValue({ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: false });
+    render(<IntegrationsAdminTab />);
+
+    await userEvent.type(screen.getByLabelText(/descrição/i), 'Baileys');
+    await userEvent.selectOptions(screen.getByLabelText(/^canal$/i), 'channel-1');
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 
     await waitFor(() =>
-      expect(api.saveSgpIntegration).toHaveBeenCalledWith({ channelId: 'channel-1', enabled: true }, 'tok-123')
+      expect(api.createSgpIntegration).toHaveBeenCalledWith({ description: 'Baileys', channelId: 'channel-1', defaultTemplateId: null, enabled: true }, 'tok-123')
     );
     expect(refresh).toHaveBeenCalled();
   });
 
-  test('shows the generate-key button once configured, and shows the key once after generating', async () => {
-    useSgpIntegration.mockReturnValue({
-      integration: { configured: true, channelId: 'channel-1', enabled: true, hasApiKey: false },
+  test('creates a new template integration for a meta_cloud channel with a chosen default template', async () => {
+    const refresh = vi.fn();
+    useSgpIntegrations.mockReturnValue({ integrations: [], refresh });
+    api.createSgpIntegration.mockResolvedValue({ id: 'int-2', description: 'Oficial', channelId: 'channel-2', mode: 'template', defaultTemplateId: 'tpl-1', enabled: true, hasApiKey: false });
+    render(<IntegrationsAdminTab />);
+
+    await userEvent.type(screen.getByLabelText(/descrição/i), 'Oficial');
+    await userEvent.selectOptions(screen.getByLabelText(/^canal$/i), 'channel-2');
+    await userEvent.selectOptions(screen.getByLabelText(/template padrão/i), 'tpl-1');
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createSgpIntegration).toHaveBeenCalledWith({ description: 'Oficial', channelId: 'channel-2', defaultTemplateId: 'tpl-1', enabled: true }, 'tok-123')
+    );
+  });
+
+  test('toggling Ativo on a card calls updateSgpIntegration with that card current values', async () => {
+    const refresh = vi.fn();
+    useSgpIntegrations.mockReturnValue({
+      integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true }],
+      refresh,
+    });
+    api.updateSgpIntegration.mockResolvedValue({});
+    render(<IntegrationsAdminTab />);
+
+    await userEvent.click(screen.getByLabelText('Ativo: Baileys'));
+
+    await waitFor(() =>
+      expect(api.updateSgpIntegration).toHaveBeenCalledWith('int-1', { description: 'Baileys', channelId: 'channel-1', defaultTemplateId: null, enabled: false }, 'tok-123')
+    );
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('generating a key shows it once', async () => {
+    useSgpIntegrations.mockReturnValue({
+      integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: false }],
       refresh: vi.fn(),
     });
-    api.rotateSgpIntegrationKey.mockResolvedValue({
-      apiKey: 'plain-key-abc',
-      configured: true,
-      channelId: 'channel-1',
-      enabled: true,
-      hasApiKey: true,
-    });
+    api.rotateSgpIntegrationKey.mockResolvedValue({ apiKey: 'plain-key-abc' });
     render(<IntegrationsAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
 
     expect(await screen.findByText('plain-key-abc')).toBeInTheDocument();
-  });
-
-  test('does not show the key section before the integration is configured', () => {
-    useSgpIntegration.mockReturnValue({ integration: { configured: false }, refresh: vi.fn() });
-    render(<IntegrationsAdminTab />);
-
-    expect(screen.queryByRole('button', { name: /gerar nova chave/i })).not.toBeInTheDocument();
-  });
-
-  test('shows an error message when saving fails', async () => {
-    useSgpIntegration.mockReturnValue({ integration: { configured: false }, refresh: vi.fn() });
-    api.saveSgpIntegration.mockRejectedValue({ body: { error: 'Falha ao salvar' } });
-    render(<IntegrationsAdminTab />);
-
-    await userEvent.selectOptions(screen.getByLabelText(/canal/i), 'channel-1');
-    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
-
-    expect(await screen.findByText('Falha ao salvar')).toBeInTheDocument();
-  });
-
-  test('unchecking Ativo and saving sends enabled: false', async () => {
-    const refresh = vi.fn();
-    useSgpIntegration.mockReturnValue({
-      integration: { configured: true, channelId: 'channel-1', enabled: true, hasApiKey: true },
-      refresh,
-    });
-    api.saveSgpIntegration.mockResolvedValue({ configured: true, channelId: 'channel-1', enabled: false, hasApiKey: true });
-    render(<IntegrationsAdminTab />);
-
-    await userEvent.click(screen.getByLabelText(/ativo/i));
-    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
-
-    await waitFor(() =>
-      expect(api.saveSgpIntegration).toHaveBeenCalledWith({ channelId: 'channel-1', enabled: false }, 'tok-123')
-    );
   });
 });

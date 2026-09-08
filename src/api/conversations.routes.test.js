@@ -589,17 +589,88 @@ describe('POST /api/conversations/start', () => {
     expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
   });
 
-  test('returns 409 when the contact already has an open conversation on this channel', async () => {
+  test('returns 409 when the contact already has an open (waiting) conversation on this channel', async () => {
     findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
     baileysManager.resolveWhatsAppJid.mockResolvedValue('5598999990000');
     findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5598999990000' });
-    findOpenConversation.mockResolvedValue({ id: 'conv-existing' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-existing', status: 'waiting' });
     const res = await request(buildApp())
       .post('/api/conversations/start')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ channelId: 'channel-1', phoneNumber: '(55) 98 99999-0000', content: 'Oi' });
     expect(res.status).toBe(409);
     expect(createConversation).not.toHaveBeenCalled();
+    expect(claimConversation).not.toHaveBeenCalled();
+  });
+
+  test('returns 409 when the contact already has an open (assigned) conversation on this channel', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    baileysManager.resolveWhatsAppJid.mockResolvedValue('5598999990000');
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5598999990000' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-existing', status: 'assigned' });
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '(55) 98 99999-0000', content: 'Oi' });
+    expect(res.status).toBe(409);
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(claimConversation).not.toHaveBeenCalled();
+  });
+
+  test('adopts a dormant silent conversation instead of creating a new one', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    baileysManager.resolveWhatsAppJid.mockResolvedValue('5598999990000');
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5598999990000' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-silent', status: 'silent' });
+    claimConversation.mockResolvedValue({
+      id: 'conv-silent',
+      contactId: 'contact-1',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+    });
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-silent',
+      contactId: 'contact-1',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+      contactPhoneNumber: '5598999990000',
+      contactDisplayName: null,
+    });
+
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '(55) 98 99999-0000', content: 'Oi, tudo bem?' });
+
+    expect(res.status).toBe(201);
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(claimConversation).toHaveBeenCalledWith('conv-silent', 'agent-1');
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-silent',
+      channelId: 'channel-1',
+      content: 'Oi, tudo bem?',
+    });
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:assigned', {
+      conversation: expect.objectContaining({ id: 'conv-silent' }),
+    });
+    expect(res.body).toEqual(expect.objectContaining({ id: 'conv-silent' }));
+  });
+
+  test('returns 409 when adopting a silent conversation races and someone else claims it first', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    baileysManager.resolveWhatsAppJid.mockResolvedValue('5598999990000');
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5598999990000' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-silent', status: 'silent' });
+    claimConversation.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi' });
+
+    expect(res.status).toBe(409);
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 
   test('creates, claims and enqueues the first message on the happy path, using the canonical number WhatsApp reports', async () => {

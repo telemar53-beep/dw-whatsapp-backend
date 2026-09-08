@@ -143,14 +143,22 @@ router.post('/start', async (req, res) => {
   }
 
   const existing = await findOpenConversation(contact.id, channel.id);
-  if (existing) {
+  let claimed;
+  if (existing && existing.status !== 'silent') {
     return res.status(409).json({ error: 'There is already an open conversation with this contact on this channel' });
-  }
-
-  const conversation = await createConversation(contact.id, channel.id);
-  const claimed = await claimConversation(conversation.id, req.agent.agentId);
-  if (!claimed) {
-    throw new Error('Failed to claim newly created conversation');
+  } else if (existing) {
+    // A dormant conversation the SGP integration created (never replied to) blocks nothing —
+    // adopt it instead of creating a duplicate, so it becomes assignable/closable like any other.
+    claimed = await claimConversation(existing.id, req.agent.agentId);
+    if (!claimed) {
+      return res.status(409).json({ error: 'There is already an open conversation with this contact on this channel' });
+    }
+  } else {
+    const conversation = await createConversation(contact.id, channel.id);
+    claimed = await claimConversation(conversation.id, req.agent.agentId);
+    if (!claimed) {
+      throw new Error('Failed to claim newly created conversation');
+    }
   }
   await enqueueOutboundMessage({ conversationId: claimed.id, channelId: channel.id, ...outboundPayload });
 

@@ -131,6 +131,22 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     return message;
   }
 
+  async function handleClaim() {
+    try {
+      await claimConversation(conversation.id, token);
+    } catch (err) {
+      window.alert((err.body && err.body.error) || 'Não foi possível assumir este atendimento.');
+    }
+  }
+
+  async function handleClose() {
+    try {
+      await closeConversation(conversation.id, token);
+    } catch (err) {
+      window.alert((err.body && err.body.error) || 'Não foi possível fechar este atendimento.');
+    }
+  }
+
   const timeline = buildTimeline(messages);
 
   return (
@@ -163,7 +179,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         <div className="flex shrink-0 items-center gap-0.5">
           {isUnassigned && (
             <button
-              onClick={() => claimConversation(conversation.id, token)}
+              onClick={handleClaim}
               className="mr-1 flex items-center gap-1.5 rounded-full bg-wa-green px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
             >
               <IconClaim size={17} />
@@ -181,7 +197,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
               <HeaderIconButton label="Transferir atendimento" onClick={() => onTransferClick(conversation.id)}>
                 <IconTransfer size={22} />
               </HeaderIconButton>
-              <HeaderIconButton label="Fechar atendimento" onClick={() => closeConversation(conversation.id, token)}>
+              <HeaderIconButton label="Fechar atendimento" onClick={handleClose}>
                 <IconCheckCircle size={22} />
               </HeaderIconButton>
             </>

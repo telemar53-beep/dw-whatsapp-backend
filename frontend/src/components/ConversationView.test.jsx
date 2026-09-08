@@ -183,6 +183,29 @@ describe('ConversationView', () => {
     await waitFor(() => expect(api.closeConversation).toHaveBeenCalledWith('c1', 'tok-123'));
   });
 
+  test('shows an alert with the backend error when closing fails', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    api.closeConversation.mockRejectedValue({ body: { error: 'Conversation is not currently assigned to you, or is closed' } });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Conversation is not currently assigned to you, or is closed'));
+    alertSpy.mockRestore();
+  });
+
+  test('shows an alert with the backend error when claiming fails', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    api.claimConversation.mockRejectedValue({ body: { error: 'Conversation is already assigned' } });
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /assumir/i }));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Conversation is already assigned'));
+    alertSpy.mockRestore();
+  });
+
   test('does not render the message input when the conversation is assigned to another agent or unassigned', () => {
     const { rerender } = render(
       <ConversationView

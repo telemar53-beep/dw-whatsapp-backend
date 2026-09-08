@@ -2,6 +2,7 @@ const { getPool, closePool } = require('../db/pool');
 const { createChannel } = require('../channels/channel.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { createConversation } = require('../conversations/conversation.repository');
+const { createMessage } = require('../conversations/message.repository');
 const { getOutboundQueue, enqueueOutboundMessage, processOutboundQueue, closeOutboundQueue } = require('./outbound-queue');
 
 describe('outbound queue', () => {
@@ -128,6 +129,40 @@ describe('outbound queue', () => {
       try {
         expect(data.headerType).toBeNull();
         expect(data.headerLink).toBeNull();
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    enqueueOutboundMessage({ conversationId, channelId, content: 'Mensagem normal' });
+  });
+
+  test('passes repliedToMessageId through to the queued job', (done) => {
+    // replied_to_message_id is a UUID FK to messages(id) (Task 1's migration), so this test
+    // creates a real original message rather than using a placeholder string like 'msg-original'.
+    createMessage({
+      conversationId,
+      direction: 'inbound',
+      content: 'Qual o valor da fatura?',
+      whatsappMessageId: 'wamid.ORIG1',
+      status: 'received',
+    }).then((original) => {
+      processOutboundQueue((data) => {
+        try {
+          expect(data.repliedToMessageId).toBe(original.id);
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+      enqueueOutboundMessage({ conversationId, channelId, content: 'R$150,00', repliedToMessageId: original.id });
+    });
+  });
+
+  test('defaults repliedToMessageId to null when not provided', (done) => {
+    processOutboundQueue((data) => {
+      try {
+        expect(data.repliedToMessageId).toBeNull();
         done();
       } catch (err) {
         done(err);

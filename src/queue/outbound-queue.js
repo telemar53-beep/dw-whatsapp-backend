@@ -12,7 +12,7 @@ function getOutboundQueue() {
   return queue;
 }
 
-async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables, headerType, headerLink }) {
+async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) {
   const message = await createMessage({
     conversationId,
     direction: 'outbound',
@@ -23,6 +23,7 @@ async function enqueueOutboundMessage({ conversationId, channelId, content, mess
     mediaPath,
     mediaMimeType,
     mediaFilename,
+    repliedToMessageId,
   });
   await getOutboundQueue().add(
     {
@@ -39,6 +40,7 @@ async function enqueueOutboundMessage({ conversationId, channelId, content, mess
       templateVariables: templateVariables || null,
       headerType: headerType || null,
       headerLink: headerLink || null,
+      repliedToMessageId: repliedToMessageId || null,
     },
     { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
   );

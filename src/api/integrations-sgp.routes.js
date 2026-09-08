@@ -8,6 +8,7 @@ const { findOpenConversation, createConversation, getConversationWithContact } =
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent } = require('../realtime/socket-server');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
+const { sgpLimiter } = require('../config/rate-limiters');
 
 const router = express.Router();
 const UNIQUE_VIOLATION = '23505';
@@ -32,7 +33,7 @@ async function requireSgpApiKey(req, res, next) {
   next();
 }
 
-router.get('/messages', requireSgpApiKey, async (req, res) => {
+router.get('/messages', sgpLimiter, requireSgpApiKey, async (req, res) => {
   const { phoneNumber, content, referenceId } = req.query;
   if (typeof phoneNumber !== 'string' || !phoneNumber.trim()) {
     return res.status(400).json({ error: 'phoneNumber is required' });

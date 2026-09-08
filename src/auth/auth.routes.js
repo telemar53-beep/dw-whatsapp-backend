@@ -1,10 +1,11 @@
 const express = require('express');
 const { login, changePassword } = require('./auth.service');
 const { requireAuth } = require('./auth.middleware');
+const { loginLimiter } = require('../config/rate-limiters');
 
 const router = express.Router();
 
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginLimiter, async (req, res, next) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password are required' });

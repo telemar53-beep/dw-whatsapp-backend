@@ -26,6 +26,7 @@ const templatesRoutes = require('./api/templates.routes');
 const adminTemplatesRoutes = require('./api/admin-templates.routes');
 const integrationsSgpRoutes = require('./api/integrations-sgp.routes');
 const adminIntegrationsRoutes = require('./api/admin-integrations.routes');
+const { globalLimiter } = require('./config/rate-limiters');
 const { initSocketServer } = require('./realtime/socket-server');
 
 const config = loadConfig();
@@ -52,6 +53,8 @@ app.get('/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({ message: 'API WhatsApp DW Telecom' });
 });
+
+app.use(globalLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/conversations', conversationsRoutes);

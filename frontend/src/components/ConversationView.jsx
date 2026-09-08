@@ -354,7 +354,11 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
       )}
       </div>
       {sgpPanelOpen && (
-        <SgpLookupPanel onSendMessage={(content) => sendMessage(content)} onSendPdf={handleSendSgpPdf} />
+        <SgpLookupPanel
+          onSendMessage={(content) => sendMessage(content)}
+          onSendPdf={handleSendSgpPdf}
+          onClose={() => setSgpPanelOpen(false)}
+        />
       )}
     </div>
   );

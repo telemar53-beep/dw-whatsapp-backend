@@ -10,6 +10,7 @@ import { useChannels } from '../hooks/useChannels';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
+import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
 
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useQueue');
@@ -20,6 +21,7 @@ vi.mock('../hooks/usePresence', () => ({ usePresence: () => new Set() }));
 vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useQueueNotificationSound');
+vi.mock('../hooks/useUnreadMyConversations');
 vi.mock('../components/StartConversationModal', () => ({
   default: ({ onCreated }) => (
     <button
@@ -39,6 +41,7 @@ beforeEach(() => {
   useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted: vi.fn() });
+  useUnreadMyConversations.mockReturnValue({ unreadIds: new Set(), clearUnread: vi.fn() });
 });
 
 function renderDashboard() {
@@ -56,6 +59,26 @@ describe('DashboardPage', () => {
     renderDashboard();
     expect(screen.getByText('Maria')).toBeInTheDocument();
     expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
+  });
+
+  test('shows an unread indicator on a my-conversations item the hook reports as unread', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([{ id: 'c2', contactDisplayName: 'Maria' }]);
+    useUnreadMyConversations.mockReturnValue({ unreadIds: new Set(['c2']), clearUnread: vi.fn() });
+    renderDashboard();
+    expect(screen.getByTitle('Mensagem não lida')).toBeInTheDocument();
+  });
+
+  test('clears the unread flag when the attendant selects that conversation', async () => {
+    const clearUnread = vi.fn();
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([{ id: 'c2', contactDisplayName: 'Maria' }]);
+    useUnreadMyConversations.mockReturnValue({ unreadIds: new Set(['c2']), clearUnread });
+    renderDashboard();
+
+    await userEvent.click(screen.getByText('Maria'));
+
+    expect(clearUnread).toHaveBeenCalledWith('c2');
   });
 
   test('shows the queue in the Espera tab after clicking it', async () => {

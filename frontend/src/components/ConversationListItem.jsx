@@ -21,7 +21,7 @@ function formatMessageTime(lastMessageAt) {
   return new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function ConversationListItem({ conversation, onSelect }) {
+function ConversationListItem({ conversation, onSelect, unread }) {
   const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
   const displayLabel = conversation.contactCityName ? `${nameLabel} - ${conversation.contactCityName}` : nameLabel;
   const previewText = getPreviewText(conversation);
@@ -41,7 +41,10 @@ function ConversationListItem({ conversation, onSelect }) {
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate font-medium text-gray-800">{displayLabel}</p>
+            <p className="flex items-center gap-1.5 truncate font-medium text-gray-800">
+              {unread && <span title="Mensagem não lida" className="h-2 w-2 shrink-0 rounded-full bg-blue-600" />}
+              {displayLabel}
+            </p>
             <div className="flex shrink-0 items-center gap-2">
               {messageTime && <span className="text-xs text-gray-400">{messageTime}</span>}
               {conversation.sectorName && (

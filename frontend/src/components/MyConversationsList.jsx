@@ -1,6 +1,6 @@
 import ConversationListItem from './ConversationListItem';
 
-function MyConversationsList({ conversations, onSelect }) {
+function MyConversationsList({ conversations, onSelect, unreadIds }) {
   return (
     <div>
       <h2 className="mb-2 font-semibold text-gray-700">Minhas conversas</h2>
@@ -9,7 +9,12 @@ function MyConversationsList({ conversations, onSelect }) {
       ) : (
         <ul className="space-y-1">
           {conversations.map((conversation) => (
-            <ConversationListItem key={conversation.id} conversation={conversation} onSelect={onSelect} />
+            <ConversationListItem
+              key={conversation.id}
+              conversation={conversation}
+              onSelect={onSelect}
+              unread={Boolean(unreadIds && unreadIds.has(conversation.id))}
+            />
           ))}
         </ul>
       )}

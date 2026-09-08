@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
+import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
 import QueueList from '../components/QueueList';
 import MyConversationsList from '../components/MyConversationsList';
 import ConversationView from '../components/ConversationView';
@@ -35,6 +36,12 @@ function DashboardPage() {
   const { muted, toggleMuted } = useQueueNotificationSound();
   const [activeTab, setActiveTab] = useState('inProgress');
   const [selectedId, setSelectedId] = useState(null);
+  const { unreadIds, clearUnread } = useUnreadMyConversations(myConversations, selectedId);
+
+  function selectConversation(conversationId) {
+    clearUnread(conversationId);
+    setSelectedId(conversationId);
+  }
   const [transferringId, setTransferringId] = useState(null);
   const [changingPassword, setChangingPassword] = useState(false);
   const [startingConversation, setStartingConversation] = useState(false);
@@ -117,7 +124,9 @@ function DashboardPage() {
               </button>
             ))}
           </div>
-          {activeTab === 'inProgress' && <MyConversationsList conversations={myConversations} onSelect={setSelectedId} />}
+          {activeTab === 'inProgress' && (
+            <MyConversationsList conversations={myConversations} onSelect={selectConversation} unreadIds={unreadIds} />
+          )}
           {activeTab === 'waiting' && (
             <QueueList
               conversations={waitingConversations}

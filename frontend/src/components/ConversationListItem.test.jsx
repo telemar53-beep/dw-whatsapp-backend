@@ -271,6 +271,31 @@ describe('ConversationListItem', () => {
     expect(screen.getByTitle('Entregue')).toBeInTheDocument();
   });
 
+  test('shows an unread indicator when unread is true', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={vi.fn()}
+          unread
+        />
+      </ul>
+    );
+    expect(screen.getByTitle('Mensagem não lida')).toBeInTheDocument();
+  });
+
+  test('shows no unread indicator by default', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.queryByTitle('Mensagem não lida')).not.toBeInTheDocument();
+  });
+
   test('shows no status ticks for an inbound last message from the contact', () => {
     render(
       <ul>

@@ -74,7 +74,7 @@ describe('GET /api/integrations/sgp/messages', () => {
 
   describe('with a valid token', () => {
     beforeEach(() => {
-      verifySgpApiKey.mockResolvedValue({ status: 'ok', channelId: 'channel-1' });
+      verifySgpApiKey.mockResolvedValue({ status: 'ok', channelId: 'channel-1', mode: 'freetext' });
     });
 
     test('returns 400 when phoneNumber is missing', async () => {
@@ -222,7 +222,10 @@ describe('GET /api/integrations/sgp/messages', () => {
   });
 
   describe('with a valid token for a template-mode integration', () => {
-    const TEMPLATE_CHANNEL = { id: 'channel-2', type: 'meta_cloud', status: 'connected', config: { phoneNumberId: '999', accessToken: 'tok', wabaId: 'waba-1' } };
+    // Production shape: `channels.status` defaults to 'disconnected' and only Baileys ever writes
+    // 'connected', so a meta_cloud channel is permanently 'disconnected'. Mocking it that way is what
+    // makes "without checking channel connectivity" an assertion instead of a coincidence.
+    const TEMPLATE_CHANNEL = { id: 'channel-2', type: 'meta_cloud', status: 'disconnected', config: { phoneNumberId: '999', accessToken: 'tok', wabaId: 'waba-1' } };
     const TEMPLATE = { id: 'tpl-1', name: 'aviso_cobranca', language: 'pt_BR', variableCount: 2, headerType: null };
 
     beforeEach(() => {

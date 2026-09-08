@@ -12,13 +12,26 @@ const ADAPTERS_BY_CHANNEL_TYPE = {
 };
 
 function startOutboundWorker() {
-  processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables, headerType, headerLink }) => {
+  processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) => {
     const existingMessage = await findMessageById(messageId);
     if (existingMessage && existingMessage.whatsappMessageId) return;
     const conversation = await getConversationWithContact(conversationId);
     const channel = await findChannelById(channelId);
     try {
       const adapter = ADAPTERS_BY_CHANNEL_TYPE[channel.type];
+
+      let replyOptions;
+      if (repliedToMessageId) {
+        const original = await findMessageById(repliedToMessageId);
+        if (original) {
+          replyOptions = {
+            repliedToWhatsappMessageId: original.whatsappMessageId,
+            repliedToDirection: original.direction,
+            repliedToContent: original.content,
+          };
+        }
+      }
+
       const { whatsappMessageId } = templateName
         ? await adapter.sendTemplateMessage(channel, conversation.contactPhoneNumber, {
             name: templateName,
@@ -34,8 +47,11 @@ function startOutboundWorker() {
               mediaMimeType,
               mediaFilename,
               caption: content,
+              ...(replyOptions || {}),
             })
-          : await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content);
+          : replyOptions
+            ? await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content, replyOptions)
+            : await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content);
       const message = await recordMessageSent(messageId, whatsappMessageId);
       if (conversation.assignedAgentId) {
         emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });

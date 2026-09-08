@@ -222,4 +222,86 @@ describe('startOutboundWorker', () => {
       { name: 'aviso_cobranca', language: 'pt_BR', variables: ['João'], headerType: 'document', headerLink: 'https://boleto.link/xyz.pdf' }
     );
   });
+
+  test('passes reply context to sendTextMessage when repliedToMessageId is present and the original message is found', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    findMessageById.mockImplementation((id) => {
+      if (id === 'msg-1') return Promise.resolve(null); // idempotency check at the top of the handler
+      if (id === 'msg-original') {
+        return Promise.resolve({ id: 'msg-original', whatsappMessageId: 'wamid.ORIG1', direction: 'inbound', content: 'Qual o valor?' });
+      }
+      return Promise.resolve(null);
+    });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.REPLY1' });
+
+    await handler({
+      messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'R$150,00',
+      repliedToMessageId: 'msg-original',
+    });
+
+    expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalledWith(
+      { id: 'channel-1', type: 'meta_cloud', config: {} },
+      '5511999998888',
+      'R$150,00',
+      { repliedToWhatsappMessageId: 'wamid.ORIG1', repliedToDirection: 'inbound', repliedToContent: 'Qual o valor?' }
+    );
+  });
+
+  test('sends without a 4th argument when repliedToMessageId is absent (unchanged behavior)', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.PLAIN1' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Oi' });
+
+    expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalledWith(
+      { id: 'channel-1', type: 'meta_cloud', config: {} },
+      '5511999998888',
+      'Oi'
+    );
+  });
+
+  test('sends without reply context when the original message is not found (defensive fallback)', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    findMessageById.mockResolvedValue(null);
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.FALLBACK1' });
+
+    await handler({
+      messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'R$150,00',
+      repliedToMessageId: 'msg-gone',
+    });
+
+    expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalledWith(
+      { id: 'channel-1', type: 'meta_cloud', config: {} },
+      '5511999998888',
+      'R$150,00'
+    );
+  });
+
+  test('passes reply context to sendMediaMessage when repliedToMessageId is present', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    findMessageById.mockImplementation((id) => {
+      if (id === 'msg-1') return Promise.resolve(null);
+      return Promise.resolve({ id: 'msg-original', whatsappMessageId: 'wamid.ORIG1', direction: 'outbound', content: 'Segue o boleto' });
+    });
+    metaCloudAdapter.sendMediaMessage.mockResolvedValue({ whatsappMessageId: 'wamid.REPLYMEDIA1' });
+
+    await handler({
+      messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Aqui está',
+      messageType: 'image', mediaPath: 'file.jpg', mediaMimeType: 'image/jpeg', mediaFilename: null,
+      repliedToMessageId: 'msg-original',
+    });
+
+    expect(metaCloudAdapter.sendMediaMessage).toHaveBeenCalledWith(
+      { id: 'channel-1', type: 'meta_cloud', config: {} },
+      '5511999998888',
+      {
+        messageType: 'image', mediaPath: 'file.jpg', mediaMimeType: 'image/jpeg', mediaFilename: null, caption: 'Aqui está',
+        repliedToWhatsappMessageId: 'wamid.ORIG1', repliedToDirection: 'outbound', repliedToContent: 'Segue o boleto',
+      }
+    );
+  });
 });

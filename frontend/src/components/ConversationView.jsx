@@ -36,14 +36,18 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           <button onClick={onBack} className="rounded p-3 text-gray-500 md:hidden" aria-label="Voltar para a lista">
             ←
           </button>
-          <button onClick={() => setEditingContact(true)} className="flex items-center gap-2" aria-label="Editar cliente">
+          <button
+            onClick={() => setEditingContact(true)}
+            className="flex items-center gap-2"
+            aria-label={`Editar cliente: ${headerLabel}`}
+          >
             <ContactAvatar
               contactId={conversation.contactId}
               avatarPath={conversation.contactAvatarPath}
               displayName={displayName}
               phoneNumber={conversation.contactPhoneNumber}
             />
-            <h3 className="font-semibold text-gray-800">{headerLabel}</h3>
+            <span className="font-semibold text-gray-800">{headerLabel}</span>
           </button>
         </div>
         <div className="flex flex-wrap gap-2">

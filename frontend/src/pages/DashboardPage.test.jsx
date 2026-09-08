@@ -61,6 +61,31 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
   });
 
+  test('exposes the tab strip as an ARIA tablist with the active tab marked aria-selected', async () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+
+    expect(screen.getByRole('tablist')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /andamento/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /espera/i })).toHaveAttribute('aria-selected', 'false');
+
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+
+    expect(screen.getByRole('tab', { name: /andamento/i })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tab', { name: /espera/i })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('exposes the active tab\'s content as an ARIA tabpanel labelled by that tab', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+
+    const tab = screen.getByRole('tab', { name: /andamento/i });
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveAttribute('aria-labelledby', tab.id);
+  });
+
   test('shows an unread indicator on a my-conversations item the hook reports as unread', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([{ id: 'c2', contactDisplayName: 'Maria' }]);
@@ -86,7 +111,7 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue([{ id: 'c2', contactDisplayName: 'Maria' }]);
     renderDashboard();
 
-    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
 
     expect(screen.getByText('Carlos')).toBeInTheDocument();
     expect(screen.queryByText('Maria')).not.toBeInTheDocument();
@@ -100,11 +125,11 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue([]);
     renderDashboard();
 
-    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
     expect(screen.getByText('Aguardando')).toBeInTheDocument();
     expect(screen.queryByText('Em Triagem')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /automação/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /automação/i }));
     expect(screen.getByText('Em Triagem')).toBeInTheDocument();
     expect(screen.queryByText('Aguardando')).not.toBeInTheDocument();
   });
@@ -117,9 +142,9 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue([{ id: 'c3', contactDisplayName: 'Minha' }]);
     renderDashboard();
 
-    expect(screen.getByRole('button', { name: /andamento/i }).textContent).toContain('1');
-    expect(screen.getByRole('button', { name: /espera/i }).textContent).toContain('1');
-    expect(screen.getByRole('button', { name: /automação/i }).textContent).toContain('1');
+    expect(screen.getByRole('tab', { name: /andamento/i }).textContent).toContain('1');
+    expect(screen.getByRole('tab', { name: /espera/i }).textContent).toContain('1');
+    expect(screen.getByRole('tab', { name: /automação/i }).textContent).toContain('1');
   });
 
   test('does not show a badge on a tab with no items', () => {
@@ -127,7 +152,7 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue([]);
     renderDashboard();
 
-    const inProgressButton = screen.getByRole('button', { name: /andamento/i });
+    const inProgressButton = screen.getByRole('tab', { name: /andamento/i });
     expect(inProgressButton.querySelector('span')).not.toBeInTheDocument();
   });
 
@@ -135,7 +160,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
     useMyConversations.mockReturnValue([]);
     renderDashboard();
-    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
     await userEvent.click(screen.getByText('Carlos'));
     expect(screen.getByRole('button', { name: /assumir/i })).toBeInTheDocument();
   });
@@ -242,7 +267,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
     useMyConversations.mockReturnValue([]);
     const { container } = renderDashboard();
-    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
     await userEvent.click(screen.getByText('Carlos'));
 
     const aside = container.querySelector('aside');
@@ -255,7 +280,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
     useMyConversations.mockReturnValue([]);
     const { container } = renderDashboard();
-    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
     await userEvent.click(screen.getByText('Carlos'));
     expect(container.querySelector('main').className).not.toMatch(/\bhidden\b/);
 
@@ -269,7 +294,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
     useMyConversations.mockReturnValue([]);
     const { container } = renderDashboard();
-    await userEvent.click(screen.getByRole('button', { name: /espera/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
     await userEvent.click(screen.getByText('Carlos'));
 
     expect(container.querySelector('header').className).toMatch(/\bhidden\b/);

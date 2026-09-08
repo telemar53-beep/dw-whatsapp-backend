@@ -110,10 +110,14 @@ function DashboardPage() {
           >
             Iniciar conversa
           </button>
-          <div className="flex rounded border border-gray-200">
+          <div role="tablist" className="flex rounded border border-gray-200">
             {TABS.map((tab) => (
               <button
                 key={tab.value}
+                id={`tab-${tab.value}`}
+                role="tab"
+                aria-selected={activeTab === tab.value}
+                aria-controls={`tabpanel-${tab.value}`}
                 onClick={() => setActiveTab(tab.value)}
                 className={`flex-1 px-2 py-2 text-xs font-medium ${
                   activeTab === tab.value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
@@ -124,25 +128,27 @@ function DashboardPage() {
               </button>
             ))}
           </div>
-          {activeTab === 'inProgress' && (
-            <MyConversationsList conversations={myConversations} onSelect={selectConversation} unreadIds={unreadIds} />
-          )}
-          {activeTab === 'waiting' && (
-            <QueueList
-              conversations={waitingConversations}
-              onSelect={setSelectedId}
-              title="Espera"
-              emptyMessage="Nenhuma conversa aguardando."
-            />
-          )}
-          {activeTab === 'automation' && (
-            <QueueList
-              conversations={automationConversations}
-              onSelect={setSelectedId}
-              title="Automação"
-              emptyMessage="Nenhuma conversa em triagem automática."
-            />
-          )}
+          <div role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+            {activeTab === 'inProgress' && (
+              <MyConversationsList conversations={myConversations} onSelect={selectConversation} unreadIds={unreadIds} />
+            )}
+            {activeTab === 'waiting' && (
+              <QueueList
+                conversations={waitingConversations}
+                onSelect={setSelectedId}
+                title="Espera"
+                emptyMessage="Nenhuma conversa aguardando."
+              />
+            )}
+            {activeTab === 'automation' && (
+              <QueueList
+                conversations={automationConversations}
+                onSelect={setSelectedId}
+                title="Automação"
+                emptyMessage="Nenhuma conversa em triagem automática."
+              />
+            )}
+          </div>
           <TeamPanel />
         </aside>
         <main className={`${selectedConversation ? 'block' : 'hidden'} flex-1 md:block`}>

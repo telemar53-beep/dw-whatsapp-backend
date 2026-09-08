@@ -214,6 +214,27 @@ describe('ConversationView', () => {
     expect(screen.getByText('Conversa')).toBeInTheDocument();
   });
 
+  test('the edit-contact trigger\'s accessible name includes the contact name, not just "Editar cliente"', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', contactId: 'contact-1', status: 'waiting', assignedAgentId: null, contactDisplayName: 'Maria' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: /editar cliente: maria/i })).toBeInTheDocument();
+  });
+
+  test('does not render the contact name as a heading (invalid inside a button)', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', contactId: 'contact-1', status: 'waiting', assignedAgentId: null, contactDisplayName: 'Maria' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Maria')).toBeInTheDocument();
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+  });
+
   test('clicking the contact name/avatar opens the edit-contact modal', async () => {
     render(
       <ConversationView

@@ -33,6 +33,14 @@ const { initSocketServer } = require('./realtime/socket-server');
 const config = loadConfig();
 const app = express();
 
+// We run behind Render's load balancer, which terminates the connection and puts the
+// caller's address in X-Forwarded-For. Left at the default, Express reports the load
+// balancer as req.ip: every attendant then shares a single rate-limit bucket, and
+// express-rate-limit rejects that setup outright (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR).
+// Trust exactly one hop — trusting all of them would let a caller prepend a forged
+// address and rotate past the limiter.
+app.set('trust proxy', 1);
+
 app.use(cors({ origin: getAllowedOrigins() }));
 app.use(
   express.json({

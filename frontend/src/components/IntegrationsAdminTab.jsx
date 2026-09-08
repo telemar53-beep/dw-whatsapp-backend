@@ -91,6 +91,8 @@ function IntegrationsAdminTab() {
   const { integrations, refresh } = useSgpIntegrations();
   const { channels } = useChannels();
   const { templates } = useTemplates();
+  // Each channel gets at most one SGP gateway (one for Baileys, one for Meta Cloud) —
+  // already-integrated channels are hidden here; edit the existing card instead of creating a duplicate.
   const eligibleChannels = channels.filter(
     (channel) =>
       (channel.type === 'baileys' || channel.type === 'meta_cloud') &&

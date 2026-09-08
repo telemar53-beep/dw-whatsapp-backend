@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TemplatesAdminTab from './TemplatesAdminTab';
 import { useTemplates } from '../hooks/useTemplates';
@@ -43,13 +43,14 @@ describe('TemplatesAdminTab', () => {
     useTemplates.mockReturnValue({ templates: [], refresh });
     api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-2', name: 'boas_vindas', status: 'PENDING' });
     render(<TemplatesAdminTab />);
+    const form = within(screen.getByRole('form', { name: /cadastrar novo template/i }));
 
-    await userEvent.selectOptions(screen.getByLabelText(/canal/i), 'ch-1');
-    await userEvent.type(screen.getByLabelText(/^nome$/i), 'boas_vindas');
-    await userEvent.selectOptions(screen.getByLabelText(/categoria/i), 'UTILITY');
-    await userEvent.type(screen.getByLabelText(/idioma/i), 'pt_BR');
-    await userEvent.type(screen.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'boas_vindas');
+    await userEvent.selectOptions(form.getByLabelText(/categoria/i), 'UTILITY');
+    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
 
     await waitFor(() =>
       expect(api.createTemplateAdmin).toHaveBeenCalledWith(
@@ -68,12 +69,13 @@ describe('TemplatesAdminTab', () => {
 
     useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }] });
     rerender(<TemplatesAdminTab />);
+    const form = within(screen.getByRole('form', { name: /cadastrar novo template/i }));
 
     api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-2', name: 'boas_vindas', status: 'PENDING' });
-    await userEvent.type(screen.getByLabelText(/^nome$/i), 'boas_vindas');
-    await userEvent.type(screen.getByLabelText(/idioma/i), 'pt_BR');
-    await userEvent.type(screen.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'boas_vindas');
+    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
 
     await waitFor(() =>
       expect(api.createTemplateAdmin).toHaveBeenCalledWith(
@@ -87,13 +89,14 @@ describe('TemplatesAdminTab', () => {
     useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
     api.createTemplateAdmin.mockRejectedValue({ body: { error: 'Invalid parameter' } });
     render(<TemplatesAdminTab />);
+    const form = within(screen.getByRole('form', { name: /cadastrar novo template/i }));
 
-    await userEvent.selectOptions(screen.getByLabelText(/canal/i), 'ch-1');
-    await userEvent.type(screen.getByLabelText(/^nome$/i), 'x');
-    await userEvent.selectOptions(screen.getByLabelText(/categoria/i), 'UTILITY');
-    await userEvent.type(screen.getByLabelText(/idioma/i), 'pt_BR');
-    await userEvent.type(screen.getByLabelText(/corpo/i), 'Y');
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'x');
+    await userEvent.selectOptions(form.getByLabelText(/categoria/i), 'UTILITY');
+    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Y');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
 
     await waitFor(() => expect(screen.getByText('Invalid parameter')).toBeInTheDocument());
   });
@@ -127,5 +130,41 @@ describe('TemplatesAdminTab', () => {
 
     await waitFor(() => expect(api.syncTemplatesAdmin).toHaveBeenCalledWith('waba-1', 'tok-123'));
     expect(refresh).toHaveBeenCalled();
+  });
+
+  test('registers an existing template by name and language', async () => {
+    const refresh = vi.fn();
+    useTemplates.mockReturnValue({ templates: [], refresh });
+    api.registerExistingTemplateAdmin.mockResolvedValue({ id: 'tpl-3', name: 'aviso_cobranca' });
+    render(<TemplatesAdminTab />);
+    const form = within(screen.getByRole('form', { name: /registrar template existente/i }));
+
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/nome exato na meta/i), 'aviso_cobranca');
+    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.selectOptions(form.getByLabelText(/cabeçalho/i), 'document');
+    await userEvent.click(form.getByRole('button', { name: /^registrar$/i }));
+
+    await waitFor(() =>
+      expect(api.registerExistingTemplateAdmin).toHaveBeenCalledWith(
+        { channelId: 'ch-1', name: 'aviso_cobranca', language: 'pt_BR', headerType: 'document' },
+        'tok-123'
+      )
+    );
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('shows an error message when registering an existing template fails', async () => {
+    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    api.registerExistingTemplateAdmin.mockRejectedValue({ body: { error: 'No template found' } });
+    render(<TemplatesAdminTab />);
+    const form = within(screen.getByRole('form', { name: /registrar template existente/i }));
+
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/nome exato na meta/i), 'x');
+    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.click(form.getByRole('button', { name: /^registrar$/i }));
+
+    await waitFor(() => expect(screen.getByText('No template found')).toBeInTheDocument());
   });
 });

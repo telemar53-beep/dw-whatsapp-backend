@@ -351,6 +351,22 @@ describe('sendTextMessage', () => {
     );
     expect(result).toEqual({ whatsappMessageId: 'wamid.SENT123' });
   });
+
+  test('adds a context field when replying to a message', async () => {
+    axios.post.mockResolvedValue({ data: { messages: [{ id: 'wamid.REPLY1' }] } });
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+
+    await sendTextMessage(channel, '5511999998888', 'R$150,00', { repliedToWhatsappMessageId: 'wamid.ORIG1' });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      {
+        messaging_product: 'whatsapp', to: '5511999998888', type: 'text', text: { body: 'R$150,00' },
+        context: { message_id: 'wamid.ORIG1' },
+      },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+  });
 });
 
 jest.mock('fs');
@@ -423,6 +439,37 @@ describe('sendMediaMessage', () => {
         to: '5511999998888',
         type: 'document',
         document: { id: 'UPLOADED_MEDIA_ID_2' },
+      },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+  });
+
+  test('adds a context field to the message payload when replying to a message', async () => {
+    getMediaFilePath.mockReturnValue('/fake/path/to/file');
+    fs.promises = { readFile: jest.fn().mockResolvedValue(Buffer.from('fake-image-bytes')) };
+    axios.post
+      .mockResolvedValueOnce({ data: { id: 'UPLOADED_MEDIA_ID' } })
+      .mockResolvedValueOnce({ data: { messages: [{ id: 'wamid.REPLYMEDIA1' }] } });
+
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+    await sendMediaMessage(channel, '5511999998888', {
+      messageType: 'image',
+      mediaPath: 'abc.jpg',
+      mediaMimeType: 'image/jpeg',
+      mediaFilename: null,
+      caption: 'Segue o comprovante',
+      repliedToWhatsappMessageId: 'wamid.ORIG2',
+    });
+
+    expect(axios.post).toHaveBeenNthCalledWith(
+      2,
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      {
+        messaging_product: 'whatsapp',
+        to: '5511999998888',
+        type: 'image',
+        image: { id: 'UPLOADED_MEDIA_ID', caption: 'Segue o comprovante' },
+        context: { message_id: 'wamid.ORIG2' },
       },
       { headers: { Authorization: 'Bearer token-abc' } }
     );

@@ -75,22 +75,26 @@ function parseInboundMessages(webhookBody) {
   return messages;
 }
 
-async function sendTextMessage(channel, toPhoneNumber, content) {
+async function sendTextMessage(channel, toPhoneNumber, content, { repliedToWhatsappMessageId } = {}) {
   const { phoneNumberId, accessToken } = channel.config;
+  const body = {
+    messaging_product: 'whatsapp',
+    to: toPhoneNumber,
+    type: 'text',
+    text: { body: content },
+  };
+  if (repliedToWhatsappMessageId) {
+    body.context = { message_id: repliedToWhatsappMessageId };
+  }
   const response = await axios.post(
     `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
-    {
-      messaging_product: 'whatsapp',
-      to: toPhoneNumber,
-      type: 'text',
-      text: { body: content },
-    },
+    body,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   return { whatsappMessageId: response.data.messages[0].id };
 }
 
-async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath, mediaMimeType, mediaFilename, caption }) {
+async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath, mediaMimeType, mediaFilename, caption, repliedToWhatsappMessageId }) {
   const { phoneNumberId, accessToken } = channel.config;
   const buffer = await fs.promises.readFile(getMediaFilePath(mediaPath));
 
@@ -108,6 +112,9 @@ async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath
     type: messageType,
     [messageType]: caption ? { id: mediaId, caption } : { id: mediaId },
   };
+  if (repliedToWhatsappMessageId) {
+    messagePayload.context = { message_id: repliedToWhatsappMessageId };
+  }
   const response = await axios.post(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, messagePayload, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });

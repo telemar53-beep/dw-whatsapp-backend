@@ -2,7 +2,7 @@ const { getPool, closePool } = require('../db/pool');
 const { createChannel } = require('../channels/channel.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { createConversation } = require('../conversations/conversation.repository');
-const { enqueueOutboundMessage, processOutboundQueue, closeOutboundQueue } = require('./outbound-queue');
+const { getOutboundQueue, enqueueOutboundMessage, processOutboundQueue, closeOutboundQueue } = require('./outbound-queue');
 
 describe('outbound queue', () => {
   let conversationId;
@@ -22,6 +22,9 @@ describe('outbound queue', () => {
   });
 
   afterEach(async () => {
+    // The Bull queue is durable in Redis: without draining it, a job left behind by one test is
+    // picked up by the next test's freshly registered processor, shifting every assertion by one.
+    await getOutboundQueue().obliterate({ force: true });
     await closeOutboundQueue();
   });
 

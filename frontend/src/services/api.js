@@ -265,3 +265,11 @@ export function updateSgpIntegration(id, payload, token) {
 export function rotateSgpIntegrationKey(id, token) {
   return apiFetch(`/api/admin/integrations/sgp/${id}/rotate-key`, { method: 'POST', token });
 }
+
+export function getSgpQueryConfig(token) {
+  return apiFetch('/api/admin/integrations/sgp-query-config', { token });
+}
+
+export function updateSgpQueryConfig(payload, token) {
+  return apiFetch('/api/admin/integrations/sgp-query-config', { method: 'PUT', body: payload, token });
+}

@@ -6,12 +6,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useCities } from '../hooks/useCities';
+import { useSgpLookup } from '../hooks/useSgpLookup';
 import * as api from '../services/api';
 
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useCities');
+vi.mock('../hooks/useSgpLookup');
 vi.mock('../services/api');
 
 beforeEach(() => {
@@ -23,6 +25,15 @@ beforeEach(() => {
   });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useCities.mockReturnValue({ cities: [], refresh: vi.fn() });
+  useSgpLookup.mockReturnValue({
+    client: null,
+    contracts: [],
+    loading: false,
+    error: null,
+    search: vi.fn(),
+    fetchDuplicate: vi.fn(),
+    duplicateState: {},
+  });
 });
 
 describe('ConversationView', () => {
@@ -425,5 +436,36 @@ describe('ConversationView', () => {
     );
     expect(screen.getByText('Você')).toBeInTheDocument();
     expect(screen.getByText('Já registramos o pagamento')).toBeInTheDocument();
+  });
+});
+
+describe('SGP lookup panel', () => {
+  test('the panel is hidden until the "Consultar SGP" button is clicked', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+    // The header button's accessible name is "Consultar SGP" via aria-label, but the button
+    // has no visible text content, so this only matches the panel's own <h2> once it renders.
+    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
+  });
+
+  test('clicking "Consultar SGP" shows the panel, clicking again hides it', async () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    expect(screen.getByText('Consultar SGP')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
   });
 });

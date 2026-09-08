@@ -9,6 +9,7 @@ import MessageStatusTicks from './MessageStatusTicks';
 import ConversationHistoryModal from './ConversationHistoryModal';
 import ContactAvatar from './ContactAvatar';
 import EditContactModal from './EditContactModal';
+import SgpLookupPanel from './SgpLookupPanel';
 import {
   IconArrowLeft,
   IconChevronDown,
@@ -17,6 +18,7 @@ import {
   IconCheckCircle,
   IconClaim,
   IconLock,
+  IconSearch,
 } from './icons/WaIcons';
 
 const OVERLAY_TYPES = ['image', 'video', 'sticker'];
@@ -91,6 +93,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const [editingContact, setEditingContact] = useState(false);
   const [contactOverride, setContactOverride] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -124,7 +127,8 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const timeline = buildTimeline(messages);
 
   return (
-    <div className="flex h-full flex-col bg-wa-chat font-wa">
+    <div className="flex h-full">
+      <div className="flex h-full min-w-0 flex-1 flex-col bg-wa-chat font-wa">
       <div className="z-10 flex items-center gap-1 border-b border-wa-border bg-wa-panel-header px-2 py-[7px] md:px-4">
         <button
           onClick={onBack}
@@ -161,6 +165,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           )}
           <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
             <IconHistory size={22} />
+          </HeaderIconButton>
+          <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
+            <IconSearch size={22} />
           </HeaderIconButton>
           {isMine && (
             <>
@@ -338,6 +345,8 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           onSaved={(updated) => setContactOverride(updated)}
         />
       )}
+      </div>
+      {sgpPanelOpen && <SgpLookupPanel />}
     </div>
   );
 }

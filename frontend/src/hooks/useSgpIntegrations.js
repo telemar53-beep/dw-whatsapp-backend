@@ -1,18 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getSgpIntegration } from '../services/api';
+import { listSgpIntegrations } from '../services/api';
 
-export function useSgpIntegration() {
+export function useSgpIntegrations() {
   const { token } = useAuth();
-  const [integration, setIntegration] = useState(null);
+  const [integrations, setIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(() => {
     if (!token) return Promise.resolve();
     setLoading(true);
-    return getSgpIntegration(token)
+    return listSgpIntegrations(token)
       .then((data) => {
-        setIntegration(data);
+        setIntegrations(data);
         setLoading(false);
       })
       .catch(() => {
@@ -24,5 +24,5 @@ export function useSgpIntegration() {
     refresh();
   }, [refresh]);
 
-  return { integration, loading, refresh };
+  return { integrations, loading, refresh };
 }

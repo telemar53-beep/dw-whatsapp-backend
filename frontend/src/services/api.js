@@ -231,6 +231,10 @@ export function syncTemplatesAdmin(wabaId, token) {
   return apiFetch('/api/admin/templates/sync', { method: 'POST', body: { wabaId }, token });
 }
 
+export function registerExistingTemplateAdmin(data, token) {
+  return apiFetch('/api/admin/templates/register-existing', { method: 'POST', body: data, token });
+}
+
 export function listCities(token) {
   return apiFetch('/api/cities', { token });
 }
@@ -243,14 +247,18 @@ export function deleteCity(id, token) {
   return apiFetch(`/api/admin/cities/${id}`, { method: 'DELETE', token });
 }
 
-export function getSgpIntegration(token) {
+export function listSgpIntegrations(token) {
   return apiFetch('/api/admin/integrations/sgp', { token });
 }
 
-export function saveSgpIntegration(payload, token) {
-  return apiFetch('/api/admin/integrations/sgp', { method: 'PUT', body: payload, token });
+export function createSgpIntegration(payload, token) {
+  return apiFetch('/api/admin/integrations/sgp', { method: 'POST', body: payload, token });
 }
 
-export function rotateSgpIntegrationKey(token) {
-  return apiFetch('/api/admin/integrations/sgp/rotate-key', { method: 'POST', token });
+export function updateSgpIntegration(id, payload, token) {
+  return apiFetch(`/api/admin/integrations/sgp/${id}`, { method: 'PUT', body: payload, token });
+}
+
+export function rotateSgpIntegrationKey(id, token) {
+  return apiFetch(`/api/admin/integrations/sgp/${id}/rotate-key`, { method: 'POST', token });
 }

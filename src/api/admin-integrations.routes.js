@@ -7,6 +7,7 @@ const {
   rotateSgpApiKey,
 } = require('../integrations/sgp-integration.repository');
 const { findChannelById } = require('../channels/channel.repository');
+const { getSgpQueryConfig, upsertSgpQueryConfig } = require('../integrations/sgp-query-config.repository');
 
 const router = express.Router();
 
@@ -98,6 +99,47 @@ router.post('/sgp/:id/rotate-key', requireAuth, requireRole('admin'), async (req
     return res.status(404).json({ error: 'Integration not found' });
   }
   res.json({ apiKey: rotated.apiKey, ...toIntegrationResponse(rotated.integration) });
+});
+
+function toQueryConfigResponse(config) {
+  if (!config) return { configured: false };
+  return {
+    configured: true,
+    baseUrl: config.baseUrl,
+    app: config.app,
+    tokenLast4: config.token.slice(-4),
+    enabled: config.enabled,
+  };
+}
+
+router.get('/sgp-query-config', requireAuth, requireRole('admin'), async (req, res) => {
+  const config = await getSgpQueryConfig();
+  res.json(toQueryConfigResponse(config));
+});
+
+router.put('/sgp-query-config', requireAuth, requireRole('admin'), async (req, res) => {
+  const { baseUrl, app, token, enabled } = req.body || {};
+  if (typeof baseUrl !== 'string' || !baseUrl.trim()) {
+    return res.status(400).json({ error: 'baseUrl is required' });
+  }
+  if (typeof app !== 'string' || !app.trim()) {
+    return res.status(400).json({ error: 'app is required' });
+  }
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be a boolean' });
+  }
+  const existing = await getSgpQueryConfig();
+  const hasToken = typeof token === 'string' && token.trim().length > 0;
+  if (!existing && !hasToken) {
+    return res.status(400).json({ error: 'token is required' });
+  }
+  const config = await upsertSgpQueryConfig({
+    baseUrl: baseUrl.trim(),
+    app: app.trim(),
+    token: hasToken ? token.trim() : null,
+    enabled,
+  });
+  res.json(toQueryConfigResponse(config));
 });
 
 module.exports = router;

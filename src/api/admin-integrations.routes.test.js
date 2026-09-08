@@ -1,5 +1,6 @@
 jest.mock('../integrations/sgp-integration.repository');
 jest.mock('../channels/channel.repository');
+jest.mock('../integrations/sgp-query-config.repository');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -10,6 +11,7 @@ const {
   rotateSgpApiKey,
 } = require('../integrations/sgp-integration.repository');
 const { findChannelById } = require('../channels/channel.repository');
+const { getSgpQueryConfig, upsertSgpQueryConfig } = require('../integrations/sgp-query-config.repository');
 const adminIntegrationsRoutes = require('./admin-integrations.routes');
 
 function buildApp() {
@@ -223,5 +225,93 @@ describe('POST /api/admin/integrations/sgp/:id/rotate-key', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(403);
     expect(rotateSgpApiKey).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/admin/integrations/sgp-query-config', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('returns configured: false when nothing is saved', async () => {
+    getSgpQueryConfig.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .get('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ configured: false });
+  });
+
+  test('returns the config with only the last 4 characters of the token', async () => {
+    getSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: '4c3b1ec5-1308-4120-88be-cf83debe5c7a', enabled: true });
+    const res = await request(buildApp())
+      .get('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true });
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+    expect(getSgpQueryConfig).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/admin/integrations/sgp-query-config', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('returns 400 when baseUrl is missing', async () => {
+    const res = await request(buildApp())
+      .put('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ app: 'chatmix', token: 'tok', enabled: true });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when creating for the first time without a token', async () => {
+    getSgpQueryConfig.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .put('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ baseUrl: 'https://x.example', app: 'chatmix', enabled: true });
+    expect(res.status).toBe(400);
+    expect(upsertSgpQueryConfig).not.toHaveBeenCalled();
+  });
+
+  test('saves the config and returns it masked', async () => {
+    getSgpQueryConfig.mockResolvedValue(null);
+    upsertSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: 'brand-new-token', enabled: true });
+
+    const res = await request(buildApp())
+      .put('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ baseUrl: 'https://x.example', app: 'chatmix', token: 'brand-new-token', enabled: true });
+
+    expect(upsertSgpQueryConfig).toHaveBeenCalledWith({ baseUrl: 'https://x.example', app: 'chatmix', token: 'brand-new-token', enabled: true });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: 'oken', enabled: true });
+  });
+
+  test('allows updating without a token when already configured', async () => {
+    getSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://old.example', app: 'chatmix', token: 'kept-token', enabled: true });
+    upsertSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://new.example', app: 'chatmix', token: 'kept-token', enabled: false });
+
+    const res = await request(buildApp())
+      .put('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ baseUrl: 'https://new.example', app: 'chatmix', enabled: false });
+
+    expect(upsertSgpQueryConfig).toHaveBeenCalledWith({ baseUrl: 'https://new.example', app: 'chatmix', token: null, enabled: false });
+    expect(res.status).toBe(200);
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .put('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ baseUrl: 'https://x.example', app: 'chatmix', token: 'tok', enabled: true });
+    expect(res.status).toBe(403);
+    expect(upsertSgpQueryConfig).not.toHaveBeenCalled();
   });
 });

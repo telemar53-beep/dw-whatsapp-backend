@@ -12,12 +12,65 @@ const cardClass = 'space-y-3 rounded-2xl border border-white/70 bg-white/50 p-6 
 
 const MODE_LABELS = { freetext: 'Texto livre (Baileys)', template: 'Template (oficial)' };
 
-function IntegrationCard({ integration, channels, onChanged }) {
+function IntegrationCard({ integration, channels, templates, onChanged }) {
   const { token } = useAuth();
   const [rotating, setRotating] = useState(false);
   const [generatedKey, setGeneratedKey] = useState(null);
   const [error, setError] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editDescription, setEditDescription] = useState(integration.description);
+  const [editChannelId, setEditChannelId] = useState(integration.channelId);
+  const [editDefaultTemplateId, setEditDefaultTemplateId] = useState(integration.defaultTemplateId || '');
   const channel = channels.find((c) => c.id === integration.channelId);
+  // Unlike the create form, the edit form must keep this card's own channel selectable —
+  // so it filters by type only, without excluding already-integrated channels.
+  const editableChannels = channels.filter((c) => c.type === 'baileys' || c.type === 'meta_cloud');
+  const editSelectedChannel = channels.find((c) => c.id === editChannelId);
+  const editIsTemplateMode = Boolean(editSelectedChannel && editSelectedChannel.type === 'meta_cloud');
+
+  function seedEditState() {
+    setEditDescription(integration.description);
+    setEditChannelId(integration.channelId);
+    setEditDefaultTemplateId(integration.defaultTemplateId || '');
+  }
+
+  function handleStartEdit() {
+    setError(null);
+    seedEditState();
+    setEditing(true);
+  }
+
+  function handleCancelEdit() {
+    seedEditState();
+    setError(null);
+    setEditing(false);
+  }
+
+  async function handleSaveEdit(event) {
+    event.preventDefault();
+    setError(null);
+    setSavingEdit(true);
+    try {
+      await updateSgpIntegration(
+        integration.id,
+        {
+          description: editDescription.trim(),
+          channelId: editChannelId,
+          defaultTemplateId: editIsTemplateMode && editDefaultTemplateId ? editDefaultTemplateId : null,
+          // Editing must never flip Ativo as a side effect — the toggle is the only control for that.
+          enabled: integration.enabled,
+        },
+        token
+      );
+      onChanged();
+      setEditing(false);
+    } catch (err) {
+      setError((err.body && err.body.error) || 'Falha ao atualizar');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
 
   async function handleToggleEnabled(event) {
     setError(null);
@@ -68,13 +121,86 @@ function IntegrationCard({ integration, channels, onChanged }) {
         </label>
       </div>
       <p className="text-sm text-ink-950/55">{integration.hasApiKey ? 'Uma chave já foi gerada.' : 'Nenhuma chave foi gerada ainda.'}</p>
-      <button
-        onClick={handleRotateKey}
-        disabled={rotating}
-        className="rounded-lg bg-teal-signal px-3 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        Gerar nova chave
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={handleRotateKey}
+          disabled={rotating}
+          className="rounded-lg bg-teal-signal px-3 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Gerar nova chave
+        </button>
+        {!editing && (
+          <button
+            onClick={handleStartEdit}
+            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-2 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+          >
+            Editar
+          </button>
+        )}
+      </div>
+      {editing && (
+        <form
+          onSubmit={handleSaveEdit}
+          aria-label={`Editar integração: ${integration.description}`}
+          className="space-y-3 rounded-xl border border-white/70 bg-white/40 p-4"
+        >
+          <div>
+            <label htmlFor={`sgp-edit-description-${integration.id}`} className={labelClass}>Descrição</label>
+            <input
+              id={`sgp-edit-description-${integration.id}`}
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor={`sgp-edit-channel-${integration.id}`} className={labelClass}>Canal</label>
+            <select
+              id={`sgp-edit-channel-${integration.id}`}
+              value={editChannelId}
+              onChange={(e) => setEditChannelId(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">Selecione um canal</option>
+              {editableChannels.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          {editIsTemplateMode && (
+            <div>
+              <label htmlFor={`sgp-edit-default-template-${integration.id}`} className={labelClass}>Template padrão (opcional)</label>
+              <select
+                id={`sgp-edit-default-template-${integration.id}`}
+                value={editDefaultTemplateId}
+                onChange={(e) => setEditDefaultTemplateId(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Nenhum</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>{template.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              disabled={savingEdit}
+              className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Salvar
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-2 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
       {generatedKey && (
         <div className="rounded-lg border border-amber-signal/50 bg-amber-signal/10 px-3 py-2 text-sm text-ink-950">
           <p className="font-medium">Copie agora — esta chave não será mostrada novamente:</p>
@@ -143,7 +269,7 @@ function IntegrationsAdminTab() {
     <div className="space-y-6">
       <div className="space-y-3">
         {integrations.map((integration) => (
-          <IntegrationCard key={integration.id} integration={integration} channels={channels} onChanged={refresh} />
+          <IntegrationCard key={integration.id} integration={integration} channels={channels} templates={approvedTemplates} onChanged={refresh} />
         ))}
       </div>
       <form onSubmit={handleCreate} className={cardClass}>

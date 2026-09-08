@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import IntegrationsAdminTab from './IntegrationsAdminTab';
 import { useSgpIntegrations } from '../hooks/useSgpIntegrations';
@@ -95,6 +95,86 @@ describe('IntegrationsAdminTab', () => {
       expect(api.updateSgpIntegration).toHaveBeenCalledWith('int-1', { description: 'Baileys', channelId: 'channel-1', defaultTemplateId: null, enabled: false }, 'tok-123')
     );
     expect(refresh).toHaveBeenCalled();
+  });
+
+  test('clicking Editar reveals the edit fields prefilled with the card current values', async () => {
+    useSgpIntegrations.mockReturnValue({
+      integrations: [{ id: 'int-2', description: 'Oficial', channelId: 'channel-2', mode: 'template', defaultTemplateId: 'tpl-1', enabled: true, hasApiKey: true }],
+      refresh: vi.fn(),
+    });
+    render(<IntegrationsAdminTab />);
+
+    expect(screen.queryByRole('form', { name: /editar integração/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+
+    const editForm = within(screen.getByRole('form', { name: /editar integração/i }));
+    expect(editForm.getByLabelText(/descrição/i)).toHaveValue('Oficial');
+    expect(editForm.getByLabelText(/^canal$/i)).toHaveValue('channel-2');
+    expect(editForm.getByLabelText(/template padrão/i)).toHaveValue('tpl-1');
+  });
+
+  test('saving the edit form sends the edited values and preserves the card Ativo state', async () => {
+    const refresh = vi.fn();
+    useSgpIntegrations.mockReturnValue({
+      integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: false, hasApiKey: true }],
+      refresh,
+    });
+    api.updateSgpIntegration.mockResolvedValue({});
+    render(<IntegrationsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    const editForm = within(screen.getByRole('form', { name: /editar integração/i }));
+    await userEvent.clear(editForm.getByLabelText(/descrição/i));
+    await userEvent.type(editForm.getByLabelText(/descrição/i), 'SGP Baileys renomeado');
+    await userEvent.selectOptions(editForm.getByLabelText(/^canal$/i), 'channel-2');
+    await userEvent.selectOptions(editForm.getByLabelText(/template padrão/i), 'tpl-1');
+    await userEvent.click(editForm.getByRole('button', { name: /salvar/i }));
+
+    await waitFor(() =>
+      expect(api.updateSgpIntegration).toHaveBeenCalledWith(
+        'int-1',
+        { description: 'SGP Baileys renomeado', channelId: 'channel-2', defaultTemplateId: 'tpl-1', enabled: false },
+        'tok-123'
+      )
+    );
+    expect(refresh).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('form', { name: /editar integração/i })).not.toBeInTheDocument());
+  });
+
+  test('the edit form template selector follows the edit form own channel selection', async () => {
+    useSgpIntegrations.mockReturnValue({
+      integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true }],
+      refresh: vi.fn(),
+    });
+    render(<IntegrationsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    const editForm = within(screen.getByRole('form', { name: /editar integração/i }));
+    expect(editForm.queryByLabelText(/template padrão/i)).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(editForm.getByLabelText(/^canal$/i), 'channel-2');
+
+    expect(editForm.getByLabelText(/template padrão/i)).toBeInTheDocument();
+  });
+
+  test('cancelling the edit form closes it without calling the API', async () => {
+    useSgpIntegrations.mockReturnValue({
+      integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true }],
+      refresh: vi.fn(),
+    });
+    render(<IntegrationsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    const editForm = within(screen.getByRole('form', { name: /editar integração/i }));
+    await userEvent.type(editForm.getByLabelText(/descrição/i), ' rascunho');
+    await userEvent.click(editForm.getByRole('button', { name: /cancelar/i }));
+
+    expect(api.updateSgpIntegration).not.toHaveBeenCalled();
+    expect(screen.queryByRole('form', { name: /editar integração/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    expect(within(screen.getByRole('form', { name: /editar integração/i })).getByLabelText(/descrição/i)).toHaveValue('Baileys');
   });
 
   test('generating a key shows it once', async () => {

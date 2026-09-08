@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { useSgpLookup } from '../hooks/useSgpLookup';
+import { useAuth } from '../contexts/AuthContext';
+import { sendMessage } from '../services/api';
 import { IconSearch } from './icons/WaIcons';
 
 function formatDueDate(isoDate) {
@@ -15,14 +17,33 @@ function formatCurrency(value) {
   return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function copyToClipboard(text) {
-  if (!navigator.clipboard) return;
-  navigator.clipboard.writeText(text).catch(() => {});
-}
-
 const actionButtonClass = 'rounded-lg border border-wa-border bg-white p-2 text-center text-xs font-medium text-wa-text hover:bg-wa-panel';
 
-function FinanceiroCard({ contractId, state, onGenerate }) {
+function SendActionButton({ actionKey, label, content, conversationId, token }) {
+  const [status, setStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
+
+  async function handleClick() {
+    setStatus('sending');
+    try {
+      await sendMessage(conversationId, content, token);
+      setStatus('sent');
+    } catch (err) {
+      setStatus('error');
+    }
+  }
+
+  return (
+    <div>
+      <button type="button" onClick={handleClick} disabled={status === 'sending'} className={actionButtonClass}>
+        {label}
+      </button>
+      {status === 'sent' && <p className="mt-1 text-center text-xs text-wa-green">Enviado ✓</p>}
+      {status === 'error' && <p className="mt-1 text-center text-xs text-red-600">Não foi possível enviar a mensagem.</p>}
+    </div>
+  );
+}
+
+function FinanceiroCard({ contractId, conversationId, token, state, onGenerate }) {
   const [qrDataUrl, setQrDataUrl] = useState(null);
 
   async function handleToggleQr(pixCode) {
@@ -81,19 +102,13 @@ function FinanceiroCard({ contractId, state, onGenerate }) {
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {duplicate.pixCode && (
-                  <button type="button" onClick={() => copyToClipboard(duplicate.pixCode)} className={actionButtonClass}>
-                    Cód Pix
-                  </button>
+                  <SendActionButton actionKey="pix" label="Cód Pix" content={duplicate.pixCode} conversationId={conversationId} token={token} />
                 )}
                 {duplicate.barCode && (
-                  <button type="button" onClick={() => copyToClipboard(duplicate.barCode)} className={actionButtonClass}>
-                    Cód Barras
-                  </button>
+                  <SendActionButton actionKey="barcode" label="Cód Barras" content={duplicate.barCode} conversationId={conversationId} token={token} />
                 )}
                 {duplicate.boletoLink && (
-                  <a href={duplicate.boletoLink} target="_blank" rel="noreferrer" className={actionButtonClass}>
-                    Link Fatura
-                  </a>
+                  <SendActionButton actionKey="link" label="Link Fatura" content={duplicate.boletoLink} conversationId={conversationId} token={token} />
                 )}
                 {duplicate.pixCode && (
                   <button type="button" onClick={() => handleToggleQr(duplicate.pixCode)} className={actionButtonClass}>
@@ -101,9 +116,7 @@ function FinanceiroCard({ contractId, state, onGenerate }) {
                   </button>
                 )}
                 {duplicate.boletoLink && (
-                  <a href={duplicate.boletoLink} target="_blank" rel="noreferrer" className={actionButtonClass}>
-                    PDF Fatura
-                  </a>
+                  <SendActionButton actionKey="pdf" label="PDF Fatura" content={duplicate.boletoLink} conversationId={conversationId} token={token} />
                 )}
               </div>
               {qrDataUrl && <img src={qrDataUrl} alt="QR code do Pix" className="mt-3 h-32 w-32" />}
@@ -114,9 +127,10 @@ function FinanceiroCard({ contractId, state, onGenerate }) {
   );
 }
 
-function SgpLookupPanel() {
+function SgpLookupPanel({ conversationId }) {
   const [cpf, setCpf] = useState('');
   const [selectedContractId, setSelectedContractId] = useState(null);
+  const { token } = useAuth();
   const { client, contracts, loading, error, errorMessage, search, fetchDuplicate, duplicateState } = useSgpLookup();
 
   useEffect(() => {
@@ -208,6 +222,8 @@ function SgpLookupPanel() {
             <FinanceiroCard
               key={selectedContract.id}
               contractId={selectedContract.id}
+              conversationId={conversationId}
+              token={token}
               state={duplicateState[selectedContract.id]}
               onGenerate={() => fetchDuplicate(selectedContract.id)}
             />

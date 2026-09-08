@@ -3,9 +3,13 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SgpLookupPanel from './SgpLookupPanel';
 import { useSgpLookup } from '../hooks/useSgpLookup';
+import { useAuth } from '../contexts/AuthContext';
+import * as api from '../services/api';
 import QRCode from 'qrcode';
 
 vi.mock('../hooks/useSgpLookup');
+vi.mock('../contexts/AuthContext');
+vi.mock('../services/api');
 vi.mock('qrcode');
 
 const BASE_HOOK = {
@@ -25,8 +29,13 @@ const CONTRACT_B = { id: 25439, status: 'Suspenso', plan: '600 Mega' };
 
 const DUPLICATE = { id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '836...', pixCode: '000201...', boletoLink: 'https://x' };
 
+function renderPanel() {
+  render(<SgpLookupPanel conversationId="conv-1" />);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  useAuth.mockReturnValue({ token: 'tok-123' });
   QRCode.toDataURL.mockResolvedValue('data:image/png;base64,FAKE');
 });
 
@@ -34,7 +43,7 @@ describe('SgpLookupPanel — busca por CPF', () => {
   test('typing a CPF and submitting calls search with only digits', async () => {
     const search = vi.fn();
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, search });
-    render(<SgpLookupPanel />);
+    renderPanel();
 
     await userEvent.type(screen.getByLabelText(/cpf do cliente/i), '036.668.113-37');
     await userEvent.click(screen.getByLabelText(/^buscar$/i));
@@ -44,13 +53,13 @@ describe('SgpLookupPanel — busca por CPF', () => {
 
   test('shows "cliente não encontrado" on a not_found error', () => {
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, error: 'not_found' });
-    render(<SgpLookupPanel />);
+    renderPanel();
     expect(screen.getByText(/cliente não encontrado/i)).toBeInTheDocument();
   });
 
   test('shows the backend\'s real error message when present', () => {
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, error: 'error', errorMessage: 'SGP integration is not configured' });
-    render(<SgpLookupPanel />);
+    renderPanel();
     expect(screen.getByText('SGP integration is not configured')).toBeInTheDocument();
   });
 });
@@ -58,7 +67,7 @@ describe('SgpLookupPanel — busca por CPF', () => {
 describe('SgpLookupPanel — seletor de contrato', () => {
   test('shows a dropdown with every contract and defaults to the first one\'s details', () => {
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, client: CLIENT, contracts: [CONTRACT_A, CONTRACT_B] });
-    render(<SgpLookupPanel />);
+    renderPanel();
 
     const select = screen.getByLabelText(/^contrato$/i);
     expect(select).toHaveValue(String(CONTRACT_A.id));
@@ -70,7 +79,7 @@ describe('SgpLookupPanel — seletor de contrato', () => {
 
   test('switching the dropdown shows the newly selected contract\'s details', async () => {
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, client: CLIENT, contracts: [CONTRACT_A, CONTRACT_B] });
-    render(<SgpLookupPanel />);
+    renderPanel();
 
     await userEvent.selectOptions(screen.getByLabelText(/^contrato$/i), String(CONTRACT_B.id));
 
@@ -84,14 +93,14 @@ describe('SgpLookupPanel — seletor de contrato', () => {
       client: CLIENT,
       contracts: [{ ...CONTRACT_A, phones: ['(98) 98512-0338'], emails: ['exemplo@dominio.com'] }],
     });
-    render(<SgpLookupPanel />);
+    renderPanel();
     expect(screen.getByText('(98) 98512-0338')).toBeInTheDocument();
     expect(screen.getByText('exemplo@dominio.com')).toBeInTheDocument();
   });
 
   test('does not render a dropdown when there are no contracts', () => {
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, client: CLIENT, contracts: [] });
-    render(<SgpLookupPanel />);
+    renderPanel();
     expect(screen.queryByLabelText(/^contrato$/i)).not.toBeInTheDocument();
   });
 });
@@ -99,7 +108,7 @@ describe('SgpLookupPanel — seletor de contrato', () => {
 describe('SgpLookupPanel — card Financeiro', () => {
   test('starts with a button to fetch the open invoice, no automatic call', () => {
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, client: CLIENT, contracts: [CONTRACT_A] });
-    render(<SgpLookupPanel />);
+    renderPanel();
     expect(BASE_HOOK.fetchDuplicate).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /consultar fatura em aberto/i })).toBeInTheDocument();
   });
@@ -107,7 +116,7 @@ describe('SgpLookupPanel — card Financeiro', () => {
   test('clicking the button calls fetchDuplicate with the selected contract id', async () => {
     const fetchDuplicate = vi.fn();
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, client: CLIENT, contracts: [CONTRACT_A], fetchDuplicate });
-    render(<SgpLookupPanel />);
+    renderPanel();
 
     await userEvent.click(screen.getByRole('button', { name: /consultar fatura em aberto/i }));
 
@@ -121,7 +130,7 @@ describe('SgpLookupPanel — card Financeiro', () => {
       contracts: [CONTRACT_A],
       duplicateState: { 17402: { loading: true, error: null } },
     });
-    render(<SgpLookupPanel />);
+    renderPanel();
     expect(screen.getByText(/consultando/i)).toBeInTheDocument();
   });
 
@@ -132,7 +141,7 @@ describe('SgpLookupPanel — card Financeiro', () => {
       contracts: [CONTRACT_A],
       duplicateState: { 17402: { loading: false, error: null, hasOpenInvoice: false, duplicates: [] } },
     });
-    render(<SgpLookupPanel />);
+    renderPanel();
     expect(screen.getByText(/nenhuma fatura em aberto/i)).toBeInTheDocument();
   });
 
@@ -143,7 +152,7 @@ describe('SgpLookupPanel — card Financeiro', () => {
       contracts: [CONTRACT_A],
       duplicateState: { 17402: { loading: false, error: 'error', errorMessage: 'Failed to reach SGP' } },
     });
-    render(<SgpLookupPanel />);
+    renderPanel();
     expect(screen.getByText('Failed to reach SGP')).toBeInTheDocument();
   });
 
@@ -154,7 +163,7 @@ describe('SgpLookupPanel — card Financeiro', () => {
       contracts: [CONTRACT_A],
       duplicateState: { 17402: { loading: false, error: null, hasOpenInvoice: true, duplicates: [DUPLICATE] } },
     });
-    render(<SgpLookupPanel />);
+    renderPanel();
   }
 
   test('shows vencimento, valor formatado e status da fatura', () => {
@@ -164,28 +173,51 @@ describe('SgpLookupPanel — card Financeiro', () => {
     expect(screen.getByText('Em aberto')).toBeInTheDocument();
   });
 
-  test('clicking "Cód Pix" copies the pix code to the clipboard', async () => {
-    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  test('clicking "Cód Pix" sends the raw pix code as a message in the conversation', async () => {
+    api.sendMessage.mockResolvedValue({});
     renderWithDuplicate();
 
     await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
 
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('000201...');
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', '000201...', 'tok-123');
+    expect(await screen.findByText(/enviado/i)).toBeInTheDocument();
   });
 
-  test('clicking "Cód Barras" copies the bar code to the clipboard', async () => {
-    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+  test('clicking "Cód Barras" sends the raw bar code as a message in the conversation', async () => {
+    api.sendMessage.mockResolvedValue({});
     renderWithDuplicate();
 
     await userEvent.click(screen.getByRole('button', { name: /cód barras/i }));
 
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('836...');
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', '836...', 'tok-123');
+    expect(await screen.findByText(/enviado/i)).toBeInTheDocument();
   });
 
-  test('"Link Fatura" and "PDF Fatura" both point at the boleto link', () => {
+  test('clicking "Link Fatura" sends the boleto link as a message in the conversation', async () => {
+    api.sendMessage.mockResolvedValue({});
     renderWithDuplicate();
-    expect(screen.getByRole('link', { name: /link fatura/i })).toHaveAttribute('href', 'https://x');
-    expect(screen.getByRole('link', { name: /pdf fatura/i })).toHaveAttribute('href', 'https://x');
+
+    await userEvent.click(screen.getByRole('button', { name: /^link fatura$/i }));
+
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'https://x', 'tok-123');
+  });
+
+  test('clicking "PDF Fatura" sends the same boleto link as a message in the conversation', async () => {
+    api.sendMessage.mockResolvedValue({});
+    renderWithDuplicate();
+
+    await userEvent.click(screen.getByRole('button', { name: /^pdf fatura$/i }));
+
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'https://x', 'tok-123');
+  });
+
+  test('shows an error when sending the message fails', async () => {
+    api.sendMessage.mockRejectedValue(new Error('network error'));
+    renderWithDuplicate();
+
+    await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
+
+    expect(await screen.findByText(/não foi possível enviar/i)).toBeInTheDocument();
   });
 
   test('clicking "QR Pix" generates and shows a QR code image from the pix code, clicking again hides it', async () => {
@@ -210,7 +242,7 @@ describe('SgpLookupPanel — card Financeiro', () => {
         25439: { loading: false, error: null, hasOpenInvoice: true, duplicates: [{ ...DUPLICATE, id: '1000', pixCode: 'other-pix' }] },
       },
     });
-    render(<SgpLookupPanel />);
+    renderPanel();
 
     await userEvent.click(screen.getByRole('button', { name: /qr pix/i }));
     await waitFor(() => expect(screen.getByAltText(/qr code do pix/i)).toBeInTheDocument());

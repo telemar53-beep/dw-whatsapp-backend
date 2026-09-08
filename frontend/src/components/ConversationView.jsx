@@ -347,7 +347,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         />
       )}
       </div>
-      {sgpPanelOpen && <SgpLookupPanel />}
+      {sgpPanelOpen && <SgpLookupPanel conversationId={conversation.id} />}
     </div>
   );
 }

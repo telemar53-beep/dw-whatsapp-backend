@@ -5,12 +5,14 @@ import IntegrationsAdminTab from './IntegrationsAdminTab';
 import { useSgpIntegrations } from '../hooks/useSgpIntegrations';
 import { useChannels } from '../hooks/useChannels';
 import { useTemplates } from '../hooks/useTemplates';
+import { useSgpQueryConfig } from '../hooks/useSgpQueryConfig';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
 
 vi.mock('../hooks/useSgpIntegrations');
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useTemplates');
+vi.mock('../hooks/useSgpQueryConfig');
 vi.mock('../contexts/AuthContext');
 vi.mock('../services/api');
 
@@ -23,6 +25,7 @@ beforeEach(() => {
   useAuth.mockReturnValue({ token: 'tok-123' });
   useChannels.mockReturnValue({ channels: [BAILEYS_CHANNEL, META_CHANNEL] });
   useTemplates.mockReturnValue({ templates: [APPROVED_TEMPLATE] });
+  useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
 });
 
 describe('IntegrationsAdminTab', () => {

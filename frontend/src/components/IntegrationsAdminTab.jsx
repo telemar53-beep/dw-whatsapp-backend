@@ -4,6 +4,7 @@ import { useSgpIntegrations } from '../hooks/useSgpIntegrations';
 import { useChannels } from '../hooks/useChannels';
 import { useTemplates } from '../hooks/useTemplates';
 import { createSgpIntegration, updateSgpIntegration, rotateSgpIntegrationKey } from '../services/api';
+import SgpQueryConfigCard from './SgpQueryConfigCard';
 
 const inputClass =
   'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
@@ -267,6 +268,7 @@ function IntegrationsAdminTab() {
 
   return (
     <div className="space-y-6">
+      <SgpQueryConfigCard />
       <div className="space-y-3">
         {integrations.map((integration) => (
           <IntegrationCard key={integration.id} integration={integration} channels={channels} templates={approvedTemplates} onChanged={refresh} />

@@ -26,6 +26,7 @@ const templatesRoutes = require('./api/templates.routes');
 const adminTemplatesRoutes = require('./api/admin-templates.routes');
 const integrationsSgpRoutes = require('./api/integrations-sgp.routes');
 const adminIntegrationsRoutes = require('./api/admin-integrations.routes');
+const sgpQueryRoutes = require('./api/sgp-query.routes');
 const { globalLimiter } = require('./config/rate-limiters');
 const { initSocketServer } = require('./realtime/socket-server');
 
@@ -76,6 +77,7 @@ app.use('/api/metrics', metricsRoutes);
 app.use('/api/templates', templatesRoutes);
 app.use('/api/admin/templates', adminTemplatesRoutes);
 app.use('/api/integrations/sgp', integrationsSgpRoutes);
+app.use('/api/sgp', sgpQueryRoutes);
 app.use('/webhooks', metaCloudRoutes);
 
 app.use((err, req, res, next) => {

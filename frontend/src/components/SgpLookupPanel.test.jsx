@@ -11,6 +11,7 @@ const BASE_HOOK = {
   contracts: [],
   loading: false,
   error: null,
+  errorMessage: null,
   search: vi.fn(),
   fetchDuplicate: vi.fn(),
   duplicateState: {},
@@ -74,6 +75,35 @@ describe('SgpLookupPanel', () => {
     render(<SgpLookupPanel />);
     expect(screen.getByText('836...')).toBeInTheDocument();
     expect(screen.getByText('000201...')).toBeInTheDocument();
+  });
+
+  test('renders a contract\'s phones and emails when present', () => {
+    useSgpLookup.mockReturnValue({
+      ...BASE_HOOK,
+      client: { id: 1, name: 'Cliente Exemplo', document: '036.668.113-37' },
+      contracts: [{ id: 17402, status: 'Ativo', plan: '1GB', address: 'RUA EXEMPLO', phones: ['(98) 98512-0338'], emails: ['exemplo@dominio.com'] }],
+    });
+    render(<SgpLookupPanel />);
+    expect(screen.getByText('(98) 98512-0338')).toBeInTheDocument();
+    expect(screen.getByText('exemplo@dominio.com')).toBeInTheDocument();
+  });
+
+  test('shows the backend\'s real error message when present', () => {
+    useSgpLookup.mockReturnValue({ ...BASE_HOOK, error: 'error', errorMessage: 'SGP integration is not configured' });
+    render(<SgpLookupPanel />);
+    expect(screen.getByText('SGP integration is not configured')).toBeInTheDocument();
+  });
+
+  test('formats the duplicate\'s due date and currency', () => {
+    useSgpLookup.mockReturnValue({
+      ...BASE_HOOK,
+      client: { id: 1, name: 'Cliente Exemplo', document: '036.668.113-37' },
+      contracts: [{ id: 17402, status: 'Ativo', plan: '1GB', address: 'RUA EXEMPLO' }],
+      duplicateState: { 17402: { loading: false, error: null, hasOpenInvoice: true, duplicates: [{ id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '836...', pixCode: '000201...', boletoLink: 'https://x' }] } },
+    });
+    render(<SgpLookupPanel />);
+    expect(screen.getByText(/20\/09\/2026/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$ 89,90/)).toBeInTheDocument();
   });
 
   test('shows "nenhuma fatura em aberto" when hasOpenInvoice is false', () => {

@@ -100,6 +100,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     setContactOverride(null);
     setEditingContact(false);
     setReplyingTo(null);
+    setSgpPanelOpen(false);
   }, [conversation.id]);
 
   useEffect(() => {

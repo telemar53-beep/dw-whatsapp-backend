@@ -2,10 +2,27 @@ import { useState } from 'react';
 import { useSgpLookup } from '../hooks/useSgpLookup';
 import { IconSearch } from './icons/WaIcons';
 
+function formatDueDate(isoDate) {
+  if (!isoDate) return isoDate;
+  const [year, month, day] = isoDate.split('-');
+  return year && month && day ? `${day}/${month}/${year}` : isoDate;
+}
+
+function formatCurrency(value) {
+  const number = Number(value);
+  if (Number.isNaN(number)) return `R$ ${value}`;
+  return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function copyToClipboard(text) {
+  if (!navigator.clipboard) return;
+  navigator.clipboard.writeText(text).catch(() => {});
+}
+
 function DuplicateResult({ state }) {
   if (!state) return null;
   if (state.loading) return <p className="mt-2 text-sm text-wa-muted">Gerando 2ª via...</p>;
-  if (state.error) return <p className="mt-2 text-sm text-red-600">Não foi possível gerar a 2ª via agora.</p>;
+  if (state.error) return <p className="mt-2 text-sm text-red-600">{state.errorMessage || 'Não foi possível gerar a 2ª via agora.'}</p>;
   if (state.hasOpenInvoice === false) {
     return <p className="mt-2 text-sm text-wa-muted">Nenhuma fatura em aberto para este contrato.</p>;
   }
@@ -14,12 +31,12 @@ function DuplicateResult({ state }) {
     <div className="mt-2 space-y-2">
       {state.duplicates.map((duplicate) => (
         <div key={duplicate.id} className="rounded-lg border border-wa-border bg-white p-2 text-sm">
-          <p>Vencimento: {duplicate.dueDate}</p>
-          <p>Valor: R$ {duplicate.value}</p>
+          <p>Vencimento: {formatDueDate(duplicate.dueDate)}</p>
+          <p>Valor: {formatCurrency(duplicate.value)}</p>
           {duplicate.barCode && (
             <div className="mt-1 flex items-center gap-2">
               <code className="flex-1 truncate">{duplicate.barCode}</code>
-              <button type="button" onClick={() => navigator.clipboard.writeText(duplicate.barCode)} className="text-teal-signal underline">
+              <button type="button" onClick={() => copyToClipboard(duplicate.barCode)} className="text-teal-signal underline">
                 Copiar
               </button>
             </div>
@@ -27,7 +44,7 @@ function DuplicateResult({ state }) {
           {duplicate.pixCode && (
             <div className="mt-1 flex items-center gap-2">
               <code className="flex-1 truncate">{duplicate.pixCode}</code>
-              <button type="button" onClick={() => navigator.clipboard.writeText(duplicate.pixCode)} className="text-teal-signal underline">
+              <button type="button" onClick={() => copyToClipboard(duplicate.pixCode)} className="text-teal-signal underline">
                 Copiar PIX
               </button>
             </div>
@@ -45,7 +62,7 @@ function DuplicateResult({ state }) {
 
 function SgpLookupPanel() {
   const [cpf, setCpf] = useState('');
-  const { client, contracts, loading, error, search, fetchDuplicate, duplicateState } = useSgpLookup();
+  const { client, contracts, loading, error, errorMessage, search, fetchDuplicate, duplicateState } = useSgpLookup();
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -54,7 +71,7 @@ function SgpLookupPanel() {
   }
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col overflow-y-auto border-l border-wa-border bg-wa-panel p-3">
+    <aside className="fixed inset-0 z-20 flex flex-col overflow-y-auto bg-wa-panel p-3 md:static md:z-auto md:h-full md:w-80 md:shrink-0 md:border-l md:border-wa-border">
       <h2 className="mb-2 font-semibold text-wa-text">Consultar SGP</h2>
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
@@ -71,7 +88,7 @@ function SgpLookupPanel() {
 
       {loading && <p className="mt-3 text-sm text-wa-muted">Buscando...</p>}
       {error === 'not_found' && <p className="mt-3 text-sm text-wa-muted">Cliente não encontrado.</p>}
-      {error === 'error' && <p className="mt-3 text-sm text-red-600">Não foi possível consultar o SGP agora.</p>}
+      {error === 'error' && <p className="mt-3 text-sm text-red-600">{errorMessage || 'Não foi possível consultar o SGP agora.'}</p>}
 
       {client && (
         <div className="mt-3">
@@ -84,6 +101,12 @@ function SgpLookupPanel() {
                   {contract.plan} — {contract.status}
                 </p>
                 <p className="text-xs text-wa-muted">{contract.address}</p>
+                {contract.phones && contract.phones.length > 0 && (
+                  <p className="text-xs text-wa-muted">{contract.phones.join(', ')}</p>
+                )}
+                {contract.emails && contract.emails.length > 0 && (
+                  <p className="text-xs text-wa-muted">{contract.emails.join(', ')}</p>
+                )}
                 <button
                   type="button"
                   onClick={() => fetchDuplicate(contract.id)}

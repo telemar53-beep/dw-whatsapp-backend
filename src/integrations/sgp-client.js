@@ -20,7 +20,8 @@ async function postSgp(config, path, params) {
       timeout: 15000,
     });
   } catch (err) {
-    throw new SgpRequestError(`Failed to reach SGP at ${path}`);
+    console.error(`SGP request failed: ${path}`, err.response ? { status: err.response.status } : { message: err.message });
+    throw new SgpRequestError(`Failed to reach SGP at ${path}`, { cause: err });
   }
 }
 
@@ -51,7 +52,11 @@ function toContract(c) {
 async function lookupClientByCpf(cpf) {
   const config = await requireConfig();
   const response = await postSgp(config, '/api/ura/consultacliente', { cpfcnpj: cpf });
-  const contratos = response.data.contratos;
+  const data = response.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new SgpRequestError('Unexpected response from SGP');
+  }
+  const contratos = data.contratos;
   if (!Array.isArray(contratos) || contratos.length === 0) {
     throw new SgpClientNotFoundError('Client not found');
   }
@@ -66,7 +71,12 @@ async function getDuplicateInvoice(contratoId) {
   // Mirrors the exact call chain observed in the user's real Chat Mix test
   // captures. This first call's response is unused — it exists only to
   // replicate the real flow.
-  await postSgp(config, '/api/central/titulos', { contrato: contratoId, nao_gerar_os: 1 });
+  try {
+    await postSgp(config, '/api/central/titulos', { contrato: contratoId, nao_gerar_os: 1 });
+  } catch (err) {
+    // Mirrors the real Chat Mix call sequence for parity only — its response was already
+    // unused, and a failure here must never block generating the duplicate invoice itself.
+  }
 
   const generated = await postSgp(config, '/api/ura/fatura2via', { contrato: contratoId, nao_gerar_os: 1 });
   const links = generated.data.links;

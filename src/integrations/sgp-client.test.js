@@ -92,6 +92,12 @@ describe('sgp-client', () => {
       axios.post.mockRejectedValue(new Error('timeout of 15000ms exceeded'));
       await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpRequestError);
     });
+
+    test('throws SgpRequestError when SGP returns a malformed/non-object response', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValue({ data: '<html>login page</html>' });
+      await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpRequestError);
+    });
   });
 
   describe('getDuplicateInvoice', () => {
@@ -149,6 +155,17 @@ describe('sgp-client', () => {
           },
         ],
       });
+    });
+
+    test('does not abort when the titulos pre-call fails', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post
+        .mockRejectedValueOnce(new Error('titulos unavailable')) // titulos
+        .mockResolvedValueOnce({ data: { status: 0, links: [] } }); // fatura2via
+
+      const result = await getDuplicateInvoice(17402);
+
+      expect(result).toEqual({ hasOpenInvoice: false, duplicates: [] });
     });
 
     test('falls back to fatura2via\'s own codigopix when the dedicated pix call fails', async () => {

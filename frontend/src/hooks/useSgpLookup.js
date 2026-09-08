@@ -6,6 +6,7 @@ export function useSgpLookup() {
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
   const [client, setClient] = useState(null);
   const [contracts, setContracts] = useState([]);
   const [duplicateState, setDuplicateState] = useState({});
@@ -14,6 +15,7 @@ export function useSgpLookup() {
     (cpf) => {
       setLoading(true);
       setError(null);
+      setErrorMessage(null);
       setClient(null);
       setContracts([]);
       setDuplicateState({});
@@ -24,7 +26,9 @@ export function useSgpLookup() {
           setLoading(false);
         })
         .catch((err) => {
-          setError(err instanceof ApiError && err.status === 404 ? 'not_found' : 'error');
+          const notFound = err instanceof ApiError && err.status === 404;
+          setError(notFound ? 'not_found' : 'error');
+          setErrorMessage(notFound ? null : err.message);
           setLoading(false);
         });
     },
@@ -38,12 +42,12 @@ export function useSgpLookup() {
         .then((data) => {
           setDuplicateState((prev) => ({ ...prev, [contratoId]: { loading: false, error: null, ...data } }));
         })
-        .catch(() => {
-          setDuplicateState((prev) => ({ ...prev, [contratoId]: { loading: false, error: 'error' } }));
+        .catch((err) => {
+          setDuplicateState((prev) => ({ ...prev, [contratoId]: { loading: false, error: 'error', errorMessage: err.message } }));
         });
     },
     [token]
   );
 
-  return { client, contracts, loading, error, search, fetchDuplicate, duplicateState };
+  return { client, contracts, loading, error, errorMessage, search, fetchDuplicate, duplicateState };
 }

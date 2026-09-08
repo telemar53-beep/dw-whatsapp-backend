@@ -48,6 +48,16 @@ describe('useSgpLookup', () => {
     expect(result.current.error).toBe('error');
   });
 
+  test('search surfaces the backend\'s real error message for a non-404 failure', async () => {
+    api.lookupSgpClient.mockRejectedValue(new ApiError(400, { error: 'SGP integration is not configured' }));
+    const { result } = renderHook(() => useSgpLookup());
+
+    await act(() => result.current.search('03666811337'));
+
+    expect(result.current.error).toBe('error');
+    expect(result.current.errorMessage).toBe('SGP integration is not configured');
+  });
+
   test('fetchDuplicate stores the result keyed by contratoId', async () => {
     api.generateSgpDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '999' }] });
     const { result } = renderHook(() => useSgpLookup());

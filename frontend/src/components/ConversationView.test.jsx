@@ -468,4 +468,15 @@ describe('SGP lookup panel', () => {
     await userEvent.click(screen.getByLabelText('Consultar SGP'));
     expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
   });
+
+  test('the panel closes when the conversation changes', async () => {
+    const CONVERSATION_A = { id: 'c1', status: 'waiting', assignedAgentId: null };
+    const CONVERSATION_B = { id: 'c2', status: 'waiting', assignedAgentId: null };
+    const { rerender } = render(<ConversationView conversation={CONVERSATION_A} onTransferClick={vi.fn()} onBack={vi.fn()} />);
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    expect(screen.getByText('Consultar SGP')).toBeInTheDocument();
+
+    rerender(<ConversationView conversation={CONVERSATION_B} onTransferClick={vi.fn()} onBack={vi.fn()} />);
+    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
+  });
 });

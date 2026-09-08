@@ -16,6 +16,7 @@ const { listMessagesByConversation, findMessageById } = require('../conversation
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { saveMediaFile, extensionForMimeType, messageTypeForMimeType } = require('../media/media-storage');
+const { normalizeAudioForWhatsApp } = require('../media/audio-normalizer');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
@@ -238,10 +239,28 @@ router.post('/:id/messages', upload.single('file'), async (req, res) => {
     if ((messageType === 'audio' || messageType === 'sticker') && content) {
       return res.status(400).json({ error: 'Audio and sticker messages cannot include a caption; send the text as a separate message' });
     }
+    let buffer = file.buffer;
+    let mimeType = file.mimetype;
+    let filename = file.originalname;
+    if (messageType === 'audio') {
+      // Browsers record in whatever container they support (WebM on Chrome and Edge),
+      // and WhatsApp silently drops anything it cannot decode. Normalize here, at the
+      // single point where audio enters the system, so every adapter gets a valid file.
+      try {
+        const normalized = await normalizeAudioForWhatsApp(file.buffer, file.mimetype);
+        buffer = normalized.buffer;
+        mimeType = normalized.mimeType;
+        if (normalized.converted && filename) {
+          filename = `${filename.replace(/\.[^.]*$/, '')}.ogg`;
+        }
+      } catch (err) {
+        return res.status(400).json({ error: 'Could not convert this audio to a format WhatsApp accepts' });
+      }
+    }
     messagePayload.messageType = messageType;
-    messagePayload.mediaPath = await saveMediaFile(file.buffer, extensionForMimeType(file.mimetype));
-    messagePayload.mediaMimeType = file.mimetype;
-    messagePayload.mediaFilename = file.originalname;
+    messagePayload.mediaPath = await saveMediaFile(buffer, extensionForMimeType(mimeType));
+    messagePayload.mediaMimeType = mimeType;
+    messagePayload.mediaFilename = filename;
   }
 
   const message = await enqueueOutboundMessage(messagePayload);
@@ -270,6 +289,7 @@ router.post('/:id/transfer', async (req, res) => {
   }
   const conversationWithContact = await getConversationWithContact(conversation.id);
   emitToAgent(req.agent.agentId, 'conversation:removed', { conversationId: conversation.id });
+  broadcast('queue:removed', { conversationId: conversation.id });
   emitToAgent(toAgentId, 'conversation:assigned', { conversation: conversationWithContact });
   res.json(conversation);
 });

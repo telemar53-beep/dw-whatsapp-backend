@@ -349,6 +349,64 @@ describe('POST /api/conversations/:id/messages', () => {
     });
   });
 
+  test('converts a WebM recording to Ogg/Opus before storing it, so WhatsApp can decode it', async () => {
+    const { spawnSync } = require('child_process');
+    const ffmpegPath = require('ffmpeg-static');
+    const { stdout: webm } = spawnSync(
+      ffmpegPath,
+      ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
+        '-c:a', 'libopus', '-b:a', '32k', '-f', 'webm', 'pipe:1'],
+      { maxBuffer: 32 * 1024 * 1024 }
+    );
+    expect(webm.subarray(0, 4)).toEqual(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+
+    const { saveMediaFile } = require('../media/media-storage');
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      channelId: 'channel-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+    });
+    saveMediaFile.mockResolvedValue('generated-audio.ogg');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'msg-3', messageType: 'audio' });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .attach('file', webm, { filename: 'gravacao.webm', contentType: 'audio/webm;codecs=opus' });
+
+    expect(res.status).toBe(201);
+    const [storedBuffer, storedExtension] = saveMediaFile.mock.calls[0];
+    expect(storedBuffer.subarray(0, 4).toString('ascii')).toBe('OggS');
+    expect(storedExtension).toBe('.ogg');
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: CONVERSATION_ID,
+      channelId: 'channel-1',
+      content: null,
+      messageType: 'audio',
+      mediaPath: 'generated-audio.ogg',
+      mediaMimeType: 'audio/ogg; codecs=opus',
+      mediaFilename: 'gravacao.ogg',
+    });
+  });
+
+  test('rejects an audio upload that cannot be converted instead of sending it silently', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      channelId: 'channel-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+    });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .attach('file', Buffer.from('not audio at all'), { filename: 'quebrado.webm', contentType: 'audio/webm' });
+
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
   test('rejects an audio upload that also includes a caption', async () => {
     getConversationWithContact.mockResolvedValue({
       id: CONVERSATION_ID,
@@ -571,6 +629,27 @@ describe('POST /api/conversations/:id/transfer', () => {
         contactDisplayName: 'Cliente',
       },
     });
+  });
+
+  test('transfers a conversation that was still waiting in the queue, without requiring the caller to have claimed it', async () => {
+    transferConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(res.status).toBe(200);
+    expect(transferConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1', 'agent-2');
+  });
+
+  test('broadcasts queue:removed on every successful transfer, so the item disappears from everyone\'s queue if it was there', async () => {
+    transferConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'conv-1' });
   });
 });
 

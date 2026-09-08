@@ -71,8 +71,8 @@ async function claimConversation(conversationId, agentId) {
 async function transferConversation(conversationId, fromAgentId, toAgentId) {
   return withTransaction(async (client) => {
     const result = await client.query(
-      `UPDATE conversations SET assigned_agent_id = $2, updated_at = now()
-       WHERE id = $1 AND assigned_agent_id = $3 AND status <> 'closed'
+      `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, triage_state = 'completed', updated_at = now()
+       WHERE id = $1 AND (assigned_agent_id = $3 OR assigned_agent_id IS NULL) AND status <> 'closed'
        RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
       [conversationId, toAgentId, fromAgentId]
     );
@@ -89,7 +89,7 @@ async function closeConversation(conversationId, agentId) {
   return withTransaction(async (client) => {
     const result = await client.query(
       `UPDATE conversations SET status = 'closed', updated_at = now()
-       WHERE id = $1 AND assigned_agent_id = $2 AND status <> 'closed'
+       WHERE id = $1 AND (assigned_agent_id = $2 OR assigned_agent_id IS NULL) AND status <> 'closed'
        RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
       [conversationId, agentId]
     );

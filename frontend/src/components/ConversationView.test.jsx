@@ -91,7 +91,6 @@ describe('ConversationView', () => {
   test('shows the Assumir button when the conversation is unassigned', () => {
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
     expect(screen.getByRole('button', { name: /assumir/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
   });
 
   test('clicking Assumir calls claimConversation', async () => {
@@ -147,6 +146,41 @@ describe('ConversationView', () => {
     expect(screen.queryByRole('button', { name: /assumir/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument();
+  });
+
+  test('shows Transferir and Fechar for a waiting conversation too, without needing to claim it first', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
+  });
+
+  test('clicking Transferir on a waiting conversation calls onTransferClick', async () => {
+    const onTransferClick = vi.fn();
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={onTransferClick}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /transferir/i }));
+    expect(onTransferClick).toHaveBeenCalledWith('c1');
+  });
+
+  test('clicking Fechar on a waiting conversation calls closeConversation', async () => {
+    api.closeConversation.mockResolvedValue({});
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+    await waitFor(() => expect(api.closeConversation).toHaveBeenCalledWith('c1', 'tok-123'));
   });
 
   test('does not render the message input when the conversation is assigned to another agent or unassigned', () => {

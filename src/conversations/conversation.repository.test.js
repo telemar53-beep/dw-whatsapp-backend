@@ -104,6 +104,26 @@ describe('conversation repository', () => {
     expect(transferred).toBeNull();
   });
 
+  test('transferConversation assigns a waiting conversation directly to an agent, without requiring it to be claimed first', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const callingAgent = await createAgent({ email: 'agent7b@dw.com', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent7c@dw.com', password: 'secret123', role: 'agent' });
+    const transferred = await transferConversation(conversation.id, callingAgent.id, targetAgent.id);
+    expect(transferred.status).toBe('assigned');
+    expect(transferred.assignedAgentId).toBe(targetAgent.id);
+    expect(transferred.triageState).toBe('completed');
+  });
+
+  test('transferConversation returns null when the conversation is already assigned to someone else', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const assignedAgent = await createAgent({ email: 'agent7d@dw.com', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'agent7e@dw.com', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent7f@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, assignedAgent.id);
+    const transferred = await transferConversation(conversation.id, otherAgent.id, targetAgent.id);
+    expect(transferred).toBeNull();
+  });
+
   test('closeConversation marks the conversation closed and records who closed it', async () => {
     const conversation = await createConversation(contactId, channelId);
     const agent = await createAgent({ email: 'agent9@dw.com', password: 'secret123', role: 'agent' });
@@ -128,11 +148,12 @@ describe('conversation repository', () => {
     expect(closed).toBeNull();
   });
 
-  test('closeConversation returns null for a conversation that was never claimed', async () => {
+  test('closeConversation closes a conversation that was never claimed (still waiting in the queue)', async () => {
     const conversation = await createConversation(contactId, channelId);
     const agent = await createAgent({ email: 'agent9d@dw.com', password: 'secret123', role: 'agent' });
     const closed = await closeConversation(conversation.id, agent.id);
-    expect(closed).toBeNull();
+    expect(closed.status).toBe('closed');
+    expect(closed.assignedAgentId).toBeNull();
   });
 
   test('getConversationWithContact includes the contact phone number and display name', async () => {

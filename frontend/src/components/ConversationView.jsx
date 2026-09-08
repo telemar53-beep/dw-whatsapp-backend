@@ -176,7 +176,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
             <IconSearch size={22} />
           </HeaderIconButton>
-          {isMine && (
+          {(isMine || isUnassigned) && (
             <>
               <HeaderIconButton label="Transferir atendimento" onClick={() => onTransferClick(conversation.id)}>
                 <IconTransfer size={22} />

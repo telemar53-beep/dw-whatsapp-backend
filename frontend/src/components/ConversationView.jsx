@@ -5,6 +5,7 @@ import { useQuickReplies } from '../hooks/useQuickReplies';
 import { claimConversation, closeConversation } from '../services/api';
 import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
+import MessageStatusTicks from './MessageStatusTicks';
 import ConversationHistoryModal from './ConversationHistoryModal';
 import ContactAvatar from './ContactAvatar';
 import EditContactModal from './EditContactModal';
@@ -93,6 +94,11 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           >
             {message.content && <p className="break-words">{message.content}</p>}
             <MessageAttachment message={message} />
+            {message.direction === 'outbound' && (
+              <div className="flex justify-end">
+                <MessageStatusTicks status={message.status} />
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -31,6 +31,31 @@ describe('ConversationView', () => {
     expect(screen.getByText('Oi, preciso de ajuda')).toBeInTheDocument();
   });
 
+  test('shows delivery status ticks on an outbound message bubble', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'outbound', content: 'Como posso ajudar?', status: 'delivered' }],
+      sendMessage: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByTitle('Entregue')).toBeInTheDocument();
+  });
+
+  test('shows no delivery status ticks on an inbound message bubble', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'inbound', content: 'Oi, tudo bem?', status: 'received' }],
+      sendMessage: vi.fn(),
+    });
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+    expect(screen.queryByTitle('Enviado')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Entregue')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Lido')).not.toBeInTheDocument();
+  });
+
   test('renders an image attachment alongside a caption', () => {
     useConversationMessages.mockReturnValue({
       messages: [

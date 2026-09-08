@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { useSgpLookup } from '../hooks/useSgpLookup';
-import { useAuth } from '../contexts/AuthContext';
-import { sendMessage } from '../services/api';
 import { IconSearch } from './icons/WaIcons';
 
 function formatDueDate(isoDate) {
@@ -19,13 +17,13 @@ function formatCurrency(value) {
 
 const actionButtonClass = 'rounded-lg border border-wa-border bg-white p-2 text-center text-xs font-medium text-wa-text hover:bg-wa-panel';
 
-function SendActionButton({ actionKey, label, content, conversationId, token }) {
+function SendActionButton({ label, content, onSendMessage }) {
   const [status, setStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
 
   async function handleClick() {
     setStatus('sending');
     try {
-      await sendMessage(conversationId, content, token);
+      await onSendMessage(content);
       setStatus('sent');
     } catch (err) {
       setStatus('error');
@@ -43,7 +41,7 @@ function SendActionButton({ actionKey, label, content, conversationId, token }) 
   );
 }
 
-function FinanceiroCard({ contractId, conversationId, token, state, onGenerate }) {
+function FinanceiroCard({ contractId, onSendMessage, state, onGenerate }) {
   const [qrDataUrl, setQrDataUrl] = useState(null);
 
   async function handleToggleQr(pixCode) {
@@ -101,23 +99,15 @@ function FinanceiroCard({ contractId, conversationId, token, state, onGenerate }
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2">
-                {duplicate.pixCode && (
-                  <SendActionButton actionKey="pix" label="Cód Pix" content={duplicate.pixCode} conversationId={conversationId} token={token} />
-                )}
-                {duplicate.barCode && (
-                  <SendActionButton actionKey="barcode" label="Cód Barras" content={duplicate.barCode} conversationId={conversationId} token={token} />
-                )}
-                {duplicate.boletoLink && (
-                  <SendActionButton actionKey="link" label="Link Fatura" content={duplicate.boletoLink} conversationId={conversationId} token={token} />
-                )}
+                {duplicate.pixCode && <SendActionButton label="Cód Pix" content={duplicate.pixCode} onSendMessage={onSendMessage} />}
+                {duplicate.barCode && <SendActionButton label="Cód Barras" content={duplicate.barCode} onSendMessage={onSendMessage} />}
+                {duplicate.boletoLink && <SendActionButton label="Link Fatura" content={duplicate.boletoLink} onSendMessage={onSendMessage} />}
                 {duplicate.pixCode && (
                   <button type="button" onClick={() => handleToggleQr(duplicate.pixCode)} className={actionButtonClass}>
                     QR Pix
                   </button>
                 )}
-                {duplicate.boletoLink && (
-                  <SendActionButton actionKey="pdf" label="PDF Fatura" content={duplicate.boletoLink} conversationId={conversationId} token={token} />
-                )}
+                {duplicate.boletoLink && <SendActionButton label="PDF Fatura" content={duplicate.boletoLink} onSendMessage={onSendMessage} />}
               </div>
               {qrDataUrl && <img src={qrDataUrl} alt="QR code do Pix" className="mt-3 h-32 w-32" />}
             </>
@@ -127,10 +117,9 @@ function FinanceiroCard({ contractId, conversationId, token, state, onGenerate }
   );
 }
 
-function SgpLookupPanel({ conversationId }) {
+function SgpLookupPanel({ onSendMessage }) {
   const [cpf, setCpf] = useState('');
   const [selectedContractId, setSelectedContractId] = useState(null);
-  const { token } = useAuth();
   const { client, contracts, loading, error, errorMessage, search, fetchDuplicate, duplicateState } = useSgpLookup();
 
   useEffect(() => {
@@ -222,8 +211,7 @@ function SgpLookupPanel({ conversationId }) {
             <FinanceiroCard
               key={selectedContract.id}
               contractId={selectedContract.id}
-              conversationId={conversationId}
-              token={token}
+              onSendMessage={onSendMessage}
               state={duplicateState[selectedContract.id]}
               onGenerate={() => fetchDuplicate(selectedContract.id)}
             />

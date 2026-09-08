@@ -3,13 +3,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SgpLookupPanel from './SgpLookupPanel';
 import { useSgpLookup } from '../hooks/useSgpLookup';
-import { useAuth } from '../contexts/AuthContext';
-import * as api from '../services/api';
 import QRCode from 'qrcode';
 
 vi.mock('../hooks/useSgpLookup');
-vi.mock('../contexts/AuthContext');
-vi.mock('../services/api');
 vi.mock('qrcode');
 
 const BASE_HOOK = {
@@ -29,13 +25,12 @@ const CONTRACT_B = { id: 25439, status: 'Suspenso', plan: '600 Mega' };
 
 const DUPLICATE = { id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '836...', pixCode: '000201...', boletoLink: 'https://x' };
 
-function renderPanel() {
-  render(<SgpLookupPanel conversationId="conv-1" />);
+function renderPanel(onSendMessage = vi.fn()) {
+  render(<SgpLookupPanel onSendMessage={onSendMessage} />);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useAuth.mockReturnValue({ token: 'tok-123' });
   QRCode.toDataURL.mockResolvedValue('data:image/png;base64,FAKE');
 });
 
@@ -156,14 +151,14 @@ describe('SgpLookupPanel — card Financeiro', () => {
     expect(screen.getByText('Failed to reach SGP')).toBeInTheDocument();
   });
 
-  function renderWithDuplicate() {
+  function renderWithDuplicate(onSendMessage) {
     useSgpLookup.mockReturnValue({
       ...BASE_HOOK,
       client: CLIENT,
       contracts: [CONTRACT_A],
       duplicateState: { 17402: { loading: false, error: null, hasOpenInvoice: true, duplicates: [DUPLICATE] } },
     });
-    renderPanel();
+    renderPanel(onSendMessage);
   }
 
   test('shows vencimento, valor formatado e status da fatura', () => {
@@ -173,47 +168,47 @@ describe('SgpLookupPanel — card Financeiro', () => {
     expect(screen.getByText('Em aberto')).toBeInTheDocument();
   });
 
-  test('clicking "Cód Pix" sends the raw pix code as a message in the conversation', async () => {
-    api.sendMessage.mockResolvedValue({});
-    renderWithDuplicate();
+  test('clicking "Cód Pix" sends the raw pix code via the same sendMessage the chat input uses', async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({});
+    renderWithDuplicate(onSendMessage);
 
     await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', '000201...', 'tok-123');
+    expect(onSendMessage).toHaveBeenCalledWith('000201...');
     expect(await screen.findByText(/enviado/i)).toBeInTheDocument();
   });
 
-  test('clicking "Cód Barras" sends the raw bar code as a message in the conversation', async () => {
-    api.sendMessage.mockResolvedValue({});
-    renderWithDuplicate();
+  test('clicking "Cód Barras" sends the raw bar code via the same sendMessage the chat input uses', async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({});
+    renderWithDuplicate(onSendMessage);
 
     await userEvent.click(screen.getByRole('button', { name: /cód barras/i }));
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', '836...', 'tok-123');
+    expect(onSendMessage).toHaveBeenCalledWith('836...');
     expect(await screen.findByText(/enviado/i)).toBeInTheDocument();
   });
 
-  test('clicking "Link Fatura" sends the boleto link as a message in the conversation', async () => {
-    api.sendMessage.mockResolvedValue({});
-    renderWithDuplicate();
+  test('clicking "Link Fatura" sends the boleto link via the same sendMessage the chat input uses', async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({});
+    renderWithDuplicate(onSendMessage);
 
     await userEvent.click(screen.getByRole('button', { name: /^link fatura$/i }));
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'https://x', 'tok-123');
+    expect(onSendMessage).toHaveBeenCalledWith('https://x');
   });
 
-  test('clicking "PDF Fatura" sends the same boleto link as a message in the conversation', async () => {
-    api.sendMessage.mockResolvedValue({});
-    renderWithDuplicate();
+  test('clicking "PDF Fatura" sends the same boleto link via the same sendMessage the chat input uses', async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({});
+    renderWithDuplicate(onSendMessage);
 
     await userEvent.click(screen.getByRole('button', { name: /^pdf fatura$/i }));
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'https://x', 'tok-123');
+    expect(onSendMessage).toHaveBeenCalledWith('https://x');
   });
 
   test('shows an error when sending the message fails', async () => {
-    api.sendMessage.mockRejectedValue(new Error('network error'));
-    renderWithDuplicate();
+    const onSendMessage = vi.fn().mockRejectedValue(new Error('network error'));
+    renderWithDuplicate(onSendMessage);
 
     await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
 

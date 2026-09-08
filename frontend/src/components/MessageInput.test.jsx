@@ -96,7 +96,7 @@ describe('MessageInput', () => {
     await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'Oi');
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
 
-    await waitFor(() => expect(onSend).toHaveBeenCalledWith('Oi', null));
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('Oi', null, null));
     expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
   });
 
@@ -122,5 +122,34 @@ describe('MessageInput', () => {
     await userEvent.click(screen.getByRole('button', { name: /respostas rápidas/i }));
 
     expect(screen.getByText(/nenhuma resposta cadastrada/i)).toBeInTheDocument();
+  });
+
+  test('shows a reply preview bar when replyingTo is set', () => {
+    render(<MessageInput onSend={vi.fn()} replyingTo={{ id: 'msg-1', content: 'Qual o valor da fatura?', direction: 'inbound' }} onCancelReply={vi.fn()} />);
+    expect(screen.getByText('Qual o valor da fatura?')).toBeInTheDocument();
+  });
+
+  test('shows no reply preview bar when replyingTo is null', () => {
+    render(<MessageInput onSend={vi.fn()} replyingTo={null} onCancelReply={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /cancelar resposta/i })).not.toBeInTheDocument();
+  });
+
+  test('cancelling the reply preview calls onCancelReply', async () => {
+    const onCancelReply = vi.fn();
+    render(<MessageInput onSend={vi.fn()} replyingTo={{ id: 'msg-1', content: 'Qual o valor?', direction: 'inbound' }} onCancelReply={onCancelReply} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /cancelar resposta/i }));
+
+    expect(onCancelReply).toHaveBeenCalled();
+  });
+
+  test('sends the repliedToMessageId as the third argument to onSend when replying', async () => {
+    const onSend = vi.fn().mockResolvedValue({});
+    render(<MessageInput onSend={onSend} replyingTo={{ id: 'msg-1', content: 'Qual o valor?', direction: 'inbound' }} onCancelReply={vi.fn()} />);
+
+    await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'R$150,00');
+    await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('R$150,00', null, 'msg-1'));
   });
 });

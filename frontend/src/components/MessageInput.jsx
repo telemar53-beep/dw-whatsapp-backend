@@ -7,7 +7,7 @@ function pickSupportedAudioMimeType() {
   return AUDIO_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate));
 }
 
-function MessageInput({ onSend, quickReplies = [] }) {
+function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelReply }) {
   const [content, setContent] = useState('');
   const [file, setFile] = useState(null);
   const [sending, setSending] = useState(false);
@@ -73,7 +73,7 @@ function MessageInput({ onSend, quickReplies = [] }) {
     setSending(true);
     setError(null);
     try {
-      await onSend(content, file);
+      await onSend(content, file, replyingTo ? replyingTo.id : null);
       setContent('');
       clearAttachment();
     } catch (err) {
@@ -84,103 +84,115 @@ function MessageInput({ onSend, quickReplies = [] }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3">
-      <div className="relative flex items-center gap-2">
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={(e) => setFile(e.target.files[0] || null)}
-          className="hidden"
-          id="message-file-input"
-          disabled={recording}
-        />
-        <label
-          htmlFor="message-file-input"
-          className={`rounded border border-gray-300 px-3 py-2 ${recording ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
-          title="Anexar arquivo"
-        >
-          📎
-        </label>
-        {recording ? (
-          <button
-            type="button"
-            onClick={stopRecording}
-            title="Parar gravação"
-            aria-label="Parar gravação"
-            className="rounded border border-red-300 bg-red-50 px-3 py-2 text-red-600"
-          >
-            ⏹️
+    <>
+      {replyingTo && (
+        <div className="flex items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+          <p className="truncate text-gray-600">
+            Respondendo: <span className="font-medium">{replyingTo.content}</span>
+          </p>
+          <button type="button" onClick={onCancelReply} aria-label="Cancelar resposta" className="text-gray-500 hover:text-gray-700">
+            ✕
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={startRecording}
-            title="Gravar áudio"
-            aria-label="Gravar áudio"
-            className="rounded border border-gray-300 px-3 py-2"
-          >
-            🎤
-          </button>
-        )}
-        <div>
-          <button
-            type="button"
-            onClick={() => setShowingQuickReplies((prev) => !prev)}
-            title="Respostas rápidas"
-            aria-label="Respostas rápidas"
-            className="rounded border border-gray-300 px-3 py-2"
-            disabled={recording}
-          >
-            💬
-          </button>
-          {showingQuickReplies && (
-            <div className="absolute bottom-full left-0 z-10 mb-1 max-h-64 w-64 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white p-2 shadow">
-              {quickReplies.length === 0 ? (
-                <p className="text-sm text-gray-500">Nenhuma resposta cadastrada</p>
-              ) : (
-                <ul className="space-y-1">
-                  {quickReplies.map((quickReply) => (
-                    <li key={quickReply.id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setContent(quickReply.content);
-                          setShowingQuickReplies(false);
-                        }}
-                        className="w-full rounded px-2 py-1 text-left text-sm hover:bg-gray-50"
-                      >
-                        {quickReply.title}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
         </div>
-        <input
-          type="text"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Digite uma mensagem..."
-          className="flex-1 rounded border border-gray-300 px-3 py-2"
-          disabled={recording}
-        />
-        <button type="submit" disabled={sending || recording} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">
-          Enviar
-        </button>
-      </div>
-      {recording && <p className="mt-1 text-sm text-red-600">Gravando... {recordingSeconds}s</p>}
-      {!recording && file && (
-        <p className="mt-1 text-sm text-gray-600">
-          Anexo: {file.name === 'gravacao.webm' ? `gravação de áudio (${recordingSeconds}s)` : file.name}{' '}
-          <button type="button" onClick={clearAttachment} className="text-blue-600 underline">
-            Remover
-          </button>
-        </p>
       )}
-      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-    </form>
+      <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3">
+        <div className="relative flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={(e) => setFile(e.target.files[0] || null)}
+            className="hidden"
+            id="message-file-input"
+            disabled={recording}
+          />
+          <label
+            htmlFor="message-file-input"
+            className={`rounded border border-gray-300 px-3 py-2 ${recording ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
+            title="Anexar arquivo"
+          >
+            📎
+          </label>
+          {recording ? (
+            <button
+              type="button"
+              onClick={stopRecording}
+              title="Parar gravação"
+              aria-label="Parar gravação"
+              className="rounded border border-red-300 bg-red-50 px-3 py-2 text-red-600"
+            >
+              ⏹️
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={startRecording}
+              title="Gravar áudio"
+              aria-label="Gravar áudio"
+              className="rounded border border-gray-300 px-3 py-2"
+            >
+              🎤
+            </button>
+          )}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowingQuickReplies((prev) => !prev)}
+              title="Respostas rápidas"
+              aria-label="Respostas rápidas"
+              className="rounded border border-gray-300 px-3 py-2"
+              disabled={recording}
+            >
+              💬
+            </button>
+            {showingQuickReplies && (
+              <div className="absolute bottom-full left-0 z-10 mb-1 max-h-64 w-64 max-w-[90vw] overflow-y-auto rounded border border-gray-200 bg-white p-2 shadow">
+                {quickReplies.length === 0 ? (
+                  <p className="text-sm text-gray-500">Nenhuma resposta cadastrada</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {quickReplies.map((quickReply) => (
+                      <li key={quickReply.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setContent(quickReply.content);
+                            setShowingQuickReplies(false);
+                          }}
+                          className="w-full rounded px-2 py-1 text-left text-sm hover:bg-gray-50"
+                        >
+                          {quickReply.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+          <input
+            type="text"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Digite uma mensagem..."
+            className="flex-1 rounded border border-gray-300 px-3 py-2"
+            disabled={recording}
+          />
+          <button type="submit" disabled={sending || recording} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">
+            Enviar
+          </button>
+        </div>
+        {recording && <p className="mt-1 text-sm text-red-600">Gravando... {recordingSeconds}s</p>}
+        {!recording && file && (
+          <p className="mt-1 text-sm text-gray-600">
+            Anexo: {file.name === 'gravacao.webm' ? `gravação de áudio (${recordingSeconds}s)` : file.name}{' '}
+            <button type="button" onClick={clearAttachment} className="text-blue-600 underline">
+              Remover
+            </button>
+          </p>
+        )}
+        {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      </form>
+    </>
   );
 }
 

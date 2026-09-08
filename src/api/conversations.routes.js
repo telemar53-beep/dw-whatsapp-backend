@@ -248,6 +248,10 @@ router.post('/:id/messages', upload.single('file'), async (req, res) => {
       // single point where audio enters the system, so every adapter gets a valid file.
       try {
         const normalized = await normalizeAudioForWhatsApp(file.buffer, file.mimetype);
+        console.log(
+          `Audio upload: received ${file.mimetype} (${file.buffer.length} bytes) -> ` +
+            `${normalized.mimeType} (${normalized.buffer.length} bytes), converted=${normalized.converted}`
+        );
         buffer = normalized.buffer;
         mimeType = normalized.mimeType;
         if (normalized.converted && filename) {

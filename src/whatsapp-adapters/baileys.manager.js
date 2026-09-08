@@ -14,10 +14,19 @@ function loadBaileysLib() {
 
 const connections = new Map();
 
+// Baileys is chatty at info/debug and we don't want that in the service log, but
+// silencing it entirely hid a real failure for days: it swallows media problems into a
+// warn ("failed to obtain extra info") and sends the message anyway. Keep warn and above.
 const noopLogger = {
-  fatal() {},
-  error() {},
-  warn() {},
+  fatal(...args) {
+    console.error('[baileys]', ...args);
+  },
+  error(...args) {
+    console.error('[baileys]', ...args);
+  },
+  warn(...args) {
+    console.warn('[baileys]', ...args);
+  },
   info() {},
   debug() {},
   trace() {},
@@ -369,6 +378,13 @@ async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath
   }
   const buffer = await fs.promises.readFile(getMediaFilePath(mediaPath));
   const jid = `${toPhoneNumber}@s.whatsapp.net`;
+  // WhatsApp accepts media it will never deliver, so the mimetype we claim and the bytes
+  // we actually send are worth one line in the log: without it, a media message that the
+  // recipient can never open is indistinguishable from a successful send.
+  console.log(
+    `Sending ${messageType} to ${jid}: mimetype=${mediaMimeType} bytes=${buffer.length} ` +
+      `header=${JSON.stringify(buffer.subarray(0, 4).toString('latin1'))}`
+  );
 
   let payload;
   if (messageType === 'image') {

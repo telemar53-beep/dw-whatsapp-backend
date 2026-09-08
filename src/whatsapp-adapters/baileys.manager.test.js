@@ -992,6 +992,33 @@ describe('baileys.manager', () => {
       });
     });
 
+    test('sends a browser voice recording as a WhatsApp voice note', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-8b', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      const { getMediaFilePath } = require('../media/media-storage');
+      getMediaFilePath.mockReturnValue('/fake/path/gravacao.ogg');
+      const fs = require('fs');
+      fs.promises.readFile = jest.fn().mockResolvedValue(Buffer.from('fake-audio-bytes'));
+
+      await manager.sendMediaMessage(channel, '5511999993333', {
+        messageType: 'audio',
+        mediaPath: 'gravacao.ogg',
+        mediaMimeType: 'audio/ogg; codecs=opus',
+        isVoiceNote: true,
+      });
+
+      // ptt is what makes WhatsApp treat it as a voice note: it renders as one and, unlike
+      // a plain audio attachment, the recipient's app fetches it on arrival instead of
+      // leaving it to auto-download settings.
+      expect(sock.sendMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', {
+        audio: Buffer.from('fake-audio-bytes'),
+        mimetype: 'audio/ogg; codecs=opus',
+        ptt: true,
+      });
+    });
+
     test('sends a sticker without a caption', async () => {
       const sock = createMockSock();
       baileysLib.default.mockReturnValue(sock);

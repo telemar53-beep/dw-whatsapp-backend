@@ -47,10 +47,25 @@ describe('MessageInput', () => {
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
 
     await waitFor(() => expect(onSend).toHaveBeenCalled());
-    const [textArg, fileArg] = onSend.mock.calls[0];
+    const [textArg, fileArg, , isVoiceNoteArg] = onSend.mock.calls[0];
     expect(textArg).toBe('');
     expect(fileArg).toBeInstanceOf(File);
     expect(fileArg.type).toMatch(/audio/);
+    // Flags it as a voice note, so WhatsApp renders a voice message and fetches it on
+    // arrival instead of leaving the download to the recipient's auto-download settings.
+    expect(isVoiceNoteArg).toBe(true);
+  });
+
+  test('does not flag a file picked from disk as a voice note', async () => {
+    const onSend = vi.fn().mockResolvedValue({});
+    const { container } = render(<MessageInput onSend={onSend} />);
+
+    const input = container.querySelector('input[type="file"]');
+    await userEvent.upload(input, new File(['musica'], 'musica.mp3', { type: 'audio/mpeg' }));
+    await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalled());
+    expect(onSend.mock.calls[0][3]).toBe(false);
   });
 
   test('shows an error when microphone access is denied', async () => {
@@ -96,7 +111,7 @@ describe('MessageInput', () => {
     await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'Oi');
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
 
-    await waitFor(() => expect(onSend).toHaveBeenCalledWith('Oi', null, null));
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('Oi', null, null, false));
     expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
   });
 
@@ -150,6 +165,6 @@ describe('MessageInput', () => {
     await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'R$150,00');
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
 
-    await waitFor(() => expect(onSend).toHaveBeenCalledWith('R$150,00', null, 'msg-1'));
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('R$150,00', null, 'msg-1', false));
   });
 });

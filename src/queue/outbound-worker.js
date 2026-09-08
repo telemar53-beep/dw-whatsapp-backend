@@ -12,7 +12,7 @@ const ADAPTERS_BY_CHANNEL_TYPE = {
 };
 
 function startOutboundWorker() {
-  processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) => {
+  processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) => {
     const existingMessage = await findMessageById(messageId);
     if (existingMessage && existingMessage.whatsappMessageId) return;
     const conversation = await getConversationWithContact(conversationId);
@@ -47,6 +47,7 @@ function startOutboundWorker() {
               mediaMimeType,
               mediaFilename,
               caption: content,
+              ...(isVoiceNote ? { isVoiceNote: true } : {}),
               ...(replyOptions || {}),
             })
           : replyOptions

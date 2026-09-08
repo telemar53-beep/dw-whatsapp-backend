@@ -261,6 +261,11 @@ router.post('/:id/messages', upload.single('file'), async (req, res) => {
         return res.status(400).json({ error: 'Could not convert this audio to a format WhatsApp accepts' });
       }
     }
+    // Only the browser knows whether this came from the microphone button or from the
+    // attachment picker, and that decides whether WhatsApp should treat it as a voice note.
+    if (messageType === 'audio' && req.body && req.body.voiceNote === 'true') {
+      messagePayload.isVoiceNote = true;
+    }
     messagePayload.messageType = messageType;
     messagePayload.mediaPath = await saveMediaFile(buffer, extensionForMimeType(mimeType));
     messagePayload.mediaMimeType = mimeType;

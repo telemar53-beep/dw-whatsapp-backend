@@ -120,8 +120,8 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
       ? conversation.contactPhoneNumber
       : conversation.sectorName || 'clique aqui para ver os dados do contato';
 
-  async function handleSend(content, file, repliedToMessageId) {
-    await sendMessage(content, file, repliedToMessageId);
+  async function handleSend(content, file, repliedToMessageId, isVoiceNote) {
+    await sendMessage(content, file, repliedToMessageId, isVoiceNote);
     setReplyingTo(null);
   }
 

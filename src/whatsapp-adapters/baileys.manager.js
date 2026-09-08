@@ -371,7 +371,7 @@ async function sendTextMessage(channel, toPhoneNumber, content, replyContext = {
   return { whatsappMessageId: sent.key.id };
 }
 
-async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath, mediaMimeType, mediaFilename, caption, ...replyContext }) {
+async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath, mediaMimeType, mediaFilename, caption, isVoiceNote, ...replyContext }) {
   const entry = connections.get(channel.id);
   if (!entry) {
     throw new Error(`No active Baileys connection for channel ${channel.id}`);
@@ -392,7 +392,14 @@ async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath
   } else if (messageType === 'video') {
     payload = caption ? { video: buffer, caption } : { video: buffer };
   } else if (messageType === 'audio') {
-    payload = { audio: buffer, mimetype: mediaMimeType };
+    // A recording from the microphone button is a voice note, and saying so matters beyond
+    // how the bubble looks: WhatsApp fetches a voice note when it arrives, while a plain
+    // audio attachment waits on the recipient's auto-download settings. A download that is
+    // deferred and then fails cannot be recovered - the protocol asks the sender to
+    // re-upload, and Baileys has no code to answer that - so the message stays broken.
+    payload = isVoiceNote
+      ? { audio: buffer, mimetype: mediaMimeType, ptt: true }
+      : { audio: buffer, mimetype: mediaMimeType };
   } else if (messageType === 'document') {
     payload = caption
       ? { document: buffer, mimetype: mediaMimeType, fileName: mediaFilename || 'arquivo', caption }

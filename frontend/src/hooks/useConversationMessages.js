@@ -40,8 +40,8 @@ export function useConversationMessages(conversationId) {
   }, []);
 
   const sendMessage = useCallback(
-    async (content, file, repliedToMessageId) => {
-      const created = await apiSendMessage(conversationId, content, token, file, repliedToMessageId);
+    async (content, file, repliedToMessageId, isVoiceNote) => {
+      const created = await apiSendMessage(conversationId, content, token, file, repliedToMessageId, isVoiceNote);
       appendMessage(created);
       return created;
     },

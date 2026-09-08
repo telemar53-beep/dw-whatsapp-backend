@@ -41,6 +41,8 @@ function ComposerButton({ label, onClick, disabled, active, children, as = 'butt
 function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelReply }) {
   const [content, setContent] = useState('');
   const [file, setFile] = useState(null);
+  // A microphone recording is a voice note; a file picked from disk is an attachment.
+  const [fileIsRecording, setFileIsRecording] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const [recording, setRecording] = useState(false);
@@ -78,6 +80,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
 
   function clearAttachment() {
     setFile(null);
+    setFileIsRecording(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -99,6 +102,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
         stream.getTracks().forEach((track) => track.stop());
         const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || mimeType || 'audio/webm' });
         setFile(new File([blob], 'gravacao.webm', { type: blob.type }));
+        setFileIsRecording(true);
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
@@ -134,7 +138,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
     setSending(true);
     setError(null);
     try {
-      await onSend(content, file, replyingTo ? replyingTo.id : null);
+      await onSend(content, file, replyingTo ? replyingTo.id : null, fileIsRecording);
       setContent('');
       clearAttachment();
     } catch (err) {
@@ -191,7 +195,10 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
         <input
           type="file"
           ref={fileInputRef}
-          onChange={(e) => setFile(e.target.files[0] || null)}
+          onChange={(e) => {
+            setFile(e.target.files[0] || null);
+            setFileIsRecording(false);
+          }}
           className="hidden"
           id="message-file-input"
           disabled={recording}

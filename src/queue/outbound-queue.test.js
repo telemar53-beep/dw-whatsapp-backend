@@ -77,6 +77,27 @@ describe('outbound queue', () => {
     });
   });
 
+  test('passes the voice-note flag through to the queued job', (done) => {
+    processOutboundQueue((data) => {
+      try {
+        expect(data.isVoiceNote).toBe(true);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    enqueueOutboundMessage({
+      conversationId,
+      channelId,
+      content: null,
+      messageType: 'audio',
+      mediaPath: 'gravacao.ogg',
+      mediaMimeType: 'audio/ogg; codecs=opus',
+      mediaFilename: 'gravacao.ogg',
+      isVoiceNote: true,
+    });
+  });
+
   test('passes template fields through to the queued job', (done) => {
     processOutboundQueue((data) => {
       try {

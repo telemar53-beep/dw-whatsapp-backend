@@ -250,7 +250,7 @@ describe('ConversationView', () => {
     await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'Segue a foto');
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
 
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('Segue a foto', fakeFile, null));
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('Segue a foto', fakeFile, null, false));
   });
 
   test('opens the previous-conversations history modal for the conversation contact', async () => {
@@ -445,7 +445,7 @@ describe('ConversationView', () => {
     await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'R$150,00');
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
 
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('R$150,00', null, 'm1'));
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('R$150,00', null, 'm1', false));
     await waitFor(() => expect(screen.queryByRole('button', { name: /cancelar resposta/i })).not.toBeInTheDocument());
   });
 

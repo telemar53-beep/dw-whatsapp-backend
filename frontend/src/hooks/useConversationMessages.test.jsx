@@ -126,7 +126,7 @@ describe('useConversationMessages', () => {
       await result.current.sendMessage('Ola cliente');
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Ola cliente', 'tok-123', undefined, undefined);
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Ola cliente', 'tok-123', undefined, undefined, undefined);
     expect(result.current.messages).toEqual([{ id: 'm2', content: 'Ola cliente', status: 'sent' }]);
   });
 
@@ -141,7 +141,7 @@ describe('useConversationMessages', () => {
       await result.current.sendMessage('Legenda', fakeFile);
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Legenda', 'tok-123', fakeFile, undefined);
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'Legenda', 'tok-123', fakeFile, undefined, undefined);
   });
 
   test('sendMessage forwards the repliedToMessageId argument to the api call', async () => {
@@ -152,7 +152,7 @@ describe('useConversationMessages', () => {
       await result.current.sendMessage('R$150,00', undefined, 'msg-original');
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'R$150,00', 'tok-123', undefined, 'msg-original');
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'R$150,00', 'tok-123', undefined, 'msg-original', undefined);
   });
 
   test('appendMessage adds a message to the local list without calling the API', async () => {

@@ -63,13 +63,16 @@ export function claimConversation(conversationId, token) {
   return apiFetch(`/api/conversations/${conversationId}/claim`, { method: 'POST', token });
 }
 
-export function sendMessage(conversationId, content, token, file, repliedToMessageId) {
+export function sendMessage(conversationId, content, token, file, repliedToMessageId, isVoiceNote) {
   if (file) {
     const formData = new FormData();
     if (content) {
       formData.append('content', content);
     }
     formData.append('file', file);
+    if (isVoiceNote) {
+      formData.append('voiceNote', 'true');
+    }
     if (repliedToMessageId) {
       formData.append('repliedToMessageId', repliedToMessageId);
     }

@@ -12,7 +12,7 @@ function getOutboundQueue() {
   return queue;
 }
 
-async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) {
+async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) {
   const message = await createMessage({
     conversationId,
     direction: 'outbound',
@@ -35,6 +35,8 @@ async function enqueueOutboundMessage({ conversationId, channelId, content, mess
       mediaPath: message.mediaPath,
       mediaMimeType: message.mediaMimeType,
       mediaFilename: message.mediaFilename,
+      // Not a column on messages: nothing reads it back, only the send needs it.
+      isVoiceNote: Boolean(isVoiceNote),
       templateName: templateName || null,
       templateLanguage: templateLanguage || null,
       templateVariables: templateVariables || null,

@@ -33,7 +33,7 @@ describe('App', () => {
     await userEvent.type(screen.getByLabelText(/senha/i), 'secret123');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
-    expect(await screen.findByText(/DW Telecom - Atendimento/)).toBeInTheDocument();
+    expect(await screen.findByText(/Selecione uma conversa/i)).toBeInTheDocument();
   });
 
   test('an already-authenticated non-admin visiting /admin/channels is redirected to the dashboard', async () => {
@@ -47,7 +47,7 @@ describe('App', () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText(/DW Telecom - Atendimento/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Selecione uma conversa/i)).toBeInTheDocument());
     expect(screen.queryByText(/Administração de Canais/)).not.toBeInTheDocument();
   });
 

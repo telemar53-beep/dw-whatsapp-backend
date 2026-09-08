@@ -8,7 +8,7 @@ describe('MessageStatusTicks', () => {
     const indicator = screen.getByTitle('Enviado');
     expect(indicator).toBeInTheDocument();
     expect(indicator.querySelectorAll('svg')).toHaveLength(1);
-    expect(indicator.className).toMatch(/text-gray-400/);
+    expect(indicator.className).toMatch(/text-wa-meta/);
   });
 
   test('renders two gray ticks for a delivered message', () => {
@@ -16,7 +16,7 @@ describe('MessageStatusTicks', () => {
     const indicator = screen.getByTitle('Entregue');
     expect(indicator).toBeInTheDocument();
     expect(indicator.querySelectorAll('svg')).toHaveLength(2);
-    expect(indicator.className).toMatch(/text-gray-400/);
+    expect(indicator.className).toMatch(/text-wa-meta/);
   });
 
   test('renders two teal ticks for a read message', () => {
@@ -24,7 +24,7 @@ describe('MessageStatusTicks', () => {
     const indicator = screen.getByTitle('Lido');
     expect(indicator).toBeInTheDocument();
     expect(indicator.querySelectorAll('svg')).toHaveLength(2);
-    expect(indicator.className).toMatch(/text-teal-signal/);
+    expect(indicator.className).toMatch(/text-wa-tick/);
   });
 
   test('renders a failure indicator for a failed message', () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
@@ -9,6 +9,79 @@ import MessageStatusTicks from './MessageStatusTicks';
 import ConversationHistoryModal from './ConversationHistoryModal';
 import ContactAvatar from './ContactAvatar';
 import EditContactModal from './EditContactModal';
+import {
+  IconArrowLeft,
+  IconChevronDown,
+  IconHistory,
+  IconTransfer,
+  IconCheckCircle,
+  IconClaim,
+  IconLock,
+} from './icons/WaIcons';
+
+const OVERLAY_TYPES = ['image', 'video', 'sticker'];
+const BLOCK_TYPES = ['document', 'location'];
+
+function startOfDay(value) {
+  const date = new Date(value);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function dayLabel(value) {
+  const day = startOfDay(value);
+  const today = startOfDay(Date.now());
+  const oneDay = 86400000;
+  if (day === today) return 'Hoje';
+  if (day === today - oneDay) return 'Ontem';
+  if (today - day < oneDay * 7) return new Date(value).toLocaleDateString('pt-BR', { weekday: 'long' });
+  return new Date(value).toLocaleDateString('pt-BR');
+}
+
+function clockLabel(value) {
+  if (!value) return null;
+  return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function buildTimeline(messages) {
+  const rows = [];
+  let previousDay = null;
+  let previousDirection = null;
+
+  messages.forEach((message) => {
+    const day = message.createdAt ? startOfDay(message.createdAt) : null;
+    const dayChanged = day !== null && day !== previousDay;
+
+    if (dayChanged) {
+      rows.push({ kind: 'day', key: `day-${day}`, label: dayLabel(message.createdAt) });
+      previousDirection = null;
+      previousDay = day;
+    }
+
+    rows.push({
+      kind: 'message',
+      key: message.id,
+      message,
+      firstOfGroup: previousDirection !== message.direction,
+    });
+    previousDirection = message.direction;
+  });
+
+  return rows;
+}
+
+function HeaderIconButton({ label, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex h-10 w-10 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-black/[.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-wa-green"
+    >
+      {children}
+    </button>
+  );
+}
 
 function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
@@ -18,6 +91,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const [editingContact, setEditingContact] = useState(false);
   const [contactOverride, setContactOverride] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
+  const bottomRef = useRef(null);
 
   useEffect(() => {
     setContactOverride(null);
@@ -25,111 +99,223 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     setReplyingTo(null);
   }, [conversation.id]);
 
+  useEffect(() => {
+    if (bottomRef.current && bottomRef.current.scrollIntoView) {
+      bottomRef.current.scrollIntoView({ block: 'end' });
+    }
+  }, [messages.length, conversation.id]);
+
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
   const isMine = conversation.assignedAgentId === agent.id;
   const displayName = contactOverride ? contactOverride.displayName : conversation.contactDisplayName;
   const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;
   const nameLabel = displayName || conversation.contactPhoneNumber || 'Conversa';
   const headerLabel = cityName ? `${nameLabel} - ${cityName}` : nameLabel;
+  const subtitle =
+    displayName && conversation.contactPhoneNumber
+      ? conversation.contactPhoneNumber
+      : conversation.sectorName || 'clique aqui para ver os dados do contato';
 
   async function handleSend(content, file, repliedToMessageId) {
     await sendMessage(content, file, repliedToMessageId);
     setReplyingTo(null);
   }
 
+  const timeline = buildTimeline(messages);
+
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 p-3">
-        <div className="flex items-center gap-2">
-          <button onClick={onBack} className="rounded p-3 text-gray-500 md:hidden" aria-label="Voltar para a lista">
-            ←
-          </button>
-          <button
-            onClick={() => setEditingContact(true)}
-            className="flex items-center gap-2"
-            aria-label={`Editar cliente: ${headerLabel}`}
-          >
-            <ContactAvatar
-              contactId={conversation.contactId}
-              avatarPath={conversation.contactAvatarPath}
-              displayName={displayName}
-              phoneNumber={conversation.contactPhoneNumber}
-            />
-            <span className="font-semibold text-gray-800">{headerLabel}</span>
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setShowingHistory(true)}
-            className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-700"
-          >
-            Ver atendimentos anteriores
-          </button>
+    <div className="flex h-full flex-col bg-wa-chat font-wa">
+      <div className="z-10 flex items-center gap-1 border-b border-wa-border bg-wa-panel-header px-2 py-[7px] md:px-4">
+        <button
+          onClick={onBack}
+          className="flex h-10 w-10 items-center justify-center rounded-full text-wa-icon hover:bg-black/[.06] md:hidden"
+          aria-label="Voltar para a lista"
+        >
+          <IconArrowLeft size={22} />
+        </button>
+        <button
+          onClick={() => setEditingContact(true)}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left transition-colors hover:bg-black/[.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-wa-green"
+          aria-label={`Editar cliente: ${headerLabel}`}
+        >
+          <ContactAvatar
+            contactId={conversation.contactId}
+            avatarPath={conversation.contactAvatarPath}
+            displayName={displayName}
+            phoneNumber={conversation.contactPhoneNumber}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[16px] leading-[21px] text-wa-text">{headerLabel}</span>
+            <span className="block truncate text-[13px] leading-[17px] text-wa-muted">{subtitle}</span>
+          </span>
+        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
           {isUnassigned && (
             <button
               onClick={() => claimConversation(conversation.id, token)}
-              className="rounded bg-green-600 px-3 py-1 text-sm text-white"
+              className="mr-1 flex items-center gap-1.5 rounded-full bg-wa-green px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
             >
+              <IconClaim size={17} />
               Assumir
             </button>
           )}
+          <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
+            <IconHistory size={22} />
+          </HeaderIconButton>
           {isMine && (
             <>
-              <button
-                onClick={() => onTransferClick(conversation.id)}
-                className="rounded bg-blue-600 px-3 py-1 text-sm text-white"
-              >
-                Transferir
-              </button>
-              <button
-                onClick={() => closeConversation(conversation.id, token)}
-                className="rounded bg-gray-600 px-3 py-1 text-sm text-white"
-              >
-                Fechar
-              </button>
+              <HeaderIconButton label="Transferir atendimento" onClick={() => onTransferClick(conversation.id)}>
+                <IconTransfer size={22} />
+              </HeaderIconButton>
+              <HeaderIconButton label="Fechar atendimento" onClick={() => closeConversation(conversation.id, token)}>
+                <IconCheckCircle size={22} />
+              </HeaderIconButton>
             </>
           )}
         </div>
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
-        {messages.map((message) => {
+
+      <div className="wa-wallpaper wa-scroll flex-1 overflow-y-auto overflow-x-hidden px-[4%] py-3 lg:px-[6%]">
+        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-[6px] bg-[#ffeecd] px-3 py-1.5 text-center text-[12.5px] leading-[18px] text-[#54656f] shadow-[0_1px_0.5px_rgba(11,20,26,.13)]">
+          <span className="shrink-0 text-[#8a7a4f]">
+            <IconLock size={13} />
+          </span>
+          Este atendimento fica registrado no sistema da DW Telecom.
+        </div>
+
+        {timeline.map((row) => {
+          if (row.kind === 'day') {
+            return (
+              <div key={row.key} className="my-3 flex justify-center">
+                <span className="rounded-[7.5px] bg-wa-panel px-3 py-[5px] text-[12.5px] font-medium text-[#54656f] shadow-[0_1px_0.5px_rgba(11,20,26,.13)]">
+                  {row.label}
+                </span>
+              </div>
+            );
+          }
+
+          const message = row.message;
+          const outbound = message.direction === 'outbound';
+          const hasText = Boolean(message.content);
+          const isSticker = message.messageType === 'sticker' && message.mediaPath;
+          const metaMode = !hasText && OVERLAY_TYPES.includes(message.messageType) && message.mediaPath
+            ? 'overlay'
+            : !hasText && BLOCK_TYPES.includes(message.messageType)
+              ? 'block'
+              : 'float';
+          const tight = metaMode === 'overlay' && !isSticker;
           const repliedToLabel = message.repliedToPreview
             ? message.repliedToPreview.direction === 'outbound'
               ? 'Você'
               : displayName || conversation.contactPhoneNumber || 'Conversa'
             : null;
-          return (
-            <div
-              key={message.id}
-              className={`max-w-[85%] space-y-1 rounded px-3 py-2 text-sm md:max-w-xs ${
-                message.direction === 'inbound' ? 'bg-gray-100 text-gray-800' : 'ml-auto bg-blue-100 text-gray-800'
+
+          const meta = (
+            <span
+              className={`flex shrink-0 items-center gap-[3px] text-[11px] leading-[15px] ${
+                metaMode === 'overlay' ? 'text-white' : 'text-wa-meta'
               }`}
             >
-              {message.repliedToPreview && (
-                <div className="rounded border-l-2 border-gray-400 bg-black/5 px-2 py-1 text-xs text-gray-600">
-                  <p className="font-medium">{repliedToLabel}</p>
-                  <p className="truncate">{message.repliedToPreview.content}</p>
-                </div>
-              )}
-              {message.content && <p className="break-words">{message.content}</p>}
-              <MessageAttachment message={message} />
-              <div className="flex items-center justify-end gap-2">
-                {isMine && message.content && (
+              {clockLabel(message.createdAt)}
+              {outbound && <MessageStatusTicks status={message.status} />}
+            </span>
+          );
+
+          return (
+            <div
+              key={row.key}
+              className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${row.firstOfGroup ? 'mt-3' : 'mt-[2px]'}`}
+            >
+              <div
+                className={`group relative max-w-[85%] md:max-w-[65%] ${
+                  isSticker
+                    ? ''
+                    : `wa-bubble rounded-[7.5px] ${outbound ? 'bg-wa-out' : 'bg-wa-in'} ${
+                        tight ? 'p-[3px]' : 'px-[9px] pb-[8px] pt-[6px]'
+                      } ${
+                        row.firstOfGroup
+                          ? outbound
+                            ? 'wa-tail-out rounded-tr-none'
+                            : 'wa-tail-in rounded-tl-none'
+                          : ''
+                      }`
+                }`}
+              >
+                {message.repliedToPreview && (
+                  <div
+                    className={`mb-1 flex overflow-hidden rounded-[4px] ${
+                      outbound ? 'bg-black/[.07]' : 'bg-black/[.04]'
+                    }`}
+                  >
+                    <span className="w-[4px] shrink-0 bg-wa-quote" />
+                    <span className="min-w-0 flex-1 px-2 py-1">
+                      <span className="block truncate text-[12.8px] font-medium leading-[18px] text-wa-quote">
+                        {repliedToLabel}
+                      </span>
+                      <span className="block truncate text-[13px] leading-[18px] text-wa-muted">
+                        {message.repliedToPreview.content}
+                      </span>
+                    </span>
+                  </div>
+                )}
+
+                <MessageAttachment
+                  message={message}
+                  avatar={
+                    !outbound ? (
+                      <ContactAvatar
+                        contactId={conversation.contactId}
+                        avatarPath={conversation.contactAvatarPath}
+                        displayName={displayName}
+                        phoneNumber={conversation.contactPhoneNumber}
+                        size={42}
+                      />
+                    ) : null
+                  }
+                />
+
+                {hasText && (
+                  <p className="whitespace-pre-wrap break-words text-[14.2px] leading-[19px] text-wa-text">
+                    {message.content}
+                    <span
+                      aria-hidden="true"
+                      className="inline-block h-[1px] align-bottom"
+                      style={{ width: outbound ? 74 : 52 }}
+                    />
+                  </p>
+                )}
+
+                {metaMode === 'float' && (
+                  <span className="absolute bottom-[4px] right-[9px]">{meta}</span>
+                )}
+                {metaMode === 'overlay' && (
+                  <span className="absolute bottom-[7px] right-[8px] rounded-full bg-black/35 px-1.5 py-[1px] backdrop-blur-[1px]">
+                    {meta}
+                  </span>
+                )}
+                {metaMode === 'block' && <span className="mt-1 flex justify-end">{meta}</span>}
+
+                {isMine && hasText && (
                   <button
                     onClick={() => setReplyingTo(message)}
                     aria-label="Responder"
                     title="Responder"
-                    className="text-xs text-gray-500 hover:underline"
+                    className={`absolute right-0 top-0 flex h-[22px] w-[26px] items-center justify-end rounded-tr-[7.5px] pr-[3px] text-wa-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 ${
+                      outbound
+                        ? 'bg-[linear-gradient(to_left,#d9fdd3_60%,rgba(217,253,211,0))]'
+                        : 'bg-[linear-gradient(to_left,#ffffff_60%,rgba(255,255,255,0))]'
+                    }`}
                   >
-                    ↩
+                    <IconChevronDown size={19} />
                   </button>
                 )}
-                {message.direction === 'outbound' && <MessageStatusTicks status={message.status} />}
               </div>
             </div>
           );
         })}
+        <div ref={bottomRef} />
       </div>
+
       {isMine && (
         <MessageInput
           onSend={handleSend}

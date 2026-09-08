@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listChannelsForAgent, startConversation, listTemplatesForChannel } from '../services/api';
+import WaDialog, {
+  waInputClass,
+  waLabelClass,
+  waPrimaryButtonClass,
+  waGhostButtonClass,
+  waErrorClass,
+} from './WaDialog';
 
 function StartConversationModal({ onClose, onCreated }) {
   const { token } = useAuth();
@@ -78,26 +85,25 @@ function StartConversationModal({ onClose, onCreated }) {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/40">
-      <div className="w-[90vw] max-w-80 rounded bg-white p-4 shadow">
-        <h3 className="mb-3 font-semibold text-gray-800">Iniciar conversa</h3>
-        <form onSubmit={handleSubmit} className="space-y-3">
+    <WaDialog title="Iniciar conversa" onClose={onClose} size="max-w-sm">
+      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <div className="wa-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-3">
           <div>
-            <label htmlFor="start-conversation-channel" className="mb-1 block text-sm text-gray-600">
+            <label htmlFor="start-conversation-channel" className={waLabelClass}>
               Canal
             </label>
             {loading ? (
-              <p className="text-sm text-gray-500">Carregando canais...</p>
+              <p className="text-[14px] text-wa-muted">Carregando canais...</p>
             ) : loadError ? (
-              <p className="text-sm text-red-600">Não foi possível carregar os canais. Feche e tente novamente.</p>
+              <p className="text-[14px] text-[#b3261e]">Não foi possível carregar os canais. Feche e tente novamente.</p>
             ) : channels.length === 0 ? (
-              <p className="text-sm text-gray-500">Nenhum canal conectado no momento.</p>
+              <p className="text-[14px] text-wa-muted">Nenhum canal conectado no momento.</p>
             ) : (
               <select
                 id="start-conversation-channel"
                 value={channelId}
                 onChange={(e) => setChannelId(e.target.value)}
-                className="w-full rounded border border-gray-300 px-3 py-2"
+                className={waInputClass}
               >
                 {channels.map((channel) => (
                   <option key={channel.id} value={channel.id}>
@@ -108,34 +114,34 @@ function StartConversationModal({ onClose, onCreated }) {
             )}
           </div>
           <div>
-            <label htmlFor="start-conversation-phone" className="mb-1 block text-sm text-gray-600">
+            <label htmlFor="start-conversation-phone" className={waLabelClass}>
               Telefone
             </label>
             <input
               id="start-conversation-phone"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2"
+              className={waInputClass}
               required
             />
           </div>
           {isMetaCloud ? (
             <>
-              <p className="rounded border border-blue-200 bg-blue-50 p-2 text-sm text-blue-800">
+              <p className="rounded-[6px] bg-[#ffeecd] px-3 py-2 text-[13.5px] leading-[19px] text-[#54656f]">
                 Este canal requer o uso de template para iniciar o atendimento!
               </p>
               <div>
-                <label htmlFor="start-conversation-template" className="mb-1 block text-sm text-gray-600">
+                <label htmlFor="start-conversation-template" className={waLabelClass}>
                   Template
                 </label>
                 {templates.length === 0 ? (
-                  <p className="text-sm text-gray-500">Nenhum template aprovado para este canal.</p>
+                  <p className="text-[14px] text-wa-muted">Nenhum template aprovado para este canal.</p>
                 ) : (
                   <select
                     id="start-conversation-template"
                     value={templateId}
                     onChange={(e) => setTemplateId(e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2"
+                    className={waInputClass}
                   >
                     {templates.map((tpl) => (
                       <option key={tpl.id} value={tpl.id}>
@@ -147,14 +153,14 @@ function StartConversationModal({ onClose, onCreated }) {
               </div>
               {templateVariableValues.map((value, index) => (
                 <div key={index}>
-                  <label htmlFor={`start-conversation-variable-${index}`} className="mb-1 block text-sm text-gray-600">
+                  <label htmlFor={`start-conversation-variable-${index}`} className={waLabelClass}>
                     Variável {index + 1}
                   </label>
                   <input
                     id={`start-conversation-variable-${index}`}
                     value={value}
                     onChange={(e) => handleVariableChange(index, e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2"
+                    className={waInputClass}
                     required
                   />
                 </div>
@@ -162,34 +168,34 @@ function StartConversationModal({ onClose, onCreated }) {
             </>
           ) : (
             <div>
-              <label htmlFor="start-conversation-message" className="mb-1 block text-sm text-gray-600">
+              <label htmlFor="start-conversation-message" className={waLabelClass}>
                 Mensagem
               </label>
               <textarea
                 id="start-conversation-message"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className="w-full rounded border border-gray-300 px-3 py-2"
+                className={waInputClass}
                 required
               />
             </div>
           )}
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={submitting || loading || loadError || channels.length === 0 || (isMetaCloud && templates.length === 0)}
-              className="flex-1 rounded bg-blue-600 py-2 text-sm text-white disabled:opacity-50"
-            >
-              Iniciar
-            </button>
-            <button type="button" onClick={onClose} className="flex-1 rounded bg-gray-200 py-2 text-sm text-gray-700">
-              Cancelar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          {error && <p className={waErrorClass}>{error}</p>}
+        </div>
+        <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
+          <button type="button" onClick={onClose} className={waGhostButtonClass}>
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={submitting || loading || loadError || channels.length === 0 || (isMetaCloud && templates.length === 0)}
+            className={waPrimaryButtonClass}
+          >
+            Iniciar
+          </button>
+        </div>
+      </form>
+    </WaDialog>
   );
 }
 

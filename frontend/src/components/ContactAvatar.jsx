@@ -11,15 +11,17 @@ function initialFor(displayName, phoneNumber) {
   return '?';
 }
 
-function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber }) {
+function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber, size = 40 }) {
   const { token } = useAuth();
+  const boxStyle = { width: size, height: size };
 
   if (avatarPath) {
     return (
       <img
         src={avatarUrl(contactId, token)}
         alt={displayName || phoneNumber || 'Contato'}
-        className="h-8 w-8 shrink-0 rounded-full object-cover"
+        style={boxStyle}
+        className="shrink-0 rounded-full bg-[#dfe5e7] object-cover"
       />
     );
   }
@@ -27,7 +29,8 @@ function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber }) {
   return (
     <span
       aria-hidden="true"
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-semibold text-white"
+      style={{ ...boxStyle, fontSize: Math.round(size * 0.4) }}
+      className="flex shrink-0 select-none items-center justify-center rounded-full bg-[#dfe5e7] font-medium text-[#8696a0]"
     >
       {initialFor(displayName, phoneNumber)}
     </span>

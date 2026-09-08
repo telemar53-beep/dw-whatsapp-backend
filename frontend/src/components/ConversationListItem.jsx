@@ -21,7 +21,7 @@ function formatMessageTime(lastMessageAt) {
   return new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function ConversationListItem({ conversation, onSelect, unread }) {
+function ConversationListItem({ conversation, onSelect, unread, selected }) {
   const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
   const displayLabel = conversation.contactCityName ? `${nameLabel} - ${conversation.contactCityName}` : nameLabel;
   const previewText = getPreviewText(conversation);
@@ -31,34 +31,48 @@ function ConversationListItem({ conversation, onSelect, unread }) {
     <li>
       <button
         onClick={() => onSelect(conversation.id)}
-        className="flex w-full items-center gap-2 rounded border border-gray-200 px-3 py-2 text-left hover:bg-gray-50"
+        className={`flex w-full items-center gap-3 pl-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-wa-green ${
+          selected ? 'bg-wa-active' : 'hover:bg-wa-hover'
+        }`}
       >
         <ContactAvatar
           contactId={conversation.contactId}
           avatarPath={conversation.contactAvatarPath}
           displayName={conversation.contactDisplayName}
           phoneNumber={conversation.contactPhoneNumber}
+          size={49}
         />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="flex items-center gap-1.5 truncate font-medium text-gray-800">
-              {unread && <span title="Mensagem não lida" className="h-2 w-2 shrink-0 rounded-full bg-blue-600" />}
-              {displayLabel}
-            </p>
-            <div className="flex shrink-0 items-center gap-2">
-              {messageTime && <span className="text-xs text-gray-400">{messageTime}</span>}
-              {conversation.sectorName && (
-                <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{conversation.sectorName}</span>
-              )}
-            </div>
-          </div>
-          <p className="flex items-center gap-1 truncate text-xs text-gray-500">
-            {conversation.lastMessageDirection === 'outbound' && (
-              <MessageStatusTicks status={conversation.lastMessageStatus} />
+        <span className="flex min-w-0 flex-1 flex-col justify-center gap-[2px] border-b border-wa-border py-[11px] pr-3">
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-[17px] leading-[22px] text-wa-text">{displayLabel}</span>
+            {messageTime && (
+              <span className={`shrink-0 text-[12px] leading-[16px] ${unread ? 'text-wa-badge' : 'text-wa-muted'}`}>
+                {messageTime}
+              </span>
             )}
-            <span className="truncate">{previewText}</span>
-          </p>
-        </div>
+          </span>
+          <span className="flex items-center justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-1 text-[14px] leading-[20px] text-wa-muted">
+              {conversation.lastMessageDirection === 'outbound' && (
+                <MessageStatusTicks status={conversation.lastMessageStatus} />
+              )}
+              <span className="truncate">{previewText}</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              {conversation.sectorName && (
+                <span className="rounded-full bg-wa-chip px-2 py-[1px] text-[11px] font-medium text-wa-chip-text">
+                  {conversation.sectorName}
+                </span>
+              )}
+              {unread && (
+                <span
+                  title="Mensagem não lida"
+                  className="h-[11px] w-[11px] shrink-0 rounded-full bg-wa-badge"
+                />
+              )}
+            </span>
+          </span>
+        </span>
       </button>
     </li>
   );

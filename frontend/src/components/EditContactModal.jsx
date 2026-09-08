@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCities } from '../hooks/useCities';
 import { updateContact } from '../services/api';
+import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
 
 function EditContactModal({ conversation, onClose, onSaved }) {
   const { token } = useAuth();
@@ -28,30 +29,29 @@ function EditContactModal({ conversation, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/40">
-      <div className="w-[90vw] max-w-80 rounded bg-white p-4 shadow">
-        <h3 className="mb-3 font-semibold text-gray-800">Editar cliente</h3>
-        <form onSubmit={handleSubmit} className="space-y-3">
+    <WaDialog title="Editar cliente" onClose={onClose} size="max-w-sm">
+      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <div className="wa-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-3">
           <div>
-            <label htmlFor="contact-name" className="mb-1 block text-sm text-gray-700">
+            <label htmlFor="contact-name" className={waLabelClass}>
               Nome
             </label>
             <input
               id="contact-name"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className={waInputClass}
             />
           </div>
           <div>
-            <label htmlFor="contact-city" className="mb-1 block text-sm text-gray-700">
+            <label htmlFor="contact-city" className={waLabelClass}>
               Cidade
             </label>
             <select
               id="contact-city"
               value={cityId}
               onChange={(e) => setCityId(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className={waInputClass}
             >
               <option value="">Nenhuma</option>
               {cities.map((city) => (
@@ -61,22 +61,18 @@ function EditContactModal({ conversation, onClose, onSaved }) {
               ))}
             </select>
           </div>
-          {error && <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex-1 rounded bg-blue-600 py-2 text-sm text-white disabled:opacity-50"
-            >
-              Salvar
-            </button>
-            <button type="button" onClick={onClose} className="flex-1 rounded bg-gray-200 py-2 text-sm text-gray-700">
-              Cancelar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          {error && <p className={waErrorClass}>{error}</p>}
+        </div>
+        <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
+          <button type="button" onClick={onClose} className={waGhostButtonClass}>
+            Cancelar
+          </button>
+          <button type="submit" disabled={submitting} className={waPrimaryButtonClass}>
+            Salvar
+          </button>
+        </div>
+      </form>
+    </WaDialog>
   );
 }
 

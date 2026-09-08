@@ -17,13 +17,13 @@ function formatCurrency(value) {
 
 const actionButtonClass = 'rounded-lg border border-wa-border bg-white p-2 text-center text-xs font-medium text-wa-text hover:bg-wa-panel';
 
-function SendActionButton({ label, content, onSendMessage }) {
+function SendActionButton({ label, action }) {
   const [status, setStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
 
   async function handleClick() {
     setStatus('sending');
     try {
-      await onSendMessage(content);
+      await action();
       setStatus('sent');
     } catch (err) {
       setStatus('error');
@@ -41,7 +41,7 @@ function SendActionButton({ label, content, onSendMessage }) {
   );
 }
 
-function FinanceiroCard({ contractId, onSendMessage, state, onGenerate }) {
+function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerate }) {
   const [qrDataUrl, setQrDataUrl] = useState(null);
 
   async function handleToggleQr(pixCode) {
@@ -99,15 +99,17 @@ function FinanceiroCard({ contractId, onSendMessage, state, onGenerate }) {
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2">
-                {duplicate.pixCode && <SendActionButton label="Cód Pix" content={duplicate.pixCode} onSendMessage={onSendMessage} />}
-                {duplicate.barCode && <SendActionButton label="Cód Barras" content={duplicate.barCode} onSendMessage={onSendMessage} />}
-                {duplicate.boletoLink && <SendActionButton label="Link Fatura" content={duplicate.boletoLink} onSendMessage={onSendMessage} />}
+                {duplicate.pixCode && <SendActionButton label="Cód Pix" action={() => onSendMessage(duplicate.pixCode)} />}
+                {duplicate.barCode && <SendActionButton label="Cód Barras" action={() => onSendMessage(duplicate.barCode)} />}
+                {duplicate.boletoLink && <SendActionButton label="Link Fatura" action={() => onSendMessage(duplicate.boletoLink)} />}
                 {duplicate.pixCode && (
                   <button type="button" onClick={() => handleToggleQr(duplicate.pixCode)} className={actionButtonClass}>
                     QR Pix
                   </button>
                 )}
-                {duplicate.boletoLink && <SendActionButton label="PDF Fatura" content={duplicate.boletoLink} onSendMessage={onSendMessage} />}
+                {duplicate.boletoLink && (
+                  <SendActionButton label="PDF Fatura" action={() => onSendPdf(contractId, duplicate.boletoLink)} />
+                )}
               </div>
               {qrDataUrl && <img src={qrDataUrl} alt="QR code do Pix" className="mt-3 h-32 w-32" />}
             </>
@@ -117,7 +119,7 @@ function FinanceiroCard({ contractId, onSendMessage, state, onGenerate }) {
   );
 }
 
-function SgpLookupPanel({ onSendMessage }) {
+function SgpLookupPanel({ onSendMessage, onSendPdf }) {
   const [cpf, setCpf] = useState('');
   const [selectedContractId, setSelectedContractId] = useState(null);
   const { client, contracts, loading, error, errorMessage, search, fetchDuplicate, duplicateState } = useSgpLookup();
@@ -212,6 +214,7 @@ function SgpLookupPanel({ onSendMessage }) {
               key={selectedContract.id}
               contractId={selectedContract.id}
               onSendMessage={onSendMessage}
+              onSendPdf={onSendPdf}
               state={duplicateState[selectedContract.id]}
               onGenerate={() => fetchDuplicate(selectedContract.id)}
             />

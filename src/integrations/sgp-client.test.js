@@ -5,6 +5,7 @@ const { getSgpQueryConfig } = require('./sgp-query-config.repository');
 const {
   lookupClientByCpf,
   getDuplicateInvoice,
+  downloadBoletoPdf,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,
@@ -180,6 +181,27 @@ describe('sgp-client', () => {
       const result = await getDuplicateInvoice(17402);
 
       expect(result.duplicates[0].pixCode).toBe('fallback-pix');
+    });
+  });
+
+  describe('downloadBoletoPdf', () => {
+    test('downloads the link and returns a Buffer', async () => {
+      axios.get.mockResolvedValue({ data: Buffer.from('%PDF-fake-bytes') });
+
+      const result = await downloadBoletoPdf('https://dwtelecom.sgp.tsmx.com.br/boleto/999');
+
+      expect(axios.get).toHaveBeenCalledWith('https://dwtelecom.sgp.tsmx.com.br/boleto/999', {
+        responseType: 'arraybuffer',
+        timeout: 15000,
+      });
+      expect(Buffer.isBuffer(result)).toBe(true);
+      expect(result.toString()).toBe('%PDF-fake-bytes');
+    });
+
+    test('throws SgpRequestError when the download fails', async () => {
+      axios.get.mockRejectedValue(new Error('timeout'));
+
+      await expect(downloadBoletoPdf('https://dwtelecom.sgp.tsmx.com.br/boleto/999')).rejects.toBeInstanceOf(SgpRequestError);
     });
   });
 });

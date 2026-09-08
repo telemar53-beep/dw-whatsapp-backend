@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
-import { claimConversation, closeConversation } from '../services/api';
+import { claimConversation, closeConversation, sendSgpBoletoPdf } from '../services/api';
 import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
 import MessageStatusTicks from './MessageStatusTicks';
@@ -87,7 +87,7 @@ function HeaderIconButton({ label, onClick, children }) {
 
 function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
-  const { messages, sendMessage } = useConversationMessages(conversation.id);
+  const { messages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
   const { quickReplies } = useQuickReplies();
   const [showingHistory, setShowingHistory] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
@@ -123,6 +123,12 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   async function handleSend(content, file, repliedToMessageId) {
     await sendMessage(content, file, repliedToMessageId);
     setReplyingTo(null);
+  }
+
+  async function handleSendSgpPdf(contratoId, boletoLink) {
+    const message = await sendSgpBoletoPdf(contratoId, conversation.id, boletoLink, token);
+    appendMessage(message);
+    return message;
   }
 
   const timeline = buildTimeline(messages);
@@ -347,7 +353,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         />
       )}
       </div>
-      {sgpPanelOpen && <SgpLookupPanel onSendMessage={(content) => sendMessage(content)} />}
+      {sgpPanelOpen && (
+        <SgpLookupPanel onSendMessage={(content) => sendMessage(content)} onSendPdf={handleSendSgpPdf} />
+      )}
     </div>
   );
 }

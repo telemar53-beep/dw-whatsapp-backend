@@ -1,15 +1,22 @@
 jest.mock('../integrations/sgp-client');
+jest.mock('../conversations/conversation.repository');
+jest.mock('../queue/outbound-queue');
+jest.mock('../media/media-storage');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const {
   lookupClientByCpf,
   getDuplicateInvoice,
+  downloadBoletoPdf,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,
   SgpRequestError,
 } = require('../integrations/sgp-client');
+const { getConversationWithContact } = require('../conversations/conversation.repository');
+const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { saveMediaFile } = require('../media/media-storage');
 const sgpQueryRoutes = require('./sgp-query.routes');
 
 function buildApp() {
@@ -127,5 +134,91 @@ describe('POST /api/sgp/contratos/:contratoId/boleto', () => {
     const res = await request(buildApp()).post('/api/sgp/contratos/17402/boleto');
     expect(res.status).toBe(401);
     expect(getDuplicateInvoice).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/sgp/contratos/:contratoId/boleto-pdf', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const CONVERSATION = { id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' };
+
+  test('returns 401 without a token', async () => {
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/boleto-pdf')
+      .send({ conversationId: 'conv-1', boletoLink: 'https://x/boleto.pdf' });
+    expect(res.status).toBe(401);
+  });
+
+  test('returns 400 when conversationId is missing', async () => {
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/boleto-pdf')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ boletoLink: 'https://x/boleto.pdf' });
+    expect(res.status).toBe(400);
+    expect(getConversationWithContact).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when boletoLink is missing', async () => {
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/boleto-pdf')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ conversationId: 'conv-1' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 when the conversation does not exist', async () => {
+    getConversationWithContact.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/boleto-pdf')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ conversationId: 'conv-missing', boletoLink: 'https://x/boleto.pdf' });
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 403 when the caller is not the assigned agent', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/boleto-pdf')
+      .set('Authorization', `Bearer ${tokenFor('agent-2', 'agent')}`)
+      .send({ conversationId: 'conv-1', boletoLink: 'https://x/boleto.pdf' });
+    expect(res.status).toBe(403);
+    expect(downloadBoletoPdf).not.toHaveBeenCalled();
+  });
+
+  test('downloads the PDF, saves it, and enqueues it as a document message', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF-fake'));
+    saveMediaFile.mockResolvedValue('abc123.pdf');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'msg-1', messageType: 'document', mediaPath: 'abc123.pdf' });
+
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/boleto-pdf')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ conversationId: 'conv-1', boletoLink: 'https://x/boleto.pdf' });
+
+    expect(downloadBoletoPdf).toHaveBeenCalledWith('https://x/boleto.pdf');
+    expect(saveMediaFile).toHaveBeenCalledWith(expect.any(Buffer), '.pdf');
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      channelId: 'channel-1',
+      content: null,
+      messageType: 'document',
+      mediaPath: 'abc123.pdf',
+      mediaMimeType: 'application/pdf',
+      mediaFilename: 'boleto.pdf',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id: 'msg-1', messageType: 'document', mediaPath: 'abc123.pdf' });
+  });
+
+  test('returns 502 when the PDF download fails', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    downloadBoletoPdf.mockRejectedValue(new SgpRequestError());
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/boleto-pdf')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ conversationId: 'conv-1', boletoLink: 'https://x/boleto.pdf' });
+    expect(res.status).toBe(502);
+    expect(saveMediaFile).not.toHaveBeenCalled();
   });
 });

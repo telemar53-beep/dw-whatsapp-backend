@@ -155,6 +155,19 @@ describe('useConversationMessages', () => {
     expect(api.sendMessage).toHaveBeenCalledWith('conv-1', 'R$150,00', 'tok-123', undefined, 'msg-original');
   });
 
+  test('appendMessage adds a message to the local list without calling the API', async () => {
+    api.getMessages.mockResolvedValue([]);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toEqual([]));
+
+    act(() => {
+      result.current.appendMessage({ id: 'm5', messageType: 'document', mediaPath: 'abc.pdf' });
+    });
+
+    expect(result.current.messages).toEqual([{ id: 'm5', messageType: 'document', mediaPath: 'abc.pdf' }]);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
   test('resets the message list when the conversationId changes', async () => {
     api.getMessages.mockResolvedValueOnce([{ id: 'm1' }]).mockResolvedValueOnce([{ id: 'm2' }]);
     const { result, rerender } = renderHook(({ id }) => useConversationMessages(id), {

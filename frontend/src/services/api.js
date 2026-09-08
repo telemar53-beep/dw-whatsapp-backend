@@ -281,3 +281,11 @@ export function lookupSgpClient(cpf, token) {
 export function generateSgpDuplicateInvoice(contratoId, token) {
   return apiFetch(`/api/sgp/contratos/${contratoId}/boleto`, { method: 'POST', token });
 }
+
+export function sendSgpBoletoPdf(contratoId, conversationId, boletoLink, token) {
+  return apiFetch(`/api/sgp/contratos/${contratoId}/boleto-pdf`, {
+    method: 'POST',
+    body: { conversationId, boletoLink },
+    token,
+  });
+}

@@ -35,14 +35,18 @@ export function useConversationMessages(conversationId) {
     };
   }, [socket, conversationId]);
 
+  const appendMessage = useCallback((message) => {
+    setMessages((prev) => [...prev, message]);
+  }, []);
+
   const sendMessage = useCallback(
     async (content, file, repliedToMessageId) => {
       const created = await apiSendMessage(conversationId, content, token, file, repliedToMessageId);
-      setMessages((prev) => [...prev, created]);
+      appendMessage(created);
       return created;
     },
-    [conversationId, token]
+    [conversationId, token, appendMessage]
   );
 
-  return { messages, sendMessage };
+  return { messages, sendMessage, appendMessage };
 }

@@ -25,8 +25,8 @@ const CONTRACT_B = { id: 25439, status: 'Suspenso', plan: '600 Mega' };
 
 const DUPLICATE = { id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '836...', pixCode: '000201...', boletoLink: 'https://x' };
 
-function renderPanel(onSendMessage = vi.fn()) {
-  render(<SgpLookupPanel onSendMessage={onSendMessage} />);
+function renderPanel(onSendMessage = vi.fn(), onSendPdf = vi.fn()) {
+  render(<SgpLookupPanel onSendMessage={onSendMessage} onSendPdf={onSendPdf} />);
 }
 
 beforeEach(() => {
@@ -151,14 +151,14 @@ describe('SgpLookupPanel — card Financeiro', () => {
     expect(screen.getByText('Failed to reach SGP')).toBeInTheDocument();
   });
 
-  function renderWithDuplicate(onSendMessage) {
+  function renderWithDuplicate(onSendMessage, onSendPdf) {
     useSgpLookup.mockReturnValue({
       ...BASE_HOOK,
       client: CLIENT,
       contracts: [CONTRACT_A],
       duplicateState: { 17402: { loading: false, error: null, hasOpenInvoice: true, duplicates: [DUPLICATE] } },
     });
-    renderPanel(onSendMessage);
+    renderPanel(onSendMessage, onSendPdf);
   }
 
   test('shows vencimento, valor formatado e status da fatura', () => {
@@ -197,13 +197,25 @@ describe('SgpLookupPanel — card Financeiro', () => {
     expect(onSendMessage).toHaveBeenCalledWith('https://x');
   });
 
-  test('clicking "PDF Fatura" sends the same boleto link via the same sendMessage the chat input uses', async () => {
+  test('clicking "PDF Fatura" downloads and sends the real PDF as an attachment, not a text link', async () => {
     const onSendMessage = vi.fn().mockResolvedValue({});
-    renderWithDuplicate(onSendMessage);
+    const onSendPdf = vi.fn().mockResolvedValue({});
+    renderWithDuplicate(onSendMessage, onSendPdf);
 
     await userEvent.click(screen.getByRole('button', { name: /^pdf fatura$/i }));
 
-    expect(onSendMessage).toHaveBeenCalledWith('https://x');
+    expect(onSendPdf).toHaveBeenCalledWith(17402, 'https://x');
+    expect(onSendMessage).not.toHaveBeenCalled();
+    expect(await screen.findByText(/enviado/i)).toBeInTheDocument();
+  });
+
+  test('shows an error when sending the PDF fails', async () => {
+    const onSendPdf = vi.fn().mockRejectedValue(new Error('download failed'));
+    renderWithDuplicate(vi.fn(), onSendPdf);
+
+    await userEvent.click(screen.getByRole('button', { name: /^pdf fatura$/i }));
+
+    expect(await screen.findByText(/não foi possível enviar/i)).toBeInTheDocument();
   });
 
   test('shows an error when sending the message fails', async () => {

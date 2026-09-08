@@ -107,9 +107,19 @@ async function getDuplicateInvoice(contratoId) {
   return { hasOpenInvoice: true, duplicates };
 }
 
+async function downloadBoletoPdf(link) {
+  try {
+    const response = await axios.get(link, { responseType: 'arraybuffer', timeout: 15000 });
+    return Buffer.from(response.data);
+  } catch (err) {
+    throw new SgpRequestError('Failed to download boleto PDF', { cause: err });
+  }
+}
+
 module.exports = {
   lookupClientByCpf,
   getDuplicateInvoice,
+  downloadBoletoPdf,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,

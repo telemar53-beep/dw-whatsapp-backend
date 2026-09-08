@@ -273,3 +273,11 @@ export function getSgpQueryConfig(token) {
 export function updateSgpQueryConfig(payload, token) {
   return apiFetch('/api/admin/integrations/sgp-query-config', { method: 'PUT', body: payload, token });
 }
+
+export function lookupSgpClient(cpf, token) {
+  return apiFetch(`/api/sgp/clientes?cpf=${encodeURIComponent(cpf)}`, { token });
+}
+
+export function generateSgpDuplicateInvoice(contratoId, token) {
+  return apiFetch(`/api/sgp/contratos/${contratoId}/boleto`, { method: 'POST', token });
+}

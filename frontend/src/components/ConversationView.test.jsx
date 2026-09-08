@@ -330,6 +330,20 @@ describe('ConversationView', () => {
     expect(screen.getByRole('button', { name: /responder/i })).toBeInTheDocument();
   });
 
+  test('shows no reply button on a message with no text content, even when the conversation is mine', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'inbound', messageType: 'image', content: null }],
+      sendMessage: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('button', { name: /responder/i })).not.toBeInTheDocument();
+  });
+
   test('shows no reply button when the conversation is not mine', () => {
     useConversationMessages.mockReturnValue({
       messages: [{ id: 'm1', direction: 'inbound', content: 'Qual o valor da fatura?' }],

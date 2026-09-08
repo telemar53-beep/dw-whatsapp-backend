@@ -97,6 +97,25 @@ describe('useConversationMessages', () => {
     expect(result.current.messages).toEqual([{ id: 'm1', status: 'sent' }]);
   });
 
+  test('a message:updated event merges into the existing message instead of replacing it, preserving fields the update does not carry', async () => {
+    // seed a message that already has a repliedToPreview (as if loaded from the initial GET)
+    api.getMessages.mockResolvedValue([
+      { id: 'm1', content: 'R$150,00', status: 'sent', repliedToPreview: { content: 'Qual o valor?', direction: 'inbound' } },
+    ]);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    act(() => {
+      fakeSocket.trigger('message:updated', {
+        conversationId: 'conv-1',
+        message: { id: 'm1', content: 'R$150,00', status: 'delivered' },
+      });
+    });
+
+    expect(result.current.messages[0].status).toBe('delivered');
+    expect(result.current.messages[0].repliedToPreview).toEqual({ content: 'Qual o valor?', direction: 'inbound' });
+  });
+
   test('sendMessage posts to the API and appends the created message immediately', async () => {
     api.getMessages.mockResolvedValue([]);
     api.sendMessage.mockResolvedValue({ id: 'm2', content: 'Ola cliente', status: 'sent' });

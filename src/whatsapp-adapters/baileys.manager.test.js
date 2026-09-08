@@ -706,6 +706,21 @@ describe('baileys.manager', () => {
       );
     });
 
+    test('sends without a quoted reply when repliedToContent is missing (defensive, should not block the send)', async () => {
+      const sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-4', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      await manager.sendTextMessage(channel, '5511999993333', 'R$150,00', {
+        repliedToWhatsappMessageId: 'wamid.ORIG1',
+        repliedToDirection: 'inbound',
+        repliedToContent: null,
+      });
+
+      expect(sock.sendMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', { text: 'R$150,00' });
+    });
+
     test('marks fromMe true when replying to an outbound message', async () => {
       const sock = createMockSock();
       baileysLib.default.mockReturnValue(sock);

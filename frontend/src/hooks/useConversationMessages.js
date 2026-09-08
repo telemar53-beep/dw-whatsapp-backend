@@ -24,7 +24,7 @@ export function useConversationMessages(conversationId) {
 
     function onUpdated({ conversationId: updatedId, message }) {
       if (updatedId !== conversationId) return;
-      setMessages((prev) => prev.map((m) => (m.id === message.id ? message : m)));
+      setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, ...message } : m)));
     }
 
     socket.on('message:new', onNew);

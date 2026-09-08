@@ -496,6 +496,26 @@ describe('POST /api/conversations/:id/messages', () => {
     expect(res.body.error).toMatch(/delivered/i);
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
+
+  test('includes repliedToPreview in the response when the message was a reply', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' });
+    findMessageById.mockResolvedValue({
+      id: 'msg-original',
+      conversationId: 'conv-1',
+      content: 'Qual o valor?',
+      direction: 'inbound',
+      whatsappMessageId: 'wamid.ORIG1',
+    });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'msg-reply', status: 'sent' });
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ content: 'R$150,00', repliedToMessageId: 'msg-original' });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id: 'msg-reply', status: 'sent', repliedToPreview: { content: 'Qual o valor?', direction: 'inbound' } });
+  });
 });
 
 describe('POST /api/conversations/:id/transfer', () => {

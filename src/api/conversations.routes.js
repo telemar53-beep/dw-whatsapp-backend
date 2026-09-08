@@ -206,8 +206,9 @@ router.post('/:id/messages', upload.single('file'), async (req, res) => {
     return res.status(403).json({ error: 'Only the assigned agent can send messages on this conversation' });
   }
 
+  let repliedTo = null;
   if (repliedToMessageId) {
-    const repliedTo = await findMessageById(repliedToMessageId);
+    repliedTo = await findMessageById(repliedToMessageId);
     if (!repliedTo || repliedTo.conversationId !== conversation.id) {
       return res.status(400).json({ error: 'repliedToMessageId does not belong to this conversation' });
     }
@@ -244,7 +245,10 @@ router.post('/:id/messages', upload.single('file'), async (req, res) => {
   }
 
   const message = await enqueueOutboundMessage(messagePayload);
-  res.status(201).json(message);
+  const response = repliedTo
+    ? { ...message, repliedToPreview: { content: repliedTo.content, direction: repliedTo.direction } }
+    : message;
+  res.status(201).json(response);
 });
 
 // eslint-disable-next-line no-unused-vars

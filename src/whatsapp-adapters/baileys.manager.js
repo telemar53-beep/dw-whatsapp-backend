@@ -314,7 +314,7 @@ async function addBaileysChannel({ name, phoneNumber }) {
 }
 
 function buildQuotedOptions(jid, { repliedToWhatsappMessageId, repliedToDirection, repliedToContent } = {}) {
-  if (!repliedToWhatsappMessageId) return undefined;
+  if (!repliedToWhatsappMessageId || !repliedToContent) return undefined;
   return {
     quoted: {
       key: { remoteJid: jid, id: repliedToWhatsappMessageId, fromMe: repliedToDirection === 'outbound' },

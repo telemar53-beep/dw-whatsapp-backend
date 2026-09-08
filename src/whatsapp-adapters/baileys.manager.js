@@ -5,6 +5,7 @@ const { loadConfig } = require('../config/env');
 const { createChannel, updateChannelStatus, listChannels } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
 const { setContactAvatarPath } = require('../conversations/contact.repository');
+const { applyParsedMessageStatusUpdates } = require('../conversations/message-status.service');
 const { saveMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
 
 function loadBaileysLib() {
@@ -27,6 +28,21 @@ const noopLogger = {
 
 function jidToPhoneNumber(jid) {
   return jid.split('@')[0];
+}
+
+// proto.WebMessageInfo.Status: ERROR=0, PENDING=1, SERVER_ACK=2, DELIVERY_ACK=3, READ=4, PLAYED=5.
+// PENDING/SERVER_ACK carry no information beyond our own 'sent' default and are ignored.
+const STATUS_BY_BAILEYS_CODE = { 0: 'failed', 3: 'delivered', 4: 'read', 5: 'read' };
+
+function parseBaileysStatusUpdates(updates) {
+  const result = [];
+  for (const { key, update } of updates) {
+    if (!key || !key.id || update.status === undefined) continue;
+    const status = STATUS_BY_BAILEYS_CODE[update.status];
+    if (!status) continue;
+    result.push({ whatsappMessageId: key.id, status });
+  }
+  return result;
 }
 
 function extractTextContent(message) {
@@ -233,6 +249,11 @@ async function handleMessagesUpsert(channel, { messages, type }) {
   }
 }
 
+async function handleMessagesUpdate(channel, updates) {
+  const parsed = parseBaileysStatusUpdates(updates);
+  await applyParsedMessageStatusUpdates(parsed);
+}
+
 async function handleConnectionUpdate(channel, update) {
   const { connection, lastDisconnect, qr } = update;
 
@@ -291,6 +312,11 @@ async function startBaileysConnection(channel) {
   sock.ev.on('messages.upsert', (payload) => {
     return handleMessagesUpsert(channel, payload).catch((err) => {
       console.error(`Failed to handle inbound Baileys message for channel ${channel.id}`, err);
+    });
+  });
+  sock.ev.on('messages.update', (updates) => {
+    return handleMessagesUpdate(channel, updates).catch((err) => {
+      console.error(`Failed to handle Baileys message status update for channel ${channel.id}`, err);
     });
   });
   return sock;
@@ -389,4 +415,5 @@ module.exports = {
   resolveWhatsAppJid,
   getQrForChannel,
   fetchContactAvatarForChannel,
+  parseBaileysStatusUpdates,
 };

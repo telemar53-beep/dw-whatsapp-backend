@@ -3,8 +3,7 @@ const { advanceMessageStatus } = require('./message.repository');
 const { getConversationWithContact } = require('./conversation.repository');
 const { emitToAgent } = require('../realtime/socket-server');
 
-async function applyMessageStatusUpdates(webhookBody) {
-  const updates = parseStatusUpdates(webhookBody);
+async function applyParsedMessageStatusUpdates(updates) {
   for (const update of updates) {
     const message = await advanceMessageStatus(update.whatsappMessageId, update.status);
     if (!message) continue;
@@ -15,4 +14,9 @@ async function applyMessageStatusUpdates(webhookBody) {
   }
 }
 
-module.exports = { applyMessageStatusUpdates };
+async function applyMessageStatusUpdates(webhookBody) {
+  const updates = parseStatusUpdates(webhookBody);
+  await applyParsedMessageStatusUpdates(updates);
+}
+
+module.exports = { applyMessageStatusUpdates, applyParsedMessageStatusUpdates };

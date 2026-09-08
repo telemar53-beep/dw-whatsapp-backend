@@ -7,6 +7,7 @@ jest.mock('@whiskeysockets/baileys', () => ({
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/inbound-message.service');
 jest.mock('../conversations/contact.repository');
+jest.mock('../conversations/message-status.service');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
   saveMediaFile: jest.fn(),
@@ -30,6 +31,7 @@ const { loadConfig } = require('../config/env');
 const { createChannel, updateChannelStatus, listChannels } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
 const { setContactAvatarPath } = require('../conversations/contact.repository');
+const { applyParsedMessageStatusUpdates } = require('../conversations/message-status.service');
 const manager = require('./baileys.manager');
 
 function createMockSock() {
@@ -68,6 +70,7 @@ describe('baileys.manager', () => {
       expect(sock.ev.on).toHaveBeenCalledWith('creds.update', expect.any(Function));
       expect(sock.ev.on).toHaveBeenCalledWith('connection.update', expect.any(Function));
       expect(sock.ev.on).toHaveBeenCalledWith('messages.upsert', expect.any(Function));
+      expect(sock.ev.on).toHaveBeenCalledWith('messages.update', expect.any(Function));
     });
   });
 
@@ -590,6 +593,81 @@ describe('baileys.manager', () => {
         locationLatitude: -3.119,
         locationLongitude: -60.021,
       });
+    });
+  });
+
+  describe('parseBaileysStatusUpdates', () => {
+    test('maps DELIVERY_ACK to delivered', () => {
+      const result = manager.parseBaileysStatusUpdates([{ key: { id: 'wamid.A' }, update: { status: 3 } }]);
+      expect(result).toEqual([{ whatsappMessageId: 'wamid.A', status: 'delivered' }]);
+    });
+
+    test('maps READ to read', () => {
+      const result = manager.parseBaileysStatusUpdates([{ key: { id: 'wamid.B' }, update: { status: 4 } }]);
+      expect(result).toEqual([{ whatsappMessageId: 'wamid.B', status: 'read' }]);
+    });
+
+    test('maps PLAYED to read', () => {
+      const result = manager.parseBaileysStatusUpdates([{ key: { id: 'wamid.C' }, update: { status: 5 } }]);
+      expect(result).toEqual([{ whatsappMessageId: 'wamid.C', status: 'read' }]);
+    });
+
+    test('maps ERROR to failed', () => {
+      const result = manager.parseBaileysStatusUpdates([{ key: { id: 'wamid.D' }, update: { status: 0 } }]);
+      expect(result).toEqual([{ whatsappMessageId: 'wamid.D', status: 'failed' }]);
+    });
+
+    test('ignores PENDING and SERVER_ACK (no new information over our own default)', () => {
+      const result = manager.parseBaileysStatusUpdates([
+        { key: { id: 'wamid.E' }, update: { status: 1 } },
+        { key: { id: 'wamid.F' }, update: { status: 2 } },
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    test('ignores an update with no status field (e.g. a message-content edit)', () => {
+      const result = manager.parseBaileysStatusUpdates([{ key: { id: 'wamid.G' }, update: { message: { conversation: 'edited' } } }]);
+      expect(result).toEqual([]);
+    });
+
+    test('ignores an update with no key id', () => {
+      const result = manager.parseBaileysStatusUpdates([{ key: {}, update: { status: 3 } }]);
+      expect(result).toEqual([]);
+    });
+
+    test('processes every update in the batch', () => {
+      const result = manager.parseBaileysStatusUpdates([
+        { key: { id: 'wamid.A' }, update: { status: 3 } },
+        { key: { id: 'wamid.B' }, update: { status: 4 } },
+      ]);
+      expect(result).toEqual([
+        { whatsappMessageId: 'wamid.A', status: 'delivered' },
+        { whatsappMessageId: 'wamid.B', status: 'read' },
+      ]);
+    });
+  });
+
+  describe('messages.update handling', () => {
+    let sock;
+
+    beforeEach(async () => {
+      sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      await manager.startBaileysConnection({ id: 'channel-status-1', type: 'baileys' });
+    });
+
+    test('parses the Baileys event and applies the resulting status updates', async () => {
+      await sock.handlers['messages.update']([{ key: { id: 'wamid.DELIVERED1' }, update: { status: 3 } }]);
+
+      expect(applyParsedMessageStatusUpdates).toHaveBeenCalledWith([{ whatsappMessageId: 'wamid.DELIVERED1', status: 'delivered' }]);
+    });
+
+    test('does not throw when applyParsedMessageStatusUpdates rejects', async () => {
+      applyParsedMessageStatusUpdates.mockRejectedValue(new Error('db error'));
+
+      await expect(
+        sock.handlers['messages.update']([{ key: { id: 'wamid.X' }, update: { status: 3 } }])
+      ).resolves.not.toThrow();
     });
   });
 

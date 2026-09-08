@@ -6,7 +6,7 @@ const { parseStatusUpdates } = require('../whatsapp-adapters/meta-cloud.adapter'
 const { advanceMessageStatus } = require('./message.repository');
 const { getConversationWithContact } = require('./conversation.repository');
 const { emitToAgent } = require('../realtime/socket-server');
-const { applyMessageStatusUpdates } = require('./message-status.service');
+const { applyMessageStatusUpdates, applyParsedMessageStatusUpdates } = require('./message-status.service');
 
 describe('applyMessageStatusUpdates', () => {
   beforeEach(() => {
@@ -70,5 +70,34 @@ describe('applyMessageStatusUpdates', () => {
       conversationId: 'conv-b',
       message: { id: 'msg-b', conversationId: 'conv-b', status: 'read' },
     });
+  });
+});
+
+describe('applyParsedMessageStatusUpdates', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('advances the message status and emits message:updated, given already-parsed updates', async () => {
+    advanceMessageStatus.mockResolvedValue({ id: 'msg-1', conversationId: 'conv-1', status: 'delivered' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+
+    await applyParsedMessageStatusUpdates([{ whatsappMessageId: 'wamid.ABC', status: 'delivered' }]);
+
+    expect(parseStatusUpdates).not.toHaveBeenCalled();
+    expect(advanceMessageStatus).toHaveBeenCalledWith('wamid.ABC', 'delivered');
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:updated', {
+      conversationId: 'conv-1',
+      message: { id: 'msg-1', conversationId: 'conv-1', status: 'delivered' },
+    });
+  });
+
+  test('skips silently when the status update does not match a known message', async () => {
+    advanceMessageStatus.mockResolvedValue(null);
+
+    await applyParsedMessageStatusUpdates([{ whatsappMessageId: 'wamid.UNKNOWN', status: 'delivered' }]);
+
+    expect(getConversationWithContact).not.toHaveBeenCalled();
+    expect(emitToAgent).not.toHaveBeenCalled();
   });
 });

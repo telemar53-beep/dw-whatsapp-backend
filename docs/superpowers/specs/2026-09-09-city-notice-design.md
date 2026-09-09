@@ -231,7 +231,7 @@ usado para `admin-channels`/`admin-dashboard` no resto do projeto).
   precisar de uma query SQL com JOIN dedicada, já que o número de cidades é pequeno.
 - `PATCH /api/admin/cities/:id/notice` (`requireAuth`, `requireRole('admin')`) — corpo
   `{ message, enabled }`, os dois obrigatórios (`message` string não-vazia após trim,
-  `enabled` boolean). 400 se a cidade não existir, 400 se `message` vazio, 400 se `enabled`
+  `enabled` boolean). 404 se a cidade não existir, 400 se `message` vazio, 400 se `enabled`
   não for boolean. Chama `upsertCityNotice(cityId, { message: message.trim(), enabled })`.
 - `DELETE /api/admin/cities/:id/notice` (`requireAuth`, `requireRole('admin')`) — remove o
   aviso da cidade por completo (volta pro estado "sem aviso salvo"). 404 se não havia aviso.

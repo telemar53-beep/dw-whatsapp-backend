@@ -3,17 +3,22 @@ jest.mock('./conversation.repository');
 jest.mock('./message.repository');
 jest.mock('../realtime/socket-server');
 jest.mock('../triage/triage.service');
+jest.mock('../channels/channel.repository');
+jest.mock('../queue/outbound-queue');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { findOpenConversation, createConversation, getConversationWithContact, activateConversation } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
+const { findChannelById } = require('../channels/channel.repository');
+const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
 describe('ingestInboundMessage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     shouldStartTriage.mockResolvedValue(false);
+    findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: null });
   });
 
   test('reuses an existing open conversation and broadcasts queue:new when unassigned', async () => {
@@ -514,5 +519,94 @@ describe('ingestInboundMessage', () => {
     });
 
     expect(activateConversation).not.toHaveBeenCalled();
+  });
+
+  test('sends the channel welcome message before the triage question on a new conversation', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-welcome-1' });
+    findOpenConversation.mockResolvedValue(null);
+    shouldStartTriage.mockResolvedValue(true);
+    findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: 'Olá! Bem-vindo à DW Telecom.' });
+    createConversation.mockResolvedValue({ id: 'conv-welcome-1', assignedAgentId: null, triageState: 'pending' });
+    createMessage.mockResolvedValue({ id: 'msg-welcome-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-welcome-1', assignedAgentId: null, triageState: 'pending' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999980010',
+      contactDisplayName: 'Cliente Novo',
+      whatsappMessageId: 'wamid.WELCOME1',
+      content: 'Oi',
+    });
+
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-welcome-1',
+      channelId: 'channel-1',
+      content: 'Olá! Bem-vindo à DW Telecom.',
+    });
+    expect(enqueueOutboundMessage.mock.invocationCallOrder[0]).toBeLessThan(sendTriageQuestion.mock.invocationCallOrder[0]);
+  });
+
+  test('does not enqueue a welcome message when the channel has none configured', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-welcome-2' });
+    findOpenConversation.mockResolvedValue(null);
+    shouldStartTriage.mockResolvedValue(false);
+    findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: null });
+    createConversation.mockResolvedValue({ id: 'conv-welcome-2', assignedAgentId: null, triageState: null });
+    createMessage.mockResolvedValue({ id: 'msg-welcome-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-welcome-2', assignedAgentId: null, triageState: null });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999980011',
+      contactDisplayName: 'Cliente Sem Boas-Vindas',
+      whatsappMessageId: 'wamid.WELCOME2',
+      content: 'Oi',
+    });
+
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('does not re-send the welcome message on a reply to an existing pending-triage conversation', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-welcome-3' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-welcome-3', assignedAgentId: null, triageState: 'pending' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: 'Olá! Bem-vindo.' });
+    createMessage.mockResolvedValue({ id: 'msg-welcome-3' });
+    processTriageReply.mockResolvedValue({ id: 'conv-welcome-3', assignedAgentId: null, triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-welcome-3', assignedAgentId: null, triageState: 'completed' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999980012',
+      contactDisplayName: 'Cliente Respondendo',
+      whatsappMessageId: 'wamid.WELCOME3',
+      content: '1',
+    });
+
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('sends the welcome message even when the channel has no triage configured', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-welcome-4' });
+    findOpenConversation.mockResolvedValue(null);
+    shouldStartTriage.mockResolvedValue(false);
+    findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: 'Oi! Já te atendemos.' });
+    createConversation.mockResolvedValue({ id: 'conv-welcome-4', assignedAgentId: null, triageState: null });
+    createMessage.mockResolvedValue({ id: 'msg-welcome-4' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-welcome-4', assignedAgentId: null, triageState: null });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999980013',
+      contactDisplayName: 'Cliente Sem Triagem',
+      whatsappMessageId: 'wamid.WELCOME4',
+      content: 'Oi',
+    });
+
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-welcome-4',
+      channelId: 'channel-1',
+      content: 'Oi! Já te atendemos.',
+    });
+    expect(sendTriageQuestion).not.toHaveBeenCalled();
   });
 });

@@ -49,10 +49,10 @@ beforeEach(() => {
 });
 
 describe('AttendanceDashboardPage', () => {
-  test('renders the 4 columns with their conversations', () => {
+  test('renders the 4 columns with their conversations', async () => {
     renderPage();
     expect(screen.getByText('Em andamento')).toBeInTheDocument();
-    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(await screen.findByText('Carlos')).toBeInTheDocument();
     expect(screen.getByText('Em espera')).toBeInTheDocument();
     expect(screen.getByText('Maria')).toBeInTheDocument();
     expect(screen.getByText('Na automação')).toBeInTheDocument();

@@ -89,11 +89,13 @@ function AttendanceDashboardPage() {
 
   useEffect(() => {
     if (!token) return;
-    getDashboardClosedToday({ offset: 0, limit: CLOSED_PAGE_SIZE }, token).then((data) => {
-      setClosedItems(data.items);
-      setClosedOffset(data.items.length);
-      setClosedHasMore(data.hasMore);
-    });
+    getDashboardClosedToday({ offset: 0, limit: CLOSED_PAGE_SIZE }, token)
+      .then((data) => {
+        setClosedItems(data.items);
+        setClosedOffset(data.items.length);
+        setClosedHasMore(data.hasMore);
+      })
+      .catch(() => {});
   }, [token]);
 
   function loadMoreClosed() {
@@ -182,7 +184,7 @@ function AttendanceDashboardPage() {
         />
         <DashboardColumn
           title="Encerrados hoje"
-          count={closedTodayCount}
+          count={filteredClosed.length}
           conversations={filteredClosed}
           onSelect={openConversation}
           emptyMessage="Nenhum atendimento encerrado nas últimas 24 horas."

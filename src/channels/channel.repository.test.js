@@ -11,6 +11,7 @@ const {
   updateChannelTriageEnabled,
   updateChannelWabaId,
   updateChannelHidden,
+  updateChannelWelcomeMessage,
   countChannelDependents,
   deleteChannel,
 } = require('./channel.repository');
@@ -130,6 +131,49 @@ describe('channel repository', () => {
   test('updateChannelTriageEnabled returns null when the channel does not exist', async () => {
     const result = await updateChannelTriageEnabled('00000000-0000-0000-0000-000000000000', true);
     expect(result).toBeNull();
+  });
+
+  test('createChannel defaults welcomeMessage to null', async () => {
+    const channel = await createChannel({
+      type: 'baileys',
+      name: 'Canal Sem Boas-Vindas',
+      phoneNumber: '+5511999990022',
+      config: {},
+    });
+    expect(channel.welcomeMessage).toBeNull();
+  });
+
+  test('updateChannelWelcomeMessage sets and clears the welcome message', async () => {
+    const channel = await createChannel({
+      type: 'baileys',
+      name: 'Canal Com Boas-Vindas',
+      phoneNumber: '+5511999990023',
+      config: {},
+    });
+
+    const withMessage = await updateChannelWelcomeMessage(channel.id, 'Olá! Bem-vindo.');
+    expect(withMessage.welcomeMessage).toBe('Olá! Bem-vindo.');
+
+    const cleared = await updateChannelWelcomeMessage(channel.id, null);
+    expect(cleared.welcomeMessage).toBeNull();
+  });
+
+  test('updateChannelWelcomeMessage returns null when the channel does not exist', async () => {
+    const result = await updateChannelWelcomeMessage('00000000-0000-0000-0000-000000000000', 'Oi');
+    expect(result).toBeNull();
+  });
+
+  test('findChannelById includes welcomeMessage', async () => {
+    const channel = await createChannel({
+      type: 'baileys',
+      name: 'Canal Buscavel',
+      phoneNumber: '+5511999990024',
+      config: {},
+    });
+    await updateChannelWelcomeMessage(channel.id, 'Seja bem-vindo!');
+
+    const found = await findChannelById(channel.id);
+    expect(found.welcomeMessage).toBe('Seja bem-vindo!');
   });
 });
 

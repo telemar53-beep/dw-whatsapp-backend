@@ -102,6 +102,16 @@ describe('GET /api/admin/dashboard/conversations/closed-today', () => {
     expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 50, offset: 0 });
   });
 
+  test('clamps negative limit to a positive minimum', async () => {
+    listClosedSince.mockResolvedValue([]);
+    countClosedSince.mockResolvedValue(0);
+
+    await request(buildApp())
+      .get('/api/admin/dashboard/conversations/closed-today?limit=-5')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 1, offset: 0 });
+  });
+
   test('returns 403 for a non-admin agent', async () => {
     const res = await request(buildApp())
       .get('/api/admin/dashboard/conversations/closed-today')

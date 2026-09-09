@@ -29,7 +29,7 @@ router.get('/conversations', requireAuth, requireRole('admin'), async (req, res)
 });
 
 router.get('/conversations/closed-today', requireAuth, requireRole('admin'), async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit, 10) || DEFAULT_LIMIT, MAX_LIMIT);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || DEFAULT_LIMIT, 1), MAX_LIMIT);
   const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
   const since = sinceNow();
   const [items, total] = await Promise.all([listClosedSince(since, { limit, offset }), countClosedSince(since)]);

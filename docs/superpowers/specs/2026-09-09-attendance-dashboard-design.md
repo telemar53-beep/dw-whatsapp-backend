@@ -72,19 +72,25 @@ Reaproveitam a mesma query/shape de `getConversationWithContact`/
 Nenhuma função existente muda de comportamento — são consultas novas ao
 lado das que já existem.
 
-### Novo endpoint: `GET /api/conversations/:id`
+### Nenhum endpoint novo para "abrir a conversa" — reaproveita um mecanismo que já existe
 
-Descoberto como uma lacuna real ao verificar como "abrir a conversa" (já
-decidido no brainstorm) funcionaria de fato: hoje `DashboardPage` guarda a
-conversa selecionada como estado local (`selectedId`/`useState`, não uma
-rota `/conversation/:id`), construído a partir de listas que só contêm as
-conversas do próprio atendente (`useQueue`/`useMyConversations`) — não
-existe hoje nenhuma forma de buscar uma conversa arbitrária (de outro
-atendente) pelo id. `requireAuth` apenas (mesma regra de
-`GET /:id/messages`, que já não tem checagem de dono nenhuma — qualquer
-atendente autenticado já pode ler o histórico de qualquer conversa hoje).
-Retorna `getConversationWithContact(id)` (404 se não existir) — o mesmo
-shape que `ConversationView` já espera.
+Verificação real ao checar como "abrir a conversa" (já decidido no
+brainstorm) funcionaria de fato: `DashboardPage` guarda a conversa
+selecionada como estado local (`selectedId`), construído a partir de
+listas que só contêm as conversas do próprio atendente
+(`useQueue`/`useMyConversations`) — não existe hoje uma rota
+`/conversation/:id`. Cheguei a desenhar um `GET /api/conversations/:id`
+novo pra cobrir isso, mas achei algo melhor: `DashboardPage` **já tem**
+exatamente o mecanismo necessário, construído pra `StartConversationModal`
+— um estado `pendingConversation` que aceita um objeto de conversa vindo
+de fora de `queue`/`myConversations`, e `selectedConversation` já cai de
+volta nele quando o id não está em nenhuma lista local (com um `useEffect`
+que limpa `pendingConversation` assim que a conversa aparece nas listas
+reais). Como o dashboard de atendimento **já tem o objeto completo da
+conversa em memória** (é o mesmo objeto renderizado no card clicado), não
+precisa buscar nada do servidor de novo — só navegar pra `/` passando esse
+objeto como estado de navegação. Nenhum endpoint novo, nenhuma chamada de
+rede extra. Ver a seção "Clique no card" em Frontend.
 
 ### Novo endpoint: `GET /api/admin/dashboard/conversations`
 
@@ -199,18 +205,17 @@ servidor por mudança de filtro) — usam as listas já existentes de
 `useChannels()`/`useAgents()`/`useSectors()`, cruzando por
 `channelId`/`assignedAgentId`/`sectorId` de cada conversa.
 
-**Clique no card:** `DashboardPage` ganha suporte a abrir uma conversa que
-não está em `useQueue`/`useMyConversations` — ao navegar pra `/` com
-`location.state.openConversationId` (via `useNavigate(..., { state })`),
-um novo efeito busca `GET /api/conversations/:id` e usa o resultado como
-`selectedConversation` (em vez de depender de achá-la nas listas locais)
-se o id não estiver em nenhuma delas. Mesmo `ConversationView` de sempre é
-reaproveitado sem mudança — se a conversa pertence a outro atendente, o
-histórico é visível (rota de mensagens já não tem checagem de dono), mas
-tentar enviar uma mensagem recebe o 403 que `POST /:id/messages` já
-retorna hoje pra quem não é o atendente responsável (comportamento
-existente, não uma lacuna nova desta feature — visão do admin é
-"olhar", não "assumir").
+**Clique no card:** navega pra `/` passando o objeto da conversa (já em
+memória, veio do próprio snapshot/evento de socket do dashboard) como
+`location.state.pendingConversation` — `DashboardPage` ganha um `useEffect`
+que, ao montar, chama exatamente o mesmo `setPendingConversation`/
+`setSelectedId` que `StartConversationModal.onCreated` já chama hoje.
+Mesmo `ConversationView` de sempre é reaproveitado sem mudança — se a
+conversa pertence a outro atendente, o histórico é visível (rota de
+mensagens já não tem checagem de dono), mas tentar enviar uma mensagem
+recebe o 403 que `POST /:id/messages` já retorna hoje pra quem não é o
+atendente responsável (comportamento existente, não uma lacuna nova desta
+feature — visão do admin é "olhar", não "assumir").
 
 **"Encerrados hoje":** botão "Carregar mais" no fim da coluna, chama
 `GET /api/admin/dashboard/conversations/closed-today?offset=N` (N = itens
@@ -241,9 +246,6 @@ já carregados), acrescenta ao final.
   `listWaitingForAgentConversations`.
 - Novo `src/api/admin-dashboard.routes.test.js`: os 2 endpoints, 403 pra
   não-admin, shape da resposta, paginação (`hasMore` true/false).
-- `conversations.routes.test.js`: novo `GET /:id` — 200 com o shape certo,
-  404 pra id inexistente, acessível por qualquer atendente autenticado
-  (sem checagem de dono, mesma regra de `GET /:id/messages`).
 - `socket-server.test.js`: admin entra na sala `dashboard` ao conectar,
   atendente comum não entra; `broadcastToDashboard` emite só pra quem
   está na sala.
@@ -256,8 +258,8 @@ já carregados), acrescenta ao final.
   e `AttendanceDashboardPage.test.jsx` (renderização das 4 colunas,
   filtros, clique navega, "carregar mais").
 - `DashboardPage.test.jsx`: novo caso — chegando em `/` com
-  `location.state.openConversationId` de uma conversa que não está em
-  `queue`/`mine`, busca via `GET /api/conversations/:id` e abre.
+  `location.state.pendingConversation` de uma conversa que não está em
+  `queue`/`mine`, abre direto sem nenhuma chamada de rede extra.
 
 ## Migração
 

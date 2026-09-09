@@ -164,7 +164,7 @@ function MetricsPage() {
   return (
     <div className="flex h-dvh">
       <NavRail active="metrics" onChangePasswordClick={() => setChangingPassword(true)} />
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans">
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-signal/20 blur-[100px]"

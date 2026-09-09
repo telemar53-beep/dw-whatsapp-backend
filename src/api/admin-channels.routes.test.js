@@ -12,6 +12,7 @@ const {
   updateChannelTriageEnabled,
   updateChannelWabaId,
   updateChannelHidden,
+  updateChannelWelcomeMessage,
   countChannelDependents,
   deleteChannel,
 } = require('../channels/channel.repository');
@@ -301,6 +302,78 @@ describe('PATCH /api/admin/channels/:id', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ triageEnabled: true });
     expect(res.status).toBe(403);
+  });
+
+  test('sets welcomeMessage', async () => {
+    updateChannelWelcomeMessage.mockResolvedValue({
+      id: 'channel-1',
+      type: 'baileys',
+      name: 'Suporte',
+      phoneNumber: '+5511999990001',
+      status: 'connected',
+      triageEnabled: false,
+      welcomeMessage: 'Olá! Bem-vindo.',
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ welcomeMessage: 'Olá! Bem-vindo.' });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelWelcomeMessage).toHaveBeenCalledWith('channel-1', 'Olá! Bem-vindo.');
+    expect(res.body.welcomeMessage).toBe('Olá! Bem-vindo.');
+  });
+
+  test('trims welcomeMessage and stores an empty/whitespace-only value as null', async () => {
+    updateChannelWelcomeMessage.mockResolvedValue({
+      id: 'channel-1',
+      type: 'baileys',
+      name: 'Suporte',
+      phoneNumber: '+5511999990001',
+      status: 'connected',
+      triageEnabled: false,
+      welcomeMessage: null,
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ welcomeMessage: '   ' });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelWelcomeMessage).toHaveBeenCalledWith('channel-1', null);
+  });
+
+  test('returns 400 when welcomeMessage is not a string', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ welcomeMessage: 123 });
+
+    expect(res.status).toBe(400);
+    expect(updateChannelWelcomeMessage).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 for welcomeMessage on a non-existent channel', async () => {
+    updateChannelWelcomeMessage.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/does-not-exist')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ welcomeMessage: 'Oi' });
+
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 400 when none of triageEnabled, wabaId, hidden or welcomeMessage is provided', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/welcomeMessage/);
   });
 });
 

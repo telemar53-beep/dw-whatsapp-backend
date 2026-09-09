@@ -9,6 +9,7 @@ const {
   updateChannelTriageEnabled,
   updateChannelWabaId,
   updateChannelHidden,
+  updateChannelWelcomeMessage,
   countChannelDependents,
   deleteChannel,
 } = require('../channels/channel.repository');
@@ -45,6 +46,7 @@ function toChannelResponse(channel) {
     status: channel.status,
     triageEnabled: channel.triageEnabled,
     hidden: channel.hidden,
+    welcomeMessage: channel.welcomeMessage,
     wabaId: channel.type === 'meta_cloud' ? channel.config.wabaId : undefined,
   };
 }
@@ -85,12 +87,15 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  const { triageEnabled, wabaId, hidden } = req.body || {};
-  if (triageEnabled === undefined && wabaId === undefined && hidden === undefined) {
-    return res.status(400).json({ error: 'triageEnabled, wabaId or hidden is required' });
+  const { triageEnabled, wabaId, hidden, welcomeMessage } = req.body || {};
+  if (triageEnabled === undefined && wabaId === undefined && hidden === undefined && welcomeMessage === undefined) {
+    return res.status(400).json({ error: 'triageEnabled, wabaId, hidden or welcomeMessage is required' });
   }
   if (hidden !== undefined && typeof hidden !== 'boolean') {
     return res.status(400).json({ error: 'hidden must be a boolean' });
+  }
+  if (welcomeMessage !== undefined && typeof welcomeMessage !== 'string') {
+    return res.status(400).json({ error: 'welcomeMessage must be a string' });
   }
   let channel;
   if (triageEnabled !== undefined) {
@@ -122,6 +127,12 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
       await baileysManager.stopBaileysChannel(existing.id);
     }
     channel = await updateChannelHidden(req.params.id, hidden);
+    if (!channel) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+  }
+  if (welcomeMessage !== undefined) {
+    channel = await updateChannelWelcomeMessage(req.params.id, welcomeMessage.trim() || null);
     if (!channel) {
       return res.status(404).json({ error: 'Channel not found' });
     }

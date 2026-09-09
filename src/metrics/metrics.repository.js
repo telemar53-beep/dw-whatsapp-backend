@@ -12,10 +12,17 @@ async function getMetricsForAgent(agentId, since) {
        JOIN conversations c ON c.id = ce.conversation_id
        WHERE ce.event_type = 'closed' AND ce.from_agent_id = $1 AND ce.created_at >= $2
      ),
+     first_assigned AS (
+       SELECT conversation_id, MIN(created_at) AS assigned_at
+       FROM conversation_events
+       WHERE event_type IN ('assigned', 'transferred') AND conversation_id IN (SELECT conversation_id FROM closed)
+       GROUP BY conversation_id
+     ),
      first_response AS (
        SELECT m.conversation_id, MIN(m.created_at) AS first_response_at
        FROM messages m
-       WHERE m.direction = 'outbound' AND m.conversation_id IN (SELECT conversation_id FROM closed)
+       JOIN first_assigned fa ON fa.conversation_id = m.conversation_id
+       WHERE m.direction = 'outbound' AND m.created_at >= fa.assigned_at
        GROUP BY m.conversation_id
      )
      SELECT
@@ -42,10 +49,17 @@ async function getMetricsForAllAgents(since) {
        JOIN conversations c ON c.id = ce.conversation_id
        WHERE ce.event_type = 'closed' AND ce.from_agent_id IS NOT NULL AND ce.created_at >= $1
      ),
+     first_assigned AS (
+       SELECT conversation_id, MIN(created_at) AS assigned_at
+       FROM conversation_events
+       WHERE event_type IN ('assigned', 'transferred') AND conversation_id IN (SELECT conversation_id FROM closed)
+       GROUP BY conversation_id
+     ),
      first_response AS (
        SELECT m.conversation_id, MIN(m.created_at) AS first_response_at
        FROM messages m
-       WHERE m.direction = 'outbound' AND m.conversation_id IN (SELECT conversation_id FROM closed)
+       JOIN first_assigned fa ON fa.conversation_id = m.conversation_id
+       WHERE m.direction = 'outbound' AND m.created_at >= fa.assigned_at
        GROUP BY m.conversation_id
      )
      SELECT

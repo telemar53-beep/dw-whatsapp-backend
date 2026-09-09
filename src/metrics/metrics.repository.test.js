@@ -21,13 +21,18 @@ async function seedContact() {
   return result.rows[0].id;
 }
 
-async function seedClosedConversation({ channelId, contactId, agentId, startedAt, closedAt, firstResponseAt }) {
+async function seedClosedConversation({ channelId, contactId, agentId, startedAt, closedAt, firstResponseAt, assignedAt }) {
   const conv = await getPool().query(
     `INSERT INTO conversations (contact_id, channel_id, status, assigned_agent_id, created_at, updated_at)
      VALUES ($1, $2, 'closed', $3, $4, $4) RETURNING id`,
     [contactId, channelId, agentId, startedAt]
   );
   const conversationId = conv.rows[0].id;
+  await getPool().query(
+    `INSERT INTO conversation_events (conversation_id, event_type, to_agent_id, created_at)
+     VALUES ($1, 'assigned', $2, $3)`,
+    [conversationId, agentId, assignedAt || startedAt]
+  );
   await getPool().query(
     `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, created_at)
      VALUES ($1, 'closed', $2, $3)`,
@@ -86,6 +91,49 @@ describe('metrics repository', () => {
     expect(metrics.closedCount).toBe(2);
     expect(metrics.avgResolutionMinutes).toBe(25);
     expect(metrics.avgFirstResponseMinutes).toBe(5);
+  });
+
+  test('getMetricsForAgent ignores an automated outbound message sent before the conversation was assigned to an agent', async () => {
+    const agent = await createAgent({ email: 'metrics-agent4@dw.com', password: 'secret123', role: 'agent' });
+    const channelId = await seedChannel();
+    const contactId = await seedContact();
+
+    const conv = await getPool().query(
+      `INSERT INTO conversations (contact_id, channel_id, status, assigned_agent_id, created_at, updated_at)
+       VALUES ($1, $2, 'closed', $3, $4, $4) RETURNING id`,
+      [contactId, channelId, agent.id, new Date('2026-01-02T10:00:00Z')]
+    );
+    const conversationId = conv.rows[0].id;
+    // Automated welcome message, sent immediately, while the conversation is still unassigned.
+    await getPool().query(
+      `INSERT INTO messages (conversation_id, direction, content, created_at)
+       VALUES ($1, 'outbound', 'Olá! Bem-vindo.', $2)`,
+      [conversationId, new Date('2026-01-02T10:00:05Z')]
+    );
+    // An agent claims the conversation 10 minutes later.
+    await getPool().query(
+      `INSERT INTO conversation_events (conversation_id, event_type, to_agent_id, created_at)
+       VALUES ($1, 'assigned', $2, $3)`,
+      [conversationId, agent.id, new Date('2026-01-02T10:10:00Z')]
+    );
+    // The agent's real first reply, 2 minutes after being assigned.
+    await getPool().query(
+      `INSERT INTO messages (conversation_id, direction, content, created_at)
+       VALUES ($1, 'outbound', 'Oi! Como posso ajudar?', $2)`,
+      [conversationId, new Date('2026-01-02T10:12:00Z')]
+    );
+    await getPool().query(
+      `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, created_at)
+       VALUES ($1, 'closed', $2, $3)`,
+      [conversationId, agent.id, new Date('2026-01-02T10:30:00Z')]
+    );
+
+    const metrics = await getMetricsForAgent(agent.id, SINCE);
+
+    expect(metrics.closedCount).toBe(1);
+    // 10:00 -> 10:12 = 12 minutes (the real reply). If the automated 10:00:05 message
+    // were still counted, this would be ~0.08 minutes instead.
+    expect(metrics.avgFirstResponseMinutes).toBe(12);
   });
 
   test('getMetricsForAgent excludes conversations closed before the since timestamp', async () => {

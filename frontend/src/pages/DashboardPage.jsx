@@ -140,27 +140,27 @@ function DashboardPage() {
             </label>
           </div>
 
-          <div role="tablist" className="flex shrink-0 gap-2 overflow-x-auto px-3 pb-2">
-            {TABS.map((tab) => (
-              <button
-                key={tab.value}
-                id={`tab-${tab.value}`}
-                role="tab"
-                aria-selected={activeTab === tab.value}
-                aria-controls={`tabpanel-${tab.value}`}
-                onClick={() => setActiveTab(tab.value)}
-                className={`shrink-0 rounded-full px-3 py-[5px] text-[14px] leading-[20px] transition-colors ${
-                  activeTab === tab.value
-                    ? 'bg-wa-chip font-medium text-wa-chip-text'
-                    : 'bg-wa-panel-header text-wa-muted hover:bg-wa-border'
-                }`}
-              >
-                {tab.label}
-                {tabCounts[tab.value] > 0 && (
-                  <span className="ml-1.5 font-medium">{tabCounts[tab.value]}</span>
-                )}
-              </button>
-            ))}
+          <div className="shrink-0 overflow-x-auto px-3 pb-2">
+            <div role="tablist" className="inline-flex flex-wrap gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.value}
+                  id={`tab-${tab.value}`}
+                  role="tab"
+                  aria-selected={activeTab === tab.value}
+                  aria-controls={`tabpanel-${tab.value}`}
+                  onClick={() => setActiveTab(tab.value)}
+                  className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    activeTab === tab.value ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/60 hover:text-ink-950'
+                  }`}
+                >
+                  {tab.label}
+                  {tabCounts[tab.value] > 0 && (
+                    <span className="ml-1.5 font-medium">{tabCounts[tab.value]}</span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div

@@ -6,7 +6,7 @@ jest.mock('../whatsapp-adapters/meta-cloud.adapter');
 jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../realtime/socket-server');
 
-const { processOutboundQueue } = require('./outbound-queue');
+const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { findMessageById, updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
@@ -303,5 +303,92 @@ describe('startOutboundWorker', () => {
         repliedToWhatsappMessageId: 'wamid.ORIG1', repliedToDirection: 'outbound', repliedToContent: 'Segue o boleto',
       }
     );
+  });
+
+  describe('automatic audio delivery check (Baileys only)', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('checks delivery a few seconds after sending audio via Baileys, and does nothing when verified', async () => {
+      const conversation = { id: 'conv-2', contactPhoneNumber: '5511999997777', assignedAgentId: 'agent-1' };
+      getConversationWithContact.mockResolvedValue(conversation);
+      findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
+      baileysManager.sendMediaMessage.mockResolvedValue({ whatsappMessageId: 'BAILEYS_AUDIO_1' });
+      baileysManager.verifyMediaDelivery.mockResolvedValue({ verified: true });
+
+      await handler({
+        messageId: 'msg-2', conversationId: 'conv-2', channelId: 'channel-2',
+        messageType: 'audio', mediaPath: 'audio.ogg', mediaMimeType: 'audio/ogg', isVoiceNote: true,
+      });
+      expect(baileysManager.verifyMediaDelivery).not.toHaveBeenCalled();
+
+      await jest.advanceTimersByTimeAsync(5000);
+
+      expect(baileysManager.verifyMediaDelivery).toHaveBeenCalledWith(
+        { id: 'channel-2', type: 'baileys', config: {} },
+        'BAILEYS_AUDIO_1',
+        '5511999997777'
+      );
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('resends the same audio automatically when delivery verification fails', async () => {
+      const conversation = { id: 'conv-2', contactPhoneNumber: '5511999997777', assignedAgentId: 'agent-1' };
+      getConversationWithContact.mockResolvedValue(conversation);
+      findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
+      baileysManager.sendMediaMessage.mockResolvedValue({ whatsappMessageId: 'BAILEYS_AUDIO_2' });
+      baileysManager.verifyMediaDelivery.mockResolvedValue({ verified: false, reason: 'timed out' });
+      enqueueOutboundMessage.mockResolvedValue({ id: 'msg-resent', messageType: 'audio' });
+
+      await handler({
+        messageId: 'msg-2', conversationId: 'conv-2', channelId: 'channel-2',
+        messageType: 'audio', mediaPath: 'audio.ogg', mediaMimeType: 'audio/ogg', mediaFilename: 'audio.ogg', isVoiceNote: true,
+      });
+      await jest.advanceTimersByTimeAsync(5000);
+
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+        conversationId: 'conv-2',
+        channelId: 'channel-2',
+        messageType: 'audio',
+        mediaPath: 'audio.ogg',
+        mediaMimeType: 'audio/ogg',
+        mediaFilename: 'audio.ogg',
+        isVoiceNote: true,
+      });
+      expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:new', {
+        conversation,
+        message: { id: 'msg-resent', messageType: 'audio' },
+      });
+    });
+
+    test('does not schedule a delivery check for non-audio Baileys messages', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-2', contactPhoneNumber: '5511999997777' });
+      findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
+      baileysManager.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'BAILEYS_TXT_1' });
+
+      await handler({ messageId: 'msg-2', conversationId: 'conv-2', channelId: 'channel-2', content: 'Oi' });
+      await jest.advanceTimersByTimeAsync(5000);
+
+      expect(baileysManager.verifyMediaDelivery).not.toHaveBeenCalled();
+    });
+
+    test('does not schedule a delivery check for audio sent via the Meta Cloud adapter', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      metaCloudAdapter.sendMediaMessage.mockResolvedValue({ whatsappMessageId: 'wamid.AUDIO1' });
+
+      await handler({
+        messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1',
+        messageType: 'audio', mediaPath: 'audio.ogg', mediaMimeType: 'audio/ogg',
+      });
+      await jest.advanceTimersByTimeAsync(5000);
+
+      expect(baileysManager.verifyMediaDelivery).not.toHaveBeenCalled();
+    });
   });
 });

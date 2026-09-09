@@ -1120,6 +1120,78 @@ describe('baileys.manager', () => {
     });
   });
 
+  describe('verifyMediaDelivery', () => {
+    function createMockSockWithRetryManager(cachedMessage) {
+      const sock = createMockSock();
+      sock.messageRetryManager = { getRecentMessage: jest.fn().mockReturnValue(cachedMessage) };
+      sock.updateMediaMessage = jest.fn();
+      return sock;
+    }
+
+    test('returns verified:true when the just-sent audio can be downloaded back', async () => {
+      const cached = { message: { audioMessage: { url: 'https://mmg.whatsapp.net/x', mediaKey: 'key' } } };
+      const sock = createMockSockWithRetryManager(cached);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-20', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('the-audio-bytes'));
+
+      const result = await manager.verifyMediaDelivery(channel, 'wamid.AUDIO1', '5511999993333');
+
+      expect(result).toEqual({ verified: true });
+      expect(baileysLib.downloadMediaMessage).toHaveBeenCalledWith(
+        { key: { remoteJid: '5511999993333@s.whatsapp.net', id: 'wamid.AUDIO1', fromMe: true }, message: cached.message },
+        'buffer',
+        {},
+        expect.objectContaining({ reuploadRequest: sock.updateMediaMessage })
+      );
+    });
+
+    test('returns verified:false when the download keeps failing', async () => {
+      const cached = { message: { audioMessage: { url: 'https://mmg.whatsapp.net/x', mediaKey: 'key' } } };
+      const sock = createMockSockWithRetryManager(cached);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-21', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      baileysLib.downloadMediaMessage.mockRejectedValue(new Error('Media re-upload failed by device (OTHER)'));
+
+      const result = await manager.verifyMediaDelivery(channel, 'wamid.AUDIO2', '5511999993333');
+
+      expect(result).toEqual({ verified: false, reason: 'Media re-upload failed by device (OTHER)' });
+    });
+
+    test('returns verified:null when the message is no longer in the retry cache', async () => {
+      const sock = createMockSockWithRetryManager(undefined);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-22', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.verifyMediaDelivery(channel, 'wamid.AUDIO3', '5511999993333');
+
+      expect(result).toEqual({ verified: null, reason: 'not-cached' });
+      expect(baileysLib.downloadMediaMessage).not.toHaveBeenCalled();
+    });
+
+    test('returns verified:false when the check itself times out', async () => {
+      const cached = { message: { audioMessage: { url: 'https://mmg.whatsapp.net/x', mediaKey: 'key' } } };
+      const sock = createMockSockWithRetryManager(cached);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-23', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      baileysLib.downloadMediaMessage.mockReturnValue(new Promise(() => {})); // never resolves
+
+      const result = await manager.verifyMediaDelivery(channel, 'wamid.AUDIO4', '5511999993333', { timeoutMs: 10 });
+
+      expect(result).toEqual({ verified: false, reason: 'timed out' });
+    });
+
+    test('returns verified:null when there is no active connection for the channel', async () => {
+      const result = await manager.verifyMediaDelivery({ id: 'channel-does-not-exist' }, 'wamid.X', '5511999993333');
+
+      expect(result).toEqual({ verified: null, reason: 'no-connection' });
+    });
+  });
+
   describe('addBaileysChannel', () => {
     test('creates the channel row and starts its connection', async () => {
       const sock = createMockSock();

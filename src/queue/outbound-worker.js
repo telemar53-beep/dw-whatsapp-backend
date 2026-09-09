@@ -1,4 +1,4 @@
-const { processOutboundQueue } = require('./outbound-queue');
+const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { findMessageById, updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
@@ -10,6 +10,42 @@ const ADAPTERS_BY_CHANNEL_TYPE = {
   meta_cloud: metaCloudAdapter,
   baileys: baileysManager,
 };
+
+const AUDIO_DELIVERY_CHECK_DELAY_MS = 5000;
+
+// Baileys can mark an audio message delivered even when WhatsApp never lets the recipient
+// download it - the customer just sees a broken bubble with no signal back to us (see
+// verifyMediaDelivery). A few seconds after sending, check whether the file is actually
+// retrievable, and if it isn't, resend it automatically so the attendant doesn't have to
+// notice a stuck customer and fix it by hand.
+async function checkAudioDelivery({ channel, whatsappMessageId, conversation, mediaPath, mediaMimeType, mediaFilename, isVoiceNote }) {
+  const result = await baileysManager.verifyMediaDelivery(channel, whatsappMessageId, conversation.contactPhoneNumber);
+  if (result.verified !== false) {
+    console.log(`Audio delivery check for ${whatsappMessageId}: verified=${result.verified} reason=${result.reason || 'n/a'}`);
+    return;
+  }
+  console.warn(`Audio ${whatsappMessageId} failed delivery verification (${result.reason}); resending automatically`);
+  const resent = await enqueueOutboundMessage({
+    conversationId: conversation.id,
+    channelId: channel.id,
+    messageType: 'audio',
+    mediaPath,
+    mediaMimeType,
+    mediaFilename,
+    isVoiceNote,
+  });
+  if (conversation.assignedAgentId) {
+    emitToAgent(conversation.assignedAgentId, 'message:new', { conversation, message: resent });
+  }
+}
+
+function scheduleAudioDeliveryCheck(ctx) {
+  setTimeout(() => {
+    checkAudioDelivery(ctx).catch((err) => {
+      console.error(`Audio delivery check crashed for ${ctx.whatsappMessageId}`, err);
+    });
+  }, AUDIO_DELIVERY_CHECK_DELAY_MS);
+}
 
 function startOutboundWorker() {
   processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) => {
@@ -56,6 +92,9 @@ function startOutboundWorker() {
       const message = await recordMessageSent(messageId, whatsappMessageId);
       if (conversation.assignedAgentId) {
         emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
+      }
+      if (channel.type === 'baileys' && messageType === 'audio' && whatsappMessageId) {
+        scheduleAudioDeliveryCheck({ channel, whatsappMessageId, conversation, mediaPath, mediaMimeType, mediaFilename, isVoiceNote });
       }
     } catch (err) {
       const message = await updateMessageStatus(messageId, 'failed');

@@ -426,6 +426,45 @@ async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath
   return { whatsappMessageId: sent.key.id };
 }
 
+const MEDIA_VERIFY_TIMEOUT_MS = 20000;
+
+function withTimeout(promise, ms, timeoutMessage) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(timeoutMessage)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// WhatsApp will happily accept an upload and mark the message delivered even when the
+// recipient can later fail to download it - the app just shows a broken audio bubble with
+// no signal back to us. The only reliable way to know is to do what the recipient's phone
+// does: download the file back from WhatsApp's own servers, letting Baileys reuploadRequest
+// (=sock.updateMediaMessage) refresh an expired link along the way, same as the official app.
+async function verifyMediaDelivery(channel, whatsappMessageId, toPhoneNumber, { timeoutMs = MEDIA_VERIFY_TIMEOUT_MS } = {}) {
+  const entry = connections.get(channel.id);
+  if (!entry) {
+    return { verified: null, reason: 'no-connection' };
+  }
+  const jid = `${toPhoneNumber}@s.whatsapp.net`;
+  const cached = entry.sock.messageRetryManager && entry.sock.messageRetryManager.getRecentMessage(jid, whatsappMessageId);
+  if (!cached) {
+    return { verified: null, reason: 'not-cached' };
+  }
+  const { downloadMediaMessage } = loadBaileysLib();
+  const sentMessage = { key: { remoteJid: jid, id: whatsappMessageId, fromMe: true }, message: cached.message };
+  try {
+    await withTimeout(
+      downloadMediaMessage(sentMessage, 'buffer', {}, { logger: noopLogger, reuploadRequest: entry.sock.updateMediaMessage }),
+      timeoutMs,
+      'timed out'
+    );
+    return { verified: true };
+  } catch (err) {
+    return { verified: false, reason: err.message };
+  }
+}
+
 function getQrForChannel(channelId) {
   const entry = connections.get(channelId);
   return entry ? entry.qr : null;
@@ -448,6 +487,7 @@ module.exports = {
   addBaileysChannel,
   sendTextMessage,
   sendMediaMessage,
+  verifyMediaDelivery,
   resolveWhatsAppJid,
   getQrForChannel,
   fetchContactAvatarForChannel,

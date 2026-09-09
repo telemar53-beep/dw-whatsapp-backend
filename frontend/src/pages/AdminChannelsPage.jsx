@@ -6,7 +6,7 @@ import ChangePasswordModal from '../components/ChangePasswordModal';
 import CreateChannelForm from '../components/CreateChannelForm';
 import QrCodeView from '../components/QrCodeView';
 import AgentsAdminTab from '../components/AgentsAdminTab';
-import QuickRepliesAdminTab from '../components/QuickRepliesAdminTab';
+import MessagesAdminTab from '../components/MessagesAdminTab';
 import SectorsAdminTab from '../components/SectorsAdminTab';
 import CitiesAdminTab from '../components/CitiesAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
@@ -17,7 +17,7 @@ import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannel
 const TABS = [
   { value: 'channels', label: 'Canais' },
   { value: 'agents', label: 'Atendentes' },
-  { value: 'quickReplies', label: 'Respostas rápidas' },
+  { value: 'quickReplies', label: 'Mensagens' },
   { value: 'sectors', label: 'Setores' },
   { value: 'cities', label: 'Cidades' },
   { value: 'triage', label: 'Triagem' },
@@ -276,7 +276,7 @@ function AdminChannelsPage() {
         ) : activeTab === 'agents' ? (
           <AgentsAdminTab />
         ) : activeTab === 'quickReplies' ? (
-          <QuickRepliesAdminTab />
+          <MessagesAdminTab />
         ) : activeTab === 'sectors' ? (
           <SectorsAdminTab />
         ) : activeTab === 'cities' ? (

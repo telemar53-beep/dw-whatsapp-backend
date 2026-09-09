@@ -152,9 +152,9 @@ describe('AdminChannelsPage', () => {
     expect(screen.queryByText('Berg')).not.toBeInTheDocument();
   });
 
-  test('switches to the Respostas rápidas tab and shows the quick-reply management UI', async () => {
+  test('switches to the Mensagens tab and shows quick replies and per-channel welcome messages', async () => {
     useChannels.mockReturnValue({
-      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', welcomeMessage: null }],
       loading: false,
       refresh: vi.fn(),
     });
@@ -168,13 +168,14 @@ describe('AdminChannelsPage', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Berg')).toBeInTheDocument();
+    expect(screen.getByText('Conectado')).toBeInTheDocument();
     expect(screen.queryByText('Boas-vindas')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /respostas rápidas/i }));
+    await userEvent.click(screen.getByRole('button', { name: /mensagens/i }));
 
     expect(screen.getByText('Boas-vindas')).toBeInTheDocument();
-    expect(screen.queryByText('Berg')).not.toBeInTheDocument();
+    expect(screen.getByText('Berg')).toBeInTheDocument();
+    expect(screen.queryByText('Conectado')).not.toBeInTheDocument();
   });
 
   test('switches to the Triagem tab and shows the triage configuration UI', async () => {

@@ -241,6 +241,10 @@ export function setChannelWabaId(id, wabaId, token) {
   return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { wabaId }, token });
 }
 
+export function setChannelWelcomeMessage(id, welcomeMessage, token) {
+  return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { welcomeMessage }, token });
+}
+
 export function listTemplatesAdmin(token) {
   return apiFetch('/api/admin/templates', { token });
 }

@@ -94,7 +94,7 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   if (hidden !== undefined && typeof hidden !== 'boolean') {
     return res.status(400).json({ error: 'hidden must be a boolean' });
   }
-  if (welcomeMessage !== undefined && typeof welcomeMessage !== 'string') {
+  if (welcomeMessage !== undefined && welcomeMessage !== null && typeof welcomeMessage !== 'string') {
     return res.status(400).json({ error: 'welcomeMessage must be a string' });
   }
   let channel;
@@ -132,7 +132,8 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     }
   }
   if (welcomeMessage !== undefined) {
-    channel = await updateChannelWelcomeMessage(req.params.id, welcomeMessage.trim() || null);
+    const normalizedWelcomeMessage = typeof welcomeMessage === 'string' ? welcomeMessage.trim() || null : null;
+    channel = await updateChannelWelcomeMessage(req.params.id, normalizedWelcomeMessage);
     if (!channel) {
       return res.status(404).json({ error: 'Channel not found' });
     }

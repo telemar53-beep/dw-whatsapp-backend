@@ -345,6 +345,26 @@ describe('PATCH /api/admin/channels/:id', () => {
     expect(updateChannelWelcomeMessage).toHaveBeenCalledWith('channel-1', null);
   });
 
+  test('accepts a literal null for welcomeMessage and stores it as null', async () => {
+    updateChannelWelcomeMessage.mockResolvedValue({
+      id: 'channel-1',
+      type: 'baileys',
+      name: 'Suporte',
+      phoneNumber: '+5511999990001',
+      status: 'connected',
+      triageEnabled: false,
+      welcomeMessage: null,
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ welcomeMessage: null });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelWelcomeMessage).toHaveBeenCalledWith('channel-1', null);
+  });
+
   test('returns 400 when welcomeMessage is not a string', async () => {
     const res = await request(buildApp())
       .patch('/api/admin/channels/channel-1')

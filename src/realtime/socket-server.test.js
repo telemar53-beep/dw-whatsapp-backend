@@ -1,7 +1,7 @@
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const { io: ioClient } = require('socket.io-client');
-const { initSocketServer, emitToAgent, broadcast, closeSocketServer } = require('./socket-server');
+const { initSocketServer, emitToAgent, broadcast, broadcastToDashboard, closeSocketServer } = require('./socket-server');
 const { resetPresence } = require('./presence');
 
 describe('socket server', () => {
@@ -81,6 +81,32 @@ describe('socket server', () => {
     });
   });
 
+  test('an admin socket joins the dashboard room and receives broadcastToDashboard events; a non-admin socket does not', (done) => {
+    const adminToken = jwt.sign({ agentId: 'agent-admin-1', role: 'admin' }, process.env.JWT_SECRET);
+    const agentToken = jwt.sign({ agentId: 'agent-plain-1', role: 'agent' }, process.env.JWT_SECRET);
+    const adminClient = connect(adminToken);
+    const agentClient = connect(agentToken);
+    let connectedCount = 0;
+
+    function onBothConnected() {
+      connectedCount += 1;
+      if (connectedCount !== 2) return;
+      const receivedByAgent = jest.fn();
+      agentClient.on('dashboard:conversation', receivedByAgent);
+      adminClient.on('dashboard:conversation', (payload) => {
+        expect(payload).toEqual({ hello: 'dashboard' });
+        expect(receivedByAgent).not.toHaveBeenCalled();
+        adminClient.close();
+        agentClient.close();
+        done();
+      });
+      broadcastToDashboard('dashboard:conversation', { hello: 'dashboard' });
+    }
+
+    adminClient.on('connect', onBothConnected);
+    agentClient.on('connect', onBothConnected);
+  });
+
   test('connecting broadcasts presence:online to already-connected clients', (done) => {
     const tokenA = jwt.sign({ agentId: 'agent-presence-a', role: 'agent' }, process.env.JWT_SECRET);
     const tokenB = jwt.sign({ agentId: 'agent-presence-b', role: 'agent' }, process.env.JWT_SECRET);
@@ -152,6 +178,12 @@ describe('socket server module-level guards', () => {
     return closeSocketServer().then(() => {
       expect(() => emitToAgent('agent-x', 'some-event', {})).not.toThrow();
       expect(() => broadcast('some-event', {})).not.toThrow();
+    });
+  });
+
+  test('broadcastToDashboard is a no-op before the server is initialized', () => {
+    return closeSocketServer().then(() => {
+      expect(() => broadcastToDashboard('some-event', {})).not.toThrow();
     });
   });
 });

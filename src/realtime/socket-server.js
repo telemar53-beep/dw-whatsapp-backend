@@ -18,6 +18,9 @@ function initSocketServer(httpServer) {
   });
   io.on('connection', (socket) => {
     socket.join(`agent:${socket.agent.agentId}`);
+    if (socket.agent.role === 'admin') {
+      socket.join('dashboard');
+    }
     if (markAgentOnline(socket.agent.agentId)) {
       // socket.broadcast.emit (not broadcast()/io.emit) deliberately excludes
       // the connecting socket itself. Socket.io adds a socket to the
@@ -54,6 +57,11 @@ function broadcast(event, payload) {
   io.emit(event, payload);
 }
 
+function broadcastToDashboard(event, payload) {
+  if (!io) return;
+  io.to('dashboard').emit(event, payload);
+}
+
 function closeSocketServer() {
   if (io) {
     const closing = io.close();
@@ -63,4 +71,4 @@ function closeSocketServer() {
   return Promise.resolve();
 }
 
-module.exports = { initSocketServer, getSocketServer, emitToAgent, broadcast, closeSocketServer };
+module.exports = { initSocketServer, getSocketServer, emitToAgent, broadcast, broadcastToDashboard, closeSocketServer };

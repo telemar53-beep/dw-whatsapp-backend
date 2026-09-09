@@ -26,18 +26,18 @@ function FilterDropdown({ label, options, selected, onToggle }) {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="rounded-full border border-wa-border bg-wa-panel px-3 py-1.5 text-[13px] text-wa-text hover:bg-wa-hover"
+        className="rounded-full border border-white/60 bg-white/40 px-3 py-1.5 text-[13px] text-ink-950/70 backdrop-blur-md transition hover:bg-white/60 hover:text-ink-950"
       >
         {label}
-        {selected.length > 0 && <span className="ml-1.5 font-medium">{selected.length}</span>}
+        {selected.length > 0 && <span className="ml-1.5 font-medium text-teal-signal">{selected.length}</span>}
       </button>
       {open && (
-        <div className="absolute z-10 mt-1 max-h-64 w-56 overflow-y-auto rounded-lg border border-wa-border bg-wa-panel p-2 shadow-lg">
+        <div className="absolute z-10 mt-1 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/70 bg-white/90 p-2 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
           {options.length === 0 ? (
-            <p className="px-2 py-1 text-[13px] text-wa-muted">Nenhuma opção</p>
+            <p className="px-2 py-1 text-[13px] text-ink-950/50">Nenhuma opção</p>
           ) : (
             options.map((option) => (
-              <label key={option.value} className="flex items-center gap-2 rounded px-2 py-1 text-[13px] hover:bg-wa-hover">
+              <label key={option.value} className="flex items-center gap-2 rounded-lg px-2 py-1 text-[13px] text-ink-950/80 hover:bg-teal-signal/10">
                 <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} />
                 {option.label}
               </label>
@@ -51,14 +51,14 @@ function FilterDropdown({ label, options, selected, onToggle }) {
 
 function DashboardColumn({ title, count, conversations, onSelect, emptyMessage, footer }) {
   return (
-    <div className="flex min-w-[280px] flex-1 flex-col rounded-lg border border-wa-border bg-wa-panel">
-      <div className="flex items-center justify-between border-b border-wa-border px-4 py-3">
-        <h2 className="text-[15px] font-semibold text-wa-text">{title}</h2>
-        <span className="rounded-full bg-wa-chip px-2 py-[1px] text-[12px] font-medium text-wa-chip-text">{count}</span>
+    <div className="flex min-w-[280px] flex-1 flex-col rounded-2xl border border-white/70 bg-white/50 backdrop-blur-xl shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)]">
+      <div className="flex items-center justify-between border-b border-white/50 px-4 py-3">
+        <h2 className="font-display text-[15px] font-semibold text-ink-950">{title}</h2>
+        <span className="rounded-full bg-teal-signal/10 px-2 py-[1px] text-[12px] font-medium text-teal-signal">{count}</span>
       </div>
       <div className="wa-scroll min-h-0 flex-1 overflow-y-auto">
         {conversations.length === 0 ? (
-          <p className="px-4 py-8 text-center text-[13px] text-wa-muted">{emptyMessage}</p>
+          <p className="px-4 py-8 text-center text-[13px] text-ink-950/50">{emptyMessage}</p>
         ) : (
           <ul>
             {conversations.map((conversation) => (
@@ -159,15 +159,26 @@ function AttendanceDashboardPage() {
   }
 
   return (
-    <div className="flex h-dvh">
+    <div className="relative flex h-dvh overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-signal/20 blur-[100px]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-20 bottom-0 h-96 w-96 rounded-full bg-amber-signal/20 blur-[120px]"
+      />
       <NavRail active="dashboard" onChangePasswordClick={() => setChangingPassword(true)} />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-wa-page font-wa text-wa-text">
-      <header className="flex items-center justify-between border-b border-wa-border px-6 py-4">
-        <h1 className="text-[19px] font-bold text-wa-green-dark">Dashboard de atendimento</h1>
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans text-ink-950">
+      <header className="flex items-center justify-between px-6 py-5">
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-ink-950">Dashboard de atendimento</h1>
+          <p className="mt-1 text-sm text-ink-950/55">Acompanhe os atendimentos da equipe em tempo real</p>
+        </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-wa-border px-6 py-3">
-        <div role="tablist" className="inline-flex gap-1 rounded-full border border-wa-border bg-wa-panel-header p-1 shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 px-6 pb-4">
+        <div role="tablist" className="inline-flex gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl shadow-sm">
           <button
             type="button"
             role="tab"
@@ -254,9 +265,9 @@ function AttendanceDashboardPage() {
       ) : (
         <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4">
           {displayClosed.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[13px] text-wa-muted">Nenhum atendimento encerrado nas últimas 24 horas.</p>
+            <p className="px-4 py-8 text-center text-[13px] text-ink-950/50">Nenhum atendimento encerrado nas últimas 24 horas.</p>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-hidden [&>li]:rounded-lg [&>li]:border [&>li]:border-wa-border [&>li]:bg-wa-panel">
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-hidden [&>li]:rounded-xl [&>li]:border [&>li]:border-white/70 [&>li]:bg-white/50 [&>li]:backdrop-blur-xl [&>li]:shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)]">
               {displayClosed.map((conversation) => (
                 <ConversationListItem key={conversation.id} conversation={conversation} onSelect={openConversation} selected={false} />
               ))}
@@ -267,7 +278,7 @@ function AttendanceDashboardPage() {
               type="button"
               onClick={loadMoreClosed}
               disabled={loadingClosed}
-              className="mt-4 w-full rounded-lg border border-wa-border bg-wa-panel px-4 py-2 text-[13px] font-medium text-wa-green-dark hover:bg-wa-hover disabled:opacity-50"
+              className="mt-4 w-full rounded-xl border border-white/70 bg-white/50 px-4 py-2 text-[13px] font-medium text-teal-signal backdrop-blur-xl transition hover:bg-white/70 disabled:opacity-50"
             >
               {loadingClosed ? 'Carregando...' : 'Carregar mais'}
             </button>

@@ -115,7 +115,7 @@ describe('MessagesAdminTab', () => {
     expect(await screen.findByText('Falha ao excluir')).toBeInTheDocument();
   });
 
-  test('shows a help box explaining what welcome messages are, with an example', () => {
+  test('shows a help popup for the welcome-message section when its button is clicked', async () => {
     useChannels.mockReturnValue({
       channels: [],
       loading: false,
@@ -124,7 +124,9 @@ describe('MessagesAdminTab', () => {
     useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
     render(<MessagesAdminTab />);
 
-    expect(screen.getAllByText(/o que é isso/i)).toHaveLength(2);
+    expect(screen.queryByText(/enviada automaticamente para o cliente assim que ele manda/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /o que é isso: boas-vindas por canal/i }));
+
     expect(screen.getByText(/enviada automaticamente para o cliente assim que ele manda/i)).toBeInTheDocument();
   });
 
@@ -283,11 +285,25 @@ describe('MessagesAdminTab', () => {
     expect(await screen.findByText('Falha ao excluir boas-vindas')).toBeInTheDocument();
   });
 
-  test('shows a help box explaining what city notices are, with an example', () => {
+  test('shows a help popup for the city-notice section when its button is clicked', async () => {
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: null }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    expect(screen.queryByText(/nesse momento nossa rede está passando/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /o que é isso: avisos por cidade/i }));
+
+    expect(screen.getByText(/nesse momento nossa rede está passando/i)).toBeInTheDocument();
+  });
+
+  test('shows a message inviting the admin to register cities when none exist yet', () => {
     useCityNotices.mockReturnValue({ cityNotices: [], loading: false, refresh: vi.fn() });
     render(<MessagesAdminTab />);
 
-    expect(screen.getByText(/nesse momento nossa rede está passando/i)).toBeInTheDocument();
+    expect(screen.getByText(/nenhuma cidade cadastrada/i)).toBeInTheDocument();
   });
 
   test('a city without a notice shows a create button, not an open textarea', () => {

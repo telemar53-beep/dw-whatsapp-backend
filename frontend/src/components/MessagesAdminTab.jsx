@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCityNotices } from '../hooks/useCityNotices';
 import { updateQuickReply, deleteQuickReply, setChannelWelcomeMessage, setCityNotice, deleteCityNotice } from '../services/api';
 import CreateQuickReplyForm from './CreateQuickReplyForm';
+import WaDialog, { waPrimaryButtonClass } from './WaDialog';
 
 const inputClass =
   'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
@@ -261,6 +262,32 @@ function CityStatusDot({ enabled }) {
   );
 }
 
+function SectionHelp({ label, title, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`O que é isso: ${label}`}
+        className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+      >
+        O que é isso?
+      </button>
+      {open && (
+        <WaDialog title={title} onClose={() => setOpen(false)} size="max-w-md">
+          <div className="px-6 py-4 text-[14.5px] leading-[20px] text-wa-text">{children}</div>
+          <div className="flex shrink-0 justify-end px-4 py-3">
+            <button type="button" onClick={() => setOpen(false)} className={waPrimaryButtonClass}>
+              Entendi
+            </button>
+          </div>
+        </WaDialog>
+      )}
+    </>
+  );
+}
+
 function CityNoticeRow({ city, onSaved }) {
   const { token } = useAuth();
   const [editing, setEditing] = useState(false);
@@ -405,17 +432,18 @@ function MessagesAdminTab() {
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <h2 className="font-display text-lg font-semibold text-ink-950">Boas-vindas por canal</h2>
-        <div className="rounded-xl border border-teal-signal/25 bg-teal-signal/10 px-4 py-3 text-sm text-ink-950/70">
-          <p className="font-medium text-ink-950">O que é isso?</p>
-          <p className="mt-1">
-            Enviada automaticamente para o cliente assim que ele manda a primeira mensagem em um
-            canal — antes de qualquer outra automação.
-          </p>
-          <p className="mt-2 italic">
-            Exemplo: "Olá! Bem-vindo à DW Telecom. Em instantes um atendente vai continuar o seu
-            atendimento."
-          </p>
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold text-ink-950">Boas-vindas por canal</h2>
+          <SectionHelp label="Boas-vindas por canal" title="Boas-vindas por canal">
+            <p>
+              Enviada automaticamente para o cliente assim que ele manda a primeira mensagem em um
+              canal — antes de qualquer outra automação.
+            </p>
+            <p className="mt-2 italic">
+              Exemplo: "Olá! Bem-vindo à DW Telecom. Em instantes um atendente vai continuar o seu
+              atendimento."
+            </p>
+          </SectionHelp>
         </div>
         {channels.map((channel) => (
           <ChannelWelcomeMessageRow key={channel.id} channel={channel} onSaved={refreshChannels} />
@@ -423,18 +451,24 @@ function MessagesAdminTab() {
       </div>
 
       <div className="space-y-3">
-        <h2 className="font-display text-lg font-semibold text-ink-950">Avisos por cidade</h2>
-        <div className="rounded-xl border border-teal-signal/25 bg-teal-signal/10 px-4 py-3 text-sm text-ink-950/70">
-          <p className="font-medium text-ink-950">O que é isso?</p>
-          <p className="mt-1">
-            Enviado automaticamente para clientes daquela cidade quando entram em contato, além
-            da boas-vindas normal — use para avisos de instabilidade ou manutenção pontual.
-          </p>
-          <p className="mt-2 italic">
-            Exemplo: "Nesse momento nossa rede está passando por uma instabilidade na sua
-            região. Nossa equipe já está trabalhando na correção."
-          </p>
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold text-ink-950">Avisos por cidade</h2>
+          <SectionHelp label="Avisos por cidade" title="Avisos por cidade">
+            <p>
+              Enviado automaticamente para clientes daquela cidade quando entram em contato, além
+              da boas-vindas normal — use para avisos de instabilidade ou manutenção pontual.
+            </p>
+            <p className="mt-2 italic">
+              Exemplo: "Nesse momento nossa rede está passando por uma instabilidade na sua
+              região. Nossa equipe já está trabalhando na correção."
+            </p>
+          </SectionHelp>
         </div>
+        {cityNotices.length === 0 && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50/80 px-3 py-2 text-sm text-amber-800">
+            Nenhuma cidade cadastrada ainda. Cadastre cidades na aba Cidades para poder criar avisos.
+          </p>
+        )}
         {cityNotices.map((city) => (
           <CityNoticeRow key={city.id} city={city} onSaved={refreshCityNotices} />
         ))}

@@ -153,6 +153,14 @@ export function listChannelsForAgent(token) {
   return apiFetch('/api/channels', { token });
 }
 
+export function getDashboardConversations(token) {
+  return apiFetch('/api/admin/dashboard/conversations', { token });
+}
+
+export function getDashboardClosedToday({ offset = 0, limit = 20 } = {}, token) {
+  return apiFetch(`/api/admin/dashboard/conversations/closed-today?offset=${offset}&limit=${limit}`, { token });
+}
+
 export function startConversation({ channelId, phoneNumber, content, templateId, templateVariables }, token) {
   return apiFetch('/api/conversations/start', {
     method: 'POST',

@@ -18,6 +18,11 @@ const {
   completeTriage,
   incrementTriageAttempts,
   activateConversation,
+  listInProgressConversations,
+  listWaitingForAgentConversations,
+  listInAutomationConversations,
+  countClosedSince,
+  listClosedSince,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -550,5 +555,78 @@ describe('conversation repository', () => {
 
     expect(found.id).toBe(created.id);
     expect(found.status).toBe('silent');
+  });
+
+  test('listInProgressConversations returns only assigned conversations, most recently updated first', async () => {
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
+    const waitingConversation = await createConversation(otherContact.id, channelId);
+    const assignedConversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'dash1@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(assignedConversation.id, agent.id);
+
+    const result = await listInProgressConversations();
+
+    expect(result.map((c) => c.id)).toEqual([assignedConversation.id]);
+    expect(result[0].contactPhoneNumber).toBe('+5511977776666');
+    void waitingConversation;
+  });
+
+  test('listWaitingForAgentConversations returns waiting conversations whose triage is not pending', async () => {
+    const waiting = await createConversation(contactId, channelId);
+    const inTriageContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
+    const inTriage = await createConversation(inTriageContact.id, channelId, 'pending');
+    const assignedContact = await findOrCreateContactByPhoneNumber('+5511977774444', 'Terceira Pessoa');
+    const agent = await createAgent({ email: 'dash2@dw.com', password: 'secret123', role: 'agent' });
+    const assigned = await createConversation(assignedContact.id, channelId);
+    await claimConversation(assigned.id, agent.id);
+
+    const result = await listWaitingForAgentConversations();
+
+    expect(result.map((c) => c.id)).toEqual([waiting.id]);
+    void inTriage;
+  });
+
+  test('listInAutomationConversations returns only conversations with triage pending', async () => {
+    const inTriage = await createConversation(contactId, channelId, 'pending');
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
+    const waiting = await createConversation(otherContact.id, channelId);
+
+    const result = await listInAutomationConversations();
+
+    expect(result.map((c) => c.id)).toEqual([inTriage.id]);
+    void waiting;
+  });
+
+  test('countClosedSince counts only conversations closed at or after the given time', async () => {
+    const agent = await createAgent({ email: 'dash3@dw.com', password: 'secret123', role: 'agent' });
+    const oldEnough = await createConversation(contactId, channelId);
+    await claimConversation(oldEnough.id, agent.id);
+    await closeConversation(oldEnough.id, agent.id);
+
+    const since = new Date(Date.now() - 60 * 60 * 1000);
+    const count = await countClosedSince(since);
+
+    expect(count).toBe(1);
+
+    const future = new Date(Date.now() + 60 * 60 * 1000);
+    expect(await countClosedSince(future)).toBe(0);
+  });
+
+  test('listClosedSince returns closed conversations most recently closed first, with closedAt and pagination', async () => {
+    const agent = await createAgent({ email: 'dash4@dw.com', password: 'secret123', role: 'agent' });
+    const first = await createConversation(contactId, channelId);
+    await claimConversation(first.id, agent.id);
+    await closeConversation(first.id, agent.id);
+    const second = await createConversation(contactId, channelId);
+    await claimConversation(second.id, agent.id);
+    await closeConversation(second.id, agent.id);
+
+    const since = new Date(Date.now() - 60 * 60 * 1000);
+    const page1 = await listClosedSince(since, { limit: 1, offset: 0 });
+    const page2 = await listClosedSince(since, { limit: 1, offset: 1 });
+
+    expect(page1.map((c) => c.id)).toEqual([second.id]);
+    expect(page1[0].closedAt).toBeDefined();
+    expect(page2.map((c) => c.id)).toEqual([first.id]);
   });
 });

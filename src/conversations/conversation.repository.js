@@ -190,6 +190,126 @@ async function listWaitingConversations() {
   return result.rows.map(toConversationSummary);
 }
 
+async function listInProgressConversations() {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
+            s.name AS sector_name,
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN LATERAL (
+       SELECT content, message_type, status, direction, created_at
+       FROM messages m
+       WHERE m.conversation_id = c.id
+       ORDER BY m.created_at DESC
+       LIMIT 1
+     ) lm ON true
+     WHERE c.status = 'assigned'
+     ORDER BY c.updated_at DESC`
+  );
+  return result.rows.map(toConversationSummary);
+}
+
+async function listWaitingForAgentConversations() {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
+            s.name AS sector_name,
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN LATERAL (
+       SELECT content, message_type, status, direction, created_at
+       FROM messages m
+       WHERE m.conversation_id = c.id
+       ORDER BY m.created_at DESC
+       LIMIT 1
+     ) lm ON true
+     WHERE c.status = 'waiting' AND c.triage_state IS DISTINCT FROM 'pending'
+     ORDER BY c.created_at ASC`
+  );
+  return result.rows.map(toConversationSummary);
+}
+
+async function listInAutomationConversations() {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
+            s.name AS sector_name,
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN LATERAL (
+       SELECT content, message_type, status, direction, created_at
+       FROM messages m
+       WHERE m.conversation_id = c.id
+       ORDER BY m.created_at DESC
+       LIMIT 1
+     ) lm ON true
+     WHERE c.triage_state = 'pending'
+     ORDER BY c.created_at ASC`
+  );
+  return result.rows.map(toConversationSummary);
+}
+
+async function countClosedSince(since) {
+  const result = await getPool().query(
+    `SELECT COUNT(*)::int AS count FROM conversation_events WHERE event_type = 'closed' AND created_at >= $1`,
+    [since]
+  );
+  return Number(result.rows[0].count);
+}
+
+async function listClosedSince(since, { limit, offset }) {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
+            s.name AS sector_name,
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at,
+            ce.created_at AS closed_at
+     FROM conversation_events ce
+     JOIN conversations c ON c.id = ce.conversation_id
+     JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN LATERAL (
+       SELECT content, message_type, status, direction, created_at
+       FROM messages m
+       WHERE m.conversation_id = c.id
+       ORDER BY m.created_at DESC
+       LIMIT 1
+     ) lm ON true
+     WHERE ce.event_type = 'closed' AND ce.created_at >= $1
+     ORDER BY ce.created_at DESC
+     LIMIT $2 OFFSET $3`,
+    [since, limit, offset]
+  );
+  return result.rows.map((row) => ({ ...toConversationSummary(row), closedAt: row.closed_at }));
+}
+
 async function listConversationsByAgent(agentId) {
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
@@ -249,4 +369,9 @@ module.exports = {
   listWaitingConversations,
   listConversationsByAgent,
   listClosedConversationsByContact,
+  listInProgressConversations,
+  listWaitingForAgentConversations,
+  listInAutomationConversations,
+  countClosedSince,
+  listClosedSince,
 };

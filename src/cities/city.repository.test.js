@@ -1,6 +1,6 @@
 const { getPool, closePool } = require('../db/pool');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
-const { listCities, createCity, deleteCity } = require('./city.repository');
+const { listCities, createCity, deleteCity, findCityById } = require('./city.repository');
 
 describe('city repository', () => {
   beforeEach(async () => {
@@ -56,5 +56,12 @@ describe('city repository', () => {
     expect(deleted).toBe(true);
     const result = await getPool().query('SELECT city_id FROM contacts WHERE id = $1', [contact.id]);
     expect(result.rows[0].city_id).toBeNull();
+  });
+
+  test('findCityById returns the city, or null when it does not exist', async () => {
+    const city = await createCity({ name: 'Bahia' });
+
+    expect(await findCityById(city.id)).toEqual(city);
+    expect(await findCityById('00000000-0000-0000-0000-000000000000')).toBeNull();
   });
 });

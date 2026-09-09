@@ -19,4 +19,10 @@ async function deleteCity(id) {
   return result.rowCount > 0;
 }
 
-module.exports = { listCities, createCity, deleteCity };
+async function findCityById(id) {
+  const result = await getPool().query('SELECT id, name, created_at FROM cities WHERE id = $1', [id]);
+  if (result.rowCount === 0) return null;
+  return toCity(result.rows[0]);
+}
+
+module.exports = { listCities, createCity, deleteCity, findCityById };

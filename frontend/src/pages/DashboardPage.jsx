@@ -140,29 +140,31 @@ function DashboardPage() {
             </label>
           </div>
 
-          <div role="tablist" className="flex shrink-0 gap-1 overflow-x-auto px-3 pb-2">
-            {TABS.map((tab) => (
-              <button
-                key={tab.value}
-                id={`tab-${tab.value}`}
-                role="tab"
-                aria-selected={activeTab === tab.value}
-                aria-controls={`tabpanel-${tab.value}`}
-                onClick={() => setActiveTab(tab.value)}
-                className={`relative shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                  activeTab === tab.value
-                    ? 'bg-teal-signal text-white shadow-sm'
-                    : 'text-ink-950/55 hover:bg-ink-950/5 hover:text-ink-950'
-                }`}
-              >
-                {tab.label}
-                {tabCounts[tab.value] > 0 && (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">
-                    {tabCounts[tab.value]}
-                  </span>
-                )}
-              </button>
-            ))}
+          <div className="flex shrink-0 justify-center overflow-x-auto px-3 pb-2">
+            <div role="tablist" className="inline-flex gap-1 rounded-full border border-wa-border bg-wa-panel-header p-1 shadow-sm">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.value}
+                  id={`tab-${tab.value}`}
+                  role="tab"
+                  aria-selected={activeTab === tab.value}
+                  aria-controls={`tabpanel-${tab.value}`}
+                  onClick={() => setActiveTab(tab.value)}
+                  className={`relative shrink-0 rounded-full px-4 py-1.5 text-sm transition ${
+                    activeTab === tab.value
+                      ? 'bg-teal-signal font-semibold text-white shadow-sm'
+                      : 'font-medium text-ink-950/55 hover:text-ink-950'
+                  }`}
+                >
+                  {tab.label}
+                  {tabCounts[tab.value] > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">
+                      {tabCounts[tab.value]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div

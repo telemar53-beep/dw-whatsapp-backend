@@ -167,14 +167,14 @@ function AttendanceDashboardPage() {
       </header>
 
       <div className="flex flex-wrap items-center gap-3 border-b border-wa-border px-6 py-3">
-        <div role="tablist" className="flex flex-wrap gap-1">
+        <div role="tablist" className="inline-flex gap-1 rounded-full border border-wa-border bg-wa-panel-header p-1 shadow-sm">
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'all'}
             onClick={() => setActiveTab('all')}
-            className={`relative rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              activeTab === 'all' ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/55 hover:bg-ink-950/5 hover:text-ink-950'
+            className={`relative rounded-full px-4 py-1.5 text-sm transition ${
+              activeTab === 'all' ? 'bg-teal-signal font-semibold text-white shadow-sm' : 'font-medium text-ink-950/55 hover:text-ink-950'
             }`}
           >
             Todos atendimentos
@@ -192,8 +192,8 @@ function AttendanceDashboardPage() {
             role="tab"
             aria-selected={activeTab === 'closed'}
             onClick={() => setActiveTab('closed')}
-            className={`relative rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              activeTab === 'closed' ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/55 hover:bg-ink-950/5 hover:text-ink-950'
+            className={`relative rounded-full px-4 py-1.5 text-sm transition ${
+              activeTab === 'closed' ? 'bg-teal-signal font-semibold text-white shadow-sm' : 'font-medium text-ink-950/55 hover:text-ink-950'
             }`}
           >
             Encerrados hoje

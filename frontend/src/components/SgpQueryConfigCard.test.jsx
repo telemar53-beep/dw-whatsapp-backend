@@ -16,24 +16,48 @@ beforeEach(() => {
 });
 
 describe('SgpQueryConfigCard', () => {
-  test('shows an empty form and requires a token when nothing is configured yet', async () => {
+  test('shows a create button when nothing is configured yet', () => {
     useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
     render(<SgpQueryConfigCard />);
 
+    expect(screen.getByRole('button', { name: /criar integração/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/url de acesso ao sgp/i)).not.toBeInTheDocument();
+  });
+
+  test('requires a token when creating a new configuration', async () => {
+    useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
+    render(<SgpQueryConfigCard />);
+
+    await userEvent.click(screen.getByRole('button', { name: /criar integração/i }));
     await userEvent.type(screen.getByLabelText(/url de acesso ao sgp/i), 'https://x.example');
     await userEvent.type(screen.getByLabelText(/^app$/i), 'chatmix');
-    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
 
     expect(api.updateSgpQueryConfig).not.toHaveBeenCalled();
     expect(screen.getByText(/token é obrigatório/i)).toBeInTheDocument();
   });
 
-  test('shows only the last 4 characters of an already-saved token', () => {
+  test('shows a closed summary with the base URL and status when already configured', () => {
     useSgpQueryConfig.mockReturnValue({
       config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true },
       refresh: vi.fn(),
     });
     render(<SgpQueryConfigCard />);
+
+    expect(screen.getByText('https://x.example', { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^editar$/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/url de acesso ao sgp/i)).not.toBeInTheDocument();
+  });
+
+  test('shows only the last 4 characters of an already-saved token, once editing', async () => {
+    useSgpQueryConfig.mockReturnValue({
+      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true },
+      refresh: vi.fn(),
+    });
+    render(<SgpQueryConfigCard />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+
     expect(screen.getByText(/5c7a/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^token$/i)).not.toBeInTheDocument();
   });
@@ -47,7 +71,8 @@ describe('SgpQueryConfigCard', () => {
     api.updateSgpQueryConfig.mockResolvedValue({});
     render(<SgpQueryConfigCard />);
 
-    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
 
     await waitFor(() =>
       expect(api.updateSgpQueryConfig).toHaveBeenCalledWith(
@@ -65,8 +90,26 @@ describe('SgpQueryConfigCard', () => {
     });
     render(<SgpQueryConfigCard />);
 
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
     await userEvent.click(screen.getByRole('button', { name: /trocar token/i }));
 
     expect(screen.getByLabelText(/^token$/i)).toBeInTheDocument();
+  });
+
+  test('canceling the edit form discards unsaved changes and returns to the closed summary', async () => {
+    useSgpQueryConfig.mockReturnValue({
+      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true },
+      refresh: vi.fn(),
+    });
+    render(<SgpQueryConfigCard />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    const urlInput = screen.getByLabelText(/url de acesso ao sgp/i);
+    await userEvent.clear(urlInput);
+    await userEvent.type(urlInput, 'https://rascunho.example');
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
+
+    expect(screen.queryByLabelText(/url de acesso ao sgp/i)).not.toBeInTheDocument();
+    expect(screen.getByText('https://x.example', { exact: false })).toBeInTheDocument();
   });
 });

@@ -40,9 +40,18 @@ describe('IntegrationsAdminTab', () => {
     expect(screen.getByText(/Texto livre/)).toBeInTheDocument();
   });
 
+  test('does not show the create-integration form until its button is clicked', () => {
+    useSgpIntegrations.mockReturnValue({ integrations: [], refresh: vi.fn() });
+    render(<IntegrationsAdminTab />);
+
+    expect(screen.queryByLabelText(/^canal$/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /nova integração sgp/i })).toBeInTheDocument();
+  });
+
   test('the template selector only appears after choosing a meta_cloud channel', async () => {
     useSgpIntegrations.mockReturnValue({ integrations: [], refresh: vi.fn() });
     render(<IntegrationsAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /nova integração sgp/i }));
 
     expect(screen.queryByLabelText(/template padrão/i)).not.toBeInTheDocument();
 
@@ -56,10 +65,11 @@ describe('IntegrationsAdminTab', () => {
     useSgpIntegrations.mockReturnValue({ integrations: [], refresh });
     api.createSgpIntegration.mockResolvedValue({ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: false });
     render(<IntegrationsAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /nova integração sgp/i }));
 
     await userEvent.type(screen.getByLabelText(/descrição/i), 'Baileys');
     await userEvent.selectOptions(screen.getByLabelText(/^canal$/i), 'channel-1');
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^cadastrar$/i }));
 
     await waitFor(() =>
       expect(api.createSgpIntegration).toHaveBeenCalledWith({ description: 'Baileys', channelId: 'channel-1', defaultTemplateId: null, enabled: true }, 'tok-123')
@@ -72,11 +82,12 @@ describe('IntegrationsAdminTab', () => {
     useSgpIntegrations.mockReturnValue({ integrations: [], refresh });
     api.createSgpIntegration.mockResolvedValue({ id: 'int-2', description: 'Oficial', channelId: 'channel-2', mode: 'template', defaultTemplateId: 'tpl-1', enabled: true, hasApiKey: false });
     render(<IntegrationsAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /nova integração sgp/i }));
 
     await userEvent.type(screen.getByLabelText(/descrição/i), 'Oficial');
     await userEvent.selectOptions(screen.getByLabelText(/^canal$/i), 'channel-2');
     await userEvent.selectOptions(screen.getByLabelText(/template padrão/i), 'tpl-1');
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^cadastrar$/i }));
 
     await waitFor(() =>
       expect(api.createSgpIntegration).toHaveBeenCalledWith({ description: 'Oficial', channelId: 'channel-2', defaultTemplateId: 'tpl-1', enabled: true }, 'tok-123')

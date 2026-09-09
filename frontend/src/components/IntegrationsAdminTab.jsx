@@ -226,6 +226,7 @@ function IntegrationsAdminTab() {
       !integrations.some((integration) => integration.channelId === channel.id)
   );
 
+  const [creatingIntegration, setCreatingIntegration] = useState(false);
   const [description, setDescription] = useState('');
   const [channelId, setChannelId] = useState('');
   const [defaultTemplateId, setDefaultTemplateId] = useState('');
@@ -258,12 +259,22 @@ function IntegrationsAdminTab() {
       setChannelId('');
       setDefaultTemplateId('');
       setEnabled(true);
+      setCreatingIntegration(false);
       refresh();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao cadastrar a integração');
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleCancelCreate() {
+    setDescription('');
+    setChannelId('');
+    setDefaultTemplateId('');
+    setEnabled(true);
+    setError(null);
+    setCreatingIntegration(false);
   }
 
   return (
@@ -274,45 +285,65 @@ function IntegrationsAdminTab() {
           <IntegrationCard key={integration.id} integration={integration} channels={channels} templates={approvedTemplates} onChanged={refresh} />
         ))}
       </div>
-      <form onSubmit={handleCreate} className={cardClass}>
-        <h3 className="font-display text-base font-semibold text-ink-950">Nova integração SGP</h3>
-        <div>
-          <label htmlFor="sgp-description" className={labelClass}>Descrição</label>
-          <input id="sgp-description" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
-        </div>
-        <div>
-          <label htmlFor="sgp-channel" className={labelClass}>Canal</label>
-          <select id="sgp-channel" value={channelId} onChange={(e) => setChannelId(e.target.value)} className={inputClass}>
-            <option value="">Selecione um canal</option>
-            {eligibleChannels.map((channel) => (
-              <option key={channel.id} value={channel.id}>{channel.name}</option>
-            ))}
-          </select>
-        </div>
-        {isTemplateMode && (
+      {!creatingIntegration && (
+        <button
+          type="button"
+          onClick={() => setCreatingIntegration(true)}
+          className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+        >
+          Nova integração SGP
+        </button>
+      )}
+      {creatingIntegration && (
+        <form onSubmit={handleCreate} className={cardClass}>
+          <h3 className="font-display text-base font-semibold text-ink-950">Nova integração SGP</h3>
           <div>
-            <label htmlFor="sgp-default-template" className={labelClass}>Template padrão (opcional)</label>
-            <select id="sgp-default-template" value={defaultTemplateId} onChange={(e) => setDefaultTemplateId(e.target.value)} className={inputClass}>
-              <option value="">Nenhum</option>
-              {approvedTemplates.map((template) => (
-                <option key={template.id} value={template.id}>{template.name}</option>
+            <label htmlFor="sgp-description" className={labelClass}>Descrição</label>
+            <input id="sgp-description" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label htmlFor="sgp-channel" className={labelClass}>Canal</label>
+            <select id="sgp-channel" value={channelId} onChange={(e) => setChannelId(e.target.value)} className={inputClass}>
+              <option value="">Selecione um canal</option>
+              {eligibleChannels.map((channel) => (
+                <option key={channel.id} value={channel.id}>{channel.name}</option>
               ))}
             </select>
           </div>
-        )}
-        <label className="flex items-center gap-2 text-sm text-ink-950/70">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-teal-signal" />
-          Ativo
-        </label>
-        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cadastrar
-        </button>
-      </form>
+          {isTemplateMode && (
+            <div>
+              <label htmlFor="sgp-default-template" className={labelClass}>Template padrão (opcional)</label>
+              <select id="sgp-default-template" value={defaultTemplateId} onChange={(e) => setDefaultTemplateId(e.target.value)} className={inputClass}>
+                <option value="">Nenhum</option>
+                {approvedTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>{template.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-sm text-ink-950/70">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-teal-signal" />
+            Ativo
+          </label>
+          {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cadastrar
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelCreate}
+              className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

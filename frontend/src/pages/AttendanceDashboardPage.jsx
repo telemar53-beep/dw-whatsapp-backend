@@ -167,44 +167,44 @@ function AttendanceDashboardPage() {
       </header>
 
       <div className="flex flex-wrap items-center gap-3 border-b border-wa-border px-6 py-3">
-        <div role="tablist" className="inline-flex flex-wrap gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl">
+        <div role="tablist" className="flex flex-wrap gap-1">
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'all'}
             onClick={() => setActiveTab('all')}
-            className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              activeTab === 'all' ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/60 hover:text-ink-950'
+            className={`relative rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              activeTab === 'all' ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/55 hover:bg-ink-950/5 hover:text-ink-950'
             }`}
           >
-            <span>Todos atendimentos</span>
-            <span
-              data-testid="tab-count-all"
-              className={`rounded-full px-1.5 text-[11px] font-medium ${
-                activeTab === 'all' ? 'bg-white/25' : 'bg-ink-950/10 text-ink-950/60'
-              }`}
-            >
-              {totalActiveCount}
-            </span>
+            Todos atendimentos
+            {totalActiveCount > 0 && (
+              <span
+                data-testid="tab-count-all"
+                className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white"
+              >
+                {totalActiveCount}
+              </span>
+            )}
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'closed'}
             onClick={() => setActiveTab('closed')}
-            className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition ${
-              activeTab === 'closed' ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/60 hover:text-ink-950'
+            className={`relative rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              activeTab === 'closed' ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/55 hover:bg-ink-950/5 hover:text-ink-950'
             }`}
           >
-            <span>Encerrados hoje</span>
-            <span
-              data-testid="tab-count-closed"
-              className={`rounded-full px-1.5 text-[11px] font-medium ${
-                activeTab === 'closed' ? 'bg-white/25' : 'bg-ink-950/10 text-ink-950/60'
-              }`}
-            >
-              {closedCount}
-            </span>
+            Encerrados hoje
+            {closedCount > 0 && (
+              <span
+                data-testid="tab-count-closed"
+                className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white"
+              >
+                {closedCount}
+              </span>
+            )}
           </button>
         </div>
         <FilterDropdown

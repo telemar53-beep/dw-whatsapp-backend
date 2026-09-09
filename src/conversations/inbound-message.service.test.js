@@ -725,4 +725,28 @@ describe('ingestInboundMessage', () => {
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
     expect(recordNoticeDelivery).not.toHaveBeenCalled();
   });
+
+  test('sends the city notice between the welcome message and the triage question when all three apply on a new conversation', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-city-6', cityId: 'city-1' });
+    findOpenConversation.mockResolvedValue(null);
+    shouldStartTriage.mockResolvedValue(true);
+    findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: 'Bem-vindo!' });
+    findActiveCityNoticeByCityId.mockResolvedValue({ id: 'notice-6', cityId: 'city-1', message: 'Instabilidade na rede' });
+    hasContactReceivedNotice.mockResolvedValue(false);
+    createConversation.mockResolvedValue({ id: 'conv-city-6', assignedAgentId: null, triageState: 'pending' });
+    createMessage.mockResolvedValue({ id: 'msg-city-6' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-city-6', assignedAgentId: null, triageState: 'pending' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5598999990015',
+      contactDisplayName: 'Cliente Triagem e Aviso',
+      whatsappMessageId: 'wamid.CITY6',
+      content: 'Oi',
+    });
+
+    expect(enqueueOutboundMessage.mock.calls[0][0].content).toBe('Bem-vindo!');
+    expect(enqueueOutboundMessage.mock.calls[1][0].content).toBe('Instabilidade na rede');
+    expect(enqueueOutboundMessage.mock.invocationCallOrder[1]).toBeLessThan(sendTriageQuestion.mock.invocationCallOrder[0]);
+  });
 });

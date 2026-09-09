@@ -64,15 +64,11 @@ async function ingestInboundMessage({
       if (channel && channel.welcomeMessage) {
         await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: channel.welcomeMessage });
       }
-      if (conversation.triageState === 'pending') {
-        await sendTriageQuestion(conversation.id, channelId);
-      }
     } catch (err) {
-      console.error(`Failed to send automatic messages for conversation ${conversation.id}`, err);
+      console.error(`Failed to send welcome message for conversation ${conversation.id}`, err);
     }
-  } else if (!justCreated && conversation.triageState === 'pending') {
-    conversation = await processTriageReply(conversation, channelId, content);
   }
+
   try {
     const cityNotice = await findActiveCityNoticeByCityId(contact.cityId);
     if (cityNotice && !(await hasContactReceivedNotice(cityNotice.id, contact.id))) {
@@ -81,6 +77,18 @@ async function ingestInboundMessage({
     }
   } catch (err) {
     console.error(`Failed to send city notice for conversation ${conversation.id}`, err);
+  }
+
+  if (justCreated) {
+    try {
+      if (conversation.triageState === 'pending') {
+        await sendTriageQuestion(conversation.id, channelId);
+      }
+    } catch (err) {
+      console.error(`Failed to start triage for conversation ${conversation.id}`, err);
+    }
+  } else if (!justCreated && conversation.triageState === 'pending') {
+    conversation = await processTriageReply(conversation, channelId, content);
   }
   const conversationWithContact = await getConversationWithContact(conversation.id);
   if (conversationWithContact.assignedAgentId) {

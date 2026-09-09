@@ -136,10 +136,8 @@ describe('MessagesAdminTab', () => {
 
     expect(screen.getByText('WhatsApp Vendas')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /criar boas-vindas/i })).toBeInTheDocument();
-    // Ensure we're not in edit mode - check that the channel row doesn't have a form
-    const channelText = screen.getByText('WhatsApp Vendas');
-    const channelRow = channelText.closest('div[class*="flex items-center"]');
-    expect(channelRow).toBeInTheDocument();
+    const channelRow = screen.getByText('WhatsApp Vendas').closest('.rounded-2xl');
+    expect(within(channelRow).queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   test('a channel with a welcome message shows a closed row with a preview and edit/delete buttons', () => {
@@ -155,10 +153,8 @@ describe('MessagesAdminTab', () => {
     expect(screen.getByText('Olá! Bem-vindo às vendas.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^editar$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^excluir$/i })).toBeInTheDocument();
-    // Ensure we're not in edit mode - the channel row should show preview, not a form
-    const channelText = screen.getByText('WhatsApp Vendas');
-    const channelRow = channelText.closest('div[class*="flex items-center justify-between"]');
-    expect(channelRow).toBeInTheDocument();
+    const channelRow = screen.getByText('WhatsApp Vendas').closest('.rounded-2xl');
+    expect(within(channelRow).queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   test('creating a welcome message opens the form, saves, and refreshes the channel list', async () => {
@@ -177,8 +173,7 @@ describe('MessagesAdminTab', () => {
     const textareas = screen.getAllByRole('textbox');
     const welcomeTextarea = textareas.find(ta => ta.tagName === 'TEXTAREA' && !ta.id);
     await userEvent.type(welcomeTextarea, 'Novo texto');
-    const saveButtons = screen.getAllByRole('button', { name: /^salvar$/i });
-    await userEvent.click(saveButtons[0]); // First Salvar button is for welcome message
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
 
     await waitFor(() => expect(api.setChannelWelcomeMessage).toHaveBeenCalledWith('ch-1', 'Novo texto', 'tok-123'));
     expect(refreshChannels).toHaveBeenCalled();
@@ -264,8 +259,7 @@ describe('MessagesAdminTab', () => {
     const textareas = screen.getAllByRole('textbox');
     const welcomeTextarea = textareas.find(ta => ta.tagName === 'TEXTAREA' && !ta.id);
     await userEvent.type(welcomeTextarea, 'Test text');
-    const saveButtons = screen.getAllByRole('button', { name: /^salvar$/i });
-    await userEvent.click(saveButtons[0]); // First save button is for welcome message
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
 
     expect(await screen.findByText('Falha ao salvar boas-vindas')).toBeInTheDocument();
   });

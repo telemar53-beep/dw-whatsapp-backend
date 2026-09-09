@@ -117,6 +117,29 @@ describe('AttendanceDashboardPage', () => {
     expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
   });
 
+  test('opening a filter dropdown closes any other one that was already open', async () => {
+    renderPage();
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
+    expect(screen.getByLabelText('WhatsApp Vendas')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /atendentes/i }));
+    expect(screen.queryByLabelText('WhatsApp Vendas')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Ana')).toBeInTheDocument();
+  });
+
+  test('clicking outside an open filter dropdown closes it', async () => {
+    renderPage();
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
+    expect(screen.getByLabelText('WhatsApp Vendas')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('Carlos'));
+    expect(screen.queryByLabelText('WhatsApp Vendas')).not.toBeInTheDocument();
+  });
+
   test('shows a "Carregar mais" button on the Encerrados hoje tab when there are more pages, and loads the next page on click', async () => {
     getDashboardClosedToday
       .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', channelId: 'chan-1' }], hasMore: true })

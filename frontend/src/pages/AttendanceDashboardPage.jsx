@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAttendanceDashboard } from '../hooks/useAttendanceDashboard';
@@ -19,13 +19,25 @@ function matchesFilters(conversation, { channelIds, agentIds, sectorIds }) {
   return true;
 }
 
-function FilterDropdown({ label, options, selected, onToggle }) {
-  const [open, setOpen] = useState(false);
+function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange }) {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onPointerDown(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        onOpenChange(false);
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [open, onOpenChange]);
+
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => onOpenChange(!open)}
         className="rounded-full border border-white/60 bg-white/40 px-3 py-1.5 text-[13px] text-ink-950/70 backdrop-blur-md transition hover:bg-white/60 hover:text-ink-950"
       >
         {label}
@@ -91,6 +103,7 @@ function AttendanceDashboardPage() {
   const [channelFilter, setChannelFilter] = useState([]);
   const [agentFilter, setAgentFilter] = useState([]);
   const [sectorFilter, setSectorFilter] = useState([]);
+  const [openFilterMenu, setOpenFilterMenu] = useState(null);
 
   const [closedItems, setClosedItems] = useState([]);
   const [closedOffset, setClosedOffset] = useState(0);
@@ -223,18 +236,24 @@ function AttendanceDashboardPage() {
           options={channels.map((c) => ({ value: c.id, label: c.name }))}
           selected={channelFilter}
           onToggle={(value) => toggleFilterValue(setChannelFilter, value)}
+          open={openFilterMenu === 'channels'}
+          onOpenChange={(next) => setOpenFilterMenu(next ? 'channels' : null)}
         />
         <FilterDropdown
           label="Atendentes"
           options={agents.map((a) => ({ value: a.id, label: a.name || a.email }))}
           selected={agentFilter}
           onToggle={(value) => toggleFilterValue(setAgentFilter, value)}
+          open={openFilterMenu === 'agents'}
+          onOpenChange={(next) => setOpenFilterMenu(next ? 'agents' : null)}
         />
         <FilterDropdown
           label="Departamentos"
           options={sectors.map((s) => ({ value: s.id, label: s.name }))}
           selected={sectorFilter}
           onToggle={(value) => toggleFilterValue(setSectorFilter, value)}
+          open={openFilterMenu === 'sectors'}
+          onOpenChange={(next) => setOpenFilterMenu(next ? 'sectors' : null)}
         />
       </div>
 

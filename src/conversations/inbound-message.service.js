@@ -5,6 +5,7 @@ const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/so
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 const { findChannelById } = require('../channels/channel.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { findActiveCityNoticeByCityId, hasContactReceivedNotice, recordNoticeDelivery } = require('../city-notices/city-notice.repository');
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -71,6 +72,15 @@ async function ingestInboundMessage({
     }
   } else if (!justCreated && conversation.triageState === 'pending') {
     conversation = await processTriageReply(conversation, channelId, content);
+  }
+  try {
+    const cityNotice = await findActiveCityNoticeByCityId(contact.cityId);
+    if (cityNotice && !(await hasContactReceivedNotice(cityNotice.id, contact.id))) {
+      await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: cityNotice.message });
+      await recordNoticeDelivery(cityNotice.id, contact.id);
+    }
+  } catch (err) {
+    console.error(`Failed to send city notice for conversation ${conversation.id}`, err);
   }
   const conversationWithContact = await getConversationWithContact(conversation.id);
   if (conversationWithContact.assignedAgentId) {

@@ -5,6 +5,7 @@ jest.mock('../realtime/socket-server');
 jest.mock('../triage/triage.service');
 jest.mock('../channels/channel.repository');
 jest.mock('../queue/outbound-queue');
+jest.mock('../city-notices/city-notice.repository');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { findOpenConversation, createConversation, getConversationWithContact, activateConversation } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
@@ -12,6 +13,11 @@ const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/so
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 const { findChannelById } = require('../channels/channel.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const {
+  findActiveCityNoticeByCityId,
+  hasContactReceivedNotice,
+  recordNoticeDelivery,
+} = require('../city-notices/city-notice.repository');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
 describe('ingestInboundMessage', () => {
@@ -19,6 +25,7 @@ describe('ingestInboundMessage', () => {
     jest.clearAllMocks();
     shouldStartTriage.mockResolvedValue(false);
     findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: null });
+    findActiveCityNoticeByCityId.mockResolvedValue(null);
   });
 
   test('reuses an existing open conversation and broadcasts queue:new when unassigned', async () => {
@@ -608,5 +615,114 @@ describe('ingestInboundMessage', () => {
       content: 'Oi! Já te atendemos.',
     });
     expect(sendTriageQuestion).not.toHaveBeenCalled();
+  });
+
+  test('sends the city notice after the welcome message on a new conversation, when the contact city has an active notice', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-city-1', cityId: 'city-1' });
+    findOpenConversation.mockResolvedValue(null);
+    shouldStartTriage.mockResolvedValue(false);
+    findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: 'Bem-vindo!' });
+    findActiveCityNoticeByCityId.mockResolvedValue({ id: 'notice-1', cityId: 'city-1', message: 'Instabilidade na rede' });
+    hasContactReceivedNotice.mockResolvedValue(false);
+    createConversation.mockResolvedValue({ id: 'conv-city-1', assignedAgentId: null, triageState: null });
+    createMessage.mockResolvedValue({ id: 'msg-city-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-city-1', assignedAgentId: null, triageState: null });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5598999990010',
+      contactDisplayName: 'Cliente de Maracaçumé',
+      whatsappMessageId: 'wamid.CITY1',
+      content: 'Oi',
+    });
+
+    expect(findActiveCityNoticeByCityId).toHaveBeenCalledWith('city-1');
+    expect(recordNoticeDelivery).toHaveBeenCalledWith('notice-1', 'contact-city-1');
+    expect(enqueueOutboundMessage.mock.calls[0][0].content).toBe('Bem-vindo!');
+    expect(enqueueOutboundMessage.mock.calls[1][0]).toEqual({
+      conversationId: 'conv-city-1',
+      channelId: 'channel-1',
+      content: 'Instabilidade na rede',
+    });
+  });
+
+  test('sends the city notice on a conversation already in progress, not just new conversations', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-city-2', cityId: 'city-1' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-city-2', assignedAgentId: 'agent-1', triageState: null });
+    findActiveCityNoticeByCityId.mockResolvedValue({ id: 'notice-2', cityId: 'city-1', message: 'Instabilidade na rede' });
+    hasContactReceivedNotice.mockResolvedValue(false);
+    createMessage.mockResolvedValue({ id: 'msg-city-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-city-2', assignedAgentId: 'agent-1', triageState: null });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5598999990011',
+      contactDisplayName: 'Cliente de Maracaçumé',
+      whatsappMessageId: 'wamid.CITY2',
+      content: 'Ainda sem internet',
+    });
+
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-city-2',
+      channelId: 'channel-1',
+      content: 'Instabilidade na rede',
+    });
+  });
+
+  test('does not resend the city notice to a contact who already received it', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-city-3', cityId: 'city-1' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-city-3', assignedAgentId: null, triageState: null });
+    findActiveCityNoticeByCityId.mockResolvedValue({ id: 'notice-3', cityId: 'city-1', message: 'Instabilidade na rede' });
+    hasContactReceivedNotice.mockResolvedValue(true);
+    createMessage.mockResolvedValue({ id: 'msg-city-3' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-city-3', assignedAgentId: null, triageState: null });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5598999990012',
+      contactDisplayName: 'Cliente de Maracaçumé',
+      whatsappMessageId: 'wamid.CITY3',
+      content: 'Oi de novo',
+    });
+
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    expect(recordNoticeDelivery).not.toHaveBeenCalled();
+  });
+
+  test('does not send a city notice when the contact has no city', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-city-4', cityId: null });
+    findOpenConversation.mockResolvedValue({ id: 'conv-city-4', assignedAgentId: null, triageState: null });
+    createMessage.mockResolvedValue({ id: 'msg-city-4' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-city-4', assignedAgentId: null, triageState: null });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5598999990013',
+      contactDisplayName: 'Cliente Sem Cidade',
+      whatsappMessageId: 'wamid.CITY4',
+      content: 'Oi',
+    });
+
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('does not send a city notice when the contact city has no active notice', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-city-5', cityId: 'city-2' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-city-5', assignedAgentId: null, triageState: null });
+    findActiveCityNoticeByCityId.mockResolvedValue(null);
+    createMessage.mockResolvedValue({ id: 'msg-city-5' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-city-5', assignedAgentId: null, triageState: null });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5598999990014',
+      contactDisplayName: 'Cliente Cidade Sem Aviso',
+      whatsappMessageId: 'wamid.CITY5',
+      content: 'Oi',
+    });
+
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    expect(recordNoticeDelivery).not.toHaveBeenCalled();
   });
 });

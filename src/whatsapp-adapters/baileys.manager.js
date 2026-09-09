@@ -342,6 +342,17 @@ async function startAllBaileysConnections() {
   }
 }
 
+async function stopBaileysChannel(channelId) {
+  closeExistingSocket(channelId);
+  connections.delete(channelId);
+  await clearSession(channelId);
+}
+
+async function reconnectBaileysChannel(channel) {
+  await stopBaileysChannel(channel.id);
+  return startBaileysConnection(channel);
+}
+
 async function addBaileysChannel({ name, phoneNumber }) {
   const channel = await createChannel({ type: 'baileys', name, phoneNumber, config: {} });
   await startBaileysConnection(channel);
@@ -432,6 +443,8 @@ async function resolveWhatsAppJid(channel, phoneNumber) {
 module.exports = {
   startAllBaileysConnections,
   startBaileysConnection,
+  stopBaileysChannel,
+  reconnectBaileysChannel,
   addBaileysChannel,
   sendTextMessage,
   sendMediaMessage,

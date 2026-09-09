@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useChannels } from '../hooks/useChannels';
 import CreateChannelForm from '../components/CreateChannelForm';
@@ -10,7 +10,7 @@ import CitiesAdminTab from '../components/CitiesAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
 import TemplatesAdminTab from '../components/TemplatesAdminTab';
 import IntegrationsAdminTab from '../components/IntegrationsAdminTab';
-import { setChannelTriageEnabled, setChannelWabaId } from '../services/api';
+import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannelHidden, deleteChannel } from '../services/api';
 
 const TABS = [
   { value: 'channels', label: 'Canais' },
@@ -39,7 +39,21 @@ function StatusDot({ status }) {
   );
 }
 
-function ChannelCard({ channel, wabaIdDrafts, setWabaIdDrafts, onToggleTriage, onSaveWabaId, onRefresh }) {
+const cardButtonClass =
+  'rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50';
+
+function ChannelCard({
+  channel,
+  wabaIdDrafts,
+  setWabaIdDrafts,
+  onToggleTriage,
+  onSaveWabaId,
+  onRefresh,
+  onReconnect,
+  onToggleHidden,
+  onDelete,
+  busy,
+}) {
   return (
     <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3">
@@ -82,17 +96,85 @@ function ChannelCard({ channel, wabaIdDrafts, setWabaIdDrafts, onToggleTriage, o
         </div>
       )}
       <QrCodeView channel={channel} onRefresh={onRefresh} />
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ink-950/10 pt-3">
+        {channel.type === 'baileys' && (
+          <button type="button" onClick={() => onReconnect(channel)} disabled={busy} className={cardButtonClass}>
+            Reconectar
+          </button>
+        )}
+        <button type="button" onClick={() => onToggleHidden(channel)} disabled={busy} className={cardButtonClass}>
+          {channel.hidden ? 'Reexibir' : 'Ocultar'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(channel)}
+          disabled={busy}
+          className="rounded-lg border border-red-300 bg-white/60 px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Excluir
+        </button>
+      </div>
     </div>
   );
 }
 
 function AdminChannelsPage() {
   const { token } = useAuth();
-  const { channels, refresh } = useChannels();
+  const [showHidden, setShowHidden] = useState(false);
+  const { channels, refresh } = useChannels(true, showHidden);
   const [activeTab, setActiveTab] = useState('channels');
   const [triageToggleError, setTriageToggleError] = useState(null);
   const [wabaIdDrafts, setWabaIdDrafts] = useState({});
   const [wabaIdError, setWabaIdError] = useState(null);
+  const [channelActionError, setChannelActionError] = useState(null);
+  const [busyChannelId, setBusyChannelId] = useState(null);
+
+  // While a channel is showing a QR code, poll so the card flips to "Conectado"
+  // on its own the moment the phone finishes scanning it.
+  const hasChannelAwaitingQr = channels.some((channel) => channel.status === 'awaiting_qr');
+  useEffect(() => {
+    if (!hasChannelAwaitingQr) return undefined;
+    const interval = setInterval(() => refresh(), 5000);
+    return () => clearInterval(interval);
+  }, [hasChannelAwaitingQr, refresh]);
+
+  async function runChannelAction(channel, action) {
+    setChannelActionError(null);
+    setBusyChannelId(channel.id);
+    try {
+      await action();
+      refresh();
+    } catch (err) {
+      setChannelActionError((err.body && err.body.error) || 'Não foi possível concluir a ação neste canal');
+    } finally {
+      setBusyChannelId(null);
+    }
+  }
+
+  function handleReconnect(channel) {
+    if (
+      channel.status === 'connected' &&
+      !window.confirm(`O canal "${channel.name}" está conectado. Reconectar vai derrubar a sessão atual e pedir um QR code novo. Continuar?`)
+    ) {
+      return;
+    }
+    runChannelAction(channel, () => reconnectChannel(channel.id, token));
+  }
+
+  function handleToggleHidden(channel) {
+    const nextHidden = !channel.hidden;
+    const message = nextHidden
+      ? `Ocultar o canal "${channel.name}"? Ele sai da lista e a sessão do WhatsApp é encerrada. O histórico é preservado.`
+      : `Reexibir o canal "${channel.name}"?`;
+    if (!window.confirm(message)) return;
+    runChannelAction(channel, () => setChannelHidden(channel.id, nextHidden, token));
+  }
+
+  function handleDelete(channel) {
+    if (!window.confirm(`Excluir o canal "${channel.name}" definitivamente? Só é possível se ele nunca teve conversas.`)) return;
+    runChannelAction(channel, () => deleteChannel(channel.id, token));
+  }
 
   async function handleToggleTriage(channelId, triageEnabled) {
     setTriageToggleError(null);
@@ -155,6 +237,18 @@ function AdminChannelsPage() {
             {wabaIdError && (
               <div className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{wabaIdError}</div>
             )}
+            {channelActionError && (
+              <div className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{channelActionError}</div>
+            )}
+            <label className="flex items-center gap-2 text-sm text-ink-950/70">
+              <input
+                type="checkbox"
+                checked={showHidden}
+                onChange={(e) => setShowHidden(e.target.checked)}
+                className="h-4 w-4 accent-teal-signal"
+              />
+              Mostrar canais ocultos
+            </label>
             <div className="space-y-3">
               {channels.map((channel) => (
                 <ChannelCard
@@ -165,6 +259,10 @@ function AdminChannelsPage() {
                   onToggleTriage={handleToggleTriage}
                   onSaveWabaId={handleSaveWabaId}
                   onRefresh={refresh}
+                  onReconnect={handleReconnect}
+                  onToggleHidden={handleToggleHidden}
+                  onDelete={handleDelete}
+                  busy={busyChannelId === channel.id}
                 />
               ))}
             </div>

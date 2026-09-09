@@ -9,6 +9,7 @@ function toChannel(row) {
     config: row.config,
     status: row.status,
     triageEnabled: row.triage_enabled,
+    hidden: row.hidden,
     createdAt: row.created_at,
   };
 }
@@ -17,7 +18,7 @@ async function createChannel({ type, name, phoneNumber, config }) {
   const result = await getPool().query(
     `INSERT INTO channels (type, name, phone_number, config)
      VALUES ($1, $2, $3, $4)
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, created_at`,
     [type, name, phoneNumber, JSON.stringify(config)]
   );
   return toChannel(result.rows[0]);
@@ -25,7 +26,7 @@ async function createChannel({ type, name, phoneNumber, config }) {
 
 async function findChannelById(id) {
   const result = await getPool().query(
-    'SELECT id, type, name, phone_number, config, status, triage_enabled, created_at FROM channels WHERE id = $1',
+    'SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, created_at FROM channels WHERE id = $1',
     [id]
   );
   if (result.rowCount === 0) return null;
@@ -34,7 +35,7 @@ async function findChannelById(id) {
 
 async function findChannelByMetaPhoneNumberId(phoneNumberId) {
   const result = await getPool().query(
-    `SELECT id, type, name, phone_number, config, status, triage_enabled, created_at FROM channels
+    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, created_at FROM channels
      WHERE type = 'meta_cloud' AND config->>'phoneNumberId' = $1`,
     [phoneNumberId]
   );
@@ -44,7 +45,7 @@ async function findChannelByMetaPhoneNumberId(phoneNumberId) {
 
 async function findChannelByWabaId(wabaId) {
   const result = await getPool().query(
-    `SELECT id, type, name, phone_number, config, status, triage_enabled, created_at FROM channels
+    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, created_at FROM channels
      WHERE type = 'meta_cloud' AND config->>'wabaId' = $1
      LIMIT 1`,
     [wabaId]
@@ -53,9 +54,11 @@ async function findChannelByWabaId(wabaId) {
   return toChannel(result.rows[0]);
 }
 
-async function listChannels() {
+async function listChannels({ includeHidden = false } = {}) {
   const result = await getPool().query(
-    'SELECT id, type, name, phone_number, config, status, triage_enabled, created_at FROM channels ORDER BY created_at ASC'
+    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, created_at FROM channels
+     ${includeHidden ? '' : 'WHERE hidden = false'}
+     ORDER BY created_at ASC`
   );
   return result.rows.map(toChannel);
 }
@@ -63,7 +66,7 @@ async function listChannels() {
 async function updateChannelStatus(id, status) {
   const result = await getPool().query(
     `UPDATE channels SET status = $2 WHERE id = $1
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, created_at`,
     [id, status]
   );
   if (result.rowCount === 0) return null;
@@ -73,7 +76,7 @@ async function updateChannelStatus(id, status) {
 async function updateChannelTriageEnabled(id, triageEnabled) {
   const result = await getPool().query(
     `UPDATE channels SET triage_enabled = $2 WHERE id = $1
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, created_at`,
     [id, triageEnabled]
   );
   if (result.rowCount === 0) return null;
@@ -83,11 +86,39 @@ async function updateChannelTriageEnabled(id, triageEnabled) {
 async function updateChannelWabaId(id, wabaId) {
   const result = await getPool().query(
     `UPDATE channels SET config = jsonb_set(config, '{wabaId}', to_jsonb($2::text)) WHERE id = $1 AND type = 'meta_cloud'
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, created_at`,
     [id, wabaId]
   );
   if (result.rowCount === 0) return null;
   return toChannel(result.rows[0]);
+}
+
+async function updateChannelHidden(id, hidden) {
+  const result = await getPool().query(
+    `UPDATE channels SET hidden = $2 WHERE id = $1
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, created_at`,
+    [id, hidden]
+  );
+  if (result.rowCount === 0) return null;
+  return toChannel(result.rows[0]);
+}
+
+async function countChannelDependents(id) {
+  const result = await getPool().query(
+    `SELECT
+       (SELECT COUNT(*) FROM conversations WHERE channel_id = $1) AS conversations,
+       (SELECT COUNT(*) FROM platform_integrations WHERE channel_id = $1) AS integrations`,
+    [id]
+  );
+  return {
+    conversations: Number(result.rows[0].conversations),
+    integrations: Number(result.rows[0].integrations),
+  };
+}
+
+async function deleteChannel(id) {
+  const result = await getPool().query('DELETE FROM channels WHERE id = $1', [id]);
+  return result.rowCount > 0;
 }
 
 module.exports = {
@@ -99,4 +130,7 @@ module.exports = {
   updateChannelStatus,
   updateChannelTriageEnabled,
   updateChannelWabaId,
+  updateChannelHidden,
+  countChannelDependents,
+  deleteChannel,
 };

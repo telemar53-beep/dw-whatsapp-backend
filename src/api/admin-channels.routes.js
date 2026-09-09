@@ -2,7 +2,16 @@ const express = require('express');
 const QRCode = require('qrcode');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
 const { verifyToken } = require('../auth/auth.service');
-const { listChannels, createChannel, findChannelById, updateChannelTriageEnabled, updateChannelWabaId } = require('../channels/channel.repository');
+const {
+  listChannels,
+  createChannel,
+  findChannelById,
+  updateChannelTriageEnabled,
+  updateChannelWabaId,
+  updateChannelHidden,
+  countChannelDependents,
+  deleteChannel,
+} = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 
 const router = express.Router();
@@ -27,19 +36,22 @@ function authenticateQrRoute(req, res, next) {
   next();
 }
 
+function toChannelResponse(channel) {
+  return {
+    id: channel.id,
+    type: channel.type,
+    name: channel.name,
+    phoneNumber: channel.phoneNumber,
+    status: channel.status,
+    triageEnabled: channel.triageEnabled,
+    hidden: channel.hidden,
+    wabaId: channel.type === 'meta_cloud' ? channel.config.wabaId : undefined,
+  };
+}
+
 router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
-  const channels = await listChannels();
-  res.json(
-    channels.map((channel) => ({
-      id: channel.id,
-      type: channel.type,
-      name: channel.name,
-      phoneNumber: channel.phoneNumber,
-      status: channel.status,
-      triageEnabled: channel.triageEnabled,
-      wabaId: channel.type === 'meta_cloud' ? channel.config.wabaId : undefined,
-    }))
-  );
+  const channels = await listChannels({ includeHidden: req.query.includeHidden === 'true' });
+  res.json(channels.map(toChannelResponse));
 });
 
 router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
@@ -73,9 +85,12 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  const { triageEnabled, wabaId } = req.body || {};
-  if (triageEnabled === undefined && wabaId === undefined) {
-    return res.status(400).json({ error: 'triageEnabled or wabaId is required' });
+  const { triageEnabled, wabaId, hidden } = req.body || {};
+  if (triageEnabled === undefined && wabaId === undefined && hidden === undefined) {
+    return res.status(400).json({ error: 'triageEnabled, wabaId or hidden is required' });
+  }
+  if (hidden !== undefined && typeof hidden !== 'boolean') {
+    return res.status(400).json({ error: 'hidden must be a boolean' });
   }
   let channel;
   if (triageEnabled !== undefined) {
@@ -96,15 +111,54 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
       return res.status(404).json({ error: 'Channel not found or not a meta_cloud channel' });
     }
   }
-  res.json({
-    id: channel.id,
-    type: channel.type,
-    name: channel.name,
-    phoneNumber: channel.phoneNumber,
-    status: channel.status,
-    triageEnabled: channel.triageEnabled,
-    wabaId: channel.type === 'meta_cloud' ? channel.config.wabaId : undefined,
-  });
+  if (hidden !== undefined) {
+    const existing = await findChannelById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+    // A hidden channel is out of use: it must not keep holding a live WhatsApp
+    // session, and it is skipped when connections are started on boot.
+    if (hidden && existing.type === 'baileys') {
+      await baileysManager.stopBaileysChannel(existing.id);
+    }
+    channel = await updateChannelHidden(req.params.id, hidden);
+    if (!channel) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+  }
+  res.json(toChannelResponse(channel));
+});
+
+router.post('/:id/reconnect', requireAuth, requireRole('admin'), async (req, res) => {
+  const channel = await findChannelById(req.params.id);
+  if (!channel) {
+    return res.status(404).json({ error: 'Channel not found' });
+  }
+  if (channel.type !== 'baileys') {
+    return res.status(400).json({ error: 'Only baileys channels connect through a QR code' });
+  }
+  await baileysManager.reconnectBaileysChannel(channel);
+  const updated = await findChannelById(req.params.id);
+  res.json(toChannelResponse(updated || channel));
+});
+
+router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const channel = await findChannelById(req.params.id);
+  if (!channel) {
+    return res.status(404).json({ error: 'Channel not found' });
+  }
+  const dependents = await countChannelDependents(channel.id);
+  if (dependents.conversations > 0 || dependents.integrations > 0) {
+    return res.status(409).json({
+      error:
+        'This channel already has conversations or an SGP integration and cannot be deleted without losing that history. Hide it instead.',
+    });
+  }
+  if (channel.type === 'baileys') {
+    await baileysManager.stopBaileysChannel(channel.id);
+  }
+  await deleteChannel(channel.id);
+  res.sendStatus(204);
 });
 
 router.get('/:id/qr', authenticateQrRoute, async (req, res) => {

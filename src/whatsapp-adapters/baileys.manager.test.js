@@ -1164,4 +1164,64 @@ describe('baileys.manager', () => {
       expect(baileysLib.default).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('stopBaileysChannel', () => {
+    test('closes the live socket and clears the stored session', async () => {
+      const sock = createMockSock();
+      sock.end = jest.fn();
+      sock.ev.removeAllListeners = jest.fn();
+      baileysLib.default.mockReturnValue(sock);
+      await manager.startBaileysConnection({ id: 'channel-stop-1', type: 'baileys' });
+
+      await manager.stopBaileysChannel('channel-stop-1');
+
+      expect(sock.ev.removeAllListeners).toHaveBeenCalled();
+      expect(sock.end).toHaveBeenCalled();
+      expect(fs.promises.rm).toHaveBeenCalledWith(path.join('/sessions', 'channel-stop-1'), { recursive: true, force: true });
+    });
+
+    test('clears the session even when there is no live socket for the channel', async () => {
+      await manager.stopBaileysChannel('channel-never-started');
+
+      expect(fs.promises.rm).toHaveBeenCalledWith(path.join('/sessions', 'channel-never-started'), {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    test('drops the channel from the connection map, so no QR is served for it anymore', async () => {
+      const sock = createMockSock();
+      sock.end = jest.fn();
+      sock.ev.removeAllListeners = jest.fn();
+      baileysLib.default.mockReturnValue(sock);
+      await manager.startBaileysConnection({ id: 'channel-stop-2', type: 'baileys' });
+
+      await manager.stopBaileysChannel('channel-stop-2');
+
+      expect(manager.getQrForChannel('channel-stop-2')).toBeNull();
+    });
+  });
+
+  describe('reconnectBaileysChannel', () => {
+    test('clears the old session and starts a fresh connection, so a new QR is generated', async () => {
+      const oldSock = createMockSock();
+      oldSock.end = jest.fn();
+      oldSock.ev.removeAllListeners = jest.fn();
+      baileysLib.default.mockReturnValue(oldSock);
+      const channel = { id: 'channel-reconnect-1', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+      baileysLib.default.mockClear();
+
+      const newSock = createMockSock();
+      baileysLib.default.mockReturnValue(newSock);
+      await manager.reconnectBaileysChannel(channel);
+
+      expect(oldSock.end).toHaveBeenCalled();
+      expect(fs.promises.rm).toHaveBeenCalledWith(path.join('/sessions', 'channel-reconnect-1'), {
+        recursive: true,
+        force: true,
+      });
+      expect(baileysLib.default).toHaveBeenCalledTimes(1);
+    });
+  });
 });

@@ -10,7 +10,7 @@ import { useCities } from '../hooks/useCities';
 import { useTriage } from '../hooks/useTriage';
 import { useTemplates } from '../hooks/useTemplates';
 import { useAuth } from '../contexts/AuthContext';
-import { setChannelTriageEnabled, setChannelWabaId } from '../services/api';
+import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannelHidden, deleteChannel } from '../services/api';
 
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
@@ -214,6 +214,127 @@ describe('AdminChannelsPage', () => {
     });
     render(<AdminChannelsPage />);
     expect(screen.queryByLabelText(/waba id/i)).not.toBeInTheDocument();
+  });
+
+  test('clicking Reconectar asks the backend for a fresh QR code and refreshes the list', async () => {
+    const refresh = vi.fn();
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'disconnected' }],
+      loading: false,
+      refresh,
+    });
+    reconnectChannel.mockResolvedValue({ id: 'ch1', status: 'awaiting_qr' });
+    render(<AdminChannelsPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /reconectar/i }));
+
+    await waitFor(() => expect(reconnectChannel).toHaveBeenCalledWith('ch1', 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('does not offer Reconectar for a meta_cloud channel, which has no QR code', () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', status: 'connected' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<AdminChannelsPage />);
+    expect(screen.queryByRole('button', { name: /reconectar/i })).not.toBeInTheDocument();
+  });
+
+  test('asks for confirmation before reconnecting a channel that is currently connected', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<AdminChannelsPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /reconectar/i }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(reconnectChannel).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  test('clicking Ocultar hides the channel after confirmation', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const refresh = vi.fn();
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'disconnected' }],
+      loading: false,
+      refresh,
+    });
+    setChannelHidden.mockResolvedValue({});
+    render(<AdminChannelsPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /ocultar/i }));
+
+    await waitFor(() => expect(setChannelHidden).toHaveBeenCalledWith('ch1', true, 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  test('clicking Excluir deletes the channel after confirmation', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const refresh = vi.fn();
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'disconnected' }],
+      loading: false,
+      refresh,
+    });
+    deleteChannel.mockResolvedValue(undefined);
+    render(<AdminChannelsPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
+
+    await waitFor(() => expect(deleteChannel).toHaveBeenCalledWith('ch1', 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  test('shows the backend message when a channel cannot be deleted because it has history', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'disconnected' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    deleteChannel.mockRejectedValue({ body: { error: 'This channel already has conversations' } });
+    render(<AdminChannelsPage />);
+
+    await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
+
+    expect(await screen.findByText(/this channel already has conversations/i)).toBeInTheDocument();
+    confirmSpy.mockRestore();
+  });
+
+  test('the "mostrar canais ocultos" toggle asks the hook for hidden channels too', async () => {
+    useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
+    render(<AdminChannelsPage />);
+
+    await userEvent.click(screen.getByLabelText(/mostrar canais ocultos/i));
+
+    expect(useChannels).toHaveBeenLastCalledWith(true, true);
+  });
+
+  test('a hidden channel is shown with a Reexibir button instead of Ocultar', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const refresh = vi.fn();
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Antigo', phoneNumber: '+5598985004187', status: 'disconnected', hidden: true }],
+      loading: false,
+      refresh,
+    });
+    setChannelHidden.mockResolvedValue({});
+    render(<AdminChannelsPage />);
+
+    expect(screen.queryByRole('button', { name: /^ocultar$/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /reexibir/i }));
+
+    await waitFor(() => expect(setChannelHidden).toHaveBeenCalledWith('ch1', false, 'tok-123'));
+    confirmSpy.mockRestore();
   });
 
   test('switches to the Templates tab and shows the templates management UI', async () => {

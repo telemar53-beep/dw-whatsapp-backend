@@ -101,8 +101,20 @@ export function listAgents(token) {
   return apiFetch('/api/agents', { token });
 }
 
-export function listChannels(token) {
-  return apiFetch('/api/admin/channels', { token });
+export function listChannels(token, { includeHidden = false } = {}) {
+  return apiFetch(`/api/admin/channels${includeHidden ? '?includeHidden=true' : ''}`, { token });
+}
+
+export function reconnectChannel(id, token) {
+  return apiFetch(`/api/admin/channels/${id}/reconnect`, { method: 'POST', token });
+}
+
+export function setChannelHidden(id, hidden, token) {
+  return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { hidden }, token });
+}
+
+export function deleteChannel(id, token) {
+  return apiFetch(`/api/admin/channels/${id}`, { method: 'DELETE', token });
 }
 
 export function createChannel(payload, token) {

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listChannels } from '../services/api';
 
-export function useChannels(enabled = true) {
+export function useChannels(enabled = true, includeHidden = false) {
   const { token } = useAuth();
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(enabled);
@@ -10,7 +10,7 @@ export function useChannels(enabled = true) {
   const refresh = useCallback(() => {
     if (!token || !enabled) return Promise.resolve();
     setLoading(true);
-    return listChannels(token)
+    return listChannels(token, { includeHidden })
       .then((data) => {
         setChannels(data);
         setLoading(false);
@@ -18,7 +18,7 @@ export function useChannels(enabled = true) {
       .catch(() => {
         setLoading(false);
       });
-  }, [token, enabled]);
+  }, [token, enabled, includeHidden]);
 
   useEffect(() => {
     refresh();

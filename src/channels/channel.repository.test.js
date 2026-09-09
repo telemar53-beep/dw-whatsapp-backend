@@ -1,4 +1,6 @@
 const { getPool, closePool } = require('../db/pool');
+const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
+const { createConversation } = require('../conversations/conversation.repository');
 const {
   createChannel,
   findChannelById,
@@ -8,6 +10,9 @@ const {
   updateChannelStatus,
   updateChannelTriageEnabled,
   updateChannelWabaId,
+  updateChannelHidden,
+  countChannelDependents,
+  deleteChannel,
 } = require('./channel.repository');
 
 describe('channel repository', () => {
@@ -166,5 +171,68 @@ describe('updateChannelWabaId', () => {
 
   test('returns null for a non-existent id', async () => {
     expect(await updateChannelWabaId('00000000-0000-0000-0000-000000000000', 'waba-x')).toBeNull();
+  });
+});
+
+describe('hiding, dependents and deletion', () => {
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE conversations, contacts, channels, platform_integrations CASCADE');
+  });
+
+  test('a new channel starts visible', async () => {
+    const channel = await createChannel({ type: 'baileys', name: 'Novo', phoneNumber: '+5511999994001', config: {} });
+    expect(channel.hidden).toBe(false);
+  });
+
+  test('updateChannelHidden hides a channel and listChannels stops returning it', async () => {
+    const channel = await createChannel({ type: 'baileys', name: 'Antigo', phoneNumber: '+5511999994002', config: {} });
+    const hiddenChannel = await updateChannelHidden(channel.id, true);
+    expect(hiddenChannel.hidden).toBe(true);
+
+    const visible = await listChannels();
+    expect(visible.map((c) => c.id)).not.toContain(channel.id);
+  });
+
+  test('listChannels with includeHidden returns hidden channels too', async () => {
+    const channel = await createChannel({ type: 'baileys', name: 'Antigo', phoneNumber: '+5511999994003', config: {} });
+    await updateChannelHidden(channel.id, true);
+
+    const all = await listChannels({ includeHidden: true });
+    expect(all.map((c) => c.id)).toContain(channel.id);
+  });
+
+  test('updateChannelHidden can un-hide a channel', async () => {
+    const channel = await createChannel({ type: 'baileys', name: 'Antigo', phoneNumber: '+5511999994004', config: {} });
+    await updateChannelHidden(channel.id, true);
+    const shown = await updateChannelHidden(channel.id, false);
+    expect(shown.hidden).toBe(false);
+    expect((await listChannels()).map((c) => c.id)).toContain(channel.id);
+  });
+
+  test('updateChannelHidden returns null for a non-existent id', async () => {
+    expect(await updateChannelHidden('00000000-0000-0000-0000-000000000000', true)).toBeNull();
+  });
+
+  test('countChannelDependents returns zeros for a brand-new channel', async () => {
+    const channel = await createChannel({ type: 'baileys', name: 'Limpo', phoneNumber: '+5511999994005', config: {} });
+    expect(await countChannelDependents(channel.id)).toEqual({ conversations: 0, integrations: 0 });
+  });
+
+  test('countChannelDependents counts the conversations attached to the channel', async () => {
+    const channel = await createChannel({ type: 'baileys', name: 'Usado', phoneNumber: '+5511999994006', config: {} });
+    const contact = await findOrCreateContactByPhoneNumber('+5511977771111', 'Cliente');
+    await createConversation(contact.id, channel.id);
+
+    expect(await countChannelDependents(channel.id)).toEqual({ conversations: 1, integrations: 0 });
+  });
+
+  test('deleteChannel removes a channel with no dependents', async () => {
+    const channel = await createChannel({ type: 'baileys', name: 'Descartavel', phoneNumber: '+5511999994007', config: {} });
+    expect(await deleteChannel(channel.id)).toBe(true);
+    expect(await findChannelById(channel.id)).toBeNull();
+  });
+
+  test('deleteChannel returns false for a non-existent id', async () => {
+    expect(await deleteChannel('00000000-0000-0000-0000-000000000000')).toBe(false);
   });
 });

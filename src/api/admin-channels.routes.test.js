@@ -5,7 +5,16 @@ const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const QRCode = require('qrcode');
-const { listChannels, createChannel, findChannelById, updateChannelTriageEnabled, updateChannelWabaId } = require('../channels/channel.repository');
+const {
+  listChannels,
+  createChannel,
+  findChannelById,
+  updateChannelTriageEnabled,
+  updateChannelWabaId,
+  updateChannelHidden,
+  countChannelDependents,
+  deleteChannel,
+} = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const adminChannelsRoutes = require('./admin-channels.routes');
 
@@ -364,5 +373,149 @@ describe('PATCH /api/admin/channels/:id (wabaId)', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
       .send({ wabaId: 'new-waba' });
     expect(res.status).toBe(404);
+  });
+
+});
+
+describe('PATCH /api/admin/channels/:id (hidden)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('hides a channel and stops its live WhatsApp session', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'baileys', name: 'Berg', phoneNumber: '+55', status: 'connected', config: {} });
+    updateChannelHidden.mockResolvedValue({ id: 'ch-1', type: 'baileys', name: 'Berg', phoneNumber: '+55', status: 'disconnected', hidden: true, config: {} });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ hidden: true });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelHidden).toHaveBeenCalledWith('ch-1', true);
+    expect(baileysManager.stopBaileysChannel).toHaveBeenCalledWith('ch-1');
+    expect(res.body.hidden).toBe(true);
+  });
+
+  test('un-hiding a channel does not touch its WhatsApp session', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'baileys', name: 'Berg', phoneNumber: '+55', status: 'disconnected', config: {} });
+    updateChannelHidden.mockResolvedValue({ id: 'ch-1', type: 'baileys', name: 'Berg', phoneNumber: '+55', status: 'disconnected', hidden: false, config: {} });
+
+    await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ hidden: false });
+
+    expect(baileysManager.stopBaileysChannel).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when hidden is not a boolean', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ hidden: 'yes' });
+    expect(res.status).toBe(400);
+    expect(updateChannelHidden).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/admin/channels/:id/reconnect', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('clears the old session and starts a fresh connection for a baileys channel', async () => {
+    const channel = { id: 'ch-1', type: 'baileys', name: 'Berg', phoneNumber: '+55', status: 'disconnected', config: {} };
+    findChannelById.mockResolvedValueOnce(channel).mockResolvedValueOnce({ ...channel, status: 'awaiting_qr' });
+
+    const res = await request(buildApp())
+      .post('/api/admin/channels/ch-1/reconnect')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+
+    expect(baileysManager.reconnectBaileysChannel).toHaveBeenCalledWith(channel);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('awaiting_qr');
+  });
+
+  test('returns 404 when the channel does not exist', async () => {
+    findChannelById.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/admin/channels/ch-missing/reconnect')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+    expect(res.status).toBe(404);
+    expect(baileysManager.reconnectBaileysChannel).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 for a meta_cloud channel, which has no QR to scan', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-2', type: 'meta_cloud', config: {} });
+    const res = await request(buildApp())
+      .post('/api/admin/channels/ch-2/reconnect')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+    expect(res.status).toBe(400);
+    expect(baileysManager.reconnectBaileysChannel).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/channels/ch-1/reconnect')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+    expect(baileysManager.reconnectBaileysChannel).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/admin/channels/:id', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('deletes a channel that has no conversations and no integrations', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'baileys', config: {} });
+    countChannelDependents.mockResolvedValue({ conversations: 0, integrations: 0 });
+    deleteChannel.mockResolvedValue(true);
+
+    const res = await request(buildApp())
+      .delete('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+
+    expect(res.status).toBe(204);
+    expect(baileysManager.stopBaileysChannel).toHaveBeenCalledWith('ch-1');
+    expect(deleteChannel).toHaveBeenCalledWith('ch-1');
+  });
+
+  test('refuses to delete a channel that already has conversations, telling the admin to hide it instead', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'baileys', config: {} });
+    countChannelDependents.mockResolvedValue({ conversations: 12, integrations: 0 });
+
+    const res = await request(buildApp())
+      .delete('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+
+    expect(res.status).toBe(409);
+    expect(deleteChannel).not.toHaveBeenCalled();
+    expect(baileysManager.stopBaileysChannel).not.toHaveBeenCalled();
+  });
+
+  test('refuses to delete a channel that is still wired to an SGP integration', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'baileys', config: {} });
+    countChannelDependents.mockResolvedValue({ conversations: 0, integrations: 1 });
+
+    const res = await request(buildApp())
+      .delete('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+
+    expect(res.status).toBe(409);
+    expect(deleteChannel).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the channel does not exist', async () => {
+    findChannelById.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .delete('/api/admin/channels/ch-missing')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+    expect(res.status).toBe(404);
+    expect(countChannelDependents).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .delete('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+    expect(deleteChannel).not.toHaveBeenCalled();
   });
 });

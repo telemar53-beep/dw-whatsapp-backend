@@ -25,6 +25,7 @@ import {
   IconSearch,
   IconLock,
   IconEmptyChat,
+  IconTeam,
 } from '../components/icons/WaIcons';
 
 const TABS = [
@@ -147,9 +148,14 @@ function DashboardPage() {
               <IconChart size={22} />
             </RailLink>
             {agent?.role === 'admin' && (
-              <RailLink to="/admin/channels" label="Administração">
-                <IconSettings size={22} />
-              </RailLink>
+              <>
+                <RailLink to="/admin/dashboard" label="Dashboard de atendimento">
+                  <IconTeam size={22} />
+                </RailLink>
+                <RailLink to="/admin/channels" label="Administração">
+                  <IconSettings size={22} />
+                </RailLink>
+              </>
             )}
           </div>
 

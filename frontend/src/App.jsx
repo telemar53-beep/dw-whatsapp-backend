@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminChannelsPage from './pages/AdminChannelsPage';
 import MetricsPage from './pages/MetricsPage';
+import AttendanceDashboardPage from './pages/AttendanceDashboardPage';
 
 function App() {
   return (
@@ -27,6 +28,14 @@ function App() {
               element={
                 <ProtectedRoute requireAdmin>
                   <AdminChannelsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AttendanceDashboardPage />
                 </ProtectedRoute>
               }
             />

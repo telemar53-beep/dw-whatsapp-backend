@@ -342,4 +342,19 @@ describe('DashboardPage', () => {
 
     expect(toggleMuted).toHaveBeenCalledTimes(1);
   });
+
+  test('shows a link to the attendance dashboard for an admin, and not for a regular agent', () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'admin' }, logout: vi.fn() });
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.getByLabelText('Dashboard de atendimento')).toBeInTheDocument();
+  });
+
+  test('does not show the attendance dashboard link for a non-admin agent', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.queryByLabelText('Dashboard de atendimento')).not.toBeInTheDocument();
+  });
 });

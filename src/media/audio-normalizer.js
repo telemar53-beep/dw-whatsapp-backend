@@ -1,4 +1,3 @@
-const { spawn } = require('child_process');
 const ffmpegPath = require('ffmpeg-static');
 
 // Containers WhatsApp clients are able to decode. Anything outside this list reaches the
@@ -28,6 +27,7 @@ function isWhatsAppSafeAudioMimeType(mimeType) {
 // Mono 48kHz Opus in an Ogg container: the same shape WhatsApp itself uses for voice
 // messages, which also lets Baileys read back a duration for the message bubble.
 function transcodeToOggOpus(buffer) {
+  const { spawn } = require('child_process');
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn(ffmpegPath, [
       '-hide_banner',
@@ -38,6 +38,13 @@ function transcodeToOggOpus(buffer) {
       '-ac', '1',
       '-ar', '48000',
       '-b:a', '32k',
+      // A MediaRecorder chunk can carry a starting timestamp that isn't zero (recording
+      // paused/resumed, or the first chunk simply arrives with an offset baked in by the
+      // browser). ffmpeg passes that offset straight into the Ogg container's timing, and
+      // WhatsApp's own player refuses to open the result ("este áudio não está mais
+      // disponível") even though the bytes are otherwise a perfectly valid Opus stream -
+      // confirmed by Baileys' own troubleshooting guide (baileys.wiki/advanced/troubleshooting).
+      '-avoid_negative_ts', 'make_zero',
       '-f', 'ogg',
       'pipe:1',
     ]);

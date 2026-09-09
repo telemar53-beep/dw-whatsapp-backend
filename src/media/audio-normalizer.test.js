@@ -78,6 +78,19 @@ describe('normalizeAudioForWhatsApp', () => {
     expect(result.converted).toBe(false);
   });
 
+  test('passes -avoid_negative_ts make_zero, since MediaRecorder chunks can carry timestamps WhatsApp\'s player refuses to open', async () => {
+    const childProcess = require('child_process');
+    const spawnSpy = jest.spyOn(childProcess, 'spawn');
+    try {
+      const webm = await encodeTone('webm');
+      await normalizeAudioForWhatsApp(webm, 'audio/webm;codecs=opus');
+
+      expect(spawnSpy).toHaveBeenCalledWith(ffmpegPath, expect.arrayContaining(['-avoid_negative_ts', 'make_zero']));
+    } finally {
+      spawnSpy.mockRestore();
+    }
+  });
+
   test('rejects audio it cannot convert instead of silently forwarding it to WhatsApp', async () => {
     await expect(normalizeAudioForWhatsApp(Buffer.from('not audio at all'), 'audio/webm')).rejects.toThrow(
       /could not be converted/i

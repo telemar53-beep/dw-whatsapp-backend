@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import AttendanceDashboardPage from './AttendanceDashboardPage';
@@ -49,15 +49,38 @@ beforeEach(() => {
 });
 
 describe('AttendanceDashboardPage', () => {
-  test('renders the 4 columns with their conversations', async () => {
+  test('shows the "Todos atendimentos" tab active by default, with the 3 live columns', async () => {
     renderPage();
+    expect(screen.getByRole('tab', { name: /todos atendimentos/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByText('Em andamento')).toBeInTheDocument();
     expect(await screen.findByText('Carlos')).toBeInTheDocument();
     expect(screen.getByText('Em espera')).toBeInTheDocument();
     expect(screen.getByText('Maria')).toBeInTheDocument();
     expect(screen.getByText('Na automação')).toBeInTheDocument();
     expect(screen.getByText('Joao')).toBeInTheDocument();
-    expect(screen.getByText('Encerrados hoje')).toBeInTheDocument();
+  });
+
+  test('the "Todos atendimentos" tab badge sums the 3 live columns', async () => {
+    renderPage();
+    expect(await screen.findByText('Carlos')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-count-all')).toHaveTextContent('3');
+  });
+
+  test('clicking the "Encerrados hoje" tab hides the 3 live columns and shows the closed list instead', async () => {
+    getDashboardClosedToday.mockResolvedValue({
+      items: [{ id: 'c9', contactDisplayName: 'Rita', channelId: 'chan-1' }],
+      hasMore: false,
+    });
+    renderPage();
+    expect(await screen.findByText('Carlos')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
+
+    expect(screen.queryByText('Em andamento')).not.toBeInTheDocument();
+    expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
+    expect(await screen.findByText('Rita')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('shows the assigned agent name on a card', async () => {
@@ -94,12 +117,13 @@ describe('AttendanceDashboardPage', () => {
     expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
   });
 
-  test('shows a "Carregar mais" button for Encerrados hoje when there are more pages, and loads the next page on click', async () => {
+  test('shows a "Carregar mais" button on the Encerrados hoje tab when there are more pages, and loads the next page on click', async () => {
     getDashboardClosedToday
       .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', channelId: 'chan-1' }], hasMore: true })
       .mockResolvedValueOnce({ items: [{ id: 'c11', contactDisplayName: 'Rita', channelId: 'chan-1' }], hasMore: false });
 
     renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
     expect(await screen.findByText('Pedro')).toBeInTheDocument();
     const loadMore = screen.getByRole('button', { name: /carregar mais/i });
 
@@ -110,7 +134,7 @@ describe('AttendanceDashboardPage', () => {
     expect(screen.queryByRole('button', { name: /carregar mais/i })).not.toBeInTheDocument();
   });
 
-  test('shows the true live closedTodayCount on the badge when no filter is active, even if fewer items are loaded', async () => {
+  test('shows the true live closedTodayCount on the tab badge when no filter is active, even if fewer items are loaded', async () => {
     useAttendanceDashboard.mockReturnValue({
       inProgress: [],
       waiting: [],
@@ -125,12 +149,12 @@ describe('AttendanceDashboardPage', () => {
     });
 
     renderPage();
-    await screen.findByText('Ana');
+    await screen.findByTestId('tab-count-closed');
 
-    expect(screen.getByText('57')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-count-closed')).toHaveTextContent('57');
   });
 
-  test('shows the filtered visible count on the badge when a filter is active', async () => {
+  test('shows the filtered visible count on the tab badge when a filter is active', async () => {
     useAttendanceDashboard.mockReturnValue({
       inProgress: [],
       waiting: [],
@@ -156,17 +180,11 @@ describe('AttendanceDashboardPage', () => {
     });
 
     renderPage();
-    await screen.findByText('Ana');
+    await waitFor(() => expect(getDashboardClosedToday).toHaveBeenCalled());
 
     await userEvent.click(screen.getByRole('button', { name: /canais/i }));
     await userEvent.click(screen.getByLabelText('WhatsApp Vendas'));
 
-    // Two "1" badges exist once the channel filter is active (the "Canais" dropdown's own
-    // selected-count badge, and the "Encerrados hoje" count badge), so scope the query to the
-    // Encerrados hoje column's badge rather than an ambiguous screen.findByText('1').
-    const closedHeading = screen.getByText('Encerrados hoje');
-    const badge = closedHeading.parentElement.querySelector('span');
-    expect(badge).toHaveTextContent('1');
-    expect(screen.queryByText('57')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('tab-count-closed')).toHaveTextContent('1'));
   });
 });

@@ -78,6 +78,8 @@ function AttendanceDashboardPage() {
   const agents = useAgents();
   const { sectors } = useSectors();
 
+  const [activeTab, setActiveTab] = useState('all');
+
   const agentNameById = useMemo(
     () => Object.fromEntries(agents.map((a) => [a.id, a.name || a.email])),
     [agents]
@@ -137,6 +139,9 @@ function AttendanceDashboardPage() {
   const displayInAutomation = filteredInAutomation.map(withAgentName);
   const displayClosed = filteredClosed.map(withAgentName);
 
+  const totalActiveCount = filteredInProgress.length + filteredWaiting.length + filteredInAutomation.length;
+  const closedCount = hasActiveFilter ? filteredClosed.length : closedTodayCount;
+
   function openConversation(conversationId) {
     const conversation =
       filteredInProgress.find((c) => c.id === conversationId) ||
@@ -156,7 +161,47 @@ function AttendanceDashboardPage() {
         <h1 className="text-[19px] font-bold text-wa-green-dark">Dashboard de atendimento</h1>
       </header>
 
-      <div className="flex flex-wrap gap-3 border-b border-wa-border px-6 py-3">
+      <div className="flex flex-wrap items-center gap-3 border-b border-wa-border px-6 py-3">
+        <div role="tablist" className="flex gap-2">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'all'}
+            onClick={() => setActiveTab('all')}
+            className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors ${
+              activeTab === 'all' ? 'bg-wa-green text-white' : 'border border-wa-border bg-wa-panel text-wa-text hover:bg-wa-hover'
+            }`}
+          >
+            <span>Todos atendimentos</span>
+            <span
+              data-testid="tab-count-all"
+              className={`rounded-full px-1.5 text-[11px] font-medium ${
+                activeTab === 'all' ? 'bg-white/25' : 'bg-wa-chip text-wa-chip-text'
+              }`}
+            >
+              {totalActiveCount}
+            </span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'closed'}
+            onClick={() => setActiveTab('closed')}
+            className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors ${
+              activeTab === 'closed' ? 'bg-wa-green text-white' : 'border border-wa-border bg-wa-panel text-wa-text hover:bg-wa-hover'
+            }`}
+          >
+            <span>Encerrados hoje</span>
+            <span
+              data-testid="tab-count-closed"
+              className={`rounded-full px-1.5 text-[11px] font-medium ${
+                activeTab === 'closed' ? 'bg-white/25' : 'bg-wa-chip text-wa-chip-text'
+              }`}
+            >
+              {closedCount}
+            </span>
+          </button>
+        </div>
         <FilterDropdown
           label="Canais"
           options={channels.map((c) => ({ value: c.id, label: c.name }))}
@@ -177,48 +222,53 @@ function AttendanceDashboardPage() {
         />
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
-        <DashboardColumn
-          title="Em andamento"
-          count={filteredInProgress.length}
-          conversations={displayInProgress}
-          onSelect={openConversation}
-          emptyMessage="Nenhum atendimento em andamento."
-        />
-        <DashboardColumn
-          title="Em espera"
-          count={filteredWaiting.length}
-          conversations={displayWaiting}
-          onSelect={openConversation}
-          emptyMessage="Nenhuma conversa aguardando."
-        />
-        <DashboardColumn
-          title="Na automação"
-          count={filteredInAutomation.length}
-          conversations={displayInAutomation}
-          onSelect={openConversation}
-          emptyMessage="Nenhuma conversa em triagem automática."
-        />
-        <DashboardColumn
-          title="Encerrados hoje"
-          count={hasActiveFilter ? filteredClosed.length : closedTodayCount}
-          conversations={displayClosed}
-          onSelect={openConversation}
-          emptyMessage="Nenhum atendimento encerrado nas últimas 24 horas."
-          footer={
-            closedHasMore && (
-              <button
-                type="button"
-                onClick={loadMoreClosed}
-                disabled={loadingClosed}
-                className="border-t border-wa-border px-4 py-2 text-[13px] font-medium text-wa-green-dark hover:bg-wa-hover disabled:opacity-50"
-              >
-                {loadingClosed ? 'Carregando...' : 'Carregar mais'}
-              </button>
-            )
-          }
-        />
-      </div>
+      {activeTab === 'all' ? (
+        <div role="tabpanel" className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
+          <DashboardColumn
+            title="Em andamento"
+            count={filteredInProgress.length}
+            conversations={displayInProgress}
+            onSelect={openConversation}
+            emptyMessage="Nenhum atendimento em andamento."
+          />
+          <DashboardColumn
+            title="Em espera"
+            count={filteredWaiting.length}
+            conversations={displayWaiting}
+            onSelect={openConversation}
+            emptyMessage="Nenhuma conversa aguardando."
+          />
+          <DashboardColumn
+            title="Na automação"
+            count={filteredInAutomation.length}
+            conversations={displayInAutomation}
+            onSelect={openConversation}
+            emptyMessage="Nenhuma conversa em triagem automática."
+          />
+        </div>
+      ) : (
+        <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4">
+          {displayClosed.length === 0 ? (
+            <p className="px-4 py-8 text-center text-[13px] text-wa-muted">Nenhum atendimento encerrado nas últimas 24 horas.</p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-hidden [&>li]:rounded-lg [&>li]:border [&>li]:border-wa-border [&>li]:bg-wa-panel">
+              {displayClosed.map((conversation) => (
+                <ConversationListItem key={conversation.id} conversation={conversation} onSelect={openConversation} selected={false} />
+              ))}
+            </ul>
+          )}
+          {closedHasMore && (
+            <button
+              type="button"
+              onClick={loadMoreClosed}
+              disabled={loadingClosed}
+              className="mt-4 w-full rounded-lg border border-wa-border bg-wa-panel px-4 py-2 text-[13px] font-medium text-wa-green-dark hover:bg-wa-hover disabled:opacity-50"
+            >
+              {loadingClosed ? 'Carregando...' : 'Carregar mais'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

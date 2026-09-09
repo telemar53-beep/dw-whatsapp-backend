@@ -71,12 +71,14 @@ async function hasContactReceivedNotice(cityNoticeId, contactId) {
 }
 
 async function recordNoticeDelivery(cityNoticeId, contactId) {
-  await getPool().query(
+  const result = await getPool().query(
     `INSERT INTO city_notice_deliveries (city_notice_id, contact_id)
      VALUES ($1, $2)
-     ON CONFLICT (city_notice_id, contact_id) DO NOTHING`,
+     ON CONFLICT (city_notice_id, contact_id) DO NOTHING
+     RETURNING id`,
     [cityNoticeId, contactId]
   );
+  return result.rowCount > 0;
 }
 
 module.exports = {

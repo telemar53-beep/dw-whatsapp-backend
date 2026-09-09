@@ -124,6 +124,7 @@ describe('MessagesAdminTab', () => {
     useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
     render(<MessagesAdminTab />);
 
+    expect(screen.getAllByText(/o que é isso/i)).toHaveLength(2);
     expect(screen.getByText(/enviada automaticamente para o cliente assim que ele manda/i)).toBeInTheDocument();
   });
 

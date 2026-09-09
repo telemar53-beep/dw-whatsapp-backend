@@ -138,6 +138,15 @@ describe('city notice repository', () => {
     expect(await hasContactReceivedNotice(notice.id, contact.id)).toBe(false);
   });
 
+  test('recordNoticeDelivery returns true on the first claim and false on a repeat claim', async () => {
+    const city = await createCity({ name: 'Maracaçumé' });
+    const contact = await findOrCreateContactByPhoneNumber('+5598999990006', 'Cliente');
+    const notice = await upsertCityNotice(city.id, { message: 'Instabilidade', enabled: true });
+
+    expect(await recordNoticeDelivery(notice.id, contact.id)).toBe(true);
+    expect(await recordNoticeDelivery(notice.id, contact.id)).toBe(false);
+  });
+
   test('recordNoticeDelivery is idempotent — calling it twice does not throw or duplicate', async () => {
     const city = await createCity({ name: 'Maracaçumé' });
     const contact = await findOrCreateContactByPhoneNumber('+5598999990005', 'Cliente');

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuickReplies } from '../hooks/useQuickReplies';
+import { useChannels } from '../hooks/useChannels';
 import { useAuth } from '../contexts/AuthContext';
-import { updateQuickReply, deleteQuickReply } from '../services/api';
+import { updateQuickReply, deleteQuickReply, setChannelWelcomeMessage } from '../services/api';
 import CreateQuickReplyForm from './CreateQuickReplyForm';
 
 const inputClass =
@@ -127,19 +128,71 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   );
 }
 
-function QuickRepliesAdminTab() {
-  const { quickReplies, refresh } = useQuickReplies();
+function ChannelWelcomeMessageRow({ channel, onSaved }) {
+  const { token } = useAuth();
+  const [text, setText] = useState(channel.welcomeMessage || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleSave() {
+    setError(null);
+    setSaving(true);
+    try {
+      await setChannelWelcomeMessage(channel.id, text, token);
+      onSaved();
+    } catch (err) {
+      setError((err.body && err.body.error) || 'Falha ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        {quickReplies.map((quickReply) => (
-          <QuickReplyRow key={quickReply.id} quickReply={quickReply} onSaved={refresh} onDeleted={refresh} />
-        ))}
-      </div>
-      <CreateQuickReplyForm onCreated={refresh} />
+    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+      <p className="font-medium text-ink-950">{channel.name}</p>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Sem boas-vindas configurada — deixe em branco para desativar."
+        className="mt-2 w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+      />
+      {error && <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="mt-2 rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {saving ? 'Salvando...' : 'Salvar'}
+      </button>
     </div>
   );
 }
 
-export default QuickRepliesAdminTab;
+function MessagesAdminTab() {
+  const { quickReplies, refresh } = useQuickReplies();
+  const { channels, refresh: refreshChannels } = useChannels(true);
+
+  return (
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <h2 className="font-display text-lg font-semibold text-ink-950">Boas-vindas por canal</h2>
+        <p className="text-sm text-ink-950/55">
+          Enviada automaticamente sempre que uma conversa nova começa nesse canal.
+        </p>
+        {channels.map((channel) => (
+          <ChannelWelcomeMessageRow key={channel.id} channel={channel} onSaved={refreshChannels} />
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="font-display text-lg font-semibold text-ink-950">Respostas rápidas</h2>
+        {quickReplies.map((quickReply) => (
+          <QuickReplyRow key={quickReply.id} quickReply={quickReply} onSaved={refresh} onDeleted={refresh} />
+        ))}
+        <CreateQuickReplyForm onCreated={refresh} />
+      </div>
+    </div>
+  );
+}
+
+export default MessagesAdminTab;

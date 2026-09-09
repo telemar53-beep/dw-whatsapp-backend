@@ -130,6 +130,22 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   );
 }
 
+function QuickRepliesModal({ quickReplies, onClose, onSaved, onDeleted }) {
+  return (
+    <WaDialog title="Respostas rápidas cadastradas" onClose={onClose} size="max-w-lg">
+      <div className="wa-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-4">
+        {quickReplies.length === 0 ? (
+          <p className="text-sm text-wa-muted">Nenhuma resposta rápida cadastrada ainda.</p>
+        ) : (
+          quickReplies.map((quickReply) => (
+            <QuickReplyRow key={quickReply.id} quickReply={quickReply} onSaved={onSaved} onDeleted={onDeleted} />
+          ))
+        )}
+      </div>
+    </WaDialog>
+  );
+}
+
 function ChannelWelcomeMessageRow({ channel, onSaved }) {
   const { token } = useAuth();
   const [editing, setEditing] = useState(false);
@@ -428,6 +444,8 @@ function MessagesAdminTab() {
   const { quickReplies, refresh } = useQuickReplies();
   const { channels, refresh: refreshChannels } = useChannels(true);
   const { cityNotices, refresh: refreshCityNotices } = useCityNotices();
+  const [creatingQuickReply, setCreatingQuickReply] = useState(false);
+  const [viewingQuickReplies, setViewingQuickReplies] = useState(false);
 
   return (
     <div className="space-y-8">
@@ -476,10 +494,39 @@ function MessagesAdminTab() {
 
       <div className="space-y-3">
         <h2 className="font-display text-lg font-semibold text-ink-950">Respostas rápidas</h2>
-        {quickReplies.map((quickReply) => (
-          <QuickReplyRow key={quickReply.id} quickReply={quickReply} onSaved={refresh} onDeleted={refresh} />
-        ))}
-        <CreateQuickReplyForm onCreated={refresh} />
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setCreatingQuickReply(true)}
+            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+          >
+            Criar resposta rápida
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewingQuickReplies(true)}
+            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+          >
+            Ver mensagens ({quickReplies.length})
+          </button>
+        </div>
+        {creatingQuickReply && (
+          <CreateQuickReplyForm
+            onCreated={() => {
+              refresh();
+              setCreatingQuickReply(false);
+            }}
+            onCancel={() => setCreatingQuickReply(false)}
+          />
+        )}
+        {viewingQuickReplies && (
+          <QuickRepliesModal
+            quickReplies={quickReplies}
+            onClose={() => setViewingQuickReplies(false)}
+            onSaved={refresh}
+            onDeleted={refresh}
+          />
+        )}
       </div>
     </div>
   );

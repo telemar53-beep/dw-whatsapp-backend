@@ -22,12 +22,15 @@ beforeEach(() => {
 });
 
 describe('MessagesAdminTab', () => {
-  test('lists existing quick replies', () => {
+  test('lists existing quick replies inside the Ver mensagens popup', async () => {
     useQuickReplies.mockReturnValue({
       quickReplies: [{ id: 'qr-1', title: 'Boas-vindas', content: 'Olá!' }],
       refresh: vi.fn(),
     });
     render(<MessagesAdminTab />);
+
+    expect(screen.queryByText('Boas-vindas')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /ver mensagens \(1\)/i }));
 
     expect(screen.getByText('Boas-vindas')).toBeInTheDocument();
     expect(screen.getByText('Olá!')).toBeInTheDocument();
@@ -42,6 +45,7 @@ describe('MessagesAdminTab', () => {
     api.updateQuickReply.mockResolvedValue({ id: 'qr-1', title: 'Editado', content: 'Novo texto' });
     render(<MessagesAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /ver mensagens/i }));
     await userEvent.click(screen.getByRole('button', { name: /editar/i }));
     const titleInput = screen.getByDisplayValue('Boas-vindas');
     await userEvent.clear(titleInput);
@@ -61,6 +65,7 @@ describe('MessagesAdminTab', () => {
     });
     render(<MessagesAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /ver mensagens/i }));
     await userEvent.click(screen.getByRole('button', { name: /editar/i }));
     const titleInput = screen.getByDisplayValue('Boas-vindas');
     await userEvent.clear(titleInput);
@@ -82,6 +87,7 @@ describe('MessagesAdminTab', () => {
     api.deleteQuickReply.mockResolvedValue(undefined);
     render(<MessagesAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /ver mensagens/i }));
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
 
     await waitFor(() => expect(api.deleteQuickReply).toHaveBeenCalledWith('qr-1', 'tok-123'));
@@ -96,6 +102,7 @@ describe('MessagesAdminTab', () => {
     });
     render(<MessagesAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /ver mensagens/i }));
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
 
     expect(api.deleteQuickReply).not.toHaveBeenCalled();
@@ -110,6 +117,7 @@ describe('MessagesAdminTab', () => {
     api.deleteQuickReply.mockRejectedValue({ body: { error: 'Falha ao excluir' } });
     render(<MessagesAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /ver mensagens/i }));
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
 
     expect(await screen.findByText('Falha ao excluir')).toBeInTheDocument();
@@ -464,5 +472,41 @@ describe('MessagesAdminTab', () => {
     await userEvent.click(screen.getByRole('button', { name: /^excluir$/i }));
 
     expect(await screen.findByText('Falha ao excluir aviso')).toBeInTheDocument();
+  });
+
+  test('does not show the quick-reply create form until its button is clicked', () => {
+    useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
+    render(<MessagesAdminTab />);
+
+    expect(screen.queryByText(/cadastrar nova resposta rápida/i)).not.toBeInTheDocument();
+  });
+
+  test('creating a quick reply opens the form, saves, refreshes, and closes the form', async () => {
+    const refresh = vi.fn();
+    useQuickReplies.mockReturnValue({ quickReplies: [], refresh });
+    api.createQuickReply.mockResolvedValue({ id: 'qr-2', title: 'Nova', content: 'Texto' });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /criar resposta rápida/i }));
+    await userEvent.type(screen.getByLabelText(/título/i), 'Nova');
+    await userEvent.type(screen.getByLabelText(/mensagem/i), 'Texto');
+    await userEvent.click(screen.getByRole('button', { name: /^cadastrar$/i }));
+
+    await waitFor(() => expect(api.createQuickReply).toHaveBeenCalledWith({ title: 'Nova', content: 'Texto' }, 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+    expect(screen.queryByText(/cadastrar nova resposta rápida/i)).not.toBeInTheDocument();
+  });
+
+  test('canceling the create form hides it without creating anything', async () => {
+    useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /criar resposta rápida/i }));
+    expect(screen.getByText(/cadastrar nova resposta rápida/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
+
+    expect(screen.queryByText(/cadastrar nova resposta rápida/i)).not.toBeInTheDocument();
+    expect(api.createQuickReply).not.toHaveBeenCalled();
   });
 });

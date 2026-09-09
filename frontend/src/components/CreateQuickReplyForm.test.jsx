@@ -39,4 +39,14 @@ describe('CreateQuickReplyForm', () => {
 
     expect(await screen.findByText('Falha ao cadastrar')).toBeInTheDocument();
   });
+
+  test('clicking Cancel calls onCancel without submitting', async () => {
+    const onCancel = vi.fn();
+    render(<CreateQuickReplyForm onCreated={vi.fn()} onCancel={onCancel} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(api.createQuickReply).not.toHaveBeenCalled();
+  });
 });

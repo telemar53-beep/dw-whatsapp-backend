@@ -176,9 +176,13 @@ describe('AdminChannelsPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /mensagens/i }));
 
-    expect(screen.getByText('Boas-vindas')).toBeInTheDocument();
     expect(screen.getByText('Berg')).toBeInTheDocument();
     expect(screen.queryByText('Conectado')).not.toBeInTheDocument();
+
+    // Quick replies are now hidden behind the "Ver mensagens" button
+    await userEvent.click(screen.getByRole('button', { name: /ver mensagens/i }));
+
+    expect(screen.getByText('Boas-vindas')).toBeInTheDocument();
   });
 
   test('switches to the Triagem tab and shows the triage configuration UI', async () => {

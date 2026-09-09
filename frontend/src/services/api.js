@@ -277,6 +277,18 @@ export function deleteCity(id, token) {
   return apiFetch(`/api/admin/cities/${id}`, { method: 'DELETE', token });
 }
 
+export function listCityNotices(token) {
+  return apiFetch('/api/admin/cities/notices', { token });
+}
+
+export function setCityNotice(cityId, message, enabled, token) {
+  return apiFetch(`/api/admin/cities/${cityId}/notice`, { method: 'PATCH', body: { message, enabled }, token });
+}
+
+export function deleteCityNotice(cityId, token) {
+  return apiFetch(`/api/admin/cities/${cityId}/notice`, { method: 'DELETE', token });
+}
+
 export function listSgpIntegrations(token) {
   return apiFetch('/api/admin/integrations/sgp', { token });
 }

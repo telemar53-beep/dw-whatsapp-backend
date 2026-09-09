@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useChannels } from '../hooks/useChannels';
+import NavRail from '../components/NavRail';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 import CreateChannelForm from '../components/CreateChannelForm';
 import QrCodeView from '../components/QrCodeView';
 import AgentsAdminTab from '../components/AgentsAdminTab';
@@ -129,6 +131,7 @@ function AdminChannelsPage() {
   const [wabaIdError, setWabaIdError] = useState(null);
   const [channelActionError, setChannelActionError] = useState(null);
   const [busyChannelId, setBusyChannelId] = useState(null);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // While a channel is showing a QR code, poll so the card flips to "Conectado"
   // on its own the moment the phone finishes scanning it.
@@ -197,7 +200,9 @@ function AdminChannelsPage() {
   }
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans">
+    <div className="flex h-dvh">
+      <NavRail active="admin" onChangePasswordClick={() => setChangingPassword(true)} />
+      <div className="relative min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-signal/20 blur-[100px]"
@@ -284,6 +289,8 @@ function AdminChannelsPage() {
           <IntegrationsAdminTab />
         )}
       </div>
+      </div>
+      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
     </div>
   );
 }

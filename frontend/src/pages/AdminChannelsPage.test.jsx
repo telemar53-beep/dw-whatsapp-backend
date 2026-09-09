@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import AdminChannelsPage from './AdminChannelsPage';
 import { useChannels } from '../hooks/useChannels';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
@@ -43,7 +44,11 @@ describe('AdminChannelsPage', () => {
       loading: false,
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
     expect(screen.getByText('Berg')).toBeInTheDocument();
     expect(screen.getByText('Suporte')).toBeInTheDocument();
   });
@@ -54,13 +59,21 @@ describe('AdminChannelsPage', () => {
       loading: false,
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
     expect(screen.getByText(/Escaneie o QR code/)).toBeInTheDocument();
   });
 
   test('renders the create-channel form', () => {
     useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
     expect(screen.getByText(/Cadastrar novo canal/)).toBeInTheDocument();
   });
 
@@ -74,7 +87,11 @@ describe('AdminChannelsPage', () => {
       agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [] }],
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     expect(screen.getByText('Berg')).toBeInTheDocument();
     expect(screen.queryByText('Ana')).not.toBeInTheDocument();
@@ -95,7 +112,11 @@ describe('AdminChannelsPage', () => {
       sectors: [{ id: 'sector-1', name: 'Financeiro' }],
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     expect(screen.getByText('Berg')).toBeInTheDocument();
     expect(screen.queryByText('Financeiro')).not.toBeInTheDocument();
@@ -116,7 +137,11 @@ describe('AdminChannelsPage', () => {
       cities: [{ id: 'city-1', name: 'Bahia' }],
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     expect(screen.getByText('Berg')).toBeInTheDocument();
     expect(screen.queryByText('Bahia')).not.toBeInTheDocument();
@@ -137,7 +162,11 @@ describe('AdminChannelsPage', () => {
       quickReplies: [{ id: 'qr1', title: 'Boas-vindas', content: 'Olá!' }],
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     expect(screen.getByText('Berg')).toBeInTheDocument();
     expect(screen.queryByText('Boas-vindas')).not.toBeInTheDocument();
@@ -154,7 +183,11 @@ describe('AdminChannelsPage', () => {
       loading: false,
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     expect(screen.getByText('Berg')).toBeInTheDocument();
     expect(screen.queryByText(/pergunta de triagem/i)).not.toBeInTheDocument();
@@ -171,7 +204,11 @@ describe('AdminChannelsPage', () => {
       loading: false,
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
     expect(screen.getByRole('checkbox', { name: /usar triagem automática/i })).toBeChecked();
   });
 
@@ -182,7 +219,11 @@ describe('AdminChannelsPage', () => {
       refresh: vi.fn(),
     });
     setChannelTriageEnabled.mockRejectedValue({ body: { error: 'Canal não encontrado' } });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     await userEvent.click(screen.getByRole('checkbox', { name: /usar triagem automática/i }));
 
@@ -196,7 +237,11 @@ describe('AdminChannelsPage', () => {
       refresh: vi.fn(),
     });
     setChannelWabaId.mockResolvedValue({});
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     const input = screen.getByLabelText(/waba id/i);
     await userEvent.clear(input);
@@ -212,7 +257,11 @@ describe('AdminChannelsPage', () => {
       loading: false,
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
     expect(screen.queryByLabelText(/waba id/i)).not.toBeInTheDocument();
   });
 
@@ -224,7 +273,11 @@ describe('AdminChannelsPage', () => {
       refresh,
     });
     reconnectChannel.mockResolvedValue({ id: 'ch1', status: 'awaiting_qr' });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /reconectar/i }));
 
@@ -238,7 +291,11 @@ describe('AdminChannelsPage', () => {
       loading: false,
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
     expect(screen.queryByRole('button', { name: /reconectar/i })).not.toBeInTheDocument();
   });
 
@@ -249,7 +306,11 @@ describe('AdminChannelsPage', () => {
       loading: false,
       refresh: vi.fn(),
     });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /reconectar/i }));
 
@@ -267,7 +328,11 @@ describe('AdminChannelsPage', () => {
       refresh,
     });
     setChannelHidden.mockResolvedValue({});
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /ocultar/i }));
 
@@ -285,7 +350,11 @@ describe('AdminChannelsPage', () => {
       refresh,
     });
     deleteChannel.mockResolvedValue(undefined);
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
 
@@ -302,7 +371,11 @@ describe('AdminChannelsPage', () => {
       refresh: vi.fn(),
     });
     deleteChannel.mockRejectedValue({ body: { error: 'This channel already has conversations' } });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
 
@@ -312,7 +385,11 @@ describe('AdminChannelsPage', () => {
 
   test('the "mostrar canais ocultos" toggle asks the hook for hidden channels too', async () => {
     useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     await userEvent.click(screen.getByLabelText(/mostrar canais ocultos/i));
 
@@ -328,7 +405,11 @@ describe('AdminChannelsPage', () => {
       refresh,
     });
     setChannelHidden.mockResolvedValue({});
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     expect(screen.queryByRole('button', { name: /^ocultar$/i })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /reexibir/i }));
@@ -344,7 +425,11 @@ describe('AdminChannelsPage', () => {
       refresh: vi.fn(),
     });
     useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
-    render(<AdminChannelsPage />);
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /templates/i }));
 

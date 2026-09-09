@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getMetrics } from '../services/api';
+import NavRail from '../components/NavRail';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 const PERIODS = [
   { value: 'today', label: 'Últimas 24 horas' },
@@ -150,6 +152,7 @@ function MetricsPage() {
   const [period, setPeriod] = useState('today');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     setError(null);
@@ -159,7 +162,9 @@ function MetricsPage() {
   }, [period, token]);
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans">
+    <div className="flex h-dvh">
+      <NavRail active="metrics" onChangePasswordClick={() => setChangingPassword(true)} />
+      <div className="relative min-h-0 flex-1 overflow-y-auto bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-signal/20 blur-[100px]"
@@ -289,6 +294,8 @@ function MetricsPage() {
           </div>
         )}
       </div>
+      </div>
+      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
     </div>
   );
 }

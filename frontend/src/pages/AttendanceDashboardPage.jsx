@@ -7,6 +7,8 @@ import { useAgents } from '../hooks/useAgents';
 import { useSectors } from '../hooks/useSectors';
 import { getDashboardClosedToday } from '../services/api';
 import ConversationListItem from '../components/ConversationListItem';
+import NavRail from '../components/NavRail';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 const CLOSED_PAGE_SIZE = 20;
 
@@ -79,6 +81,7 @@ function AttendanceDashboardPage() {
   const { sectors } = useSectors();
 
   const [activeTab, setActiveTab] = useState('all');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const agentNameById = useMemo(
     () => Object.fromEntries(agents.map((a) => [a.id, a.name || a.email])),
@@ -156,7 +159,9 @@ function AttendanceDashboardPage() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-wa-page font-wa text-wa-text">
+    <div className="flex h-dvh">
+      <NavRail active="dashboard" onChangePasswordClick={() => setChangingPassword(true)} />
+      <div className="flex min-h-0 flex-1 flex-col bg-wa-page font-wa text-wa-text">
       <header className="flex items-center justify-between border-b border-wa-border px-6 py-4">
         <h1 className="text-[19px] font-bold text-wa-green-dark">Dashboard de atendimento</h1>
       </header>
@@ -269,6 +274,8 @@ function AttendanceDashboardPage() {
           )}
         </div>
       )}
+      </div>
+      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
     </div>
   );
 }

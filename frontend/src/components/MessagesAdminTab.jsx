@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useChannels } from '../hooks/useChannels';
 import { useAuth } from '../contexts/AuthContext';
-import { updateQuickReply, deleteQuickReply, setChannelWelcomeMessage } from '../services/api';
+import { useCityNotices } from '../hooks/useCityNotices';
+import { updateQuickReply, deleteQuickReply, setChannelWelcomeMessage, setCityNotice, deleteCityNotice } from '../services/api';
 import CreateQuickReplyForm from './CreateQuickReplyForm';
 
 const inputClass =
@@ -251,9 +252,155 @@ function ChannelWelcomeMessageRow({ channel, onSaved }) {
   );
 }
 
+function CityStatusDot({ enabled }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-950/60">
+      <span className={`h-2 w-2 rounded-full ${enabled ? 'bg-teal-signal' : 'bg-ink-950/25'}`} aria-hidden="true" />
+      {enabled ? 'Ativo' : 'Inativo'}
+    </span>
+  );
+}
+
+function CityNoticeRow({ city, onSaved }) {
+  const { token } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState((city.notice && city.notice.message) || '');
+  const [enabled, setEnabled] = useState(Boolean(city.notice && city.notice.enabled));
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  function handleEditClick() {
+    setText((city.notice && city.notice.message) || '');
+    setEnabled(Boolean(city.notice && city.notice.enabled));
+    setError(null);
+    setEditing(true);
+  }
+
+  function handleCancel() {
+    setText((city.notice && city.notice.message) || '');
+    setEnabled(Boolean(city.notice && city.notice.enabled));
+    setError(null);
+    setEditing(false);
+  }
+
+  async function handleSave(event) {
+    event.preventDefault();
+    setError(null);
+    setSaving(true);
+    try {
+      await setCityNotice(city.id, text, enabled, token);
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      setError((err.body && err.body.error) || 'Falha ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Remover o aviso da cidade "${city.name}"?`)) {
+      return;
+    }
+    setDeleteError(null);
+    setDeleting(true);
+    try {
+      await deleteCityNotice(city.id, token);
+      onSaved();
+    } catch (err) {
+      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleting(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={handleSave}
+        className="space-y-2 rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      >
+        <p className="font-medium text-ink-950">{city.name}</p>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+          required
+        />
+        <label className="flex items-center gap-2 text-sm text-ink-950/70">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            className="h-4 w-4 accent-teal-signal"
+          />
+          Ativo
+        </label>
+        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Salvar
+          </button>
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  if (!city.notice) {
+    return (
+      <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+        <p className="font-medium text-ink-950">{city.name}</p>
+        <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+          Criar aviso
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="font-medium text-ink-950">{city.name}</p>
+          <p className="text-sm text-ink-950/55">{city.notice.message}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <CityStatusDot enabled={city.notice.enabled} />
+          <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+            Editar
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+          >
+            Excluir
+          </button>
+        </div>
+      </div>
+      {deleteError && (
+        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+      )}
+    </div>
+  );
+}
+
 function MessagesAdminTab() {
   const { quickReplies, refresh } = useQuickReplies();
   const { channels, refresh: refreshChannels } = useChannels(true);
+  const { cityNotices, refresh: refreshCityNotices } = useCityNotices();
 
   return (
     <div className="space-y-8">
@@ -272,6 +419,24 @@ function MessagesAdminTab() {
         </div>
         {channels.map((channel) => (
           <ChannelWelcomeMessageRow key={channel.id} channel={channel} onSaved={refreshChannels} />
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="font-display text-lg font-semibold text-ink-950">Avisos por cidade</h2>
+        <div className="rounded-xl border border-teal-signal/25 bg-teal-signal/10 px-4 py-3 text-sm text-ink-950/70">
+          <p className="font-medium text-ink-950">O que é isso?</p>
+          <p className="mt-1">
+            Enviado automaticamente para clientes daquela cidade quando entram em contato, além
+            da boas-vindas normal — use para avisos de instabilidade ou manutenção pontual.
+          </p>
+          <p className="mt-2 italic">
+            Exemplo: "Nesse momento nossa rede está passando por uma instabilidade na sua
+            região. Nossa equipe já está trabalhando na correção."
+          </p>
+        </div>
+        {cityNotices.map((city) => (
+          <CityNoticeRow key={city.id} city={city} onSaved={refreshCityNotices} />
         ))}
       </div>
 

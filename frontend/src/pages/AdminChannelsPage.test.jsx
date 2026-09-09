@@ -10,6 +10,7 @@ import { useSectors } from '../hooks/useSectors';
 import { useCities } from '../hooks/useCities';
 import { useTriage } from '../hooks/useTriage';
 import { useTemplates } from '../hooks/useTemplates';
+import { useCityNotices } from '../hooks/useCityNotices';
 import { useAuth } from '../contexts/AuthContext';
 import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannelHidden, deleteChannel } from '../services/api';
 
@@ -20,6 +21,7 @@ vi.mock('../hooks/useSectors');
 vi.mock('../hooks/useCities');
 vi.mock('../hooks/useTriage');
 vi.mock('../hooks/useTemplates');
+vi.mock('../hooks/useCityNotices');
 vi.mock('../contexts/AuthContext');
 vi.mock('../services/api');
 
@@ -32,6 +34,7 @@ beforeEach(() => {
   useCities.mockReturnValue({ cities: [], refresh: vi.fn() });
   useTriage.mockReturnValue({ config: { questionText: 'Q', confirmationText: 'C', maxAttempts: 2 }, options: [], refresh: vi.fn() });
   useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+  useCityNotices.mockReturnValue({ cityNotices: [], loading: false, refresh: vi.fn() });
 });
 
 describe('AdminChannelsPage', () => {

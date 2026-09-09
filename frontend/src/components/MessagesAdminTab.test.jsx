@@ -5,17 +5,20 @@ import MessagesAdminTab from './MessagesAdminTab';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useChannels } from '../hooks/useChannels';
 import { useAuth } from '../contexts/AuthContext';
+import { useCityNotices } from '../hooks/useCityNotices';
 import * as api from '../services/api';
 
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useChannels');
 vi.mock('../contexts/AuthContext');
+vi.mock('../hooks/useCityNotices');
 vi.mock('../services/api');
 
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123' });
   useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
+  useCityNotices.mockReturnValue({ cityNotices: [], loading: false, refresh: vi.fn() });
 });
 
 describe('MessagesAdminTab', () => {
@@ -121,8 +124,7 @@ describe('MessagesAdminTab', () => {
     useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
     render(<MessagesAdminTab />);
 
-    expect(screen.getByText(/o que é isso/i)).toBeInTheDocument();
-    expect(screen.getByText(/enviada automaticamente para o cliente/i)).toBeInTheDocument();
+    expect(screen.getByText(/enviada automaticamente para o cliente assim que ele manda/i)).toBeInTheDocument();
   });
 
   test('a channel without a welcome message shows a create button, not an open textarea', () => {
@@ -278,5 +280,172 @@ describe('MessagesAdminTab', () => {
     await userEvent.click(screen.getByRole('button', { name: /^excluir$/i }));
 
     expect(await screen.findByText('Falha ao excluir boas-vindas')).toBeInTheDocument();
+  });
+
+  test('shows a help box explaining what city notices are, with an example', () => {
+    useCityNotices.mockReturnValue({ cityNotices: [], loading: false, refresh: vi.fn() });
+    render(<MessagesAdminTab />);
+
+    expect(screen.getByText(/nesse momento nossa rede está passando/i)).toBeInTheDocument();
+  });
+
+  test('a city without a notice shows a create button, not an open textarea', () => {
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: null }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    expect(screen.getByText('Maracaçumé')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /criar aviso/i })).toBeInTheDocument();
+    const cityRow = screen.getByText('Maracaçumé').closest('.rounded-2xl');
+    expect(within(cityRow).queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  test('a city with a notice shows a closed row with status, preview, and edit/delete buttons', () => {
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: { message: 'Instabilidade na rede', enabled: true } }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    expect(screen.getByText('Maracaçumé')).toBeInTheDocument();
+    expect(screen.getByText('Instabilidade na rede')).toBeInTheDocument();
+    expect(screen.getByText('Ativo')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^editar$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^excluir$/i })).toBeInTheDocument();
+    const cityRow = screen.getByText('Maracaçumé').closest('.rounded-2xl');
+    expect(within(cityRow).queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  test('a disabled notice shows the Inativo status instead of Ativo', () => {
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: { message: 'Instabilidade na rede', enabled: false } }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    expect(screen.getByText('Inativo')).toBeInTheDocument();
+    expect(screen.queryByText('Ativo')).not.toBeInTheDocument();
+  });
+
+  test('creating a city notice opens the form, saves with the Ativo checkbox, and refreshes the list', async () => {
+    const refresh = vi.fn();
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: null }],
+      loading: false,
+      refresh,
+    });
+    api.setCityNotice.mockResolvedValue({ id: 'notice-1', cityId: 'city-1', message: 'Instabilidade', enabled: true });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /criar aviso/i }));
+    const textareas = screen.getAllByRole('textbox');
+    const noticeTextarea = textareas.find((ta) => ta.tagName === 'TEXTAREA' && !ta.id);
+    await userEvent.type(noticeTextarea, 'Instabilidade');
+    await userEvent.click(screen.getByRole('checkbox', { name: /ativo/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+
+    await waitFor(() => expect(api.setCityNotice).toHaveBeenCalledWith('city-1', 'Instabilidade', true, 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('editing an existing city notice pre-fills the text and the Ativo checkbox', async () => {
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: { message: 'Texto atual', enabled: true } }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+
+    expect(screen.getByDisplayValue('Texto atual')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /ativo/i })).toBeChecked();
+  });
+
+  test('canceling a city-notice edit discards unsaved changes and shows the closed row again', async () => {
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: { message: 'Texto atual', enabled: true } }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    const textarea = screen.getByDisplayValue('Texto atual');
+    await userEvent.clear(textarea);
+    await userEvent.type(textarea, 'Rascunho abandonado');
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(screen.getByText('Texto atual')).toBeInTheDocument();
+    expect(screen.queryByText('Rascunho abandonado')).not.toBeInTheDocument();
+  });
+
+  test('deleting a city notice asks for confirmation, then removes it and refreshes', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const refresh = vi.fn();
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: { message: 'Texto atual', enabled: true } }],
+      loading: false,
+      refresh,
+    });
+    api.deleteCityNotice.mockResolvedValue(undefined);
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^excluir$/i }));
+
+    await waitFor(() => expect(api.deleteCityNotice).toHaveBeenCalledWith('city-1', 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('does not delete a city notice when the confirmation is declined', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: { message: 'Texto atual', enabled: true } }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^excluir$/i }));
+
+    expect(api.deleteCityNotice).not.toHaveBeenCalled();
+  });
+
+  test('shows an error message when saving a city notice fails', async () => {
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: null }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    api.setCityNotice.mockRejectedValue({ body: { error: 'Falha ao salvar aviso' } });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /criar aviso/i }));
+    const textareas = screen.getAllByRole('textbox');
+    const noticeTextarea = textareas.find((ta) => ta.tagName === 'TEXTAREA' && !ta.id);
+    await userEvent.type(noticeTextarea, 'Instabilidade');
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+
+    expect(await screen.findByText('Falha ao salvar aviso')).toBeInTheDocument();
+  });
+
+  test('shows an error message when deleting a city notice fails', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    useCityNotices.mockReturnValue({
+      cityNotices: [{ id: 'city-1', name: 'Maracaçumé', notice: { message: 'Texto atual', enabled: true } }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    api.deleteCityNotice.mockRejectedValue({ body: { error: 'Falha ao excluir aviso' } });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^excluir$/i }));
+
+    expect(await screen.findByText('Falha ao excluir aviso')).toBeInTheDocument();
   });
 });

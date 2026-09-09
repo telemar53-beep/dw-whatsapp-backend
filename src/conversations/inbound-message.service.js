@@ -1,7 +1,7 @@
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { findOpenConversation, createConversation, getConversationWithContact, activateConversation } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
-const { emitToAgent, broadcast } = require('../realtime/socket-server');
+const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 
 const UNIQUE_VIOLATION = '23505';
@@ -66,6 +66,7 @@ async function ingestInboundMessage({
   } else {
     broadcast('queue:new', { conversation: conversationWithContact, message });
   }
+  broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact });
   return { contact, conversation, message, contactJustCreated };
 }
 

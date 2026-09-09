@@ -6,7 +6,7 @@ jest.mock('../triage/triage.service');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { findOpenConversation, createConversation, getConversationWithContact, activateConversation } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
-const { emitToAgent, broadcast } = require('../realtime/socket-server');
+const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
@@ -63,6 +63,46 @@ describe('ingestInboundMessage', () => {
       message: { id: 'msg-1' },
     });
     expect(emitToAgent).not.toHaveBeenCalled();
+  });
+
+  test('always broadcasts dashboard:conversation with the up-to-date conversation, regardless of assignment', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-dash1' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-dash1', assignedAgentId: 'agent-9' });
+    createMessage.mockResolvedValue({ id: 'msg-dash1' });
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-dash1',
+      assignedAgentId: 'agent-9',
+      status: 'assigned',
+    });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999980000',
+      contactDisplayName: 'Cliente Dashboard',
+      whatsappMessageId: 'wamid.DASH1',
+      content: 'Oi',
+    });
+
+    expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', {
+      conversation: { id: 'conv-dash1', assignedAgentId: 'agent-9', status: 'assigned' },
+    });
+  });
+
+  test('does not broadcast dashboard:conversation for a duplicate webhook redelivery', async () => {
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-dash2' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-dash2', assignedAgentId: null });
+    const uniqueViolation = Object.assign(new Error('duplicate key'), { code: '23505' });
+    createMessage.mockRejectedValue(uniqueViolation);
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '+5511999980001',
+      contactDisplayName: 'Reenvio Dashboard',
+      whatsappMessageId: 'wamid.DASH2',
+      content: 'Oi',
+    });
+
+    expect(broadcastToDashboard).not.toHaveBeenCalled();
   });
 
   test('emits message:new to the assigned agent when the conversation is already assigned', async () => {

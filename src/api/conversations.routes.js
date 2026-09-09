@@ -14,7 +14,7 @@ const {
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
-const { emitToAgent, broadcast } = require('../realtime/socket-server');
+const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { saveMediaFile, extensionForMimeType, messageTypeForMimeType } = require('../media/media-storage');
 const { normalizeAudioForWhatsApp } = require('../media/audio-normalizer');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
@@ -186,6 +186,7 @@ router.post('/:id/claim', async (req, res) => {
   const conversationWithContact = await getConversationWithContact(conversation.id);
   broadcast('queue:removed', { conversationId: conversation.id });
   emitToAgent(conversation.assignedAgentId, 'conversation:assigned', { conversation: conversationWithContact });
+  broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact });
   res.json(conversation);
 });
 
@@ -300,6 +301,7 @@ router.post('/:id/transfer', async (req, res) => {
   emitToAgent(req.agent.agentId, 'conversation:removed', { conversationId: conversation.id });
   broadcast('queue:removed', { conversationId: conversation.id });
   emitToAgent(toAgentId, 'conversation:assigned', { conversation: conversationWithContact });
+  broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact });
   res.json(conversation);
 });
 
@@ -313,6 +315,8 @@ router.post('/:id/close', async (req, res) => {
   } else {
     broadcast('queue:removed', { conversationId: conversation.id });
   }
+  const conversationWithContact = await getConversationWithContact(conversation.id);
+  broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact, closedAt: new Date().toISOString() });
   res.json(conversation);
 });
 

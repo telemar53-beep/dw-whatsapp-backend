@@ -27,7 +27,7 @@ const {
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
-const { emitToAgent, broadcast } = require('../realtime/socket-server');
+const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const { findTemplateById } = require('../templates/template.repository');
@@ -179,6 +179,17 @@ describe('POST /api/conversations/:id/claim', () => {
         contactPhoneNumber: '+5511999998888',
         contactDisplayName: 'Cliente',
       },
+    });
+  });
+
+  test('also broadcasts dashboard:conversation on a successful claim', async () => {
+    claimConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/claim`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', {
+      conversation: { id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' },
     });
   });
 
@@ -642,6 +653,18 @@ describe('POST /api/conversations/:id/transfer', () => {
     expect(transferConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1', 'agent-2');
   });
 
+  test('also broadcasts dashboard:conversation on a successful transfer', async () => {
+    transferConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-2' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', {
+      conversation: { id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-2' },
+    });
+  });
+
   test('broadcasts queue:removed on every successful transfer, so the item disappears from everyone\'s queue if it was there', async () => {
     transferConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-2' });
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
@@ -689,6 +712,21 @@ describe('POST /api/conversations/:id/close', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'conv-1' });
     expect(emitToAgent).not.toHaveBeenCalled();
+  });
+
+  test('also broadcasts dashboard:conversation with a closedAt timestamp on a successful close', async () => {
+    closeConversation.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(broadcastToDashboard).toHaveBeenCalledWith(
+      'dashboard:conversation',
+      expect.objectContaining({
+        conversation: { id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1' },
+        closedAt: expect.any(String),
+      })
+    );
   });
 });
 

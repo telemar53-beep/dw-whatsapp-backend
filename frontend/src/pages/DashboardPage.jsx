@@ -149,7 +149,7 @@ function DashboardPage() {
             </label>
           </div>
 
-          <div className="flex shrink-0 justify-center overflow-x-auto px-3 pb-2">
+          <div className="flex shrink-0 justify-center overflow-x-auto px-3 pt-2 pb-2">
             <div role="tablist" className="inline-flex gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl shadow-sm">
               {TABS.map((tab) => (
                 <button

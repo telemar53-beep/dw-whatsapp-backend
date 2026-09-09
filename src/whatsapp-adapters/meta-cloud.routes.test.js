@@ -109,6 +109,37 @@ describe('POST /webhooks/meta', () => {
     });
   });
 
+  test('skips processing entirely for a hidden channel', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1', hidden: true });
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
+                messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+    const signature = sign(bodyString, 'app-secret');
+
+    const res = await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', signature)
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(res.status).toBe(200);
+    expect(ingestInboundMessage).not.toHaveBeenCalled();
+  });
+
   test('responds 200 and continues processing when ingestInboundMessage fails for one message in a batch', async () => {
     findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1' });
     ingestInboundMessage.mockRejectedValueOnce(new Error('db unavailable')).mockResolvedValueOnce({});

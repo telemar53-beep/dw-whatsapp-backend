@@ -29,7 +29,7 @@ router.post('/meta', async (req, res) => {
   for (const inboundMessage of inboundMessages) {
     try {
       const channel = await findChannelByMetaPhoneNumberId(inboundMessage.metaPhoneNumberId);
-      if (!channel) {
+      if (!channel || channel.hidden) {
         continue;
       }
       let mediaPath;

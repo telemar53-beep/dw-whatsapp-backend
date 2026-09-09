@@ -128,4 +128,15 @@ describe('TriageAdminTab', () => {
     render(<TriageAdminTab />);
     expect(screen.queryByText(/nenhuma opção cadastrada/i)).not.toBeInTheDocument();
   });
+
+  test('shows a help box explaining what triage options are, with an example', () => {
+    useTriage.mockReturnValue({
+      config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
+      options: [],
+      refresh: vi.fn(),
+    });
+    render(<TriageAdminTab />);
+    expect(screen.getByText(/o que é isso/i)).toBeInTheDocument();
+    expect(screen.getByText(/exemplo:/i)).toBeInTheDocument();
+  });
 });

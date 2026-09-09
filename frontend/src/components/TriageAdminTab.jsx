@@ -160,6 +160,17 @@ function TriageAdminTab() {
         </p>
       )}
       <TriageConfigForm config={config} onSaved={refresh} />
+      <div className="rounded-xl border border-teal-signal/25 bg-teal-signal/10 px-4 py-3 text-sm text-ink-950/70">
+        <p className="font-medium text-ink-950">O que é isso?</p>
+        <p className="mt-1">
+          Cada opção é um item do menu automático mostrado ao cliente na primeira mensagem. Ele
+          escolhe pelo número ou digitando uma palavra-chave, e a conversa entra direto na fila
+          do setor certo.
+        </p>
+        <p className="mt-2 italic">
+          Exemplo: opção 1 → Financeiro, palavras-chave: fatura, boleto, conta, pagamento.
+        </p>
+      </div>
       <div className="space-y-3">
         {options.map((option) => (
           <TriageOptionRow key={option.id} option={option} onSaved={refresh} onDeleted={refresh} />

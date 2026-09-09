@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
@@ -78,6 +78,8 @@ function RailLink({ to, label, children }) {
 
 function DashboardPage() {
   const { agent, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const queue = useQueue();
   const myConversations = useMyConversations();
   const { muted, toggleMuted } = useQueueNotificationSound();
@@ -118,6 +120,17 @@ function DashboardPage() {
       setPendingConversation(null);
     }
   }, [queue, myConversations, pendingConversation]);
+
+  useEffect(() => {
+    if (location.state && location.state.pendingConversation) {
+      const conversation = location.state.pendingConversation;
+      setPendingConversation(conversation);
+      setSelectedId(conversation.id);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // Only ever consume the one-shot navigation payload on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const agentInitial = agent?.name ? agent.name.trim().charAt(0).toUpperCase() : 'DW';
 

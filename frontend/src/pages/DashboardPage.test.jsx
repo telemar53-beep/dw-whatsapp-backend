@@ -357,4 +357,29 @@ describe('DashboardPage', () => {
     renderDashboard();
     expect(screen.queryByLabelText('Dashboard de atendimento')).not.toBeInTheDocument();
   });
+
+  test('opens a conversation passed in via location.state.pendingConversation, even when not in queue or myConversations', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: '/',
+            state: {
+              pendingConversation: {
+                id: 'conv-other-agent',
+                contactDisplayName: 'Cliente de Outro Atendente',
+                assignedAgentId: 'agent-2',
+                status: 'assigned',
+              },
+            },
+          },
+        ]}
+      >
+        <DashboardPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Cliente de Outro Atendente')).toBeInTheDocument();
+  });
 });

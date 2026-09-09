@@ -949,6 +949,37 @@ describe('POST /api/conversations/start', () => {
     expect(res.body).toEqual(expect.objectContaining({ id: CONVERSATION_ID, contactPhoneNumber: '559899990000' }));
   });
 
+  test('also broadcasts dashboard:conversation on the happy path', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    baileysManager.resolveWhatsAppJid.mockResolvedValue('559899990000');
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '559899990000' });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: CONVERSATION_ID, contactId: 'contact-1', channelId: 'channel-1' });
+    claimConversation.mockResolvedValue({
+      id: CONVERSATION_ID,
+      contactId: 'contact-1',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+    });
+    getConversationWithContact.mockResolvedValue({
+      id: CONVERSATION_ID,
+      contactId: 'contact-1',
+      channelId: 'channel-1',
+      assignedAgentId: 'agent-1',
+      contactPhoneNumber: '559899990000',
+      contactDisplayName: null,
+    });
+
+    await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi, tudo bem?' });
+
+    expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', {
+      conversation: expect.objectContaining({ id: CONVERSATION_ID }),
+    });
+  });
+
   test('fires off a fire-and-forget avatar fetch when the contact was just created on a Baileys channel', async () => {
     findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
     baileysManager.resolveWhatsAppJid.mockResolvedValue('559899990001');

@@ -59,6 +59,11 @@ function ConversationListItem({ conversation, onSelect, unread, selected }) {
               <span className="truncate">{previewText}</span>
             </span>
             <span className="flex shrink-0 items-center gap-1.5">
+              {conversation.assignedAgentName && (
+                <span className="rounded-full bg-wa-badge/15 px-2 py-[1px] text-[11px] font-medium text-wa-badge">
+                  {conversation.assignedAgentName}
+                </span>
+              )}
               {conversation.sectorName && (
                 <span className="rounded-full bg-wa-chip px-2 py-[1px] text-[11px] font-medium text-wa-chip-text">
                   {conversation.sectorName}

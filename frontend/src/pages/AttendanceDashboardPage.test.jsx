@@ -60,6 +60,12 @@ describe('AttendanceDashboardPage', () => {
     expect(screen.getByText('Encerrados hoje')).toBeInTheDocument();
   });
 
+  test('shows the assigned agent name on a card', async () => {
+    renderPage();
+    expect(await screen.findByText('Carlos')).toBeInTheDocument();
+    expect(screen.getByText('Ana')).toBeInTheDocument();
+  });
+
   test('clicking a card navigates to / with the conversation as pendingConversation state', async () => {
     renderPage();
     await userEvent.click(screen.getByText('Carlos'));
@@ -102,5 +108,65 @@ describe('AttendanceDashboardPage', () => {
     expect(await screen.findByText('Rita')).toBeInTheDocument();
     expect(getDashboardClosedToday).toHaveBeenCalledWith({ offset: 1, limit: 20 }, 'tok-123');
     expect(screen.queryByRole('button', { name: /carregar mais/i })).not.toBeInTheDocument();
+  });
+
+  test('shows the true live closedTodayCount on the badge when no filter is active, even if fewer items are loaded', async () => {
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [],
+      waiting: [],
+      inAutomation: [],
+      closedTodayCount: 57,
+      loading: false,
+      refresh: vi.fn(),
+    });
+    getDashboardClosedToday.mockResolvedValue({
+      items: [{ id: 'c1', contactDisplayName: 'Ana', channelId: 'chan-1' }],
+      hasMore: true,
+    });
+
+    renderPage();
+    await screen.findByText('Ana');
+
+    expect(screen.getByText('57')).toBeInTheDocument();
+  });
+
+  test('shows the filtered visible count on the badge when a filter is active', async () => {
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [],
+      waiting: [],
+      inAutomation: [],
+      closedTodayCount: 57,
+      loading: false,
+      refresh: vi.fn(),
+    });
+    getDashboardClosedToday.mockResolvedValue({
+      items: [
+        { id: 'c1', contactDisplayName: 'Ana', channelId: 'chan-1' },
+        { id: 'c2', contactDisplayName: 'Beto', channelId: 'chan-2' },
+      ],
+      hasMore: false,
+    });
+    useChannels.mockReturnValue({
+      channels: [
+        { id: 'chan-1', name: 'WhatsApp Vendas' },
+        { id: 'chan-2', name: 'WhatsApp Suporte' },
+      ],
+      loading: false,
+      refresh: vi.fn(),
+    });
+
+    renderPage();
+    await screen.findByText('Ana');
+
+    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
+    await userEvent.click(screen.getByLabelText('WhatsApp Vendas'));
+
+    // Two "1" badges exist once the channel filter is active (the "Canais" dropdown's own
+    // selected-count badge, and the "Encerrados hoje" count badge), so scope the query to the
+    // Encerrados hoje column's badge rather than an ambiguous screen.findByText('1').
+    const closedHeading = screen.getByText('Encerrados hoje');
+    const badge = closedHeading.parentElement.querySelector('span');
+    expect(badge).toHaveTextContent('1');
+    expect(screen.queryByText('57')).not.toBeInTheDocument();
   });
 });

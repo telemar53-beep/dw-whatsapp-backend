@@ -47,7 +47,7 @@ export function useAttendanceDashboard() {
 
     function onDashboardConversation({ conversation, closedAt }) {
       const isInProgress = conversation.status === 'assigned';
-      const isInAutomation = conversation.triageState === 'pending';
+      const isInAutomation = conversation.triageState === 'pending' && conversation.status !== 'closed' && conversation.status !== 'silent';
       const isWaiting = conversation.status === 'waiting' && !isInAutomation;
 
       setInProgress((prev) => (isInProgress ? upsert(prev, conversation) : remove(prev, conversation.id)));

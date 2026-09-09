@@ -165,6 +165,7 @@ router.post('/start', async (req, res) => {
 
   const conversationWithContact = await getConversationWithContact(claimed.id);
   emitToAgent(req.agent.agentId, 'conversation:assigned', { conversation: conversationWithContact });
+  broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact });
 
   res.status(201).json(conversationWithContact);
 });

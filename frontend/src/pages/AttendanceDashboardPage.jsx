@@ -78,6 +78,11 @@ function AttendanceDashboardPage() {
   const agents = useAgents();
   const { sectors } = useSectors();
 
+  const agentNameById = useMemo(
+    () => Object.fromEntries(agents.map((a) => [a.id, a.name || a.email])),
+    [agents]
+  );
+
   const [channelFilter, setChannelFilter] = useState([]);
   const [agentFilter, setAgentFilter] = useState([]);
   const [sectorFilter, setSectorFilter] = useState([]);
@@ -115,10 +120,22 @@ function AttendanceDashboardPage() {
     [channelFilter, agentFilter, sectorFilter]
   );
 
+  const hasActiveFilter = channelFilter.length > 0 || agentFilter.length > 0 || sectorFilter.length > 0;
+
   const filteredInProgress = inProgress.filter((c) => matchesFilters(c, filters));
   const filteredWaiting = waiting.filter((c) => matchesFilters(c, filters));
   const filteredInAutomation = inAutomation.filter((c) => matchesFilters(c, filters));
   const filteredClosed = closedItems.filter((c) => matchesFilters(c, filters));
+
+  function withAgentName(conversation) {
+    const agentName = conversation.assignedAgentId ? agentNameById[conversation.assignedAgentId] : null;
+    return agentName ? { ...conversation, assignedAgentName: agentName } : conversation;
+  }
+
+  const displayInProgress = filteredInProgress.map(withAgentName);
+  const displayWaiting = filteredWaiting.map(withAgentName);
+  const displayInAutomation = filteredInAutomation.map(withAgentName);
+  const displayClosed = filteredClosed.map(withAgentName);
 
   function openConversation(conversationId) {
     const conversation =
@@ -164,28 +181,28 @@ function AttendanceDashboardPage() {
         <DashboardColumn
           title="Em andamento"
           count={filteredInProgress.length}
-          conversations={filteredInProgress}
+          conversations={displayInProgress}
           onSelect={openConversation}
           emptyMessage="Nenhum atendimento em andamento."
         />
         <DashboardColumn
           title="Em espera"
           count={filteredWaiting.length}
-          conversations={filteredWaiting}
+          conversations={displayWaiting}
           onSelect={openConversation}
           emptyMessage="Nenhuma conversa aguardando."
         />
         <DashboardColumn
           title="Na automação"
           count={filteredInAutomation.length}
-          conversations={filteredInAutomation}
+          conversations={displayInAutomation}
           onSelect={openConversation}
           emptyMessage="Nenhuma conversa em triagem automática."
         />
         <DashboardColumn
           title="Encerrados hoje"
-          count={filteredClosed.length}
-          conversations={filteredClosed}
+          count={hasActiveFilter ? filteredClosed.length : closedTodayCount}
+          conversations={displayClosed}
           onSelect={openConversation}
           emptyMessage="Nenhum atendimento encerrado nas últimas 24 horas."
           footer={

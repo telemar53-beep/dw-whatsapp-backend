@@ -49,6 +49,30 @@ describe('ConversationListItem', () => {
     expect(screen.queryByText('Financeiro')).not.toBeInTheDocument();
   });
 
+  test('shows the assigned agent name as a tag when the conversation has one', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000', assignedAgentName: 'Ana' }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('Ana')).toBeInTheDocument();
+  });
+
+  test('shows no agent tag when the conversation has no assignedAgentName', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.queryByText('Ana')).not.toBeInTheDocument();
+  });
+
   test('calls onSelect with the conversation id when clicked', async () => {
     const onSelect = vi.fn();
     render(

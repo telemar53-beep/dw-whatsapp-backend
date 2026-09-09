@@ -80,6 +80,28 @@ describe('useAttendanceDashboard', () => {
     expect(result.current.waiting).toEqual([]);
   });
 
+  test('removes a conversation from inAutomation (and every list) when it closes even if triageState is still pending', async () => {
+    getDashboardConversations.mockResolvedValue({
+      inProgress: [],
+      waiting: [],
+      inAutomation: [{ id: 'c9', status: 'waiting', triageState: 'pending' }],
+      closedTodayCount: 0,
+    });
+    const { result } = renderHook(() => useAttendanceDashboard());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      socket.emit('dashboard:conversation', {
+        conversation: { id: 'c9', status: 'closed', triageState: 'pending' },
+        closedAt: '2026-09-09T12:00:00.000Z',
+      });
+    });
+
+    expect(result.current.inAutomation).toEqual([]);
+    expect(result.current.inProgress).toEqual([]);
+    expect(result.current.waiting).toEqual([]);
+  });
+
   test('removes a conversation from every live list when it closes, and increments closedTodayCount', async () => {
     getDashboardConversations.mockResolvedValue({
       inProgress: [{ id: 'c1', status: 'assigned' }],

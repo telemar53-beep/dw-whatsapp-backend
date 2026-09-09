@@ -597,6 +597,18 @@ describe('conversation repository', () => {
     void waiting;
   });
 
+  test('listInAutomationConversations excludes a conversation that was closed while triage was still pending', async () => {
+    const inTriage = await createConversation(contactId, channelId, 'pending');
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
+    const closedWhilePending = await createConversation(otherContact.id, channelId, 'pending');
+    const agent = await createAgent({ email: 'dash5@dw.com', password: 'secret123', role: 'agent' });
+    await closeConversation(closedWhilePending.id, agent.id);
+
+    const result = await listInAutomationConversations();
+
+    expect(result.map((c) => c.id)).toEqual([inTriage.id]);
+  });
+
   test('countClosedSince counts only conversations closed at or after the given time', async () => {
     const agent = await createAgent({ email: 'dash3@dw.com', password: 'secret123', role: 'agent' });
     const oldEnough = await createConversation(contactId, channelId);

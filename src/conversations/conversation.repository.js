@@ -265,7 +265,7 @@ async function listInAutomationConversations() {
        ORDER BY m.created_at DESC
        LIMIT 1
      ) lm ON true
-     WHERE c.triage_state = 'pending'
+     WHERE c.triage_state = 'pending' AND c.status NOT IN ('closed', 'silent')
      ORDER BY c.created_at ASC`
   );
   return result.rows.map(toConversationSummary);

@@ -161,7 +161,7 @@ function AttendanceDashboardPage() {
   return (
     <div className="flex h-dvh">
       <NavRail active="dashboard" onChangePasswordClick={() => setChangingPassword(true)} />
-      <div className="flex min-h-0 flex-1 flex-col bg-wa-page font-wa text-wa-text">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-wa-page font-wa text-wa-text">
       <header className="flex items-center justify-between border-b border-wa-border px-6 py-4">
         <h1 className="text-[19px] font-bold text-wa-green-dark">Dashboard de atendimento</h1>
       </header>

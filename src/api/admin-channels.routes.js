@@ -97,6 +97,9 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   if (welcomeMessage !== undefined && welcomeMessage !== null && typeof welcomeMessage !== 'string') {
     return res.status(400).json({ error: 'welcomeMessage must be a string' });
   }
+  if (typeof welcomeMessage === 'string' && welcomeMessage.trim().length > 4096) {
+    return res.status(400).json({ error: 'welcomeMessage must be 4096 characters or fewer' });
+  }
   let channel;
   if (triageEnabled !== undefined) {
     if (typeof triageEnabled !== 'boolean') {

@@ -170,7 +170,7 @@ function ChannelWelcomeMessageRow({ channel, onSaved }) {
 
 function MessagesAdminTab() {
   const { quickReplies, refresh } = useQuickReplies();
-  const { channels, refresh: refreshChannels } = useChannels(true);
+  const { channels, refresh: refreshChannels } = useChannels(true, true);
 
   return (
     <div className="space-y-8">

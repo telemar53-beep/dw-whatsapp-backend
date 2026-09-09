@@ -375,6 +375,17 @@ describe('PATCH /api/admin/channels/:id', () => {
     expect(updateChannelWelcomeMessage).not.toHaveBeenCalled();
   });
 
+  test('returns 400 when welcomeMessage is over 4096 characters', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ welcomeMessage: 'a'.repeat(4097) });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('welcomeMessage must be 4096 characters or fewer');
+    expect(updateChannelWelcomeMessage).not.toHaveBeenCalled();
+  });
+
   test('returns 404 for welcomeMessage on a non-existent channel', async () => {
     updateChannelWelcomeMessage.mockResolvedValue(null);
 

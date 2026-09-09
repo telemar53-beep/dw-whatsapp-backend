@@ -918,4 +918,6 @@ npm test
 cd frontend && npx vitest run
 ```
 
-Expected: all backend and frontend tests pass, no failures introduced in files this plan didn't touch. Remind whoever deploys this: **run `npm run migrate -- up` in the Render Shell right after deploy** — the new `welcome_message` column must exist before any inbound webhook hits `ingestInboundMessage`, or every new conversation will 500.
+Expected: all backend and frontend tests pass, no failures introduced in files this plan didn't touch.
+
+**Deploy ordering matters more than "run the migration after deploy" suggests.** Before `welcome_message` exists, every `SELECT` in `channel.repository.js` throws instead of returning — and the failure is silent, not a 500: `startAllBaileysConnections()` swallows the error on boot, so no Baileys channel reconnects at all (a full outage for that channel type, not a degradation); the Meta Cloud webhook handler still returns `200` after catching the error per-message, so Meta never retries and the customer's message is lost with only a log line; queued outbound sends burn their retries and land as `failed`. The safe sequence is **migrate first, deploy second** — set a Render Pre-Deploy Command of `npm run migrate -- up` if the project's Render setup supports one, or manually apply the column from the DB console immediately before deploying. The migration is idempotent (`ADD COLUMN IF NOT EXISTS`), so applying it early and then letting the formal migration run again post-deploy is safe.

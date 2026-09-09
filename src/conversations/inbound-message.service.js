@@ -58,12 +58,16 @@ async function ingestInboundMessage({
     return { contact, conversation, message: null, contactJustCreated };
   }
   if (justCreated) {
-    const channel = await findChannelById(channelId);
-    if (channel.welcomeMessage) {
-      await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: channel.welcomeMessage });
-    }
-    if (conversation.triageState === 'pending') {
-      await sendTriageQuestion(conversation.id, channelId);
+    try {
+      const channel = await findChannelById(channelId);
+      if (channel && channel.welcomeMessage) {
+        await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: channel.welcomeMessage });
+      }
+      if (conversation.triageState === 'pending') {
+        await sendTriageQuestion(conversation.id, channelId);
+      }
+    } catch (err) {
+      console.error(`Failed to send automatic messages for conversation ${conversation.id}`, err);
     }
   } else if (!justCreated && conversation.triageState === 'pending') {
     conversation = await processTriageReply(conversation, channelId, content);

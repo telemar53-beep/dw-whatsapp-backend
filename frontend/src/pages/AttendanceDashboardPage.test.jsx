@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import AttendanceDashboardPage from './AttendanceDashboardPage';
@@ -9,6 +9,8 @@ import { useAgents } from '../hooks/useAgents';
 import { useSectors } from '../hooks/useSectors';
 import { useAuth } from '../contexts/AuthContext';
 import { getDashboardClosedToday } from '../services/api';
+import { useConversationMessages } from '../hooks/useConversationMessages';
+import { useQuickReplies } from '../hooks/useQuickReplies';
 
 vi.mock('../hooks/useAttendanceDashboard');
 vi.mock('../hooks/useChannels');
@@ -16,6 +18,8 @@ vi.mock('../hooks/useAgents');
 vi.mock('../hooks/useSectors');
 vi.mock('../contexts/AuthContext');
 vi.mock('../services/api');
+vi.mock('../hooks/useConversationMessages');
+vi.mock('../hooks/useQuickReplies');
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -33,11 +37,13 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useAuth.mockReturnValue({ token: 'tok-123' });
+  useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'agent' } });
   useChannels.mockReturnValue({ channels: [{ id: 'chan-1', name: 'WhatsApp Vendas' }], loading: false, refresh: vi.fn() });
   useAgents.mockReturnValue([{ id: 'agent-1', name: 'Ana', email: 'ana@dw.com' }]);
   useSectors.mockReturnValue({ sectors: [{ id: 'sector-1', name: 'Financeiro' }], loading: false, refresh: vi.fn() });
   getDashboardClosedToday.mockResolvedValue({ items: [], hasMore: false });
+  useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
+  useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useAttendanceDashboard.mockReturnValue({
     inProgress: [{ id: 'c1', contactDisplayName: 'Carlos', channelId: 'chan-1', assignedAgentId: 'agent-1', sectorId: 'sector-1' }],
     waiting: [{ id: 'c2', contactDisplayName: 'Maria', channelId: 'chan-1', assignedAgentId: null, sectorId: null }],
@@ -89,14 +95,45 @@ describe('AttendanceDashboardPage', () => {
     expect(screen.getByText('Ana')).toBeInTheDocument();
   });
 
-  test('clicking a card navigates to / with the conversation as pendingConversation state', async () => {
+  test('clicking a card opens the conversation in a popup, without navigating away', async () => {
     renderPage();
-    await userEvent.click(screen.getByText('Carlos'));
-    expect(mockNavigate).toHaveBeenCalledWith('/', {
-      state: {
-        pendingConversation: { id: 'c1', contactDisplayName: 'Carlos', channelId: 'chan-1', assignedAgentId: 'agent-1', sectorId: 'sector-1' },
-      },
+    await userEvent.click(await screen.findByText('Carlos'));
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getAllByText('Carlos').length).toBeGreaterThan(0);
+  });
+
+  test('closing the conversation popup returns to the dashboard view', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByText('Carlos'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('clicking transfer inside the conversation popup opens the transfer modal', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByText('Carlos'));
+
+    await userEvent.click(screen.getByRole('button', { name: /transferir atendimento/i }));
+
+    expect(screen.getByText('Transferir para')).toBeInTheDocument();
+  });
+
+  test('opening a closed conversation from the Encerrados hoje tab also uses the popup, not navigation', async () => {
+    getDashboardClosedToday.mockResolvedValue({
+      items: [{ id: 'c9', contactDisplayName: 'Rita', channelId: 'chan-1', status: 'closed', assignedAgentId: 'agent-1' }],
+      hasMore: false,
     });
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
+    await userEvent.click(await screen.findByText('Rita'));
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   test('filtering by channel hides conversations from other channels', async () => {

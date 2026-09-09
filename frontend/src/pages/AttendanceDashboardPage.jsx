@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAttendanceDashboard } from '../hooks/useAttendanceDashboard';
 import { useChannels } from '../hooks/useChannels';
@@ -9,6 +8,8 @@ import { getDashboardClosedToday } from '../services/api';
 import ConversationListItem from '../components/ConversationListItem';
 import NavRail from '../components/NavRail';
 import ChangePasswordModal from '../components/ChangePasswordModal';
+import ConversationModal from '../components/ConversationModal';
+import TransferModal from '../components/TransferModal';
 
 const CLOSED_PAGE_SIZE = 20;
 
@@ -86,7 +87,6 @@ function DashboardColumn({ title, count, conversations, onSelect, emptyMessage, 
 
 function AttendanceDashboardPage() {
   const { token } = useAuth();
-  const navigate = useNavigate();
   const { inProgress, waiting, inAutomation, closedTodayCount } = useAttendanceDashboard();
   const { channels } = useChannels(true);
   const agents = useAgents();
@@ -94,6 +94,8 @@ function AttendanceDashboardPage() {
 
   const [activeTab, setActiveTab] = useState('all');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [transferringId, setTransferringId] = useState(null);
 
   const agentNameById = useMemo(
     () => Object.fromEntries(agents.map((a) => [a.id, a.name || a.email])),
@@ -159,13 +161,11 @@ function AttendanceDashboardPage() {
   const closedCount = hasActiveFilter ? filteredClosed.length : closedTodayCount;
 
   function openConversation(conversationId) {
-    const conversation =
-      filteredInProgress.find((c) => c.id === conversationId) ||
-      filteredWaiting.find((c) => c.id === conversationId) ||
-      filteredInAutomation.find((c) => c.id === conversationId) ||
-      filteredClosed.find((c) => c.id === conversationId);
-    navigate('/', { state: { pendingConversation: conversation } });
+    setSelectedConversationId(conversationId);
   }
+
+  const selectedConversation =
+    [...inProgress, ...waiting, ...inAutomation, ...closedItems].find((c) => c.id === selectedConversationId) || null;
 
   function toggleFilterValue(setFilter, value) {
     setFilter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
@@ -306,6 +306,14 @@ function AttendanceDashboardPage() {
       )}
       </div>
       {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
+      {selectedConversation && (
+        <ConversationModal
+          conversation={selectedConversation}
+          onClose={() => setSelectedConversationId(null)}
+          onTransferClick={setTransferringId}
+        />
+      )}
+      {transferringId && <TransferModal conversationId={transferringId} onClose={() => setTransferringId(null)} />}
     </div>
   );
 }

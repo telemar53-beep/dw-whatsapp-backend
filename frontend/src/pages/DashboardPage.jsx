@@ -88,12 +88,21 @@ function DashboardPage() {
   }, []);
 
   return (
-    <div className="flex h-dvh flex-col bg-wa-page font-wa text-wa-text">
-      <div data-testid="channel-banner-wrapper" className={selectedConversation ? 'hidden md:block' : ''}>
+    <div className="relative flex h-dvh flex-col overflow-hidden bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans text-ink-950">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-signal/20 blur-[100px]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-20 bottom-0 h-96 w-96 rounded-full bg-amber-signal/20 blur-[120px]"
+      />
+
+      <div data-testid="channel-banner-wrapper" className={`relative ${selectedConversation ? 'hidden md:block' : ''}`}>
         <ChannelStatusBanner />
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <NavRail
           active="conversas"
           onConversasClick={() => setSelectedId(null)}
@@ -104,29 +113,29 @@ function DashboardPage() {
         <aside
           className={`${
             selectedConversation ? 'hidden' : 'flex'
-          } w-full min-w-0 flex-col border-r border-wa-border bg-wa-panel md:flex md:w-[400px] md:shrink-0 lg:w-[30%] lg:min-w-[360px] lg:max-w-[500px]`}
+          } w-full min-w-0 flex-col border-r border-white/50 bg-white/40 backdrop-blur-2xl md:flex md:w-[400px] md:shrink-0 lg:w-[30%] lg:min-w-[360px] lg:max-w-[500px]`}
         >
           <header
             className={`${
               selectedConversation ? 'hidden md:flex' : 'flex'
             } h-[59px] shrink-0 items-center justify-between gap-2 px-4`}
           >
-            <span className="truncate text-[19px] font-bold leading-tight tracking-[-0.01em] text-wa-green-dark">
+            <span className="truncate font-display text-xl font-semibold leading-tight tracking-[-0.01em] text-ink-950">
               DW Telecom
             </span>
             <button
               onClick={() => setStartingConversation(true)}
               aria-label="Iniciar conversa"
               title="Iniciar conversa"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-wa-green text-white shadow-[0_1px_3px_rgba(11,20,26,.16)] transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-signal text-white shadow-[0_10px_24px_-8px_rgba(13,148,136,0.55)] transition hover:brightness-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-signal"
             >
               <IconNewChat size={22} />
             </button>
           </header>
 
           <div className="shrink-0 px-3 pb-2">
-            <label className="flex h-[35px] items-center gap-3 rounded-[8px] bg-wa-panel-header px-3 focus-within:outline focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-wa-green/60">
-              <span className="shrink-0 text-wa-icon">
+            <label className="flex h-[38px] items-center gap-3 rounded-xl border border-ink-950/10 bg-white/50 px-3 transition focus-within:border-teal-signal/50 focus-within:bg-white/80 focus-within:ring-2 focus-within:ring-teal-signal/20">
+              <span className="shrink-0 text-ink-950/40">
                 <IconSearch size={18} />
               </span>
               <input
@@ -135,13 +144,13 @@ function DashboardPage() {
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Pesquisar uma conversa"
                 aria-label="Pesquisar uma conversa"
-                className="min-w-0 flex-1 bg-transparent text-[14.5px] text-wa-text outline-none placeholder:text-wa-muted"
+                className="min-w-0 flex-1 bg-transparent text-[14.5px] text-ink-950 outline-none placeholder:text-ink-950/35"
               />
             </label>
           </div>
 
           <div className="flex shrink-0 justify-center overflow-x-auto px-3 pb-2">
-            <div role="tablist" className="inline-flex gap-1 rounded-full border border-wa-border bg-wa-panel-header p-1 shadow-sm">
+            <div role="tablist" className="inline-flex gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl shadow-sm">
               {TABS.map((tab) => (
                 <button
                   key={tab.value}
@@ -171,7 +180,7 @@ function DashboardPage() {
             role="tabpanel"
             id={`tabpanel-${activeTab}`}
             aria-labelledby={`tab-${activeTab}`}
-            className="wa-scroll min-h-0 flex-1 overflow-y-auto border-t border-wa-border"
+            className="wa-scroll min-h-0 flex-1 overflow-y-auto border-t border-white/40"
           >
             {activeTab === 'inProgress' && (
               <MyConversationsList
@@ -210,15 +219,15 @@ function DashboardPage() {
               onBack={() => setSelectedId(null)}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center border-b-[6px] border-wa-badge bg-wa-panel-header px-6 text-center">
-              <span className="text-[#d5dbde]">
+            <div className="flex h-full flex-col items-center justify-center border-b-[6px] border-teal-signal/60 bg-white/25 px-6 text-center backdrop-blur-sm">
+              <span className="text-ink-950/20">
                 <IconEmptyChat width={320} height={190} />
               </span>
-              <p className="mt-6 text-[32px] font-light leading-tight text-[#41525d]">DW Telecom Atendimento</p>
-              <p className="mt-3 max-w-[38ch] text-[14px] leading-[20px] text-wa-muted">
+              <p className="mt-6 font-display text-[32px] font-light leading-tight text-ink-950/80">DW Telecom Atendimento</p>
+              <p className="mt-3 max-w-[38ch] text-[14px] leading-[20px] text-ink-950/55">
                 Selecione uma conversa na lista ao lado para ler o histórico e responder ao cliente.
               </p>
-              <p className="mt-10 flex items-center gap-1.5 text-[13px] text-wa-meta">
+              <p className="mt-10 flex items-center gap-1.5 text-[13px] text-ink-950/45">
                 <IconLock size={13} />
                 Todo atendimento fica registrado no sistema.
               </p>

@@ -10,8 +10,8 @@ function RailButton({ label, onClick, children, active }) {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green ${
-        active ? 'bg-[#e9edef] text-wa-text' : 'text-wa-icon hover:bg-[#e9edef]'
+      className={`flex h-11 w-11 items-center justify-center rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-signal ${
+        active ? 'bg-teal-signal text-white shadow-[0_6px_16px_-6px_rgba(13,148,136,0.55)]' : 'text-ink-950/45 hover:bg-white/60 hover:text-ink-950'
       }`}
     >
       {children}
@@ -25,8 +25,8 @@ function RailLink({ to, label, children, active }) {
       to={to}
       aria-label={label}
       title={label}
-      className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green ${
-        active ? 'bg-[#e9edef] text-wa-text' : 'text-wa-icon hover:bg-[#e9edef]'
+      className={`flex h-11 w-11 items-center justify-center rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-signal ${
+        active ? 'bg-teal-signal text-white shadow-[0_6px_16px_-6px_rgba(13,148,136,0.55)]' : 'text-ink-950/45 hover:bg-white/60 hover:text-ink-950'
       }`}
     >
       {children}
@@ -49,12 +49,12 @@ function NavRail({ active, onConversasClick, onChangePasswordClick, mobileHidden
       aria-label="Navegação principal"
       className={`${
         mobileHidden ? 'hidden md:flex' : 'flex'
-      } w-14 shrink-0 flex-col items-center justify-between border-r border-wa-border bg-wa-panel-header py-3 md:w-[60px]`}
+      } w-14 shrink-0 flex-col items-center justify-between border-r border-white/50 bg-gradient-to-b from-sky-mist/70 via-teal-mist/50 to-sand-mist/60 py-4 backdrop-blur-xl md:w-[64px]`}
     >
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-1.5">
         <span
           aria-hidden="true"
-          className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-wa-green text-[13px] font-bold tracking-tight text-white"
+          className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-teal-signal font-display text-[13px] font-semibold tracking-tight text-white shadow-sm"
         >
           DW
         </span>
@@ -82,7 +82,7 @@ function NavRail({ active, onConversasClick, onChangePasswordClick, mobileHidden
         )}
       </div>
 
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-1.5">
         <RailButton label={muted ? 'Som mutado' : 'Som ativado'} onClick={toggleMuted} active={muted}>
           {muted ? <IconBellOff size={21} /> : <IconBellOn size={21} />}
         </RailButton>
@@ -95,7 +95,7 @@ function NavRail({ active, onConversasClick, onChangePasswordClick, mobileHidden
         <span
           aria-hidden="true"
           title={agent?.name || 'Atendente'}
-          className="mt-1 flex h-9 w-9 items-center justify-center rounded-full bg-[#dfe5e7] text-[13px] font-medium text-[#8696a0]"
+          className="mt-1 flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/50 font-display text-[13px] font-medium text-ink-950/70"
         >
           {agentInitial}
         </span>

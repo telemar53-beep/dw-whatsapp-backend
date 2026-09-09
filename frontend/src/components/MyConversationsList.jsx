@@ -3,7 +3,7 @@ import ConversationListItem from './ConversationListItem';
 function MyConversationsList({ conversations, onSelect, unreadIds, selectedId }) {
   if (conversations.length === 0) {
     return (
-      <p className="px-6 py-10 text-center text-[14px] leading-[20px] text-wa-muted">Nenhuma conversa atribuída.</p>
+      <p className="px-6 py-10 text-center text-[14px] leading-[20px] text-ink-950/50">Nenhuma conversa atribuída.</p>
     );
   }
 

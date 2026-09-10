@@ -93,8 +93,8 @@ export function transferConversation(conversationId, toAgentId, token) {
   });
 }
 
-export function closeConversation(conversationId, token) {
-  return apiFetch(`/api/conversations/${conversationId}/close`, { method: 'POST', token });
+export function closeConversation(conversationId, reasonId, token) {
+  return apiFetch(`/api/conversations/${conversationId}/close`, { method: 'POST', body: { reasonId }, token });
 }
 
 export function listAgents(token) {
@@ -207,6 +207,22 @@ export function deleteSector(id, token) {
 
 export function setAgentSectors(agentId, sectorIds, token) {
   return apiFetch(`/api/admin/agents/${agentId}/sectors`, { method: 'PUT', body: { sectorIds }, token });
+}
+
+export function listReasons(token) {
+  return apiFetch('/api/reasons', { token });
+}
+
+export function listReasonsAdmin(token) {
+  return apiFetch('/api/admin/reasons', { token });
+}
+
+export function createReason(payload, token) {
+  return apiFetch('/api/admin/reasons', { method: 'POST', body: payload, token });
+}
+
+export function updateReason(id, payload, token) {
+  return apiFetch(`/api/admin/reasons/${id}`, { method: 'PATCH', body: payload, token });
 }
 
 export function getMetrics(period, token) {

@@ -4,6 +4,7 @@ jest.mock('../conversations/conversation.repository');
 jest.mock('../conversations/message.repository');
 jest.mock('../whatsapp-adapters/meta-cloud.adapter');
 jest.mock('../whatsapp-adapters/baileys.manager');
+jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
 jest.mock('../realtime/socket-server');
 
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
@@ -12,6 +13,7 @@ const { getConversationWithContact } = require('../conversations/conversation.re
 const { findMessageById, updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
+const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { emitToAgent } = require('../realtime/socket-server');
 const { startOutboundWorker } = require('./outbound-worker');
 
@@ -62,6 +64,23 @@ describe('startOutboundWorker', () => {
     );
     expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();
     expect(recordMessageSent).toHaveBeenCalledWith('msg-2', 'BAILEYS_OUT_1');
+  });
+
+  test('sends via the 360dialog adapter when the channel type is 360dialog', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-3', type: '360dialog', config: { apiKey: 'key-1', wabaId: 'waba-1' } });
+    threeSixtyDialogAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'D360_OUT_1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888', assignedAgentId: null });
+    recordMessageSent.mockResolvedValue({ id: 'msg-1' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-3', content: 'Ola' });
+
+    expect(threeSixtyDialogAdapter.sendTextMessage).toHaveBeenCalledWith(
+      { id: 'channel-3', type: '360dialog', config: { apiKey: 'key-1', wabaId: 'waba-1' } },
+      '5511999998888',
+      'Ola'
+    );
+    expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();
+    expect(baileysManager.sendTextMessage).not.toHaveBeenCalled();
   });
 
   test('marks the message failed and rethrows when sending fails', async () => {

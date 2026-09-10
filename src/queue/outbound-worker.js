@@ -4,11 +4,13 @@ const { getConversationWithContact } = require('../conversations/conversation.re
 const { findMessageById, updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
+const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { emitToAgent } = require('../realtime/socket-server');
 
 const ADAPTERS_BY_CHANNEL_TYPE = {
   meta_cloud: metaCloudAdapter,
   baileys: baileysManager,
+  '360dialog': threeSixtyDialogAdapter,
 };
 
 const AUDIO_DELIVERY_CHECK_DELAY_MS = 5000;

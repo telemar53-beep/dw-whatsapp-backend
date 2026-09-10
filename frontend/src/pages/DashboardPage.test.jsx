@@ -246,11 +246,11 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
   });
 
-  test('shows a Métricas link for any attendant', () => {
+  test('shows a Relatório link for any attendant', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     renderDashboard();
-    expect(screen.getByRole('link', { name: /métricas/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /relatório/i })).toBeInTheDocument();
   });
 
   test('shows the list and hides the conversation panel on mobile when nothing is selected', () => {

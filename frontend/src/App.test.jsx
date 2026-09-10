@@ -66,6 +66,6 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /métricas/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /relatório/i })).toBeInTheDocument();
   });
 });

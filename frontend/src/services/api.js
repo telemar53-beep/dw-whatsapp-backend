@@ -353,3 +353,25 @@ export function sendSgpBoletoPdf(contratoId, conversationId, boletoLink, token) 
     token,
   });
 }
+
+export function getMyProfile(token) {
+  return apiFetch('/api/agents/me', { token });
+}
+
+export function updateMyProfile({ name, phone }, token) {
+  return apiFetch('/api/agents/me', { method: 'PATCH', body: { name, phone }, token });
+}
+
+export function uploadMyAvatar(file, token) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiFetch('/api/agents/me/avatar', { method: 'POST', body: formData, token });
+}
+
+export function deleteMyAvatar(token) {
+  return apiFetch('/api/agents/me/avatar', { method: 'DELETE', token });
+}
+
+export function agentAvatarUrl(agentId, token) {
+  return `${API_BASE_URL}/api/agents/${agentId}/avatar?token=${token}`;
+}

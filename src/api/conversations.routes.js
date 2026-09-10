@@ -23,6 +23,7 @@ const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const { findTemplateById } = require('../templates/template.repository');
 const { substituteVariables } = require('../templates/template-validator');
 const { sendOpeningMessageIfApplicable, sendClosingMessageIfApplicable } = require('../assignment-messages/assignment-message.service');
+const { findReasonById } = require('../reasons/reason.repository');
 
 const router = express.Router();
 
@@ -320,7 +321,15 @@ router.post('/:id/transfer', async (req, res) => {
 });
 
 router.post('/:id/close', async (req, res) => {
-  const conversation = await closeConversation(req.params.id, req.agent.agentId);
+  const { reasonId } = req.body || {};
+  if (!reasonId) {
+    return res.status(400).json({ error: 'reasonId is required' });
+  }
+  const reason = await findReasonById(reasonId);
+  if (!reason || !reason.active) {
+    return res.status(400).json({ error: 'Invalid or inactive reasonId' });
+  }
+  const conversation = await closeConversation(req.params.id, req.agent.agentId, reasonId);
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation is not currently assigned to you, or is closed' });
   }

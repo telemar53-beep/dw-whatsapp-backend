@@ -11,6 +11,7 @@ jest.mock('../conversations/contact.repository');
 jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../templates/template.repository');
 jest.mock('../assignment-messages/assignment-message.service');
+jest.mock('../reasons/reason.repository');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -36,6 +37,7 @@ const {
   sendOpeningMessageIfApplicable,
   sendClosingMessageIfApplicable,
 } = require('../assignment-messages/assignment-message.service');
+const { findReasonById } = require('../reasons/reason.repository');
 const conversationsRoutes = require('./conversations.routes');
 
 function buildApp() {
@@ -721,22 +723,57 @@ describe('POST /api/conversations/:id/transfer', () => {
 });
 
 describe('POST /api/conversations/:id/close', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findReasonById.mockResolvedValue({ id: 'reason-1', name: 'Troca de senha', active: true });
+  });
 
   test('closes an open conversation', async () => {
     closeConversation.mockResolvedValue({ id: 'conv-1', status: 'closed' });
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'reason-1' });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('closed');
+    expect(closeConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1', 'reason-1');
+  });
+
+  test('returns 400 when reasonId is missing', async () => {
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(closeConversation).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when the reason does not exist', async () => {
+    findReasonById.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'does-not-exist' });
+    expect(res.status).toBe(400);
+    expect(closeConversation).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when the reason is inactive', async () => {
+    findReasonById.mockResolvedValue({ id: 'reason-1', name: 'Antigo', active: false });
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'reason-1' });
+    expect(res.status).toBe(400);
+    expect(closeConversation).not.toHaveBeenCalled();
   });
 
   test('returns 409 when the conversation is not assigned to the caller, does not exist, or is already closed', async () => {
     closeConversation.mockResolvedValue(null);
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'reason-1' });
     expect(res.status).toBe(409);
   });
 
@@ -744,7 +781,8 @@ describe('POST /api/conversations/:id/close', () => {
     closeConversation.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1' });
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'reason-1' });
     expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:closed', { conversationId: 'conv-1' });
     expect(broadcast).not.toHaveBeenCalled();
   });
@@ -753,7 +791,8 @@ describe('POST /api/conversations/:id/close', () => {
     closeConversation.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: null });
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'reason-1' });
     expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'conv-1' });
     expect(emitToAgent).not.toHaveBeenCalled();
   });
@@ -763,7 +802,8 @@ describe('POST /api/conversations/:id/close', () => {
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1' });
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'reason-1' });
     expect(broadcastToDashboard).toHaveBeenCalledWith(
       'dashboard:conversation',
       expect.objectContaining({
@@ -778,7 +818,8 @@ describe('POST /api/conversations/:id/close', () => {
     closeConversation.mockResolvedValue(closedConversation);
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'reason-1' });
     expect(sendClosingMessageIfApplicable).toHaveBeenCalledWith(closedConversation, 'agent-1');
   });
 
@@ -786,7 +827,8 @@ describe('POST /api/conversations/:id/close', () => {
     closeConversation.mockResolvedValue(null);
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'reason-1' });
     expect(sendClosingMessageIfApplicable).not.toHaveBeenCalled();
   });
 
@@ -796,7 +838,8 @@ describe('POST /api/conversations/:id/close', () => {
     sendClosingMessageIfApplicable.mockRejectedValue(new Error('boom'));
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'reason-1' });
     expect(res.status).toBe(200);
   });
 });

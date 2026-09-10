@@ -6,6 +6,7 @@ import {
   getQueue,
   setUnauthorizedHandler,
   sendMessage,
+  closeConversation,
   mediaUrl,
   listAgentsAdmin,
   createAgent,
@@ -23,6 +24,10 @@ import {
   updateSector,
   deleteSector,
   setAgentSectors,
+  listReasons,
+  listReasonsAdmin,
+  createReason,
+  updateReason,
   getMetrics,
   getTriage,
   updateTriageConfig,
@@ -200,6 +205,17 @@ describe('setAgentActive', () => {
   });
 });
 
+describe('closeConversation', () => {
+  test('posts the reasonId in the body', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await closeConversation('conv-1', 'reason-1', 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/conversations/conv-1/close',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ reasonId: 'reason-1' }) })
+    );
+  });
+});
+
 describe('getConversationHistory', () => {
   test('fetches the closed conversation history for a contact', async () => {
     global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('[]') });
@@ -351,6 +367,50 @@ describe('setAgentSectors', () => {
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/api/admin/agents/agent-1/sectors',
       expect.objectContaining({ method: 'PUT', body: JSON.stringify({ sectorIds: ['sector-1', 'sector-2'] }) })
+    );
+  });
+});
+
+describe('listReasons', () => {
+  test('fetches the active reason list for any authenticated agent', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('[]') });
+    await listReasons('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/reasons',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+});
+
+describe('listReasonsAdmin', () => {
+  test('fetches all reasons for an admin', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('[]') });
+    await listReasonsAdmin('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/reasons',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+});
+
+describe('createReason', () => {
+  test('posts the new reason payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await createReason({ name: 'Troca de senha' }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/reasons',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Troca de senha' }) })
+    );
+  });
+});
+
+describe('updateReason', () => {
+  test('patches the reason payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await updateReason('reason-1', { active: false }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/admin/reasons/reason-1',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ active: false }) })
     );
   });
 });

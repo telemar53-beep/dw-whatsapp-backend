@@ -5,6 +5,7 @@ import { useSectors } from '../hooks/useSectors';
 import { updateTriageOption, deleteTriageOption } from '../services/api';
 import TriageConfigForm from './TriageConfigForm';
 import CreateTriageOptionForm from './CreateTriageOptionForm';
+import SectionHelp from './SectionHelp';
 
 const inputClass =
   'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
@@ -147,6 +148,7 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
 
 function TriageAdminTab() {
   const { config, options, refresh } = useTriage();
+  const [creatingOption, setCreatingOption] = useState(false);
 
   if (!config) {
     return <p className="text-sm text-ink-950/55">Carregando...</p>;
@@ -160,23 +162,42 @@ function TriageAdminTab() {
         </p>
       )}
       <TriageConfigForm config={config} onSaved={refresh} />
-      <div className="rounded-xl border border-teal-signal/25 bg-teal-signal/10 px-4 py-3 text-sm text-ink-950/70">
-        <p className="font-medium text-ink-950">O que é isso?</p>
-        <p className="mt-1">
-          Cada opção é um item do menu automático mostrado ao cliente na primeira mensagem. Ele
-          escolhe pelo número ou digitando uma palavra-chave, e a conversa entra direto na fila
-          do setor certo.
-        </p>
-        <p className="mt-2 italic">
-          Exemplo: opção 1 → Financeiro, palavras-chave: fatura, boleto, conta, pagamento.
-        </p>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCreatingOption(true)}
+            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+          >
+            Criar opção
+          </button>
+          <SectionHelp label="Triagem" title="Triagem">
+            <p>
+              Cada opção é um item do menu automático mostrado ao cliente na primeira
+              mensagem. Ele escolhe pelo número ou digitando uma palavra-chave, e a
+              conversa entra direto na fila do setor certo.
+            </p>
+            <p className="mt-2 italic">
+              Exemplo: opção 1 → Financeiro, palavras-chave: fatura, boleto, conta,
+              pagamento.
+            </p>
+          </SectionHelp>
+        </div>
+        {creatingOption && (
+          <CreateTriageOptionForm
+            onCreated={() => {
+              refresh();
+              setCreatingOption(false);
+            }}
+            onCancel={() => setCreatingOption(false)}
+          />
+        )}
       </div>
       <div className="space-y-3">
         {options.map((option) => (
           <TriageOptionRow key={option.id} option={option} onSaved={refresh} onDeleted={refresh} />
         ))}
       </div>
-      <CreateTriageOptionForm onCreated={refresh} />
     </div>
   );
 }

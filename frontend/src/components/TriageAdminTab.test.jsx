@@ -81,6 +81,7 @@ describe('TriageAdminTab', () => {
     api.createTriageOption.mockResolvedValue({ id: 'opt-2', optionNumber: 2, sectorId: 's2', sectorName: 'Suporte', keywords: ['internet'] });
     render(<TriageAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /criar opção/i }));
     await userEvent.type(screen.getByLabelText(/número da opção/i), '2');
     await userEvent.selectOptions(screen.getByLabelText(/^setor$/i), 's2');
     await userEvent.type(screen.getByLabelText(/frases-gatilho/i), 'internet');
@@ -129,14 +130,16 @@ describe('TriageAdminTab', () => {
     expect(screen.queryByText(/nenhuma opção cadastrada/i)).not.toBeInTheDocument();
   });
 
-  test('shows a help box explaining what triage options are, with an example', () => {
+  test('shows a help popup explaining what triage options are, with an example', async () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
       refresh: vi.fn(),
     });
     render(<TriageAdminTab />);
-    expect(screen.getByText(/o que é isso/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /o que é isso/i }));
+
     expect(screen.getByText(/exemplo:/i)).toBeInTheDocument();
   });
 });

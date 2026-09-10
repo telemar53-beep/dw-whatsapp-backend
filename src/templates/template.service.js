@@ -147,6 +147,9 @@ async function syncTemplatesForWaba(wabaId) {
   if (!channel) {
     throw new TemplateValidationError('No channel found for this WABA');
   }
+  if (!isOfficialChannelType(channel.type)) {
+    throw new TemplateValidationError('channelId must reference an official channel (meta_cloud or 360dialog)');
+  }
   const metaTemplates = await ADAPTERS_BY_CHANNEL_TYPE[channel.type].listMetaTemplates(channel);
   for (const metaTemplate of metaTemplates) {
     if (!KNOWN_STATUSES.has(metaTemplate.status)) {

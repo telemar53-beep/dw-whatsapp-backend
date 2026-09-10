@@ -121,4 +121,11 @@ describe('loadConfig', () => {
     delete process.env.FRONTEND_ORIGIN;
     expect(() => loadConfig()).not.toThrow();
   });
+
+  test('strips a trailing slash from PUBLIC_BASE_URL', () => {
+    setAllRequired();
+    process.env.PUBLIC_BASE_URL = 'http://localhost:3000/';
+    const config = loadConfig();
+    expect(config.publicBaseUrl).toBe('http://localhost:3000');
+  });
 });

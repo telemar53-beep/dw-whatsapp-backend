@@ -83,13 +83,15 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
       }
       const webhookToken = crypto.randomBytes(24).toString('hex');
       const config = { apiKey, wabaId, webhookToken };
+      const channel = await createChannel({ type, name, phoneNumber, config });
       const webhookUrl = `${loadConfig().publicBaseUrl}/webhooks/360dialog/${webhookToken}`;
       try {
-        await threeSixtyDialogAdapter.registerWebhook({ config }, webhookUrl);
+        await threeSixtyDialogAdapter.registerWebhook(channel, webhookUrl);
       } catch (err) {
+        console.error('Failed to register 360dialog webhook', err.response?.data || err.message || err);
+        await deleteChannel(channel.id);
         return res.status(400).json({ error: 'Não foi possível registrar o webhook na 360dialog — confira a API Key' });
       }
-      const channel = await createChannel({ type, name, phoneNumber, config });
       return res.status(201).json(channel);
     }
 
@@ -137,7 +139,7 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     }
     channel = await updateChannelWabaId(req.params.id, wabaId.trim());
     if (!channel) {
-      return res.status(404).json({ error: 'Channel not found or not a meta_cloud channel' });
+      return res.status(404).json({ error: 'Channel not found or not an official channel (meta_cloud or 360dialog)' });
     }
   }
   if (hidden !== undefined) {

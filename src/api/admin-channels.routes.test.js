@@ -180,7 +180,7 @@ describe('POST /api/admin/channels', () => {
     expect(res.status).toBe(403);
   });
 
-  test('creates a 360dialog channel, registering the webhook first', async () => {
+  test('creates a 360dialog channel, registering the webhook after creating the row', async () => {
     threeSixtyDialogAdapter.registerWebhook.mockResolvedValue(undefined);
     createChannel.mockResolvedValue({
       id: 'channel-9', type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009',
@@ -224,8 +224,14 @@ describe('POST /api/admin/channels', () => {
     expect(createChannel).not.toHaveBeenCalled();
   });
 
-  test('does not create the channel when webhook registration fails', async () => {
+  test('rolls back the channel when webhook registration fails', async () => {
+    createChannel.mockResolvedValue({
+      id: 'channel-9', type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009',
+      config: { apiKey: 'bad-key', wabaId: 'waba-9', webhookToken: expect.any(String) },
+      status: 'disconnected', triageEnabled: false, hidden: false, welcomeMessage: null,
+    });
     threeSixtyDialogAdapter.registerWebhook.mockRejectedValue(new Error('401 Unauthorized'));
+    deleteChannel.mockResolvedValue(true);
 
     const res = await request(buildApp())
       .post('/api/admin/channels')
@@ -233,7 +239,8 @@ describe('POST /api/admin/channels', () => {
       .send({ type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009', apiKey: 'bad-key', wabaId: 'waba-9' });
 
     expect(res.status).toBe(400);
-    expect(createChannel).not.toHaveBeenCalled();
+    expect(createChannel).toHaveBeenCalled();
+    expect(deleteChannel).toHaveBeenCalledWith('channel-9');
   });
 });
 

@@ -23,7 +23,7 @@ function loadConfig() {
     baileysSessionsDir: process.env.BAILEYS_SESSIONS_DIR,
     mediaStorageDir: process.env.MEDIA_STORAGE_DIR,
     frontendOrigin: process.env.FRONTEND_ORIGIN || null,
-    publicBaseUrl: process.env.PUBLIC_BASE_URL,
+    publicBaseUrl: process.env.PUBLIC_BASE_URL.replace(/\/+$/, ''),
   };
 }
 

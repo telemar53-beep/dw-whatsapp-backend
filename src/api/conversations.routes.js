@@ -162,10 +162,12 @@ router.post('/start', async (req, res) => {
       throw new Error('Failed to claim newly created conversation');
     }
   }
-  try {
-    await sendOpeningMessageIfApplicable(claimed, req.agent.agentId);
-  } catch (err) {
-    console.error(`Failed to send assignment opening message for conversation ${claimed.id}`, err);
+  if (channel.type !== 'meta_cloud') {
+    try {
+      await sendOpeningMessageIfApplicable(claimed, req.agent.agentId);
+    } catch (err) {
+      console.error(`Failed to send assignment opening message for conversation ${claimed.id}`, err);
+    }
   }
   await enqueueOutboundMessage({ conversationId: claimed.id, channelId: channel.id, ...outboundPayload });
 

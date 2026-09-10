@@ -1246,4 +1246,23 @@ describe('POST /start (meta_cloud)', () => {
 
     expect(baileysManager.resolveWhatsAppJid).not.toHaveBeenCalled();
   });
+
+  test('does not dispatch the assignment opening message for a meta_cloud channel', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    findTemplateById.mockResolvedValue(approvedTemplate);
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5511999990000' });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: 'conv-1' });
+    claimConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'tpl-1', templateVariables: ['João', 'R$150,00'] });
+
+    expect(res.status).toBe(201);
+    expect(sendOpeningMessageIfApplicable).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).toHaveBeenCalled();
+  });
 });

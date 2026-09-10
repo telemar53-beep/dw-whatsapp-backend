@@ -325,6 +325,9 @@ router.post('/:id/close', async (req, res) => {
   if (!reasonId) {
     return res.status(400).json({ error: 'reasonId is required' });
   }
+  if (!UUID_PATTERN.test(reasonId)) {
+    return res.status(400).json({ error: 'Invalid or inactive reasonId' });
+  }
   const reason = await findReasonById(reasonId);
   if (!reason || !reason.active) {
     return res.status(400).json({ error: 'Invalid or inactive reasonId' });

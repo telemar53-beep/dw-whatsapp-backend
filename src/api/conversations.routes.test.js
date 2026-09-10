@@ -723,9 +723,12 @@ describe('POST /api/conversations/:id/transfer', () => {
 });
 
 describe('POST /api/conversations/:id/close', () => {
+  const REASON_ID = '33333333-3333-3333-3333-333333333333';
+  const NON_EXISTENT_REASON_ID = '44444444-4444-4444-4444-444444444444';
+
   beforeEach(() => {
     jest.clearAllMocks();
-    findReasonById.mockResolvedValue({ id: 'reason-1', name: 'Troca de senha', active: true });
+    findReasonById.mockResolvedValue({ id: REASON_ID, name: 'Troca de senha', active: true });
   });
 
   test('closes an open conversation', async () => {
@@ -733,10 +736,10 @@ describe('POST /api/conversations/:id/close', () => {
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'reason-1' });
+      .send({ reasonId: REASON_ID });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('closed');
-    expect(closeConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1', 'reason-1');
+    expect(closeConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1', REASON_ID);
   });
 
   test('returns 400 when reasonId is missing', async () => {
@@ -753,18 +756,28 @@ describe('POST /api/conversations/:id/close', () => {
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'does-not-exist' });
+      .send({ reasonId: NON_EXISTENT_REASON_ID });
     expect(res.status).toBe(400);
     expect(closeConversation).not.toHaveBeenCalled();
   });
 
   test('returns 400 when the reason is inactive', async () => {
-    findReasonById.mockResolvedValue({ id: 'reason-1', name: 'Antigo', active: false });
+    findReasonById.mockResolvedValue({ id: REASON_ID, name: 'Antigo', active: false });
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'reason-1' });
+      .send({ reasonId: REASON_ID });
     expect(res.status).toBe(400);
+    expect(closeConversation).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 and does not call findReasonById when reasonId is not a valid UUID', async () => {
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ reasonId: 'not-a-uuid' });
+    expect(res.status).toBe(400);
+    expect(findReasonById).not.toHaveBeenCalled();
     expect(closeConversation).not.toHaveBeenCalled();
   });
 
@@ -773,7 +786,7 @@ describe('POST /api/conversations/:id/close', () => {
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'reason-1' });
+      .send({ reasonId: REASON_ID });
     expect(res.status).toBe(409);
   });
 
@@ -782,7 +795,7 @@ describe('POST /api/conversations/:id/close', () => {
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'reason-1' });
+      .send({ reasonId: REASON_ID });
     expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:closed', { conversationId: 'conv-1' });
     expect(broadcast).not.toHaveBeenCalled();
   });
@@ -792,7 +805,7 @@ describe('POST /api/conversations/:id/close', () => {
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'reason-1' });
+      .send({ reasonId: REASON_ID });
     expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'conv-1' });
     expect(emitToAgent).not.toHaveBeenCalled();
   });
@@ -803,7 +816,7 @@ describe('POST /api/conversations/:id/close', () => {
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'reason-1' });
+      .send({ reasonId: REASON_ID });
     expect(broadcastToDashboard).toHaveBeenCalledWith(
       'dashboard:conversation',
       expect.objectContaining({
@@ -819,7 +832,7 @@ describe('POST /api/conversations/:id/close', () => {
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'reason-1' });
+      .send({ reasonId: REASON_ID });
     expect(sendClosingMessageIfApplicable).toHaveBeenCalledWith(closedConversation, 'agent-1');
   });
 
@@ -828,7 +841,7 @@ describe('POST /api/conversations/:id/close', () => {
     await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'reason-1' });
+      .send({ reasonId: REASON_ID });
     expect(sendClosingMessageIfApplicable).not.toHaveBeenCalled();
   });
 
@@ -839,7 +852,7 @@ describe('POST /api/conversations/:id/close', () => {
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ reasonId: 'reason-1' });
+      .send({ reasonId: REASON_ID });
     expect(res.status).toBe(200);
   });
 });

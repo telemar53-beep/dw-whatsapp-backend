@@ -152,7 +152,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   return (
     <div className="flex h-full">
       <div className="flex h-full min-w-0 flex-1 flex-col bg-wa-chat font-wa">
-      <div className="z-10 flex items-center gap-1 border-b border-wa-border bg-wa-panel-header px-2 py-[7px] md:px-4">
+      <div className="z-10 flex items-center gap-1 border-b border-white/60 bg-white/55 px-2 py-[7px] backdrop-blur-xl md:px-4">
         <button
           onClick={onBack}
           className="flex h-10 w-10 items-center justify-center rounded-full text-wa-icon hover:bg-black/[.06] md:hidden"
@@ -206,8 +206,8 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
       </div>
 
       <div className="wa-wallpaper wa-scroll flex-1 overflow-y-auto overflow-x-hidden px-[4%] py-3 lg:px-[6%]">
-        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-[6px] bg-[#ffeecd] px-3 py-1.5 text-center text-[12.5px] leading-[18px] text-[#54656f] shadow-[0_1px_0.5px_rgba(11,20,26,.13)]">
-          <span className="shrink-0 text-[#8a7a4f]">
+        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-[8px] bg-amber-signal/15 px-3 py-1.5 text-center text-[12.5px] leading-[18px] text-amber-signal-dark shadow-[0_1px_0.5px_rgba(11,20,26,.08)]">
+          <span className="shrink-0 text-amber-signal-dark">
             <IconLock size={13} />
           </span>
           Este atendimento fica registrado no sistema da DW Telecom.
@@ -217,7 +217,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           if (row.kind === 'day') {
             return (
               <div key={row.key} className="my-3 flex justify-center">
-                <span className="rounded-[7.5px] bg-wa-panel px-3 py-[5px] text-[12.5px] font-medium text-[#54656f] shadow-[0_1px_0.5px_rgba(11,20,26,.13)]">
+                <span className="rounded-[7.5px] bg-white/80 px-3 py-[5px] text-[12.5px] font-medium text-wa-icon shadow-[0_1px_0.5px_rgba(11,20,26,.08)]">
                   {row.label}
                 </span>
               </div>
@@ -332,7 +332,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                     title="Responder"
                     className={`absolute right-0 top-0 flex h-[22px] w-[26px] items-center justify-end rounded-tr-[7.5px] pr-[3px] text-wa-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 ${
                       outbound
-                        ? 'bg-[linear-gradient(to_left,#d9fdd3_60%,rgba(217,253,211,0))]'
+                        ? 'bg-[linear-gradient(to_left,#dcefe9_60%,rgba(220,239,233,0))]'
                         : 'bg-[linear-gradient(to_left,#ffffff_60%,rgba(255,255,255,0))]'
                     }`}
                   >

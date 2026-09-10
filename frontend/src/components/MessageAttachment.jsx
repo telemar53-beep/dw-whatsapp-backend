@@ -102,7 +102,7 @@ function VoiceNote({ url, seed, outbound, avatar }) {
 
   const progress = duration > 0 ? Math.min(current / duration, 1) : 0;
   const playedBars = Math.round(progress * BAR_COUNT);
-  const trackColor = outbound ? '#a4c8a0' : '#c6ced2';
+  const trackColor = outbound ? '#a9cec7' : '#c7d3d0';
 
   return (
     <div className="pt-0.5">
@@ -133,7 +133,7 @@ function VoiceNote({ url, seed, outbound, avatar }) {
               className="w-[2px] shrink-0 rounded-full"
               style={{
                 height: `${Math.round(height * 22)}px`,
-                backgroundColor: index < playedBars ? '#00a884' : trackColor,
+                backgroundColor: index < playedBars ? '#0d9488' : trackColor,
               }}
             />
           ))}
@@ -238,7 +238,7 @@ function DocumentCard({ url, filename, outbound }) {
       target="_blank"
       rel="noreferrer"
       className={`flex w-[min(18rem,62vw)] items-center gap-3 rounded-[6px] px-3 py-2.5 transition-colors ${
-        outbound ? 'bg-wa-out-deep hover:bg-[#c7eec1]' : 'bg-[#f5f6f6] hover:bg-[#eceff1]'
+        outbound ? 'bg-wa-out-deep hover:bg-[#bfe0d6]' : 'bg-[#eef4f2] hover:bg-[#e6efec]'
       }`}
     >
       <span className="relative flex h-9 w-7 shrink-0 items-center justify-center">

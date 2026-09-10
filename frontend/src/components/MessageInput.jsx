@@ -151,7 +151,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
   const canSend = Boolean(content.trim() || file);
 
   return (
-    <div className="bg-wa-panel-header font-wa">
+    <div className="border-t border-white/60 bg-white/55 font-wa backdrop-blur-xl">
       {replyingTo && (
         <div className="px-4 pt-2">
           <div className="flex items-stretch overflow-hidden rounded-t-[8px] bg-white">
@@ -251,7 +251,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
               </ComposerButton>
 
               {showingEmojis && (
-                <div className="animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-[10px] border border-wa-border bg-white p-2 shadow-[0_2px_10px_rgba(11,20,26,.16)]">
+                <div className="animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/70 bg-white/90 p-2 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.45)] backdrop-blur-xl">
                   <div className="grid grid-cols-8 gap-1">
                     {EMOJIS.map((emoji) => (
                       <button
@@ -268,7 +268,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
               )}
 
               {showingQuickReplies && (
-                <div className="animate-wa-pop wa-scroll absolute bottom-full left-0 z-20 mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-[10px] border border-wa-border bg-white py-1.5 shadow-[0_2px_10px_rgba(11,20,26,.16)]">
+                <div className="animate-wa-pop wa-scroll absolute bottom-full left-0 z-20 mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/70 bg-white/90 py-1.5 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.45)] backdrop-blur-xl">
                   {quickReplies.length === 0 ? (
                     <p className="px-3 py-2 text-[13.5px] text-wa-muted">Nenhuma resposta cadastrada</p>
                   ) : (

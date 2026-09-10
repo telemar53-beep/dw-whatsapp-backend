@@ -29,8 +29,8 @@ function formatCurrency(value) {
 
 function Card({ icon, title, children }) {
   return (
-    <section className="overflow-hidden rounded-[10px] border border-wa-border bg-white shadow-[0_1px_2px_rgba(11,20,26,.06)]">
-      <div className="flex items-center gap-2 border-b border-wa-border px-3.5 py-2.5">
+    <section className="overflow-hidden rounded-2xl border border-white/70 bg-white/60 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+      <div className="flex items-center gap-2 border-b border-white/50 px-3.5 py-2.5">
         <span className="text-wa-green">{icon}</span>
         <span className="text-[14.5px] font-medium text-wa-text">{title}</span>
       </div>
@@ -62,7 +62,7 @@ function StatusPill({ status }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[12px] font-medium ${
-        active ? 'bg-[#e7f8ef] text-[#067647]' : 'bg-[#f0f2f5] text-wa-icon'
+        active ? 'bg-teal-signal/10 text-teal-signal' : 'bg-wa-active text-wa-icon'
       }`}
     >
       <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-wa-badge' : 'bg-wa-border-strong'}`} />
@@ -78,11 +78,11 @@ function ActionTile({ label, color, icon, onClick, busy, done, pressed }) {
       onClick={onClick}
       disabled={busy}
       aria-pressed={pressed}
-      className={`flex flex-col items-center justify-start gap-1.5 rounded-[10px] border bg-white px-1 py-2.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green disabled:opacity-60 ${
-        pressed || done ? 'border-wa-green bg-[#f2fbf7]' : 'border-wa-border hover:border-wa-green/50 hover:bg-wa-hover'
+      className={`flex flex-col items-center justify-start gap-1.5 rounded-[10px] border bg-white/70 px-1 py-2.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green disabled:opacity-60 ${
+        pressed || done ? 'border-teal-signal bg-teal-signal/10' : 'border-wa-border hover:border-wa-green/50 hover:bg-wa-hover'
       }`}
     >
-      <span className="flex h-7 items-center justify-center" style={{ color: done ? '#00a884' : color }}>
+      <span className="flex h-7 items-center justify-center" style={{ color: done ? '#0d9488' : color }}>
         {busy ? <IconSpinner size={22} /> : done ? <IconCheck size={24} /> : icon}
       </span>
       <span className="text-center text-[11.5px] font-medium leading-[14px] text-wa-text">{label}</span>
@@ -94,12 +94,12 @@ function InvoiceTable({ duplicate }) {
   const cells = [
     { label: 'Vencimento', value: formatDueDate(duplicate.dueDate) },
     { label: 'Valor', value: formatCurrency(duplicate.value) },
-    { label: 'Status', value: <span className="rounded-full bg-[#fff3d6] px-2 py-[2px] text-[12px] font-medium text-[#9a6b00]">Em aberto</span> },
+    { label: 'Status', value: <span className="rounded-full bg-amber-signal/15 px-2 py-[2px] text-[12px] font-medium text-amber-signal-dark">Em aberto</span> },
   ];
 
   return (
     <div className="mt-2 overflow-hidden rounded-[8px] border border-wa-border">
-      <div className="grid grid-cols-3 divide-x divide-wa-border bg-[#f6f8fa]">
+      <div className="grid grid-cols-3 divide-x divide-wa-border bg-white/40">
         {cells.map((cell) => (
           <span key={cell.label} className="px-2 py-1.5 text-center text-[11.5px] text-wa-muted">
             {cell.label}
@@ -209,7 +209,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
             {duplicate.barCode && (
               <ActionTile
                 label="Cód Barras"
-                color="#111b21"
+                color="#0b1220"
                 icon={<IconBarcode size={24} />}
                 busy={busyKey === 'barcode'}
                 done={feedback && feedback.key === 'barcode' && feedback.kind === 'sent'}
@@ -239,7 +239,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
             {duplicate.pixCode && (
               <ActionTile
                 label="QR Pix"
-                color="#54656f"
+                color="#57626d"
                 icon={<IconQrCode size={24} />}
                 pressed={Boolean(qrDataUrl)}
                 onClick={() => handleToggleQr(duplicate.pixCode)}
@@ -259,7 +259,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
           )}
 
           {qrDataUrl && (
-            <figure ref={qrRef} className="mt-3 flex flex-col items-center rounded-[8px] border border-wa-border bg-[#f6f8fa] p-3">
+            <figure ref={qrRef} className="mt-3 flex flex-col items-center rounded-[8px] border border-wa-border bg-white/60 p-3">
               <img src={qrDataUrl} alt="QR code do Pix" className="h-36 w-36 rounded-[4px] bg-white p-1.5" />
               <figcaption className="mt-2 text-center text-[12px] text-wa-muted">
                 Mostre este código para o cliente pagar pelo app do banco.
@@ -290,8 +290,8 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
   const selectedContract = contracts.find((contract) => String(contract.id) === String(selectedContractId)) || null;
 
   return (
-    <aside className="fixed inset-0 z-30 flex flex-col bg-[#eef1f4] font-wa md:static md:z-auto md:h-full md:w-[360px] md:shrink-0 md:border-l md:border-wa-border">
-      <div className="flex h-[59px] shrink-0 items-center gap-2 border-b border-wa-border bg-wa-panel-header px-4">
+    <aside className="fixed inset-0 z-30 flex flex-col bg-white/40 font-wa backdrop-blur-2xl md:static md:z-auto md:h-full md:w-[360px] md:shrink-0 md:border-l md:border-white/50">
+      <div className="flex h-[59px] shrink-0 items-center gap-2 border-b border-white/50 bg-white/50 px-4 backdrop-blur-xl">
         <span className="text-wa-icon">
           <IconIdCard size={21} />
         </span>
@@ -364,7 +364,7 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
                     id="sgp-contract-select"
                     value={selectedContractId || ''}
                     onChange={(e) => setSelectedContractId(e.target.value)}
-                    className="h-10 w-full appearance-none rounded-[8px] border border-wa-border bg-[#f6f8fa] pl-3 pr-9 text-[14.5px] text-wa-text outline-none focus:border-wa-green"
+                    className="h-10 w-full appearance-none rounded-[8px] border border-wa-border bg-white/60 pl-3 pr-9 text-[14.5px] text-wa-text outline-none focus:border-wa-green"
                   >
                     {contracts.map((contract) => (
                       <option key={contract.id} value={contract.id}>

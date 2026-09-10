@@ -103,6 +103,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     setEditingContact(false);
     setReplyingTo(null);
     setSgpPanelOpen(false);
+    setClosingReason(false);
   }, [conversation.id]);
 
   useEffect(() => {

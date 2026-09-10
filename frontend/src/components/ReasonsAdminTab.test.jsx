@@ -53,6 +53,21 @@ describe('ReasonsAdminTab', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  test('shows an inline error when toggling active fails', async () => {
+    const refresh = vi.fn();
+    useReasonsAdmin.mockReturnValue({
+      reasons: [{ id: 'r1', name: 'Troca de senha', active: true }],
+      refresh,
+    });
+    api.updateReason.mockRejectedValue({ body: { error: 'Falha ao atualizar' } });
+    render(<ReasonsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /desativar/i }));
+
+    expect(await screen.findByText('Falha ao atualizar')).toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   test('shows Ativar for an inactive reason', () => {
     useReasonsAdmin.mockReturnValue({
       reasons: [{ id: 'r1', name: 'Antigo', active: false }],

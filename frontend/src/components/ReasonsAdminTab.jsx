@@ -14,6 +14,7 @@ function ReasonRow({ reason, onSaved }) {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [toggleError, setToggleError] = useState(null);
 
   async function handleSave(event) {
     event.preventDefault();
@@ -44,9 +45,12 @@ function ReasonRow({ reason, onSaved }) {
 
   async function handleToggleActive() {
     setToggling(true);
+    setToggleError(null);
     try {
       await updateReason(reason.id, { active: !reason.active }, token);
       onSaved();
+    } catch (err) {
+      setToggleError((err.body && err.body.error) || 'Falha ao atualizar o motivo');
     } finally {
       setToggling(false);
     }
@@ -97,6 +101,9 @@ function ReasonRow({ reason, onSaved }) {
           </button>
         </div>
       </div>
+      {toggleError && (
+        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{toggleError}</p>
+      )}
     </div>
   );
 }

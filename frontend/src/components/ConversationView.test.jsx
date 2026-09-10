@@ -7,6 +7,7 @@ import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useCities } from '../hooks/useCities';
 import { useSgpLookup } from '../hooks/useSgpLookup';
+import { useReasons } from '../hooks/useReasons';
 import * as api from '../services/api';
 
 vi.mock('../contexts/AuthContext');
@@ -14,6 +15,7 @@ vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useCities');
 vi.mock('../hooks/useSgpLookup');
+vi.mock('../hooks/useReasons');
 vi.mock('../services/api');
 
 beforeEach(() => {
@@ -33,6 +35,11 @@ beforeEach(() => {
     search: vi.fn(),
     fetchDuplicate: vi.fn(),
     duplicateState: {},
+  });
+  useReasons.mockReturnValue({
+    reasons: [{ id: 'r1', name: 'Troca de senha', active: true }],
+    loading: false,
+    refresh: vi.fn(),
   });
 });
 
@@ -112,7 +119,7 @@ describe('ConversationView', () => {
     expect(screen.queryByRole('button', { name: /assumir/i })).not.toBeInTheDocument();
   });
 
-  test('clicking Fechar calls closeConversation', async () => {
+  test('clicking Fechar opens the reason popup, and confirming calls closeConversation', async () => {
     api.closeConversation.mockResolvedValue({});
     render(
       <ConversationView
@@ -121,7 +128,12 @@ describe('ConversationView', () => {
       />
     );
     await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
-    await waitFor(() => expect(api.closeConversation).toHaveBeenCalledWith('c1', 'tok-123'));
+
+    expect(screen.getByText('Motivo do contato')).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('Troca de senha'));
+    await userEvent.click(screen.getByRole('button', { name: /confirmar encerramento/i }));
+
+    await waitFor(() => expect(api.closeConversation).toHaveBeenCalledWith('c1', 'r1', 'tok-123'));
   });
 
   test('clicking Transferir calls onTransferClick with the conversation id', async () => {
@@ -171,7 +183,7 @@ describe('ConversationView', () => {
     expect(onTransferClick).toHaveBeenCalledWith('c1');
   });
 
-  test('clicking Fechar on a waiting conversation calls closeConversation', async () => {
+  test('clicking Fechar on a waiting conversation opens the popup too', async () => {
     api.closeConversation.mockResolvedValue({});
     render(
       <ConversationView
@@ -180,10 +192,13 @@ describe('ConversationView', () => {
       />
     );
     await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
-    await waitFor(() => expect(api.closeConversation).toHaveBeenCalledWith('c1', 'tok-123'));
+    await userEvent.click(screen.getByLabelText('Troca de senha'));
+    await userEvent.click(screen.getByRole('button', { name: /confirmar encerramento/i }));
+
+    await waitFor(() => expect(api.closeConversation).toHaveBeenCalledWith('c1', 'r1', 'tok-123'));
   });
 
-  test('shows an alert with the backend error when closing fails', async () => {
+  test('shows the backend error inline in the popup when closing fails, without using window.alert', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     api.closeConversation.mockRejectedValue({ body: { error: 'Conversation is not currently assigned to you, or is closed' } });
     render(
@@ -193,7 +208,11 @@ describe('ConversationView', () => {
       />
     );
     await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Conversation is not currently assigned to you, or is closed'));
+    await userEvent.click(screen.getByLabelText('Troca de senha'));
+    await userEvent.click(screen.getByRole('button', { name: /confirmar encerramento/i }));
+
+    expect(await screen.findByText('Conversation is not currently assigned to you, or is closed')).toBeInTheDocument();
+    expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 

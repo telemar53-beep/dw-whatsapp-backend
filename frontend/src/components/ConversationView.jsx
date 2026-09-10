@@ -7,6 +7,7 @@ import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
 import MessageStatusTicks from './MessageStatusTicks';
 import ConversationHistoryModal from './ConversationHistoryModal';
+import CloseReasonModal from './CloseReasonModal';
 import ContactAvatar from './ContactAvatar';
 import EditContactModal from './EditContactModal';
 import SgpLookupPanel from './SgpLookupPanel';
@@ -94,6 +95,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const [contactOverride, setContactOverride] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
+  const [closingReason, setClosingReason] = useState(false);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -139,12 +141,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     }
   }
 
-  async function handleClose() {
-    try {
-      await closeConversation(conversation.id, token);
-    } catch (err) {
-      window.alert((err.body && err.body.error) || 'Não foi possível fechar este atendimento.');
-    }
+  async function handleConfirmClose(reasonId) {
+    await closeConversation(conversation.id, reasonId, token);
+    setClosingReason(false);
   }
 
   const timeline = buildTimeline(messages);
@@ -197,7 +196,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
               <HeaderIconButton label="Transferir atendimento" onClick={() => onTransferClick(conversation.id)}>
                 <IconTransfer size={22} />
               </HeaderIconButton>
-              <HeaderIconButton label="Fechar atendimento" onClick={handleClose}>
+              <HeaderIconButton label="Fechar atendimento" onClick={() => setClosingReason(true)}>
                 <IconCheckCircle size={22} />
               </HeaderIconButton>
             </>
@@ -368,6 +367,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           onSaved={(updated) => setContactOverride(updated)}
         />
       )}
+      {closingReason && <CloseReasonModal onConfirm={handleConfirmClose} onClose={() => setClosingReason(false)} />}
       </div>
       {sgpPanelOpen && (
         <SgpLookupPanel

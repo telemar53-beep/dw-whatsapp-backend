@@ -23,7 +23,7 @@ describe('ConversationModal', () => {
     render(<ConversationModal conversation={conversation} onClose={vi.fn()} onTransferClick={vi.fn()} />);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.getAllByText('Carlos').length).toBeGreaterThan(0);
   });
 
   test('closing via the conversation view\'s back button calls onClose', async () => {

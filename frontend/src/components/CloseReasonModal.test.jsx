@@ -64,4 +64,12 @@ describe('CloseReasonModal', () => {
 
     expect(onClose).toHaveBeenCalled();
   });
+
+  test('shows an empty-state message and keeps confirm disabled when there are no reasons', () => {
+    useReasons.mockReturnValue({ reasons: [], loading: false, refresh: vi.fn() });
+    render(<CloseReasonModal onConfirm={vi.fn()} onClose={vi.fn()} />);
+
+    expect(screen.getByText(/nenhum motivo de contato cadastrado ainda/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /confirmar encerramento/i })).toBeDisabled();
+  });
 });

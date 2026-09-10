@@ -276,3 +276,11 @@ export function IconChats(props) {
     </Svg>
   );
 }
+
+export function IconUser(props) {
+  return (
+    <Svg {...props}>
+      <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.4 0-9 2.2-9 5.5V22h18v-2.5c0-3.3-4.6-5.5-9-5.5z" />
+    </Svg>
+  );
+}

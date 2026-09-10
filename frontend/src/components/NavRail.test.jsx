@@ -65,11 +65,11 @@ describe('NavRail', () => {
     expect(logout).toHaveBeenCalled();
   });
 
-  test('calls onChangePasswordClick when Trocar senha is clicked', async () => {
-    const onChangePasswordClick = vi.fn();
-    renderRail({ onChangePasswordClick });
-    await userEvent.click(screen.getByLabelText('Trocar senha'));
-    expect(onChangePasswordClick).toHaveBeenCalled();
+  test('calls onProfileClick when Meu perfil is clicked', async () => {
+    const onProfileClick = vi.fn();
+    renderRail({ onProfileClick });
+    await userEvent.click(screen.getByLabelText('Meu perfil'));
+    expect(onProfileClick).toHaveBeenCalled();
   });
 
   test('calls toggleMuted when the sound icon is clicked', async () => {

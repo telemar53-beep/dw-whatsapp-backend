@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
-import { IconChats, IconChart, IconSettings, IconBellOn, IconBellOff, IconKey, IconLogout, IconTeam } from './icons/WaIcons';
+import { IconChats, IconChart, IconSettings, IconBellOn, IconBellOff, IconUser, IconLogout, IconTeam } from './icons/WaIcons';
 
 function RailButton({ label, onClick, children, active }) {
   return (
@@ -39,7 +39,7 @@ function RailLink({ to, label, children, active }) {
 // attendant stranded with only the browser's own back button - see the "Conversas"
 // item, which is the one exception: it needs to reset local state instead of
 // navigating when the caller is already on the conversations page.
-function NavRail({ active, onConversasClick, onChangePasswordClick, mobileHidden = false }) {
+function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = false }) {
   const { agent, logout } = useAuth();
   const { muted, toggleMuted } = useQueueNotificationSound();
   const agentInitial = agent?.name ? agent.name.trim().charAt(0).toUpperCase() : 'DW';
@@ -86,8 +86,8 @@ function NavRail({ active, onConversasClick, onChangePasswordClick, mobileHidden
         <RailButton label={muted ? 'Som mutado' : 'Som ativado'} onClick={toggleMuted} active={muted}>
           {muted ? <IconBellOff size={21} /> : <IconBellOn size={21} />}
         </RailButton>
-        <RailButton label="Trocar senha" onClick={onChangePasswordClick}>
-          <IconKey size={21} />
+        <RailButton label="Meu perfil" onClick={onProfileClick}>
+          <IconUser size={21} />
         </RailButton>
         <RailButton label="Sair" onClick={logout}>
           <IconLogout size={21} />

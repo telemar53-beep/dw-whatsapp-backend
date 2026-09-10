@@ -19,22 +19,24 @@ beforeEach(() => {
 });
 
 describe('TemplatesAdminTab', () => {
-  test('lists templates with their status', () => {
+  test('lists templates with their status', async () => {
     useTemplates.mockReturnValue({
       templates: [{ id: 'tpl-1', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejectionReason: null }],
       refresh: vi.fn(),
     });
     render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /ver templates/i }));
     expect(screen.getByText('fatura_vencida')).toBeInTheDocument();
     expect(screen.getByText('APPROVED')).toBeInTheDocument();
   });
 
-  test('shows the rejection reason for a rejected template', () => {
+  test('shows the rejection reason for a rejected template', async () => {
     useTemplates.mockReturnValue({
       templates: [{ id: 'tpl-1', name: 'x', language: 'pt_BR', category: 'UTILITY', status: 'REJECTED', rejectionReason: 'Invalid format' }],
       refresh: vi.fn(),
     });
     render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /ver templates/i }));
     expect(screen.getByText('Invalid format')).toBeInTheDocument();
   });
 
@@ -43,6 +45,7 @@ describe('TemplatesAdminTab', () => {
     useTemplates.mockReturnValue({ templates: [], refresh });
     api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-2', name: 'boas_vindas', status: 'PENDING' });
     render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
     const form = within(screen.getByRole('form', { name: /cadastrar novo template/i }));
 
     await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
@@ -66,6 +69,7 @@ describe('TemplatesAdminTab', () => {
     useTemplates.mockReturnValue({ templates: [], refresh });
     useChannels.mockReturnValue({ channels: [] });
     const { rerender } = render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
 
     useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }] });
     rerender(<TemplatesAdminTab />);
@@ -89,6 +93,7 @@ describe('TemplatesAdminTab', () => {
     useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
     api.createTemplateAdmin.mockRejectedValue({ body: { error: 'Invalid parameter' } });
     render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
     const form = within(screen.getByRole('form', { name: /cadastrar novo template/i }));
 
     await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
@@ -111,6 +116,7 @@ describe('TemplatesAdminTab', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<TemplatesAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /ver templates/i }));
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
 
     await waitFor(() => expect(api.deleteTemplateAdmin).toHaveBeenCalledWith('tpl-1', 'tok-123'));
@@ -137,6 +143,7 @@ describe('TemplatesAdminTab', () => {
     useTemplates.mockReturnValue({ templates: [], refresh });
     api.registerExistingTemplateAdmin.mockResolvedValue({ id: 'tpl-3', name: 'aviso_cobranca' });
     render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /registrar template existente/i }));
     const form = within(screen.getByRole('form', { name: /registrar template existente/i }));
 
     await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
@@ -158,6 +165,7 @@ describe('TemplatesAdminTab', () => {
     useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
     api.registerExistingTemplateAdmin.mockRejectedValue({ body: { error: 'No template found' } });
     render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /registrar template existente/i }));
     const form = within(screen.getByRole('form', { name: /registrar template existente/i }));
 
     await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
@@ -166,5 +174,84 @@ describe('TemplatesAdminTab', () => {
     await userEvent.click(form.getByRole('button', { name: /^registrar$/i }));
 
     await waitFor(() => expect(screen.getByText('No template found')).toBeInTheDocument());
+  });
+
+  test('does not show the template list, create form, or register form until their buttons are clicked', () => {
+    useTemplates.mockReturnValue({
+      templates: [{ id: 'tpl-1', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejectionReason: null }],
+      refresh: vi.fn(),
+    });
+    render(<TemplatesAdminTab />);
+
+    expect(screen.queryByText('fatura_vencida')).not.toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: /cadastrar novo template/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: /registrar template existente/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ver templates \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cadastrar novo template/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /registrar template existente/i })).toBeInTheDocument();
+  });
+
+  test('clicking Ver templates shows the status of every template', async () => {
+    useTemplates.mockReturnValue({
+      templates: [
+        { id: 'tpl-1', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejectionReason: null },
+        { id: 'tpl-2', name: 'promocao', language: 'pt_BR', category: 'MARKETING', status: 'REJECTED', rejectionReason: 'Formato inválido' },
+      ],
+      refresh: vi.fn(),
+    });
+    render(<TemplatesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /ver templates/i }));
+
+    expect(screen.getByText('fatura_vencida')).toBeInTheDocument();
+    expect(screen.getByText('APPROVED')).toBeInTheDocument();
+    expect(screen.getByText('promocao')).toBeInTheDocument();
+    expect(screen.getByText('REJECTED')).toBeInTheDocument();
+    expect(screen.getByText('Formato inválido')).toBeInTheDocument();
+  });
+
+  test('canceling the create-template form hides it without creating anything', async () => {
+    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    render(<TemplatesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
+    expect(screen.getByRole('form', { name: /cadastrar novo template/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
+
+    expect(screen.queryByRole('form', { name: /cadastrar novo template/i })).not.toBeInTheDocument();
+    expect(api.createTemplateAdmin).not.toHaveBeenCalled();
+  });
+
+  test('canceling the register-existing-template form hides it without registering anything', async () => {
+    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    render(<TemplatesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /registrar template existente/i }));
+    expect(screen.getByRole('form', { name: /registrar template existente/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
+
+    expect(screen.queryByRole('form', { name: /registrar template existente/i })).not.toBeInTheDocument();
+    expect(api.registerExistingTemplateAdmin).not.toHaveBeenCalled();
+  });
+
+  test('creating a template closes the create form afterward', async () => {
+    const refresh = vi.fn();
+    useTemplates.mockReturnValue({ templates: [], refresh });
+    api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-2', name: 'boas_vindas', status: 'PENDING' });
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
+    const form = within(screen.getByRole('form', { name: /cadastrar novo template/i }));
+
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'boas_vindas');
+    await userEvent.selectOptions(form.getByLabelText(/categoria/i), 'UTILITY');
+    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
+    await userEvent.click(form.getByRole('button', { name: /^cadastrar$/i }));
+
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(screen.queryByRole('form', { name: /cadastrar novo template/i })).not.toBeInTheDocument();
   });
 });

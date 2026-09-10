@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTemplates } from '../hooks/useTemplates';
 import { useChannels } from '../hooks/useChannels';
 import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin } from '../services/api';
+import WaDialog from './WaDialog';
 
 function TemplateRow({ template, onDeleted }) {
   const { token } = useAuth();
@@ -49,7 +50,21 @@ function TemplateRow({ template, onDeleted }) {
   );
 }
 
-function RegisterExistingTemplateForm({ onRegistered }) {
+function TemplatesModal({ templates, onClose, onDeleted }) {
+  return (
+    <WaDialog title="Templates cadastrados" onClose={onClose} size="max-w-lg">
+      <div className="wa-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-4">
+        {templates.length === 0 ? (
+          <p className="text-sm text-wa-muted">Nenhum template cadastrado ainda.</p>
+        ) : (
+          templates.map((template) => <TemplateRow key={template.id} template={template} onDeleted={onDeleted} />)
+        )}
+      </div>
+    </WaDialog>
+  );
+}
+
+function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
   const { token } = useAuth();
   const { channels } = useChannels();
   const metaCloudChannels = channels.filter((channel) => channel.type === 'meta_cloud');
@@ -138,13 +153,24 @@ function RegisterExistingTemplateForm({ onRegistered }) {
         </select>
       </div>
       {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        Registrar
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Registrar
+        </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+          >
+            Cancelar
+          </button>
+        )}
+      </div>
     </form>
   );
 }
@@ -155,6 +181,9 @@ function TemplatesAdminTab() {
   const { channels } = useChannels();
   const metaCloudChannels = channels.filter((channel) => channel.type === 'meta_cloud');
 
+  const [viewingTemplates, setViewingTemplates] = useState(false);
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [registeringTemplate, setRegisteringTemplate] = useState(false);
   const [channelId, setChannelId] = useState('');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('UTILITY');
@@ -182,12 +211,20 @@ function TemplatesAdminTab() {
       await createTemplateAdmin({ channelId, name, category, language, bodyText }, token);
       setName('');
       setBodyText('');
+      setCreatingTemplate(false);
       refresh();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao criar template');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleCancelCreate() {
+    setName('');
+    setBodyText('');
+    setError(null);
+    setCreatingTemplate(false);
   }
 
   async function handleSync(wabaId) {
@@ -218,11 +255,40 @@ function TemplatesAdminTab() {
       {syncError && (
         <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{syncError}</p>
       )}
-      <div className="space-y-3">
-        {templates.map((template) => (
-          <TemplateRow key={template.id} template={template} onDeleted={refresh} />
-        ))}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setViewingTemplates(true)}
+          className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+        >
+          Ver templates ({templates.length})
+        </button>
+        {!creatingTemplate && (
+          <button
+            type="button"
+            onClick={() => setCreatingTemplate(true)}
+            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+          >
+            Cadastrar novo template
+          </button>
+        )}
+        {!registeringTemplate && (
+          <button
+            type="button"
+            onClick={() => setRegisteringTemplate(true)}
+            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+          >
+            Registrar template existente
+          </button>
+        )}
       </div>
+
+      {viewingTemplates && (
+        <TemplatesModal templates={templates} onClose={() => setViewingTemplates(false)} onDeleted={refresh} />
+      )}
+
+      {creatingTemplate && (
       <form
         onSubmit={handleCreate}
         aria-label="Cadastrar novo template"
@@ -302,15 +368,34 @@ function TemplatesAdminTab() {
         {error && (
           <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>
         )}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cadastrar
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cadastrar
+          </button>
+          <button
+            type="button"
+            onClick={handleCancelCreate}
+            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+          >
+            Cancelar
+          </button>
+        </div>
       </form>
-      <RegisterExistingTemplateForm onRegistered={refresh} />
+      )}
+
+      {registeringTemplate && (
+        <RegisterExistingTemplateForm
+          onRegistered={() => {
+            refresh();
+            setRegisteringTemplate(false);
+          }}
+          onCancel={() => setRegisteringTemplate(false)}
+        />
+      )}
     </div>
   );
 }

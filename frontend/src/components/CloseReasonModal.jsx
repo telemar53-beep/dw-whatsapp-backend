@@ -22,7 +22,7 @@ function CloseReasonModal({ onConfirm, onClose }) {
 
   return (
     <WaDialog title="Motivo do contato" description="Escolha o motivo antes de encerrar o atendimento." onClose={onClose}>
-      <div className="space-y-2 px-6 py-4">
+      <div className="wa-scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-6 py-4">
         {reasons.length === 0 ? (
           <p className="text-[14.5px] text-wa-muted">
             Nenhum motivo de contato cadastrado ainda. Peça a um administrador para cadastrar ao menos um motivo em

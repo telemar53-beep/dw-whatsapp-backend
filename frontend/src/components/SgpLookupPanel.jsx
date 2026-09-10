@@ -291,7 +291,7 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
 
   return (
     <aside className="fixed inset-0 z-30 flex flex-col bg-white/40 font-wa backdrop-blur-2xl md:static md:z-auto md:h-full md:w-[360px] md:shrink-0 md:border-l md:border-white/50">
-      <div className="flex h-[59px] shrink-0 items-center gap-2 border-b border-white/50 bg-white/50 px-4 backdrop-blur-xl">
+      <div className="flex h-[59px] shrink-0 items-center gap-2 border-b border-white/50 bg-white/40 px-4 backdrop-blur-2xl">
         <span className="text-wa-icon">
           <IconIdCard size={21} />
         </span>

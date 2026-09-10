@@ -151,7 +151,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
   const canSend = Boolean(content.trim() || file);
 
   return (
-    <div className="border-t border-white/60 bg-white/55 font-wa backdrop-blur-xl">
+    <div className="border-t border-white/50 bg-white/40 font-wa backdrop-blur-2xl">
       {replyingTo && (
         <div className="px-4 pt-2">
           <div className="flex items-stretch overflow-hidden rounded-t-[8px] bg-white">

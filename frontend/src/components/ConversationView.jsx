@@ -79,7 +79,7 @@ function HeaderIconButton({ label, onClick, children }) {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="flex h-10 w-10 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-black/[.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-wa-green"
+      className="flex h-8 w-8 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-white hover:text-ink-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-wa-green"
     >
       {children}
     </button>
@@ -152,7 +152,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   return (
     <div className="flex h-full">
       <div className="flex h-full min-w-0 flex-1 flex-col bg-wa-chat font-wa">
-      <div className="z-10 flex items-center gap-1 border-b border-white/60 bg-white/55 px-2 py-[7px] backdrop-blur-xl md:px-4">
+      <div className="z-10 flex items-center gap-1 border-b border-white/50 bg-white/40 px-2 py-[7px] backdrop-blur-2xl md:px-4">
         <button
           onClick={onBack}
           className="flex h-10 w-10 items-center justify-center rounded-full text-wa-icon hover:bg-black/[.06] md:hidden"
@@ -176,32 +176,34 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             <span className="block truncate text-[13px] leading-[17px] text-wa-muted">{subtitle}</span>
           </span>
         </button>
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-2">
           {isUnassigned && (
             <button
               onClick={handleClaim}
-              className="mr-1 flex items-center gap-1.5 rounded-full bg-wa-green px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
+              className="flex items-center gap-1.5 rounded-full bg-wa-green px-3.5 py-1.5 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
             >
               <IconClaim size={17} />
               Assumir
             </button>
           )}
-          <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
-            <IconHistory size={22} />
-          </HeaderIconButton>
-          <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
-            <IconSearch size={22} />
-          </HeaderIconButton>
-          {(isMine || isUnassigned) && (
-            <>
-              <HeaderIconButton label="Transferir atendimento" onClick={() => onTransferClick(conversation.id)}>
-                <IconTransfer size={22} />
-              </HeaderIconButton>
-              <HeaderIconButton label="Fechar atendimento" onClick={() => setClosingReason(true)}>
-                <IconCheckCircle size={22} />
-              </HeaderIconButton>
-            </>
-          )}
+          <div className="flex items-center gap-0.5 rounded-full border border-white/70 bg-white/40 p-1 shadow-sm backdrop-blur-xl">
+            <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
+              <IconHistory size={19} />
+            </HeaderIconButton>
+            <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
+              <IconSearch size={19} />
+            </HeaderIconButton>
+            {(isMine || isUnassigned) && (
+              <>
+                <HeaderIconButton label="Transferir atendimento" onClick={() => onTransferClick(conversation.id)}>
+                  <IconTransfer size={19} />
+                </HeaderIconButton>
+                <HeaderIconButton label="Fechar atendimento" onClick={() => setClosingReason(true)}>
+                  <IconCheckCircle size={19} />
+                </HeaderIconButton>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

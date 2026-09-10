@@ -73,10 +73,32 @@ describe('AgentsAdminTab', () => {
     expect(screen.queryByRole('button', { name: /desativar/i })).not.toBeInTheDocument();
   });
 
-  test('renders the create-agent form', () => {
+  test('does not show the create-agent form until its button is clicked', () => {
     useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
     render(<AgentsAdminTab />);
+
+    expect(screen.queryByText(/Cadastrar novo atendente/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /criar atendente/i })).toBeInTheDocument();
+  });
+
+  test('clicking Criar atendente reveals the create-agent form', async () => {
+    useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
+    render(<AgentsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /criar atendente/i }));
+
     expect(screen.getByText(/Cadastrar novo atendente/)).toBeInTheDocument();
+  });
+
+  test('canceling the create-agent form hides it again', async () => {
+    useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
+    render(<AgentsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /criar atendente/i }));
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(screen.queryByText(/Cadastrar novo atendente/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /criar atendente/i })).toBeInTheDocument();
   });
 
   test('shows each agent\'s assigned sectors', () => {

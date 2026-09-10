@@ -62,4 +62,14 @@ describe('CreateAgentForm', () => {
 
     expect(await screen.findByText('Já existe um atendente com esse email')).toBeInTheDocument();
   });
+
+  test('clicking Cancel calls onCancel without submitting', async () => {
+    const onCancel = vi.fn();
+    render(<CreateAgentForm onCreated={vi.fn()} onCancel={onCancel} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(api.createAgent).not.toHaveBeenCalled();
+  });
 });

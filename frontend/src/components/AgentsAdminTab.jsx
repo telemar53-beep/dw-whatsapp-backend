@@ -115,6 +115,7 @@ function AgentsAdminTab() {
   const { token, agent: currentAgent } = useAuth();
   const { agents, refresh } = useAgentsAdmin();
   const { sectors } = useSectors();
+  const [creatingAgent, setCreatingAgent] = useState(false);
 
   async function handleToggleActive(agentToToggle) {
     await setAgentActive(agentToToggle.id, !agentToToggle.active, token);
@@ -135,7 +136,24 @@ function AgentsAdminTab() {
           />
         ))}
       </div>
-      <CreateAgentForm onCreated={refresh} />
+      {!creatingAgent && (
+        <button
+          type="button"
+          onClick={() => setCreatingAgent(true)}
+          className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+        >
+          Criar atendente
+        </button>
+      )}
+      {creatingAgent && (
+        <CreateAgentForm
+          onCreated={() => {
+            refresh();
+            setCreatingAgent(false);
+          }}
+          onCancel={() => setCreatingAgent(false)}
+        />
+      )}
     </div>
   );
 }

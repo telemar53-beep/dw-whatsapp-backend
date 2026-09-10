@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useChannels } from '../hooks/useChannels';
 import NavRail from '../components/NavRail';
 import ChangePasswordModal from '../components/ChangePasswordModal';
-import CreateChannelForm from '../components/CreateChannelForm';
+import CreateChannelModal from '../components/CreateChannelModal';
 import QrCodeView from '../components/QrCodeView';
 import AgentsAdminTab from '../components/AgentsAdminTab';
 import MessagesAdminTab from '../components/MessagesAdminTab';
@@ -132,6 +132,7 @@ function AdminChannelsPage() {
   const [channelActionError, setChannelActionError] = useState(null);
   const [busyChannelId, setBusyChannelId] = useState(null);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [creatingChannel, setCreatingChannel] = useState(false);
 
   // While a channel is showing a QR code, poll so the card flips to "Conectado"
   // on its own the moment the phone finishes scanning it.
@@ -271,7 +272,22 @@ function AdminChannelsPage() {
                 />
               ))}
             </div>
-            <CreateChannelForm onCreated={refresh} />
+            <button
+              type="button"
+              onClick={() => setCreatingChannel(true)}
+              className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+            >
+              Criar canal
+            </button>
+            {creatingChannel && (
+              <CreateChannelModal
+                onClose={() => setCreatingChannel(false)}
+                onCreated={() => {
+                  refresh();
+                  setCreatingChannel(false);
+                }}
+              />
+            )}
           </div>
         ) : activeTab === 'agents' ? (
           <AgentsAdminTab />

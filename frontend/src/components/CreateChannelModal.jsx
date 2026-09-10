@@ -1,0 +1,59 @@
+import { useState } from 'react';
+import CreateChannelForm from './CreateChannelForm';
+import WaDialog from './WaDialog';
+
+const TYPE_OPTIONS = [
+  {
+    value: 'baileys',
+    label: 'Baileys (não oficial)',
+    description: 'Conecta pelo WhatsApp normal, escaneando um QR code — mais rápido de configurar.',
+  },
+  {
+    value: 'meta_cloud',
+    label: 'Meta Cloud (oficial)',
+    description: 'API oficial da Meta — precisa de Phone Number ID, Access Token e WABA ID.',
+  },
+];
+
+function CreateChannelModal({ onClose, onCreated }) {
+  const [type, setType] = useState(null);
+
+  if (!type) {
+    return (
+      <WaDialog title="Criar canal" onClose={onClose} size="max-w-lg">
+        <div className="space-y-3 px-6 py-4">
+          {TYPE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setType(option.value)}
+              className="w-full rounded-2xl border border-white/70 bg-white/50 p-4 text-left shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl transition hover:bg-white/80"
+            >
+              <p className="font-medium text-ink-950">{option.label}</p>
+              <p className="mt-1 text-sm text-ink-950/55">{option.description}</p>
+            </button>
+          ))}
+        </div>
+      </WaDialog>
+    );
+  }
+
+  const selected = TYPE_OPTIONS.find((option) => option.value === type);
+
+  return (
+    <WaDialog title={`Criar canal — ${selected.label}`} onClose={onClose} size="max-w-lg">
+      <div className="px-6 py-4">
+        <button
+          type="button"
+          onClick={() => setType(null)}
+          className="mb-3 text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+        >
+          ← Voltar
+        </button>
+        <CreateChannelForm type={type} onCreated={onCreated} onCancel={onClose} />
+      </div>
+    </WaDialog>
+  );
+}
+
+export default CreateChannelModal;

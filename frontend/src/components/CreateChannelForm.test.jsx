@@ -17,12 +17,12 @@ describe('CreateChannelForm', () => {
   test('creates a baileys channel with just name and phone number', async () => {
     api.createChannel.mockResolvedValue({ id: 'ch1' });
     const onCreated = vi.fn();
-    render(<CreateChannelForm onCreated={onCreated} />);
+    render(<CreateChannelForm type="baileys" onCreated={onCreated} />);
 
-    await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'baileys');
+    expect(screen.queryByLabelText(/phone number id/i)).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/^nome/i), 'Vendas');
     await userEvent.type(screen.getByLabelText(/telefone/i), '+5511988887777');
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^cadastrar$/i }));
 
     await waitFor(() =>
       expect(api.createChannel).toHaveBeenCalledWith(
@@ -33,27 +33,24 @@ describe('CreateChannelForm', () => {
     expect(onCreated).toHaveBeenCalled();
   });
 
-  test('shows the phoneNumberId and accessToken fields only for meta_cloud', async () => {
-    render(<CreateChannelForm onCreated={vi.fn()} />);
-    expect(screen.queryByLabelText(/phone number id/i)).not.toBeInTheDocument();
-
-    await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'meta_cloud');
+  test('shows the phoneNumberId, accessToken and wabaId fields for meta_cloud', () => {
+    render(<CreateChannelForm type="meta_cloud" onCreated={vi.fn()} />);
 
     expect(screen.getByLabelText(/phone number id/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/access token/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/waba id/i)).toBeInTheDocument();
   });
 
   test('creates a meta_cloud channel with all fields', async () => {
     api.createChannel.mockResolvedValue({ id: 'ch2' });
-    render(<CreateChannelForm onCreated={vi.fn()} />);
+    render(<CreateChannelForm type="meta_cloud" onCreated={vi.fn()} />);
 
-    await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'meta_cloud');
     await userEvent.type(screen.getByLabelText(/^nome/i), 'Suporte');
     await userEvent.type(screen.getByLabelText(/telefone/i), '+5511999990000');
     await userEvent.type(screen.getByLabelText(/phone number id/i), '123456');
     await userEvent.type(screen.getByLabelText(/access token/i), 'tok-meta');
     await userEvent.type(screen.getByLabelText(/waba id/i), 'waba-1');
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^cadastrar$/i }));
 
     await waitFor(() =>
       expect(api.createChannel).toHaveBeenCalledWith(
@@ -72,13 +69,22 @@ describe('CreateChannelForm', () => {
 
   test('shows an error message when creation fails', async () => {
     api.createChannel.mockRejectedValue({ body: { error: 'Ja existe um canal com esse telefone' } });
-    render(<CreateChannelForm onCreated={vi.fn()} />);
+    render(<CreateChannelForm type="baileys" onCreated={vi.fn()} />);
 
-    await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'baileys');
     await userEvent.type(screen.getByLabelText(/^nome/i), 'Vendas');
     await userEvent.type(screen.getByLabelText(/telefone/i), '+5511988887777');
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^cadastrar$/i }));
 
     expect(await screen.findByText('Ja existe um canal com esse telefone')).toBeInTheDocument();
+  });
+
+  test('clicking Cancel calls onCancel without creating', async () => {
+    const onCancel = vi.fn();
+    render(<CreateChannelForm type="baileys" onCreated={vi.fn()} onCancel={onCancel} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(api.createChannel).not.toHaveBeenCalled();
   });
 });

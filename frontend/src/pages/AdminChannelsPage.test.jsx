@@ -70,14 +70,15 @@ describe('AdminChannelsPage', () => {
     expect(screen.getByText(/Escaneie o QR code/)).toBeInTheDocument();
   });
 
-  test('renders the create-channel form', () => {
+  test('shows a button to create a new channel', () => {
     useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
     render(
       <MemoryRouter>
         <AdminChannelsPage />
       </MemoryRouter>
     );
-    expect(screen.getByText(/Cadastrar novo canal/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /criar canal/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^nome/i)).not.toBeInTheDocument();
   });
 
   test('switches to the Atendentes tab and shows the agents list instead of channels', async () => {

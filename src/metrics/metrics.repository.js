@@ -117,7 +117,7 @@ async function getMetricsByReason(since) {
      FROM closed
      JOIN contact_reasons r ON r.id = closed.reason_id
      GROUP BY r.id, r.name
-     ORDER BY closed_count DESC`,
+     ORDER BY closed_count DESC, r.name ASC`,
     [since]
   );
   return result.rows.map((row) => ({

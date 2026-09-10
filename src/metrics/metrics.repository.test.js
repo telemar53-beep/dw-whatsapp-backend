@@ -267,6 +267,31 @@ describe('metrics repository', () => {
     ]);
   });
 
+  test('getMetricsByReason breaks ties on closed_count by reason name ascending', async () => {
+    const agent = await createAgent({ email: 'metrics-reason-tie@dw.com', password: 'secret123', role: 'agent' });
+    const channelId = await seedChannel();
+    const pagamento = await createReason({ name: 'Pagamento' });
+    const senha = await createReason({ name: 'Troca de senha' });
+
+    await seedClosedConversation({
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T10:00:00Z'), closedAt: new Date('2026-01-02T10:30:00Z'),
+      reasonId: senha.id,
+    });
+    await seedClosedConversation({
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T11:00:00Z'), closedAt: new Date('2026-01-02T11:30:00Z'),
+      reasonId: pagamento.id,
+    });
+
+    const metrics = await getMetricsByReason(SINCE);
+
+    expect(metrics).toEqual([
+      { reasonId: pagamento.id, reasonName: 'Pagamento', closedCount: 1 },
+      { reasonId: senha.id, reasonName: 'Troca de senha', closedCount: 1 },
+    ]);
+  });
+
   test('getMetricsByReason ignores conversations closed without a reason', async () => {
     const agent = await createAgent({ email: 'metrics-reason2@dw.com', password: 'secret123', role: 'agent' });
     const channelId = await seedChannel();

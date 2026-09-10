@@ -1,7 +1,9 @@
 const express = require('express');
 const QRCode = require('qrcode');
+const crypto = require('crypto');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
 const { verifyToken } = require('../auth/auth.service');
+const { loadConfig } = require('../config/env');
 const {
   listChannels,
   createChannel,
@@ -14,6 +16,8 @@ const {
   deleteChannel,
 } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
+const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
+const { isOfficialChannelType } = require('../channels/channel-types');
 
 const router = express.Router();
 
@@ -47,7 +51,7 @@ function toChannelResponse(channel) {
     triageEnabled: channel.triageEnabled,
     hidden: channel.hidden,
     welcomeMessage: channel.welcomeMessage,
-    wabaId: channel.type === 'meta_cloud' ? channel.config.wabaId : undefined,
+    wabaId: isOfficialChannelType(channel.type) ? channel.config.wabaId : undefined,
   };
 }
 
@@ -72,6 +76,23 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
       return res.status(201).json(channel);
     }
 
+    if (type === '360dialog') {
+      const { apiKey, wabaId } = req.body;
+      if (!apiKey || !wabaId) {
+        return res.status(400).json({ error: 'apiKey and wabaId are required for 360dialog channels' });
+      }
+      const webhookToken = crypto.randomBytes(24).toString('hex');
+      const config = { apiKey, wabaId, webhookToken };
+      const webhookUrl = `${loadConfig().publicBaseUrl}/webhooks/360dialog/${webhookToken}`;
+      try {
+        await threeSixtyDialogAdapter.registerWebhook({ config }, webhookUrl);
+      } catch (err) {
+        return res.status(400).json({ error: 'Não foi possível registrar o webhook na 360dialog — confira a API Key' });
+      }
+      const channel = await createChannel({ type, name, phoneNumber, config });
+      return res.status(201).json(channel);
+    }
+
     if (type === 'baileys') {
       const channel = await baileysManager.addBaileysChannel({ name, phoneNumber });
       return res.status(201).json(channel);
@@ -83,7 +104,7 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
     throw err;
   }
 
-  return res.status(400).json({ error: 'type must be meta_cloud or baileys' });
+  return res.status(400).json({ error: 'type must be meta_cloud, baileys, or 360dialog' });
 });
 
 router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {

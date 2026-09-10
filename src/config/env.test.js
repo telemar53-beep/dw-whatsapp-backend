@@ -19,6 +19,7 @@ describe('loadConfig', () => {
     process.env.META_APP_SECRET = 'app-secret';
     process.env.BAILEYS_SESSIONS_DIR = './.baileys-sessions';
     process.env.MEDIA_STORAGE_DIR = './.media-storage';
+    process.env.PUBLIC_BASE_URL = 'http://localhost:3000';
   }
 
   test('throws when DATABASE_URL is missing', () => {
@@ -63,10 +64,16 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow('Missing required environment variables: MEDIA_STORAGE_DIR');
   });
 
+  test('throws when PUBLIC_BASE_URL is missing', () => {
+    setAllRequired();
+    delete process.env.PUBLIC_BASE_URL;
+    expect(() => loadConfig()).toThrow('Missing required environment variables: PUBLIC_BASE_URL');
+  });
+
   test('lists all missing variables together', () => {
     process.env = {};
     expect(() => loadConfig()).toThrow(
-      'Missing required environment variables: DATABASE_URL, JWT_SECRET, REDIS_URL, META_VERIFY_TOKEN, META_APP_SECRET, BAILEYS_SESSIONS_DIR, MEDIA_STORAGE_DIR'
+      'Missing required environment variables: DATABASE_URL, JWT_SECRET, REDIS_URL, META_VERIFY_TOKEN, META_APP_SECRET, BAILEYS_SESSIONS_DIR, MEDIA_STORAGE_DIR, PUBLIC_BASE_URL'
     );
   });
 
@@ -84,6 +91,7 @@ describe('loadConfig', () => {
       baileysSessionsDir: './.baileys-sessions',
       mediaStorageDir: './.media-storage',
       frontendOrigin: null,
+      publicBaseUrl: 'http://localhost:3000',
     });
   });
 

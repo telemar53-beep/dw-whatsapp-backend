@@ -7,6 +7,7 @@ function loadConfig() {
     'META_APP_SECRET',
     'BAILEYS_SESSIONS_DIR',
     'MEDIA_STORAGE_DIR',
+    'PUBLIC_BASE_URL',
   ];
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) {
@@ -22,6 +23,7 @@ function loadConfig() {
     baileysSessionsDir: process.env.BAILEYS_SESSIONS_DIR,
     mediaStorageDir: process.env.MEDIA_STORAGE_DIR,
     frontendOrigin: process.env.FRONTEND_ORIGIN || null,
+    publicBaseUrl: process.env.PUBLIC_BASE_URL,
   };
 }
 

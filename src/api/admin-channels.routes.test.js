@@ -1,5 +1,6 @@
 jest.mock('../channels/channel.repository');
 jest.mock('../whatsapp-adapters/baileys.manager');
+jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
 jest.mock('qrcode');
 const request = require('supertest');
 const express = require('express');
@@ -17,6 +18,7 @@ const {
   deleteChannel,
 } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
+const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const adminChannelsRoutes = require('./admin-channels.routes');
 
 function buildApp() {
@@ -176,6 +178,62 @@ describe('POST /api/admin/channels', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ type: 'baileys', name: 'X', phoneNumber: '+5511900000000' });
     expect(res.status).toBe(403);
+  });
+
+  test('creates a 360dialog channel, registering the webhook first', async () => {
+    threeSixtyDialogAdapter.registerWebhook.mockResolvedValue(undefined);
+    createChannel.mockResolvedValue({
+      id: 'channel-9', type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009',
+      config: { apiKey: 'd360-key', wabaId: 'waba-9', webhookToken: expect.any(String) },
+      status: 'disconnected', triageEnabled: false, hidden: false, welcomeMessage: null,
+    });
+
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009', apiKey: 'd360-key', wabaId: 'waba-9' });
+
+    expect(res.status).toBe(201);
+    expect(threeSixtyDialogAdapter.registerWebhook).toHaveBeenCalledTimes(1);
+    const [registeredChannel, webhookUrl] = threeSixtyDialogAdapter.registerWebhook.mock.calls[0];
+    expect(registeredChannel.config.apiKey).toBe('d360-key');
+    expect(webhookUrl).toMatch(/^http:\/\/localhost:3000\/webhooks\/360dialog\/[a-f0-9]{48}$/);
+    expect(createChannel).toHaveBeenCalledWith(expect.objectContaining({
+      type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009',
+      config: expect.objectContaining({ apiKey: 'd360-key', wabaId: 'waba-9' }),
+    }));
+  });
+
+  test('rejects a 360dialog channel missing apiKey', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009', wabaId: 'waba-9' });
+
+    expect(res.status).toBe(400);
+    expect(createChannel).not.toHaveBeenCalled();
+  });
+
+  test('rejects a 360dialog channel missing wabaId', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009', apiKey: 'd360-key' });
+
+    expect(res.status).toBe(400);
+    expect(createChannel).not.toHaveBeenCalled();
+  });
+
+  test('does not create the channel when webhook registration fails', async () => {
+    threeSixtyDialogAdapter.registerWebhook.mockRejectedValue(new Error('401 Unauthorized'));
+
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009', apiKey: 'bad-key', wabaId: 'waba-9' });
+
+    expect(res.status).toBe(400);
+    expect(createChannel).not.toHaveBeenCalled();
   });
 });
 
@@ -444,6 +502,16 @@ describe('GET /api/admin/channels (wabaId in response)', () => {
     const res = await request(buildApp()).get('/api/admin/channels').set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
     expect(res.body[0].wabaId).toBe('waba-1');
     expect(res.body[1].wabaId).toBeUndefined();
+  });
+
+  test('includes wabaId for a 360dialog channel', async () => {
+    listChannels.mockResolvedValue([
+      { id: 'channel-9', type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009', config: { apiKey: 'k', wabaId: 'waba-9', webhookToken: 't' }, status: 'disconnected', triageEnabled: false, hidden: false, welcomeMessage: null },
+    ]);
+    const res = await request(buildApp())
+      .get('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+    expect(res.body[0].wabaId).toBe('waba-9');
   });
 });
 

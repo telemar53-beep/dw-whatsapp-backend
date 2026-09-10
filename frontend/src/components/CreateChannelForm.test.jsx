@@ -67,6 +67,38 @@ describe('CreateChannelForm', () => {
     );
   });
 
+  test('shows apiKey and wabaId fields only for type 360dialog', () => {
+    render(<CreateChannelForm type="360dialog" onCreated={vi.fn()} />);
+
+    expect(screen.getByLabelText(/api key/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/waba id/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/phone number id/i)).not.toBeInTheDocument();
+  });
+
+  test('submits the 360dialog payload with apiKey and wabaId', async () => {
+    api.createChannel.mockResolvedValue({ id: 'channel-9' });
+    render(<CreateChannelForm type="360dialog" onCreated={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText(/^nome/i), 'Via BSP');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '+5511999990009');
+    await userEvent.type(screen.getByLabelText(/api key/i), 'd360-key-abc');
+    await userEvent.type(screen.getByLabelText(/waba id/i), 'waba-9');
+    await userEvent.click(screen.getByRole('button', { name: /^cadastrar$/i }));
+
+    await waitFor(() =>
+      expect(api.createChannel).toHaveBeenCalledWith(
+        {
+          type: '360dialog',
+          name: 'Via BSP',
+          phoneNumber: '+5511999990009',
+          apiKey: 'd360-key-abc',
+          wabaId: 'waba-9',
+        },
+        'tok-123'
+      )
+    );
+  });
+
   test('shows an error message when creation fails', async () => {
     api.createChannel.mockRejectedValue({ body: { error: 'Ja existe um canal com esse telefone' } });
     render(<CreateChannelForm type="baileys" onCreated={vi.fn()} />);

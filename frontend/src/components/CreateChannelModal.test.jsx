@@ -42,6 +42,16 @@ describe('CreateChannelModal', () => {
     expect(screen.getByLabelText(/waba id/i)).toBeInTheDocument();
   });
 
+  test('shows a third option for 360dialog and leads to its form', async () => {
+    render(<CreateChannelModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /360dialog/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /360dialog/i }));
+
+    expect(screen.getByLabelText(/api key/i)).toBeInTheDocument();
+  });
+
   test('clicking Voltar returns to the type-choice step', async () => {
     render(<CreateChannelModal onClose={vi.fn()} onCreated={vi.fn()} />);
 

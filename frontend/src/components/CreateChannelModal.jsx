@@ -13,6 +13,11 @@ const TYPE_OPTIONS = [
     label: 'Meta Cloud (oficial)',
     description: 'API oficial da Meta — precisa de Phone Number ID, Access Token e WABA ID.',
   },
+  {
+    value: '360dialog',
+    label: '360dialog (oficial via BSP)',
+    description: 'API oficial via 360dialog — precisa só da API Key (D360-API-KEY) e do WABA ID.',
+  },
 ];
 
 function CreateChannelModal({ onClose, onCreated }) {

@@ -13,6 +13,7 @@ function CreateChannelForm({ type, onCreated, onCancel }) {
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [wabaId, setWabaId] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -21,7 +22,11 @@ function CreateChannelForm({ type, onCreated, onCancel }) {
     setError(null);
     setSubmitting(true);
     const payload =
-      type === 'meta_cloud' ? { type, name, phoneNumber, phoneNumberId, accessToken, wabaId } : { type, name, phoneNumber };
+      type === 'meta_cloud'
+        ? { type, name, phoneNumber, phoneNumberId, accessToken, wabaId }
+        : type === '360dialog'
+          ? { type, name, phoneNumber, apiKey, wabaId }
+          : { type, name, phoneNumber };
     try {
       await createChannel(payload, token);
       setName('');
@@ -29,6 +34,7 @@ function CreateChannelForm({ type, onCreated, onCancel }) {
       setPhoneNumberId('');
       setAccessToken('');
       setWabaId('');
+      setApiKey('');
       onCreated();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao cadastrar canal');
@@ -89,6 +95,22 @@ function CreateChannelForm({ type, onCreated, onCancel }) {
               WABA ID
             </label>
             <input id="wabaId" value={wabaId} onChange={(e) => setWabaId(e.target.value)} className={inputClass} required />
+          </div>
+        </>
+      )}
+      {type === '360dialog' && (
+        <>
+          <div>
+            <label htmlFor="apiKey" className={labelClass}>
+              API Key (D360-API-KEY)
+            </label>
+            <input id="apiKey" value={apiKey} onChange={(e) => setApiKey(e.target.value)} className={inputClass} required />
+          </div>
+          <div>
+            <label htmlFor="wabaId360" className={labelClass}>
+              WABA ID
+            </label>
+            <input id="wabaId360" value={wabaId} onChange={(e) => setWabaId(e.target.value)} className={inputClass} required />
           </div>
         </>
       )}

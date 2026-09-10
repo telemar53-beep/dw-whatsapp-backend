@@ -1,7 +1,8 @@
 const { getPool, closePool } = require('../db/pool');
 const { createAgent } = require('../agents/agent.repository');
 const { createSector, setAgentSectors } = require('../sectors/sector.repository');
-const { getMetricsForAgent, getMetricsForAllAgents, getMetricsBySector } = require('./metrics.repository');
+const { createReason } = require('../reasons/reason.repository');
+const { getMetricsForAgent, getMetricsForAllAgents, getMetricsBySector, getMetricsByReason } = require('./metrics.repository');
 
 let contactCounter = 0;
 
@@ -21,7 +22,7 @@ async function seedContact() {
   return result.rows[0].id;
 }
 
-async function seedClosedConversation({ channelId, contactId, agentId, startedAt, closedAt, firstResponseAt, assignedAt }) {
+async function seedClosedConversation({ channelId, contactId, agentId, startedAt, closedAt, firstResponseAt, assignedAt, reasonId }) {
   const conv = await getPool().query(
     `INSERT INTO conversations (contact_id, channel_id, status, assigned_agent_id, created_at, updated_at)
      VALUES ($1, $2, 'closed', $3, $4, $4) RETURNING id`,
@@ -34,9 +35,9 @@ async function seedClosedConversation({ channelId, contactId, agentId, startedAt
     [conversationId, agentId, assignedAt || startedAt]
   );
   await getPool().query(
-    `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, created_at)
-     VALUES ($1, 'closed', $2, $3)`,
-    [conversationId, agentId, closedAt]
+    `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, reason_id, created_at)
+     VALUES ($1, 'closed', $2, $3, $4)`,
+    [conversationId, agentId, reasonId || null, closedAt]
   );
   if (firstResponseAt) {
     await getPool().query(
@@ -51,7 +52,7 @@ async function seedClosedConversation({ channelId, contactId, agentId, startedAt
 describe('metrics repository', () => {
   beforeEach(async () => {
     await getPool().query(
-      'TRUNCATE messages, conversation_events, conversations, contacts, channels, agent_sectors, sectors, agents CASCADE'
+      'TRUNCATE messages, conversation_events, conversations, contacts, channels, agent_sectors, sectors, contact_reasons, agents CASCADE'
     );
     contactCounter = 0;
   });
@@ -232,6 +233,66 @@ describe('metrics repository', () => {
     });
 
     const metrics = await getMetricsBySector(SINCE);
+
+    expect(metrics).toEqual([]);
+  });
+
+  test('getMetricsByReason counts closed conversations per reason, ordered by frequency', async () => {
+    const agent = await createAgent({ email: 'metrics-reason1@dw.com', password: 'secret123', role: 'agent' });
+    const channelId = await seedChannel();
+    const senha = await createReason({ name: 'Troca de senha' });
+    const pagamento = await createReason({ name: 'Pagamento' });
+
+    await seedClosedConversation({
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T10:00:00Z'), closedAt: new Date('2026-01-02T10:30:00Z'),
+      reasonId: senha.id,
+    });
+    await seedClosedConversation({
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T11:00:00Z'), closedAt: new Date('2026-01-02T11:30:00Z'),
+      reasonId: senha.id,
+    });
+    await seedClosedConversation({
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T12:00:00Z'), closedAt: new Date('2026-01-02T12:30:00Z'),
+      reasonId: pagamento.id,
+    });
+
+    const metrics = await getMetricsByReason(SINCE);
+
+    expect(metrics).toEqual([
+      { reasonId: senha.id, reasonName: 'Troca de senha', closedCount: 2 },
+      { reasonId: pagamento.id, reasonName: 'Pagamento', closedCount: 1 },
+    ]);
+  });
+
+  test('getMetricsByReason ignores conversations closed without a reason', async () => {
+    const agent = await createAgent({ email: 'metrics-reason2@dw.com', password: 'secret123', role: 'agent' });
+    const channelId = await seedChannel();
+
+    await seedClosedConversation({
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T10:00:00Z'), closedAt: new Date('2026-01-02T10:30:00Z'),
+    });
+
+    const metrics = await getMetricsByReason(SINCE);
+
+    expect(metrics).toEqual([]);
+  });
+
+  test('getMetricsByReason excludes conversations closed before the since timestamp', async () => {
+    const agent = await createAgent({ email: 'metrics-reason3@dw.com', password: 'secret123', role: 'agent' });
+    const channelId = await seedChannel();
+    const reason = await createReason({ name: 'Antigo' });
+
+    await seedClosedConversation({
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: BEFORE_SINCE, closedAt: new Date('2026-01-01T09:15:00Z'),
+      reasonId: reason.id,
+    });
+
+    const metrics = await getMetricsByReason(SINCE);
 
     expect(metrics).toEqual([]);
   });

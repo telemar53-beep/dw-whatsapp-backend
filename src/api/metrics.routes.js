@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../auth/auth.middleware');
-const { getMetricsForAgent, getMetricsForAllAgents, getMetricsBySector } = require('../metrics/metrics.repository');
+const { getMetricsForAgent, getMetricsForAllAgents, getMetricsBySector, getMetricsByReason } = require('../metrics/metrics.repository');
 
 const router = express.Router();
 
@@ -19,8 +19,12 @@ router.get('/', requireAuth, async (req, res) => {
   }
 
   if (req.agent.role === 'admin') {
-    const [byAgent, bySector] = await Promise.all([getMetricsForAllAgents(since), getMetricsBySector(since)]);
-    return res.json({ period: req.query.period, scope: 'admin', byAgent, bySector });
+    const [byAgent, bySector, byReason] = await Promise.all([
+      getMetricsForAllAgents(since),
+      getMetricsBySector(since),
+      getMetricsByReason(since),
+    ]);
+    return res.json({ period: req.query.period, scope: 'admin', byAgent, bySector, byReason });
   }
 
   const own = await getMetricsForAgent(req.agent.agentId, since);

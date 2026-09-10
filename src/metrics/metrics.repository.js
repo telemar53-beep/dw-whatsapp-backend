@@ -106,4 +106,25 @@ async function getMetricsBySector(since) {
   }));
 }
 
-module.exports = { getMetricsForAgent, getMetricsForAllAgents, getMetricsBySector };
+async function getMetricsByReason(since) {
+  const result = await getPool().query(
+    `WITH closed AS (
+       SELECT ce.reason_id
+       FROM conversation_events ce
+       WHERE ce.event_type = 'closed' AND ce.reason_id IS NOT NULL AND ce.created_at >= $1
+     )
+     SELECT r.id AS reason_id, r.name AS reason_name, COUNT(*)::int AS closed_count
+     FROM closed
+     JOIN contact_reasons r ON r.id = closed.reason_id
+     GROUP BY r.id, r.name
+     ORDER BY closed_count DESC`,
+    [since]
+  );
+  return result.rows.map((row) => ({
+    reasonId: row.reason_id,
+    reasonName: row.reason_name,
+    closedCount: Number(row.closed_count),
+  }));
+}
+
+module.exports = { getMetricsForAgent, getMetricsForAllAgents, getMetricsBySector, getMetricsByReason };

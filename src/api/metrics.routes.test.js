@@ -6,6 +6,7 @@ const {
   getMetricsForAgent,
   getMetricsForAllAgents,
   getMetricsBySector,
+  getMetricsByReason,
 } = require('../metrics/metrics.repository');
 const metricsRoutes = require('./metrics.routes');
 
@@ -61,6 +62,7 @@ describe('GET /api/metrics', () => {
     expect(getMetricsForAgent).toHaveBeenCalledWith('agent-1', expect.any(Date));
     expect(getMetricsForAllAgents).not.toHaveBeenCalled();
     expect(getMetricsBySector).not.toHaveBeenCalled();
+    expect(getMetricsByReason).not.toHaveBeenCalled();
     expect(res.body).toEqual({
       period: 'today',
       scope: 'agent',
@@ -73,6 +75,7 @@ describe('GET /api/metrics', () => {
       { agentId: 'a1', agentName: 'Ana', closedCount: 2, avgResolutionMinutes: 10, avgFirstResponseMinutes: 3 },
     ]);
     getMetricsBySector.mockResolvedValue([{ sectorId: 's1', sectorName: 'Financeiro', closedCount: 2 }]);
+    getMetricsByReason.mockResolvedValue([{ reasonId: 'r1', reasonName: 'Troca de senha', closedCount: 2 }]);
 
     const res = await request(buildApp())
       .get('/api/metrics?period=7d')
@@ -87,6 +90,7 @@ describe('GET /api/metrics', () => {
       scope: 'admin',
       byAgent: [{ agentId: 'a1', agentName: 'Ana', closedCount: 2, avgResolutionMinutes: 10, avgFirstResponseMinutes: 3 }],
       bySector: [{ sectorId: 's1', sectorName: 'Financeiro', closedCount: 2 }],
+      byReason: [{ reasonId: 'r1', reasonName: 'Troca de senha', closedCount: 2 }],
     });
   });
 

@@ -7,6 +7,8 @@ const {
   listAgents,
   setAgentActive,
   updateAgentPassword,
+  updateAgentProfile,
+  setAgentAvatarPath,
 } = require('./agent.repository');
 const { createSector, setAgentSectors } = require('../sectors/sector.repository');
 
@@ -107,5 +109,45 @@ describe('agent repository', () => {
     const matchesOld = await bcrypt.compare('secret123', agent.passwordHash);
     expect(matchesNew).toBe(true);
     expect(matchesOld).toBe(false);
+  });
+
+  test('findAgentById includes phone and avatarPath (both null by default)', async () => {
+    const created = await createAgent({ name: 'Helena', email: 'h@dw.com', password: 'secret123', role: 'agent' });
+    const agent = await findAgentById(created.id);
+    expect(agent.phone).toBeNull();
+    expect(agent.avatarPath).toBeNull();
+  });
+
+  test('updateAgentProfile updates name and phone', async () => {
+    const created = await createAgent({ name: 'Igor', email: 'i@dw.com', password: 'secret123', role: 'agent' });
+
+    const updated = await updateAgentProfile(created.id, { name: 'Igor Silva', phone: '11999998888' });
+
+    expect(updated.name).toBe('Igor Silva');
+    expect(updated.phone).toBe('11999998888');
+  });
+
+  test('updateAgentProfile clears phone when given null', async () => {
+    const created = await createAgent({ name: 'Julia', email: 'j@dw.com', password: 'secret123', role: 'agent' });
+    await updateAgentProfile(created.id, { name: 'Julia', phone: '11999998888' });
+
+    const updated = await updateAgentProfile(created.id, { name: 'Julia', phone: null });
+
+    expect(updated.phone).toBeNull();
+  });
+
+  test('updateAgentProfile returns null when the agent does not exist', async () => {
+    const result = await updateAgentProfile('00000000-0000-0000-0000-000000000000', { name: 'X', phone: null });
+    expect(result).toBeNull();
+  });
+
+  test('setAgentAvatarPath sets and then clears the avatar path', async () => {
+    const created = await createAgent({ name: 'Karen', email: 'k@dw.com', password: 'secret123', role: 'agent' });
+
+    await setAgentAvatarPath(created.id, 'avatars/karen.jpg');
+    expect((await findAgentById(created.id)).avatarPath).toBe('avatars/karen.jpg');
+
+    await setAgentAvatarPath(created.id, null);
+    expect((await findAgentById(created.id)).avatarPath).toBeNull();
   });
 });

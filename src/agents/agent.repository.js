@@ -4,7 +4,16 @@ const { getPool } = require('../db/pool');
 const SALT_ROUNDS = 10;
 
 function toPublicAgent(row) {
-  return { id: row.id, name: row.name, email: row.email, role: row.role, active: row.active, createdAt: row.created_at };
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    active: row.active,
+    phone: row.phone,
+    avatarPath: row.avatar_path,
+    createdAt: row.created_at,
+  };
 }
 
 async function createAgent({ name, email, password, role }) {
@@ -55,7 +64,7 @@ async function findAgentByIdWithPasswordHash(id) {
 
 async function findAgentById(id) {
   const result = await getPool().query(
-    'SELECT id, name, email, role, active, created_at FROM agents WHERE id = $1',
+    'SELECT id, name, email, role, active, phone, avatar_path, created_at FROM agents WHERE id = $1',
     [id]
   );
   if (result.rowCount === 0) return null;
@@ -64,7 +73,7 @@ async function findAgentById(id) {
 
 async function listAgents() {
   const result = await getPool().query(`
-    SELECT a.id, a.name, a.email, a.role, a.active, a.created_at,
+    SELECT a.id, a.name, a.email, a.role, a.active, a.phone, a.avatar_path, a.created_at,
            COALESCE(
              json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name) FILTER (WHERE s.id IS NOT NULL),
              '[]'
@@ -91,6 +100,20 @@ async function updateAgentPassword(id, passwordHash) {
   await getPool().query('UPDATE agents SET password_hash = $2 WHERE id = $1', [id, passwordHash]);
 }
 
+async function updateAgentProfile(id, { name, phone }) {
+  const result = await getPool().query(
+    `UPDATE agents SET name = $2, phone = $3 WHERE id = $1
+     RETURNING id, name, email, role, active, phone, avatar_path, created_at`,
+    [id, name, phone || null]
+  );
+  if (result.rowCount === 0) return null;
+  return toPublicAgent(result.rows[0]);
+}
+
+async function setAgentAvatarPath(id, avatarPath) {
+  await getPool().query('UPDATE agents SET avatar_path = $2 WHERE id = $1', [id, avatarPath]);
+}
+
 module.exports = {
   createAgent,
   findAgentByEmail,
@@ -99,4 +122,6 @@ module.exports = {
   listAgents,
   setAgentActive,
   updateAgentPassword,
+  updateAgentProfile,
+  setAgentAvatarPath,
 };

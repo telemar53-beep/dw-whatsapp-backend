@@ -451,10 +451,15 @@ function CityNoticeRow({ city, onSaved }) {
 
 function AssignmentMessageSection() {
   const { token } = useAuth();
-  const { config, refresh } = useAssignmentMessageConfig();
+  const { config: fetchedConfig, refresh } = useAssignmentMessageConfig();
   const { agents } = useAgentsAdmin(true);
   const { channels } = useChannels(true);
   const [editing, setEditing] = useState(false);
+  // Mirrors the backend's response from the last successful save, so the closed
+  // summary reflects it immediately instead of waiting on refresh()'s network
+  // round-trip (which silently swallows its own errors).
+  const [savedConfig, setSavedConfig] = useState(null);
+  const config = savedConfig || fetchedConfig;
   const [enabled, setEnabled] = useState(config.enabled);
   const [openingMessage, setOpeningMessage] = useState(config.openingMessage);
   const [closingMessage, setClosingMessage] = useState(config.closingMessage);
@@ -496,7 +501,8 @@ function AssignmentMessageSection() {
     setError(null);
     setSaving(true);
     try {
-      await updateAssignmentMessageConfig({ enabled, openingMessage, closingMessage, agentIds, channelIds }, token);
+      const saved = await updateAssignmentMessageConfig({ enabled, openingMessage, closingMessage, agentIds, channelIds }, token);
+      setSavedConfig(saved);
       setEditing(false);
       refresh();
     } catch (err) {

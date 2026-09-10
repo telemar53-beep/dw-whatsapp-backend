@@ -550,7 +550,14 @@ describe('Atribuir um atendimento', () => {
       loading: false,
       refresh,
     });
-    api.updateAssignmentMessageConfig.mockResolvedValue({});
+    api.updateAssignmentMessageConfig.mockResolvedValue({
+      id: 'config-1',
+      enabled: false,
+      openingMessage: 'Olá @chat_atendente',
+      closingMessage: 'Tchau @chat_protocolo',
+      agentIds: ['agent-1'],
+      channelIds: [],
+    });
     render(<MessagesAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Criar atribuição' }));
@@ -570,6 +577,11 @@ describe('Atribuir um atendimento', () => {
       )
     );
     expect(refresh).toHaveBeenCalled();
+
+    // The closed summary must reflect the saved config immediately, without depending
+    // on refresh()'s network round-trip (which silently swallows its own errors).
+    expect(screen.getByText(/1 atendentes, 0 canais/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Criar atribuição' })).not.toBeInTheDocument();
   });
 
   test('checking an already-checked agent unchecks it', async () => {

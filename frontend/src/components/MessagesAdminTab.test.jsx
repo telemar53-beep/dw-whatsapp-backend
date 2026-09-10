@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCityNotices } from '../hooks/useCityNotices';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
 import { useAssignmentMessageConfig } from '../hooks/useAssignmentMessageConfig';
+import { useTemplates } from '../hooks/useTemplates';
 import * as api from '../services/api';
 
 vi.mock('../hooks/useQuickReplies');
@@ -16,6 +17,7 @@ vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useCityNotices');
 vi.mock('../hooks/useAgentsAdmin');
 vi.mock('../hooks/useAssignmentMessageConfig');
+vi.mock('../hooks/useTemplates');
 vi.mock('../services/api');
 
 beforeEach(() => {
@@ -24,6 +26,7 @@ beforeEach(() => {
   useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
   useCityNotices.mockReturnValue({ cityNotices: [], loading: false, refresh: vi.fn() });
   useAgentsAdmin.mockReturnValue({ agents: [], loading: false, refresh: vi.fn() });
+  useTemplates.mockReturnValue({ templates: [], loading: false, refresh: vi.fn() });
   useAssignmentMessageConfig.mockReturnValue({
     config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
     loading: false,
@@ -32,6 +35,14 @@ beforeEach(() => {
 });
 
 describe('MessagesAdminTab', () => {
+  test('shows the Templates section with its own create button', () => {
+    useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
+    render(<MessagesAdminTab />);
+
+    expect(screen.getByText('Templates')).toBeInTheDocument();
+    expect(screen.getByText(/cadastrar novo template/i)).toBeInTheDocument();
+  });
+
   test('lists existing quick replies inside the Ver mensagens popup', async () => {
     useQuickReplies.mockReturnValue({
       quickReplies: [{ id: 'qr-1', title: 'Boas-vindas', content: 'Olá!' }],

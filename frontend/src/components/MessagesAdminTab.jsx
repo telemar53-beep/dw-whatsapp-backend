@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCityNotices } from '../hooks/useCityNotices';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
 import { useAssignmentMessageConfig } from '../hooks/useAssignmentMessageConfig';
+import TemplatesAdminTab from './TemplatesAdminTab';
 import {
   updateQuickReply,
   deleteQuickReply,
@@ -740,6 +741,21 @@ function MessagesAdminTab() {
             onDeleted={refresh}
           />
         )}
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold text-ink-950">Templates</h2>
+          <SectionHelp label="Templates" title="Templates">
+            <p>
+              Templates são mensagens pré-aprovadas pela Meta, usadas para iniciar
+              conversas em canais oficiais (Meta Cloud) fora da janela de 24 horas —
+              cadastre novos, registre templates já existentes na Meta, ou veja o
+              status de aprovação dos que já foram enviados.
+            </p>
+          </SectionHelp>
+        </div>
+        <TemplatesAdminTab />
       </div>
     </div>
   );

@@ -10,7 +10,6 @@ import MessagesAdminTab from '../components/MessagesAdminTab';
 import SectorsAdminTab from '../components/SectorsAdminTab';
 import CitiesAdminTab from '../components/CitiesAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
-import TemplatesAdminTab from '../components/TemplatesAdminTab';
 import IntegrationsAdminTab from '../components/IntegrationsAdminTab';
 import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannelHidden, deleteChannel } from '../services/api';
 
@@ -21,7 +20,6 @@ const TABS = [
   { value: 'sectors', label: 'Setores' },
   { value: 'cities', label: 'Cidades' },
   { value: 'triage', label: 'Triagem' },
-  { value: 'templates', label: 'Templates' },
   { value: 'integrations', label: 'Integrações' },
 ];
 
@@ -299,8 +297,6 @@ function AdminChannelsPage() {
           <CitiesAdminTab />
         ) : activeTab === 'triage' ? (
           <TriageAdminTab />
-        ) : activeTab === 'templates' ? (
-          <TemplatesAdminTab />
         ) : (
           <IntegrationsAdminTab />
         )}

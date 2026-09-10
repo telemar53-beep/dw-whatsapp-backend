@@ -434,21 +434,4 @@ describe('AdminChannelsPage', () => {
     confirmSpy.mockRestore();
   });
 
-  test('switches to the Templates tab and shows the templates management UI', async () => {
-    useChannels.mockReturnValue({
-      channels: [{ id: 'ch1', type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', status: 'disconnected', wabaId: 'waba-1' }],
-      loading: false,
-      refresh: vi.fn(),
-    });
-    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
-    render(
-      <MemoryRouter>
-        <AdminChannelsPage />
-      </MemoryRouter>
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: /templates/i }));
-
-    expect(screen.getByText(/cadastrar novo template/i)).toBeInTheDocument();
-  });
 });

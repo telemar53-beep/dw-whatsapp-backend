@@ -7,6 +7,7 @@ const { getAllowedOrigins } = require('./config/cors-origins');
 const { getPool } = require('./db/pool');
 const authRoutes = require('./auth/auth.routes');
 const metaCloudRoutes = require('./whatsapp-adapters/meta-cloud.routes');
+const threeSixtyDialogRoutes = require('./whatsapp-adapters/three-sixty-dialog.routes');
 const conversationsRoutes = require('./api/conversations.routes');
 const agentsRoutes = require('./api/agents.routes');
 const channelsRoutes = require('./api/channels.routes');
@@ -97,6 +98,7 @@ app.use('/api/admin/templates', adminTemplatesRoutes);
 app.use('/api/integrations/sgp', integrationsSgpRoutes);
 app.use('/api/sgp', sgpQueryRoutes);
 app.use('/webhooks', metaCloudRoutes);
+app.use('/webhooks', threeSixtyDialogRoutes);
 
 app.use((err, req, res, next) => {
   console.error('Unhandled API error', err);

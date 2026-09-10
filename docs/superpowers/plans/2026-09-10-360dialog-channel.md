@@ -214,10 +214,10 @@ const {
 } = require('./three-sixty-dialog.adapter');
 
 jest.mock('axios');
-jest.mock('fs', () => ({
-  promises: { readFile: jest.fn() },
-}));
+jest.mock('fs');
+jest.mock('../media/media-storage');
 const fs = require('fs');
+const { getMediaFilePath } = require('../media/media-storage');
 
 const CHANNEL = { id: 'channel-1', config: { apiKey: 'd360-key-abc', wabaId: 'waba-1', webhookToken: 'token-xyz' } };
 
@@ -282,7 +282,8 @@ describe('sendTemplateMessage', () => {
 
 describe('sendMediaMessage', () => {
   test('uploads the file then sends a media message referencing the uploaded id', async () => {
-    fs.promises.readFile.mockResolvedValue(Buffer.from('fake-image-bytes'));
+    getMediaFilePath.mockReturnValue('/fake/path/to/file');
+    fs.promises = { readFile: jest.fn().mockResolvedValue(Buffer.from('fake-image-bytes')) };
     axios.post
       .mockResolvedValueOnce({ data: { id: 'media-360-1' } })
       .mockResolvedValueOnce({ data: { messages: [{ id: 'wamid.MEDIA1' }] } });

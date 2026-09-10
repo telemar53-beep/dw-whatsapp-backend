@@ -10,6 +10,7 @@ function toConversation(row) {
     sectorId: row.sector_id,
     triageState: row.triage_state,
     triageAttempts: row.triage_attempts,
+    protocolNumber: row.protocol_number !== undefined ? row.protocol_number : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -56,7 +57,7 @@ async function claimConversation(conversationId, agentId) {
     const result = await client.query(
       `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, triage_state = 'completed', updated_at = now()
        WHERE id = $1 AND assigned_agent_id IS NULL AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, created_at, updated_at`,
       [conversationId, agentId]
     );
     if (result.rowCount === 0) return null;
@@ -90,7 +91,7 @@ async function closeConversation(conversationId, agentId) {
     const result = await client.query(
       `UPDATE conversations SET status = 'closed', updated_at = now()
        WHERE id = $1 AND (assigned_agent_id = $2 OR assigned_agent_id IS NULL) AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, created_at, updated_at`,
       [conversationId, agentId]
     );
     if (result.rowCount === 0) return null;

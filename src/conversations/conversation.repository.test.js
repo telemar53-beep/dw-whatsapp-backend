@@ -161,6 +161,23 @@ describe('conversation repository', () => {
     expect(closed.assignedAgentId).toBeNull();
   });
 
+  test('claimConversation returns protocolNumber as null before any protocol has been claimed', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'agent-protocol@dw.com', password: 'secret123', role: 'agent' });
+    const claimed = await claimConversation(conversation.id, agent.id);
+    expect(claimed.protocolNumber).toBeNull();
+  });
+
+  test('closeConversation returns the protocol_number set for the conversation, if any', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'agent-protocol-2@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+    await getPool().query('UPDATE conversations SET protocol_number = 42 WHERE id = $1', [conversation.id]);
+
+    const closed = await closeConversation(conversation.id, agent.id);
+    expect(closed.protocolNumber).toBe(42);
+  });
+
   test('getConversationWithContact includes the contact phone number and display name', async () => {
     const conversation = await createConversation(contactId, channelId);
     const result = await getConversationWithContact(conversation.id);

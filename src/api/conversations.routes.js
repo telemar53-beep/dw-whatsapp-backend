@@ -24,6 +24,7 @@ const { findTemplateById } = require('../templates/template.repository');
 const { substituteVariables } = require('../templates/template-validator');
 const { sendOpeningMessageIfApplicable, sendClosingMessageIfApplicable } = require('../assignment-messages/assignment-message.service');
 const { findReasonById } = require('../reasons/reason.repository');
+const { isOfficialChannelType } = require('../channels/channel-types');
 
 const router = express.Router();
 
@@ -82,7 +83,7 @@ router.post('/start', async (req, res) => {
   if (!channel) {
     return res.status(404).json({ error: 'Channel not found' });
   }
-  if (channel.type !== 'baileys' && channel.type !== 'meta_cloud') {
+  if (channel.type !== 'baileys' && !isOfficialChannelType(channel.type)) {
     return res.status(400).json({ error: 'Unsupported channel type' });
   }
 
@@ -163,7 +164,7 @@ router.post('/start', async (req, res) => {
       throw new Error('Failed to claim newly created conversation');
     }
   }
-  if (channel.type !== 'meta_cloud') {
+  if (!isOfficialChannelType(channel.type)) {
     try {
       await sendOpeningMessageIfApplicable(claimed, req.agent.agentId);
     } catch (err) {

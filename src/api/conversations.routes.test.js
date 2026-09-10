@@ -1321,4 +1321,45 @@ describe('POST /start (meta_cloud)', () => {
     expect(sendOpeningMessageIfApplicable).not.toHaveBeenCalled();
     expect(enqueueOutboundMessage).toHaveBeenCalled();
   });
+
+  test('accepts a 360dialog channel in the type gate, same as meta_cloud', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: '360dialog', config: { wabaId: 'waba-1' } });
+    findTemplateById.mockResolvedValue(approvedTemplate);
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5511999990000' });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: 'conv-1' });
+    claimConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'tpl-1', templateVariables: ['João', 'R$150,00'] });
+
+    expect(res.status).toBe(201);
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-1', channelId: 'ch-1',
+      content: 'Olá João, sua fatura de R$150,00 venceu.',
+      templateName: 'fatura_vencida', templateLanguage: 'pt_BR', templateVariables: ['João', 'R$150,00'],
+    });
+  });
+
+  test('does not dispatch the assignment opening message for a 360dialog channel', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: '360dialog', config: { wabaId: 'waba-1' } });
+    findTemplateById.mockResolvedValue(approvedTemplate);
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '5511999990000' });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: 'conv-1' });
+    claimConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+
+    const res = await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'ch-1', phoneNumber: '5511999990000', templateId: 'tpl-1', templateVariables: ['João', 'R$150,00'] });
+
+    expect(res.status).toBe(201);
+    expect(sendOpeningMessageIfApplicable).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).toHaveBeenCalled();
+  });
 });

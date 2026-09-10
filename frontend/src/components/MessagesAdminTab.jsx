@@ -15,7 +15,8 @@ import {
   updateAssignmentMessageConfig,
 } from '../services/api';
 import CreateQuickReplyForm from './CreateQuickReplyForm';
-import WaDialog, { waPrimaryButtonClass } from './WaDialog';
+import WaDialog from './WaDialog';
+import SectionHelp from './SectionHelp';
 
 const inputClass =
   'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
@@ -285,32 +286,6 @@ function CityStatusDot({ enabled }) {
       <span className={`h-2 w-2 rounded-full ${enabled ? 'bg-teal-signal' : 'bg-ink-950/25'}`} aria-hidden="true" />
       {enabled ? 'Ativo' : 'Inativo'}
     </span>
-  );
-}
-
-function SectionHelp({ label, title, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={`O que é isso: ${label}`}
-        className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
-      >
-        O que é isso?
-      </button>
-      {open && (
-        <WaDialog title={title} onClose={() => setOpen(false)} size="max-w-md">
-          <div className="px-6 py-4 text-[14.5px] leading-[20px] text-wa-text">{children}</div>
-          <div className="flex shrink-0 justify-end px-4 py-3">
-            <button type="button" onClick={() => setOpen(false)} className={waPrimaryButtonClass}>
-              Entendi
-            </button>
-          </div>
-        </WaDialog>
-      )}
-    </>
   );
 }
 
@@ -707,7 +682,19 @@ function MessagesAdminTab() {
       </div>
 
       <div className="space-y-3">
-        <h2 className="font-display text-lg font-semibold text-ink-950">Respostas rápidas</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold text-ink-950">Respostas rápidas</h2>
+          <SectionHelp label="Respostas rápidas" title="Respostas rápidas">
+            <p>
+              Mensagens prontas que o atendente pode inserir com um clique durante o
+              atendimento, pra agilizar respostas repetitivas.
+            </p>
+            <p className="mt-2 italic">
+              Exemplo: "Olá! Para agilizar seu atendimento, poderia me informar seu
+              CPF ou número de contrato?"
+            </p>
+          </SectionHelp>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"

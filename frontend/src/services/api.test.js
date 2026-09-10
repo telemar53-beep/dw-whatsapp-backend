@@ -35,6 +35,11 @@ import {
   updateTriageOption,
   deleteTriageOption,
   setChannelTriageEnabled,
+  getMyProfile,
+  updateMyProfile,
+  uploadMyAvatar,
+  deleteMyAvatar,
+  agentAvatarUrl,
 } from './api';
 
 beforeEach(() => {
@@ -498,5 +503,65 @@ describe('setChannelTriageEnabled', () => {
       'http://localhost:3000/api/admin/channels/channel-1',
       expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ triageEnabled: true }) })
     );
+  });
+});
+
+describe('getMyProfile', () => {
+  test('fetches the authenticated agent\'s own profile', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await getMyProfile('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/agents/me',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+});
+
+describe('updateMyProfile', () => {
+  test('patches the name and phone', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await updateMyProfile({ name: 'Ana Paula', phone: '11988887777' }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/agents/me',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'Ana Paula', phone: '11988887777' }),
+      })
+    );
+  });
+});
+
+describe('uploadMyAvatar', () => {
+  test('posts the file as multipart form data', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    const file = new File(['fake-bytes'], 'foto.jpg', { type: 'image/jpeg' });
+
+    await uploadMyAvatar(file, 'tok-123');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/agents/me/avatar',
+      expect.objectContaining({ method: 'POST' })
+    );
+    const call = global.fetch.mock.calls[0];
+    const options = call[1];
+    expect(options.body).toBeInstanceOf(FormData);
+    expect(options.body.get('file')).toBe(file);
+  });
+});
+
+describe('deleteMyAvatar', () => {
+  test('sends a DELETE request to remove the avatar', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await deleteMyAvatar('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/agents/me/avatar',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+  });
+});
+
+describe('agentAvatarUrl', () => {
+  test('builds a URL with the agent id and token as query string', () => {
+    expect(agentAvatarUrl('agent-1', 'tok-abc')).toBe('http://localhost:3000/api/agents/agent-1/avatar?token=tok-abc');
   });
 });

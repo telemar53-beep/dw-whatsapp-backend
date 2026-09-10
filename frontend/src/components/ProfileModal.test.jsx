@@ -102,4 +102,16 @@ describe('ProfileModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  test('shows an error and a working Fechar button when the initial profile fetch fails', async () => {
+    api.getMyProfile.mockRejectedValue({ body: { error: 'Sessão expirada' } });
+    const onClose = vi.fn();
+    render(<ProfileModal onClose={onClose} />);
+
+    const fecharButton = await screen.findByRole('button', { name: /fechar/i });
+    expect(await screen.findByText('Sessão expirada')).toBeInTheDocument();
+
+    await userEvent.click(fecharButton);
+    expect(onClose).toHaveBeenCalled();
+  });
 });

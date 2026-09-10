@@ -1512,6 +1512,13 @@ Both must be 100% green before proceeding to
 `superpowers:finishing-a-development-branch`.
 
 Nenhuma variável de ambiente nova é necessária (diferente do 360dialog/PUBLIC_BASE_URL).
-A migração da Task 1 precisa rodar em produção após o deploy (`npm run migrate -- up`
-via o Render Shell), mesmo processo já estabelecido para toda migração deste projeto —
-não bloqueia o boot (colunas nullable), mas as rotas novas vão 500 até rodar.
+
+**IMPORTANTE — ordem de deploy diferente do padrão usual deste projeto:** a migração da
+Task 1 (`ALTER TABLE agents ADD COLUMN phone/avatar_path`) precisa rodar **antes ou
+junto com** o deploy do código, não depois. Diferente de outras entregas deste projeto,
+a Task 1 modificou as queries de `listAgents()` e `findAgentById()` — funções já usadas
+por recursos que já estavam em produção antes deste plano (`GET /api/agents`, consumido
+pelo `TransferModal` para transferir atendimento, e pelo serviço de mensagem de
+atribuição ao assumir/encerrar um atendimento). Se o código novo subir antes da
+migração, esses recursos JÁ EXISTENTES quebram com `column "phone" does not exist` —
+não é só a feature nova que fica bloqueada até a migração rodar.

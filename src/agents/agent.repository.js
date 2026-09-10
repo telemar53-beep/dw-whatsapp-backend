@@ -20,7 +20,7 @@ async function createAgent({ name, email, password, role }) {
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const result = await getPool().query(
     `INSERT INTO agents (name, email, password_hash, role) VALUES ($1, $2, $3, $4)
-     RETURNING id, name, email, role, active, created_at`,
+     RETURNING id, name, email, role, active, phone, avatar_path, created_at`,
     [name || email.split('@')[0], email, passwordHash, role]
   );
   return toPublicAgent(result.rows[0]);

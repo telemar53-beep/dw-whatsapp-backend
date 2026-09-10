@@ -200,14 +200,6 @@ export function IconBellOff(props) {
   );
 }
 
-export function IconKey(props) {
-  return (
-    <Svg {...props}>
-      <path d="M14.5 3a6.5 6.5 0 00-6.2 8.5L3 16.8V21h4.2v-2.2h2.2v-2.2h2.2l1.3-1.3A6.5 6.5 0 1014.5 3zm2 5.5a1.7 1.7 0 110-3.4 1.7 1.7 0 010 3.4z" />
-    </Svg>
-  );
-}
-
 export function IconChart(props) {
   return (
     <Svg {...props}>

@@ -7,6 +7,7 @@ import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButt
 function ProfileModal({ onClose, onProfileUpdated }) {
   const { token } = useAuth();
   const [profile, setProfile] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
@@ -29,7 +30,9 @@ function ProfileModal({ onClose, onProfileUpdated }) {
         setName(data.name);
         setPhone(data.phone || '');
       })
-      .catch(() => {});
+      .catch((err) => {
+        setLoadError((err.body && err.body.error) || 'Falha ao carregar perfil');
+      });
   }, [token]);
 
   async function handleSaveProfile(event) {
@@ -105,7 +108,14 @@ function ProfileModal({ onClose, onProfileUpdated }) {
   if (!profile) {
     return (
       <WaDialog title="Meu perfil" onClose={onClose} size="max-w-md">
-        <p className="px-6 py-4 text-[14.5px] text-wa-muted">Carregando...</p>
+        <div className="px-6 py-4">
+          <p className="text-[14.5px] text-wa-muted">{loadError || 'Carregando...'}</p>
+        </div>
+        <div className="flex shrink-0 justify-end px-4 py-3">
+          <button type="button" onClick={onClose} className={waGhostButtonClass}>
+            Fechar
+          </button>
+        </div>
       </WaDialog>
     );
   }
@@ -124,7 +134,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 onChange={handleAvatarChange}
                 disabled={avatarBusy}
-                className="hidden"
+                className="sr-only"
               />
             </label>
             {profile.avatarPath && (

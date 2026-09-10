@@ -41,6 +41,30 @@ describe('GET /api/agents', () => {
     expect(res.status).toBe(200);
     expect(res.body[0].avatarPath).toBe('avatars/a1.jpg');
   });
+
+  test('returns id, name, email, role and online status for every agent', async () => {
+    listAgents.mockResolvedValue([
+      { id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: null },
+      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.com', role: 'admin', avatarPath: null },
+    ]);
+    isAgentOnline.mockImplementation((id) => id === 'agent-1');
+
+    const res = await request(buildApp())
+      .get('/api/agents')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      { id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: null, online: true },
+      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.com', role: 'admin', avatarPath: null, online: false },
+    ]);
+  });
+
+  test('returns 401 without a token', async () => {
+    const res = await request(buildApp()).get('/api/agents');
+    expect(res.status).toBe(401);
+    expect(listAgents).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/agents/me', () => {

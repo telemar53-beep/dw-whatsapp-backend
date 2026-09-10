@@ -13,6 +13,7 @@ function AgentAvatar({ agentId, avatarPath, name, size = 40 }) {
   if (avatarPath) {
     return (
       <img
+        key={avatarPath}
         src={agentAvatarUrl(agentId, token)}
         alt={name || 'Atendente'}
         style={boxStyle}

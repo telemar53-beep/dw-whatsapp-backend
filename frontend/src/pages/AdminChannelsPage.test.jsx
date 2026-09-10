@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import AdminChannelsPage from './AdminChannelsPage';
 import { useChannels } from '../hooks/useChannels';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
+import { useAssignmentMessageConfig } from '../hooks/useAssignmentMessageConfig';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useSectors } from '../hooks/useSectors';
 import { useCities } from '../hooks/useCities';
@@ -16,6 +17,7 @@ import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannel
 
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
+vi.mock('../hooks/useAssignmentMessageConfig');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useSectors');
 vi.mock('../hooks/useCities');
@@ -29,6 +31,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
   useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
+  useAssignmentMessageConfig.mockReturnValue({
+    config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+    loading: false,
+    refresh: vi.fn(),
+  });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useSectors.mockReturnValue({ sectors: [], refresh: vi.fn() });
   useCities.mockReturnValue({ cities: [], refresh: vi.fn() });

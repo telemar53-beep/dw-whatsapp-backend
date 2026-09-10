@@ -104,10 +104,15 @@ nome (mesmo fallback visual do `ContactAvatar`).
 **`TeamPanel.jsx`:** cada linha da lista de colegas ganha um `<AgentAvatar>` ao lado do
 nome (a bolinha de online/offline continua exatamente como está).
 
-**`useAgents.js`:** passa a expor uma função `refresh()` (mesmo padrão já usado por
-`useChannels`/`useQuickReplies` neste projeto), para que `ProfileModal` consiga disparar
-uma atualização da lista assim que o próprio nome/foto mudar — sem isso, a própria linha
-do atendente no Painel de Equipe ficaria com dado desatualizado até um F5.
+**Atualização do Painel de Equipe após salvar o próprio perfil:** `TeamPanel` só é
+renderizado dentro de `DashboardPage.jsx`, como componente irmão do `ProfileModal` (não
+um ancestral/descendente) — os dois chamam `useAgents()` de forma independente, então
+expor um `refresh()` no hook não propagaria entre eles. Em vez disso, `DashboardPage.jsx`
+mantém uma chave (`teamPanelKey`) que incrementa toda vez que `ProfileModal` salva
+nome/telefone/foto (via um callback `onProfileUpdated`), e passa essa chave como `key` do
+`<TeamPanel>` — React remonta o componente do zero, o que refaz a busca de
+`GET /api/agents` e traz o dado atualizado. `useAgents.js` não precisa de nenhuma
+mudança.
 
 **`services/api.js`:** novas funções `getMyProfile(token)`, `updateMyProfile({name,
 phone}, token)`, `uploadMyAvatar(file, token)`, `deleteMyAvatar(token)`,
@@ -136,7 +141,7 @@ existentes para contato (`avatarUrl`) e troca de senha (`changePassword`).
   foto, remove foto, seção de troca de senha funcionando, substitui
   `ChangePasswordModal.test.jsx`); `AgentAvatar.test.jsx` (novo, espelha
   `ContactAvatar.test.jsx`); `NavRail.test.jsx` (botão renomeado); `TeamPanel.test.jsx`
-  (avatar aparecendo em cada linha); `useAgents.test.jsx` (expõe `refresh`).
+  (avatar aparecendo em cada linha).
 
 ## 7. Fora de escopo (YAGNI, deliberado)
 

@@ -8,6 +8,7 @@ import QrCodeView from '../components/QrCodeView';
 import AgentsAdminTab from '../components/AgentsAdminTab';
 import MessagesAdminTab from '../components/MessagesAdminTab';
 import SectorsAdminTab from '../components/SectorsAdminTab';
+import ReasonsAdminTab from '../components/ReasonsAdminTab';
 import CitiesAdminTab from '../components/CitiesAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
 import IntegrationsAdminTab from '../components/IntegrationsAdminTab';
@@ -18,6 +19,7 @@ const TABS = [
   { value: 'agents', label: 'Atendentes' },
   { value: 'quickReplies', label: 'Mensagens' },
   { value: 'sectors', label: 'Setores' },
+  { value: 'reasons', label: 'Motivos' },
   { value: 'cities', label: 'Cidades' },
   { value: 'triage', label: 'Triagem' },
   { value: 'integrations', label: 'Integrações' },
@@ -293,6 +295,8 @@ function AdminChannelsPage() {
           <MessagesAdminTab />
         ) : activeTab === 'sectors' ? (
           <SectorsAdminTab />
+        ) : activeTab === 'reasons' ? (
+          <ReasonsAdminTab />
         ) : activeTab === 'cities' ? (
           <CitiesAdminTab />
         ) : activeTab === 'triage' ? (

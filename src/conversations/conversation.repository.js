@@ -86,7 +86,7 @@ async function transferConversation(conversationId, fromAgentId, toAgentId) {
   });
 }
 
-async function closeConversation(conversationId, agentId) {
+async function closeConversation(conversationId, agentId, reasonId) {
   return withTransaction(async (client) => {
     const result = await client.query(
       `UPDATE conversations SET status = 'closed', updated_at = now()
@@ -96,8 +96,8 @@ async function closeConversation(conversationId, agentId) {
     );
     if (result.rowCount === 0) return null;
     await client.query(
-      `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id) VALUES ($1, 'closed', $2)`,
-      [conversationId, agentId]
+      `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, reason_id) VALUES ($1, 'closed', $2, $3)`,
+      [conversationId, agentId, reasonId]
     );
     return toConversation(result.rows[0]);
   });

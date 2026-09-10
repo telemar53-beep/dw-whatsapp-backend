@@ -144,6 +144,38 @@ describe('conversation repository', () => {
     expect(events.rows[0].from_agent_id).toBe(agent.id);
   });
 
+  test('closeConversation records the reason_id when one is passed', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'agent9e@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+    const reasonResult = await getPool().query(
+      `INSERT INTO contact_reasons (name) VALUES ('Troca de senha') RETURNING id`
+    );
+    const reasonId = reasonResult.rows[0].id;
+
+    await closeConversation(conversation.id, agent.id, reasonId);
+
+    const events = await getPool().query(
+      `SELECT reason_id FROM conversation_events WHERE conversation_id = $1 AND event_type = 'closed'`,
+      [conversation.id]
+    );
+    expect(events.rows[0].reason_id).toBe(reasonId);
+  });
+
+  test('closeConversation leaves reason_id null when none is passed', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'agent9f@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+
+    await closeConversation(conversation.id, agent.id);
+
+    const events = await getPool().query(
+      `SELECT reason_id FROM conversation_events WHERE conversation_id = $1 AND event_type = 'closed'`,
+      [conversation.id]
+    );
+    expect(events.rows[0].reason_id).toBeNull();
+  });
+
   test('closeConversation returns null when called by an agent other than the assigned one', async () => {
     const conversation = await createConversation(contactId, channelId);
     const assignedAgent = await createAgent({ email: 'agent9b@dw.com', password: 'secret123', role: 'agent' });

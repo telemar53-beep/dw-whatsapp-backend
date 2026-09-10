@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAgents } from '../hooks/useAgents';
 import { usePresence } from '../hooks/usePresence';
 import { IconChevronDown, IconTeam } from './icons/WaIcons';
+import AgentAvatar from './AgentAvatar';
 
 function sortAgents(agents, onlineIds) {
   return [...agents].sort((a, b) => {
@@ -54,6 +55,9 @@ function TeamPanel() {
                       onlineIds.has(teammate.id) ? 'bg-teal-signal' : 'bg-ink-950/20'
                     }`}
                   />
+                  {teammate.avatarPath !== undefined && (
+                    <AgentAvatar agentId={teammate.id} avatarPath={teammate.avatarPath} name={teammate.name} size={22} />
+                  )}
                   <span className="truncate">{teammate.name}</span>
                 </li>
               ))}

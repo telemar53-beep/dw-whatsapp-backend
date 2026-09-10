@@ -22,6 +22,7 @@ const { findChannelById } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const { findTemplateById } = require('../templates/template.repository');
 const { substituteVariables } = require('../templates/template-validator');
+const { sendOpeningMessageIfApplicable, sendClosingMessageIfApplicable } = require('../assignment-messages/assignment-message.service');
 
 const router = express.Router();
 
@@ -161,6 +162,11 @@ router.post('/start', async (req, res) => {
       throw new Error('Failed to claim newly created conversation');
     }
   }
+  try {
+    await sendOpeningMessageIfApplicable(claimed, req.agent.agentId);
+  } catch (err) {
+    console.error(`Failed to send assignment opening message for conversation ${claimed.id}`, err);
+  }
   await enqueueOutboundMessage({ conversationId: claimed.id, channelId: channel.id, ...outboundPayload });
 
   const conversationWithContact = await getConversationWithContact(claimed.id);
@@ -183,6 +189,11 @@ router.post('/:id/claim', async (req, res) => {
   const conversation = await claimConversation(req.params.id, req.agent.agentId);
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation already assigned or closed' });
+  }
+  try {
+    await sendOpeningMessageIfApplicable(conversation, req.agent.agentId);
+  } catch (err) {
+    console.error(`Failed to send assignment opening message for conversation ${conversation.id}`, err);
   }
   const conversationWithContact = await getConversationWithContact(conversation.id);
   broadcast('queue:removed', { conversationId: conversation.id });
@@ -310,6 +321,11 @@ router.post('/:id/close', async (req, res) => {
   const conversation = await closeConversation(req.params.id, req.agent.agentId);
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation is not currently assigned to you, or is closed' });
+  }
+  try {
+    await sendClosingMessageIfApplicable(conversation, req.agent.agentId);
+  } catch (err) {
+    console.error(`Failed to send assignment closing message for conversation ${conversation.id}`, err);
   }
   if (conversation.assignedAgentId) {
     emitToAgent(conversation.assignedAgentId, 'conversation:closed', { conversationId: conversation.id });

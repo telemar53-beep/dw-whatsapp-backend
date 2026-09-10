@@ -10,6 +10,7 @@ jest.mock('../channels/channel.repository');
 jest.mock('../conversations/contact.repository');
 jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../templates/template.repository');
+jest.mock('../assignment-messages/assignment-message.service');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -31,6 +32,10 @@ const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/so
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const { findTemplateById } = require('../templates/template.repository');
+const {
+  sendOpeningMessageIfApplicable,
+  sendClosingMessageIfApplicable,
+} = require('../assignment-messages/assignment-message.service');
 const conversationsRoutes = require('./conversations.routes');
 
 function buildApp() {
@@ -200,6 +205,35 @@ describe('POST /api/conversations/:id/claim', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(broadcast).not.toHaveBeenCalled();
     expect(emitToAgent).not.toHaveBeenCalled();
+  });
+
+  test('calls sendOpeningMessageIfApplicable with the claimed conversation and agent id', async () => {
+    const claimedConversation = { id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1', channelId: 'channel-1', protocolNumber: null };
+    claimConversation.mockResolvedValue(claimedConversation);
+    getConversationWithContact.mockResolvedValue(claimedConversation);
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/claim`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(sendOpeningMessageIfApplicable).toHaveBeenCalledWith(claimedConversation, 'agent-1');
+  });
+
+  test('does not call sendOpeningMessageIfApplicable when the claim fails', async () => {
+    claimConversation.mockResolvedValue(null);
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/claim`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(sendOpeningMessageIfApplicable).not.toHaveBeenCalled();
+  });
+
+  test('a failure inside sendOpeningMessageIfApplicable does not break the 200 response', async () => {
+    const claimedConversation = { id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1', channelId: 'channel-1', protocolNumber: null };
+    claimConversation.mockResolvedValue(claimedConversation);
+    getConversationWithContact.mockResolvedValue(claimedConversation);
+    sendOpeningMessageIfApplicable.mockRejectedValue(new Error('boom'));
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/claim`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(200);
   });
 });
 
@@ -674,6 +708,16 @@ describe('POST /api/conversations/:id/transfer', () => {
       .send({ toAgentId: 'agent-2' });
     expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'conv-1' });
   });
+
+  test('never calls sendOpeningMessageIfApplicable or sendClosingMessageIfApplicable', async () => {
+    transferConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-2' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(sendOpeningMessageIfApplicable).not.toHaveBeenCalled();
+    expect(sendClosingMessageIfApplicable).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/conversations/:id/close', () => {
@@ -727,6 +771,33 @@ describe('POST /api/conversations/:id/close', () => {
         closedAt: expect.any(String),
       })
     );
+  });
+
+  test('calls sendClosingMessageIfApplicable with the closed conversation and agent id', async () => {
+    const closedConversation = { id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1', channelId: 'channel-1', protocolNumber: 1042 };
+    closeConversation.mockResolvedValue(closedConversation);
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(sendClosingMessageIfApplicable).toHaveBeenCalledWith(closedConversation, 'agent-1');
+  });
+
+  test('does not call sendClosingMessageIfApplicable when the close fails', async () => {
+    closeConversation.mockResolvedValue(null);
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(sendClosingMessageIfApplicable).not.toHaveBeenCalled();
+  });
+
+  test('a failure inside sendClosingMessageIfApplicable does not break the 200 response', async () => {
+    const closedConversation = { id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1', channelId: 'channel-1', protocolNumber: 1042 };
+    closeConversation.mockResolvedValue(closedConversation);
+    sendClosingMessageIfApplicable.mockRejectedValue(new Error('boom'));
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(200);
   });
 });
 
@@ -947,6 +1018,29 @@ describe('POST /api/conversations/start', () => {
       conversation: expect.objectContaining({ id: CONVERSATION_ID }),
     });
     expect(res.body).toEqual(expect.objectContaining({ id: CONVERSATION_ID, contactPhoneNumber: '559899990000' }));
+  });
+
+  test('calls sendOpeningMessageIfApplicable before enqueuing the typed content, on the happy path', async () => {
+    findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
+    baileysManager.resolveWhatsAppJid.mockResolvedValue('559899990000');
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '559899990000' });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: CONVERSATION_ID, contactId: 'contact-1', channelId: 'channel-1' });
+    const claimedConversation = { id: CONVERSATION_ID, contactId: 'contact-1', channelId: 'channel-1', assignedAgentId: 'agent-1', protocolNumber: null };
+    claimConversation.mockResolvedValue(claimedConversation);
+    getConversationWithContact.mockResolvedValue({ ...claimedConversation, contactPhoneNumber: '559899990000' });
+
+    const callOrder = [];
+    sendOpeningMessageIfApplicable.mockImplementation(async () => { callOrder.push('opening'); });
+    enqueueOutboundMessage.mockImplementation(async () => { callOrder.push('enqueue'); return { id: 'msg-1' }; });
+
+    await request(buildApp())
+      .post('/api/conversations/start')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', phoneNumber: '5598999990000', content: 'Oi, tudo bem?' });
+
+    expect(sendOpeningMessageIfApplicable).toHaveBeenCalledWith(claimedConversation, 'agent-1');
+    expect(callOrder).toEqual(['opening', 'enqueue']);
   });
 
   test('also broadcasts dashboard:conversation on the happy path', async () => {

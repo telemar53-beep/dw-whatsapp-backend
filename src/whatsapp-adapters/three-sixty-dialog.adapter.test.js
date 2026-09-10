@@ -3,6 +3,7 @@ const {
   sendTextMessage,
   sendMediaMessage,
   sendTemplateMessage,
+  downloadMedia,
   createMetaTemplate,
   listMetaTemplates,
   deleteMetaTemplate,
@@ -106,6 +107,25 @@ describe('sendMediaMessage', () => {
   });
 });
 
+describe('downloadMedia', () => {
+  test('fetches the temporary media URL then downloads the file bytes', async () => {
+    axios.get
+      .mockResolvedValueOnce({ data: { url: 'https://waba-v2.360dialog.io/temp-url' } })
+      .mockResolvedValueOnce({ data: Buffer.from('fake-bytes') });
+
+    const buffer = await downloadMedia('media-360-1', CHANNEL);
+
+    expect(axios.get).toHaveBeenNthCalledWith(1, 'https://waba-v2.360dialog.io/media-360-1', {
+      headers: { 'D360-API-KEY': 'd360-key-abc' },
+    });
+    expect(axios.get).toHaveBeenNthCalledWith(2, 'https://waba-v2.360dialog.io/temp-url', {
+      headers: { 'D360-API-KEY': 'd360-key-abc' },
+      responseType: 'arraybuffer',
+    });
+    expect(buffer).toEqual(Buffer.from('fake-bytes'));
+  });
+});
+
 describe('createMetaTemplate', () => {
   test('posts to message_templates with the D360-API-KEY header', async () => {
     axios.post.mockResolvedValue({ data: { id: 'tpl-360-1', status: 'PENDING' } });
@@ -127,7 +147,10 @@ describe('listMetaTemplates', () => {
 
     const result = await listMetaTemplates(CHANNEL);
 
-    expect(axios.get).toHaveBeenCalledWith('https://waba-v2.360dialog.io/message_templates', { headers: { 'D360-API-KEY': 'd360-key-abc' } });
+    expect(axios.get).toHaveBeenCalledWith('https://waba-v2.360dialog.io/message_templates', {
+      headers: { 'D360-API-KEY': 'd360-key-abc' },
+      params: { fields: 'id,name,language,category,status,rejected_reason,components' },
+    });
     expect(result).toEqual([{ id: 'tpl-1', name: 'fatura_vencida', status: 'APPROVED' }]);
   });
 });

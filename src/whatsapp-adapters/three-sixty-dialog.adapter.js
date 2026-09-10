@@ -87,7 +87,10 @@ async function createMetaTemplate(channel, { name, category, language, bodyText 
 }
 
 async function listMetaTemplates(channel) {
-  const response = await axios.get(`${BASE_URL}/message_templates`, { headers: authHeaders(channel) });
+  const response = await axios.get(`${BASE_URL}/message_templates`, {
+    headers: authHeaders(channel),
+    params: { fields: 'id,name,language,category,status,rejected_reason,components' },
+  });
   return response.data.data || response.data;
 }
 

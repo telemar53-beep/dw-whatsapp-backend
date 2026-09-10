@@ -24,10 +24,10 @@ beforeEach(() => {
 });
 
 describe('NavRail', () => {
-  test('always shows Conversas and Métricas', () => {
+  test('always shows Conversas and Relatório', () => {
     renderRail();
     expect(screen.getByLabelText('Conversas')).toBeInTheDocument();
-    expect(screen.getByLabelText('Métricas')).toBeInTheDocument();
+    expect(screen.getByLabelText('Relatório')).toBeInTheDocument();
   });
 
   test('shows the admin-only links for an admin agent', () => {

@@ -67,7 +67,7 @@ function NavRail({ active, onConversasClick, onChangePasswordClick, mobileHidden
             <IconChats size={23} />
           </RailLink>
         )}
-        <RailLink to="/metrics" label="Métricas" active={active === 'metrics'}>
+        <RailLink to="/metrics" label="Relatório" active={active === 'metrics'}>
           <IconChart size={22} />
         </RailLink>
         {agent?.role === 'admin' && (

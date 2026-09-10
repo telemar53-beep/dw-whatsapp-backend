@@ -111,6 +111,15 @@ function IconAlert(props) {
   );
 }
 
+function IconTag(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M12 2l9 9-9 9-9-9V2h9z" />
+      <circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function StatTile({ icon, value, label }) {
   const display = value === null || value === undefined ? '-' : value;
   return (
@@ -177,7 +186,7 @@ function MetricsPage() {
       <div className="relative mx-auto max-w-5xl space-y-6 px-4 py-10 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-display text-2xl font-semibold text-ink-950">Métricas</h1>
+            <h1 className="font-display text-2xl font-semibold text-ink-950">Relatório</h1>
             <p className="mt-1 text-sm text-ink-950/55">Indicadores de atendimento da equipe</p>
           </div>
           <Link
@@ -291,6 +300,22 @@ function MetricsPage() {
                 )}
               </ChartCard>
             </div>
+
+            <ChartCard title="Atendimentos por motivo" icon={<IconTag className="h-4 w-4" />}>
+              {data.byReason.length === 0 ? (
+                <EmptyState />
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={data.byReason} barCategoryGap="32%">
+                    <CartesianGrid vertical={false} stroke={GRID_COLOR} />
+                    <XAxis dataKey="reasonName" tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
+                    <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(217, 134, 31, 0.08)' }} />
+                    <Bar dataKey="closedCount" name="Atendimentos" fill={AMBER_DARK} radius={[6, 6, 0, 0]} maxBarSize={48} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
           </div>
         )}
       </div>

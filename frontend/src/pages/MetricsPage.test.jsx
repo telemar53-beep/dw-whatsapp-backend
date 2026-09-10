@@ -76,6 +76,7 @@ describe('MetricsPage', () => {
       scope: 'admin',
       byAgent: [{ agentId: 'a1', agentName: 'Ana', closedCount: 5, avgResolutionMinutes: 10, avgFirstResponseMinutes: 2 }],
       bySector: [{ sectorId: 's1', sectorName: 'Financeiro', closedCount: 5 }],
+      byReason: [],
     });
     renderPage();
 
@@ -94,10 +95,11 @@ describe('MetricsPage', () => {
       scope: 'admin',
       byAgent: [],
       bySector: [],
+      byReason: [],
     });
     renderPage();
 
-    expect(await screen.findAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(3);
+    expect(await screen.findAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(4);
     expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
   });
 
@@ -108,12 +110,29 @@ describe('MetricsPage', () => {
       scope: 'admin',
       byAgent: [{ agentId: 'a1', agentName: 'Ana', closedCount: 5, avgResolutionMinutes: 10, avgFirstResponseMinutes: 2 }],
       bySector: [],
+      byReason: [],
     });
     renderPage();
 
     await screen.findAllByText(/"agentName":"Ana"/);
     expect(screen.getAllByText(/"agentName":"Ana"/)).toHaveLength(2);
-    expect(screen.getByText('Nenhum atendimento fechado nesse período.')).toBeInTheDocument();
+    // Both bySector and byReason are empty here, so their charts each render their
+    // own empty state.
+    expect(screen.getAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(2);
+  });
+
+  test('shows the per-reason chart for an admin', async () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'admin',
+      byAgent: [],
+      bySector: [],
+      byReason: [{ reasonId: 'r1', reasonName: 'Troca de senha', closedCount: 4 }],
+    });
+    renderPage();
+
+    expect(await screen.findByText(/"reasonName":"Troca de senha"/)).toBeInTheDocument();
   });
 
   test('switching period refetches metrics with the new period', async () => {

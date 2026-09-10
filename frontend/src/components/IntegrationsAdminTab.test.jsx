@@ -18,6 +18,7 @@ vi.mock('../services/api');
 
 const BAILEYS_CHANNEL = { id: 'channel-1', type: 'baileys', name: 'Berg' };
 const META_CHANNEL = { id: 'channel-2', type: 'meta_cloud', name: 'Oficial' };
+const DIALOG360_CHANNEL = { id: 'channel-3', type: '360dialog', name: '360 Oficial' };
 const APPROVED_TEMPLATE = { id: 'tpl-1', name: 'aviso_cobranca', status: 'APPROVED' };
 
 beforeEach(() => {
@@ -56,6 +57,20 @@ describe('IntegrationsAdminTab', () => {
     expect(screen.queryByLabelText(/template padrão/i)).not.toBeInTheDocument();
 
     await userEvent.selectOptions(screen.getByLabelText(/^canal$/i), 'channel-2');
+
+    expect(screen.getByLabelText(/template padrão/i)).toBeInTheDocument();
+  });
+
+  test('offers a 360dialog channel as eligible and switches the form to template mode when selected', async () => {
+    useChannels.mockReturnValue({ channels: [BAILEYS_CHANNEL, DIALOG360_CHANNEL] });
+    useSgpIntegrations.mockReturnValue({ integrations: [], refresh: vi.fn() });
+    render(<IntegrationsAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /nova integração sgp/i }));
+
+    expect(screen.getByRole('option', { name: '360 Oficial' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/template padrão/i)).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText(/^canal$/i), 'channel-3');
 
     expect(screen.getByLabelText(/template padrão/i)).toBeInTheDocument();
   });

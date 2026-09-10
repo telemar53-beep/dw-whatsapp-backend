@@ -4,6 +4,7 @@ import { useSgpIntegrations } from '../hooks/useSgpIntegrations';
 import { useChannels } from '../hooks/useChannels';
 import { useTemplates } from '../hooks/useTemplates';
 import { createSgpIntegration, updateSgpIntegration, rotateSgpIntegrationKey } from '../services/api';
+import { isOfficialChannelType } from '../utils/channelTypes';
 import SgpQueryConfigCard from './SgpQueryConfigCard';
 
 const inputClass =
@@ -26,9 +27,9 @@ function IntegrationCard({ integration, channels, templates, onChanged }) {
   const channel = channels.find((c) => c.id === integration.channelId);
   // Unlike the create form, the edit form must keep this card's own channel selectable —
   // so it filters by type only, without excluding already-integrated channels.
-  const editableChannels = channels.filter((c) => c.type === 'baileys' || c.type === 'meta_cloud');
+  const editableChannels = channels.filter((c) => c.type === 'baileys' || isOfficialChannelType(c.type));
   const editSelectedChannel = channels.find((c) => c.id === editChannelId);
-  const editIsTemplateMode = Boolean(editSelectedChannel && editSelectedChannel.type === 'meta_cloud');
+  const editIsTemplateMode = Boolean(editSelectedChannel && isOfficialChannelType(editSelectedChannel.type));
 
   function seedEditState() {
     setEditDescription(integration.description);
@@ -218,11 +219,11 @@ function IntegrationsAdminTab() {
   const { integrations, refresh } = useSgpIntegrations();
   const { channels } = useChannels();
   const { templates } = useTemplates();
-  // Each channel gets at most one SGP gateway (one for Baileys, one for Meta Cloud) —
+  // Each channel gets at most one SGP gateway (one for Baileys, one per official channel (Meta Cloud or 360dialog)) —
   // already-integrated channels are hidden here; edit the existing card instead of creating a duplicate.
   const eligibleChannels = channels.filter(
     (channel) =>
-      (channel.type === 'baileys' || channel.type === 'meta_cloud') &&
+      (channel.type === 'baileys' || isOfficialChannelType(channel.type)) &&
       !integrations.some((integration) => integration.channelId === channel.id)
   );
 
@@ -235,7 +236,7 @@ function IntegrationsAdminTab() {
   const [saving, setSaving] = useState(false);
 
   const selectedChannel = channels.find((c) => c.id === channelId);
-  const isTemplateMode = Boolean(selectedChannel && selectedChannel.type === 'meta_cloud');
+  const isTemplateMode = Boolean(selectedChannel && isOfficialChannelType(selectedChannel.type));
   const approvedTemplates = templates.filter((t) => t.status === 'APPROVED');
 
   async function handleCreate(event) {

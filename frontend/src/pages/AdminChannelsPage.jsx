@@ -13,6 +13,7 @@ import CitiesAdminTab from '../components/CitiesAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
 import IntegrationsAdminTab from '../components/IntegrationsAdminTab';
 import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannelHidden, deleteChannel } from '../services/api';
+import { isOfficialChannelType, channelTypeLabel } from '../utils/channelTypes';
 
 const TABS = [
   { value: 'channels', label: 'Canais' },
@@ -62,7 +63,7 @@ function ChannelCard({
         <div>
           <p className="font-medium text-ink-950">{channel.name}</p>
           <p className="text-sm text-ink-950/55">
-            {channel.type === 'meta_cloud' ? 'Meta Cloud (oficial)' : 'Baileys (não oficial)'} — {channel.phoneNumber}
+            {channelTypeLabel(channel.type)} — {channel.phoneNumber}
           </p>
         </div>
         <StatusDot status={channel.status} />
@@ -76,7 +77,7 @@ function ChannelCard({
         />
         Usar triagem automática
       </label>
-      {channel.type === 'meta_cloud' && (
+      {isOfficialChannelType(channel.type) && (
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
             <label htmlFor={`waba-id-${channel.id}`} className="mb-1.5 block text-sm font-medium text-ink-950/70">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listChannelsForAgent, startConversation, listTemplatesForChannel } from '../services/api';
+import { isOfficialChannelType } from '../utils/channelTypes';
 import WaDialog, {
   waInputClass,
   waLabelClass,
@@ -27,7 +28,7 @@ function StartConversationModal({ onClose, onCreated }) {
     listChannelsForAgent(token)
       .then((data) => {
         const eligible = data.filter(
-          (channel) => (channel.type === 'baileys' && channel.status === 'connected') || channel.type === 'meta_cloud'
+          (channel) => (channel.type === 'baileys' && channel.status === 'connected') || isOfficialChannelType(channel.type)
         );
         setChannels(eligible);
         if (eligible.length > 0) {
@@ -41,11 +42,11 @@ function StartConversationModal({ onClose, onCreated }) {
   }, [token]);
 
   const selectedChannel = channels.find((channel) => channel.id === channelId);
-  const isMetaCloud = selectedChannel && selectedChannel.type === 'meta_cloud';
+  const isOfficialChannel = selectedChannel && isOfficialChannelType(selectedChannel.type);
   const selectedTemplate = templates.find((tpl) => tpl.id === templateId);
 
   useEffect(() => {
-    if (!isMetaCloud || !channelId) {
+    if (!isOfficialChannel || !channelId) {
       setTemplates([]);
       setTemplateId('');
       return;
@@ -54,7 +55,7 @@ function StartConversationModal({ onClose, onCreated }) {
       setTemplates(data);
       setTemplateId(data[0]?.id || '');
     });
-  }, [isMetaCloud, channelId, token]);
+  }, [isOfficialChannel, channelId, token]);
 
   useEffect(() => {
     setTemplateVariableValues(selectedTemplate ? Array(selectedTemplate.variableCount).fill('') : []);
@@ -73,7 +74,7 @@ function StartConversationModal({ onClose, onCreated }) {
     setError(null);
     setSubmitting(true);
     try {
-      const conversation = isMetaCloud
+      const conversation = isOfficialChannel
         ? await startConversation({ channelId, phoneNumber, templateId, templateVariables: templateVariableValues }, token)
         : await startConversation({ channelId, phoneNumber, content }, token);
       onCreated(conversation);
@@ -125,7 +126,7 @@ function StartConversationModal({ onClose, onCreated }) {
               required
             />
           </div>
-          {isMetaCloud ? (
+          {isOfficialChannel ? (
             <>
               <p className="rounded-[6px] bg-[#ffeecd] px-3 py-2 text-[13.5px] leading-[19px] text-[#54656f]">
                 Este canal requer o uso de template para iniciar o atendimento!
@@ -188,7 +189,7 @@ function StartConversationModal({ onClose, onCreated }) {
           </button>
           <button
             type="submit"
-            disabled={submitting || loading || loadError || channels.length === 0 || (isMetaCloud && templates.length === 0)}
+            disabled={submitting || loading || loadError || channels.length === 0 || (isOfficialChannel && templates.length === 0)}
             className={waPrimaryButtonClass}
           >
             Iniciar

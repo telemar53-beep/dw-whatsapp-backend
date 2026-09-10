@@ -267,6 +267,45 @@ describe('AdminChannelsPage', () => {
     await waitFor(() => expect(setChannelWabaId).toHaveBeenCalledWith('ch1', 'new-waba', 'tok-123'));
   });
 
+  test('lets an admin edit the WABA ID of a 360dialog channel', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: '360dialog', name: 'Oficial 360', phoneNumber: '+5511999990000', status: 'disconnected', triageEnabled: false, wabaId: 'old-waba' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    setChannelWabaId.mockResolvedValue({});
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    const input = screen.getByLabelText(/waba id/i);
+    await userEvent.clear(input);
+    await userEvent.type(input, 'new-waba');
+    await userEvent.click(screen.getByRole('button', { name: /salvar waba id/i }));
+
+    await waitFor(() => expect(setChannelWabaId).toHaveBeenCalledWith('ch1', 'new-waba', 'tok-123'));
+  });
+
+  test('labels a meta_cloud channel as Meta Cloud (oficial) and a 360dialog channel as 360dialog (oficial)', () => {
+    useChannels.mockReturnValue({
+      channels: [
+        { id: 'ch1', type: 'meta_cloud', name: 'Meta', phoneNumber: '+5511999990000', status: 'connected' },
+        { id: 'ch2', type: '360dialog', name: '360', phoneNumber: '+5511999990001', status: 'connected' },
+      ],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/Meta Cloud \(oficial\)/)).toBeInTheDocument();
+    expect(screen.getByText(/360dialog \(oficial\)/)).toBeInTheDocument();
+  });
+
   test('does not show a WABA ID field for a baileys channel', () => {
     useChannels.mockReturnValue({
       channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],

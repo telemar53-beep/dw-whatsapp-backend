@@ -89,6 +89,26 @@ describe('TemplatesAdminTab', () => {
     );
   });
 
+  test('offers a 360dialog channel as a selectable option in the create-template channel select', async () => {
+    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    useChannels.mockReturnValue({ channels: [{ id: 'ch-2', type: '360dialog', name: '360 Oficial', wabaId: 'waba-2' }] });
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
+    const form = within(screen.getByRole('form', { name: /cadastrar novo template/i }));
+
+    expect(form.getByRole('option', { name: '360 Oficial' })).toBeInTheDocument();
+  });
+
+  test('offers a 360dialog channel as a selectable option in the register-existing-template channel select', async () => {
+    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    useChannels.mockReturnValue({ channels: [{ id: 'ch-2', type: '360dialog', name: '360 Oficial', wabaId: 'waba-2' }] });
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /registrar template existente/i }));
+    const form = within(screen.getByRole('form', { name: /registrar template existente/i }));
+
+    expect(form.getByRole('option', { name: '360 Oficial' })).toBeInTheDocument();
+  });
+
   test('shows the Meta error message when creation fails', async () => {
     useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
     api.createTemplateAdmin.mockRejectedValue({ body: { error: 'Invalid parameter' } });

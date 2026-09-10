@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTemplates } from '../hooks/useTemplates';
 import { useChannels } from '../hooks/useChannels';
 import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin } from '../services/api';
+import { isOfficialChannelType } from '../utils/channelTypes';
 import WaDialog from './WaDialog';
 
 function TemplateRow({ template, onDeleted }) {
@@ -67,7 +68,7 @@ function TemplatesModal({ templates, onClose, onDeleted }) {
 function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
   const { token } = useAuth();
   const { channels } = useChannels();
-  const metaCloudChannels = channels.filter((channel) => channel.type === 'meta_cloud');
+  const officialChannels = channels.filter((channel) => isOfficialChannelType(channel.type));
 
   const [channelId, setChannelId] = useState('');
   const [name, setName] = useState('');
@@ -113,7 +114,7 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
           required
         >
           <option value="">Selecione um canal</option>
-          {metaCloudChannels.map((channel) => (
+          {officialChannels.map((channel) => (
             <option key={channel.id} value={channel.id}>{channel.name}</option>
           ))}
         </select>
@@ -179,7 +180,7 @@ function TemplatesAdminTab() {
   const { token } = useAuth();
   const { templates, refresh } = useTemplates();
   const { channels } = useChannels();
-  const metaCloudChannels = channels.filter((channel) => channel.type === 'meta_cloud');
+  const officialChannels = channels.filter((channel) => isOfficialChannelType(channel.type));
 
   const [viewingTemplates, setViewingTemplates] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
@@ -193,15 +194,15 @@ function TemplatesAdminTab() {
   const [submitting, setSubmitting] = useState(false);
   const [syncError, setSyncError] = useState(null);
 
-  const wabaIds = [...new Set(metaCloudChannels.map((channel) => channel.wabaId).filter(Boolean))];
+  const wabaIds = [...new Set(officialChannels.map((channel) => channel.wabaId).filter(Boolean))];
 
-  const firstMetaCloudChannelId = metaCloudChannels[0]?.id;
+  const firstOfficialChannelId = officialChannels[0]?.id;
 
   useEffect(() => {
-    if (!channelId && firstMetaCloudChannelId) {
-      setChannelId(firstMetaCloudChannelId);
+    if (!channelId && firstOfficialChannelId) {
+      setChannelId(firstOfficialChannelId);
     }
-  }, [firstMetaCloudChannelId, channelId]);
+  }, [firstOfficialChannelId, channelId]);
 
   async function handleCreate(event) {
     event.preventDefault();
@@ -306,7 +307,7 @@ function TemplatesAdminTab() {
             className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
             required
           >
-            {metaCloudChannels.map((channel) => (
+            {officialChannels.map((channel) => (
               <option key={channel.id} value={channel.id}>
                 {channel.name}
               </option>

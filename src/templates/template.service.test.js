@@ -1,6 +1,7 @@
 jest.mock('../channels/channel.repository');
 jest.mock('./template.repository');
 jest.mock('../whatsapp-adapters/meta-cloud.adapter');
+jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
 
 const { findChannelById, findChannelByWabaId } = require('../channels/channel.repository');
 const {
@@ -13,6 +14,7 @@ const {
   deleteTemplateRecord,
 } = require('./template.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
+const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const {
   createTemplate,
   listApprovedTemplatesForChannel,
@@ -42,6 +44,20 @@ describe('createTemplate', () => {
   test('rejects when the channel is not meta_cloud', async () => {
     findChannelById.mockResolvedValue({ id: 'ch-1', type: 'baileys', config: {} });
     await expect(createTemplate(validInput)).rejects.toThrow(TemplateValidationError);
+  });
+
+  test('accepts a 360dialog channel the same way it accepts meta_cloud', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: '360dialog', config: { apiKey: 'key-1', wabaId: 'waba-1' } });
+    threeSixtyDialogAdapter.createMetaTemplate.mockResolvedValue({ metaTemplateId: 'meta-tpl-9', status: 'PENDING' });
+    createTemplateRecord.mockResolvedValue({ id: 'local-1', wabaId: 'waba-1', metaTemplateId: 'meta-tpl-9', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', bodyText: validInput.bodyText, variableCount: 1, status: 'PENDING', rejectionReason: null, createdAt: new Date() });
+
+    await createTemplate(validInput);
+
+    expect(threeSixtyDialogAdapter.createMetaTemplate).toHaveBeenCalledWith(
+      { id: 'ch-1', type: '360dialog', config: { apiKey: 'key-1', wabaId: 'waba-1' } },
+      expect.objectContaining({ name: 'fatura_vencida' })
+    );
+    expect(metaCloudAdapter.createMetaTemplate).not.toHaveBeenCalled();
   });
 
   test('rejects when the meta_cloud channel has no wabaId configured', async () => {
@@ -122,13 +138,13 @@ describe('listApprovedTemplatesForChannel', () => {
 describe('deleteTemplate', () => {
   test('deletes from Meta then locally when a channel for the WABA exists', async () => {
     findTemplateById.mockResolvedValue({ id: 'tpl-1', wabaId: 'waba-1', name: 'fatura_vencida', metaTemplateId: 'meta-tpl-1' });
-    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', config: { accessToken: 'tok', wabaId: 'waba-1' } });
+    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { accessToken: 'tok', wabaId: 'waba-1' } });
     deleteTemplateRecord.mockResolvedValue(true);
 
     const result = await deleteTemplate('tpl-1');
 
     expect(metaCloudAdapter.deleteMetaTemplate).toHaveBeenCalledWith(
-      { id: 'ch-1', config: { accessToken: 'tok', wabaId: 'waba-1' } },
+      { id: 'ch-1', type: 'meta_cloud', config: { accessToken: 'tok', wabaId: 'waba-1' } },
       { name: 'fatura_vencida', metaTemplateId: 'meta-tpl-1' }
     );
     expect(deleteTemplateRecord).toHaveBeenCalledWith('tpl-1');
@@ -155,7 +171,7 @@ describe('deleteTemplate', () => {
 
   test('still deletes the local row when the Meta delete call itself throws', async () => {
     findTemplateById.mockResolvedValue({ id: 'tpl-1', wabaId: 'waba-1', name: 'x', metaTemplateId: 'meta-1' });
-    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', config: { accessToken: 'tok', wabaId: 'waba-1' } });
+    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { accessToken: 'tok', wabaId: 'waba-1' } });
     metaCloudAdapter.deleteMetaTemplate.mockRejectedValue(new Error('Object does not exist'));
     deleteTemplateRecord.mockResolvedValue(true);
 
@@ -164,11 +180,25 @@ describe('deleteTemplate', () => {
     expect(deleteTemplateRecord).toHaveBeenCalledWith('tpl-1');
     expect(result).toBe(true);
   });
+
+  test('deletes via the 360dialog adapter when the owning channel is 360dialog', async () => {
+    findTemplateById.mockResolvedValue({ id: 'local-1', wabaId: 'waba-1', name: 'fatura_vencida', metaTemplateId: 'meta-tpl-1' });
+    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', type: '360dialog', config: { apiKey: 'key-1', wabaId: 'waba-1' } });
+    deleteTemplateRecord.mockResolvedValue(true);
+
+    await deleteTemplate('local-1');
+
+    expect(threeSixtyDialogAdapter.deleteMetaTemplate).toHaveBeenCalledWith(
+      { id: 'ch-1', type: '360dialog', config: { apiKey: 'key-1', wabaId: 'waba-1' } },
+      { name: 'fatura_vencida', metaTemplateId: 'meta-tpl-1' }
+    );
+    expect(metaCloudAdapter.deleteMetaTemplate).not.toHaveBeenCalled();
+  });
 });
 
 describe('syncTemplatesForWaba', () => {
   test('updates local status for each template Meta returns', async () => {
-    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', config: { accessToken: 'tok', wabaId: 'waba-1' } });
+    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { accessToken: 'tok', wabaId: 'waba-1' } });
     metaCloudAdapter.listMetaTemplates.mockResolvedValue([
       { id: 'meta-1', status: 'APPROVED', rejected_reason: null },
       { id: 'meta-2', status: 'REJECTED', rejected_reason: 'INVALID_FORMAT' },
@@ -183,7 +213,7 @@ describe('syncTemplatesForWaba', () => {
   });
 
   test('skips an unrecognized status value without writing it', async () => {
-    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', config: { accessToken: 'tok', wabaId: 'waba-1' } });
+    findChannelByWabaId.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { accessToken: 'tok', wabaId: 'waba-1' } });
     metaCloudAdapter.listMetaTemplates.mockResolvedValue([{ id: 'meta-1', status: 'IN_APPEAL' }]);
     listTemplates.mockResolvedValue([]);
 
@@ -246,6 +276,20 @@ describe('registerExistingTemplate', () => {
   test('rejects when the channel is not meta_cloud', async () => {
     findChannelById.mockResolvedValue({ id: 'ch-1', type: 'baileys', config: {} });
     await expect(registerExistingTemplate(validInput)).rejects.toThrow(TemplateValidationError);
+  });
+
+  test('accepts a 360dialog channel the same way it accepts meta_cloud', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: '360dialog', config: { wabaId: 'waba-1' } });
+    threeSixtyDialogAdapter.listMetaTemplates.mockResolvedValue([
+      { id: 984, name: 'aviso_cobranca', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', components: [{ type: 'BODY', text: 'Ola {{1}}' }] },
+    ]);
+    createTemplateRecord.mockResolvedValue({ id: 'local-1', metaTemplateId: '984', name: 'aviso_cobranca', status: 'PENDING' });
+    updateTemplateStatusByMetaTemplateId.mockResolvedValue({ id: 'local-1', metaTemplateId: '984', status: 'APPROVED' });
+
+    await registerExistingTemplate({ channelId: 'ch-1', name: 'aviso_cobranca', language: 'pt_BR' });
+
+    expect(threeSixtyDialogAdapter.listMetaTemplates).toHaveBeenCalledWith({ id: 'ch-1', type: '360dialog', config: { wabaId: 'waba-1' } });
+    expect(metaCloudAdapter.listMetaTemplates).not.toHaveBeenCalled();
   });
 
   test('rejects when the meta_cloud channel has no wabaId configured', async () => {

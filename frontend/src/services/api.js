@@ -313,6 +313,14 @@ export function updateSgpQueryConfig(payload, token) {
   return apiFetch('/api/admin/integrations/sgp-query-config', { method: 'PUT', body: payload, token });
 }
 
+export function getAssignmentMessageConfig(token) {
+  return apiFetch('/api/admin/assignment-message', { token });
+}
+
+export function updateAssignmentMessageConfig(payload, token) {
+  return apiFetch('/api/admin/assignment-message', { method: 'PUT', body: payload, token });
+}
+
 export function lookupSgpClient(cpf, token) {
   return apiFetch(`/api/sgp/clientes?cpf=${encodeURIComponent(cpf)}`, { token });
 }

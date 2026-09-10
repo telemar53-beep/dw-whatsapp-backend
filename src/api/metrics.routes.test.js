@@ -94,6 +94,54 @@ describe('GET /api/metrics', () => {
     });
   });
 
+  test('accepts a custom period with a valid days value', async () => {
+    getMetricsForAgent.mockResolvedValue({ closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null });
+
+    const res = await request(buildApp())
+      .get('/api/metrics?period=custom&days=45')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.period).toBe('custom');
+    expect(getMetricsForAgent).toHaveBeenCalledWith('agent-1', expect.any(Date));
+  });
+
+  test('returns 400 for a custom period with no days value', async () => {
+    const res = await request(buildApp())
+      .get('/api/metrics?period=custom')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(400);
+    expect(getMetricsForAgent).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 for a custom period with a non-integer days value', async () => {
+    const res = await request(buildApp())
+      .get('/api/metrics?period=custom&days=abc')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(400);
+    expect(getMetricsForAgent).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 for a custom period with a zero or negative days value', async () => {
+    const res = await request(buildApp())
+      .get('/api/metrics?period=custom&days=0')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(400);
+    expect(getMetricsForAgent).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 for a custom period with a days value over the 365 cap', async () => {
+    const res = await request(buildApp())
+      .get('/api/metrics?period=custom&days=366')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(400);
+    expect(getMetricsForAgent).not.toHaveBeenCalled();
+  });
+
   test('accepts the 30d period', async () => {
     getMetricsForAgent.mockResolvedValue({ closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null });
 

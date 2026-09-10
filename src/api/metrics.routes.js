@@ -5,17 +5,23 @@ const { getMetricsForAgent, getMetricsForAllAgents, getMetricsBySector, getMetri
 const router = express.Router();
 
 const PERIOD_HOURS = { today: 24, '7d': 7 * 24, '30d': 30 * 24 };
+const CUSTOM_DAYS_MAX = 365;
 
-function periodToSince(period) {
+function periodToSince(period, daysParam) {
+  if (period === 'custom') {
+    const days = Number(daysParam);
+    if (!Number.isInteger(days) || days < 1 || days > CUSTOM_DAYS_MAX) return null;
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  }
   if (!Object.prototype.hasOwnProperty.call(PERIOD_HOURS, period)) return null;
   const hours = PERIOD_HOURS[period];
   return new Date(Date.now() - hours * 60 * 60 * 1000);
 }
 
 router.get('/', requireAuth, async (req, res) => {
-  const since = periodToSince(req.query.period);
+  const since = periodToSince(req.query.period, req.query.days);
   if (!since) {
-    return res.status(400).json({ error: 'period must be one of: today, 7d, 30d' });
+    return res.status(400).json({ error: `period must be one of: today, 7d, 30d, or custom with a days parameter from 1 to ${CUSTOM_DAYS_MAX}` });
   }
 
   if (req.agent.role === 'admin') {

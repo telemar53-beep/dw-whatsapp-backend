@@ -156,19 +156,34 @@ function EmptyState() {
   );
 }
 
+const CUSTOM_DAYS_MAX = 365;
+
 function MetricsPage() {
   const { token, agent } = useAuth();
   const [period, setPeriod] = useState('today');
+  const [customDays, setCustomDays] = useState(null);
+  const [customDaysInput, setCustomDaysInput] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
+    if (period === 'custom' && !customDays) return;
     setError(null);
-    getMetrics(period, token)
+    getMetrics(period, token, customDays)
       .then(setData)
       .catch(() => setError('Falha ao carregar métricas'));
-  }, [period, token]);
+  }, [period, token, customDays]);
+
+  const customDaysValue = Number(customDaysInput);
+  const customDaysValid = Number.isInteger(customDaysValue) && customDaysValue >= 1 && customDaysValue <= CUSTOM_DAYS_MAX;
+
+  function handleApplyCustomDays() {
+    if (!customDaysValid) return;
+    setCustomDays(customDaysValue);
+    setPeriod('custom');
+  }
 
   return (
     <div className="flex h-dvh">
@@ -198,18 +213,56 @@ function MetricsPage() {
           </Link>
         </div>
 
-        <div className="inline-flex flex-wrap gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl">
-          {PERIODS.map((p) => (
+        <div className="space-y-2">
+          <div className="inline-flex flex-wrap gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl">
+            {PERIODS.map((p) => (
+              <button
+                key={p.value}
+                onClick={() => {
+                  setPeriod(p.value);
+                  setShowCustomInput(false);
+                }}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  period === p.value ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/60 hover:text-ink-950'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
             <button
-              key={p.value}
-              onClick={() => setPeriod(p.value)}
+              onClick={() => setShowCustomInput((prev) => !prev)}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                period === p.value ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/60 hover:text-ink-950'
+                period === 'custom' ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/60 hover:text-ink-950'
               }`}
             >
-              {p.label}
+              Personalizado
             </button>
-          ))}
+          </div>
+          {showCustomInput && (
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="custom-days" className="text-sm text-ink-950/70">
+                Últimos
+              </label>
+              <input
+                id="custom-days"
+                type="number"
+                min="1"
+                max={CUSTOM_DAYS_MAX}
+                value={customDaysInput}
+                onChange={(e) => setCustomDaysInput(e.target.value)}
+                className="w-20 rounded-lg border border-ink-950/15 bg-white/60 px-2.5 py-1.5 text-sm text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+              />
+              <span className="text-sm text-ink-950/70">dias</span>
+              <button
+                type="button"
+                onClick={handleApplyCustomDays}
+                disabled={!customDaysValid}
+                className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Aplicar
+              </button>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -301,7 +354,7 @@ function MetricsPage() {
               </ChartCard>
             </div>
 
-            <ChartCard title="Atendimentos por motivo" icon={<IconTag className="h-4 w-4" />}>
+            <ChartCard title="Motivos de Contato" icon={<IconTag className="h-4 w-4" />}>
               {data.byReason.length === 0 ? (
                 <EmptyState />
               ) : (

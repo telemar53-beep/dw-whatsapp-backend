@@ -225,8 +225,9 @@ export function updateReason(id, payload, token) {
   return apiFetch(`/api/admin/reasons/${id}`, { method: 'PATCH', body: payload, token });
 }
 
-export function getMetrics(period, token) {
-  return apiFetch(`/api/metrics?period=${period}`, { token });
+export function getMetrics(period, token, days) {
+  const query = period === 'custom' ? `period=${period}&days=${days}` : `period=${period}`;
+  return apiFetch(`/api/metrics?${query}`, { token });
 }
 
 export function getTriage(token) {

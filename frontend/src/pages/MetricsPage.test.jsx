@@ -142,11 +142,11 @@ describe('MetricsPage', () => {
       own: { closedCount: 1, avgResolutionMinutes: 1, avgFirstResponseMinutes: 1 },
     });
     renderPage();
-    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('today', 'tok-123'));
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('today', 'tok-123', null));
 
     await userEvent.click(screen.getByRole('button', { name: /últimos 7 dias/i }));
 
-    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('7d', 'tok-123'));
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('7d', 'tok-123', null));
   });
 
   test('shows an error message when the fetch fails', async () => {
@@ -154,5 +154,74 @@ describe('MetricsPage', () => {
     renderPage();
 
     expect(await screen.findByText(/falha ao carregar métricas/i)).toBeInTheDocument();
+  });
+
+  test('clicking Personalizado reveals the custom days input, hidden by default', async () => {
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'agent',
+      own: { closedCount: 1, avgResolutionMinutes: 1, avgFirstResponseMinutes: 1 },
+    });
+    renderPage();
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledTimes(1));
+
+    expect(screen.queryByLabelText(/últimos/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+
+    expect(screen.getByLabelText(/últimos/i)).toBeInTheDocument();
+  });
+
+  test('applying a valid custom days value fetches with period=custom', async () => {
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'agent',
+      own: { closedCount: 1, avgResolutionMinutes: 1, avgFirstResponseMinutes: 1 },
+    });
+    renderPage();
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+    await userEvent.type(screen.getByLabelText(/últimos/i), '45');
+    await userEvent.click(screen.getByRole('button', { name: /aplicar/i }));
+
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('custom', 'tok-123', 45));
+  });
+
+  test('the Aplicar button stays disabled for an invalid custom days value', async () => {
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'agent',
+      own: { closedCount: 1, avgResolutionMinutes: 1, avgFirstResponseMinutes: 1 },
+    });
+    renderPage();
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+
+    expect(screen.getByRole('button', { name: /aplicar/i })).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText(/últimos/i), '400');
+
+    expect(screen.getByRole('button', { name: /aplicar/i })).toBeDisabled();
+  });
+
+  test('switching back to a fixed period after a custom one refetches with that period', async () => {
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'agent',
+      own: { closedCount: 1, avgResolutionMinutes: 1, avgFirstResponseMinutes: 1 },
+    });
+    renderPage();
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+    await userEvent.type(screen.getByLabelText(/últimos/i), '45');
+    await userEvent.click(screen.getByRole('button', { name: /aplicar/i }));
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('custom', 'tok-123', 45));
+
+    await userEvent.click(screen.getByRole('button', { name: /últimas 24 horas/i }));
+
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('today', 'tok-123', 45));
   });
 });

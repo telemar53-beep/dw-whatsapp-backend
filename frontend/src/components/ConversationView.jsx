@@ -332,7 +332,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                     title="Responder"
                     className={`absolute right-0 top-0 flex h-[22px] w-[26px] items-center justify-end rounded-tr-[7.5px] pr-[3px] text-wa-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 ${
                       outbound
-                        ? 'bg-[linear-gradient(to_left,#dcefe9_60%,rgba(220,239,233,0))]'
+                        ? 'bg-[linear-gradient(to_left,#ffffff_60%,rgba(255,255,255,0))]'
                         : 'bg-[linear-gradient(to_left,#ffffff_60%,rgba(255,255,255,0))]'
                     }`}
                   >

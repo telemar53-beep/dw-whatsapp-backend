@@ -209,7 +209,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
             <ComposerButton label="Descartar gravação" onClick={stopRecording}>
               <IconTrash size={22} />
             </ComposerButton>
-            <p className="flex h-[42px] flex-1 items-center gap-2 rounded-[8px] bg-white px-4 text-[14px] text-wa-text">
+            <p className="flex h-[42px] flex-1 items-center gap-2 rounded-full bg-white px-4 text-[14px] text-wa-text">
               <span aria-hidden="true" className="animate-wa-rec h-2.5 w-2.5 shrink-0 rounded-full bg-[#ea4335]" />
               Gravando… {recordingSeconds}s
             </p>
@@ -225,19 +225,9 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
           </>
         ) : (
           <>
-            <div ref={popoverRef} className="relative flex items-center">
-              <ComposerButton
-                label="Emojis"
-                active={showingEmojis}
-                onClick={() => {
-                  setShowingEmojis((prev) => !prev);
-                  setShowingQuickReplies(false);
-                }}
-              >
-                <IconEmoji size={26} />
-              </ComposerButton>
+            <div ref={popoverRef} className="relative flex flex-1 items-end gap-1">
               <ComposerButton label="Anexar arquivo" as="label" htmlFor="message-file-input">
-                <IconAttach size={26} />
+                <IconAttach size={24} />
               </ComposerButton>
               <ComposerButton
                 label="Respostas rápidas"
@@ -247,8 +237,33 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                   setShowingEmojis(false);
                 }}
               >
-                <IconQuickReply size={24} />
+                <IconQuickReply size={22} />
               </ComposerButton>
+
+              <div className="flex h-[42px] min-w-0 flex-1 items-center rounded-full bg-white pl-1 pr-1 focus-within:outline focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-wa-green/50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowingEmojis((prev) => !prev);
+                    setShowingQuickReplies(false);
+                  }}
+                  aria-label="Emojis"
+                  title="Emojis"
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-black/[.05] ${
+                    showingEmojis ? 'text-wa-green' : 'text-wa-icon'
+                  }`}
+                >
+                  <IconEmoji size={24} />
+                </button>
+                <input
+                  type="text"
+                  ref={textInputRef}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Digite uma mensagem..."
+                  className="h-full min-w-0 flex-1 bg-transparent px-1 text-[15px] text-wa-text outline-none placeholder:text-wa-muted"
+                />
+              </div>
 
               {showingEmojis && (
                 <div className="animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/70 bg-white/90 p-2 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.45)] backdrop-blur-xl">
@@ -293,15 +308,6 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                 </div>
               )}
             </div>
-
-            <input
-              type="text"
-              ref={textInputRef}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Digite uma mensagem..."
-              className="h-[42px] min-w-0 flex-1 rounded-[8px] bg-white px-4 text-[15px] text-wa-text outline-none placeholder:text-wa-muted focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-wa-green/50"
-            />
 
             {canSend ? (
               <button

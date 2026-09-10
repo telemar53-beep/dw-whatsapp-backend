@@ -238,7 +238,7 @@ function DocumentCard({ url, filename, outbound }) {
       target="_blank"
       rel="noreferrer"
       className={`flex w-[min(18rem,62vw)] items-center gap-3 rounded-[6px] px-3 py-2.5 transition-colors ${
-        outbound ? 'bg-wa-out-deep hover:bg-[#bfe0d6]' : 'bg-[#eef4f2] hover:bg-[#e6efec]'
+        outbound ? 'bg-wa-out-deep hover:bg-[#e6efec]' : 'bg-[#eef4f2] hover:bg-[#e6efec]'
       }`}
     >
       <span className="relative flex h-9 w-7 shrink-0 items-center justify-center">

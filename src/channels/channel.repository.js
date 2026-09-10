@@ -47,9 +47,19 @@ async function findChannelByMetaPhoneNumberId(phoneNumberId) {
 async function findChannelByWabaId(wabaId) {
   const result = await getPool().query(
     `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at FROM channels
-     WHERE type = 'meta_cloud' AND config->>'wabaId' = $1
+     WHERE config->>'wabaId' = $1
      LIMIT 1`,
     [wabaId]
+  );
+  if (result.rowCount === 0) return null;
+  return toChannel(result.rows[0]);
+}
+
+async function findChannelByWebhookToken(webhookToken) {
+  const result = await getPool().query(
+    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at FROM channels
+     WHERE type = '360dialog' AND config->>'webhookToken' = $1`,
+    [webhookToken]
   );
   if (result.rowCount === 0) return null;
   return toChannel(result.rows[0]);
@@ -86,7 +96,7 @@ async function updateChannelTriageEnabled(id, triageEnabled) {
 
 async function updateChannelWabaId(id, wabaId) {
   const result = await getPool().query(
-    `UPDATE channels SET config = jsonb_set(config, '{wabaId}', to_jsonb($2::text)) WHERE id = $1 AND type = 'meta_cloud'
+    `UPDATE channels SET config = jsonb_set(config, '{wabaId}', to_jsonb($2::text)) WHERE id = $1 AND type IN ('meta_cloud', '360dialog')
      RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at`,
     [id, wabaId]
   );
@@ -137,6 +147,7 @@ module.exports = {
   findChannelById,
   findChannelByMetaPhoneNumberId,
   findChannelByWabaId,
+  findChannelByWebhookToken,
   listChannels,
   updateChannelStatus,
   updateChannelTriageEnabled,

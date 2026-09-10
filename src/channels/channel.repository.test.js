@@ -6,6 +6,7 @@ const {
   findChannelById,
   findChannelByMetaPhoneNumberId,
   findChannelByWabaId,
+  findChannelByWebhookToken,
   listChannels,
   updateChannelStatus,
   updateChannelTriageEnabled,
@@ -175,6 +176,33 @@ describe('channel repository', () => {
     const found = await findChannelById(channel.id);
     expect(found.welcomeMessage).toBe('Seja bem-vindo!');
   });
+
+  test('createChannel stores and returns a 360dialog channel', async () => {
+    const channel = await createChannel({
+      type: '360dialog',
+      name: 'Suporte via BSP',
+      phoneNumber: '+5511999990003',
+      config: { apiKey: 'd360-key-abc', wabaId: 'waba-360-1', webhookToken: 'token-abc123' },
+    });
+    expect(channel.id).toBeDefined();
+    expect(channel.type).toBe('360dialog');
+    expect(channel.config).toEqual({ apiKey: 'd360-key-abc', wabaId: 'waba-360-1', webhookToken: 'token-abc123' });
+  });
+
+  describe('findChannelByWebhookToken', () => {
+    test('finds a 360dialog channel by its webhookToken', async () => {
+      const created = await createChannel({
+        type: '360dialog', name: 'Suporte via BSP', phoneNumber: '+5511999990004',
+        config: { apiKey: 'key-1', wabaId: 'waba-1', webhookToken: 'find-me-token' },
+      });
+      const found = await findChannelByWebhookToken('find-me-token');
+      expect(found.id).toBe(created.id);
+    });
+
+    test('returns null when no channel has that token', async () => {
+      expect(await findChannelByWebhookToken('does-not-exist')).toBeNull();
+    });
+  });
 });
 
 describe('findChannelByWabaId', () => {
@@ -194,6 +222,15 @@ describe('findChannelByWabaId', () => {
   test('never matches a baileys channel', async () => {
     await createChannel({ type: 'baileys', name: 'Berg', phoneNumber: '+5511999991111', config: {} });
     expect(await findChannelByWabaId(undefined)).toBeNull();
+  });
+
+  test('finds a 360dialog channel by its configured wabaId', async () => {
+    const created = await createChannel({
+      type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990005',
+      config: { apiKey: 'key-1', wabaId: 'waba-360-2', webhookToken: 'tok-1' },
+    });
+    const found = await findChannelByWabaId('waba-360-2');
+    expect(found.id).toBe(created.id);
   });
 });
 
@@ -215,6 +252,15 @@ describe('updateChannelWabaId', () => {
 
   test('returns null for a non-existent id', async () => {
     expect(await updateChannelWabaId('00000000-0000-0000-0000-000000000000', 'waba-x')).toBeNull();
+  });
+
+  test('updates the wabaId of an existing 360dialog channel', async () => {
+    const created = await createChannel({
+      type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990006',
+      config: { apiKey: 'key-1', wabaId: 'old-waba', webhookToken: 'tok-2' },
+    });
+    const updated = await updateChannelWabaId(created.id, 'new-waba');
+    expect(updated.config.wabaId).toBe('new-waba');
   });
 });
 

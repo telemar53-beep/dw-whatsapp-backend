@@ -8,6 +8,7 @@ const {
 } = require('../integrations/sgp-integration.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const { getSgpQueryConfig, upsertSgpQueryConfig } = require('../integrations/sgp-query-config.repository');
+const { isOfficialChannelType } = require('../channels/channel-types');
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ function toIntegrationResponse(integration) {
 }
 
 function modeForChannel(channel) {
-  return channel.type === 'meta_cloud' ? 'template' : 'freetext';
+  return isOfficialChannelType(channel.type) ? 'template' : 'freetext';
 }
 
 router.get('/sgp', requireAuth, requireRole('admin'), async (req, res) => {
@@ -47,7 +48,7 @@ router.post('/sgp', requireAuth, requireRole('admin'), async (req, res) => {
   if (!channel) {
     return res.status(404).json({ error: 'Channel not found' });
   }
-  if (channel.type !== 'baileys' && channel.type !== 'meta_cloud') {
+  if (channel.type !== 'baileys' && !isOfficialChannelType(channel.type)) {
     return res.status(400).json({ error: 'Unsupported channel type' });
   }
   const mode = modeForChannel(channel);
@@ -76,7 +77,7 @@ router.put('/sgp/:id', requireAuth, requireRole('admin'), async (req, res) => {
   if (!channel) {
     return res.status(404).json({ error: 'Channel not found' });
   }
-  if (channel.type !== 'baileys' && channel.type !== 'meta_cloud') {
+  if (channel.type !== 'baileys' && !isOfficialChannelType(channel.type)) {
     return res.status(400).json({ error: 'Unsupported channel type' });
   }
   const mode = modeForChannel(channel);

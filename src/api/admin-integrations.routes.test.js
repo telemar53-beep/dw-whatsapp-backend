@@ -135,6 +135,20 @@ describe('POST /api/admin/integrations/sgp', () => {
     expect(res.status).toBe(201);
   });
 
+  test('derives mode "template" for a 360dialog channel too', async () => {
+    const threeSixtyDialogChannel = { id: 'channel-3', type: '360dialog' };
+    findChannelById.mockResolvedValue(threeSixtyDialogChannel);
+    createSgpIntegration.mockResolvedValue({ id: 'int-3', description: 'Via BSP', channelId: 'channel-3', mode: 'template', defaultTemplateId: 'tpl-1', enabled: true, hasApiKey: false });
+
+    const res = await request(buildApp())
+      .post('/api/admin/integrations/sgp')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ description: 'Via BSP', channelId: 'channel-3', defaultTemplateId: 'tpl-1', enabled: true });
+
+    expect(createSgpIntegration).toHaveBeenCalledWith({ description: 'Via BSP', channelId: 'channel-3', mode: 'template', defaultTemplateId: 'tpl-1', enabled: true });
+    expect(res.status).toBe(201);
+  });
+
   test('returns 403 for a non-admin agent', async () => {
     const res = await request(buildApp())
       .post('/api/admin/integrations/sgp')

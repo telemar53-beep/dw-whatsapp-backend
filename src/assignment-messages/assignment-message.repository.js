@@ -77,4 +77,13 @@ async function claimProtocolNumber(conversationId) {
   return result.rows[0].protocol_number;
 }
 
-module.exports = { getAssignmentMessageConfig, upsertAssignmentMessageConfig, claimProtocolNumber };
+async function clearProtocolNumber(conversationId) {
+  await getPool().query('UPDATE conversations SET protocol_number = NULL WHERE id = $1', [conversationId]);
+}
+
+module.exports = {
+  getAssignmentMessageConfig,
+  upsertAssignmentMessageConfig,
+  claimProtocolNumber,
+  clearProtocolNumber,
+};

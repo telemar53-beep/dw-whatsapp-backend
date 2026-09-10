@@ -2,7 +2,7 @@ jest.mock('./assignment-message.repository');
 jest.mock('../agents/agent.repository');
 jest.mock('../queue/outbound-queue');
 
-const { getAssignmentMessageConfig, claimProtocolNumber } = require('./assignment-message.repository');
+const { getAssignmentMessageConfig, claimProtocolNumber, clearProtocolNumber } = require('./assignment-message.repository');
 const { findAgentById } = require('../agents/agent.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { sendOpeningMessageIfApplicable, sendClosingMessageIfApplicable } = require('./assignment-message.service');
@@ -51,6 +51,38 @@ describe('sendOpeningMessageIfApplicable', () => {
       channelId: 'channel-1',
       content: 'Olá, meu nome é Geovanna, protocolo 1042',
     });
+  });
+
+  test('clears the claimed protocol number and rethrows when enqueueOutboundMessage fails', async () => {
+    getAssignmentMessageConfig.mockResolvedValue({
+      enabled: true,
+      agentIds: ['agent-1'],
+      channelIds: ['channel-1'],
+      openingMessage: 'Olá @chat_atendente, protocolo @chat_protocolo',
+    });
+    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Geovanna Silva' });
+    claimProtocolNumber.mockResolvedValue(1042);
+    enqueueOutboundMessage.mockRejectedValue(new Error('queue down'));
+
+    await expect(sendOpeningMessageIfApplicable(CONVERSATION, 'agent-1')).rejects.toThrow('queue down');
+
+    expect(clearProtocolNumber).toHaveBeenCalledWith('conv-1');
+  });
+
+  test('clears the claimed protocol number and rethrows when findAgentById fails', async () => {
+    getAssignmentMessageConfig.mockResolvedValue({
+      enabled: true,
+      agentIds: ['agent-1'],
+      channelIds: ['channel-1'],
+      openingMessage: 'Olá @chat_atendente',
+    });
+    claimProtocolNumber.mockResolvedValue(1042);
+    findAgentById.mockRejectedValue(new Error('agent not found'));
+
+    await expect(sendOpeningMessageIfApplicable(CONVERSATION, 'agent-1')).rejects.toThrow('agent not found');
+
+    expect(clearProtocolNumber).toHaveBeenCalledWith('conv-1');
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 });
 

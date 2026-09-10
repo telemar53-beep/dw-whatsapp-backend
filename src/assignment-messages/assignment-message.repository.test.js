@@ -5,6 +5,7 @@ const {
   getAssignmentMessageConfig,
   upsertAssignmentMessageConfig,
   claimProtocolNumber,
+  clearProtocolNumber,
 } = require('./assignment-message.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { createConversation } = require('../conversations/conversation.repository');
@@ -148,5 +149,22 @@ describe('assignment message repository', () => {
     const numberA = await claimProtocolNumber(conversationA.id);
     const numberB = await claimProtocolNumber(conversationB.id);
     expect(numberA).not.toBe(numberB);
+  });
+
+  test('clearProtocolNumber resets a claimed protocol number back to null', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('+5511977776666', 'Joao');
+    const channel = await createChannel({
+      type: 'meta_cloud',
+      name: 'Canal Teste',
+      phoneNumber: '+5511999990009',
+      config: { phoneNumberId: '111', accessToken: 'tok' },
+    });
+    const conversation = await createConversation(contact.id, channel.id);
+    await claimProtocolNumber(conversation.id);
+
+    await clearProtocolNumber(conversation.id);
+
+    const result = await getPool().query('SELECT protocol_number FROM conversations WHERE id = $1', [conversation.id]);
+    expect(result.rows[0].protocol_number).toBeNull();
   });
 });

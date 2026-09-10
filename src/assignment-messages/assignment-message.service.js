@@ -1,4 +1,4 @@
-const { getAssignmentMessageConfig, claimProtocolNumber } = require('./assignment-message.repository');
+const { getAssignmentMessageConfig, claimProtocolNumber, clearProtocolNumber } = require('./assignment-message.repository');
 const { substituteAssignmentPlaceholders } = require('./message-placeholders');
 const { findAgentById } = require('../agents/agent.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -9,13 +9,18 @@ async function sendOpeningMessageIfApplicable(conversation, agentId) {
   if (!config.agentIds.includes(agentId)) return;
   if (!config.channelIds.includes(conversation.channelId)) return;
 
-  const agent = await findAgentById(agentId);
   const protocolNumber = await claimProtocolNumber(conversation.id);
-  const content = substituteAssignmentPlaceholders(config.openingMessage, {
-    agentName: agent.name,
-    protocolNumber,
-  });
-  await enqueueOutboundMessage({ conversationId: conversation.id, channelId: conversation.channelId, content });
+  try {
+    const agent = await findAgentById(agentId);
+    const content = substituteAssignmentPlaceholders(config.openingMessage, {
+      agentName: agent.name,
+      protocolNumber,
+    });
+    await enqueueOutboundMessage({ conversationId: conversation.id, channelId: conversation.channelId, content });
+  } catch (err) {
+    await clearProtocolNumber(conversation.id);
+    throw err;
+  }
 }
 
 async function sendClosingMessageIfApplicable(conversation, agentId) {

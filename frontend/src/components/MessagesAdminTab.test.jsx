@@ -6,12 +6,16 @@ import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useChannels } from '../hooks/useChannels';
 import { useAuth } from '../contexts/AuthContext';
 import { useCityNotices } from '../hooks/useCityNotices';
+import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
+import { useAssignmentMessageConfig } from '../hooks/useAssignmentMessageConfig';
 import * as api from '../services/api';
 
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useChannels');
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useCityNotices');
+vi.mock('../hooks/useAgentsAdmin');
+vi.mock('../hooks/useAssignmentMessageConfig');
 vi.mock('../services/api');
 
 beforeEach(() => {
@@ -19,6 +23,12 @@ beforeEach(() => {
   useAuth.mockReturnValue({ token: 'tok-123' });
   useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
   useCityNotices.mockReturnValue({ cityNotices: [], loading: false, refresh: vi.fn() });
+  useAgentsAdmin.mockReturnValue({ agents: [], loading: false, refresh: vi.fn() });
+  useAssignmentMessageConfig.mockReturnValue({
+    config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+    loading: false,
+    refresh: vi.fn(),
+  });
 });
 
 describe('MessagesAdminTab', () => {
@@ -508,5 +518,142 @@ describe('MessagesAdminTab', () => {
 
     expect(screen.queryByText(/cadastrar nova resposta rápida/i)).not.toBeInTheDocument();
     expect(api.createQuickReply).not.toHaveBeenCalled();
+  });
+});
+
+describe('Atribuir um atendimento', () => {
+  beforeEach(() => {
+    useAgentsAdmin.mockReturnValue({
+      agents: [
+        { id: 'agent-1', name: 'Geovanna Silva', email: 'geovanna@dw.com' },
+        { id: 'agent-2', name: 'Carlos Souza', email: 'carlos@dw.com' },
+      ],
+      loading: false,
+      refresh: vi.fn(),
+    });
+  });
+
+  test('shows a "Criar atribuição" button when no config exists yet', () => {
+    useAssignmentMessageConfig.mockReturnValue({
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+    expect(screen.getByRole('button', { name: 'Criar atribuição' })).toBeInTheDocument();
+  });
+
+  test('fills the form, saves and shows the closed summary', async () => {
+    const refresh = vi.fn();
+    useAssignmentMessageConfig.mockReturnValue({
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      loading: false,
+      refresh,
+    });
+    api.updateAssignmentMessageConfig.mockResolvedValue({});
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Criar atribuição' }));
+    await userEvent.type(screen.getByLabelText(/mensagem de abertura/i), 'Olá @chat_atendente');
+    await userEvent.type(screen.getByLabelText(/mensagem de encerramento/i), 'Tchau @chat_protocolo');
+    await userEvent.click(screen.getByLabelText('Geovanna Silva'));
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+
+    await waitFor(() =>
+      expect(api.updateAssignmentMessageConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          openingMessage: 'Olá @chat_atendente',
+          closingMessage: 'Tchau @chat_protocolo',
+          agentIds: ['agent-1'],
+        }),
+        'tok-123'
+      )
+    );
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('checking an already-checked agent unchecks it', async () => {
+    useAssignmentMessageConfig.mockReturnValue({
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Criar atribuição' }));
+    const agentCheckbox = screen.getByLabelText('Geovanna Silva');
+    await userEvent.click(agentCheckbox);
+    expect(agentCheckbox).toBeChecked();
+    await userEvent.click(agentCheckbox);
+    expect(agentCheckbox).not.toBeChecked();
+  });
+
+  test('canceling while creating does not leave a stale draft on reopen', async () => {
+    useAssignmentMessageConfig.mockReturnValue({
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Criar atribuição' }));
+    await userEvent.type(screen.getByLabelText(/mensagem de abertura/i), 'rascunho descartado');
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Criar atribuição' }));
+    expect(screen.getByLabelText(/mensagem de abertura/i)).toHaveValue('');
+  });
+
+  test('shows the closed-state summary with counts when a config already exists', () => {
+    useAssignmentMessageConfig.mockReturnValue({
+      config: {
+        id: 'config-1',
+        enabled: true,
+        openingMessage: 'abertura',
+        closingMessage: 'fechamento',
+        agentIds: ['agent-1', 'agent-2'],
+        channelIds: [],
+      },
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+    expect(screen.getByText(/2 atendentes/i)).toBeInTheDocument();
+  });
+
+  test('editing an existing config pre-fills the form fields', async () => {
+    useAssignmentMessageConfig.mockReturnValue({
+      config: {
+        id: 'config-1',
+        enabled: true,
+        openingMessage: 'Texto de abertura',
+        closingMessage: 'Texto de encerramento',
+        agentIds: ['agent-1'],
+        channelIds: [],
+      },
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+
+    expect(screen.getByLabelText(/mensagem de abertura/i)).toHaveValue('Texto de abertura');
+    expect(screen.getByLabelText(/mensagem de encerramento/i)).toHaveValue('Texto de encerramento');
+    expect(screen.getByLabelText('Geovanna Silva')).toBeChecked();
+  });
+
+  test('shows a help popup for the assignment-message section when its button is clicked', async () => {
+    useAssignmentMessageConfig.mockReturnValue({
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(<MessagesAdminTab />);
+
+    expect(screen.queryByText(/enviada automaticamente para o cliente quando um atendente assume/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /o que é isso: atribuir um atendimento/i }));
+
+    expect(screen.getByText(/enviada automaticamente para o cliente quando um atendente assume/i)).toBeInTheDocument();
   });
 });

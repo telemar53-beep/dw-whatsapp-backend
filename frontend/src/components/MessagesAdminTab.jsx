@@ -3,7 +3,16 @@ import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useChannels } from '../hooks/useChannels';
 import { useAuth } from '../contexts/AuthContext';
 import { useCityNotices } from '../hooks/useCityNotices';
-import { updateQuickReply, deleteQuickReply, setChannelWelcomeMessage, setCityNotice, deleteCityNotice } from '../services/api';
+import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
+import { useAssignmentMessageConfig } from '../hooks/useAssignmentMessageConfig';
+import {
+  updateQuickReply,
+  deleteQuickReply,
+  setChannelWelcomeMessage,
+  setCityNotice,
+  deleteCityNotice,
+  updateAssignmentMessageConfig,
+} from '../services/api';
 import CreateQuickReplyForm from './CreateQuickReplyForm';
 import WaDialog, { waPrimaryButtonClass } from './WaDialog';
 
@@ -440,6 +449,180 @@ function CityNoticeRow({ city, onSaved }) {
   );
 }
 
+function AssignmentMessageSection() {
+  const { token } = useAuth();
+  const { config, refresh } = useAssignmentMessageConfig();
+  const { agents } = useAgentsAdmin(true);
+  const { channels } = useChannels(true);
+  const [editing, setEditing] = useState(false);
+  const [enabled, setEnabled] = useState(config.enabled);
+  const [openingMessage, setOpeningMessage] = useState(config.openingMessage);
+  const [closingMessage, setClosingMessage] = useState(config.closingMessage);
+  const [agentIds, setAgentIds] = useState(config.agentIds);
+  const [channelIds, setChannelIds] = useState(config.channelIds);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  function handleEditClick() {
+    setEnabled(config.enabled);
+    setOpeningMessage(config.openingMessage);
+    setClosingMessage(config.closingMessage);
+    setAgentIds(config.agentIds);
+    setChannelIds(config.channelIds);
+    setError(null);
+    setEditing(true);
+  }
+
+  function handleCancel() {
+    setEnabled(config.enabled);
+    setOpeningMessage(config.openingMessage);
+    setClosingMessage(config.closingMessage);
+    setAgentIds(config.agentIds);
+    setChannelIds(config.channelIds);
+    setError(null);
+    setEditing(false);
+  }
+
+  function toggleAgent(agentId) {
+    setAgentIds((prev) => (prev.includes(agentId) ? prev.filter((id) => id !== agentId) : [...prev, agentId]));
+  }
+
+  function toggleChannel(channelId) {
+    setChannelIds((prev) => (prev.includes(channelId) ? prev.filter((id) => id !== channelId) : [...prev, channelId]));
+  }
+
+  async function handleSave(event) {
+    event.preventDefault();
+    setError(null);
+    setSaving(true);
+    try {
+      await updateAssignmentMessageConfig({ enabled, openingMessage, closingMessage, agentIds, channelIds }, token);
+      setEditing(false);
+      refresh();
+    } catch (err) {
+      setError((err.body && err.body.error) || 'Falha ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={handleSave}
+        className="space-y-3 rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      >
+        <label className="flex items-center gap-2 text-sm text-ink-950/70">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-teal-signal" />
+          Ativo
+        </label>
+        <div className="space-y-1">
+          <label htmlFor="assignment-opening-message" className="text-sm font-medium text-ink-950">
+            Mensagem de abertura
+          </label>
+          <textarea
+            id="assignment-opening-message"
+            value={openingMessage}
+            onChange={(e) => setOpeningMessage(e.target.value)}
+            placeholder="@chat_saudacao_maiusculo, meu nome é @chat_atendente. Irei iniciar seu atendimento, como posso te ajudar? O protocolo do seu atendimento é @chat_protocolo"
+            className={inputClass}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="assignment-closing-message" className="text-sm font-medium text-ink-950">
+            Mensagem de encerramento
+          </label>
+          <textarea
+            id="assignment-closing-message"
+            value={closingMessage}
+            onChange={(e) => setClosingMessage(e.target.value)}
+            placeholder="Estou encerrando seu atendimento! Qualquer dúvida coloco-me prontamente à disposição."
+            className={inputClass}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-ink-950">Atendentes</p>
+          <div className="space-y-1">
+            {agents.map((agent) => (
+              <label key={agent.id} className="flex items-center gap-2 text-sm text-ink-950/70">
+                <input
+                  type="checkbox"
+                  checked={agentIds.includes(agent.id)}
+                  onChange={() => toggleAgent(agent.id)}
+                  className="h-4 w-4 accent-teal-signal"
+                />
+                {agent.name}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-ink-950">Canais</p>
+          <div className="space-y-1">
+            {channels.map((channel) => (
+              <label key={channel.id} className="flex items-center gap-2 text-sm text-ink-950/70">
+                <input
+                  type="checkbox"
+                  checked={channelIds.includes(channel.id)}
+                  onChange={() => toggleChannel(channel.id)}
+                  className="h-4 w-4 accent-teal-signal"
+                />
+                {channel.name}
+              </label>
+            ))}
+          </div>
+        </div>
+        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Salvar
+          </button>
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  if (config.id === null) {
+    return (
+      <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+        <p className="text-sm text-ink-950/55">Nenhuma configuração criada ainda.</p>
+        <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+          Criar atribuição
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-ink-950/70">
+          {config.agentIds.length} atendentes, {config.channelIds.length} canais
+        </p>
+        <div className="flex items-center gap-3">
+          <CityStatusDot enabled={config.enabled} />
+          <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+            Editar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MessagesAdminTab() {
   const { quickReplies, refresh } = useQuickReplies();
   const { channels, refresh: refreshChannels } = useChannels(true);
@@ -490,6 +673,30 @@ function MessagesAdminTab() {
         {cityNotices.map((city) => (
           <CityNoticeRow key={city.id} city={city} onSaved={refreshCityNotices} />
         ))}
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold text-ink-950">Atribuir um atendimento</h2>
+          <SectionHelp label="Atribuir um atendimento" title="Atribuir um atendimento">
+            <p>
+              Enviada automaticamente para o cliente quando um atendente assume o
+              atendimento, e uma segunda mensagem quando ele é encerrado. Escolha
+              abaixo quais atendentes e quais canais disparam essas mensagens.
+            </p>
+            <p className="mt-2">Placeholders disponíveis:</p>
+            <ul className="mt-1 list-disc pl-5">
+              <li><code>@chat_saudacao_maiusculo</code> — Bom dia / Boa tarde / Boa noite, automático</li>
+              <li><code>@chat_atendente</code> — primeiro nome de quem assumiu</li>
+              <li><code>@chat_protocolo</code> — número do protocolo do atendimento</li>
+            </ul>
+            <p className="mt-2 italic">
+              Exemplo: "Bom dia, meu nome é Geovanna. Irei iniciar seu atendimento,
+              como posso te ajudar? O protocolo do seu atendimento é 1042"
+            </p>
+          </SectionHelp>
+        </div>
+        <AssignmentMessageSection />
       </div>
 
       <div className="space-y-3">

@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { useAuth } from '../contexts/AuthContext';
 import { getMetrics } from '../services/api';
 import NavRail from '../components/NavRail';
-import ChangePasswordModal from '../components/ChangePasswordModal';
+import ProfileModal from '../components/ProfileModal';
 
 const PERIODS = [
   { value: 'today', label: 'Últimas 24 horas' },
@@ -166,7 +166,7 @@ function MetricsPage() {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [changingPassword, setChangingPassword] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     if (period === 'custom' && !customDays) return;
@@ -187,7 +187,7 @@ function MetricsPage() {
 
   return (
     <div className="flex h-dvh">
-      <NavRail active="metrics" onChangePasswordClick={() => setChangingPassword(true)} />
+      <NavRail active="metrics" onProfileClick={() => setProfileOpen(true)} />
       <div className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans">
       <div
         aria-hidden="true"
@@ -373,7 +373,7 @@ function MetricsPage() {
         )}
       </div>
       </div>
-      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
     </div>
   );
 }

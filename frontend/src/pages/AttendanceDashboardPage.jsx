@@ -7,7 +7,7 @@ import { useSectors } from '../hooks/useSectors';
 import { getDashboardClosedToday } from '../services/api';
 import ConversationListItem from '../components/ConversationListItem';
 import NavRail from '../components/NavRail';
-import ChangePasswordModal from '../components/ChangePasswordModal';
+import ProfileModal from '../components/ProfileModal';
 import ConversationModal from '../components/ConversationModal';
 import TransferModal from '../components/TransferModal';
 
@@ -93,7 +93,7 @@ function AttendanceDashboardPage() {
   const { sectors } = useSectors();
 
   const [activeTab, setActiveTab] = useState('all');
-  const [changingPassword, setChangingPassword] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [transferringId, setTransferringId] = useState(null);
 
@@ -181,7 +181,7 @@ function AttendanceDashboardPage() {
         aria-hidden="true"
         className="pointer-events-none absolute -right-20 bottom-0 h-96 w-96 rounded-full bg-amber-signal/20 blur-[120px]"
       />
-      <NavRail active="dashboard" onChangePasswordClick={() => setChangingPassword(true)} />
+      <NavRail active="dashboard" onProfileClick={() => setProfileOpen(true)} />
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans text-ink-950">
       <header className="flex items-center justify-between px-6 py-5">
         <div>
@@ -305,7 +305,7 @@ function AttendanceDashboardPage() {
         </div>
       )}
       </div>
-      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
       {selectedConversation && (
         <ConversationModal
           conversation={selectedConversation}

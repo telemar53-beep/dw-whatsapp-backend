@@ -8,7 +8,7 @@ import MyConversationsList from '../components/MyConversationsList';
 import ConversationView from '../components/ConversationView';
 import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
-import ChangePasswordModal from '../components/ChangePasswordModal';
+import ProfileModal from '../components/ProfileModal';
 import StartConversationModal from '../components/StartConversationModal';
 import TeamPanel from '../components/TeamPanel';
 import NavRail from '../components/NavRail';
@@ -48,7 +48,8 @@ function DashboardPage() {
     setSelectedId(conversationId);
   }
   const [transferringId, setTransferringId] = useState(null);
-  const [changingPassword, setChangingPassword] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [teamPanelKey, setTeamPanelKey] = useState(0);
   const [startingConversation, setStartingConversation] = useState(false);
   const [pendingConversation, setPendingConversation] = useState(null);
 
@@ -106,7 +107,7 @@ function DashboardPage() {
         <NavRail
           active="conversas"
           onConversasClick={() => setSelectedId(null)}
-          onChangePasswordClick={() => setChangingPassword(true)}
+          onProfileClick={() => setProfileOpen(true)}
           mobileHidden={Boolean(selectedConversation)}
         />
 
@@ -208,7 +209,7 @@ function DashboardPage() {
             )}
           </div>
 
-          <TeamPanel />
+          <TeamPanel key={teamPanelKey} />
         </aside>
 
         <main className={`${selectedConversation ? 'block' : 'hidden'} min-w-0 flex-1 md:block`}>
@@ -237,7 +238,9 @@ function DashboardPage() {
       </div>
 
       {transferringId && <TransferModal conversationId={transferringId} onClose={() => setTransferringId(null)} />}
-      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
+      {profileOpen && (
+        <ProfileModal onClose={() => setProfileOpen(false)} onProfileUpdated={() => setTeamPanelKey((k) => k + 1)} />
+      )}
       {startingConversation && (
         <StartConversationModal
           onClose={() => setStartingConversation(false)}

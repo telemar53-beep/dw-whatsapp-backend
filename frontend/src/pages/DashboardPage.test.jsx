@@ -187,16 +187,16 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('link', { name: /administração/i })).not.toBeInTheDocument();
   });
 
-  test('opens the change-password modal from the header', async () => {
+  test('opens the profile modal from the header', async () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     renderDashboard();
 
-    expect(screen.queryByText(/trocar minha senha/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/meu perfil/i)).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /^trocar senha$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^meu perfil$/i }));
 
-    expect(screen.getByText(/trocar minha senha/i)).toBeInTheDocument();
+    expect(screen.getByText(/meu perfil/i)).toBeInTheDocument();
   });
 
   test('shows an Iniciar conversa button for any attendant', () => {

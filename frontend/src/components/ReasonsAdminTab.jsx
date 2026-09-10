@@ -3,6 +3,7 @@ import { useReasonsAdmin } from '../hooks/useReasonsAdmin';
 import { useAuth } from '../contexts/AuthContext';
 import { updateReason } from '../services/api';
 import CreateReasonForm from './CreateReasonForm';
+import SectionHelp from './SectionHelp';
 
 const inputClass =
   'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
@@ -110,15 +111,41 @@ function ReasonRow({ reason, onSaved }) {
 
 function ReasonsAdminTab() {
   const { reasons, refresh } = useReasonsAdmin();
+  const [creatingReason, setCreatingReason] = useState(false);
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setCreatingReason(true)}
+          className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+        >
+          Criar motivo
+        </button>
+        <SectionHelp label="Motivos" title="Motivos de contato">
+          <p>
+            Lista de motivos que o atendente escolhe ao encerrar um atendimento — fica
+            registrado no histórico e aparece agrupado no Relatório, em "Motivos de
+            Contato".
+          </p>
+          <p className="mt-2 italic">Exemplo: "Troca de senha", "Pagamento - sem conexão".</p>
+        </SectionHelp>
+      </div>
+      {creatingReason && (
+        <CreateReasonForm
+          onCreated={() => {
+            refresh();
+            setCreatingReason(false);
+          }}
+          onCancel={() => setCreatingReason(false)}
+        />
+      )}
       <div className="space-y-3">
         {reasons.map((reason) => (
           <ReasonRow key={reason.id} reason={reason} onSaved={refresh} />
         ))}
       </div>
-      <CreateReasonForm onCreated={refresh} />
     </div>
   );
 }

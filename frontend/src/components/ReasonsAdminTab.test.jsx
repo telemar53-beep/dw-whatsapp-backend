@@ -31,6 +31,7 @@ describe('ReasonsAdminTab', () => {
     api.createReason.mockResolvedValue({ id: 'r1', name: 'Pagamento', active: true });
     render(<ReasonsAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /criar motivo/i }));
     await userEvent.type(screen.getByLabelText(/nome/i), 'Pagamento');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 

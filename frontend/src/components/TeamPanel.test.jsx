@@ -24,21 +24,21 @@ describe('TeamPanel', () => {
 
   test('lists online agents before offline agents, alphabetically within each group', () => {
     useAgents.mockReturnValue([
-      { id: 'a1', name: 'Carlos' },
-      { id: 'a2', name: 'Ana' },
-      { id: 'a3', name: 'Bruno' },
+      { id: 'a1', name: 'Carlos', avatarPath: null },
+      { id: 'a2', name: 'Ana', avatarPath: null },
+      { id: 'a3', name: 'Bruno', avatarPath: null },
     ]);
     usePresence.mockReturnValue(new Set(['a1', 'a2']));
     render(<TeamPanel />);
 
-    const items = screen.getAllByRole('listitem').map((li) => li.textContent);
+    const items = screen.getAllByRole('listitem').map((li) => li.querySelector('.truncate').textContent);
     expect(items).toEqual(['Ana', 'Carlos', 'Bruno']);
   });
 
   test('shows an online dot for a connected agent and an offline dot for a disconnected one', () => {
     useAgents.mockReturnValue([
-      { id: 'a1', name: 'Ana' },
-      { id: 'a2', name: 'Bruno' },
+      { id: 'a1', name: 'Ana', avatarPath: null },
+      { id: 'a2', name: 'Bruno', avatarPath: null },
     ]);
     usePresence.mockReturnValue(new Set(['a1']));
     render(<TeamPanel />);

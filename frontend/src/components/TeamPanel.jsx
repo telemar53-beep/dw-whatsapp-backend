@@ -55,9 +55,7 @@ function TeamPanel() {
                       onlineIds.has(teammate.id) ? 'bg-teal-signal' : 'bg-ink-950/20'
                     }`}
                   />
-                  {teammate.avatarPath !== undefined && (
-                    <AgentAvatar agentId={teammate.id} avatarPath={teammate.avatarPath} name={teammate.name} size={22} />
-                  )}
+                  <AgentAvatar agentId={teammate.id} avatarPath={teammate.avatarPath} name={teammate.name} size={22} />
                   <span className="truncate">{teammate.name}</span>
                 </li>
               ))}

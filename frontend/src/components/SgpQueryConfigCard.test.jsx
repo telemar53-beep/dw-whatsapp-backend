@@ -112,4 +112,17 @@ describe('SgpQueryConfigCard', () => {
     expect(screen.queryByLabelText(/url de acesso ao sgp/i)).not.toBeInTheDocument();
     expect(screen.getByText('https://x.example', { exact: false })).toBeInTheDocument();
   });
+
+  test('canceling while creating discards the draft, so reopening starts blank', async () => {
+    useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
+    render(<SgpQueryConfigCard />);
+
+    await userEvent.click(screen.getByRole('button', { name: /criar integração/i }));
+    await userEvent.type(screen.getByLabelText(/url de acesso ao sgp/i), 'https://rascunho.example');
+    await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /criar integração/i }));
+
+    expect(screen.getByLabelText(/url de acesso ao sgp/i)).toHaveValue('');
+  });
 });

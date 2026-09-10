@@ -40,6 +40,10 @@ function SgpQueryConfigCard() {
       setBaseUrl(config.baseUrl);
       setApp(config.app);
       setEnabled(config.enabled);
+    } else {
+      setBaseUrl('');
+      setApp('');
+      setEnabled(true);
     }
     setChangingToken(false);
     setNewToken('');

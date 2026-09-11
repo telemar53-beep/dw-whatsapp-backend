@@ -6,8 +6,10 @@ jest.mock('../triage/triage.service');
 jest.mock('../channels/channel.repository');
 jest.mock('../queue/outbound-queue');
 jest.mock('../city-notices/city-notice.repository');
+jest.mock('../business-hours/business-hours.repository');
+jest.mock('../business-hours/business-hours.service');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
-const { findOpenConversation, createConversation, getConversationWithContact, activateConversation } = require('./conversation.repository');
+const { findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
@@ -18,6 +20,8 @@ const {
   hasContactReceivedNotice,
   recordNoticeDelivery,
 } = require('../city-notices/city-notice.repository');
+const { getBusinessHoursConfig } = require('../business-hours/business-hours.repository');
+const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
 describe('ingestInboundMessage', () => {
@@ -26,6 +30,8 @@ describe('ingestInboundMessage', () => {
     shouldStartTriage.mockResolvedValue(false);
     findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: null });
     findActiveCityNoticeByCityId.mockResolvedValue(null);
+    getBusinessHoursConfig.mockResolvedValue({ enabled: false, startTime: '08:00', endTime: '18:00', message: '' });
+    isOutsideBusinessHours.mockReturnValue(false);
   });
 
   test('reuses an existing open conversation and broadcasts queue:new when unassigned', async () => {
@@ -789,5 +795,145 @@ describe('ingestInboundMessage', () => {
     });
 
     expect(sendTriageQuestion).toHaveBeenCalledWith('conv-welcome-5', 'channel-1');
+  });
+
+  describe('business hours notice', () => {
+    test('sends the notice and does not start triage when a new conversation arrives outside business hours', async () => {
+      getBusinessHoursConfig.mockResolvedValue({
+        enabled: true,
+        startTime: '08:00',
+        endTime: '18:00',
+        message: 'Nosso horário de atendimento é seg-sex das 08:00 às 18:00.',
+      });
+      isOutsideBusinessHours.mockReturnValue(true);
+      shouldStartTriage.mockResolvedValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '+5511999998888' });
+      findOpenConversation.mockResolvedValue(null);
+      createConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: null, triageState: null, businessHoursNoticeSentAt: null });
+      createMessage.mockResolvedValue({ id: 'msg-1' });
+      markBusinessHoursNoticeSent.mockResolvedValue({ id: 'conv-1', assignedAgentId: null, triageState: null, businessHoursNoticeSentAt: '2026-09-14T03:00:00.000Z' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wamid.X',
+        content: 'Oi',
+      });
+
+      expect(createConversation).toHaveBeenCalledWith('contact-1', 'channel-1', null);
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+        conversationId: 'conv-1',
+        channelId: 'channel-1',
+        content: 'Nosso horário de atendimento é seg-sex das 08:00 às 18:00.',
+      });
+      expect(markBusinessHoursNoticeSent).toHaveBeenCalledWith('conv-1');
+      expect(sendTriageQuestion).not.toHaveBeenCalled();
+    });
+
+    test('starts triage normally for a new conversation inside business hours (regression)', async () => {
+      getBusinessHoursConfig.mockResolvedValue({ enabled: true, startTime: '08:00', endTime: '18:00', message: 'aviso' });
+      isOutsideBusinessHours.mockReturnValue(false);
+      shouldStartTriage.mockResolvedValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '+5511999998888' });
+      findOpenConversation.mockResolvedValue(null);
+      createConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: null, triageState: 'pending', businessHoursNoticeSentAt: null });
+      createMessage.mockResolvedValue({ id: 'msg-1' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wamid.X',
+        content: 'Oi',
+      });
+
+      expect(createConversation).toHaveBeenCalledWith('contact-1', 'channel-1', 'pending');
+      expect(sendTriageQuestion).toHaveBeenCalledWith('conv-1', 'channel-1');
+      expect(markBusinessHoursNoticeSent).not.toHaveBeenCalled();
+    });
+
+    test('does not repeat the notice on a second message in the same conversation', async () => {
+      getBusinessHoursConfig.mockResolvedValue({ enabled: true, startTime: '08:00', endTime: '18:00', message: 'aviso' });
+      isOutsideBusinessHours.mockReturnValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '+5511999998888' });
+      findOpenConversation.mockResolvedValue({
+        id: 'conv-1',
+        assignedAgentId: null,
+        triageState: null,
+        businessHoursNoticeSentAt: '2026-09-14T03:00:00.000Z',
+      });
+      createMessage.mockResolvedValue({ id: 'msg-2' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wamid.Y',
+        content: 'Segunda mensagem',
+      });
+
+      expect(markBusinessHoursNoticeSent).not.toHaveBeenCalled();
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('sends the notice on an existing conversation with pending triage without interrupting the triage reply', async () => {
+      getBusinessHoursConfig.mockResolvedValue({ enabled: true, startTime: '08:00', endTime: '18:00', message: 'aviso de horário' });
+      isOutsideBusinessHours.mockReturnValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '+5511999998888' });
+      findOpenConversation.mockResolvedValue({
+        id: 'conv-1',
+        assignedAgentId: null,
+        triageState: 'pending',
+        businessHoursNoticeSentAt: null,
+      });
+      createMessage.mockResolvedValue({ id: 'msg-2' });
+      markBusinessHoursNoticeSent.mockResolvedValue({
+        id: 'conv-1',
+        assignedAgentId: null,
+        triageState: 'pending',
+        businessHoursNoticeSentAt: '2026-09-14T03:00:00.000Z',
+      });
+      processTriageReply.mockResolvedValue({ id: 'conv-1', assignedAgentId: null, triageState: 'completed' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wamid.Y',
+        content: '1',
+      });
+
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith({ conversationId: 'conv-1', channelId: 'channel-1', content: 'aviso de horário' });
+      expect(markBusinessHoursNoticeSent).toHaveBeenCalledWith('conv-1');
+      expect(processTriageReply).toHaveBeenCalledWith(
+        { id: 'conv-1', assignedAgentId: null, triageState: 'pending', businessHoursNoticeSentAt: '2026-09-14T03:00:00.000Z' },
+        'channel-1',
+        '1'
+      );
+    });
+
+    test('never checks business hours behavior when the config is disabled', async () => {
+      getBusinessHoursConfig.mockResolvedValue({ enabled: false, startTime: '08:00', endTime: '18:00', message: 'aviso' });
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '+5511999998888' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: null, triageState: null, businessHoursNoticeSentAt: null });
+      createMessage.mockResolvedValue({ id: 'msg-1' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wamid.X',
+        content: 'Oi',
+      });
+
+      expect(isOutsideBusinessHours).not.toHaveBeenCalled();
+      expect(markBusinessHoursNoticeSent).not.toHaveBeenCalled();
+    });
   });
 });

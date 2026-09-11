@@ -1,11 +1,13 @@
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
-const { findOpenConversation, createConversation, getConversationWithContact, activateConversation } = require('./conversation.repository');
+const { findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 const { findChannelById } = require('../channels/channel.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { findActiveCityNoticeByCityId, recordNoticeDelivery } = require('../city-notices/city-notice.repository');
+const { getBusinessHoursConfig } = require('../business-hours/business-hours.repository');
+const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -24,13 +26,17 @@ async function ingestInboundMessage({
 }) {
   const { wasCreated, ...contact } = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   const contactJustCreated = Boolean(wasCreated);
+
+  const businessHoursConfig = await getBusinessHoursConfig();
+  const outsideBusinessHours = businessHoursConfig.enabled && isOutsideBusinessHours(businessHoursConfig);
+
   let conversation = await findOpenConversation(contact.id, channelId);
   if (conversation && conversation.status === 'silent') {
     conversation = await activateConversation(conversation.id);
   }
   let justCreated = false;
   if (!conversation) {
-    const startTriage = await shouldStartTriage(channelId);
+    const startTriage = !outsideBusinessHours && (await shouldStartTriage(channelId));
     try {
       conversation = await createConversation(contact.id, channelId, startTriage ? 'pending' : null);
       justCreated = true;
@@ -76,6 +82,15 @@ async function ingestInboundMessage({
     }
   } catch (err) {
     console.error(`Failed to send city notice for conversation ${conversation.id}`, err);
+  }
+
+  if (outsideBusinessHours && !conversation.businessHoursNoticeSentAt) {
+    try {
+      await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: businessHoursConfig.message });
+      conversation = await markBusinessHoursNoticeSent(conversation.id);
+    } catch (err) {
+      console.error(`Failed to send business hours notice for conversation ${conversation.id}`, err);
+    }
   }
 
   if (justCreated) {

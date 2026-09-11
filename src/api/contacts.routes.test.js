@@ -91,7 +91,7 @@ describe('PATCH /api/contacts/:id', () => {
       .send({ displayName: 'Maria Editada', cityId: 'city-1' });
 
     expect(res.status).toBe(200);
-    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria Editada', cityId: 'city-1' });
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria Editada', cityId: 'city-1', internalNote: null });
     expect(res.body.displayName).toBe('Maria Editada');
   });
 
@@ -104,7 +104,7 @@ describe('PATCH /api/contacts/:id', () => {
       .send({ displayName: '  Maria  ' });
 
     expect(res.status).toBe(200);
-    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria', cityId: null });
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria', cityId: null, internalNote: null });
   });
 
   test('treats a blank display name as null', async () => {
@@ -116,7 +116,7 @@ describe('PATCH /api/contacts/:id', () => {
       .send({ displayName: '   ', cityId: null });
 
     expect(res.status).toBe(200);
-    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: null, cityId: null });
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: null, cityId: null, internalNote: null });
   });
 
   test('returns 400 when displayName is not a string', async () => {
@@ -124,6 +124,40 @@ describe('PATCH /api/contacts/:id', () => {
       .patch('/api/contacts/contact-1')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ displayName: 12345 });
+
+    expect(res.status).toBe(400);
+    expect(updateContact).not.toHaveBeenCalled();
+  });
+
+  test('passes the internal note through', async () => {
+    updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Maria', cityId: null, internalNote: 'Cliente VIP' });
+
+    const res = await request(buildApp())
+      .patch('/api/contacts/contact-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ displayName: 'Maria', internalNote: '  Cliente VIP  ' });
+
+    expect(res.status).toBe(200);
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria', cityId: null, internalNote: 'Cliente VIP' });
+  });
+
+  test('treats a blank internal note as null', async () => {
+    updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Maria', cityId: null, internalNote: null });
+
+    const res = await request(buildApp())
+      .patch('/api/contacts/contact-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ displayName: 'Maria', internalNote: '   ' });
+
+    expect(res.status).toBe(200);
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria', cityId: null, internalNote: null });
+  });
+
+  test('returns 400 when internalNote is not a string', async () => {
+    const res = await request(buildApp())
+      .patch('/api/contacts/contact-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ displayName: 'Maria', internalNote: 12345 });
 
     expect(res.status).toBe(400);
     expect(updateContact).not.toHaveBeenCalled();

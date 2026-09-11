@@ -35,12 +35,16 @@ router.get('/:contactId/avatar', authenticateContactRoute, async (req, res) => {
 });
 
 router.patch('/:id', requireAuth, async (req, res) => {
-  const { displayName: rawDisplayName, cityId } = req.body || {};
+  const { displayName: rawDisplayName, cityId, internalNote: rawInternalNote } = req.body || {};
   if (rawDisplayName !== undefined && rawDisplayName !== null && typeof rawDisplayName !== 'string') {
     return res.status(400).json({ error: 'displayName must be a string or null' });
   }
+  if (rawInternalNote !== undefined && rawInternalNote !== null && typeof rawInternalNote !== 'string') {
+    return res.status(400).json({ error: 'internalNote must be a string or null' });
+  }
   const displayName = typeof rawDisplayName === 'string' ? rawDisplayName.trim() || null : null;
-  const contact = await updateContact(req.params.id, { displayName, cityId: cityId || null });
+  const internalNote = typeof rawInternalNote === 'string' ? rawInternalNote.trim() || null : null;
+  const contact = await updateContact(req.params.id, { displayName, cityId: cityId || null, internalNote });
   if (!contact) {
     return res.status(404).json({ error: 'Contact not found' });
   }

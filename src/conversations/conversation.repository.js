@@ -11,6 +11,7 @@ function toConversation(row) {
     triageState: row.triage_state,
     triageAttempts: row.triage_attempts,
     protocolNumber: row.protocol_number !== undefined ? row.protocol_number : null,
+    businessHoursNoticeSentAt: row.business_hours_notice_sent_at !== undefined ? row.business_hours_notice_sent_at : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -36,7 +37,7 @@ function toConversationSummary(row) {
 
 async function findOpenConversation(contactId, channelId) {
   const result = await getPool().query(
-    `SELECT id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at
+    `SELECT id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, created_at, updated_at
      FROM conversations WHERE contact_id = $1 AND channel_id = $2 AND status <> 'closed'`,
     [contactId, channelId]
   );
@@ -47,7 +48,7 @@ async function findOpenConversation(contactId, channelId) {
 async function createConversation(contactId, channelId, triageState = null, status = 'waiting') {
   const result = await getPool().query(
     `INSERT INTO conversations (contact_id, channel_id, triage_state, status) VALUES ($1, $2, $3, $4)
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, created_at, updated_at`,
     [contactId, channelId, triageState, status]
   );
   return toConversation(result.rows[0]);
@@ -130,10 +131,19 @@ async function activateConversation(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET status = 'waiting', updated_at = now()
      WHERE id = $1 AND status = 'silent'
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, created_at, updated_at`,
     [conversationId]
   );
   if (result.rowCount === 0) return null;
+  return toConversation(result.rows[0]);
+}
+
+async function markBusinessHoursNoticeSent(conversationId) {
+  const result = await getPool().query(
+    `UPDATE conversations SET business_hours_notice_sent_at = now() WHERE id = $1
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, created_at, updated_at`,
+    [conversationId]
+  );
   return toConversation(result.rows[0]);
 }
 
@@ -377,4 +387,5 @@ module.exports = {
   listInAutomationConversations,
   countClosedSince,
   listClosedSince,
+  markBusinessHoursNoticeSent,
 };

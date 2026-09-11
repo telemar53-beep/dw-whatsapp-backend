@@ -23,6 +23,7 @@ const {
   listInAutomationConversations,
   countClosedSince,
   listClosedSince,
+  markBusinessHoursNoticeSent,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -706,5 +707,36 @@ describe('conversation repository', () => {
     expect(page1.map((c) => c.id)).toEqual([second.id]);
     expect(page1[0].closedAt).toBeDefined();
     expect(page2.map((c) => c.id)).toEqual([first.id]);
+  });
+
+  test('a freshly created conversation has a null businessHoursNoticeSentAt', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    expect(conversation.businessHoursNoticeSentAt).toBeNull();
+  });
+
+  test('markBusinessHoursNoticeSent sets a timestamp', async () => {
+    const conversation = await createConversation(contactId, channelId);
+
+    const updated = await markBusinessHoursNoticeSent(conversation.id);
+
+    expect(updated.businessHoursNoticeSentAt).not.toBeNull();
+  });
+
+  test('findOpenConversation returns businessHoursNoticeSentAt after it was marked', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    await markBusinessHoursNoticeSent(conversation.id);
+
+    const found = await findOpenConversation(contactId, channelId);
+
+    expect(found.businessHoursNoticeSentAt).not.toBeNull();
+  });
+
+  test('activateConversation preserves a previously marked businessHoursNoticeSentAt', async () => {
+    const conversation = await createConversation(contactId, channelId, null, 'silent');
+    await markBusinessHoursNoticeSent(conversation.id);
+
+    const activated = await activateConversation(conversation.id);
+
+    expect(activated.businessHoursNoticeSentAt).not.toBeNull();
   });
 });

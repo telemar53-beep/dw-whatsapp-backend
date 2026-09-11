@@ -30,6 +30,11 @@ describe('NavRail', () => {
     expect(screen.getByLabelText('Relatório')).toBeInTheDocument();
   });
 
+  test('always shows Campanhas', () => {
+    renderRail();
+    expect(screen.getByLabelText('Campanhas')).toBeInTheDocument();
+  });
+
   test('shows the admin-only links for an admin agent', () => {
     useAuth.mockReturnValue({ agent: { id: 'admin-1', name: 'Ana', role: 'admin' }, logout: vi.fn() });
     renderRail();

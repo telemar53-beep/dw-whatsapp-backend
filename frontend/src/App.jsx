@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import AdminChannelsPage from './pages/AdminChannelsPage';
 import MetricsPage from './pages/MetricsPage';
 import AttendanceDashboardPage from './pages/AttendanceDashboardPage';
+import CampaignsPage from './pages/CampaignsPage';
 
 function App() {
   return (
@@ -44,6 +45,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <MetricsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/campaigns"
+              element={
+                <ProtectedRoute>
+                  <CampaignsPage />
                 </ProtectedRoute>
               }
             />

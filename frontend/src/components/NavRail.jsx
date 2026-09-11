@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
-import { IconChats, IconChart, IconSettings, IconBellOn, IconBellOff, IconUser, IconLogout, IconTeam } from './icons/WaIcons';
+import { IconChats, IconChart, IconSettings, IconBellOn, IconBellOff, IconUser, IconLogout, IconTeam, IconMegaphone } from './icons/WaIcons';
 
 const RAIL_BUTTON_BASE =
   'relative flex h-12 w-12 items-center justify-center rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
@@ -76,6 +76,9 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
         )}
         <RailLink to="/metrics" label="Relatório" active={active === 'metrics'}>
           <IconChart size={23} />
+        </RailLink>
+        <RailLink to="/campaigns" label="Campanhas" active={active === 'campaigns'}>
+          <IconMegaphone size={23} />
         </RailLink>
         {agent?.role === 'admin' && (
           <>

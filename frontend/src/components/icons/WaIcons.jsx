@@ -280,3 +280,11 @@ export function IconUser(props) {
     </Svg>
   );
 }
+
+export function IconMegaphone(props) {
+  return (
+    <Svg {...props}>
+      <path d="M3 10v4a1 1 0 001 1h2l7 4V5L6 9H4a1 1 0 00-1 1zm15.5 2c0-1.9-.8-3.6-2-4.9l-1.1 1.1c.9 1 1.5 2.3 1.5 3.8s-.6 2.8-1.5 3.8l1.1 1.1c1.2-1.3 2-3 2-4.9z" />
+    </Svg>
+  );
+}

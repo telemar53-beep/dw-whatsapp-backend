@@ -161,7 +161,7 @@ describe('GET /api/admin/dashboard/conversations/by-protocol/:protocolNumber', (
     expect(res.status).toBe(404);
   });
 
-  test('returns 400 when protocolNumber is not a positive integer', async () => {
+  test('returns 400 for a value matching neither protocol format', async () => {
     const res = await request(buildApp())
       .get('/api/admin/dashboard/conversations/by-protocol/not-a-number')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);

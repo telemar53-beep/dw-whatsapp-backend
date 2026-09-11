@@ -29,9 +29,9 @@ describe('ConversationInfoPanel', () => {
   });
 
   test('shows the protocol number when the conversation has one', () => {
-    render(<ConversationInfoPanel conversation={{ ...CONVERSATION, protocolNumber: 1042 }} />);
+    render(<ConversationInfoPanel conversation={{ ...CONVERSATION, protocolNumber: '20260911-0001' }} />);
     expect(screen.getByText('Protocolo')).toBeInTheDocument();
-    expect(screen.getByText('1042')).toBeInTheDocument();
+    expect(screen.getByText('20260911-0001')).toBeInTheDocument();
   });
 
   test('does not show a protocol row before one has been claimed', () => {

@@ -47,10 +47,10 @@ describe('substituteAssignmentPlaceholders', () => {
     const template = '@chat_saudacao_maiusculo, meu nome é @chat_atendente. O protocolo do seu atendimento é @chat_protocolo';
     const result = substituteAssignmentPlaceholders(template, {
       agentName: 'Geovanna Silva',
-      protocolNumber: 1042,
+      protocolNumber: '20260911-0001',
     });
     global.Date.mockRestore();
-    expect(result).toBe('Bom dia, meu nome é Geovanna. O protocolo do seu atendimento é 1042');
+    expect(result).toBe('Bom dia, meu nome é Geovanna. O protocolo do seu atendimento é 20260911-0001');
   });
 
   test('leaves text without placeholders unchanged', () => {

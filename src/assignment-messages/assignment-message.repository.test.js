@@ -14,7 +14,7 @@ const { createConversation } = require('../conversations/conversation.repository
 describe('assignment message repository', () => {
   beforeEach(async () => {
     await getPool().query(
-      'TRUNCATE assignment_message_config, assignment_message_agents, assignment_message_channels, conversations, contacts, channels, agents CASCADE'
+      'TRUNCATE assignment_message_config, assignment_message_agents, assignment_message_channels, conversations, contacts, channels, agents, protocol_counters CASCADE'
     );
   });
 

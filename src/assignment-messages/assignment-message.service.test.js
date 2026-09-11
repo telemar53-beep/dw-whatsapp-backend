@@ -103,12 +103,12 @@ describe('sendClosingMessageIfApplicable', () => {
     findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Geovanna Silva' });
     enqueueOutboundMessage.mockResolvedValue({ id: 'msg-2' });
 
-    await sendClosingMessageIfApplicable({ ...CONVERSATION, protocolNumber: 1042 }, 'agent-1');
+    await sendClosingMessageIfApplicable({ ...CONVERSATION, protocolNumber: '20260911-0001' }, 'agent-1');
 
     expect(enqueueOutboundMessage).toHaveBeenCalledWith({
       conversationId: 'conv-1',
       channelId: 'channel-1',
-      content: 'Encerrando o atendimento 1042, Geovanna',
+      content: 'Encerrando o atendimento 20260911-0001, Geovanna',
     });
   });
 });

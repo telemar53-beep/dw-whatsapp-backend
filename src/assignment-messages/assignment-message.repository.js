@@ -69,14 +69,14 @@ async function upsertAssignmentMessageConfig({ enabled, openingMessage, closingM
 const PROTOCOL_TIMEZONE = 'America/Sao_Paulo';
 
 function todaySaoPauloDateString(date = new Date()) {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: PROTOCOL_TIMEZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  });
-  // en-CA formats as YYYY-MM-DD; strip the dashes for the AAAAMMDD segment.
-  return formatter.format(date).replace(/-/g, '');
+  }).formatToParts(date);
+  const get = (type) => parts.find((p) => p.type === type).value;
+  return `${get('year')}${get('month')}${get('day')}`;
 }
 
 async function nextProtocolSequenceForToday() {

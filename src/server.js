@@ -33,6 +33,7 @@ const adminAssignmentMessagesRoutes = require('./api/admin-assignment-messages.r
 const reasonsRoutes = require('./api/reasons.routes');
 const adminReasonsRoutes = require('./api/admin-reasons.routes');
 const sgpQueryRoutes = require('./api/sgp-query.routes');
+const campaignsRoutes = require('./api/campaigns.routes');
 const { globalLimiter } = require('./config/rate-limiters');
 const { initSocketServer } = require('./realtime/socket-server');
 
@@ -79,6 +80,7 @@ app.use('/api/contacts', contactsRoutes);
 app.use('/api/quick-replies', quickRepliesRoutes);
 app.use('/api/sectors', sectorsRoutes);
 app.use('/api/cities', citiesRoutes);
+app.use('/api/campaigns', campaignsRoutes);
 app.use('/api/admin/channels', adminChannelsRoutes);
 app.use('/api/admin/agents', adminAgentsRoutes);
 app.use('/api/admin/quick-replies', adminQuickRepliesRoutes);
@@ -114,10 +116,12 @@ if (require.main === module) {
   // import graph is harmless and avoids reintroducing the same class of
   // problem if a future change reverts that fix.
   const { startOutboundWorker } = require('./queue/outbound-worker');
+  const { startCampaignWorker } = require('./queue/campaign-worker');
   const { startAllBaileysConnections } = require('./whatsapp-adapters/baileys.manager');
   const httpServer = http.createServer(app);
   initSocketServer(httpServer);
   startOutboundWorker();
+  startCampaignWorker();
   startAllBaileysConnections().catch((err) => {
     console.error('Failed to start Baileys connections', err);
   });

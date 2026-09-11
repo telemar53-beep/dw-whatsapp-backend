@@ -328,7 +328,7 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue([]);
     useQueueNotificationSound.mockReturnValue({ muted: true, toggleMuted: vi.fn() });
     renderDashboard();
-    expect(screen.getByRole('button', { name: /som mutado/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /som desativado/i })).toBeInTheDocument();
   });
 
   test('clicking the sound toggle button calls toggleMuted', async () => {

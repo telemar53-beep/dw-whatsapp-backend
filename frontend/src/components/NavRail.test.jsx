@@ -80,9 +80,9 @@ describe('NavRail', () => {
     expect(toggleMuted).toHaveBeenCalled();
   });
 
-  test('shows "Som mutado" when muted is true', () => {
+  test('shows "Som desativado" when muted is true', () => {
     useQueueNotificationSound.mockReturnValue({ muted: true, toggleMuted: vi.fn() });
     renderRail();
-    expect(screen.getByLabelText('Som mutado')).toBeInTheDocument();
+    expect(screen.getByLabelText('Som desativado')).toBeInTheDocument();
   });
 });

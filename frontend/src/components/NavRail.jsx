@@ -3,8 +3,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { IconChats, IconChart, IconSettings, IconBellOn, IconBellOff, IconUser, IconLogout, IconTeam } from './icons/WaIcons';
 
-function railButtonClass(active) {
-  return `relative flex h-12 w-12 items-center justify-center rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${
+const RAIL_BUTTON_BASE =
+  'relative flex h-12 w-12 items-center justify-center rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
+
+// `active` é a página aberta (traço laranja); `highlight` é um estado ligado
+// no próprio botão, como o som desativado — laranja, mas sem marca de seção.
+function railButtonClass(active, highlight) {
+  if (highlight) {
+    return `${RAIL_BUTTON_BASE} bg-chat-orange/15 text-chat-orange hover:bg-chat-orange/25`;
+  }
+  return `${RAIL_BUTTON_BASE} ${
     active ? 'bg-white/[0.16] text-chat-text' : 'text-chat-icon hover:bg-white/[0.08] hover:text-chat-text'
   }`;
 }
@@ -15,9 +23,9 @@ function ActiveMark({ active }) {
   return <span aria-hidden="true" className="absolute -left-[18px] h-6 w-[3px] rounded-full bg-chat-orange" />;
 }
 
-function RailButton({ label, onClick, children, active }) {
+function RailButton({ label, onClick, children, active, highlight }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} title={label} className={railButtonClass(active)}>
+    <button type="button" onClick={onClick} aria-label={label} title={label} className={railButtonClass(active, highlight)}>
       <ActiveMark active={active} />
       {children}
     </button>
@@ -83,7 +91,7 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
 
       <div className="flex flex-col items-center gap-[9px]">
         <span aria-hidden="true" className="mb-4 h-px w-8 bg-white/15" />
-        <RailButton label={muted ? 'Som mutado' : 'Som ativado'} onClick={toggleMuted} active={muted}>
+        <RailButton label={muted ? 'Som desativado' : 'Som ativado'} onClick={toggleMuted} highlight={muted}>
           {muted ? <IconBellOff size={22} /> : <IconBellOn size={22} />}
         </RailButton>
         <RailButton label="Meu perfil" onClick={onProfileClick}>

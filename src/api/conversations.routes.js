@@ -8,6 +8,8 @@ const {
   claimConversation,
   transferConversation,
   closeConversation,
+  adminTransferConversation,
+  adminCloseConversation,
   listClosedConversationsByContact,
   findOpenConversation,
   createConversation,
@@ -309,12 +311,17 @@ router.post('/:id/transfer', async (req, res) => {
   if (!toAgentId) {
     return res.status(400).json({ error: 'toAgentId is required' });
   }
-  const conversation = await transferConversation(req.params.id, req.agent.agentId, toAgentId);
+  const isAdmin = req.agent.role === 'admin';
+  const conversation = isAdmin
+    ? await adminTransferConversation(req.params.id, toAgentId)
+    : await transferConversation(req.params.id, req.agent.agentId, toAgentId);
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation is not currently assigned to you, or is closed' });
   }
   const conversationWithContact = await getConversationWithContact(conversation.id);
-  emitToAgent(req.agent.agentId, 'conversation:removed', { conversationId: conversation.id });
+  if (!isAdmin) {
+    emitToAgent(req.agent.agentId, 'conversation:removed', { conversationId: conversation.id });
+  }
   broadcast('queue:removed', { conversationId: conversation.id });
   emitToAgent(toAgentId, 'conversation:assigned', { conversation: conversationWithContact });
   broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact });
@@ -333,7 +340,9 @@ router.post('/:id/close', async (req, res) => {
   if (!reason || !reason.active) {
     return res.status(400).json({ error: 'Invalid or inactive reasonId' });
   }
-  const conversation = await closeConversation(req.params.id, req.agent.agentId, reasonId);
+  const conversation = req.agent.role === 'admin'
+    ? await adminCloseConversation(req.params.id, req.agent.agentId, reasonId)
+    : await closeConversation(req.params.id, req.agent.agentId, reasonId);
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation is not currently assigned to you, or is closed' });
   }

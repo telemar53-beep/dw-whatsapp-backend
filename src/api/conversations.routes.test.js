@@ -23,6 +23,8 @@ const {
   claimConversation,
   transferConversation,
   closeConversation,
+  adminTransferConversation,
+  adminCloseConversation,
   listClosedConversationsByContact,
   findOpenConversation,
   createConversation,
@@ -720,6 +722,39 @@ describe('POST /api/conversations/:id/transfer', () => {
     expect(sendOpeningMessageIfApplicable).not.toHaveBeenCalled();
     expect(sendClosingMessageIfApplicable).not.toHaveBeenCalled();
   });
+
+  test('an admin can transfer a conversation assigned to a different agent', async () => {
+    adminTransferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(res.status).toBe(200);
+    expect(adminTransferConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-2');
+    expect(transferConversation).not.toHaveBeenCalled();
+  });
+
+  test('does not emit conversation:removed to the admin performing the transfer, only conversation:assigned to the new agent', async () => {
+    adminTransferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(emitToAgent).not.toHaveBeenCalledWith('admin-1', 'conversation:removed', expect.anything());
+    expect(emitToAgent).toHaveBeenCalledWith('agent-2', 'conversation:assigned', {
+      conversation: { id: 'conv-1', assignedAgentId: 'agent-2' },
+    });
+  });
+
+  test('returns 409 when an admin tries to transfer a conversation that does not exist or is already closed', async () => {
+    adminTransferConversation.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(res.status).toBe(409);
+  });
 });
 
 describe('POST /api/conversations/:id/close', () => {
@@ -854,6 +889,35 @@ describe('POST /api/conversations/:id/close', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({ reasonId: REASON_ID });
     expect(res.status).toBe(200);
+  });
+
+  test('an admin can close a conversation assigned to a different agent', async () => {
+    adminCloseConversation.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1' });
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ reasonId: REASON_ID });
+    expect(res.status).toBe(200);
+    expect(adminCloseConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'admin-1', REASON_ID);
+    expect(closeConversation).not.toHaveBeenCalled();
+  });
+
+  test('notifies the originally assigned agent when an admin closes their conversation', async () => {
+    adminCloseConversation.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1' });
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ reasonId: REASON_ID });
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'conversation:closed', { conversationId: 'conv-1' });
+  });
+
+  test('returns 409 when an admin tries to close a conversation that does not exist or is already closed', async () => {
+    adminCloseConversation.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ reasonId: REASON_ID });
+    expect(res.status).toBe(409);
   });
 });
 

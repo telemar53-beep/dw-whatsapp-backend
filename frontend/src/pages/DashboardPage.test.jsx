@@ -290,14 +290,14 @@ describe('DashboardPage', () => {
     expect(container.querySelector('aside').className).not.toMatch(/\bhidden\b/);
   });
 
-  test('hides the dashboard header on mobile when a conversation is selected', async () => {
+  test('hides the conversation list and the channel banner on mobile when a conversation is selected', async () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
     useMyConversations.mockReturnValue([]);
     const { container } = renderDashboard();
     await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
     await userEvent.click(screen.getByText('Carlos'));
 
-    expect(container.querySelector('header').className).toMatch(/\bhidden\b/);
+    expect(container.querySelector('aside').className).toMatch(/\bhidden\b/);
     expect(container.querySelector('[data-testid="channel-banner-wrapper"]').className).toMatch(/\bhidden\b/);
   });
 

@@ -102,22 +102,22 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
 
   const progress = duration > 0 ? Math.min(current / duration, 1) : 0;
   const playedBars = Math.round(progress * BAR_COUNT);
-  const trackColor = dark ? 'rgba(255,255,255,0.22)' : outbound ? '#a9cec7' : '#c7d3d0';
+  const trackColor = dark ? 'rgba(255,255,255,0.60)' : outbound ? '#a9cec7' : '#c7d3d0';
   const playedColor = dark ? '#efe7ce' : '#0d9488';
 
   if (dark) {
     return (
-      <div className="pt-0.5">
+      <div>
         <audio ref={audioRef} src={url} preload="metadata" className="max-w-full hidden" />
-        <div className="flex w-[min(17.5rem,62vw)] items-start gap-2">
+        <div className="flex w-[min(20.625rem,62vw)] items-center gap-[10px]">
           <button
             type="button"
             onClick={togglePlay}
             aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'}
             title={playing ? 'Pausar' : 'Reproduzir'}
-            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
+            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-[#131110] text-white transition-colors hover:bg-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
           >
-            {playing ? <IconPause size={22} /> : <IconPlay size={22} />}
+            {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
           </button>
 
           <button
@@ -127,7 +127,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
               const rect = event.currentTarget.getBoundingClientRect();
               seekTo(Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1));
             }}
-            className="relative mt-1 flex h-8 flex-1 items-center gap-[2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
+            className="relative flex h-8 items-center gap-[3px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
           >
             {bars.map((height, index) => (
               <span
@@ -139,28 +139,32 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
                 }}
               />
             ))}
-            <span
-              className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-chat-cream shadow-[0_1px_3px_rgba(0,0,0,.4)]"
-              style={{ left: `calc(${progress * 100}% - 6px)` }}
-            />
+            {progress > 0 && (
+              <span
+                className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-chat-cream shadow-[0_1px_3px_rgba(0,0,0,.4)]"
+                style={{ left: `calc(${progress * 100}% - 6px)` }}
+              />
+            )}
           </button>
 
-          <span className="relative mt-0.5 shrink-0">
+          <span className="relative ml-auto shrink-0">
             {avatar || (
-              <span className="flex h-[42px] w-[42px] items-center justify-center rounded-full bg-white/10 text-chat-icon">
-                <IconMic size={22} />
+              <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white/[0.22] text-white/85">
+                <IconMic size={20} />
               </span>
             )}
-            <span
-              className={`absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-chat-canvas ${
-                progress > 0 ? 'text-chat-faint' : 'text-chat-cream'
-              }`}
-            >
-              <IconMic size={13} />
-            </span>
+            {avatar && (
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-chat-canvas ${
+                  progress > 0 ? 'text-chat-faint' : 'text-chat-cream'
+                }`}
+              >
+                <IconMic size={13} />
+              </span>
+            )}
           </span>
         </div>
-        <div className="mt-0.5 flex items-center gap-2 pl-1 text-[11px] text-chat-faint">
+        <div className="mt-[3px] flex items-center gap-2 pl-1 text-[12px] leading-[16px] text-chat-faint">
           <span>{formatClock(current > 0 ? current : duration)}</span>
           {(playing || current > 0) && (
             <button

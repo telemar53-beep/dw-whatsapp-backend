@@ -92,18 +92,18 @@ function DashboardPage() {
     <div className="relative flex h-dvh flex-col overflow-hidden bg-chat-canvas font-sans text-chat-text">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 -top-44 h-[46rem] w-[46rem] -translate-x-1/2 rounded-full bg-chat-copper/35 blur-[160px]"
+        className="pointer-events-none absolute left-[44%] top-[2%] h-[38rem] w-[40rem] rounded-full bg-chat-copper/55 blur-[150px]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-16 top-1/3 h-[30rem] w-[30rem] rounded-full bg-chat-mauve/20 blur-[150px]"
+        className="pointer-events-none absolute left-[36%] top-[40%] h-[30rem] w-[32rem] rounded-full bg-chat-copper/35 blur-[150px]"
       />
 
       <div data-testid="channel-banner-wrapper" className={`relative ${selectedConversation ? 'hidden md:block' : ''}`}>
         <ChannelStatusBanner />
       </div>
 
-      <div className="relative z-10 flex min-h-0 flex-1 gap-0 p-0 md:gap-3 md:p-3 lg:gap-4 lg:p-5">
+      <div className="relative z-10 flex min-h-0 flex-1 gap-0 p-0 md:gap-3 md:p-3">
         <NavRail
           active="conversas"
           onConversasClick={() => setSelectedId(null)}
@@ -115,30 +115,12 @@ function DashboardPage() {
         <aside
           className={`${
             selectedConversation ? 'hidden' : 'flex'
-          } w-full min-w-0 flex-col bg-white/[0.10] backdrop-blur-2xl md:flex md:w-[380px] md:shrink-0 md:overflow-clip md:rounded-[28px] md:border md:border-white/10 lg:w-[30%] lg:min-w-[340px] lg:max-w-[460px]`}
+          } w-full min-w-0 flex-col bg-white/[0.09] backdrop-blur-2xl md:flex md:w-[380px] md:shrink-0 md:overflow-clip md:rounded-[22px] md:border md:border-white/[0.07] lg:w-[28%] lg:min-w-[360px] lg:max-w-[440px]`}
         >
-          <header
-            className={`${
-              selectedConversation ? 'hidden md:flex' : 'flex'
-            } h-[64px] shrink-0 items-center justify-between gap-2 px-4`}
-          >
-            <span className="truncate font-display text-xl font-semibold leading-tight tracking-[-0.01em] text-chat-text">
-              DW Telecom
-            </span>
-            <button
-              onClick={() => setStartingConversation(true)}
-              aria-label="Iniciar conversa"
-              title="Iniciar conversa"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-chat-text shadow-[0_10px_24px_-8px_rgba(0,0,0,0.5)] transition hover:bg-white/16 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
-            >
-              <IconNewChat size={22} />
-            </button>
-          </header>
-
-          <div className="shrink-0 px-3 pb-2">
-            <label className="flex h-[40px] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.12] px-3 transition focus-within:border-white/25 focus-within:bg-white/[0.16]">
+          <div className="flex shrink-0 items-center gap-3.5 px-3 pb-2 pt-[18px]">
+            <label className="flex h-[46px] min-w-0 flex-1 items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.06] px-4 transition focus-within:border-white/20 focus-within:bg-white/[0.10]">
               <span className="shrink-0 text-chat-faint">
-                <IconSearch size={18} />
+                <IconSearch size={19} />
               </span>
               <input
                 type="search"
@@ -146,43 +128,49 @@ function DashboardPage() {
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Pesquisar uma conversa"
                 aria-label="Pesquisar uma conversa"
-                className="min-w-0 flex-1 bg-transparent text-[14.5px] text-chat-text outline-none placeholder:text-chat-faint"
+                className="min-w-0 flex-1 bg-transparent text-[15px] text-chat-text outline-none placeholder:text-chat-faint"
               />
             </label>
+            <button
+              onClick={() => setStartingConversation(true)}
+              aria-label="Iniciar conversa"
+              title="Iniciar conversa"
+              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-white/[0.13] text-chat-text transition hover:bg-white/[0.18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+            >
+              <IconNewChat size={24} />
+            </button>
           </div>
 
-          <div className="flex shrink-0 justify-center overflow-x-auto px-3 pt-2 pb-2">
-            <div role="tablist" className="inline-flex gap-1 rounded-full border border-white/10 bg-white/[0.07] p-1">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.value}
-                  id={`tab-${tab.value}`}
-                  role="tab"
-                  aria-selected={activeTab === tab.value}
-                  aria-controls={`tabpanel-${tab.value}`}
-                  onClick={() => setActiveTab(tab.value)}
-                  className={`relative shrink-0 rounded-full border px-4 py-1.5 text-sm transition ${
-                    activeTab === tab.value
-                      ? 'border-chat-orange/60 bg-white/[0.12] font-semibold text-chat-text'
-                      : 'border-transparent font-medium text-chat-muted hover:text-chat-text'
-                  }`}
-                >
-                  {tab.label}
-                  {tabCounts[tab.value] > 0 && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-chat-orange px-1 text-[11px] font-semibold text-chat-orange-ink">
-                      {tabCounts[tab.value]}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+          <div role="tablist" className="flex shrink-0 gap-3.5 overflow-x-auto px-3 pb-3 pt-4">
+            {TABS.map((tab) => (
+              <button
+                key={tab.value}
+                id={`tab-${tab.value}`}
+                role="tab"
+                aria-selected={activeTab === tab.value}
+                aria-controls={`tabpanel-${tab.value}`}
+                onClick={() => setActiveTab(tab.value)}
+                className={`relative shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${
+                  activeTab === tab.value
+                    ? 'border-chat-orange/70 text-chat-text'
+                    : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
+                }`}
+              >
+                {tab.label}
+                {tabCounts[tab.value] > 0 && (
+                  <span className="absolute -right-2 -top-2 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-chat-orange px-1 text-[12px] font-semibold text-white">
+                    {tabCounts[tab.value]}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
 
           <div
             role="tabpanel"
             id={`tabpanel-${activeTab}`}
             aria-labelledby={`tab-${activeTab}`}
-            className="chat-scroll min-h-0 flex-1 overflow-y-auto border-t border-white/[0.06]"
+            className="chat-scroll min-h-0 flex-1 overflow-y-auto pt-3"
           >
             {activeTab === 'inProgress' && (
               <MyConversationsList
@@ -216,7 +204,7 @@ function DashboardPage() {
         <main
           className={`${
             selectedConversation ? 'block' : 'hidden'
-          } min-w-0 flex-1 md:block md:overflow-clip md:rounded-[28px] md:border md:border-white/10`}
+          } min-w-0 flex-1 md:block md:overflow-clip md:rounded-[22px] md:border md:border-white/[0.07]`}
         >
           {selectedConversation ? (
             <ConversationView
@@ -225,7 +213,7 @@ function DashboardPage() {
               onBack={() => setSelectedId(null)}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center bg-white/[0.10] px-6 text-center backdrop-blur-2xl md:rounded-[28px]">
+            <div className="flex h-full flex-col items-center justify-center bg-white/[0.08] px-6 text-center backdrop-blur-2xl md:rounded-[22px]">
               <span className="text-white/10">
                 <IconEmptyChat width={320} height={190} />
               </span>

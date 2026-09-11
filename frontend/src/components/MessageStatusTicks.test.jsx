@@ -3,28 +3,28 @@ import { render, screen } from '@testing-library/react';
 import MessageStatusTicks from './MessageStatusTicks';
 
 describe('MessageStatusTicks', () => {
-  test('renders one gray tick for a sent message', () => {
+  test('renders one dim tick for a sent message', () => {
     render(<MessageStatusTicks status="sent" />);
     const indicator = screen.getByTitle('Enviado');
     expect(indicator).toBeInTheDocument();
     expect(indicator.querySelectorAll('svg')).toHaveLength(1);
-    expect(indicator.className).toMatch(/text-chat-faint/);
+    expect(indicator.className).toMatch(/text-white\/45/);
   });
 
-  test('renders two gray ticks for a delivered message', () => {
+  test('renders two dim ticks for a delivered message', () => {
     render(<MessageStatusTicks status="delivered" />);
     const indicator = screen.getByTitle('Entregue');
     expect(indicator).toBeInTheDocument();
     expect(indicator.querySelectorAll('svg')).toHaveLength(2);
-    expect(indicator.className).toMatch(/text-chat-faint/);
+    expect(indicator.className).toMatch(/text-white\/45/);
   });
 
-  test('renders two teal ticks for a read message', () => {
+  test('renders two bright ticks for a read message', () => {
     render(<MessageStatusTicks status="read" />);
     const indicator = screen.getByTitle('Lido');
     expect(indicator).toBeInTheDocument();
     expect(indicator.querySelectorAll('svg')).toHaveLength(2);
-    expect(indicator.className).toMatch(/text-chat-online/);
+    expect(indicator.className).toMatch(/text-white\/85/);
   });
 
   test('renders a failure indicator for a failed message', () => {

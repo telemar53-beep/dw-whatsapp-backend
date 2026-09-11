@@ -79,7 +79,7 @@ function HeaderIconButton({ label, onClick, children }) {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="flex h-8 w-8 items-center justify-center rounded-full text-chat-icon transition-colors hover:bg-white/10 hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+      className="flex h-12 w-12 items-center justify-center rounded-full text-chat-icon transition-colors hover:bg-white/10 hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
     >
       {children}
     </button>
@@ -152,7 +152,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   return (
     <div className="flex h-full">
       <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
-      <div className="z-10 flex items-center gap-1 border-b border-white/10 bg-white/[0.09] px-2 py-[7px] backdrop-blur-2xl md:px-4">
+      <div className="z-10 flex shrink-0 items-center gap-2 px-2 py-3 md:gap-4 md:px-6 md:py-3.5">
         <button
           onClick={onBack}
           className="flex h-10 w-10 items-center justify-center rounded-full text-chat-icon hover:bg-white/10 md:hidden"
@@ -162,7 +162,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         </button>
         <button
           onClick={() => setEditingContact(true)}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+          className="flex min-w-0 flex-1 items-center gap-4 rounded-2xl px-1 py-1 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
           aria-label={`Editar cliente: ${headerLabel}`}
         >
           <ContactAvatar
@@ -170,10 +170,12 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             avatarPath={conversation.contactAvatarPath}
             displayName={displayName}
             phoneNumber={conversation.contactPhoneNumber}
+            size={56}
+            dark
           />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[16px] leading-[21px] text-chat-text">{headerLabel}</span>
-            <span className="block truncate text-[13px] leading-[17px] text-chat-muted">{subtitle}</span>
+            <span className="block truncate text-[20px] leading-[27px] text-chat-text">{headerLabel}</span>
+            <span className="block truncate text-[14.5px] leading-[20px] text-chat-muted">{subtitle}</span>
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-2">
@@ -186,20 +188,20 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
               Assumir
             </button>
           )}
-          <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.08] p-1">
+          <div className="flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.06] p-2">
             <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
-              <IconHistory size={19} />
+              <IconHistory size={22} />
             </HeaderIconButton>
             <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
-              <IconSearch size={19} />
+              <IconSearch size={22} />
             </HeaderIconButton>
             {(isMine || isUnassigned) && (
               <>
                 <HeaderIconButton label="Transferir atendimento" onClick={() => onTransferClick(conversation.id)}>
-                  <IconTransfer size={19} />
+                  <IconTransfer size={22} />
                 </HeaderIconButton>
                 <HeaderIconButton label="Fechar atendimento" onClick={() => setClosingReason(true)}>
-                  <IconCheckCircle size={19} />
+                  <IconCheckCircle size={22} />
                 </HeaderIconButton>
               </>
             )}
@@ -207,8 +209,8 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         </div>
       </div>
 
-      <div className="chat-scroll flex-1 overflow-y-auto overflow-x-hidden px-[4%] py-3 lg:px-[6%]">
-        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.10] px-3 py-1.5 text-center text-[12.5px] leading-[18px] text-chat-muted">
+      <div className="chat-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 md:px-8">
+        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-full bg-white/[0.13] px-4 py-2 text-center text-[13px] leading-[18px] text-chat-muted">
           <span className="shrink-0 text-chat-faint">
             <IconLock size={13} />
           </span>
@@ -219,7 +221,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           if (row.kind === 'day') {
             return (
               <div key={row.key} className="my-3 flex justify-center">
-                <span className="rounded-full border border-white/10 bg-white/[0.11] px-3 py-[5px] text-[12.5px] font-medium text-chat-muted">
+                <span className="rounded-full bg-white/[0.13] px-4 py-2 text-[13px] font-medium text-chat-muted">
                   {row.label}
                 </span>
               </div>
@@ -244,7 +246,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
 
           const meta = (
             <span
-              className={`flex shrink-0 items-center gap-[3px] text-[11px] leading-[15px] ${
+              className={`flex shrink-0 items-center gap-[3px] text-[12px] leading-[16px] ${
                 metaMode === 'overlay' ? 'text-white' : 'text-chat-faint'
               }`}
             >
@@ -256,14 +258,14 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           return (
             <div
               key={row.key}
-              className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${row.firstOfGroup ? 'mt-3' : 'mt-[2px]'}`}
+              className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${row.firstOfGroup ? 'mt-3' : 'mt-[6px]'}`}
             >
               <div
                 className={`group relative max-w-[85%] md:max-w-[65%] ${
                   isSticker
                     ? ''
-                    : `rounded-[18px] border border-white/[0.08] ${outbound ? 'bg-white/[0.18]' : 'bg-white/[0.12]'} ${
-                        tight ? 'p-[3px]' : 'px-3 pb-2 pt-[7px]'
+                    : `rounded-[16px] border border-white/[0.14] ${outbound ? 'bg-white/[0.12]' : 'bg-white/[0.14]'} ${
+                        tight ? 'p-[3px]' : 'px-3 pb-2 pt-[8px]'
                       }`
                 }`}
               >
@@ -298,18 +300,18 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 />
 
                 {hasText && (
-                  <p className="whitespace-pre-wrap break-words text-[14.2px] leading-[19px] text-chat-text">
+                  <p className="whitespace-pre-wrap break-words text-[15.5px] leading-[21px] text-chat-text">
                     {message.content}
                     <span
                       aria-hidden="true"
                       className="inline-block h-[1px] align-bottom"
-                      style={{ width: outbound ? 74 : 52 }}
+                      style={{ width: outbound ? 82 : 58 }}
                     />
                   </p>
                 )}
 
                 {metaMode === 'float' && (
-                  <span className="absolute bottom-[4px] right-[9px]">{meta}</span>
+                  <span className="absolute bottom-[5px] right-[11px]">{meta}</span>
                 )}
                 {metaMode === 'overlay' && (
                   <span className="absolute bottom-[7px] right-[8px] rounded-full bg-black/35 px-1.5 py-[1px] backdrop-blur-[1px]">

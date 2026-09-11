@@ -19,7 +19,7 @@ function pickSupportedAudioMimeType() {
 }
 
 function ComposerButton({ label, onClick, disabled, active, children, as = 'button', htmlFor }) {
-  const className = `flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${
+  const className = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${
     active ? 'bg-white/10 text-chat-text' : 'text-chat-icon'
   } ${disabled ? 'pointer-events-none opacity-40' : 'cursor-pointer hover:bg-white/[0.08]'}`;
 
@@ -151,10 +151,10 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
   const canSend = Boolean(content.trim() || file);
 
   return (
-    <div className="border-t border-white/10 bg-white/[0.10] font-wa backdrop-blur-2xl">
+    <div className="shrink-0 font-wa">
       {replyingTo && (
-        <div className="px-4 pt-2">
-          <div className="flex items-stretch overflow-hidden rounded-t-2xl bg-white/[0.10]">
+        <div className="px-3 pt-2 md:px-5">
+          <div className="flex items-stretch overflow-hidden rounded-2xl bg-white/[0.10]">
             <span className="w-[4px] shrink-0 bg-chat-copper" />
             <div className="min-w-0 flex-1 px-3 py-1.5">
               <p className="text-[12.8px] font-medium leading-[18px] text-chat-copper">Respondendo</p>
@@ -174,7 +174,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
       )}
 
       {!recording && file && (
-        <div className="px-4 pt-2">
+        <div className="px-3 pt-2 md:px-5">
           <p className="flex items-center gap-2 rounded-2xl bg-white/[0.10] px-3 py-2 text-[13px] text-chat-muted">
             <span className="shrink-0 text-chat-copper">
               <IconAttach size={17} />
@@ -191,7 +191,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex items-end gap-1.5 px-2 py-[7px] md:px-4">
+      <form onSubmit={handleSubmit} className="flex items-center gap-2.5 px-3 py-3 md:px-5">
         <input
           type="file"
           ref={fileInputRef}
@@ -209,7 +209,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
             <ComposerButton label="Descartar gravação" onClick={stopRecording}>
               <IconTrash size={22} />
             </ComposerButton>
-            <p className="flex h-[42px] flex-1 items-center gap-2 rounded-full bg-white/[0.11] px-4 text-[14px] text-chat-text">
+            <p className="flex h-[60px] flex-1 items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.07] px-5 text-[15px] text-chat-text">
               <span aria-hidden="true" className="animate-wa-rec h-2.5 w-2.5 shrink-0 rounded-full bg-[#ea4335]" />
               Gravando… {recordingSeconds}s
             </p>
@@ -218,14 +218,17 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
               onClick={stopRecording}
               aria-label="Parar gravação"
               title="Parar gravação"
-              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95"
+              className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95"
             >
-              <IconStop size={18} />
+              <IconStop size={20} />
             </button>
           </>
         ) : (
           <>
-            <div ref={popoverRef} className="relative flex flex-1 items-end gap-1">
+            <div
+              ref={popoverRef}
+              className="relative flex h-[60px] min-w-0 flex-1 items-center gap-3 rounded-full border border-white/[0.06] bg-white/[0.07] pl-3 pr-1.5"
+            >
               <ComposerButton label="Anexar arquivo" as="label" htmlFor="message-file-input">
                 <IconAttach size={24} />
               </ComposerButton>
@@ -237,33 +240,27 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                   setShowingEmojis(false);
                 }}
               >
-                <IconQuickReply size={22} />
+                <IconQuickReply size={24} />
+              </ComposerButton>
+              <ComposerButton
+                label="Emojis"
+                active={showingEmojis}
+                onClick={() => {
+                  setShowingEmojis((prev) => !prev);
+                  setShowingQuickReplies(false);
+                }}
+              >
+                <IconEmoji size={24} />
               </ComposerButton>
 
-              <div className="flex h-[42px] min-w-0 flex-1 items-center rounded-full bg-white/[0.13] pl-1 pr-1 focus-within:outline focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-white/30">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowingEmojis((prev) => !prev);
-                    setShowingQuickReplies(false);
-                  }}
-                  aria-label="Emojis"
-                  title="Emojis"
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/[0.06] ${
-                    showingEmojis ? 'text-chat-text' : 'text-chat-icon'
-                  }`}
-                >
-                  <IconEmoji size={24} />
-                </button>
-                <input
-                  type="text"
-                  ref={textInputRef}
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Digite uma mensagem..."
-                  className="h-full min-w-0 flex-1 bg-transparent px-1 text-[15px] text-chat-text outline-none placeholder:text-chat-faint"
-                />
-              </div>
+              <input
+                type="text"
+                ref={textInputRef}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Digite uma mensagem..."
+                className="h-[48px] min-w-0 flex-1 rounded-full border border-white/[0.10] bg-white/[0.03] px-[18px] text-[15px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
+              />
 
               {showingEmojis && (
                 <div className="animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-[#232325]/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
@@ -315,21 +312,27 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                 disabled={sending}
                 aria-label="Enviar"
                 title="Enviar"
-                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 disabled:opacity-40"
+                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 disabled:opacity-40"
               >
                 <IconSend size={24} />
               </button>
             ) : (
-              <ComposerButton label="Gravar áudio" onClick={startRecording}>
+              <button
+                type="button"
+                onClick={startRecording}
+                aria-label="Gravar áudio"
+                title="Gravar áudio"
+                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.08] text-chat-icon transition-colors hover:bg-white/[0.13] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+              >
                 <IconMic size={24} />
-              </ComposerButton>
+              </button>
             )}
           </>
         )}
       </form>
 
       {error && (
-        <p className="px-4 pb-2 text-[13px] text-[#ea4335]" role="alert">
+        <p className="px-3 pb-2 text-[13px] text-[#ea4335] md:px-5" role="alert">
           {error}
         </p>
       )}

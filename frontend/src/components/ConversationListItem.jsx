@@ -28,11 +28,11 @@ function ConversationListItem({ conversation, onSelect, unread, selected }) {
   const messageTime = formatMessageTime(conversation.lastMessageAt);
 
   return (
-    <li>
+    <li className="px-0.5">
       <button
         onClick={() => onSelect(conversation.id)}
-        className={`flex w-full items-center gap-3 pl-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${
-          selected ? 'bg-white/10' : 'hover:bg-white/[0.05]'
+        className={`flex w-full items-center gap-4 rounded-[18px] p-4 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${
+          selected ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]'
         }`}
       >
         <ContactAvatar
@@ -40,13 +40,14 @@ function ConversationListItem({ conversation, onSelect, unread, selected }) {
           avatarPath={conversation.contactAvatarPath}
           displayName={conversation.contactDisplayName}
           phoneNumber={conversation.contactPhoneNumber}
-          size={49}
+          size={52}
+          dark
         />
-        <span className="flex min-w-0 flex-1 flex-col justify-center gap-[2px] border-b border-white/[0.06] py-[11px] pr-3">
+        <span className="flex min-w-0 flex-1 flex-col justify-center gap-[3px]">
           <span className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-[17px] leading-[22px] text-chat-text">{displayLabel}</span>
+            <span className="truncate text-[16px] leading-[22px] text-chat-text">{displayLabel}</span>
             {messageTime && (
-              <span className={`shrink-0 text-[12px] leading-[16px] ${unread ? 'font-medium text-chat-orange' : 'text-chat-faint'}`}>
+              <span className={`shrink-0 text-[12.5px] leading-[16px] ${unread ? 'font-medium text-chat-orange' : 'text-chat-faint'}`}>
                 {messageTime}
               </span>
             )}
@@ -79,6 +80,8 @@ function ConversationListItem({ conversation, onSelect, unread, selected }) {
           </span>
         </span>
       </button>
+      {/* A conversa aberta é um cartão inteiro; as demais ficam separadas por um fio. */}
+      {!selected && <span aria-hidden="true" className="mx-4 block h-px bg-white/[0.07]" />}
     </li>
   );
 }

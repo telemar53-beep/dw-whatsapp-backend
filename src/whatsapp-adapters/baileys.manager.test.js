@@ -11,8 +11,10 @@ jest.mock('../conversations/message-status.service');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
   saveMediaFile: jest.fn(),
+  deleteMediaFile: jest.fn().mockResolvedValue(undefined),
   getMediaFilePath: jest.fn(),
 }));
+jest.mock('../realtime/socket-server');
 jest.mock('../config/env');
 jest.mock('fs', () => ({
   ...jest.requireActual('fs'),
@@ -30,8 +32,9 @@ const baileysLib = require('@whiskeysockets/baileys');
 const { loadConfig } = require('../config/env');
 const { createChannel, updateChannelStatus, listChannels } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
-const { setContactAvatarPath } = require('../conversations/contact.repository');
+const { setContactAvatarPath, claimContactAvatarRefresh, findContactByPhoneNumber } = require('../conversations/contact.repository');
 const { applyParsedMessageStatusUpdates } = require('../conversations/message-status.service');
+const { broadcast } = require('../realtime/socket-server');
 const manager = require('./baileys.manager');
 
 function createMockSock() {
@@ -55,6 +58,9 @@ describe('baileys.manager', () => {
     loadConfig.mockReturnValue({ baileysSessionsDir: '/sessions' });
     baileysLib.useMultiFileAuthState.mockResolvedValue({ state: {}, saveCreds: jest.fn() });
     ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-default' }, contactJustCreated: false });
+    // Por padrão o contato ainda não foi conferido: a trava libera a busca.
+    claimContactAvatarRefresh.mockImplementation(async (contactId) => ({ id: contactId, avatarPath: null }));
+    findContactByPhoneNumber.mockResolvedValue(null);
   });
 
   describe('startBaileysConnection', () => {
@@ -71,6 +77,7 @@ describe('baileys.manager', () => {
       expect(sock.ev.on).toHaveBeenCalledWith('connection.update', expect.any(Function));
       expect(sock.ev.on).toHaveBeenCalledWith('messages.upsert', expect.any(Function));
       expect(sock.ev.on).toHaveBeenCalledWith('messages.update', expect.any(Function));
+      expect(sock.ev.on).toHaveBeenCalledWith('contacts.update', expect.any(Function));
     });
   });
 
@@ -671,8 +678,9 @@ describe('baileys.manager', () => {
     });
   });
 
-  describe('contact avatar fetching', () => {
+  describe('contact avatar refresh', () => {
     let sock;
+    const { saveMediaFile, deleteMediaFile } = require('../media/media-storage');
 
     beforeEach(async () => {
       sock = createMockSock();
@@ -681,74 +689,200 @@ describe('baileys.manager', () => {
     });
 
     async function flushAvatarFetch() {
-      // The avatar fetch is fire-and-forget (never awaited by handleMessagesUpsert),
-      // so its own promise chain (profilePictureUrl -> axios.get -> saveMediaFile ->
+      // The avatar refresh is fire-and-forget (never awaited by handleMessagesUpsert),
+      // so its own promise chain (claim -> profilePictureUrl -> axios.get -> saveMediaFile ->
       // setContactAvatarPath) needs a macrotask tick to fully settle before assertions.
       await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    function inbound(jid, id, text = 'Oi') {
+      return sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [{ key: { remoteJid: jid, fromMe: false, id }, pushName: 'Cliente', message: { conversation: text } }],
+      });
     }
 
     test('fetches and stores the avatar when the inbound message created a brand-new contact', async () => {
       ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-new-1' }, contactJustCreated: true });
       sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/fake-avatar.jpg');
       axios.get.mockResolvedValue({ data: Buffer.from('fake-avatar-bytes') });
-      const { saveMediaFile } = require('../media/media-storage');
       saveMediaFile.mockResolvedValue('generated-avatar.jpg');
 
-      await sock.handlers['messages.upsert']({
-        type: 'notify',
-        messages: [
-          {
-            key: { remoteJid: '5511999998888@s.whatsapp.net', fromMe: false, id: 'AVATAR_MSG_1' },
-            pushName: 'Cliente Novo',
-            message: { conversation: 'Primeira mensagem' },
-          },
-        ],
-      });
+      await inbound('5511999998888@s.whatsapp.net', 'AVATAR_MSG_1', 'Primeira mensagem');
       await flushAvatarFetch();
 
+      expect(claimContactAvatarRefresh).toHaveBeenCalledWith('contact-new-1', manager.AVATAR_REFRESH_INTERVAL_MS);
       expect(sock.profilePictureUrl).toHaveBeenCalledWith('5511999998888@s.whatsapp.net', 'image');
       expect(axios.get).toHaveBeenCalledWith('https://pps.whatsapp.net/fake-avatar.jpg', { responseType: 'arraybuffer' });
       expect(saveMediaFile).toHaveBeenCalledWith(Buffer.from('fake-avatar-bytes'), '.jpg');
       expect(setContactAvatarPath).toHaveBeenCalledWith('contact-new-1', 'generated-avatar.jpg');
+      expect(broadcast).toHaveBeenCalledWith('contact:avatar-updated', { contactId: 'contact-new-1', avatarPath: 'generated-avatar.jpg' });
+      expect(deleteMediaFile).not.toHaveBeenCalled();
     });
 
-    test('does not fetch an avatar when the contact already existed', async () => {
+    test('re-checks an existing contact whose last check is stale and replaces the old photo', async () => {
       ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-existing-1' }, contactJustCreated: false });
+      claimContactAvatarRefresh.mockResolvedValue({ id: 'contact-existing-1', avatarPath: 'old-avatar.jpg' });
+      sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/new-avatar.jpg');
+      axios.get.mockResolvedValue({ data: Buffer.from('new-bytes') });
+      saveMediaFile.mockResolvedValue('new-avatar.jpg');
 
-      await sock.handlers['messages.upsert']({
-        type: 'notify',
-        messages: [
-          {
-            key: { remoteJid: '5511999997777@s.whatsapp.net', fromMe: false, id: 'AVATAR_MSG_2' },
-            pushName: 'Cliente Existente',
-            message: { conversation: 'Mensagem de novo' },
-          },
-        ],
-      });
+      await inbound('5511999997777@s.whatsapp.net', 'AVATAR_MSG_2');
       await flushAvatarFetch();
 
-      expect(sock.profilePictureUrl).not.toHaveBeenCalled();
+      expect(setContactAvatarPath).toHaveBeenCalledWith('contact-existing-1', 'new-avatar.jpg');
+      expect(broadcast).toHaveBeenCalledWith('contact:avatar-updated', { contactId: 'contact-existing-1', avatarPath: 'new-avatar.jpg' });
+      expect(deleteMediaFile).toHaveBeenCalledWith('old-avatar.jpg');
     });
 
-    test('does not throw and never stores an avatar when the photo is unavailable', async () => {
-      ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-new-2' }, contactJustCreated: true });
-      sock.profilePictureUrl.mockRejectedValue(new Error('not-authorized'));
+    test('does not ask WhatsApp again when the contact was checked recently (claim refused)', async () => {
+      ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-existing-2' }, contactJustCreated: false });
+      claimContactAvatarRefresh.mockResolvedValue(null);
 
-      await expect(
-        sock.handlers['messages.upsert']({
-          type: 'notify',
-          messages: [
-            {
-              key: { remoteJid: '5511999996666@s.whatsapp.net', fromMe: false, id: 'AVATAR_MSG_3' },
-              pushName: 'Cliente Privado',
-              message: { conversation: 'Oi' },
-            },
-          ],
-        })
-      ).resolves.not.toThrow();
+      await inbound('5511999997778@s.whatsapp.net', 'AVATAR_MSG_2B');
+      await flushAvatarFetch();
+
+      expect(claimContactAvatarRefresh).toHaveBeenCalledWith('contact-existing-2', manager.AVATAR_REFRESH_INTERVAL_MS);
+      expect(sock.profilePictureUrl).not.toHaveBeenCalled();
+      expect(setContactAvatarPath).not.toHaveBeenCalled();
+      expect(broadcast).not.toHaveBeenCalled();
+    });
+
+    test('clears the stored photo when the contact removed it (or made it private)', async () => {
+      ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-existing-3' }, contactJustCreated: false });
+      claimContactAvatarRefresh.mockResolvedValue({ id: 'contact-existing-3', avatarPath: 'old-avatar.jpg' });
+      const err = new Error('not-authorized');
+      err.data = 401;
+      sock.profilePictureUrl.mockRejectedValue(err);
+
+      await inbound('5511999997779@s.whatsapp.net', 'AVATAR_MSG_2C');
+      await flushAvatarFetch();
+
+      expect(setContactAvatarPath).toHaveBeenCalledWith('contact-existing-3', null);
+      expect(broadcast).toHaveBeenCalledWith('contact:avatar-updated', { contactId: 'contact-existing-3', avatarPath: null });
+      expect(deleteMediaFile).toHaveBeenCalledWith('old-avatar.jpg');
+    });
+
+    test('keeps the stored photo when the WhatsApp lookup fails for a transient reason', async () => {
+      ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-existing-4' }, contactJustCreated: false });
+      claimContactAvatarRefresh.mockResolvedValue({ id: 'contact-existing-4', avatarPath: 'old-avatar.jpg' });
+      sock.profilePictureUrl.mockRejectedValue(new Error('Timed Out'));
+
+      await inbound('5511999997780@s.whatsapp.net', 'AVATAR_MSG_2D');
       await flushAvatarFetch();
 
       expect(setContactAvatarPath).not.toHaveBeenCalled();
+      expect(deleteMediaFile).not.toHaveBeenCalled();
+      expect(broadcast).not.toHaveBeenCalled();
+    });
+
+    test('does not throw and never stores an avatar when a new contact has no photo', async () => {
+      ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-new-2' }, contactJustCreated: true });
+      sock.profilePictureUrl.mockRejectedValue(new Error('not-authorized'));
+
+      await expect(inbound('5511999996666@s.whatsapp.net', 'AVATAR_MSG_3')).resolves.not.toThrow();
+      await flushAvatarFetch();
+
+      expect(setContactAvatarPath).not.toHaveBeenCalled();
+      expect(broadcast).not.toHaveBeenCalled();
+    });
+
+    test('still processes the message when the claim itself fails', async () => {
+      ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-new-3' }, contactJustCreated: true });
+      claimContactAvatarRefresh.mockRejectedValue(new Error('db down'));
+
+      await expect(inbound('5511999996667@s.whatsapp.net', 'AVATAR_MSG_4')).resolves.not.toThrow();
+      await flushAvatarFetch();
+
+      expect(ingestInboundMessage).toHaveBeenCalled();
+      expect(sock.profilePictureUrl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('contacts.update (profile picture changed on WhatsApp)', () => {
+    let sock;
+    const channel = { id: 'channel-picture', type: 'baileys' };
+    const { saveMediaFile, deleteMediaFile } = require('../media/media-storage');
+
+    beforeEach(async () => {
+      sock = createMockSock();
+      baileysLib.default.mockReturnValue(sock);
+      await manager.startBaileysConnection(channel);
+    });
+
+    async function flush() {
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    test('forces a refresh (ignoring the interval) for a known contact whose picture changed', async () => {
+      findContactByPhoneNumber.mockResolvedValue({ id: 'contact-known', phoneNumber: '5511999990001', avatarPath: 'old.jpg' });
+      claimContactAvatarRefresh.mockResolvedValue({ id: 'contact-known', avatarPath: 'old.jpg' });
+      sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/changed.jpg');
+      axios.get.mockResolvedValue({ data: Buffer.from('changed-bytes') });
+      saveMediaFile.mockResolvedValue('changed.jpg');
+
+      await sock.handlers['contacts.update']([{ id: '5511999990001@s.whatsapp.net', imgUrl: 'changed' }]);
+      await flush();
+
+      expect(findContactByPhoneNumber).toHaveBeenCalledWith('5511999990001');
+      expect(claimContactAvatarRefresh).toHaveBeenCalledWith('contact-known', 0);
+      expect(sock.profilePictureUrl).toHaveBeenCalledWith('5511999990001@s.whatsapp.net', 'image');
+      expect(setContactAvatarPath).toHaveBeenCalledWith('contact-known', 'changed.jpg');
+      expect(deleteMediaFile).toHaveBeenCalledWith('old.jpg');
+      expect(broadcast).toHaveBeenCalledWith('contact:avatar-updated', { contactId: 'contact-known', avatarPath: 'changed.jpg' });
+    });
+
+    test('clears the photo for a known contact whose picture was removed', async () => {
+      findContactByPhoneNumber.mockResolvedValue({ id: 'contact-known', phoneNumber: '5511999990001', avatarPath: 'old.jpg' });
+      claimContactAvatarRefresh.mockResolvedValue({ id: 'contact-known', avatarPath: 'old.jpg' });
+      sock.profilePictureUrl.mockResolvedValue(undefined);
+
+      await sock.handlers['contacts.update']([{ id: '5511999990001@s.whatsapp.net', imgUrl: 'removed' }]);
+      await flush();
+
+      expect(setContactAvatarPath).toHaveBeenCalledWith('contact-known', null);
+      expect(deleteMediaFile).toHaveBeenCalledWith('old.jpg');
+      expect(broadcast).toHaveBeenCalledWith('contact:avatar-updated', { contactId: 'contact-known', avatarPath: null });
+    });
+
+    test('resolves a LID address through the socket mapping before looking the contact up', async () => {
+      sock.signalRepository = { lidMapping: { getPNForLID: jest.fn().mockResolvedValue('5511999990002@s.whatsapp.net') } };
+      findContactByPhoneNumber.mockResolvedValue({ id: 'contact-lid', phoneNumber: '5511999990002', avatarPath: null });
+      sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/lid.jpg');
+      axios.get.mockResolvedValue({ data: Buffer.from('lid-bytes') });
+      saveMediaFile.mockResolvedValue('lid.jpg');
+
+      await sock.handlers['contacts.update']([{ id: '123456789@lid', imgUrl: 'changed' }]);
+      await flush();
+
+      expect(sock.signalRepository.lidMapping.getPNForLID).toHaveBeenCalledWith('123456789@lid');
+      expect(findContactByPhoneNumber).toHaveBeenCalledWith('5511999990002');
+      expect(setContactAvatarPath).toHaveBeenCalledWith('contact-lid', 'lid.jpg');
+    });
+
+    test('ignores updates without a picture change, unknown contacts and unresolvable ids', async () => {
+      findContactByPhoneNumber.mockResolvedValue(null);
+
+      await sock.handlers['contacts.update']([
+        { id: '5511999990003@s.whatsapp.net', notify: 'Novo nome' },
+        { id: '5511999990004@s.whatsapp.net', imgUrl: 'changed' },
+        { id: '987654321@lid', imgUrl: 'changed' },
+        { id: 'grupo@g.us', imgUrl: 'changed' },
+      ]);
+      await flush();
+
+      expect(findContactByPhoneNumber).toHaveBeenCalledTimes(1);
+      expect(findContactByPhoneNumber).toHaveBeenCalledWith('5511999990004');
+      expect(sock.profilePictureUrl).not.toHaveBeenCalled();
+    });
+
+    test('never rejects even when the lookup throws', async () => {
+      findContactByPhoneNumber.mockRejectedValue(new Error('db down'));
+      await expect(
+        sock.handlers['contacts.update']([{ id: '5511999990005@s.whatsapp.net', imgUrl: 'changed' }])
+      ).resolves.not.toThrow();
     });
   });
 
@@ -871,9 +1005,38 @@ describe('baileys.manager', () => {
 
       const result = await manager.fetchContactAvatarForChannel(channel, 'contact-backfill-1', '5511999995555');
 
+      expect(claimContactAvatarRefresh).toHaveBeenCalledWith('contact-backfill-1', manager.AVATAR_REFRESH_INTERVAL_MS);
       expect(sock.profilePictureUrl).toHaveBeenCalledWith('5511999995555@s.whatsapp.net', 'image');
       expect(setContactAvatarPath).toHaveBeenCalledWith('contact-backfill-1', 'generated-avatar-2.jpg');
       expect(result).toBe(true);
+    });
+
+    test('force bypasses the refresh interval (used by the backfill script)', async () => {
+      const sock = createMockSock();
+      sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/fake-avatar-3.jpg');
+      axios.get.mockResolvedValue({ data: Buffer.from('fake-avatar-bytes-3') });
+      const { saveMediaFile } = require('../media/media-storage');
+      saveMediaFile.mockResolvedValue('generated-avatar-3.jpg');
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-backfill-3', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      await manager.fetchContactAvatarForChannel(channel, 'contact-backfill-3', '5511999995557', { force: true });
+
+      expect(claimContactAvatarRefresh).toHaveBeenCalledWith('contact-backfill-3', 0);
+    });
+
+    test('resolves to false without asking WhatsApp when the contact was checked recently', async () => {
+      const sock = createMockSock();
+      claimContactAvatarRefresh.mockResolvedValue(null);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-backfill-4', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.fetchContactAvatarForChannel(channel, 'contact-backfill-4', '5511999995558');
+
+      expect(result).toBe(false);
+      expect(sock.profilePictureUrl).not.toHaveBeenCalled();
     });
 
     test('resolves to false when the photo is unavailable, without throwing', async () => {

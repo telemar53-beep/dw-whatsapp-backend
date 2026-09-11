@@ -14,7 +14,16 @@ describe('ContactAvatar', () => {
   test('renders the photo with the authenticated avatar URL when avatarPath is set', () => {
     render(<ContactAvatar contactId="c1" avatarPath="avatars/c1.jpg" displayName="Carlos" phoneNumber="+5511999990000" />);
     const img = screen.getByRole('img');
-    expect(img.src).toBe('http://localhost:3000/api/contacts/c1/avatar?token=tok-123');
+    expect(img.src).toBe('http://localhost:3000/api/contacts/c1/avatar?token=tok-123&v=avatars%2Fc1.jpg');
+  });
+
+  test('changes the image URL when the avatarPath changes, so the browser does not reuse the cached photo', () => {
+    const { rerender } = render(<ContactAvatar contactId="c1" avatarPath="one.jpg" displayName="Carlos" phoneNumber="+5511999990000" />);
+    const before = screen.getByRole('img').src;
+    rerender(<ContactAvatar contactId="c1" avatarPath="two.jpg" displayName="Carlos" phoneNumber="+5511999990000" />);
+    const after = screen.getByRole('img').src;
+    expect(after).not.toBe(before);
+    expect(after).toContain('v=two.jpg');
   });
 
   test('renders the first letter of the display name when there is no avatarPath', () => {

@@ -48,4 +48,11 @@ function getMediaFilePath(relativePath) {
   return fullPath;
 }
 
-module.exports = { saveMediaFile, getMediaFilePath, extensionForMimeType, messageTypeForMimeType };
+// Remove um arquivo de mídia já substituído (ex.: foto antiga de um contato).
+// Arquivo inexistente não é erro — o objetivo é só não acumular lixo em disco.
+async function deleteMediaFile(relativePath) {
+  if (!relativePath) return;
+  await fs.promises.rm(getMediaFilePath(relativePath), { force: true });
+}
+
+module.exports = { saveMediaFile, deleteMediaFile, getMediaFilePath, extensionForMimeType, messageTypeForMimeType };

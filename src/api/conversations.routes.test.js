@@ -1285,7 +1285,7 @@ describe('POST /api/conversations/start', () => {
     expect(baileysManager.fetchContactAvatarForChannel).toHaveBeenCalledWith(BAILEYS_CHANNEL, 'contact-new-1', '559899990001');
   });
 
-  test('does not fetch an avatar when the contact already existed', async () => {
+  test('also asks the adapter to re-check the avatar when the contact already existed (adapter throttles)', async () => {
     findChannelById.mockResolvedValue(BAILEYS_CHANNEL);
     baileysManager.resolveWhatsAppJid.mockResolvedValue('559899990002');
     findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-2', phoneNumber: '559899990002', wasCreated: false });
@@ -1312,7 +1312,7 @@ describe('POST /api/conversations/start', () => {
       .send({ channelId: 'channel-1', phoneNumber: '559899990002', content: 'Oi' });
 
     expect(res.status).toBe(201);
-    expect(baileysManager.fetchContactAvatarForChannel).not.toHaveBeenCalled();
+    expect(baileysManager.fetchContactAvatarForChannel).toHaveBeenCalledWith(BAILEYS_CHANNEL, 'contact-2', '559899990002');
   });
 
   test('returns 401 without a token', async () => {

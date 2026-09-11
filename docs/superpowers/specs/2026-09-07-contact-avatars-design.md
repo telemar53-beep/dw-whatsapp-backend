@@ -194,3 +194,33 @@ Render Shell contra a `DATABASE_URL` de produção, depois do deploy). Passos:
 
 Com o spec aprovado, o próximo passo é usar a skill `writing-plans` para
 transformar isso num plano de implementação detalhado.
+
+## Revisão 2026-09-11 — foto passa a acompanhar o WhatsApp
+
+A decisão original de "buscar uma única vez, nunca atualizar" foi revertida a
+pedido do usuário: o atendente via a foto antiga do cliente mesmo depois de ele
+trocar no WhatsApp. O que mudou:
+
+- **Nova coluna** `contacts.avatar_checked_at` (migração
+  `1788950000000_add-avatar-checked-at-to-contacts.js`, roda sozinha no deploy):
+  registra a última consulta ao WhatsApp, com ou sem foto disponível.
+- **Refresh a cada mensagem recebida**, com trava de frequência de 6 h por
+  contato (`AVATAR_REFRESH_INTERVAL_MS`). A trava é um `UPDATE ... RETURNING`
+  atômico (`claimContactAvatarRefresh`), então duas mensagens simultâneas do
+  mesmo número disparam uma única busca. Isso também cobre a primeira busca de
+  contato novo e o retry de contato cuja primeira busca falhou.
+- **Troca de foto em tempo real**: o adapter escuta `contacts.update` do
+  Baileys (o WhatsApp manda `imgUrl: 'changed' | 'removed'` quando um contato
+  troca/apaga a foto) e força o refresh na hora, ignorando o intervalo.
+  Endereços `@lid` são resolvidos via `signalRepository.lidMapping`.
+- **Foto removida ou tornada privada** limpa `avatar_path` (só quando o
+  WhatsApp responde item-not-found/not-authorized ou URL vazia — erro de rede
+  ou timeout mantém a foto atual). O arquivo antigo é apagado do disco
+  (`deleteMediaFile`).
+- **Frontend**: evento `contact:avatar-updated { contactId, avatarPath }`
+  atualiza fila, "Minhas conversas" e o dashboard de atendimento sem
+  recarregar; a URL do avatar ganha `&v=<avatarPath>` para o navegador não
+  reaproveitar a imagem antiga do cache.
+- `POST /api/conversations/start` (canal Baileys) passa a pedir o refresh para
+  qualquer contato, não só o recém-criado — a trava no adapter evita excesso.
+- O script de backfill usa `{ force: true }` para ignorar a trava.

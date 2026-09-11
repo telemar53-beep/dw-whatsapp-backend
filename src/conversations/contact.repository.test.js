@@ -5,6 +5,7 @@ const { createConversation } = require('./conversation.repository');
 const {
   findOrCreateContactByPhoneNumber,
   setContactAvatarPath,
+  claimContactAvatarRefresh,
   findContactById,
   findContactByPhoneNumber,
   updateContact,
@@ -61,6 +62,43 @@ describe('contact repository', () => {
     await setContactAvatarPath(contact.id, 'abc123.jpg');
     const found = await findContactById(contact.id);
     expect(found.avatarPath).toBe('abc123.jpg');
+  });
+
+  describe('claimContactAvatarRefresh', () => {
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    test('claims a contact that was never checked and returns its current avatar path', async () => {
+      const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+      await setContactAvatarPath(contact.id, 'old.jpg');
+      const claimed = await claimContactAvatarRefresh(contact.id, ONE_HOUR);
+      expect(claimed).not.toBeNull();
+      expect(claimed.id).toBe(contact.id);
+      expect(claimed.avatarPath).toBe('old.jpg');
+      const found = await findContactById(contact.id);
+      expect(found.avatarCheckedAt).not.toBeNull();
+    });
+
+    test('refuses a second claim inside the interval', async () => {
+      const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+      expect(await claimContactAvatarRefresh(contact.id, ONE_HOUR)).not.toBeNull();
+      expect(await claimContactAvatarRefresh(contact.id, ONE_HOUR)).toBeNull();
+    });
+
+    test('claims again once the last check is older than the interval', async () => {
+      const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+      await getPool().query("UPDATE contacts SET avatar_checked_at = NOW() - INTERVAL '2 hours' WHERE id = $1", [contact.id]);
+      expect(await claimContactAvatarRefresh(contact.id, ONE_HOUR)).not.toBeNull();
+    });
+
+    test('a zero interval always claims (forced refresh)', async () => {
+      const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+      expect(await claimContactAvatarRefresh(contact.id, ONE_HOUR)).not.toBeNull();
+      expect(await claimContactAvatarRefresh(contact.id, 0)).not.toBeNull();
+    });
+
+    test('returns null for an unknown contact', async () => {
+      expect(await claimContactAvatarRefresh('00000000-0000-0000-0000-000000000000', 0)).toBeNull();
+    });
   });
 
   test('findContactById returns null for an unknown id', async () => {

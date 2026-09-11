@@ -48,6 +48,18 @@ describe('useMyConversations', () => {
     expect(result.current).toEqual([{ id: 'c1' }]);
   });
 
+  test('contact:avatar-updated swaps the avatar of the matching conversations', async () => {
+    api.getMyConversations.mockResolvedValue([{ id: 'c1', contactId: 'ct1', contactAvatarPath: 'old.jpg' }]);
+    const { result } = renderHook(() => useMyConversations());
+    await waitFor(() => expect(result.current).toHaveLength(1));
+
+    act(() => {
+      fakeSocket.trigger('contact:avatar-updated', { contactId: 'ct1', avatarPath: null });
+    });
+
+    expect(result.current).toEqual([{ id: 'c1', contactId: 'ct1', contactAvatarPath: null }]);
+  });
+
   test('conversation:removed removes the conversation from the list', async () => {
     api.getMyConversations.mockResolvedValue([{ id: 'c1' }]);
     const { result } = renderHook(() => useMyConversations());

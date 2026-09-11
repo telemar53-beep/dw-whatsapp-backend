@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
+import { applyContactAvatarUpdate } from '../utils/contactAvatar';
 import { getMyConversations } from '../services/api';
 
 export function useMyConversations() {
@@ -30,13 +31,19 @@ export function useMyConversations() {
       setConversations((prev) => prev.filter((c) => c.id !== conversationId));
     }
 
+    function onAvatarUpdated(payload) {
+      setConversations((prev) => applyContactAvatarUpdate(prev, payload));
+    }
+
     socket.on('conversation:assigned', onAssigned);
     socket.on('conversation:removed', onRemoved);
     socket.on('conversation:closed', onRemoved);
+    socket.on('contact:avatar-updated', onAvatarUpdated);
     return () => {
       socket.off('conversation:assigned', onAssigned);
       socket.off('conversation:removed', onRemoved);
       socket.off('conversation:closed', onRemoved);
+      socket.off('contact:avatar-updated', onAvatarUpdated);
     };
   }, [socket]);
 

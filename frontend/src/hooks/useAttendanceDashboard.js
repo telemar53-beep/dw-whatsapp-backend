@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { getDashboardConversations } from '../services/api';
+import { applyContactAvatarUpdate } from '../utils/contactAvatar';
 
 function upsert(list, conversation) {
   const index = list.findIndex((c) => c.id === conversation.id);
@@ -59,8 +60,18 @@ export function useAttendanceDashboard() {
       }
     }
 
+    function onAvatarUpdated(payload) {
+      setInProgress((prev) => applyContactAvatarUpdate(prev, payload));
+      setWaiting((prev) => applyContactAvatarUpdate(prev, payload));
+      setInAutomation((prev) => applyContactAvatarUpdate(prev, payload));
+    }
+
     socket.on('dashboard:conversation', onDashboardConversation);
-    return () => socket.off('dashboard:conversation', onDashboardConversation);
+    socket.on('contact:avatar-updated', onAvatarUpdated);
+    return () => {
+      socket.off('dashboard:conversation', onDashboardConversation);
+      socket.off('contact:avatar-updated', onAvatarUpdated);
+    };
   }, [socket]);
 
   return { inProgress, waiting, inAutomation, closedTodayCount, loading, refresh };

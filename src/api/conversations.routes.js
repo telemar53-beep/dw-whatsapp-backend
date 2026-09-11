@@ -157,7 +157,9 @@ router.post('/start', async (req, res) => {
   }
 
   const contact = await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, null);
-  if (channel.type === 'baileys' && contact.wasCreated) {
+  if (channel.type === 'baileys') {
+    // Contato novo busca a foto pela primeira vez; contato antigo reconfere se a
+    // última consulta já passou do intervalo (a trava fica no próprio adapter).
     baileysManager.fetchContactAvatarForChannel(channel, contact.id, canonicalPhoneNumber).catch((err) => {
       console.error(`Could not fetch profile photo for contact ${contact.id}`, err);
     });

@@ -48,6 +48,24 @@ describe('useQueue', () => {
     expect(result.current).toEqual([{ id: 'c1', contactDisplayName: 'Carlos (atualizado)' }]);
   });
 
+  test('contact:avatar-updated swaps the avatar of every conversation of that contact', async () => {
+    api.getQueue.mockResolvedValue([
+      { id: 'c1', contactId: 'ct1', contactAvatarPath: 'old.jpg' },
+      { id: 'c2', contactId: 'ct2', contactAvatarPath: null },
+    ]);
+    const { result } = renderHook(() => useQueue());
+    await waitFor(() => expect(result.current).toHaveLength(2));
+
+    act(() => {
+      fakeSocket.trigger('contact:avatar-updated', { contactId: 'ct1', avatarPath: 'new.jpg' });
+    });
+
+    expect(result.current).toEqual([
+      { id: 'c1', contactId: 'ct1', contactAvatarPath: 'new.jpg' },
+      { id: 'c2', contactId: 'ct2', contactAvatarPath: null },
+    ]);
+  });
+
   test('queue:new adds a new entry for an unseen conversation', async () => {
     api.getQueue.mockResolvedValue([]);
     const { result } = renderHook(() => useQueue());

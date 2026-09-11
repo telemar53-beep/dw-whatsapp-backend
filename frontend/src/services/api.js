@@ -129,8 +129,11 @@ export function mediaUrl(messageId, token) {
   return `${API_BASE_URL}/api/media/${messageId}?token=${token}`;
 }
 
-export function avatarUrl(contactId, token) {
-  return `${API_BASE_URL}/api/contacts/${contactId}/avatar?token=${token}`;
+// `avatarPath` entra na URL só como marcador de versão: quando o backend troca
+// a foto, o caminho muda e o navegador para de reaproveitar a imagem antiga do cache.
+export function avatarUrl(contactId, token, avatarPath) {
+  const version = avatarPath ? `&v=${encodeURIComponent(avatarPath)}` : '';
+  return `${API_BASE_URL}/api/contacts/${contactId}/avatar?token=${token}${version}`;
 }
 
 export function updateContact(id, payload, token) {

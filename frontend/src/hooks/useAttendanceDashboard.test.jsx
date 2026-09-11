@@ -32,6 +32,25 @@ describe('useAttendanceDashboard', () => {
     useSocket.mockReturnValue(socket);
   });
 
+  test('contact:avatar-updated swaps the avatar across all three lists', async () => {
+    getDashboardConversations.mockResolvedValue({
+      inProgress: [{ id: 'c1', status: 'assigned', contactId: 'ct1', contactAvatarPath: 'old.jpg' }],
+      waiting: [{ id: 'c2', status: 'waiting', triageState: null, contactId: 'ct1', contactAvatarPath: 'old.jpg' }],
+      inAutomation: [{ id: 'c3', status: 'waiting', triageState: 'pending', contactId: 'ct2', contactAvatarPath: null }],
+      closedTodayCount: 0,
+    });
+    const { result } = renderHook(() => useAttendanceDashboard());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      socket.emit('contact:avatar-updated', { contactId: 'ct1', avatarPath: 'new.jpg' });
+    });
+
+    expect(result.current.inProgress[0].contactAvatarPath).toBe('new.jpg');
+    expect(result.current.waiting[0].contactAvatarPath).toBe('new.jpg');
+    expect(result.current.inAutomation[0].contactAvatarPath).toBeNull();
+  });
+
   test('fetches the initial snapshot on mount', async () => {
     getDashboardConversations.mockResolvedValue({
       inProgress: [{ id: 'c1', status: 'assigned' }],

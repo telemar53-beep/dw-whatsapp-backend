@@ -4,6 +4,7 @@ const path = require('path');
 const { loadConfig } = require('../config/env');
 const {
   saveMediaFile,
+  deleteMediaFile,
   getMediaFilePath,
   extensionForMimeType,
   messageTypeForMimeType,
@@ -46,6 +47,25 @@ describe('media-storage', () => {
       process.env.MEDIA_STORAGE_DIR = nestedDir;
       const relativePath = await saveMediaFile(Buffer.from('x'), '.png');
       expect(fs.existsSync(getMediaFilePath(relativePath))).toBe(true);
+    });
+  });
+
+  describe('deleteMediaFile', () => {
+    test('removes a previously saved file', async () => {
+      const relativePath = await saveMediaFile(Buffer.from('old avatar'), '.jpg');
+      const fullPath = getMediaFilePath(relativePath);
+      expect(fs.existsSync(fullPath)).toBe(true);
+      await deleteMediaFile(relativePath);
+      expect(fs.existsSync(fullPath)).toBe(false);
+    });
+
+    test('resolves quietly when the file no longer exists or the path is empty', async () => {
+      await expect(deleteMediaFile('never-existed.jpg')).resolves.toBeUndefined();
+      await expect(deleteMediaFile(null)).resolves.toBeUndefined();
+    });
+
+    test('refuses a path that escapes the storage directory', async () => {
+      await expect(deleteMediaFile('../../etc/passwd')).rejects.toThrow('Invalid media path');
     });
   });
 

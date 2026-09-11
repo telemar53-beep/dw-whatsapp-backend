@@ -4,9 +4,10 @@ const axios = require('axios');
 const { loadConfig } = require('../config/env');
 const { createChannel, updateChannelStatus, listChannels } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
-const { setContactAvatarPath } = require('../conversations/contact.repository');
+const { setContactAvatarPath, claimContactAvatarRefresh, findContactByPhoneNumber } = require('../conversations/contact.repository');
 const { applyParsedMessageStatusUpdates } = require('../conversations/message-status.service');
-const { saveMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
+const { saveMediaFile, deleteMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
+const { broadcast } = require('../realtime/socket-server');
 
 function loadBaileysLib() {
   return require('@whiskeysockets/baileys');
@@ -158,25 +159,118 @@ function resolveContactPhoneJid(key) {
   return null;
 }
 
-async function fetchAndStoreContactAvatar(sock, phoneJid, contactId) {
+// Intervalo mínimo entre duas consultas ao WhatsApp pela foto do MESMO contato
+// (a cada mensagem recebida). Troca de foto detectada pelo evento
+// `contacts.update` ignora esse intervalo e atualiza na hora.
+const AVATAR_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+// O WhatsApp responde "não tem foto" de duas formas: URL vazia, ou um erro de
+// item-not-found (404) / not-authorized (401, foto privada). Baileys embrulha o
+// código do erro num Boom em `err.data`. Qualquer outra falha (rede, timeout,
+// conexão caindo) é transitória e NÃO deve apagar a foto que já temos.
+function isNoPictureError(err) {
+  const code = err && (err.data || (err.output && err.output.statusCode));
+  if (code === 401 || code === 403 || code === 404) return true;
+  const message = err && err.message ? String(err.message) : '';
+  return /not-authorized|item-not-found|forbidden/i.test(message);
+}
+
+// Reconsulta a foto de perfil do contato e sincroniza o banco com o WhatsApp:
+// foto nova → baixa, troca o arquivo e avisa o frontend; foto removida/privada
+// → limpa; nada mudou → só renova a marca de "conferido". Devolve true quando
+// o contato passa a ter uma foto ao final. Nunca deixa erro escapar.
+async function refreshContactAvatar(sock, phoneJid, contactId, { force = false } = {}) {
+  let previous;
   try {
-    const url = await sock.profilePictureUrl(phoneJid, 'image');
+    previous = await claimContactAvatarRefresh(contactId, force ? 0 : AVATAR_REFRESH_INTERVAL_MS);
+  } catch (err) {
+    console.error(`Could not claim profile photo refresh for contact ${contactId}`, err);
+    return false;
+  }
+  if (!previous) return false;
+  const previousPath = previous.avatarPath || null;
+
+  let url = null;
+  try {
+    url = await sock.profilePictureUrl(phoneJid, 'image');
+  } catch (err) {
+    if (!isNoPictureError(err)) {
+      console.error(`Could not fetch profile photo for contact ${contactId}`, err);
+      return Boolean(previousPath);
+    }
+  }
+
+  try {
+    if (!url) {
+      if (previousPath) {
+        await setContactAvatarPath(contactId, null);
+        broadcast('contact:avatar-updated', { contactId, avatarPath: null });
+        await deleteMediaFile(previousPath).catch(() => {});
+      }
+      return false;
+    }
     const response = await axios.get(url, { responseType: 'arraybuffer' });
     const avatarPath = await saveMediaFile(Buffer.from(response.data), '.jpg');
     await setContactAvatarPath(contactId, avatarPath);
+    broadcast('contact:avatar-updated', { contactId, avatarPath });
+    if (previousPath && previousPath !== avatarPath) {
+      await deleteMediaFile(previousPath).catch(() => {});
+    }
     return true;
   } catch (err) {
-    console.error(`Could not fetch profile photo for contact ${contactId}`, err);
-    return false;
+    console.error(`Could not store profile photo for contact ${contactId}`, err);
+    return Boolean(previousPath);
   }
 }
 
-async function fetchContactAvatarForChannel(channel, contactId, phoneNumber) {
+function scheduleContactAvatarRefresh(channel, entry, phoneJid, contact, options) {
+  if (!contact || !contact.id) return;
+  if (!entry) {
+    console.log(`Skipping avatar refresh for contact ${contact.id}: no active connection for channel ${channel.id}`);
+    return;
+  }
+  refreshContactAvatar(entry.sock, phoneJid, contact.id, options).catch((err) => {
+    console.error(`Could not refresh profile photo for contact ${contact.id}`, err);
+  });
+}
+
+async function fetchContactAvatarForChannel(channel, contactId, phoneNumber, { force = false } = {}) {
   const entry = connections.get(channel.id);
   if (!entry) {
     throw new Error(`No active Baileys connection for channel ${channel.id}`);
   }
-  return fetchAndStoreContactAvatar(entry.sock, `${phoneNumber}@s.whatsapp.net`, contactId);
+  return refreshContactAvatar(entry.sock, `${phoneNumber}@s.whatsapp.net`, contactId, { force });
+}
+
+async function resolvePhoneJidForContactUpdate(sock, id) {
+  if (!id) return null;
+  if (id.endsWith('@s.whatsapp.net')) return id;
+  if (!id.endsWith('@lid')) return null;
+  const mapping = sock.signalRepository && sock.signalRepository.lidMapping;
+  if (!mapping || typeof mapping.getPNForLID !== 'function') return null;
+  const pn = await mapping.getPNForLID(id);
+  return pn && pn.endsWith('@s.whatsapp.net') ? pn : null;
+}
+
+// Baileys emite `contacts.update` com imgUrl 'changed' / 'removed' quando o
+// WhatsApp avisa que um contato trocou ou apagou a foto de perfil — é o mesmo
+// sinal que faz o app do celular atualizar a foto na hora.
+async function handleContactsUpdate(channel, updates) {
+  const entry = connections.get(channel.id);
+  if (!entry) return;
+  for (const update of updates || []) {
+    if (!update || (update.imgUrl !== 'changed' && update.imgUrl !== 'removed')) continue;
+    let phoneJid = null;
+    try {
+      phoneJid = await resolvePhoneJidForContactUpdate(entry.sock, update.id);
+    } catch (err) {
+      console.error(`Could not resolve phone JID for contact update ${update.id}`, err);
+    }
+    if (!phoneJid) continue;
+    const contact = await findContactByPhoneNumber(jidToPhoneNumber(phoneJid));
+    if (!contact) continue;
+    scheduleContactAvatarRefresh(channel, entry, phoneJid, contact, { force: true });
+  }
 }
 
 async function handleMessagesUpsert(channel, { messages, type }) {
@@ -201,11 +295,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         locationLatitude: location.latitude,
         locationLongitude: location.longitude,
       });
-      if (result.contactJustCreated && entry) {
-        fetchAndStoreContactAvatar(entry.sock, phoneJid, result.contact.id);
-      } else if (result.contactJustCreated) {
-        console.log(`Skipping avatar fetch for contact ${result.contact.id}: no active connection for channel ${channel.id}`);
-      }
+      scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
       continue;
     }
 
@@ -225,11 +315,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         mediaMimeType: mediaInfo.mimeType,
         mediaFilename: mediaInfo.filename,
       });
-      if (result.contactJustCreated && entry) {
-        fetchAndStoreContactAvatar(entry.sock, phoneJid, result.contact.id);
-      } else if (result.contactJustCreated) {
-        console.log(`Skipping avatar fetch for contact ${result.contact.id}: no active connection for channel ${channel.id}`);
-      }
+      scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
       continue;
     }
 
@@ -250,11 +336,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       messageType: 'text',
       content,
     });
-    if (result.contactJustCreated && entry) {
-      fetchAndStoreContactAvatar(entry.sock, phoneJid, result.contact.id);
-    } else if (result.contactJustCreated) {
-      console.log(`Skipping avatar fetch for contact ${result.contact.id}: no active connection for channel ${channel.id}`);
-    }
+    scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
   }
 }
 
@@ -326,6 +408,11 @@ async function startBaileysConnection(channel) {
   sock.ev.on('messages.update', (updates) => {
     return handleMessagesUpdate(channel, updates).catch((err) => {
       console.error(`Failed to handle Baileys message status update for channel ${channel.id}`, err);
+    });
+  });
+  sock.ev.on('contacts.update', (updates) => {
+    return handleContactsUpdate(channel, updates).catch((err) => {
+      console.error(`Failed to handle Baileys contact update for channel ${channel.id}`, err);
     });
   });
   return sock;
@@ -492,4 +579,5 @@ module.exports = {
   getQrForChannel,
   fetchContactAvatarForChannel,
   parseBaileysStatusUpdates,
+  AVATAR_REFRESH_INTERVAL_MS,
 };

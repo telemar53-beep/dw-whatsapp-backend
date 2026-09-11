@@ -20,7 +20,7 @@ function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber, size =
   if (avatarPath) {
     return (
       <img
-        src={avatarUrl(contactId, token)}
+        src={avatarUrl(contactId, token, avatarPath)}
         alt={displayName || phoneNumber || 'Contato'}
         style={boxStyle}
         className={`shrink-0 rounded-full object-cover ${discClass}`}

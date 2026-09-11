@@ -7,13 +7,14 @@ function toContact(row) {
     displayName: row.display_name,
     avatarPath: row.avatar_path,
     cityId: row.city_id,
+    internalNote: row.internal_note,
     createdAt: row.created_at,
   };
 }
 
 async function findOrCreateContactByPhoneNumber(phoneNumber, displayName) {
   const existing = await getPool().query(
-    'SELECT id, phone_number, display_name, avatar_path, city_id, created_at FROM contacts WHERE phone_number = $1',
+    'SELECT id, phone_number, display_name, avatar_path, city_id, internal_note, created_at FROM contacts WHERE phone_number = $1',
     [phoneNumber]
   );
   if (existing.rowCount > 0) {
@@ -22,7 +23,7 @@ async function findOrCreateContactByPhoneNumber(phoneNumber, displayName) {
   const inserted = await getPool().query(
     `INSERT INTO contacts (phone_number, display_name) VALUES ($1, $2)
      ON CONFLICT (phone_number) DO UPDATE SET phone_number = EXCLUDED.phone_number
-     RETURNING id, phone_number, display_name, avatar_path, city_id, created_at`,
+     RETURNING id, phone_number, display_name, avatar_path, city_id, internal_note, created_at`,
     [phoneNumber, displayName || null]
   );
   return { ...toContact(inserted.rows[0]), wasCreated: true };
@@ -34,18 +35,18 @@ async function setContactAvatarPath(contactId, avatarPath) {
 
 async function findContactById(id) {
   const result = await getPool().query(
-    'SELECT id, phone_number, display_name, avatar_path, city_id, created_at FROM contacts WHERE id = $1',
+    'SELECT id, phone_number, display_name, avatar_path, city_id, internal_note, created_at FROM contacts WHERE id = $1',
     [id]
   );
   if (result.rowCount === 0) return null;
   return toContact(result.rows[0]);
 }
 
-async function updateContact(id, { displayName, cityId }) {
+async function updateContact(id, { displayName, cityId, internalNote }) {
   const result = await getPool().query(
-    `UPDATE contacts SET display_name = $2, city_id = $3 WHERE id = $1
-     RETURNING id, phone_number, display_name, avatar_path, city_id, created_at`,
-    [id, displayName || null, cityId || null]
+    `UPDATE contacts SET display_name = $2, city_id = $3, internal_note = $4 WHERE id = $1
+     RETURNING id, phone_number, display_name, avatar_path, city_id, internal_note, created_at`,
+    [id, displayName || null, cityId || null, internalNote || null]
   );
   if (result.rowCount === 0) return null;
   return toContact(result.rows[0]);

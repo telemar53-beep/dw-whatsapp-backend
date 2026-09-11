@@ -92,6 +92,28 @@ describe('contact repository', () => {
     expect(updated).toBeNull();
   });
 
+  test('updateContact stores an internal note', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+
+    const updated = await updateContact(contact.id, { displayName: 'Maria', cityId: null, internalNote: 'Já reclamou 3x do mesmo problema' });
+
+    expect(updated.internalNote).toBe('Já reclamou 3x do mesmo problema');
+  });
+
+  test('updateContact with internalNote null clears an existing note', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+    await updateContact(contact.id, { displayName: 'Maria', cityId: null, internalNote: 'Nota antiga' });
+
+    const updated = await updateContact(contact.id, { displayName: 'Maria', cityId: null, internalNote: null });
+
+    expect(updated.internalNote).toBeNull();
+  });
+
+  test('a freshly created contact has no internal note', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+    expect(contact.internalNote).toBeNull();
+  });
+
   describe('listContactsMissingAvatarForBaileysBackfill', () => {
     test('returns a contact with no avatar that has a Baileys conversation', async () => {
       const contact = await findOrCreateContactByPhoneNumber('+5511977776666', 'Joao');

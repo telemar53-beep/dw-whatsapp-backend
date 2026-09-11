@@ -31,8 +31,8 @@ function ConversationListItem({ conversation, onSelect, unread, selected }) {
     <li>
       <button
         onClick={() => onSelect(conversation.id)}
-        className={`flex w-full items-center gap-3 pl-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-signal ${
-          selected ? 'bg-white/55' : 'hover:bg-white/25'
+        className={`flex w-full items-center gap-3 pl-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${
+          selected ? 'bg-white/10' : 'hover:bg-white/[0.05]'
         }`}
       >
         <ContactAvatar
@@ -42,17 +42,17 @@ function ConversationListItem({ conversation, onSelect, unread, selected }) {
           phoneNumber={conversation.contactPhoneNumber}
           size={49}
         />
-        <span className="flex min-w-0 flex-1 flex-col justify-center gap-[2px] border-b border-ink-950/8 py-[11px] pr-3">
+        <span className="flex min-w-0 flex-1 flex-col justify-center gap-[2px] border-b border-white/[0.06] py-[11px] pr-3">
           <span className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-[17px] leading-[22px] text-ink-950">{displayLabel}</span>
+            <span className="truncate text-[17px] leading-[22px] text-chat-text">{displayLabel}</span>
             {messageTime && (
-              <span className={`shrink-0 text-[12px] leading-[16px] ${unread ? 'font-medium text-amber-signal-dark' : 'text-ink-950/45'}`}>
+              <span className={`shrink-0 text-[12px] leading-[16px] ${unread ? 'font-medium text-chat-orange' : 'text-chat-faint'}`}>
                 {messageTime}
               </span>
             )}
           </span>
           <span className="flex items-center justify-between gap-2">
-            <span className="flex min-w-0 items-center gap-1 text-[14px] leading-[20px] text-ink-950/55">
+            <span className="flex min-w-0 items-center gap-1 text-[14px] leading-[20px] text-chat-muted">
               {conversation.lastMessageDirection === 'outbound' && (
                 <MessageStatusTicks status={conversation.lastMessageStatus} />
               )}
@@ -60,19 +60,19 @@ function ConversationListItem({ conversation, onSelect, unread, selected }) {
             </span>
             <span className="flex shrink-0 items-center gap-1.5">
               {conversation.assignedAgentName && (
-                <span className="rounded-full bg-teal-signal/10 px-2 py-[1px] text-[11px] font-medium text-teal-signal">
+                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-[1px] text-[11px] font-medium text-chat-muted">
                   {conversation.assignedAgentName}
                 </span>
               )}
               {conversation.sectorName && (
-                <span className="rounded-full bg-indigo-signal/10 px-2 py-[1px] text-[11px] font-medium text-indigo-signal">
+                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-[1px] text-[11px] font-medium text-chat-muted">
                   {conversation.sectorName}
                 </span>
               )}
               {unread && (
                 <span
                   title="Mensagem não lida"
-                  className="h-[11px] w-[11px] shrink-0 rounded-full bg-amber-signal"
+                  className="h-[11px] w-[11px] shrink-0 rounded-full bg-chat-orange"
                 />
               )}
             </span>

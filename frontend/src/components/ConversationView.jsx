@@ -79,7 +79,7 @@ function HeaderIconButton({ label, onClick, children }) {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="flex h-8 w-8 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-white hover:text-ink-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-wa-green"
+      className="flex h-8 w-8 items-center justify-center rounded-full text-chat-icon transition-colors hover:bg-white/10 hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
     >
       {children}
     </button>
@@ -151,18 +151,18 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
 
   return (
     <div className="flex h-full">
-      <div className="flex h-full min-w-0 flex-1 flex-col bg-wa-chat font-wa">
-      <div className="z-10 flex items-center gap-1 border-b border-white/50 bg-white/40 px-2 py-[7px] backdrop-blur-2xl md:px-4">
+      <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
+      <div className="z-10 flex items-center gap-1 border-b border-white/10 bg-white/[0.04] px-2 py-[7px] backdrop-blur-2xl md:px-4">
         <button
           onClick={onBack}
-          className="flex h-10 w-10 items-center justify-center rounded-full text-wa-icon hover:bg-black/[.06] md:hidden"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-chat-icon hover:bg-white/10 md:hidden"
           aria-label="Voltar para a lista"
         >
           <IconArrowLeft size={22} />
         </button>
         <button
           onClick={() => setEditingContact(true)}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left transition-colors hover:bg-black/[.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-wa-green"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
           aria-label={`Editar cliente: ${headerLabel}`}
         >
           <ContactAvatar
@@ -172,21 +172,21 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             phoneNumber={conversation.contactPhoneNumber}
           />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[16px] leading-[21px] text-wa-text">{headerLabel}</span>
-            <span className="block truncate text-[13px] leading-[17px] text-wa-muted">{subtitle}</span>
+            <span className="block truncate text-[16px] leading-[21px] text-chat-text">{headerLabel}</span>
+            <span className="block truncate text-[13px] leading-[17px] text-chat-muted">{subtitle}</span>
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-2">
           {isUnassigned && (
             <button
               onClick={handleClaim}
-              className="flex items-center gap-1.5 rounded-full bg-wa-green px-3.5 py-1.5 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
+              className="flex items-center gap-1.5 rounded-full bg-chat-cream px-3.5 py-1.5 text-[13px] font-medium text-chat-orange-ink shadow-sm transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
             >
               <IconClaim size={17} />
               Assumir
             </button>
           )}
-          <div className="flex items-center gap-0.5 rounded-full border border-white/70 bg-white/40 p-1 shadow-sm backdrop-blur-xl">
+          <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-1">
             <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
               <IconHistory size={19} />
             </HeaderIconButton>
@@ -207,9 +207,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         </div>
       </div>
 
-      <div className="wa-wallpaper wa-scroll flex-1 overflow-y-auto overflow-x-hidden px-[4%] py-3 lg:px-[6%]">
-        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-[8px] bg-amber-signal/15 px-3 py-1.5 text-center text-[12.5px] leading-[18px] text-amber-signal-dark shadow-[0_1px_0.5px_rgba(11,20,26,.08)]">
-          <span className="shrink-0 text-amber-signal-dark">
+      <div className="chat-scroll flex-1 overflow-y-auto overflow-x-hidden bg-black/10 px-[4%] py-3 lg:px-[6%]">
+        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-center text-[12.5px] leading-[18px] text-chat-muted">
+          <span className="shrink-0 text-chat-faint">
             <IconLock size={13} />
           </span>
           Este atendimento fica registrado no sistema da DW Telecom.
@@ -219,7 +219,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           if (row.kind === 'day') {
             return (
               <div key={row.key} className="my-3 flex justify-center">
-                <span className="rounded-[7.5px] bg-white/80 px-3 py-[5px] text-[12.5px] font-medium text-wa-icon shadow-[0_1px_0.5px_rgba(11,20,26,.08)]">
+                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-[5px] text-[12.5px] font-medium text-chat-muted">
                   {row.label}
                 </span>
               </div>
@@ -245,7 +245,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           const meta = (
             <span
               className={`flex shrink-0 items-center gap-[3px] text-[11px] leading-[15px] ${
-                metaMode === 'overlay' ? 'text-white' : 'text-wa-meta'
+                metaMode === 'overlay' ? 'text-white' : 'text-chat-faint'
               }`}
             >
               {clockLabel(message.createdAt)}
@@ -262,29 +262,19 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 className={`group relative max-w-[85%] md:max-w-[65%] ${
                   isSticker
                     ? ''
-                    : `wa-bubble rounded-[7.5px] ${outbound ? 'bg-wa-out' : 'bg-wa-in'} ${
-                        tight ? 'p-[3px]' : 'px-[9px] pb-[8px] pt-[6px]'
-                      } ${
-                        row.firstOfGroup
-                          ? outbound
-                            ? 'wa-tail-out rounded-tr-none'
-                            : 'wa-tail-in rounded-tl-none'
-                          : ''
+                    : `rounded-[18px] border border-white/[0.06] ${outbound ? 'bg-white/[0.13]' : 'bg-white/[0.07]'} ${
+                        tight ? 'p-[3px]' : 'px-3 pb-2 pt-[7px]'
                       }`
                 }`}
               >
                 {message.repliedToPreview && (
-                  <div
-                    className={`mb-1 flex overflow-hidden rounded-[4px] ${
-                      outbound ? 'bg-black/[.07]' : 'bg-black/[.04]'
-                    }`}
-                  >
-                    <span className="w-[4px] shrink-0 bg-wa-quote" />
+                  <div className="mb-1 flex overflow-hidden rounded-[10px] bg-black/20">
+                    <span className="w-[4px] shrink-0 bg-chat-copper" />
                     <span className="min-w-0 flex-1 px-2 py-1">
-                      <span className="block truncate text-[12.8px] font-medium leading-[18px] text-wa-quote">
+                      <span className="block truncate text-[12.8px] font-medium leading-[18px] text-chat-copper">
                         {repliedToLabel}
                       </span>
-                      <span className="block truncate text-[13px] leading-[18px] text-wa-muted">
+                      <span className="block truncate text-[13px] leading-[18px] text-chat-muted">
                         {message.repliedToPreview.content}
                       </span>
                     </span>
@@ -293,6 +283,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
 
                 <MessageAttachment
                   message={message}
+                  dark
                   avatar={
                     !outbound ? (
                       <ContactAvatar
@@ -307,7 +298,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 />
 
                 {hasText && (
-                  <p className="whitespace-pre-wrap break-words text-[14.2px] leading-[19px] text-wa-text">
+                  <p className="whitespace-pre-wrap break-words text-[14.2px] leading-[19px] text-chat-text">
                     {message.content}
                     <span
                       aria-hidden="true"
@@ -332,11 +323,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                     onClick={() => setReplyingTo(message)}
                     aria-label="Responder"
                     title="Responder"
-                    className={`absolute right-0 top-0 flex h-[22px] w-[26px] items-center justify-end rounded-tr-[7.5px] pr-[3px] text-wa-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 ${
-                      outbound
-                        ? 'bg-[linear-gradient(to_left,#ffffff_60%,rgba(255,255,255,0))]'
-                        : 'bg-[linear-gradient(to_left,#ffffff_60%,rgba(255,255,255,0))]'
-                    }`}
+                    className="absolute right-0 top-0 flex h-[22px] w-[26px] items-center justify-end rounded-tr-[18px] bg-[linear-gradient(to_left,rgba(255,255,255,0.14)_50%,rgba(255,255,255,0))] pr-[3px] text-chat-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
                   >
                     <IconChevronDown size={19} />
                   </button>

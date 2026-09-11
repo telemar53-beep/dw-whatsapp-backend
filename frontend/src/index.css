@@ -39,6 +39,21 @@
   --color-wa-quote: #0d9488;
   --color-wa-chip: #dcefe9;
   --color-wa-chip-text: #0f766e;
+
+  /* Vidro fumê da página de chat (Atendimento) — escopo isolado dos tokens wa-*,
+     que continuam servindo os modais claros. Ver output/design-chat/LEIA-ME-DESIGN.md */
+  --color-chat-canvas: #17181a;
+  --color-chat-rail: #0e0f10;
+  --color-chat-text: #f4f1ed;
+  --color-chat-muted: #c7c2bd;
+  --color-chat-faint: #8b8682;
+  --color-chat-icon: #b0aba6;
+  --color-chat-copper: #b97a55;
+  --color-chat-mauve: #6c5b77;
+  --color-chat-orange: #ff8a42;
+  --color-chat-orange-ink: #2a1a0e;
+  --color-chat-online: #33d9a6;
+  --color-chat-cream: #efe7ce;
 }
 
 /* ---------- Fundo do chat ---------- */
@@ -95,6 +110,30 @@
 
 .wa-scroll:hover::-webkit-scrollbar-thumb {
   background-color: rgba(11, 20, 26, 0.3);
+}
+
+/* ---------- Barra de rolagem do vidro fumê (fundo escuro) ---------- */
+.chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.chat-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+
+.chat-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.28);
 }
 
 /* ---------- Animações ---------- */

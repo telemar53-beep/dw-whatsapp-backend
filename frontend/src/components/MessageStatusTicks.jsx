@@ -31,14 +31,14 @@ function MessageStatusTicks({ status }) {
 
   if (status === 'sent') {
     return (
-      <span title="Enviado" className="inline-flex shrink-0 text-wa-meta">
+      <span title="Enviado" className="inline-flex shrink-0 text-chat-faint">
         <Tick />
       </span>
     );
   }
 
   if (status === 'delivered' || status === 'read') {
-    const colorClass = status === 'read' ? 'text-wa-tick' : 'text-wa-meta';
+    const colorClass = status === 'read' ? 'text-chat-online' : 'text-chat-faint';
     const label = status === 'read' ? 'Lido' : 'Entregue';
     return (
       <span title={label} className={`inline-flex shrink-0 ${colorClass}`}>

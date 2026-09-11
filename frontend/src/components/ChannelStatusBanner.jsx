@@ -14,15 +14,15 @@ function ChannelStatusBanner() {
   if (problemChannels.length === 0) return null;
 
   return (
-    <div className="border-b border-[#f2d99a] bg-[#fff3cd] px-4 py-2 font-wa text-[13.5px] leading-[20px] text-[#7a5c15]">
+    <div className="space-y-1 border-b border-white/10 bg-chat-canvas px-4 py-2 font-wa text-[13.5px] leading-[20px] text-chat-muted">
       {problemChannels.map((channel) => (
         <p key={channel.id} className="flex items-center gap-2">
-          <span className="shrink-0 text-[#c9962c]">
+          <span className="shrink-0 text-chat-orange">
             <IconWarning size={16} />
           </span>
-          Canal <strong className="font-semibold">{channel.name}</strong> está{' '}
+          Canal <strong className="font-semibold text-chat-text">{channel.name}</strong> está{' '}
           {channel.status === 'awaiting_qr' ? 'aguardando leitura do QR code' : 'desconectado'} —{' '}
-          <Link to="/admin/channels" className="font-medium underline underline-offset-2 hover:text-[#5c440d]">
+          <Link to="/admin/channels" className="font-medium text-chat-text underline underline-offset-2 hover:text-chat-orange">
             ver na administração de canais
           </Link>
         </p>

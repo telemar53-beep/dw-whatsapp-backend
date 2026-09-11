@@ -19,9 +19,9 @@ function pickSupportedAudioMimeType() {
 }
 
 function ComposerButton({ label, onClick, disabled, active, children, as = 'button', htmlFor }) {
-  const className = `flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-wa-green ${
-    active ? 'bg-black/[.07] text-wa-text' : 'text-wa-icon'
-  } ${disabled ? 'pointer-events-none opacity-40' : 'cursor-pointer hover:bg-black/[.06]'}`;
+  const className = `flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${
+    active ? 'bg-white/10 text-chat-text' : 'text-chat-icon'
+  } ${disabled ? 'pointer-events-none opacity-40' : 'cursor-pointer hover:bg-white/[0.08]'}`;
 
   if (as === 'label') {
     return (
@@ -151,21 +151,21 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
   const canSend = Boolean(content.trim() || file);
 
   return (
-    <div className="border-t border-white/50 bg-white/40 font-wa backdrop-blur-2xl">
+    <div className="border-t border-white/10 bg-white/[0.04] font-wa backdrop-blur-2xl">
       {replyingTo && (
         <div className="px-4 pt-2">
-          <div className="flex items-stretch overflow-hidden rounded-t-[8px] bg-white">
-            <span className="w-[4px] shrink-0 bg-wa-quote" />
+          <div className="flex items-stretch overflow-hidden rounded-t-2xl bg-white/[0.06]">
+            <span className="w-[4px] shrink-0 bg-chat-copper" />
             <div className="min-w-0 flex-1 px-3 py-1.5">
-              <p className="text-[12.8px] font-medium leading-[18px] text-wa-quote">Respondendo</p>
-              <p className="truncate text-[13px] leading-[18px] text-wa-muted">{replyingTo.content}</p>
+              <p className="text-[12.8px] font-medium leading-[18px] text-chat-copper">Respondendo</p>
+              <p className="truncate text-[13px] leading-[18px] text-chat-muted">{replyingTo.content}</p>
             </div>
             <button
               type="button"
               onClick={onCancelReply}
               aria-label="Cancelar resposta"
               title="Cancelar resposta"
-              className="flex w-11 shrink-0 items-center justify-center text-[18px] leading-none text-wa-icon hover:bg-black/[.04]"
+              className="flex w-11 shrink-0 items-center justify-center text-[18px] leading-none text-chat-icon hover:bg-white/[0.06]"
             >
               ✕
             </button>
@@ -175,15 +175,15 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
 
       {!recording && file && (
         <div className="px-4 pt-2">
-          <p className="flex items-center gap-2 rounded-[8px] bg-white px-3 py-2 text-[13px] text-wa-muted">
-            <span className="shrink-0 text-wa-green">
+          <p className="flex items-center gap-2 rounded-2xl bg-white/[0.06] px-3 py-2 text-[13px] text-chat-muted">
+            <span className="shrink-0 text-chat-copper">
               <IconAttach size={17} />
             </span>
             Anexo: {file.name === 'gravacao.webm' ? `gravação de áudio (${recordingSeconds}s)` : file.name}{' '}
             <button
               type="button"
               onClick={clearAttachment}
-              className="ml-auto shrink-0 rounded px-2 py-0.5 text-[13px] font-medium text-wa-green hover:bg-wa-green/10"
+              className="ml-auto shrink-0 rounded px-2 py-0.5 text-[13px] font-medium text-chat-text hover:bg-white/10"
             >
               Remover
             </button>
@@ -209,7 +209,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
             <ComposerButton label="Descartar gravação" onClick={stopRecording}>
               <IconTrash size={22} />
             </ComposerButton>
-            <p className="flex h-[42px] flex-1 items-center gap-2 rounded-full bg-white px-4 text-[14px] text-wa-text">
+            <p className="flex h-[42px] flex-1 items-center gap-2 rounded-full bg-white/[0.06] px-4 text-[14px] text-chat-text">
               <span aria-hidden="true" className="animate-wa-rec h-2.5 w-2.5 shrink-0 rounded-full bg-[#ea4335]" />
               Gravando… {recordingSeconds}s
             </p>
@@ -218,7 +218,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
               onClick={stopRecording}
               aria-label="Parar gravação"
               title="Parar gravação"
-              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-wa-green text-white transition-colors hover:bg-wa-green-dark"
+              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95"
             >
               <IconStop size={18} />
             </button>
@@ -240,7 +240,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                 <IconQuickReply size={22} />
               </ComposerButton>
 
-              <div className="flex h-[42px] min-w-0 flex-1 items-center rounded-full bg-white pl-1 pr-1 focus-within:outline focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-wa-green/50">
+              <div className="flex h-[42px] min-w-0 flex-1 items-center rounded-full bg-white/[0.06] pl-1 pr-1 focus-within:outline focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-white/30">
                 <button
                   type="button"
                   onClick={() => {
@@ -249,8 +249,8 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                   }}
                   aria-label="Emojis"
                   title="Emojis"
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-black/[.05] ${
-                    showingEmojis ? 'text-wa-green' : 'text-wa-icon'
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/[0.06] ${
+                    showingEmojis ? 'text-chat-text' : 'text-chat-icon'
                   }`}
                 >
                   <IconEmoji size={24} />
@@ -261,19 +261,19 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   placeholder="Digite uma mensagem..."
-                  className="h-full min-w-0 flex-1 bg-transparent px-1 text-[15px] text-wa-text outline-none placeholder:text-wa-muted"
+                  className="h-full min-w-0 flex-1 bg-transparent px-1 text-[15px] text-chat-text outline-none placeholder:text-chat-faint"
                 />
               </div>
 
               {showingEmojis && (
-                <div className="animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/70 bg-white/90 p-2 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.45)] backdrop-blur-xl">
+                <div className="animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-[#232325]/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
                   <div className="grid grid-cols-8 gap-1">
                     {EMOJIS.map((emoji) => (
                       <button
                         key={emoji}
                         type="button"
                         onClick={() => appendEmoji(emoji)}
-                        className="rounded-md py-1 text-[20px] leading-none transition-colors hover:bg-wa-hover"
+                        className="rounded-md py-1 text-[20px] leading-none transition-colors hover:bg-white/10"
                       >
                         {emoji}
                       </button>
@@ -283,9 +283,9 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
               )}
 
               {showingQuickReplies && (
-                <div className="animate-wa-pop wa-scroll absolute bottom-full left-0 z-20 mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/70 bg-white/90 py-1.5 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.45)] backdrop-blur-xl">
+                <div className="animate-wa-pop chat-scroll absolute bottom-full left-0 z-20 mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-[#232325]/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
                   {quickReplies.length === 0 ? (
-                    <p className="px-3 py-2 text-[13.5px] text-wa-muted">Nenhuma resposta cadastrada</p>
+                    <p className="px-3 py-2 text-[13.5px] text-chat-muted">Nenhuma resposta cadastrada</p>
                   ) : (
                     <ul>
                       {quickReplies.map((quickReply) => (
@@ -297,7 +297,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                               setShowingQuickReplies(false);
                               if (textInputRef.current) textInputRef.current.focus();
                             }}
-                            className="block w-full truncate px-3.5 py-2.5 text-left text-[14.5px] text-wa-text transition-colors hover:bg-wa-hover"
+                            className="block w-full truncate px-3.5 py-2.5 text-left text-[14.5px] text-chat-text transition-colors hover:bg-white/[0.06]"
                           >
                             {quickReply.title}
                           </button>
@@ -315,7 +315,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                 disabled={sending}
                 aria-label="Enviar"
                 title="Enviar"
-                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-black/[.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-wa-green disabled:opacity-40"
+                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 disabled:opacity-40"
               >
                 <IconSend size={24} />
               </button>

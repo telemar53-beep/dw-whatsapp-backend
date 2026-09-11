@@ -14,6 +14,8 @@ const {
   adminTransferConversation,
   adminCloseConversation,
   getConversationWithContact,
+  findConversationByProtocolNumber,
+  listConversationsByContact,
   listWaitingConversations,
   listConversationsByAgent,
   listClosedConversationsByContact,
@@ -322,6 +324,60 @@ describe('conversation repository', () => {
     expect(result.id).toBe(conversation.id);
     expect(result.contactPhoneNumber).toBe('+5511977776666');
     expect(result.contactDisplayName).toBe('Joao');
+  });
+
+  test('getConversationWithContact includes the protocol number when one has been claimed', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    await getPool().query('UPDATE conversations SET protocol_number = 1042 WHERE id = $1', [conversation.id]);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.protocolNumber).toBe(1042);
+  });
+
+  test('getConversationWithContact has a null protocolNumber before one is claimed', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const result = await getConversationWithContact(conversation.id);
+    expect(result.protocolNumber).toBeNull();
+  });
+
+  test('findConversationByProtocolNumber finds the conversation with that protocol number', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    await getPool().query('UPDATE conversations SET protocol_number = 1042 WHERE id = $1', [conversation.id]);
+
+    const result = await findConversationByProtocolNumber(1042);
+
+    expect(result.id).toBe(conversation.id);
+    expect(result.contactPhoneNumber).toBe('+5511977776666');
+  });
+
+  test('findConversationByProtocolNumber returns null when no conversation has that protocol number', async () => {
+    const result = await findConversationByProtocolNumber(999999);
+    expect(result).toBeNull();
+  });
+
+  test('listConversationsByContact returns every conversation for that contact regardless of status, most recent first', async () => {
+    const agent = await createAgent({ email: 'by-contact-1@dw.com', password: 'secret123', role: 'agent' });
+    const first = await createConversation(contactId, channelId);
+    await claimConversation(first.id, agent.id);
+    await closeConversation(first.id, agent.id);
+    const second = await createConversation(contactId, channelId);
+
+    const result = await listConversationsByContact(contactId);
+
+    expect(result.map((c) => c.id)).toEqual([second.id, first.id]);
+    expect(result.find((c) => c.id === first.id).status).toBe('closed');
+    expect(result.find((c) => c.id === second.id).status).toBe('waiting');
+  });
+
+  test('listConversationsByContact excludes conversations belonging to a different contact', async () => {
+    const mine = await createConversation(contactId, channelId);
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
+    await createConversation(otherContact.id, channelId);
+
+    const result = await listConversationsByContact(contactId);
+
+    expect(result.map((c) => c.id)).toEqual([mine.id]);
   });
 
   test('getConversationWithContact includes the contact avatar path', async () => {

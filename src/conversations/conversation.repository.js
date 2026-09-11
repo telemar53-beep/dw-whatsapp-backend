@@ -188,7 +188,7 @@ async function markBusinessHoursNoticeSent(conversationId) {
 
 async function getConversationWithContact(conversationId) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -213,6 +213,63 @@ async function getConversationWithContact(conversationId) {
   );
   if (result.rowCount === 0) return null;
   return toConversationSummary(result.rows[0]);
+}
+
+async function findConversationByProtocolNumber(protocolNumber) {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
+            ct.internal_note AS contact_internal_note,
+            s.name AS sector_name,
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN LATERAL (
+       SELECT content, message_type, status, direction, created_at
+       FROM messages m
+       WHERE m.conversation_id = c.id
+       ORDER BY m.created_at DESC
+       LIMIT 1
+     ) lm ON true
+     WHERE c.protocol_number = $1`,
+    [protocolNumber]
+  );
+  if (result.rowCount === 0) return null;
+  return toConversationSummary(result.rows[0]);
+}
+
+async function listConversationsByContact(contactId) {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
+            s.name AS sector_name,
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN LATERAL (
+       SELECT content, message_type, status, direction, created_at
+       FROM messages m
+       WHERE m.conversation_id = c.id
+       ORDER BY m.created_at DESC
+       LIMIT 1
+     ) lm ON true
+     WHERE c.contact_id = $1
+     ORDER BY c.created_at DESC`,
+    [contactId]
+  );
+  return result.rows.map(toConversationSummary);
 }
 
 async function listWaitingConversations() {
@@ -457,6 +514,8 @@ module.exports = {
   incrementTriageAttempts,
   activateConversation,
   getConversationWithContact,
+  findConversationByProtocolNumber,
+  listConversationsByContact,
   listWaitingConversations,
   listConversationsByAgent,
   countClosedConversationsByAgent,

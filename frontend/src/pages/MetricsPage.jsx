@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getMetrics } from '../services/api';
@@ -27,14 +26,7 @@ const TOOLTIP_STYLE = {
   color: '#f4f1ed',
 };
 const AXIS_TICK = { fill: AXIS_COLOR, fontSize: 12 };
-
-function IconChevronLeft(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      <path d="M15 6l-6 6 6 6" />
-    </svg>
-  );
-}
+const CHART_CURSOR = { fill: 'rgba(255, 255, 255, 0.06)' };
 
 function IconCheck(props) {
   return (
@@ -121,10 +113,12 @@ function IconTag(props) {
   );
 }
 
+const PANEL_CLASS = 'rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl';
+
 function StatTile({ icon, value, label }) {
   const display = value === null || value === undefined ? '-' : value;
   return (
-    <div className="rounded-[20px] border border-white/[0.07] bg-white/[0.06] p-6">
+    <div className={`${PANEL_CLASS} p-6`}>
       <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.07] text-chat-orange">
         {icon}
       </span>
@@ -136,7 +130,7 @@ function StatTile({ icon, value, label }) {
 
 function ChartCard({ title, icon, children }) {
   return (
-    <div className="rounded-[20px] border border-white/[0.07] bg-white/[0.06] p-6">
+    <div className={`${PANEL_CLASS} p-6`}>
       <div className="mb-5 flex items-center gap-2.5">
         <span className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.07] text-chat-orange">
           {icon}
@@ -157,10 +151,41 @@ function EmptyState() {
   );
 }
 
+// Eixos e grade repetidos em todos os gráficos.
+function chartAxes(dataKey) {
+  return (
+    <>
+      <CartesianGrid vertical={false} stroke={GRID_COLOR} />
+      <XAxis dataKey={dataKey} tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
+      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
+    </>
+  );
+}
+
+// A faixa de indicadores do admin sai do mesmo payload dos gráficos: total de
+// fechados e as médias de tempo ponderadas pelo volume de cada atendente.
+function summarize(byAgent) {
+  const closedCount = byAgent.reduce((total, row) => total + (row.closedCount || 0), 0);
+
+  function weightedAverage(field) {
+    const rows = byAgent.filter((row) => row[field] !== null && row[field] !== undefined && row.closedCount > 0);
+    const weight = rows.reduce((total, row) => total + row.closedCount, 0);
+    if (weight === 0) return null;
+    const sum = rows.reduce((total, row) => total + row[field] * row.closedCount, 0);
+    return Math.round((sum / weight) * 10) / 10;
+  }
+
+  return {
+    closedCount,
+    avgResolutionMinutes: weightedAverage('avgResolutionMinutes'),
+    avgFirstResponseMinutes: weightedAverage('avgFirstResponseMinutes'),
+  };
+}
+
 const CUSTOM_DAYS_MAX = 365;
 
 function MetricsPage() {
-  const { token, agent } = useAuth();
+  const { token } = useAuth();
   const [period, setPeriod] = useState('today');
   const [customDays, setCustomDays] = useState(null);
   const [customDaysInput, setCustomDaysInput] = useState('');
@@ -186,6 +211,15 @@ function MetricsPage() {
     setPeriod('custom');
   }
 
+  const isAdmin = data && data.scope === 'admin';
+  const summary = useMemo(() => (isAdmin ? summarize(data.byAgent) : null), [isAdmin, data]);
+
+  function periodButtonClass(selected) {
+    return `shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${
+      selected ? 'border-chat-orange/70 text-chat-text' : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
+    }`;
+  }
+
   return (
     <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
       <div
@@ -198,28 +232,17 @@ function MetricsPage() {
       />
 
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-3">
-      <NavRail active="metrics" onProfileClick={() => setProfileOpen(true)} />
-      <div className="chat-scroll min-h-0 min-w-0 flex-1 overflow-y-auto rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl">
+        <NavRail active="metrics" onProfileClick={() => setProfileOpen(true)} />
 
-      <div className="mx-auto max-w-5xl space-y-6 px-6 py-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header className="shrink-0 px-2 pb-4 pt-2">
             <h1 className="font-display text-[26px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
               Relatório
             </h1>
             <p className="mt-1.5 text-[14px] text-chat-muted">Indicadores de atendimento da equipe</p>
-          </div>
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.06] px-4 py-2 text-[14px] font-medium text-chat-muted transition hover:bg-white/[0.10] hover:text-chat-text"
-          >
-            <IconChevronLeft className="h-4 w-4" />
-            Voltar
-          </Link>
-        </div>
+          </header>
 
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-3 px-2 pb-4">
             {PERIODS.map((p) => (
               <button
                 key={p.value}
@@ -227,164 +250,189 @@ function MetricsPage() {
                   setPeriod(p.value);
                   setShowCustomInput(false);
                 }}
-                className={`shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition ${
-                  period === p.value
-                    ? 'border-chat-orange/70 text-chat-text'
-                    : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
-                }`}
+                className={periodButtonClass(period === p.value)}
               >
                 {p.label}
               </button>
             ))}
-            <button
-              onClick={() => setShowCustomInput((prev) => !prev)}
-              className={`shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition ${
-                period === 'custom'
-                  ? 'border-chat-orange/70 text-chat-text'
-                  : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
-              }`}
-            >
+            <button onClick={() => setShowCustomInput((prev) => !prev)} className={periodButtonClass(period === 'custom')}>
               Personalizado
             </button>
+
+            {showCustomInput && (
+              <>
+                <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10" />
+                <div className="flex items-center gap-2">
+                  <label htmlFor="custom-days" className="text-[14px] text-chat-muted">
+                    Últimos
+                  </label>
+                  <input
+                    id="custom-days"
+                    type="number"
+                    min="1"
+                    max={CUSTOM_DAYS_MAX}
+                    value={customDaysInput}
+                    onChange={(e) => setCustomDaysInput(e.target.value)}
+                    className="h-[40px] w-20 rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 text-[14px] text-chat-text outline-none transition focus:border-chat-orange/60"
+                  />
+                  <span className="text-[14px] text-chat-muted">dias</span>
+                  <button
+                    type="button"
+                    onClick={handleApplyCustomDays}
+                    disabled={!customDaysValid}
+                    className="h-[40px] rounded-[12px] bg-chat-orange px-4 text-[14px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-          {showCustomInput && (
-            <div className="flex flex-wrap items-center gap-2">
-              <label htmlFor="custom-days" className="text-[14px] text-chat-muted">
-                Últimos
-              </label>
-              <input
-                id="custom-days"
-                type="number"
-                min="1"
-                max={CUSTOM_DAYS_MAX}
-                value={customDaysInput}
-                onChange={(e) => setCustomDaysInput(e.target.value)}
-                className="h-[40px] w-20 rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 text-[14px] text-chat-text outline-none transition focus:border-chat-orange/60"
-              />
-              <span className="text-[14px] text-chat-muted">dias</span>
-              <button
-                type="button"
-                onClick={handleApplyCustomDays}
-                disabled={!customDaysValid}
-                className="h-[40px] rounded-[12px] bg-chat-orange px-4 text-[14px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Aplicar
-              </button>
-            </div>
-          )}
+
+          <div className="chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-2">
+            {error && (
+              <div className="flex items-center gap-2 rounded-[14px] bg-wa-error-bg px-4 py-3 text-[14px] text-wa-error-text">
+                <IconAlert className="h-4 w-4 flex-shrink-0" />
+                <p>{error}</p>
+              </div>
+            )}
+
+            {!data && !error && (
+              <p className="px-1 py-10 text-center text-[14px] text-chat-faint">Carregando indicadores...</p>
+            )}
+
+            {data && data.scope === 'agent' && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <StatTile icon={<IconCheck className="h-5 w-5" />} value={data.own.closedCount} label="Atendimentos fechados" />
+                <StatTile
+                  icon={<IconClock className="h-5 w-5" />}
+                  value={data.own.avgResolutionMinutes}
+                  label="Tempo médio de atendimento (min)"
+                />
+                <StatTile
+                  icon={<IconReply className="h-5 w-5" />}
+                  value={data.own.avgFirstResponseMinutes}
+                  label="Tempo médio de primeira resposta (min)"
+                />
+              </div>
+            )}
+
+            {isAdmin && (
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <StatTile icon={<IconCheck className="h-5 w-5" />} value={summary.closedCount} label="Atendimentos fechados" />
+                  <StatTile
+                    icon={<IconClock className="h-5 w-5" />}
+                    value={summary.avgResolutionMinutes}
+                    label="Tempo médio de atendimento (min)"
+                  />
+                  <StatTile
+                    icon={<IconReply className="h-5 w-5" />}
+                    value={summary.avgFirstResponseMinutes}
+                    label="Tempo médio de primeira resposta (min)"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  <ChartCard title="Atendimentos por atendente" icon={<IconUsers className="h-4 w-4" />}>
+                    {data.byAgent.length === 0 ? (
+                      <EmptyState />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={data.byAgent} barCategoryGap="32%">
+                          {chartAxes('agentName')}
+                          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
+                          <Bar
+                            isAnimationActive={false}
+                            dataKey="closedCount"
+                            name="Atendimentos"
+                            fill={TEAL}
+                            radius={[6, 6, 0, 0]}
+                            maxBarSize={48}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartCard>
+
+                  <ChartCard title="Atendimentos por setor" icon={<IconLayers className="h-4 w-4" />}>
+                    {data.bySector.length === 0 ? (
+                      <EmptyState />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={data.bySector} barCategoryGap="32%">
+                          {chartAxes('sectorName')}
+                          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
+                          <Bar
+                            isAnimationActive={false}
+                            dataKey="closedCount"
+                            name="Atendimentos"
+                            fill={INDIGO}
+                            radius={[6, 6, 0, 0]}
+                            maxBarSize={48}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartCard>
+
+                  <ChartCard title="Motivos de contato" icon={<IconTag className="h-4 w-4" />}>
+                    {data.byReason.length === 0 ? (
+                      <EmptyState />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={data.byReason} barCategoryGap="32%">
+                          {chartAxes('reasonName')}
+                          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
+                          <Bar
+                            isAnimationActive={false}
+                            dataKey="closedCount"
+                            name="Atendimentos"
+                            fill={AMBER_DARK}
+                            radius={[6, 6, 0, 0]}
+                            maxBarSize={48}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartCard>
+
+                  <ChartCard title="Tempo médio por atendente (min)" icon={<IconGauge className="h-4 w-4" />}>
+                    {data.byAgent.length === 0 ? (
+                      <EmptyState />
+                    ) : (
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={data.byAgent} barCategoryGap="28%" barGap={4}>
+                          {chartAxes('agentName')}
+                          <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
+                          <Legend wrapperStyle={{ fontSize: 13, color: AXIS_COLOR, paddingTop: 8 }} />
+                          <Bar
+                            isAnimationActive={false}
+                            dataKey="avgResolutionMinutes"
+                            name="Atendimento"
+                            fill={TEAL}
+                            radius={[6, 6, 0, 0]}
+                            maxBarSize={40}
+                          />
+                          <Bar
+                            isAnimationActive={false}
+                            dataKey="avgFirstResponseMinutes"
+                            name="Primeira resposta"
+                            fill={AMBER_DARK}
+                            radius={[6, 6, 0, 0]}
+                            maxBarSize={40}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartCard>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-
-        {error && (
-          <div className="flex items-center gap-2 rounded-[14px] bg-wa-error-bg px-4 py-3 text-[14px] text-wa-error-text">
-            <IconAlert className="h-4 w-4 flex-shrink-0" />
-            <p>{error}</p>
-          </div>
-        )}
-
-        {data && data.scope === 'agent' && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatTile icon={<IconCheck className="h-5 w-5" />} value={data.own.closedCount} label="Atendimentos fechados" />
-            <StatTile
-              icon={<IconClock className="h-5 w-5" />}
-              value={data.own.avgResolutionMinutes}
-              label="Tempo médio de atendimento (min)"
-            />
-            <StatTile
-              icon={<IconReply className="h-5 w-5" />}
-              value={data.own.avgFirstResponseMinutes}
-              label="Tempo médio de primeira resposta (min)"
-            />
-          </div>
-        )}
-
-        {data && data.scope === 'admin' && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <ChartCard title="Atendimentos por atendente" icon={<IconUsers className="h-4 w-4" />}>
-              {data.byAgent.length === 0 ? (
-                <EmptyState />
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={data.byAgent} barCategoryGap="32%">
-                    <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-                    <XAxis dataKey="agentName" tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
-                    <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }} />
-                    <Bar isAnimationActive={false} dataKey="closedCount" name="Atendimentos" fill={TEAL} radius={[6, 6, 0, 0]} maxBarSize={48} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
-
-            <ChartCard title="Atendimentos por setor" icon={<IconLayers className="h-4 w-4" />}>
-              {data.bySector.length === 0 ? (
-                <EmptyState />
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={data.bySector} barCategoryGap="32%">
-                    <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-                    <XAxis dataKey="sectorName" tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
-                    <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }} />
-                    <Bar isAnimationActive={false} dataKey="closedCount" name="Atendimentos" fill={INDIGO} radius={[6, 6, 0, 0]} maxBarSize={48} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
-
-            <div className="lg:col-span-2">
-              <ChartCard title="Tempo médio por atendente (min)" icon={<IconGauge className="h-4 w-4" />}>
-                {data.byAgent.length === 0 ? (
-                  <EmptyState />
-                ) : (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={data.byAgent} barCategoryGap="28%" barGap={4}>
-                      <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-                      <XAxis dataKey="agentName" tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
-                      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }} />
-                      <Legend wrapperStyle={{ fontSize: 13, color: AXIS_COLOR, paddingTop: 8 }} />
-                      <Bar
-                        isAnimationActive={false}
-                        dataKey="avgResolutionMinutes"
-                        name="Tempo médio de atendimento"
-                        fill={TEAL}
-                        radius={[6, 6, 0, 0]}
-                        maxBarSize={40}
-                      />
-                      <Bar
-                        isAnimationActive={false}
-                        dataKey="avgFirstResponseMinutes"
-                        name="Tempo médio de primeira resposta"
-                        fill={AMBER_DARK}
-                        radius={[6, 6, 0, 0]}
-                        maxBarSize={40}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </ChartCard>
-            </div>
-
-            <ChartCard title="Motivos de Contato" icon={<IconTag className="h-4 w-4" />}>
-              {data.byReason.length === 0 ? (
-                <EmptyState />
-              ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={data.byReason} barCategoryGap="32%">
-                    <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-                    <XAxis dataKey="reasonName" tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
-                    <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }} />
-                    <Bar isAnimationActive={false} dataKey="closedCount" name="Atendimentos" fill={AMBER_DARK} radius={[6, 6, 0, 0]} maxBarSize={48} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
-          </div>
-        )}
       </div>
-      </div>
-      </div>
+
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
     </div>
   );

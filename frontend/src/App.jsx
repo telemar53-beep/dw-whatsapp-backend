@@ -8,6 +8,7 @@ import AdminChannelsPage from './pages/AdminChannelsPage';
 import MetricsPage from './pages/MetricsPage';
 import AttendanceDashboardPage from './pages/AttendanceDashboardPage';
 import CampaignsPage from './pages/CampaignsPage';
+import CampaignDetailPage from './pages/CampaignDetailPage';
 
 function App() {
   return (
@@ -53,6 +54,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <CampaignsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/campaigns/:id"
+              element={
+                <ProtectedRoute>
+                  <CampaignDetailPage />
                 </ProtectedRoute>
               }
             />

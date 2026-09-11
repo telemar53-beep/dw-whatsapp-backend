@@ -114,6 +114,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
   const isMine = conversation.assignedAgentId === agent.id;
+  const isAdmin = agent.role === 'admin' && conversation.status !== 'closed';
   const displayName = contactOverride ? contactOverride.displayName : conversation.contactDisplayName;
   const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;
   const nameLabel = displayName || conversation.contactPhoneNumber || 'Conversa';
@@ -195,7 +196,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
               <IconSearch size={22} />
             </HeaderIconButton>
-            {(isMine || isUnassigned) && (
+            {(isMine || isUnassigned || isAdmin) && (
               <>
                 <HeaderIconButton label="Transferir atendimento" onClick={() => onTransferClick(conversation.id)}>
                   <IconTransfer size={22} />

@@ -160,6 +160,30 @@ describe('ConversationView', () => {
     expect(screen.queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument();
   });
 
+  test('shows Transferir and Fechar to an admin viewing a conversation assigned to another agent', () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-OTHER' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
+  });
+
+  test('an admin does not see Transferir or Fechar on an already-closed conversation', () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'closed', assignedAgentId: 'agent-OTHER' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument();
+  });
+
   test('shows Transferir and Fechar for a waiting conversation too, without needing to claim it first', () => {
     render(
       <ConversationView

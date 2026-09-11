@@ -9,7 +9,7 @@ const RAIL_BUTTON_BASE =
 function railButtonClass(active, dark) {
   if (dark) {
     return `relative flex h-12 w-12 items-center justify-center rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${
-      active ? 'bg-white/[0.10] text-chat-text' : 'text-chat-icon hover:bg-white/[0.06] hover:text-chat-text'
+      active ? 'bg-white/[0.16] text-chat-text' : 'text-chat-icon hover:bg-white/[0.08] hover:text-chat-text'
     }`;
   }
   return `${RAIL_BUTTON_BASE} focus-visible:outline-teal-signal ${
@@ -56,7 +56,7 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
       aria-label="Navegação principal"
       className={`${mobileHidden ? 'hidden md:flex' : 'flex'} ${
         dark
-          ? 'w-16 shrink-0 flex-col items-center justify-between rounded-[26px] border border-white/[0.05] bg-chat-rail/95 py-6 md:w-[88px]'
+          ? 'w-16 shrink-0 flex-col items-center justify-between rounded-[26px] border border-white/[0.07] bg-white/[0.09] py-6 backdrop-blur-2xl md:w-[88px]'
           : 'w-14 shrink-0 flex-col items-center justify-between border-r border-white/50 bg-gradient-to-b from-sky-mist/70 via-teal-mist/50 to-sand-mist/60 py-4 backdrop-blur-xl md:w-[64px]'
       }`}
     >
@@ -65,7 +65,7 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
           aria-hidden="true"
           className={`mb-2 flex items-center justify-center font-display font-semibold tracking-tight ${
             dark
-              ? 'h-12 w-12 rounded-full bg-white/[0.07] text-[14px] text-chat-text'
+              ? 'h-12 w-12 rounded-full bg-white/[0.12] text-[14px] text-chat-text'
               : 'h-9 w-9 rounded-xl bg-teal-signal text-[13px] text-white shadow-sm'
           }`}
         >
@@ -96,7 +96,7 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
       </div>
 
       <div className={`flex flex-col items-center ${dark ? 'gap-[9px]' : 'gap-1.5'}`}>
-        {dark && <span aria-hidden="true" className="mb-4 h-px w-8 bg-white/10" />}
+        {dark && <span aria-hidden="true" className="mb-4 h-px w-8 bg-white/15" />}
         <RailButton label={muted ? 'Som mutado' : 'Som ativado'} onClick={toggleMuted} active={muted} dark={dark}>
           {muted ? <IconBellOff size={dark ? 22 : 21} /> : <IconBellOn size={dark ? 22 : 21} />}
         </RailButton>
@@ -111,7 +111,7 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
           title={agent?.name || 'Atendente'}
           className={`mt-2 flex items-center justify-center rounded-full border font-display font-medium ${
             dark
-              ? 'h-11 w-11 border-white/15 bg-white/[0.06] text-[15px] text-chat-text'
+              ? 'h-11 w-11 border-white/20 bg-white/[0.12] text-[15px] text-chat-text'
               : 'h-9 w-9 border-white/60 bg-white/50 text-[13px] text-ink-950/70'
           }`}
         >

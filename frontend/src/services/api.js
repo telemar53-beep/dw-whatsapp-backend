@@ -47,6 +47,10 @@ export function getQueue(token) {
   return apiFetch('/api/conversations/queue', { token });
 }
 
+export function getMyClosedConversations({ offset = 0, limit = 20 } = {}, token) {
+  return apiFetch(`/api/conversations/mine/closed?offset=${offset}&limit=${limit}`, { token });
+}
+
 export function getMyConversations(token) {
   return apiFetch('/api/conversations/mine', { token });
 }

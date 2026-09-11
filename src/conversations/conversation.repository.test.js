@@ -312,10 +312,10 @@ describe('conversation repository', () => {
     const conversation = await createConversation(contactId, channelId);
     const agent = await createAgent({ email: 'agent-protocol-2@dw.com', password: 'secret123', role: 'agent' });
     await claimConversation(conversation.id, agent.id);
-    await getPool().query('UPDATE conversations SET protocol_number = 42 WHERE id = $1', [conversation.id]);
+    await getPool().query("UPDATE conversations SET protocol_number = '42' WHERE id = $1", [conversation.id]);
 
     const closed = await closeConversation(conversation.id, agent.id);
-    expect(closed.protocolNumber).toBe(42);
+    expect(closed.protocolNumber).toBe('42');
   });
 
   test('getConversationWithContact includes the contact phone number and display name', async () => {
@@ -328,11 +328,11 @@ describe('conversation repository', () => {
 
   test('getConversationWithContact includes the protocol number when one has been claimed', async () => {
     const conversation = await createConversation(contactId, channelId);
-    await getPool().query('UPDATE conversations SET protocol_number = 1042 WHERE id = $1', [conversation.id]);
+    await getPool().query("UPDATE conversations SET protocol_number = '1042' WHERE id = $1", [conversation.id]);
 
     const result = await getConversationWithContact(conversation.id);
 
-    expect(result.protocolNumber).toBe(1042);
+    expect(result.protocolNumber).toBe('1042');
   });
 
   test('getConversationWithContact has a null protocolNumber before one is claimed', async () => {
@@ -343,9 +343,9 @@ describe('conversation repository', () => {
 
   test('findConversationByProtocolNumber finds the conversation with that protocol number', async () => {
     const conversation = await createConversation(contactId, channelId);
-    await getPool().query('UPDATE conversations SET protocol_number = 1042 WHERE id = $1', [conversation.id]);
+    await getPool().query("UPDATE conversations SET protocol_number = '1042' WHERE id = $1", [conversation.id]);
 
-    const result = await findConversationByProtocolNumber(1042);
+    const result = await findConversationByProtocolNumber('1042');
 
     expect(result.id).toBe(conversation.id);
     expect(result.contactPhoneNumber).toBe('+5511977776666');

@@ -42,8 +42,8 @@
 
   /* Vidro fumê da página de chat (Atendimento) — escopo isolado dos tokens wa-*,
      que continuam servindo os modais claros. Ver output/design-chat/LEIA-ME-DESIGN.md */
-  --color-chat-canvas: #17181a;
-  --color-chat-rail: #0e0f10;
+  --color-chat-canvas: #211e1c;
+  --color-chat-rail: #17140f;
   --color-chat-text: #f4f1ed;
   --color-chat-muted: #c7c2bd;
   --color-chat-faint: #8b8682;

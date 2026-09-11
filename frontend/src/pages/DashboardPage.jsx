@@ -115,7 +115,7 @@ function DashboardPage() {
         <aside
           className={`${
             selectedConversation ? 'hidden' : 'flex'
-          } w-full min-w-0 flex-col bg-white/[0.04] backdrop-blur-2xl md:flex md:w-[380px] md:shrink-0 md:overflow-clip md:rounded-[28px] md:border md:border-white/10 lg:w-[30%] lg:min-w-[340px] lg:max-w-[460px]`}
+          } w-full min-w-0 flex-col bg-white/[0.10] backdrop-blur-2xl md:flex md:w-[380px] md:shrink-0 md:overflow-clip md:rounded-[28px] md:border md:border-white/10 lg:w-[30%] lg:min-w-[340px] lg:max-w-[460px]`}
         >
           <header
             className={`${
@@ -136,7 +136,7 @@ function DashboardPage() {
           </header>
 
           <div className="shrink-0 px-3 pb-2">
-            <label className="flex h-[40px] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-3 transition focus-within:border-white/25 focus-within:bg-white/[0.09]">
+            <label className="flex h-[40px] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.12] px-3 transition focus-within:border-white/25 focus-within:bg-white/[0.16]">
               <span className="shrink-0 text-chat-faint">
                 <IconSearch size={18} />
               </span>
@@ -152,7 +152,7 @@ function DashboardPage() {
           </div>
 
           <div className="flex shrink-0 justify-center overflow-x-auto px-3 pt-2 pb-2">
-            <div role="tablist" className="inline-flex gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
+            <div role="tablist" className="inline-flex gap-1 rounded-full border border-white/10 bg-white/[0.07] p-1">
               {TABS.map((tab) => (
                 <button
                   key={tab.value}
@@ -163,7 +163,7 @@ function DashboardPage() {
                   onClick={() => setActiveTab(tab.value)}
                   className={`relative shrink-0 rounded-full border px-4 py-1.5 text-sm transition ${
                     activeTab === tab.value
-                      ? 'border-chat-orange/60 bg-white/[0.06] font-semibold text-chat-text'
+                      ? 'border-chat-orange/60 bg-white/[0.12] font-semibold text-chat-text'
                       : 'border-transparent font-medium text-chat-muted hover:text-chat-text'
                   }`}
                 >
@@ -225,7 +225,7 @@ function DashboardPage() {
               onBack={() => setSelectedId(null)}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center bg-white/[0.03] px-6 text-center backdrop-blur-2xl md:rounded-[28px]">
+            <div className="flex h-full flex-col items-center justify-center bg-white/[0.10] px-6 text-center backdrop-blur-2xl md:rounded-[28px]">
               <span className="text-white/10">
                 <IconEmptyChat width={320} height={190} />
               </span>

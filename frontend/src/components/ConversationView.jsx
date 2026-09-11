@@ -152,7 +152,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   return (
     <div className="flex h-full">
       <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
-      <div className="z-10 flex items-center gap-1 border-b border-white/10 bg-white/[0.04] px-2 py-[7px] backdrop-blur-2xl md:px-4">
+      <div className="z-10 flex items-center gap-1 border-b border-white/10 bg-white/[0.09] px-2 py-[7px] backdrop-blur-2xl md:px-4">
         <button
           onClick={onBack}
           className="flex h-10 w-10 items-center justify-center rounded-full text-chat-icon hover:bg-white/10 md:hidden"
@@ -186,7 +186,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
               Assumir
             </button>
           )}
-          <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-1">
+          <div className="flex items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.08] p-1">
             <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
               <IconHistory size={19} />
             </HeaderIconButton>
@@ -207,8 +207,8 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         </div>
       </div>
 
-      <div className="chat-scroll flex-1 overflow-y-auto overflow-x-hidden bg-black/10 px-[4%] py-3 lg:px-[6%]">
-        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-center text-[12.5px] leading-[18px] text-chat-muted">
+      <div className="chat-scroll flex-1 overflow-y-auto overflow-x-hidden px-[4%] py-3 lg:px-[6%]">
+        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.10] px-3 py-1.5 text-center text-[12.5px] leading-[18px] text-chat-muted">
           <span className="shrink-0 text-chat-faint">
             <IconLock size={13} />
           </span>
@@ -219,7 +219,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           if (row.kind === 'day') {
             return (
               <div key={row.key} className="my-3 flex justify-center">
-                <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-[5px] text-[12.5px] font-medium text-chat-muted">
+                <span className="rounded-full border border-white/10 bg-white/[0.11] px-3 py-[5px] text-[12.5px] font-medium text-chat-muted">
                   {row.label}
                 </span>
               </div>
@@ -262,7 +262,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 className={`group relative max-w-[85%] md:max-w-[65%] ${
                   isSticker
                     ? ''
-                    : `rounded-[18px] border border-white/[0.06] ${outbound ? 'bg-white/[0.13]' : 'bg-white/[0.07]'} ${
+                    : `rounded-[18px] border border-white/[0.08] ${outbound ? 'bg-white/[0.18]' : 'bg-white/[0.12]'} ${
                         tight ? 'p-[3px]' : 'px-3 pb-2 pt-[7px]'
                       }`
                 }`}

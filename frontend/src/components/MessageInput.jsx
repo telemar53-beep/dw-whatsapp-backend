@@ -151,10 +151,10 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
   const canSend = Boolean(content.trim() || file);
 
   return (
-    <div className="border-t border-white/10 bg-white/[0.04] font-wa backdrop-blur-2xl">
+    <div className="border-t border-white/10 bg-white/[0.10] font-wa backdrop-blur-2xl">
       {replyingTo && (
         <div className="px-4 pt-2">
-          <div className="flex items-stretch overflow-hidden rounded-t-2xl bg-white/[0.06]">
+          <div className="flex items-stretch overflow-hidden rounded-t-2xl bg-white/[0.10]">
             <span className="w-[4px] shrink-0 bg-chat-copper" />
             <div className="min-w-0 flex-1 px-3 py-1.5">
               <p className="text-[12.8px] font-medium leading-[18px] text-chat-copper">Respondendo</p>
@@ -175,7 +175,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
 
       {!recording && file && (
         <div className="px-4 pt-2">
-          <p className="flex items-center gap-2 rounded-2xl bg-white/[0.06] px-3 py-2 text-[13px] text-chat-muted">
+          <p className="flex items-center gap-2 rounded-2xl bg-white/[0.10] px-3 py-2 text-[13px] text-chat-muted">
             <span className="shrink-0 text-chat-copper">
               <IconAttach size={17} />
             </span>
@@ -209,7 +209,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
             <ComposerButton label="Descartar gravação" onClick={stopRecording}>
               <IconTrash size={22} />
             </ComposerButton>
-            <p className="flex h-[42px] flex-1 items-center gap-2 rounded-full bg-white/[0.06] px-4 text-[14px] text-chat-text">
+            <p className="flex h-[42px] flex-1 items-center gap-2 rounded-full bg-white/[0.11] px-4 text-[14px] text-chat-text">
               <span aria-hidden="true" className="animate-wa-rec h-2.5 w-2.5 shrink-0 rounded-full bg-[#ea4335]" />
               Gravando… {recordingSeconds}s
             </p>
@@ -240,7 +240,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                 <IconQuickReply size={22} />
               </ComposerButton>
 
-              <div className="flex h-[42px] min-w-0 flex-1 items-center rounded-full bg-white/[0.06] pl-1 pr-1 focus-within:outline focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-white/30">
+              <div className="flex h-[42px] min-w-0 flex-1 items-center rounded-full bg-white/[0.13] pl-1 pr-1 focus-within:outline focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-white/30">
                 <button
                   type="button"
                   onClick={() => {

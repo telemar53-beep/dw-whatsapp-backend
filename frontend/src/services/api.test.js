@@ -40,6 +40,9 @@ import {
   uploadMyAvatar,
   deleteMyAvatar,
   agentAvatarUrl,
+  createCampaign,
+  listCampaigns,
+  getCampaign,
 } from './api';
 
 beforeEach(() => {
@@ -563,5 +566,35 @@ describe('deleteMyAvatar', () => {
 describe('agentAvatarUrl', () => {
   test('builds a URL with the agent id and token as query string', () => {
     expect(agentAvatarUrl('agent-1', 'tok-abc')).toBe('http://localhost:3000/api/agents/agent-1/avatar?token=tok-abc');
+  });
+});
+
+describe('createCampaign', () => {
+  test('posts the campaign payload', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{"id":"campaign-1"}') });
+    await createCampaign({ channelId: 'ch-1', content: 'Oi', recipients: '5511999990000' }, 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/campaigns',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ channelId: 'ch-1', content: 'Oi', recipients: '5511999990000' }),
+      })
+    );
+  });
+});
+
+describe('listCampaigns', () => {
+  test('fetches the campaign list', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('[]') });
+    await listCampaigns('tok-123');
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost:3000/api/campaigns', expect.objectContaining({ method: 'GET' }));
+  });
+});
+
+describe('getCampaign', () => {
+  test('fetches one campaign by id', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
+    await getCampaign('campaign-1', 'tok-123');
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost:3000/api/campaigns/campaign-1', expect.objectContaining({ method: 'GET' }));
   });
 });

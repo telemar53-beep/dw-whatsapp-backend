@@ -375,3 +375,15 @@ export function deleteMyAvatar(token) {
 export function agentAvatarUrl(agentId, token) {
   return `${API_BASE_URL}/api/agents/${agentId}/avatar?token=${token}`;
 }
+
+export function createCampaign(payload, token) {
+  return apiFetch('/api/campaigns', { method: 'POST', body: payload, token });
+}
+
+export function listCampaigns(token) {
+  return apiFetch('/api/campaigns', { token });
+}
+
+export function getCampaign(id, token) {
+  return apiFetch(`/api/campaigns/${id}`, { token });
+}

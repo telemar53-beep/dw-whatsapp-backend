@@ -10,7 +10,7 @@ function SignalMark() {
       stroke="currentColor"
       strokeWidth="1.75"
       strokeLinecap="round"
-      className="h-5 w-5 text-teal-signal"
+      className="h-6 w-6 text-chat-orange"
       aria-hidden="true"
     >
       <circle cx="6" cy="18" r="1.4" fill="currentColor" stroke="none" />
@@ -20,6 +20,9 @@ function SignalMark() {
     </svg>
   );
 }
+
+const FIELD_CLASS =
+  'h-[48px] w-full rounded-[14px] border border-white/[0.10] bg-white/[0.06] px-4 text-[15px] text-chat-text outline-none transition placeholder:text-chat-faint focus:border-chat-orange/60 focus:bg-white/[0.10]';
 
 function LoginPage() {
   const { login } = useAuth();
@@ -44,33 +47,35 @@ function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist px-4 py-10 font-sans">
+    <div className="chat-theme relative flex min-h-dvh items-center justify-center overflow-hidden bg-chat-canvas px-4 py-10 font-sans text-chat-text">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-signal/25 blur-[100px]"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[40rem] w-[44rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-chat-copper/50 blur-[150px]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -bottom-24 h-96 w-96 rounded-full bg-amber-signal/30 blur-[120px]"
+        className="pointer-events-none absolute -bottom-[18%] -right-[6%] h-[28rem] w-[30rem] rounded-full bg-chat-copper/30 blur-[150px]"
       />
 
       <div className="relative w-full max-w-sm animate-login-rise">
-        <div className="relative overflow-hidden rounded-3xl border border-white/70 bg-white/55 p-8 shadow-[0_30px_80px_-20px_rgba(15,35,60,0.35)] backdrop-blur-2xl sm:p-10">
+        <div className="relative overflow-hidden rounded-[28px] border border-white/[0.10] bg-white/[0.10] p-8 shadow-[0_40px_100px_-30px_rgba(0,0,0,0.85)] backdrop-blur-2xl sm:p-10">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-teal-signal/50 to-transparent"
+            className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-chat-orange/60 to-transparent"
           />
           <div className="mb-8 flex flex-col items-center text-center">
-            <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-teal-signal/30 bg-teal-signal/10">
+            <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.08]">
               <SignalMark />
             </span>
-            <h1 className="font-display text-xl font-semibold text-ink-950">DW Telecom</h1>
-            <p className="mt-1 text-sm text-ink-950/55">Painel de atendimento</p>
+            <h1 className="font-display text-[22px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
+              DW Telecom
+            </h1>
+            <p className="mt-1.5 text-[14px] text-chat-muted">Painel de atendimento</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-ink-950/70">
+              <label htmlFor="email" className="mb-1.5 block text-[13px] font-medium text-chat-muted">
                 Email
               </label>
               <input
@@ -78,12 +83,12 @@ function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-xl border border-ink-950/15 bg-white/50 px-4 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/80 focus:ring-2 focus:ring-teal-signal/25"
+                className={FIELD_CLASS}
                 required
               />
             </div>
             <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-ink-950/70">
+              <label htmlFor="password" className="mb-1.5 block text-[13px] font-medium text-chat-muted">
                 Senha
               </label>
               <input
@@ -91,7 +96,7 @@ function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border border-ink-950/15 bg-white/50 px-4 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/80 focus:ring-2 focus:ring-teal-signal/25"
+                className={FIELD_CLASS}
                 required
               />
             </div>
@@ -99,7 +104,7 @@ function LoginPage() {
             {error && (
               <p
                 role="alert"
-                className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700"
+                className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text"
               >
                 {error}
               </p>
@@ -108,12 +113,16 @@ function LoginPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.55)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-[48px] w-full rounded-[14px] bg-chat-orange text-[15px] font-medium text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Entrar
+              {submitting ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
         </div>
+
+        <p className="mt-6 text-center text-[12.5px] text-chat-faint">
+          Acesso restrito à equipe de atendimento da DW Telecom.
+        </p>
       </div>
     </div>
   );

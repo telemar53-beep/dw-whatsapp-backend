@@ -25,6 +25,8 @@ const {
   listInAutomationConversations,
   countClosedSince,
   listClosedSince,
+  countClosedConversationsByAgent,
+  listClosedConversationsByAgent,
   markBusinessHoursNoticeSent,
 } = require('./conversation.repository');
 
@@ -810,6 +812,68 @@ describe('conversation repository', () => {
     expect(page1.map((c) => c.id)).toEqual([second.id]);
     expect(page1[0].closedAt).toBeDefined();
     expect(page2.map((c) => c.id)).toEqual([first.id]);
+  });
+
+  test('countClosedConversationsByAgent counts only that agent\'s closed conversations', async () => {
+    const agent = await createAgent({ email: 'my-closed-1@dw.com', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'my-closed-2@dw.com', password: 'secret123', role: 'agent' });
+    const mine = await createConversation(contactId, channelId);
+    await claimConversation(mine.id, agent.id);
+    await closeConversation(mine.id, agent.id);
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
+    const theirs = await createConversation(otherContact.id, channelId);
+    await claimConversation(theirs.id, otherAgent.id);
+    await closeConversation(theirs.id, otherAgent.id);
+
+    expect(await countClosedConversationsByAgent(agent.id)).toBe(1);
+    expect(await countClosedConversationsByAgent(otherAgent.id)).toBe(1);
+  });
+
+  test('listClosedConversationsByAgent returns only that agent\'s closed conversations, most recently closed first, with pagination', async () => {
+    const agent = await createAgent({ email: 'my-closed-3@dw.com', password: 'secret123', role: 'agent' });
+    const otherAgent = await createAgent({ email: 'my-closed-4@dw.com', password: 'secret123', role: 'agent' });
+    const first = await createConversation(contactId, channelId);
+    await claimConversation(first.id, agent.id);
+    await closeConversation(first.id, agent.id);
+    const second = await createConversation(contactId, channelId);
+    await claimConversation(second.id, agent.id);
+    await closeConversation(second.id, agent.id);
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
+    const theirs = await createConversation(otherContact.id, channelId);
+    await claimConversation(theirs.id, otherAgent.id);
+    await closeConversation(theirs.id, otherAgent.id);
+
+    const page1 = await listClosedConversationsByAgent(agent.id, { limit: 1, offset: 0 });
+    const page2 = await listClosedConversationsByAgent(agent.id, { limit: 1, offset: 1 });
+
+    expect(page1.map((c) => c.id)).toEqual([second.id]);
+    expect(page2.map((c) => c.id)).toEqual([first.id]);
+  });
+
+  test('listClosedConversationsByAgent excludes a conversation still open for that agent', async () => {
+    const agent = await createAgent({ email: 'my-closed-5@dw.com', password: 'secret123', role: 'agent' });
+    const closed = await createConversation(contactId, channelId);
+    await claimConversation(closed.id, agent.id);
+    await closeConversation(closed.id, agent.id);
+    const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
+    const stillOpen = await createConversation(otherContact.id, channelId);
+    await claimConversation(stillOpen.id, agent.id);
+
+    const result = await listClosedConversationsByAgent(agent.id, { limit: 10, offset: 0 });
+
+    expect(result.map((c) => c.id)).toEqual([closed.id]);
+  });
+
+  test('listClosedConversationsByAgent still shows a conversation closed by an admin override', async () => {
+    const agent = await createAgent({ email: 'my-closed-6@dw.com', password: 'secret123', role: 'agent' });
+    const admin = await createAgent({ email: 'my-closed-admin@dw.com', password: 'secret123', role: 'admin' });
+    const conversation = await createConversation(contactId, channelId);
+    await claimConversation(conversation.id, agent.id);
+    await adminCloseConversation(conversation.id, admin.id, null);
+
+    const result = await listClosedConversationsByAgent(agent.id, { limit: 10, offset: 0 });
+
+    expect(result.map((c) => c.id)).toEqual([conversation.id]);
   });
 
   test('a freshly created conversation has a null businessHoursNoticeSentAt', async () => {

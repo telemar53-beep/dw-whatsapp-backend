@@ -390,6 +390,43 @@ async function listConversationsByAgent(agentId) {
   return result.rows.map(toConversationSummary);
 }
 
+async function countClosedConversationsByAgent(agentId) {
+  const result = await getPool().query(
+    `SELECT COUNT(*)::int AS count FROM conversations WHERE assigned_agent_id = $1 AND status = 'closed'`,
+    [agentId]
+  );
+  return Number(result.rows[0].count);
+}
+
+async function listClosedConversationsByAgent(agentId, { limit, offset }) {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.created_at, c.updated_at,
+            ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
+            ct.avatar_path AS contact_avatar_path,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name,
+            s.name AS sector_name,
+            lm.content AS last_message_content, lm.message_type AS last_message_type,
+            lm.status AS last_message_status, lm.direction AS last_message_direction,
+            lm.created_at AS last_message_at
+     FROM conversations c
+     JOIN contacts ct ON ct.id = c.contact_id
+     LEFT JOIN sectors s ON s.id = c.sector_id
+     LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN LATERAL (
+       SELECT content, message_type, status, direction, created_at
+       FROM messages m
+       WHERE m.conversation_id = c.id
+       ORDER BY m.created_at DESC
+       LIMIT 1
+     ) lm ON true
+     WHERE c.assigned_agent_id = $1 AND c.status = 'closed'
+     ORDER BY c.updated_at DESC
+     LIMIT $2 OFFSET $3`,
+    [agentId, limit, offset]
+  );
+  return result.rows.map((row) => ({ ...toConversationSummary(row), closedAt: row.updated_at }));
+}
+
 async function listClosedConversationsByContact(contactId) {
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.created_at, c.updated_at,
@@ -422,6 +459,8 @@ module.exports = {
   getConversationWithContact,
   listWaitingConversations,
   listConversationsByAgent,
+  countClosedConversationsByAgent,
+  listClosedConversationsByAgent,
   listClosedConversationsByContact,
   listInProgressConversations,
   listWaitingForAgentConversations,

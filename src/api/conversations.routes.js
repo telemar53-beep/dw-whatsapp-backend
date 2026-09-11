@@ -347,19 +347,18 @@ router.post('/:id/transfer', async (req, res) => {
 
 router.post('/:id/close', async (req, res) => {
   const { reasonId } = req.body || {};
-  if (!reasonId) {
-    return res.status(400).json({ error: 'reasonId is required' });
-  }
-  if (!UUID_PATTERN.test(reasonId)) {
-    return res.status(400).json({ error: 'Invalid or inactive reasonId' });
-  }
-  const reason = await findReasonById(reasonId);
-  if (!reason || !reason.active) {
-    return res.status(400).json({ error: 'Invalid or inactive reasonId' });
+  if (reasonId) {
+    if (!UUID_PATTERN.test(reasonId)) {
+      return res.status(400).json({ error: 'Invalid or inactive reasonId' });
+    }
+    const reason = await findReasonById(reasonId);
+    if (!reason || !reason.active) {
+      return res.status(400).json({ error: 'Invalid or inactive reasonId' });
+    }
   }
   const conversation = req.agent.role === 'admin'
-    ? await adminCloseConversation(req.params.id, req.agent.agentId, reasonId)
-    : await closeConversation(req.params.id, req.agent.agentId, reasonId);
+    ? await adminCloseConversation(req.params.id, req.agent.agentId, reasonId || null)
+    : await closeConversation(req.params.id, req.agent.agentId, reasonId || null);
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation is not currently assigned to you, or is closed' });
   }

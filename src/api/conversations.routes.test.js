@@ -838,13 +838,15 @@ describe('POST /api/conversations/:id/close', () => {
     expect(closeConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1', REASON_ID);
   });
 
-  test('returns 400 when reasonId is missing', async () => {
+  test('closes a conversation without a reasonId, passing null through (quick-close from the queue)', async () => {
+    closeConversation.mockResolvedValue({ id: 'conv-1', status: 'closed' });
     const res = await request(buildApp())
       .post(`/api/conversations/${CONVERSATION_ID}/close`)
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send({});
-    expect(res.status).toBe(400);
-    expect(closeConversation).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(closeConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-1', null);
+    expect(findReasonById).not.toHaveBeenCalled();
   });
 
   test('returns 400 when the reason does not exist', async () => {

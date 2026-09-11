@@ -11,7 +11,12 @@ import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
+import { closeConversation } from '../services/api';
 
+vi.mock('../services/api', async (importOriginal) => ({
+  ...(await importOriginal()),
+  closeConversation: vi.fn(),
+}));
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useQueue');
 vi.mock('../hooks/useMyConversations');
@@ -42,6 +47,7 @@ beforeEach(() => {
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted: vi.fn() });
   useUnreadMyConversations.mockReturnValue({ unreadIds: new Set(), clearUnread: vi.fn() });
+  closeConversation.mockResolvedValue({ id: 'c1', status: 'closed' });
 });
 
 function renderDashboard() {
@@ -132,6 +138,40 @@ describe('DashboardPage', () => {
     await userEvent.click(screen.getByRole('tab', { name: /automação/i }));
     expect(screen.getByText('Em Triagem')).toBeInTheDocument();
     expect(screen.queryByText('Aguardando')).not.toBeInTheDocument();
+  });
+
+  test('quick-closes a conversation from the Espera tab without asking for a reason', async () => {
+    useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }]);
+    useMyConversations.mockReturnValue([]);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+    await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+
+    expect(closeConversation).toHaveBeenCalledWith('c1', null, 'tok-123');
+    window.confirm.mockRestore();
+  });
+
+  test('quick-closes a conversation from the Automação tab without asking for a reason', async () => {
+    useQueue.mockReturnValue([{ id: 'c2', contactDisplayName: 'Em Triagem', triageState: 'pending', assignedAgentId: null }]);
+    useMyConversations.mockReturnValue([]);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('tab', { name: /automação/i }));
+    await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+
+    expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
+    window.confirm.mockRestore();
+  });
+
+  test('does not show a quick-close button in the Andamento tab', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([{ id: 'c3', contactDisplayName: 'Minha' }]);
+    renderDashboard();
+
+    expect(screen.queryByRole('button', { name: /finalizar/i })).not.toBeInTheDocument();
   });
 
   test('shows a badge with the count on each tab', () => {

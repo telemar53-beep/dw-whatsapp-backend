@@ -4,7 +4,12 @@ import { useAttendanceDashboard } from '../hooks/useAttendanceDashboard';
 import { useChannels } from '../hooks/useChannels';
 import { useAgents } from '../hooks/useAgents';
 import { useSectors } from '../hooks/useSectors';
-import { getDashboardClosedToday, getDashboardConversationByProtocol, getDashboardConversationsByPhone } from '../services/api';
+import {
+  getDashboardClosedToday,
+  getDashboardConversationByProtocol,
+  getDashboardConversationsByPhone,
+  closeConversation,
+} from '../services/api';
 import ConversationListItem from '../components/ConversationListItem';
 import NavRail from '../components/NavRail';
 import ProfileModal from '../components/ProfileModal';
@@ -62,7 +67,7 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
   );
 }
 
-function DashboardColumn({ title, count, conversations, onSelect, emptyMessage, footer }) {
+function DashboardColumn({ title, count, conversations, onSelect, onQuickClose, emptyMessage, footer }) {
   return (
     <div className="flex min-w-[300px] flex-1 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl">
       <div className="flex items-center justify-between px-5 py-4">
@@ -77,7 +82,13 @@ function DashboardColumn({ title, count, conversations, onSelect, emptyMessage, 
         ) : (
           <ul>
             {conversations.map((conversation) => (
-              <ConversationListItem key={conversation.id} conversation={conversation} onSelect={onSelect} selected={false} />
+              <ConversationListItem
+                key={conversation.id}
+                conversation={conversation}
+                onSelect={onSelect}
+                onQuickClose={onQuickClose}
+                selected={false}
+              />
             ))}
           </ul>
         )}
@@ -172,6 +183,10 @@ function AttendanceDashboardPage() {
 
   function openConversation(conversationId) {
     setSelectedConversationId(conversationId);
+  }
+
+  function quickCloseConversation(conversationId) {
+    closeConversation(conversationId, null, token).catch(() => {});
   }
 
   async function handleProtocolSearch(event) {
@@ -376,6 +391,7 @@ function AttendanceDashboardPage() {
             count={filteredWaiting.length}
             conversations={displayWaiting}
             onSelect={openConversation}
+            onQuickClose={quickCloseConversation}
             emptyMessage="Nenhuma conversa aguardando."
           />
           <DashboardColumn
@@ -383,6 +399,7 @@ function AttendanceDashboardPage() {
             count={filteredInAutomation.length}
             conversations={displayInAutomation}
             onSelect={openConversation}
+            onQuickClose={quickCloseConversation}
             emptyMessage="Nenhuma conversa em triagem automática."
           />
         </div>

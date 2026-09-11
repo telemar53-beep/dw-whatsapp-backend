@@ -1,5 +1,6 @@
 import ContactAvatar from './ContactAvatar';
 import MessageStatusTicks from './MessageStatusTicks';
+import { IconCheckCircle } from './icons/WaIcons';
 
 const MEDIA_TYPE_LABELS = {
   image: '📷 Foto',
@@ -21,16 +22,37 @@ function formatMessageTime(lastMessageAt) {
   return new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function ConversationListItem({ conversation, onSelect, unread, selected }) {
+function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected }) {
   const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
   const displayLabel = conversation.contactCityName ? `${nameLabel} - ${conversation.contactCityName}` : nameLabel;
   const previewText = getPreviewText(conversation);
   const messageTime = formatMessageTime(conversation.lastMessageAt);
 
+  function handleSelect() {
+    onSelect(conversation.id);
+  }
+
+  function handleKeyDown(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleSelect();
+    }
+  }
+
+  function handleQuickClose(event) {
+    event.stopPropagation();
+    if (window.confirm('Encerrar esse atendimento sem motivo?')) {
+      onQuickClose(conversation.id);
+    }
+  }
+
   return (
     <li className="px-0.5">
-      <button
-        onClick={() => onSelect(conversation.id)}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleSelect}
+        onKeyDown={handleKeyDown}
         className={`flex w-full items-center gap-4 rounded-[18px] p-4 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${
           selected ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]'
         }`}
@@ -79,7 +101,18 @@ function ConversationListItem({ conversation, onSelect, unread, selected }) {
             </span>
           </span>
         </span>
-      </button>
+        {onQuickClose && (
+          <button
+            type="button"
+            onClick={handleQuickClose}
+            aria-label="Finalizar sem motivo"
+            title="Finalizar sem motivo"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-chat-icon transition hover:bg-white/[0.08] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+          >
+            <IconCheckCircle size={20} />
+          </button>
+        )}
+      </div>
       {/* A conversa aberta é um cartão inteiro; as demais ficam separadas por um fio. */}
       {!selected && <span aria-hidden="true" className="mx-4 block h-px bg-white/[0.07]" />}
     </li>

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
+import { closeConversation } from '../services/api';
 import QueueList from '../components/QueueList';
 import MyConversationsList from '../components/MyConversationsList';
 import ConversationView from '../components/ConversationView';
@@ -36,6 +38,7 @@ function matchesSearch(conversation, term) {
 function DashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { token } = useAuth();
   const queue = useQueue();
   const myConversations = useMyConversations();
   const [activeTab, setActiveTab] = useState('inProgress');
@@ -46,6 +49,10 @@ function DashboardPage() {
   function selectConversation(conversationId) {
     clearUnread(conversationId);
     setSelectedId(conversationId);
+  }
+
+  function quickCloseConversation(conversationId) {
+    closeConversation(conversationId, null, token).catch(() => {});
   }
 
   const [transferringId, setTransferringId] = useState(null);
@@ -184,6 +191,7 @@ function DashboardPage() {
               <QueueList
                 conversations={visibleWaiting}
                 onSelect={setSelectedId}
+                onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
                 emptyMessage="Nenhuma conversa aguardando."
               />
@@ -192,6 +200,7 @@ function DashboardPage() {
               <QueueList
                 conversations={visibleAutomation}
                 onSelect={setSelectedId}
+                onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
                 emptyMessage="Nenhuma conversa em triagem automática."
               />

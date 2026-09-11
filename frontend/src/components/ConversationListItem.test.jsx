@@ -340,4 +340,85 @@ describe('ConversationListItem', () => {
     expect(screen.queryByTitle('Entregue')).not.toBeInTheDocument();
     expect(screen.queryByTitle('Lido')).not.toBeInTheDocument();
   });
+
+  test('shows no quick-close button when onQuickClose is not given', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.queryByRole('button', { name: /finalizar/i })).not.toBeInTheDocument();
+  });
+
+  test('shows a quick-close button when onQuickClose is given', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={vi.fn()}
+          onQuickClose={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByRole('button', { name: /finalizar/i })).toBeInTheDocument();
+  });
+
+  test('clicking the quick-close button asks for confirmation and calls onQuickClose without opening the conversation', async () => {
+    const onQuickClose = vi.fn();
+    const onSelect = vi.fn();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={onSelect}
+          onQuickClose={onQuickClose}
+        />
+      </ul>
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+
+    expect(window.confirm).toHaveBeenCalledWith('Encerrar esse atendimento sem motivo?');
+    expect(onQuickClose).toHaveBeenCalledWith('c1');
+    expect(onSelect).not.toHaveBeenCalled();
+    window.confirm.mockRestore();
+  });
+
+  test('clicking the quick-close button does not call onQuickClose when the confirmation is declined', async () => {
+    const onQuickClose = vi.fn();
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={vi.fn()}
+          onQuickClose={onQuickClose}
+        />
+      </ul>
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+
+    expect(onQuickClose).not.toHaveBeenCalled();
+    window.confirm.mockRestore();
+  });
+
+  test('clicking the row still calls onSelect as before', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={onSelect}
+          onQuickClose={vi.fn()}
+        />
+      </ul>
+    );
+    await userEvent.click(screen.getByText('Carlos'));
+    expect(onSelect).toHaveBeenCalledWith('c1');
+  });
 });

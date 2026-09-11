@@ -8,7 +8,12 @@ import { useChannels } from '../hooks/useChannels';
 import { useAgents } from '../hooks/useAgents';
 import { useSectors } from '../hooks/useSectors';
 import { useAuth } from '../contexts/AuthContext';
-import { getDashboardClosedToday, getDashboardConversationByProtocol, getDashboardConversationsByPhone } from '../services/api';
+import {
+  getDashboardClosedToday,
+  getDashboardConversationByProtocol,
+  getDashboardConversationsByPhone,
+  closeConversation,
+} from '../services/api';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 
@@ -42,6 +47,7 @@ beforeEach(() => {
   useAgents.mockReturnValue([{ id: 'agent-1', name: 'Ana', email: 'ana@dw.com' }]);
   useSectors.mockReturnValue({ sectors: [{ id: 'sector-1', name: 'Financeiro' }], loading: false, refresh: vi.fn() });
   getDashboardClosedToday.mockResolvedValue({ items: [], hasMore: false });
+  closeConversation.mockResolvedValue({ id: 'c2', status: 'closed' });
   useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useAttendanceDashboard.mockReturnValue({
@@ -71,6 +77,38 @@ describe('AttendanceDashboardPage', () => {
     renderPage();
     expect(await screen.findByText('Carlos')).toBeInTheDocument();
     expect(screen.getByTestId('tab-count-all')).toHaveTextContent('3');
+  });
+
+  test('quick-closes a conversation from the "Em espera" column without asking for a reason', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderPage();
+    expect(await screen.findByText('Maria')).toBeInTheDocument();
+
+    const waitingColumn = screen.getByText('Em espera').closest('div').parentElement;
+    await userEvent.click(within(waitingColumn).getByRole('button', { name: /finalizar/i }));
+
+    expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
+    window.confirm.mockRestore();
+  });
+
+  test('quick-closes a conversation from the "Na automação" column without asking for a reason', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderPage();
+    expect(await screen.findByText('Joao')).toBeInTheDocument();
+
+    const automationColumn = screen.getByText('Na automação').closest('div').parentElement;
+    await userEvent.click(within(automationColumn).getByRole('button', { name: /finalizar/i }));
+
+    expect(closeConversation).toHaveBeenCalledWith('c3', null, 'tok-123');
+    window.confirm.mockRestore();
+  });
+
+  test('does not show a quick-close button in the "Em andamento" column', async () => {
+    renderPage();
+    expect(await screen.findByText('Carlos')).toBeInTheDocument();
+
+    const inProgressColumn = screen.getByText('Em andamento').closest('div').parentElement;
+    expect(within(inProgressColumn).queryByRole('button', { name: /finalizar/i })).not.toBeInTheDocument();
   });
 
   test('clicking the "Encerrados hoje" tab hides the 3 live columns and shows the closed list instead', async () => {

@@ -4,7 +4,7 @@ import { useAttendanceDashboard } from '../hooks/useAttendanceDashboard';
 import { useChannels } from '../hooks/useChannels';
 import { useAgents } from '../hooks/useAgents';
 import { useSectors } from '../hooks/useSectors';
-import { getDashboardClosedToday } from '../services/api';
+import { getDashboardClosedToday, getDashboardConversationByProtocol, getDashboardConversationsByPhone } from '../services/api';
 import ConversationListItem from '../components/ConversationListItem';
 import NavRail from '../components/NavRail';
 import ProfileModal from '../components/ProfileModal';
@@ -114,6 +114,14 @@ function AttendanceDashboardPage() {
   const [closedHasMore, setClosedHasMore] = useState(false);
   const [loadingClosed, setLoadingClosed] = useState(false);
 
+  const [protocolQuery, setProtocolQuery] = useState('');
+  const [protocolError, setProtocolError] = useState(null);
+  const [foundConversation, setFoundConversation] = useState(null);
+
+  const [phoneQuery, setPhoneQuery] = useState('');
+  const [phoneError, setPhoneError] = useState(null);
+  const [phoneSearchResult, setPhoneSearchResult] = useState(null);
+
   useEffect(() => {
     if (!token) return;
     getDashboardClosedToday({ offset: 0, limit: CLOSED_PAGE_SIZE }, token)
@@ -166,8 +174,46 @@ function AttendanceDashboardPage() {
     setSelectedConversationId(conversationId);
   }
 
+  async function handleProtocolSearch(event) {
+    event.preventDefault();
+    setProtocolError(null);
+    const query = protocolQuery.trim();
+    if (!query) return;
+    try {
+      const conversation = await getDashboardConversationByProtocol(query, token);
+      setFoundConversation(conversation);
+      setSelectedConversationId(conversation.id);
+    } catch (err) {
+      setFoundConversation(null);
+      setProtocolError((err.body && err.body.error) || 'Nenhum atendimento encontrado com esse protocolo');
+    }
+  }
+
+  async function handlePhoneSearch(event) {
+    event.preventDefault();
+    setPhoneError(null);
+    const query = phoneQuery.trim();
+    if (!query) return;
+    try {
+      const result = await getDashboardConversationsByPhone(query, token);
+      setPhoneSearchResult(result);
+    } catch (err) {
+      setPhoneSearchResult(null);
+      setPhoneError((err.body && err.body.error) || 'Nenhum cliente encontrado com esse telefone');
+    }
+  }
+
+  function clearPhoneSearch() {
+    setPhoneSearchResult(null);
+    setPhoneQuery('');
+    setPhoneError(null);
+  }
+
   const selectedConversation =
-    [...inProgress, ...waiting, ...inAutomation, ...closedItems].find((c) => c.id === selectedConversationId) || null;
+    [...inProgress, ...waiting, ...inAutomation, ...closedItems].find((c) => c.id === selectedConversationId) ||
+    (foundConversation && foundConversation.id === selectedConversationId ? foundConversation : null) ||
+    (phoneSearchResult && phoneSearchResult.conversations.find((c) => c.id === selectedConversationId)) ||
+    null;
 
   function toggleFilterValue(setFilter, value) {
     setFilter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
@@ -265,9 +311,59 @@ function AttendanceDashboardPage() {
           open={openFilterMenu === 'sectors'}
           onOpenChange={(next) => setOpenFilterMenu(next ? 'sectors' : null)}
         />
+        <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10" />
+        <form onSubmit={handleProtocolSearch}>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={protocolQuery}
+            onChange={(e) => setProtocolQuery(e.target.value)}
+            placeholder="Buscar por protocolo"
+            aria-label="Buscar por protocolo"
+            className="h-[38px] w-[170px] rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-text outline-none placeholder:text-chat-muted focus:border-white/25"
+          />
+        </form>
+        <form onSubmit={handlePhoneSearch}>
+          <input
+            type="text"
+            value={phoneQuery}
+            onChange={(e) => setPhoneQuery(e.target.value)}
+            placeholder="Buscar por telefone do cliente"
+            aria-label="Buscar por telefone do cliente"
+            className="h-[38px] w-[220px] rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-text outline-none placeholder:text-chat-muted focus:border-white/25"
+          />
+        </form>
       </div>
+      {(protocolError || phoneError) && (
+        <p className="px-2 pb-2 text-[13px] text-chat-faint">{protocolError || phoneError}</p>
+      )}
 
-      {activeTab === 'all' ? (
+      {phoneSearchResult ? (
+        <div role="tabpanel" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+          <div className="mb-3 flex items-center justify-between px-1">
+            <p className="text-[14px] text-chat-muted">
+              {phoneSearchResult.conversations.length} atendimento(s) de{' '}
+              {phoneSearchResult.contact.displayName || phoneSearchResult.contact.phoneNumber}
+            </p>
+            <button
+              type="button"
+              onClick={clearPhoneSearch}
+              className="text-[13px] font-medium text-chat-orange hover:underline"
+            >
+              Limpar busca
+            </button>
+          </div>
+          {phoneSearchResult.conversations.length === 0 ? (
+            <p className="px-4 py-10 text-center text-[13.5px] text-chat-faint">Esse cliente ainda não teve nenhum atendimento.</p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08] [&>li]:backdrop-blur-2xl">
+              {phoneSearchResult.conversations.map(withAgentName).map((conversation) => (
+                <ConversationListItem key={conversation.id} conversation={conversation} onSelect={openConversation} selected={false} />
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : activeTab === 'all' ? (
         <div role="tabpanel" className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-2 pb-2">
           <DashboardColumn
             title="Em andamento"

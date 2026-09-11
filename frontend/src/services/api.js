@@ -169,6 +169,14 @@ export function getDashboardClosedToday({ offset = 0, limit = 20 } = {}, token) 
   return apiFetch(`/api/admin/dashboard/conversations/closed-today?offset=${offset}&limit=${limit}`, { token });
 }
 
+export function getDashboardConversationByProtocol(protocolNumber, token) {
+  return apiFetch(`/api/admin/dashboard/conversations/by-protocol/${encodeURIComponent(protocolNumber)}`, { token });
+}
+
+export function getDashboardConversationsByPhone(phone, token) {
+  return apiFetch(`/api/admin/dashboard/conversations/by-phone?phone=${encodeURIComponent(phone)}`, { token });
+}
+
 export function startConversation({ channelId, phoneNumber, content, templateId, templateVariables }, token) {
   return apiFetch('/api/conversations/start', {
     method: 'POST',

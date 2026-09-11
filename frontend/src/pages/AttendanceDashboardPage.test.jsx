@@ -8,7 +8,7 @@ import { useChannels } from '../hooks/useChannels';
 import { useAgents } from '../hooks/useAgents';
 import { useSectors } from '../hooks/useSectors';
 import { useAuth } from '../contexts/AuthContext';
-import { getDashboardClosedToday } from '../services/api';
+import { getDashboardClosedToday, getDashboardConversationByProtocol, getDashboardConversationsByPhone } from '../services/api';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 
@@ -246,5 +246,86 @@ describe('AttendanceDashboardPage', () => {
     await userEvent.click(screen.getByLabelText('WhatsApp Vendas'));
 
     await waitFor(() => expect(screen.getByTestId('tab-count-closed')).toHaveTextContent('1'));
+  });
+
+  test('searching by protocol number opens the matching conversation', async () => {
+    getDashboardConversationByProtocol.mockResolvedValue({
+      id: 'conv-found',
+      status: 'closed',
+      protocolNumber: 1042,
+      contactDisplayName: 'Cliente Antigo',
+      assignedAgentId: 'agent-1',
+    });
+    renderPage();
+
+    await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '1042{Enter}');
+
+    expect(getDashboardConversationByProtocol).toHaveBeenCalledWith('1042', 'tok-123');
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  test('shows an error when the protocol number is not found', async () => {
+    getDashboardConversationByProtocol.mockRejectedValue({ body: { error: 'No conversation found with that protocol number' } });
+    renderPage();
+
+    await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '999999');
+    await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '{Enter}');
+
+    expect(await screen.findByText('No conversation found with that protocol number')).toBeInTheDocument();
+  });
+
+  test('searching by phone number shows the matching contact\'s conversations', async () => {
+    getDashboardConversationsByPhone.mockResolvedValue({
+      contact: { id: 'contact-1', phoneNumber: '+5511999990000', displayName: 'Maria Cliente' },
+      conversations: [
+        { id: 'conv-old-1', status: 'closed', contactDisplayName: 'Maria Cliente', channelId: 'chan-1' },
+        { id: 'conv-old-2', status: 'waiting', contactDisplayName: 'Maria Cliente', channelId: 'chan-1' },
+      ],
+    });
+    renderPage();
+
+    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '+5511999990000{Enter}');
+
+    expect(getDashboardConversationsByPhone).toHaveBeenCalledWith('+5511999990000', 'tok-123');
+    expect(await screen.findByText(/2 atendimento/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Maria Cliente')).toHaveLength(2);
+  });
+
+  test('clicking a phone-search result opens it in the conversation modal', async () => {
+    getDashboardConversationsByPhone.mockResolvedValue({
+      contact: { id: 'contact-1', phoneNumber: '+5511999990000', displayName: 'Maria Cliente' },
+      conversations: [{ id: 'conv-old-1', status: 'closed', contactDisplayName: 'Maria Cliente', channelId: 'chan-1' }],
+    });
+    renderPage();
+
+    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '+5511999990000{Enter}');
+    await userEvent.click(await screen.findByText('Maria Cliente'));
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  test('shows an error when the phone number matches no contact', async () => {
+    getDashboardConversationsByPhone.mockRejectedValue({ body: { error: 'No contact found with that phone number' } });
+    renderPage();
+
+    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '+5511900000000{Enter}');
+
+    expect(await screen.findByText('No contact found with that phone number')).toBeInTheDocument();
+  });
+
+  test('clearing the phone search returns to the normal tabs', async () => {
+    getDashboardConversationsByPhone.mockResolvedValue({
+      contact: { id: 'contact-1', phoneNumber: '+5511999990000', displayName: 'Maria Cliente' },
+      conversations: [{ id: 'conv-old-1', status: 'closed', contactDisplayName: 'Maria Cliente', channelId: 'chan-1' }],
+    });
+    renderPage();
+
+    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '+5511999990000{Enter}');
+    await screen.findByText(/1 atendimento/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /limpar busca/i }));
+
+    expect(screen.queryByText(/atendimento\(s\) de/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Em andamento')).toBeInTheDocument();
   });
 });

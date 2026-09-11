@@ -27,4 +27,15 @@ describe('ConversationInfoPanel', () => {
     render(<ConversationInfoPanel conversation={CONVERSATION} />);
     expect(screen.queryByText(/nota interna/i)).not.toBeInTheDocument();
   });
+
+  test('shows the protocol number when the conversation has one', () => {
+    render(<ConversationInfoPanel conversation={{ ...CONVERSATION, protocolNumber: 1042 }} />);
+    expect(screen.getByText('Protocolo')).toBeInTheDocument();
+    expect(screen.getByText('1042')).toBeInTheDocument();
+  });
+
+  test('does not show a protocol row before one has been claimed', () => {
+    render(<ConversationInfoPanel conversation={{ ...CONVERSATION, protocolNumber: null }} />);
+    expect(screen.queryByText('Protocolo')).not.toBeInTheDocument();
+  });
 });

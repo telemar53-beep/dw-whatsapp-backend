@@ -66,6 +66,7 @@ function ConversationInfoPanel({ conversation }) {
         <InfoRow label="Cidade" value={conversation.contactCityName || 'Não informada'} />
         <InfoRow label="Setor" value={conversation.sectorName || 'Não definido'} />
         <InfoRow label="Atendente" value={conversation.assignedAgentName || 'Não atribuído'} />
+        {conversation.protocolNumber && <InfoRow label="Protocolo" value={conversation.protocolNumber} />}
         {closedAtLabel && <InfoRow label="Encerrado em" value={closedAtLabel} />}
       </div>
     </aside>

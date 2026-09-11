@@ -1767,7 +1767,7 @@ function CampaignsPage() {
             </button>
           </header>
 
-          <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+          <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
             {loading ? (
               <p className="text-[14px] text-chat-muted">Carregando...</p>
             ) : campaigns.length === 0 ? (
@@ -2012,7 +2012,7 @@ function CampaignDetailPage() {
             </p>
           </header>
 
-          <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+          <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
             <ul className="space-y-1.5">
               {campaign.recipients.map((recipient) => (
                 <li

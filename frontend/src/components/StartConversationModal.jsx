@@ -96,7 +96,7 @@ function StartConversationModal({ onClose, onCreated }) {
             {loading ? (
               <p className="text-[14px] text-wa-muted">Carregando canais...</p>
             ) : loadError ? (
-              <p className="text-[14px] text-[#b3261e]">Não foi possível carregar os canais. Feche e tente novamente.</p>
+              <p className="text-[14px] text-wa-error-text">Não foi possível carregar os canais. Feche e tente novamente.</p>
             ) : channels.length === 0 ? (
               <p className="text-[14px] text-wa-muted">Nenhum canal conectado no momento.</p>
             ) : (
@@ -128,7 +128,7 @@ function StartConversationModal({ onClose, onCreated }) {
           </div>
           {isOfficialChannel ? (
             <>
-              <p className="rounded-[6px] bg-[#ffeecd] px-3 py-2 text-[13.5px] leading-[19px] text-[#54656f]">
+              <p className="rounded-[10px] bg-wa-warn-bg px-3 py-2 text-[13.5px] leading-[19px] text-wa-warn-text">
                 Este canal requer o uso de template para iniciar o atendimento!
               </p>
               <div>

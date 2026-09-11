@@ -39,6 +39,19 @@
   --color-wa-quote: #0d9488;
   --color-wa-chip: #dcefe9;
   --color-wa-chip-text: #0f766e;
+  --color-wa-avatar: #dfe5e7;
+  --color-wa-avatar-text: #8696a0;
+  --color-wa-error-bg: #fdecea;
+  --color-wa-error-text: #b3261e;
+  --color-wa-warn-bg: #ffeecd;
+  --color-wa-warn-text: #8a5a12;
+  --color-wa-surface: rgba(255, 255, 255, 0.6);
+  --color-wa-surface-soft: rgba(255, 255, 255, 0.4);
+  --color-wa-surface-line: rgba(255, 255, 255, 0.55);
+  --color-wa-field: #ffffff;
+  --color-sgp-blue: #1a73e8;
+  --color-sgp-red: #d93025;
+  --color-sgp-gray: #57626d;
 
   /* Vidro fumê da página de chat (Atendimento) — escopo isolado dos tokens wa-*,
      que continuam servindo os modais claros. Ver output/design-chat/LEIA-ME-DESIGN.md */
@@ -54,6 +67,69 @@
   --color-chat-orange-ink: #2a1a0e;
   --color-chat-online: #33d9a6;
   --color-chat-cream: #efe7ce;
+}
+
+/* ---------- Vidro fumê nos pop-ups da página de atendimento ----------
+   Os modais e o painel do SGP são escritos uma vez só, em tokens `wa-*`.
+   Dentro de `.chat-theme` (a raiz do DashboardPage) os tokens apontam para a
+   paleta escura, então o mesmo componente sai claro em Relatório/Administração
+   e escuro sobre o chat — sem prop de tema em cada modal. */
+.chat-theme {
+  /* Deixa selects, scrollbars e campos nativos seguirem o tema escuro. */
+  color-scheme: dark;
+
+  --wa-dialog-radius: 22px;
+  --wa-dialog-border: rgba(255, 255, 255, 0.1);
+  --wa-dialog-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.75);
+  --wa-dialog-blur: 28px;
+  --wa-overlay: rgba(8, 7, 6, 0.62);
+  --wa-overlay-blur: 6px;
+
+  --color-wa-text: #f4f1ed;
+  --color-wa-muted: #b6b0ab;
+  --color-wa-meta: #8b8682;
+  --color-wa-icon: #c7c2bd;
+  --color-wa-border: rgba(255, 255, 255, 0.1);
+  --color-wa-border-strong: rgba(255, 255, 255, 0.2);
+  --color-wa-panel: rgba(36, 32, 30, 0.92);
+  --color-wa-panel-header: rgba(255, 255, 255, 0.07);
+  --color-wa-page: #171513;
+  --color-wa-chat: #171513;
+  --color-wa-in: rgba(255, 255, 255, 0.14);
+  --color-wa-out: rgba(255, 255, 255, 0.12);
+  --color-wa-out-deep: rgba(255, 255, 255, 0.12);
+  --color-wa-hover: rgba(255, 255, 255, 0.07);
+  --color-wa-active: rgba(255, 255, 255, 0.12);
+  --color-wa-green: #f4531f;
+  --color-wa-green-dark: #d8441a;
+  --color-wa-badge: #33d9a6;
+  --color-wa-tick: #33d9a6;
+  --color-wa-quote: #f4531f;
+  --color-wa-chip: rgba(51, 217, 166, 0.16);
+  --color-wa-chip-text: #33d9a6;
+  --color-wa-avatar: rgba(255, 255, 255, 0.13);
+  --color-wa-avatar-text: #c7c2bd;
+  --color-wa-error-bg: rgba(234, 67, 53, 0.18);
+  --color-wa-error-text: #ff9d93;
+  --color-wa-warn-bg: rgba(242, 169, 60, 0.16);
+  --color-wa-warn-text: #f0b65f;
+  --color-wa-surface: rgba(255, 255, 255, 0.06);
+  --color-wa-surface-soft: rgba(255, 255, 255, 0.04);
+  --color-wa-surface-line: rgba(255, 255, 255, 0.08);
+  --color-wa-field: rgba(255, 255, 255, 0.06);
+  --color-sgp-blue: #7ab0ff;
+  --color-sgp-red: #ff8d82;
+  --color-sgp-gray: #c7c2bd;
+}
+
+/* Valores claros equivalentes, para o mesmo componente fora do chat. */
+:root {
+  --wa-dialog-radius: 6px;
+  --wa-dialog-border: transparent;
+  --wa-dialog-shadow: 0 17px 50px rgba(11, 20, 26, 0.19), 0 12px 15px rgba(11, 20, 26, 0.24);
+  --wa-dialog-blur: 0px;
+  --wa-overlay: rgba(11, 20, 26, 0.4);
+  --wa-overlay-blur: 0px;
 }
 
 /* ---------- Fundo do chat ---------- */

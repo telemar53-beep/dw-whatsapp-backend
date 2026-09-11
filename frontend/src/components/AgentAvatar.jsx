@@ -17,7 +17,7 @@ function AgentAvatar({ agentId, avatarPath, name, size = 40 }) {
         src={agentAvatarUrl(agentId, token)}
         alt={name || 'Atendente'}
         style={boxStyle}
-        className="shrink-0 rounded-full bg-[#dfe5e7] object-cover"
+        className="shrink-0 rounded-full bg-wa-avatar object-cover"
       />
     );
   }
@@ -26,7 +26,7 @@ function AgentAvatar({ agentId, avatarPath, name, size = 40 }) {
     <span
       aria-hidden="true"
       style={{ ...boxStyle, fontSize: Math.round(size * 0.4) }}
-      className="flex shrink-0 select-none items-center justify-center rounded-full bg-[#dfe5e7] font-medium text-[#8696a0]"
+      className="flex shrink-0 select-none items-center justify-center rounded-full bg-wa-avatar font-medium text-wa-avatar-text"
     >
       {initialFor(name)}
     </span>

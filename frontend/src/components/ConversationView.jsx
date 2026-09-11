@@ -182,9 +182,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           {isUnassigned && (
             <button
               onClick={handleClaim}
-              className="flex items-center gap-1.5 rounded-full bg-chat-cream px-3.5 py-1.5 text-[13px] font-medium text-chat-orange-ink shadow-sm transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+              className="flex items-center gap-1.5 rounded-full bg-chat-orange px-4 py-2.5 text-[14px] font-medium text-white transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
             >
-              <IconClaim size={17} />
+              <IconClaim size={18} />
               Assumir
             </button>
           )}

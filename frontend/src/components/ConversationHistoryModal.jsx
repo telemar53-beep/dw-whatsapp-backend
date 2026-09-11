@@ -43,19 +43,19 @@ function ConversationHistoryModal({ contactId, onClose }) {
               <span className="block truncate text-[13px] leading-[17px] text-wa-muted">{selected.channelName}</span>
             </span>
           </div>
-          <div className="wa-wallpaper wa-scroll min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-3">
+          <div className="wa-wallpaper chat-scroll min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-3">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`wa-bubble max-w-[80%] rounded-[7.5px] px-[9px] pb-[7px] pt-[6px] text-[14.2px] leading-[19px] text-wa-text ${
+                  className={`max-w-[80%] rounded-[14px] border border-wa-border px-3 pb-2 pt-[7px] text-[14.2px] leading-[19px] text-wa-text ${
                     message.direction === 'outbound' ? 'bg-wa-out' : 'bg-wa-in'
                   }`}
                 >
                   {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
-                  <MessageAttachment message={message} />
+                  <MessageAttachment message={message} dark />
                 </div>
               </div>
             ))}
@@ -79,7 +79,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
                     >
                       <span
                         aria-hidden="true"
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#dfe5e7] text-[#8696a0]"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-wa-avatar text-wa-avatar-text"
                       >
                         <IconHistory size={19} />
                       </span>

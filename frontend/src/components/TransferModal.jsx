@@ -27,7 +27,7 @@ function TransferModal({ conversationId, onClose }) {
                 >
                   <span
                     aria-hidden="true"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#dfe5e7] text-[13px] font-medium text-[#8696a0]"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-wa-avatar text-[13px] font-medium text-wa-avatar-text"
                   >
                     {(a.name || a.email || '?').trim().charAt(0).toUpperCase()}
                   </span>

@@ -89,7 +89,7 @@ function DashboardPage() {
   }, []);
 
   return (
-    <div className="relative flex h-dvh flex-col overflow-hidden bg-chat-canvas font-sans text-chat-text">
+    <div className="chat-theme relative flex h-dvh flex-col overflow-hidden bg-chat-canvas font-sans text-chat-text">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute left-[44%] top-[2%] h-[38rem] w-[40rem] rounded-full bg-chat-copper/55 blur-[150px]"

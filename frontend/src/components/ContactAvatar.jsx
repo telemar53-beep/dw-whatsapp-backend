@@ -15,7 +15,7 @@ function initialFor(displayName, phoneNumber) {
 function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber, size = 40, dark = false }) {
   const { token } = useAuth();
   const boxStyle = { width: size, height: size };
-  const discClass = dark ? 'bg-white/[0.13]' : 'bg-[#dfe5e7]';
+  const discClass = dark ? 'bg-white/[0.13]' : 'bg-wa-avatar';
 
   if (avatarPath) {
     return (
@@ -33,7 +33,7 @@ function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber, size =
       aria-hidden="true"
       style={{ ...boxStyle, fontSize: Math.round(size * 0.38) }}
       className={`flex shrink-0 select-none items-center justify-center rounded-full font-medium ${discClass} ${
-        dark ? 'text-chat-muted' : 'text-[#8696a0]'
+        dark ? 'text-chat-muted' : 'text-wa-avatar-text'
       }`}
     >
       {initialFor(displayName, phoneNumber)}

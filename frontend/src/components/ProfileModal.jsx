@@ -142,7 +142,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
                 type="button"
                 onClick={handleRemoveAvatar}
                 disabled={avatarBusy}
-                className="px-2 text-[13px] text-[#b3261e] hover:underline"
+                className="px-2 text-[13px] text-wa-error-text hover:underline"
               >
                 Remover foto
               </button>

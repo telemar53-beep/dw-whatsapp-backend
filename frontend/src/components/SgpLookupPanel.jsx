@@ -29,8 +29,8 @@ function formatCurrency(value) {
 
 function Card({ icon, title, children }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-white/70 bg-white/60 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center gap-2 border-b border-white/50 px-3.5 py-2.5">
+    <section className="overflow-hidden rounded-2xl border border-wa-surface-line bg-wa-surface shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+      <div className="flex items-center gap-2 border-b border-wa-surface-line px-3.5 py-2.5">
         <span className="text-wa-green">{icon}</span>
         <span className="text-[14.5px] font-medium text-wa-text">{title}</span>
       </div>
@@ -62,7 +62,7 @@ function StatusPill({ status }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[12px] font-medium ${
-        active ? 'bg-teal-signal/10 text-teal-signal' : 'bg-wa-active text-wa-icon'
+        active ? 'bg-wa-chip text-wa-chip-text' : 'bg-wa-active text-wa-icon'
       }`}
     >
       <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-wa-badge' : 'bg-wa-border-strong'}`} />
@@ -78,11 +78,14 @@ function ActionTile({ label, color, icon, onClick, busy, done, pressed }) {
       onClick={onClick}
       disabled={busy}
       aria-pressed={pressed}
-      className={`flex flex-col items-center justify-start gap-1.5 rounded-[10px] border bg-white/70 px-1 py-2.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green disabled:opacity-60 ${
-        pressed || done ? 'border-teal-signal bg-teal-signal/10' : 'border-wa-border hover:border-wa-green/50 hover:bg-wa-hover'
+      className={`flex flex-col items-center justify-start gap-1.5 rounded-[10px] border bg-wa-surface px-1 py-2.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green disabled:opacity-60 ${
+        pressed || done ? 'border-wa-chip-text bg-wa-chip' : 'border-wa-border hover:border-wa-green/50 hover:bg-wa-hover'
       }`}
     >
-      <span className="flex h-7 items-center justify-center" style={{ color: done ? '#0d9488' : color }}>
+      <span
+        className="flex h-7 items-center justify-center"
+        style={{ color: done ? 'var(--color-wa-chip-text)' : color }}
+      >
         {busy ? <IconSpinner size={22} /> : done ? <IconCheck size={24} /> : icon}
       </span>
       <span className="text-center text-[11.5px] font-medium leading-[14px] text-wa-text">{label}</span>
@@ -94,12 +97,12 @@ function InvoiceTable({ duplicate }) {
   const cells = [
     { label: 'Vencimento', value: formatDueDate(duplicate.dueDate) },
     { label: 'Valor', value: formatCurrency(duplicate.value) },
-    { label: 'Status', value: <span className="rounded-full bg-amber-signal/15 px-2 py-[2px] text-[12px] font-medium text-amber-signal-dark">Em aberto</span> },
+    { label: 'Status', value: <span className="rounded-full bg-wa-warn-bg px-2 py-[2px] text-[12px] font-medium text-wa-warn-text">Em aberto</span> },
   ];
 
   return (
     <div className="mt-2 overflow-hidden rounded-[8px] border border-wa-border">
-      <div className="grid grid-cols-3 divide-x divide-wa-border bg-white/40">
+      <div className="grid grid-cols-3 divide-x divide-wa-border bg-wa-surface-soft">
         {cells.map((cell) => (
           <span key={cell.label} className="px-2 py-1.5 text-center text-[11.5px] text-wa-muted">
             {cell.label}
@@ -162,7 +165,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
         <button
           type="button"
           onClick={onGenerate}
-          className="w-full rounded-[8px] bg-wa-green px-3 py-2 text-[14px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
+          className="w-full rounded-[12px] bg-wa-green px-3 py-2.5 text-[14px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
         >
           Consultar fatura em aberto
         </button>
@@ -176,7 +179,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
       )}
 
       {state && !state.loading && state.error && (
-        <p className="rounded-[6px] bg-[#fdecea] px-3 py-2 text-[13.5px] text-[#b3261e]">
+        <p className="rounded-[10px] bg-wa-error-bg px-3 py-2 text-[13.5px] text-wa-error-text">
           {state.errorMessage || 'Não foi possível consultar o SGP agora.'}
         </p>
       )}
@@ -199,7 +202,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
             {duplicate.pixCode && (
               <ActionTile
                 label="Cód Pix"
-                color="#32bcad"
+                color="#2fc8b6"
                 icon={<IconPix size={24} />}
                 busy={busyKey === 'pix'}
                 done={feedback && feedback.key === 'pix' && feedback.kind === 'sent'}
@@ -209,7 +212,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
             {duplicate.barCode && (
               <ActionTile
                 label="Cód Barras"
-                color="#0b1220"
+                color="var(--color-wa-text)"
                 icon={<IconBarcode size={24} />}
                 busy={busyKey === 'barcode'}
                 done={feedback && feedback.key === 'barcode' && feedback.kind === 'sent'}
@@ -219,7 +222,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
             {duplicate.boletoLink && (
               <ActionTile
                 label="Link Fatura"
-                color="#1a73e8"
+                color="var(--color-sgp-blue)"
                 icon={<IconInvoiceLink size={24} />}
                 busy={busyKey === 'link'}
                 done={feedback && feedback.key === 'link' && feedback.kind === 'sent'}
@@ -229,7 +232,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
             {duplicate.boletoLink && (
               <ActionTile
                 label="PDF Fatura"
-                color="#d93025"
+                color="var(--color-sgp-red)"
                 icon={<IconPdfFile size={24} />}
                 busy={busyKey === 'pdf'}
                 done={feedback && feedback.key === 'pdf' && feedback.kind === 'sent'}
@@ -239,7 +242,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
             {duplicate.pixCode && (
               <ActionTile
                 label="QR Pix"
-                color="#57626d"
+                color="var(--color-sgp-gray)"
                 icon={<IconQrCode size={24} />}
                 pressed={Boolean(qrDataUrl)}
                 onClick={() => handleToggleQr(duplicate.pixCode)}
@@ -250,7 +253,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
           {feedback && (
             <p
               className={`mt-2.5 flex items-center gap-1.5 text-[12.5px] ${
-                feedback.kind === 'sent' ? 'text-wa-green-dark' : 'text-[#b3261e]'
+                feedback.kind === 'sent' ? 'text-wa-chip-text' : 'text-wa-error-text'
               }`}
             >
               {feedback.kind === 'sent' && <IconCheck size={15} />}
@@ -259,7 +262,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
           )}
 
           {qrDataUrl && (
-            <figure ref={qrRef} className="mt-3 flex flex-col items-center rounded-[8px] border border-wa-border bg-white/60 p-3">
+            <figure ref={qrRef} className="mt-3 flex flex-col items-center rounded-[12px] border border-wa-border bg-wa-surface p-3">
               <img src={qrDataUrl} alt="QR code do Pix" className="h-36 w-36 rounded-[4px] bg-white p-1.5" />
               <figcaption className="mt-2 text-center text-[12px] text-wa-muted">
                 Mostre este código para o cliente pagar pelo app do banco.
@@ -290,8 +293,8 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
   const selectedContract = contracts.find((contract) => String(contract.id) === String(selectedContractId)) || null;
 
   return (
-    <aside className="fixed inset-0 z-30 flex flex-col bg-white/40 font-wa backdrop-blur-2xl md:static md:z-auto md:h-full md:w-[360px] md:shrink-0 md:border-l md:border-white/50">
-      <div className="flex h-[59px] shrink-0 items-center gap-2 border-b border-white/50 bg-white/40 px-4 backdrop-blur-2xl">
+    <aside className="fixed inset-0 z-30 flex flex-col bg-wa-surface-soft font-wa backdrop-blur-2xl md:static md:z-auto md:h-full md:w-[360px] md:shrink-0 md:border-l md:border-wa-surface-line">
+      <div className="flex h-[70px] shrink-0 items-center gap-2 border-b border-wa-surface-line bg-wa-surface-soft px-4 backdrop-blur-2xl">
         <span className="text-wa-icon">
           <IconIdCard size={21} />
         </span>
@@ -302,14 +305,14 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
             onClick={onClose}
             aria-label="Fechar consulta SGP"
             title="Fechar"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-black/[.06]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-wa-hover"
           >
             <IconClose size={19} />
           </button>
         )}
       </div>
 
-      <div className="wa-scroll min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      <div className="chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             value={cpf}
@@ -317,13 +320,13 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
             placeholder="CPF ou CNPJ do cliente"
             aria-label="CPF do cliente"
             inputMode="numeric"
-            className="h-10 min-w-0 flex-1 rounded-[8px] border border-wa-border bg-white px-3 text-[14.5px] text-wa-text outline-none placeholder:text-wa-muted focus:border-wa-green focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-wa-green/40"
+            className="h-11 min-w-0 flex-1 rounded-[12px] border border-wa-border bg-wa-field px-3.5 text-[14.5px] text-wa-text outline-none placeholder:text-wa-muted focus:border-wa-green focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-wa-green/40"
           />
           <button
             type="submit"
             aria-label="Buscar"
             title="Buscar"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-wa-green text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-wa-green text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
           >
             <IconSearch size={19} />
           </button>
@@ -336,12 +339,12 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
           </p>
         )}
         {error === 'not_found' && (
-          <p className="rounded-[8px] border border-wa-border bg-white px-3 py-2.5 text-[14px] text-wa-muted">
+          <p className="rounded-[12px] border border-wa-border bg-wa-field px-3 py-2.5 text-[14px] text-wa-muted">
             Cliente não encontrado. Confira o documento e busque de novo.
           </p>
         )}
         {error === 'error' && (
-          <p className="rounded-[8px] bg-[#fdecea] px-3 py-2.5 text-[13.5px] text-[#b3261e]">
+          <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text">
             {errorMessage || 'Não foi possível consultar o SGP agora.'}
           </p>
         )}
@@ -364,7 +367,7 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
                     id="sgp-contract-select"
                     value={selectedContractId || ''}
                     onChange={(e) => setSelectedContractId(e.target.value)}
-                    className="h-10 w-full appearance-none rounded-[8px] border border-wa-border bg-white/60 pl-3 pr-9 text-[14.5px] text-wa-text outline-none focus:border-wa-green"
+                    className="h-11 w-full appearance-none rounded-[12px] border border-wa-border bg-wa-field pl-3.5 pr-9 text-[14.5px] text-wa-text outline-none focus:border-wa-green"
                   >
                     {contracts.map((contract) => (
                       <option key={contract.id} value={contract.id}>

@@ -11,6 +11,8 @@ const {
   claimConversation,
   transferConversation,
   closeConversation,
+  adminTransferConversation,
+  adminCloseConversation,
   getConversationWithContact,
   listWaitingConversations,
   listConversationsByAgent,
@@ -192,6 +194,107 @@ describe('conversation repository', () => {
     const closed = await closeConversation(conversation.id, agent.id);
     expect(closed.status).toBe('closed');
     expect(closed.assignedAgentId).toBeNull();
+  });
+
+  test('adminTransferConversation moves the conversation even when called by someone other than the assigned agent', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const assignedAgent = await createAgent({ email: 'agent-admin-xfer-1@dw.com', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent-admin-xfer-2@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, assignedAgent.id);
+
+    const transferred = await adminTransferConversation(conversation.id, targetAgent.id);
+
+    expect(transferred.assignedAgentId).toBe(targetAgent.id);
+  });
+
+  test('adminTransferConversation records the previously assigned agent as from_agent_id', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const assignedAgent = await createAgent({ email: 'agent-admin-xfer-3@dw.com', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent-admin-xfer-4@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, assignedAgent.id);
+
+    await adminTransferConversation(conversation.id, targetAgent.id);
+
+    const events = await getPool().query(
+      `SELECT from_agent_id, to_agent_id FROM conversation_events WHERE conversation_id = $1 AND event_type = 'transferred'`,
+      [conversation.id]
+    );
+    expect(events.rows[0].from_agent_id).toBe(assignedAgent.id);
+    expect(events.rows[0].to_agent_id).toBe(targetAgent.id);
+  });
+
+  test('adminTransferConversation assigns an unclaimed waiting conversation directly', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const targetAgent = await createAgent({ email: 'agent-admin-xfer-5@dw.com', password: 'secret123', role: 'agent' });
+
+    const transferred = await adminTransferConversation(conversation.id, targetAgent.id);
+
+    expect(transferred.assignedAgentId).toBe(targetAgent.id);
+  });
+
+  test('adminTransferConversation returns null for a closed conversation', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const assignedAgent = await createAgent({ email: 'agent-admin-xfer-6@dw.com', password: 'secret123', role: 'agent' });
+    const targetAgent = await createAgent({ email: 'agent-admin-xfer-7@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, assignedAgent.id);
+    await closeConversation(conversation.id, assignedAgent.id);
+
+    const transferred = await adminTransferConversation(conversation.id, targetAgent.id);
+
+    expect(transferred).toBeNull();
+  });
+
+  test('adminCloseConversation closes the conversation even when called by an admin who never claimed it', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const assignedAgent = await createAgent({ email: 'agent-admin-close-1@dw.com', password: 'secret123', role: 'agent' });
+    const admin = await createAgent({ email: 'admin-close-1@dw.com', password: 'secret123', role: 'admin' });
+    await claimConversation(conversation.id, assignedAgent.id);
+
+    const closed = await adminCloseConversation(conversation.id, admin.id, null);
+
+    expect(closed.status).toBe('closed');
+  });
+
+  test('adminCloseConversation records the admin as from_agent_id, not the originally assigned agent', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const assignedAgent = await createAgent({ email: 'agent-admin-close-2@dw.com', password: 'secret123', role: 'agent' });
+    const admin = await createAgent({ email: 'admin-close-2@dw.com', password: 'secret123', role: 'admin' });
+    await claimConversation(conversation.id, assignedAgent.id);
+
+    await adminCloseConversation(conversation.id, admin.id, null);
+
+    const events = await getPool().query(
+      `SELECT from_agent_id FROM conversation_events WHERE conversation_id = $1 AND event_type = 'closed'`,
+      [conversation.id]
+    );
+    expect(events.rows[0].from_agent_id).toBe(admin.id);
+  });
+
+  test('adminCloseConversation records the reason_id when one is passed', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const admin = await createAgent({ email: 'admin-close-3@dw.com', password: 'secret123', role: 'admin' });
+    const reasonResult = await getPool().query(`INSERT INTO contact_reasons (name) VALUES ('Atendente ausente') RETURNING id`);
+    const reasonId = reasonResult.rows[0].id;
+
+    await adminCloseConversation(conversation.id, admin.id, reasonId);
+
+    const events = await getPool().query(
+      `SELECT reason_id FROM conversation_events WHERE conversation_id = $1 AND event_type = 'closed'`,
+      [conversation.id]
+    );
+    expect(events.rows[0].reason_id).toBe(reasonId);
+  });
+
+  test('adminCloseConversation returns null for an already closed conversation', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const assignedAgent = await createAgent({ email: 'agent-admin-close-4@dw.com', password: 'secret123', role: 'agent' });
+    const admin = await createAgent({ email: 'admin-close-4@dw.com', password: 'secret123', role: 'admin' });
+    await claimConversation(conversation.id, assignedAgent.id);
+    await closeConversation(conversation.id, assignedAgent.id);
+
+    const closed = await adminCloseConversation(conversation.id, admin.id, null);
+
+    expect(closed).toBeNull();
   });
 
   test('claimConversation returns protocolNumber as null before any protocol has been claimed', async () => {

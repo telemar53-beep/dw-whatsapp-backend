@@ -105,6 +105,45 @@ async function closeConversation(conversationId, agentId, reasonId) {
   });
 }
 
+async function adminTransferConversation(conversationId, toAgentId) {
+  return withTransaction(async (client) => {
+    const current = await client.query(`SELECT assigned_agent_id FROM conversations WHERE id = $1 AND status <> 'closed'`, [
+      conversationId,
+    ]);
+    if (current.rowCount === 0) return null;
+    const fromAgentId = current.rows[0].assigned_agent_id;
+    const result = await client.query(
+      `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, triage_state = 'completed', updated_at = now()
+       WHERE id = $1 AND status <> 'closed'
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
+      [conversationId, toAgentId]
+    );
+    if (result.rowCount === 0) return null;
+    await client.query(
+      `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, to_agent_id) VALUES ($1, 'transferred', $2, $3)`,
+      [conversationId, fromAgentId, toAgentId]
+    );
+    return toConversation(result.rows[0]);
+  });
+}
+
+async function adminCloseConversation(conversationId, adminAgentId, reasonId) {
+  return withTransaction(async (client) => {
+    const result = await client.query(
+      `UPDATE conversations SET status = 'closed', updated_at = now()
+       WHERE id = $1 AND status <> 'closed'
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, created_at, updated_at`,
+      [conversationId]
+    );
+    if (result.rowCount === 0) return null;
+    await client.query(
+      `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, reason_id) VALUES ($1, 'closed', $2, $3)`,
+      [conversationId, adminAgentId, reasonId]
+    );
+    return toConversation(result.rows[0]);
+  });
+}
+
 async function completeTriage(conversationId, sectorId) {
   const result = await getPool().query(
     `UPDATE conversations SET sector_id = $2, triage_state = 'completed', updated_at = now()
@@ -375,6 +414,8 @@ module.exports = {
   claimConversation,
   transferConversation,
   closeConversation,
+  adminTransferConversation,
+  adminCloseConversation,
   completeTriage,
   incrementTriageAttempts,
   activateConversation,

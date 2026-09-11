@@ -19,6 +19,8 @@ const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const {
   listWaitingConversations,
   listConversationsByAgent,
+  listClosedConversationsByAgent,
+  countClosedConversationsByAgent,
   getConversationWithContact,
   claimConversation,
   transferConversation,
@@ -89,6 +91,65 @@ describe('GET /api/conversations/mine', () => {
     expect(res.status).toBe(200);
     expect(listConversationsByAgent).toHaveBeenCalledWith('agent-1');
     expect(res.body).toEqual([{ id: 'conv-2', assignedAgentId: 'agent-1' }]);
+  });
+});
+
+describe('GET /api/conversations/mine/closed', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('returns a page of the requesting agent\'s closed conversations with hasMore true when more remain', async () => {
+    listClosedConversationsByAgent.mockResolvedValue([{ id: 'conv-1', closedAt: '2026-09-09T10:00:00.000Z' }]);
+    countClosedConversationsByAgent.mockResolvedValue(3);
+
+    const res = await request(buildApp())
+      .get('/api/conversations/mine/closed?limit=1&offset=0')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ items: [{ id: 'conv-1', closedAt: '2026-09-09T10:00:00.000Z' }], hasMore: true });
+    expect(listClosedConversationsByAgent).toHaveBeenCalledWith('agent-1', { limit: 1, offset: 0 });
+    expect(countClosedConversationsByAgent).toHaveBeenCalledWith('agent-1');
+  });
+
+  test('returns hasMore false when the page reaches the end', async () => {
+    listClosedConversationsByAgent.mockResolvedValue([{ id: 'conv-1' }]);
+    countClosedConversationsByAgent.mockResolvedValue(1);
+
+    const res = await request(buildApp())
+      .get('/api/conversations/mine/closed?limit=20&offset=0')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.body.hasMore).toBe(false);
+  });
+
+  test('defaults limit to 20 and caps it at 50', async () => {
+    listClosedConversationsByAgent.mockResolvedValue([]);
+    countClosedConversationsByAgent.mockResolvedValue(0);
+
+    await request(buildApp())
+      .get('/api/conversations/mine/closed')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(listClosedConversationsByAgent).toHaveBeenCalledWith('agent-1', { limit: 20, offset: 0 });
+
+    jest.clearAllMocks();
+    listClosedConversationsByAgent.mockResolvedValue([]);
+    countClosedConversationsByAgent.mockResolvedValue(0);
+    await request(buildApp())
+      .get('/api/conversations/mine/closed?limit=999')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(listClosedConversationsByAgent).toHaveBeenCalledWith('agent-1', { limit: 50, offset: 0 });
+  });
+
+  test('only lists the requesting agent\'s own closed conversations, never another agent\'s', async () => {
+    listClosedConversationsByAgent.mockResolvedValue([]);
+    countClosedConversationsByAgent.mockResolvedValue(0);
+
+    await request(buildApp())
+      .get('/api/conversations/mine/closed')
+      .set('Authorization', `Bearer ${tokenFor('agent-2', 'agent')}`);
+
+    expect(listClosedConversationsByAgent).toHaveBeenCalledWith('agent-2', expect.any(Object));
+    expect(countClosedConversationsByAgent).toHaveBeenCalledWith('agent-2');
   });
 });
 

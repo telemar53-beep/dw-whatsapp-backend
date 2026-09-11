@@ -10,6 +10,8 @@ const {
   closeConversation,
   adminTransferConversation,
   adminCloseConversation,
+  listClosedConversationsByAgent,
+  countClosedConversationsByAgent,
   listClosedConversationsByContact,
   findOpenConversation,
   createConversation,
@@ -57,6 +59,19 @@ router.get('/queue', async (req, res) => {
 router.get('/mine', async (req, res) => {
   const conversations = await listConversationsByAgent(req.agent.agentId);
   res.json(conversations);
+});
+
+const MINE_CLOSED_DEFAULT_LIMIT = 20;
+const MINE_CLOSED_MAX_LIMIT = 50;
+
+router.get('/mine/closed', async (req, res) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || MINE_CLOSED_DEFAULT_LIMIT, 1), MINE_CLOSED_MAX_LIMIT);
+  const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+  const [items, total] = await Promise.all([
+    listClosedConversationsByAgent(req.agent.agentId, { limit, offset }),
+    countClosedConversationsByAgent(req.agent.agentId),
+  ]);
+  res.json({ items, hasMore: offset + items.length < total });
 });
 
 router.get('/contacts/:contactId/history', async (req, res) => {

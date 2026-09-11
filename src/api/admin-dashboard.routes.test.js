@@ -1,4 +1,5 @@
 jest.mock('../conversations/conversation.repository');
+jest.mock('../conversations/contact.repository');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -8,7 +9,10 @@ const {
   listInAutomationConversations,
   countClosedSince,
   listClosedSince,
+  findConversationByProtocolNumber,
+  listConversationsByContact,
 } = require('../conversations/conversation.repository');
+const { findContactByPhoneNumber } = require('../conversations/contact.repository');
 const adminDashboardRoutes = require('./admin-dashboard.routes');
 
 function buildApp() {
@@ -115,6 +119,96 @@ describe('GET /api/admin/dashboard/conversations/closed-today', () => {
   test('returns 403 for a non-admin agent', async () => {
     const res = await request(buildApp())
       .get('/api/admin/dashboard/conversations/closed-today')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('GET /api/admin/dashboard/conversations/by-protocol/:protocolNumber', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('returns the conversation with that protocol number', async () => {
+    findConversationByProtocolNumber.mockResolvedValue({ id: 'conv-1', protocolNumber: 1042 });
+
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/by-protocol/1042')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.status).toBe(200);
+    expect(findConversationByProtocolNumber).toHaveBeenCalledWith(1042);
+    expect(res.body).toEqual({ id: 'conv-1', protocolNumber: 1042 });
+  });
+
+  test('returns 404 when no conversation has that protocol number', async () => {
+    findConversationByProtocolNumber.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/by-protocol/999999')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 400 when protocolNumber is not a positive integer', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/by-protocol/not-a-number')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.status).toBe(400);
+    expect(findConversationByProtocolNumber).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/by-protocol/1042')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('GET /api/admin/dashboard/conversations/by-phone', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('returns the contact and every conversation they have had', async () => {
+    findContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '+5511999990000', displayName: 'Maria' });
+    listConversationsByContact.mockResolvedValue([{ id: 'conv-1', status: 'closed' }, { id: 'conv-2', status: 'waiting' }]);
+
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/by-phone?phone=%2B5511999990000')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.status).toBe(200);
+    expect(findContactByPhoneNumber).toHaveBeenCalledWith('+5511999990000');
+    expect(listConversationsByContact).toHaveBeenCalledWith('contact-1');
+    expect(res.body).toEqual({
+      contact: { id: 'contact-1', phoneNumber: '+5511999990000', displayName: 'Maria' },
+      conversations: [{ id: 'conv-1', status: 'closed' }, { id: 'conv-2', status: 'waiting' }],
+    });
+  });
+
+  test('returns 404 when no contact has that phone number', async () => {
+    findContactByPhoneNumber.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/by-phone?phone=%2B5511900000000')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.status).toBe(404);
+    expect(listConversationsByContact).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when phone is missing', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/by-phone')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.status).toBe(400);
+    expect(findContactByPhoneNumber).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/by-phone?phone=%2B5511999990000')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(403);
   });

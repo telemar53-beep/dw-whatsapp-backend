@@ -6,7 +6,10 @@ const {
   listInAutomationConversations,
   countClosedSince,
   listClosedSince,
+  findConversationByProtocolNumber,
+  listConversationsByContact,
 } = require('../conversations/conversation.repository');
+const { findContactByPhoneNumber } = require('../conversations/contact.repository');
 
 const router = express.Router();
 
@@ -34,6 +37,32 @@ router.get('/conversations/closed-today', requireAuth, requireRole('admin'), asy
   const since = sinceNow();
   const [items, total] = await Promise.all([listClosedSince(since, { limit, offset }), countClosedSince(since)]);
   res.json({ items, hasMore: offset + items.length < total });
+});
+
+const PROTOCOL_NUMBER_PATTERN = /^\d+$/;
+
+router.get('/conversations/by-protocol/:protocolNumber', requireAuth, requireRole('admin'), async (req, res) => {
+  if (!PROTOCOL_NUMBER_PATTERN.test(req.params.protocolNumber)) {
+    return res.status(400).json({ error: 'protocolNumber must be a positive integer' });
+  }
+  const conversation = await findConversationByProtocolNumber(Number(req.params.protocolNumber));
+  if (!conversation) {
+    return res.status(404).json({ error: 'No conversation found with that protocol number' });
+  }
+  res.json(conversation);
+});
+
+router.get('/conversations/by-phone', requireAuth, requireRole('admin'), async (req, res) => {
+  const phone = (req.query.phone || '').trim();
+  if (!phone) {
+    return res.status(400).json({ error: 'phone is required' });
+  }
+  const contact = await findContactByPhoneNumber(phone);
+  if (!contact) {
+    return res.status(404).json({ error: 'No contact found with that phone number' });
+  }
+  const conversations = await listConversationsByContact(contact.id);
+  res.json({ contact, conversations });
 });
 
 module.exports = router;

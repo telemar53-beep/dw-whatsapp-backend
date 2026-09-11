@@ -264,6 +264,22 @@ describe('AttendanceDashboardPage', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
+  test('searching by the new AAAAMMDD-XXXX protocol format opens the matching conversation', async () => {
+    getDashboardConversationByProtocol.mockResolvedValue({
+      id: 'conv-found-2',
+      status: 'closed',
+      protocolNumber: '20260911-0001',
+      contactDisplayName: 'Cliente Novo',
+      assignedAgentId: 'agent-1',
+    });
+    renderPage();
+
+    await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '20260911-0001{Enter}');
+
+    expect(getDashboardConversationByProtocol).toHaveBeenCalledWith('20260911-0001', 'tok-123');
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
   test('shows an error when the protocol number is not found', async () => {
     getDashboardConversationByProtocol.mockRejectedValue({ body: { error: 'No conversation found with that protocol number' } });
     renderPage();

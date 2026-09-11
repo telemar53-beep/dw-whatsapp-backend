@@ -315,7 +315,6 @@ function AttendanceDashboardPage() {
         <form onSubmit={handleProtocolSearch}>
           <input
             type="text"
-            inputMode="numeric"
             value={protocolQuery}
             onChange={(e) => setProtocolQuery(e.target.value)}
             placeholder="Buscar por protocolo"

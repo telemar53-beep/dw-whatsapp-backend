@@ -1,9 +1,14 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { findAgentByEmail, findAgentByIdWithPasswordHash, updateAgentPassword } = require('../agents/agent.repository');
 
 const TOKEN_EXPIRY = '12h';
 const SALT_ROUNDS = 10;
+// Excludes 0/O and 1/I/l so a generated password can be read aloud or typed
+// without ambiguity (the admin often has to relay it to the agent by phone).
+const GENERATED_PASSWORD_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+const GENERATED_PASSWORD_LENGTH = 12;
 
 function invalidCredentialsError() {
   const err = new Error('Invalid credentials');
@@ -57,4 +62,20 @@ async function changePassword({ agentId, currentPassword, newPassword }) {
   await updateAgentPassword(agentId, newHash);
 }
 
-module.exports = { login, verifyToken, changePassword };
+function generatePassword() {
+  const bytes = crypto.randomBytes(GENERATED_PASSWORD_LENGTH);
+  let password = '';
+  for (let i = 0; i < GENERATED_PASSWORD_LENGTH; i++) {
+    password += GENERATED_PASSWORD_CHARSET[bytes[i] % GENERATED_PASSWORD_CHARSET.length];
+  }
+  return password;
+}
+
+async function resetAgentPassword(agentId) {
+  const newPassword = generatePassword();
+  const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await updateAgentPassword(agentId, newHash);
+  return newPassword;
+}
+
+module.exports = { login, verifyToken, changePassword, resetAgentPassword };

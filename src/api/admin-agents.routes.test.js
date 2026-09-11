@@ -1,10 +1,15 @@
 jest.mock('../agents/agent.repository');
 jest.mock('../sectors/sector.repository');
+jest.mock('../auth/auth.service', () => ({
+  ...jest.requireActual('../auth/auth.service'),
+  resetAgentPassword: jest.fn(),
+}));
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { listAgents, createAgent, setAgentActive, findAgentById } = require('../agents/agent.repository');
 const { setAgentSectors } = require('../sectors/sector.repository');
+const { resetAgentPassword } = require('../auth/auth.service');
 const adminAgentsRoutes = require('./admin-agents.routes');
 
 function buildApp() {
@@ -209,6 +214,48 @@ describe('PATCH /api/admin/agents/:id', () => {
       .send({ active: false });
     expect(res.status).toBe(403);
     expect(setAgentActive).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/admin/agents/:id/password', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('generates and returns a new password for the agent', async () => {
+    findAgentById.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.com', role: 'agent' });
+    resetAgentPassword.mockResolvedValue('Xy9kFpQr2z');
+
+    const res = await request(buildApp())
+      .put('/api/admin/agents/agent-4/password')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.status).toBe(200);
+    expect(resetAgentPassword).toHaveBeenCalledWith('agent-4');
+    expect(res.body.newPassword).toBe('Xy9kFpQr2z');
+  });
+
+  test('returns 404 when the agent does not exist', async () => {
+    findAgentById.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .put('/api/admin/agents/does-not-exist/password')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+    expect(res.status).toBe(404);
+    expect(resetAgentPassword).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when an admin tries to reset their own password here', async () => {
+    const res = await request(buildApp())
+      .put('/api/admin/agents/admin-1/password')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+    expect(res.status).toBe(400);
+    expect(resetAgentPassword).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .put('/api/admin/agents/agent-4/password')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+    expect(resetAgentPassword).not.toHaveBeenCalled();
   });
 });
 

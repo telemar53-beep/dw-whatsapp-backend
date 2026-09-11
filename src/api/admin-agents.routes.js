@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
+const { resetAgentPassword } = require('../auth/auth.service');
 const { listAgents, createAgent, setAgentActive, findAgentById } = require('../agents/agent.repository');
 const { setAgentSectors } = require('../sectors/sector.repository');
 
@@ -56,6 +57,18 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     return res.status(404).json({ error: 'Agent not found' });
   }
   res.json(toResponseShape(agent));
+});
+
+router.put('/:id/password', requireAuth, requireRole('admin'), async (req, res) => {
+  if (req.params.id === req.agent.agentId) {
+    return res.status(400).json({ error: 'You cannot reset your own password here' });
+  }
+  const agent = await findAgentById(req.params.id);
+  if (!agent) {
+    return res.status(404).json({ error: 'Agent not found' });
+  }
+  const newPassword = await resetAgentPassword(req.params.id);
+  res.json({ newPassword });
 });
 
 router.put('/:id/sectors', requireAuth, requireRole('admin'), async (req, res) => {

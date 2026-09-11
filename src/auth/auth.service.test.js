@@ -2,7 +2,7 @@ jest.mock('../agents/agent.repository');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { findAgentByEmail, findAgentByIdWithPasswordHash, updateAgentPassword } = require('../agents/agent.repository');
-const { login, verifyToken, changePassword } = require('./auth.service');
+const { login, verifyToken, changePassword, resetAgentPassword } = require('./auth.service');
 
 describe('auth service', () => {
   beforeEach(() => {
@@ -84,6 +84,29 @@ describe('auth service', () => {
         changePassword({ agentId: 'agent-1', currentPassword: 'wrongpassword', newPassword: 'newpassword456' })
       ).rejects.toMatchObject({ code: 'INVALID_CURRENT_PASSWORD' });
       expect(updateAgentPassword).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetAgentPassword', () => {
+    test('generates a new password, hashes it, and returns the plaintext password', async () => {
+      const newPassword = await resetAgentPassword('agent-1');
+
+      expect(typeof newPassword).toBe('string');
+      expect(newPassword.length).toBeGreaterThanOrEqual(10);
+      expect(updateAgentPassword).toHaveBeenCalledWith('agent-1', expect.any(String));
+      const newHash = updateAgentPassword.mock.calls[0][1];
+      expect(await bcrypt.compare(newPassword, newHash)).toBe(true);
+    });
+
+    test('generates a different password on each call', async () => {
+      const first = await resetAgentPassword('agent-1');
+      const second = await resetAgentPassword('agent-1');
+      expect(first).not.toBe(second);
+    });
+
+    test('only uses unambiguous alphanumeric characters (no 0/O/1/I/l)', async () => {
+      const newPassword = await resetAgentPassword('agent-1');
+      expect(newPassword).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789]+$/);
     });
   });
 });

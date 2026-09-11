@@ -11,6 +11,7 @@ import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
+import { useMyClosedConversations } from '../hooks/useMyClosedConversations';
 
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useQueue');
@@ -22,6 +23,7 @@ vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useQueueNotificationSound');
 vi.mock('../hooks/useUnreadMyConversations');
+vi.mock('../hooks/useMyClosedConversations');
 vi.mock('../components/StartConversationModal', () => ({
   default: ({ onCreated }) => (
     <button
@@ -42,6 +44,7 @@ beforeEach(() => {
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
   useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted: vi.fn() });
   useUnreadMyConversations.mockReturnValue({ unreadIds: new Set(), clearUnread: vi.fn() });
+  useMyClosedConversations.mockReturnValue({ items: [], hasMore: false, loading: false, loadMore: vi.fn(), refresh: vi.fn() });
 });
 
 function renderDashboard() {
@@ -170,6 +173,62 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue([]);
     renderDashboard();
     expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
+  });
+
+  test('shows the agent\'s own closed conversations in the Encerrados tab', async () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    useMyClosedConversations.mockReturnValue({
+      items: [{ id: 'c-old', contactDisplayName: 'Ana Encerrada', status: 'closed', assignedAgentId: 'agent-1' }],
+      hasMore: false,
+      loading: false,
+      loadMore: vi.fn(),
+      refresh: vi.fn(),
+    });
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('tab', { name: /encerrados/i }));
+
+    expect(screen.getByText('Ana Encerrada')).toBeInTheDocument();
+  });
+
+  test('selecting a conversation from the Encerrados tab opens it read-only, without message input or action buttons', async () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    useMyClosedConversations.mockReturnValue({
+      items: [{ id: 'c-old', contactDisplayName: 'Ana Encerrada', status: 'closed', assignedAgentId: 'agent-1' }],
+      hasMore: false,
+      loading: false,
+      loadMore: vi.fn(),
+      refresh: vi.fn(),
+    });
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('tab', { name: /encerrados/i }));
+    await userEvent.click(screen.getByText('Ana Encerrada'));
+
+    expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /fechar atendimento/i })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/mensagem/i)).not.toBeInTheDocument();
+  });
+
+  test('clicking Carregar mais in the Encerrados tab calls loadMore', async () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    const loadMore = vi.fn();
+    useMyClosedConversations.mockReturnValue({
+      items: [{ id: 'c-old', contactDisplayName: 'Ana Encerrada', status: 'closed', assignedAgentId: 'agent-1' }],
+      hasMore: true,
+      loading: false,
+      loadMore,
+      refresh: vi.fn(),
+    });
+    renderDashboard();
+
+    await userEvent.click(screen.getByRole('tab', { name: /encerrados/i }));
+    await userEvent.click(screen.getByRole('button', { name: /carregar mais/i }));
+
+    expect(loadMore).toHaveBeenCalled();
   });
 
   test('shows an Administração link for an admin agent', () => {

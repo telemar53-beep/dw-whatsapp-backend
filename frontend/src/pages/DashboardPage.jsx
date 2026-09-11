@@ -3,8 +3,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
+import { useMyClosedConversations } from '../hooks/useMyClosedConversations';
 import QueueList from '../components/QueueList';
 import MyConversationsList from '../components/MyConversationsList';
+import ClosedConversationsList from '../components/ClosedConversationsList';
 import ConversationView from '../components/ConversationView';
 import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
@@ -18,6 +20,7 @@ const TABS = [
   { value: 'inProgress', label: 'Andamento' },
   { value: 'waiting', label: 'Espera' },
   { value: 'automation', label: 'Automação' },
+  { value: 'closed', label: 'Encerrados' },
 ];
 
 function matchesSearch(conversation, term) {
@@ -38,6 +41,7 @@ function DashboardPage() {
   const navigate = useNavigate();
   const queue = useQueue();
   const myConversations = useMyConversations();
+  const myClosedConversations = useMyClosedConversations();
   const [activeTab, setActiveTab] = useState('inProgress');
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState('');
@@ -46,6 +50,11 @@ function DashboardPage() {
   function selectConversation(conversationId) {
     clearUnread(conversationId);
     setSelectedId(conversationId);
+  }
+
+  function selectClosedConversation(conversation) {
+    setPendingConversation(conversation);
+    setSelectedId(conversation.id);
   }
   const [transferringId, setTransferringId] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -193,6 +202,16 @@ function DashboardPage() {
                 onSelect={setSelectedId}
                 selectedId={selectedId}
                 emptyMessage="Nenhuma conversa em triagem automática."
+              />
+            )}
+            {activeTab === 'closed' && (
+              <ClosedConversationsList
+                conversations={myClosedConversations.items}
+                onSelect={selectClosedConversation}
+                selectedId={selectedId}
+                hasMore={myClosedConversations.hasMore}
+                loading={myClosedConversations.loading}
+                onLoadMore={myClosedConversations.loadMore}
               />
             )}
           </div>

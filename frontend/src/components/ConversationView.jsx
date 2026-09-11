@@ -113,7 +113,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   }, [messages.length, conversation.id]);
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
-  const isMine = conversation.assignedAgentId === agent.id;
+  const isMine = conversation.assignedAgentId === agent.id && conversation.status !== 'closed';
   const isAdmin = agent.role === 'admin' && conversation.status !== 'closed';
   const displayName = contactOverride ? contactOverride.displayName : conversation.contactDisplayName;
   const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;

@@ -109,7 +109,6 @@ function DashboardPage() {
           onConversasClick={() => setSelectedId(null)}
           onProfileClick={() => setProfileOpen(true)}
           mobileHidden={Boolean(selectedConversation)}
-          dark
         />
 
         <aside

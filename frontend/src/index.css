@@ -7,16 +7,9 @@
   --font-wa: "Segoe UI", "Helvetica Neue", Helvetica, "Lucida Grande", Arial,
     Ubuntu, Cantarell, "Fira Sans", system-ui, sans-serif;
 
-  --color-ink-950: #0b1220;
-  --color-sky-mist: #cfe9ee;
-  --color-teal-mist: #bfe0d6;
-  --color-sand-mist: #eddab0;
-  --color-teal-signal: #0d9488;
-  --color-amber-signal: #f2a93c;
-  --color-amber-signal-dark: #d9861f;
-  --color-indigo-signal: #3d6fb4;
-
-  /* Paleta do chat — herda a identidade clara/glass do resto do site */
+  /* Base clara dos componentes: continua valendo fora de `.chat-theme`, que
+     hoje é declarado por todas as páginas. Manter os dois lados faz o mesmo
+     componente servir aos dois temas sem fork. */
   --color-wa-green: #0d9488;
   --color-wa-green-dark: #0b7d73;
   --color-wa-badge: #0d9488;

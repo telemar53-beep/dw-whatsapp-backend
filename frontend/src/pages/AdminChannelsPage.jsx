@@ -264,7 +264,7 @@ function AdminChannelsPage() {
       />
 
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-3">
-        <NavRail active="admin" onProfileClick={() => setProfileOpen(true)} dark />
+        <NavRail active="admin" onProfileClick={() => setProfileOpen(true)} />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:flex-row">
 

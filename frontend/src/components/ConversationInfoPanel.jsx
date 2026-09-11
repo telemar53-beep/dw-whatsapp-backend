@@ -5,7 +5,7 @@ function getStatusMeta(conversation) {
     return { label: 'Encerrado', className: 'bg-wa-active text-wa-muted' };
   }
   if (conversation.triageState === 'pending' && conversation.status !== 'silent') {
-    return { label: 'Na automação', className: 'bg-indigo-signal/10 text-indigo-signal' };
+    return { label: 'Na automação', className: 'bg-wa-link/15 text-wa-link' };
   }
   if (conversation.status === 'waiting') {
     return { label: 'Em espera', className: 'bg-wa-warn-bg text-wa-warn-text' };

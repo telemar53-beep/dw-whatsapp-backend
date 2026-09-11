@@ -184,7 +184,7 @@ function AttendanceDashboardPage() {
         className="pointer-events-none absolute -right-[6%] bottom-[-15%] h-[30rem] w-[32rem] rounded-full bg-chat-copper/25 blur-[150px]"
       />
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-3">
-      <NavRail active="dashboard" onProfileClick={() => setProfileOpen(true)} dark />
+      <NavRail active="dashboard" onProfileClick={() => setProfileOpen(true)} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex shrink-0 items-center justify-between px-2 pb-4 pt-2">
         <div>

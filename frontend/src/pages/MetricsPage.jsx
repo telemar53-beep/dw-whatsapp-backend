@@ -12,18 +12,19 @@ const PERIODS = [
   { value: '30d', label: 'Últimos 30 dias' },
 ];
 
-const TEAL = '#0d9488';
-const AMBER_DARK = '#d9861f';
-const INDIGO = '#3d6fb4';
-const GRID_COLOR = 'rgba(11, 18, 32, 0.08)';
-const AXIS_COLOR = 'rgba(11, 18, 32, 0.45)';
+// Séries claras o bastante para o fundo escuro, e distintas entre si.
+const TEAL = '#4dd4ac';
+const AMBER_DARK = '#f0a94f';
+const INDIGO = '#8aa9e8';
+const GRID_COLOR = 'rgba(255, 255, 255, 0.10)';
+const AXIS_COLOR = 'rgba(255, 255, 255, 0.55)';
 const TOOLTIP_STYLE = {
-  backgroundColor: 'rgba(255, 255, 255, 0.94)',
-  border: '1px solid rgba(11, 18, 32, 0.08)',
-  borderRadius: 12,
-  boxShadow: '0 20px 40px -20px rgba(15, 35, 60, 0.35)',
+  backgroundColor: 'rgba(36, 32, 30, 0.96)',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
+  borderRadius: 14,
+  boxShadow: '0 30px 80px -20px rgba(0, 0, 0, 0.75)',
   fontSize: 13,
-  color: '#0b1220',
+  color: '#f4f1ed',
 };
 const AXIS_TICK = { fill: AXIS_COLOR, fontSize: 12 };
 
@@ -123,24 +124,24 @@ function IconTag(props) {
 function StatTile({ icon, value, label }) {
   const display = value === null || value === undefined ? '-' : value;
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-teal-signal/30 bg-teal-signal/10 text-teal-signal">
+    <div className="rounded-[20px] border border-white/[0.07] bg-white/[0.06] p-6">
+      <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.07] text-chat-orange">
         {icon}
       </span>
-      <p className="font-display text-3xl font-semibold text-ink-950">{display}</p>
-      <p className="mt-1 text-sm text-ink-950/55">{label}</p>
+      <p className="font-display text-[32px] font-semibold leading-tight text-chat-text">{display}</p>
+      <p className="mt-1.5 text-[14px] leading-[19px] text-chat-muted">{label}</p>
     </div>
   );
 }
 
 function ChartCard({ title, icon, children }) {
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="mb-4 flex items-center gap-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-teal-signal/30 bg-teal-signal/10 text-teal-signal">
+    <div className="rounded-[20px] border border-white/[0.07] bg-white/[0.06] p-6">
+      <div className="mb-5 flex items-center gap-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.07] text-chat-orange">
           {icon}
         </span>
-        <h2 className="font-display text-base font-semibold text-ink-950">{title}</h2>
+        <h2 className="font-display text-[16px] font-semibold text-chat-text">{title}</h2>
       </div>
       {children}
     </div>
@@ -149,9 +150,9 @@ function ChartCard({ title, icon, children }) {
 
 function EmptyState() {
   return (
-    <div className="flex h-[260px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-ink-950/15 bg-white/30 text-center">
-      <IconInbox className="h-6 w-6 text-ink-950/30" />
-      <p className="text-sm text-ink-950/50">Nenhum atendimento fechado nesse período.</p>
+    <div className="flex h-[260px] flex-col items-center justify-center gap-2 rounded-[16px] border border-dashed border-white/[0.12] text-center">
+      <IconInbox className="h-6 w-6 text-chat-faint" />
+      <p className="text-[13.5px] text-chat-faint">Nenhum atendimento fechado nesse período.</p>
     </div>
   );
 }
@@ -186,27 +187,31 @@ function MetricsPage() {
   }
 
   return (
-    <div className="flex h-dvh">
-      <NavRail active="metrics" onProfileClick={() => setProfileOpen(true)} />
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans">
+    <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-signal/20 blur-[100px]"
+        className="pointer-events-none absolute left-[36%] -top-[12%] h-[38rem] w-[42rem] rounded-full bg-chat-copper/40 blur-[150px]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-16 top-96 h-96 w-96 rounded-full bg-amber-signal/25 blur-[120px]"
+        className="pointer-events-none absolute -right-[8%] bottom-[-18%] h-[30rem] w-[32rem] rounded-full bg-chat-copper/25 blur-[150px]"
       />
 
-      <div className="relative mx-auto max-w-5xl space-y-6 px-4 py-10 sm:px-6">
+      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-3">
+      <NavRail active="metrics" onProfileClick={() => setProfileOpen(true)} />
+      <div className="chat-scroll min-h-0 min-w-0 flex-1 overflow-y-auto rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl">
+
+      <div className="mx-auto max-w-5xl space-y-6 px-6 py-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-display text-2xl font-semibold text-ink-950">Relatório</h1>
-            <p className="mt-1 text-sm text-ink-950/55">Indicadores de atendimento da equipe</p>
+            <h1 className="font-display text-[26px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
+              Relatório
+            </h1>
+            <p className="mt-1.5 text-[14px] text-chat-muted">Indicadores de atendimento da equipe</p>
           </div>
           <Link
             to="/"
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/70 bg-white/40 px-3 py-1.5 text-sm font-medium text-ink-950/70 backdrop-blur-xl transition hover:bg-white/70 hover:text-ink-950"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.06] px-4 py-2 text-[14px] font-medium text-chat-muted transition hover:bg-white/[0.10] hover:text-chat-text"
           >
             <IconChevronLeft className="h-4 w-4" />
             Voltar
@@ -214,7 +219,7 @@ function MetricsPage() {
         </div>
 
         <div className="space-y-2">
-          <div className="inline-flex flex-wrap gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl">
+          <div className="flex flex-wrap gap-3">
             {PERIODS.map((p) => (
               <button
                 key={p.value}
@@ -222,8 +227,10 @@ function MetricsPage() {
                   setPeriod(p.value);
                   setShowCustomInput(false);
                 }}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                  period === p.value ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/60 hover:text-ink-950'
+                className={`shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition ${
+                  period === p.value
+                    ? 'border-chat-orange/70 text-chat-text'
+                    : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
                 }`}
               >
                 {p.label}
@@ -231,8 +238,10 @@ function MetricsPage() {
             ))}
             <button
               onClick={() => setShowCustomInput((prev) => !prev)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                period === 'custom' ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/60 hover:text-ink-950'
+              className={`shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition ${
+                period === 'custom'
+                  ? 'border-chat-orange/70 text-chat-text'
+                  : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
               }`}
             >
               Personalizado
@@ -240,7 +249,7 @@ function MetricsPage() {
           </div>
           {showCustomInput && (
             <div className="flex flex-wrap items-center gap-2">
-              <label htmlFor="custom-days" className="text-sm text-ink-950/70">
+              <label htmlFor="custom-days" className="text-[14px] text-chat-muted">
                 Últimos
               </label>
               <input
@@ -250,14 +259,14 @@ function MetricsPage() {
                 max={CUSTOM_DAYS_MAX}
                 value={customDaysInput}
                 onChange={(e) => setCustomDaysInput(e.target.value)}
-                className="w-20 rounded-lg border border-ink-950/15 bg-white/60 px-2.5 py-1.5 text-sm text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+                className="h-[40px] w-20 rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 text-[14px] text-chat-text outline-none transition focus:border-chat-orange/60"
               />
-              <span className="text-sm text-ink-950/70">dias</span>
+              <span className="text-[14px] text-chat-muted">dias</span>
               <button
                 type="button"
                 onClick={handleApplyCustomDays}
                 disabled={!customDaysValid}
-                className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-[40px] rounded-[12px] bg-chat-orange px-4 text-[14px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Aplicar
               </button>
@@ -266,7 +275,7 @@ function MetricsPage() {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 rounded-xl border border-red-300 bg-red-50/80 px-4 py-3 text-sm text-red-700">
+          <div className="flex items-center gap-2 rounded-[14px] bg-wa-error-bg px-4 py-3 text-[14px] text-wa-error-text">
             <IconAlert className="h-4 w-4 flex-shrink-0" />
             <p>{error}</p>
           </div>
@@ -299,8 +308,8 @@ function MetricsPage() {
                     <CartesianGrid vertical={false} stroke={GRID_COLOR} />
                     <XAxis dataKey="agentName" tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
                     <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(13, 148, 136, 0.08)' }} />
-                    <Bar dataKey="closedCount" name="Atendimentos" fill={TEAL} radius={[6, 6, 0, 0]} maxBarSize={48} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }} />
+                    <Bar isAnimationActive={false} dataKey="closedCount" name="Atendimentos" fill={TEAL} radius={[6, 6, 0, 0]} maxBarSize={48} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -315,8 +324,8 @@ function MetricsPage() {
                     <CartesianGrid vertical={false} stroke={GRID_COLOR} />
                     <XAxis dataKey="sectorName" tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
                     <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(61, 111, 180, 0.08)' }} />
-                    <Bar dataKey="closedCount" name="Atendimentos" fill={INDIGO} radius={[6, 6, 0, 0]} maxBarSize={48} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }} />
+                    <Bar isAnimationActive={false} dataKey="closedCount" name="Atendimentos" fill={INDIGO} radius={[6, 6, 0, 0]} maxBarSize={48} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -332,9 +341,10 @@ function MetricsPage() {
                       <CartesianGrid vertical={false} stroke={GRID_COLOR} />
                       <XAxis dataKey="agentName" tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
                       <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(11, 18, 32, 0.04)' }} />
-                      <Legend wrapperStyle={{ fontSize: 13, color: AXIS_COLOR }} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }} />
+                      <Legend wrapperStyle={{ fontSize: 13, color: AXIS_COLOR, paddingTop: 8 }} />
                       <Bar
+                        isAnimationActive={false}
                         dataKey="avgResolutionMinutes"
                         name="Tempo médio de atendimento"
                         fill={TEAL}
@@ -342,6 +352,7 @@ function MetricsPage() {
                         maxBarSize={40}
                       />
                       <Bar
+                        isAnimationActive={false}
                         dataKey="avgFirstResponseMinutes"
                         name="Tempo médio de primeira resposta"
                         fill={AMBER_DARK}
@@ -363,14 +374,15 @@ function MetricsPage() {
                     <CartesianGrid vertical={false} stroke={GRID_COLOR} />
                     <XAxis dataKey="reasonName" tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
                     <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={32} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(217, 134, 31, 0.08)' }} />
-                    <Bar dataKey="closedCount" name="Atendimentos" fill={AMBER_DARK} radius={[6, 6, 0, 0]} maxBarSize={48} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }} />
+                    <Bar isAnimationActive={false} dataKey="closedCount" name="Atendimentos" fill={AMBER_DARK} radius={[6, 6, 0, 0]} maxBarSize={48} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </ChartCard>
           </div>
         )}
+      </div>
       </div>
       </div>
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}

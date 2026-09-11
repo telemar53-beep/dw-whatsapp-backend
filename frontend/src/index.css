@@ -78,6 +78,8 @@
   --wa-dialog-blur: 28px;
   --wa-overlay: rgba(8, 7, 6, 0.62);
   --wa-overlay-blur: 6px;
+  --scroll-thumb: rgba(255, 255, 255, 0.26);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.42);
 
   --color-wa-text: #f4f1ed;
   --color-wa-muted: #b6b0ab;
@@ -125,6 +127,8 @@
   --wa-dialog-blur: 0px;
   --wa-overlay: rgba(11, 20, 26, 0.4);
   --wa-overlay-blur: 0px;
+  --scroll-thumb: rgba(11, 20, 26, 0.22);
+  --scroll-thumb-hover: rgba(11, 20, 26, 0.34);
 }
 
 /* ---------- Fundo do chat ---------- */
@@ -159,52 +163,47 @@
   clip-path: polygon(0 0, 100% 0, 0 100%);
 }
 
-/* ---------- Barra de rolagem estilo WhatsApp ---------- */
-.wa-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(11, 20, 26, 0.2) transparent;
-}
-
-.wa-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.wa-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.wa-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(11, 20, 26, 0.2);
-  border-radius: 3px;
-}
-
-.wa-scroll:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(11, 20, 26, 0.3);
-}
-
-/* ---------- Barra de rolagem do vidro fumê (fundo escuro) ---------- */
+/* ---------- Barras de rolagem ----------
+   `.wa-scroll` e `.chat-scroll` são a mesma barra: a cor do polegar vem do
+   tema. Fixa em escuro, ela sumia dentro dos modais escuros — só aparecia no
+   hover, quando o sistema engorda a barra. */
+.wa-scroll,
 .chat-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
+.wa-scroll::-webkit-scrollbar,
 .chat-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
+.wa-scroll::-webkit-scrollbar-track,
 .chat-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
+.wa-scroll::-webkit-scrollbar-thumb,
 .chat-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.18);
-  border-radius: 3px;
+  background-color: var(--scroll-thumb);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
 }
 
+.wa-scroll:hover::-webkit-scrollbar-thumb,
 .chat-scroll:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.28);
+  background-color: var(--scroll-thumb-hover);
+}
+
+/* ---------- Menu nativo do <select> ----------
+   O popup é desenhado pelo sistema e ignora o fundo do campo: sem cor própria,
+   as opções saem no texto claro do tema sobre um fundo branco. */
+.chat-theme select option,
+.chat-theme select optgroup {
+  background-color: #241f1d;
+  color: #f4f1ed;
 }
 
 /* ---------- Animações ---------- */

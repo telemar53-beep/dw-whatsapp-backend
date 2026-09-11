@@ -6,6 +6,7 @@ const {
   findOrCreateContactByPhoneNumber,
   setContactAvatarPath,
   findContactById,
+  findContactByPhoneNumber,
   updateContact,
   listContactsMissingAvatarForBaileysBackfill,
 } = require('./contact.repository');
@@ -65,6 +66,24 @@ describe('contact repository', () => {
   test('findContactById returns null for an unknown id', async () => {
     const found = await findContactById('00000000-0000-0000-0000-000000000000');
     expect(found).toBeNull();
+  });
+
+  test('findContactByPhoneNumber finds an existing contact without creating a new one', async () => {
+    const created = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+
+    const found = await findContactByPhoneNumber('+5511988887777');
+
+    expect(found.id).toBe(created.id);
+    const all = await getPool().query('SELECT count(*) FROM contacts');
+    expect(Number(all.rows[0].count)).toBe(1);
+  });
+
+  test('findContactByPhoneNumber returns null for an unknown phone number, without creating a contact', async () => {
+    const found = await findContactByPhoneNumber('+5511900000000');
+
+    expect(found).toBeNull();
+    const all = await getPool().query('SELECT count(*) FROM contacts');
+    expect(Number(all.rows[0].count)).toBe(0);
   });
 
   test('updateContact updates the display name and city', async () => {

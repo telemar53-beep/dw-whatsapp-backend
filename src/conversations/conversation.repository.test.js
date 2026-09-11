@@ -251,6 +251,23 @@ describe('conversation repository', () => {
     expect(result.contactCityName).toBeNull();
   });
 
+  test('getConversationWithContact includes the contact internal note', async () => {
+    await updateContact(contactId, { displayName: 'Joao', cityId: null, internalNote: 'Já reclamou 3x' });
+    const conversation = await createConversation(contactId, channelId);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.contactInternalNote).toBe('Já reclamou 3x');
+  });
+
+  test('getConversationWithContact has a null contactInternalNote when the contact has no note', async () => {
+    const conversation = await createConversation(contactId, channelId);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.contactInternalNote).toBeNull();
+  });
+
   test('getConversationWithContact includes the most recent message preview and time', async () => {
     const conversation = await createConversation(contactId, channelId);
     await createMessage({

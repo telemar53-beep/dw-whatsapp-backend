@@ -224,4 +224,42 @@ describe('MetricsPage', () => {
 
     await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('today', 'tok-123', 45));
   });
+
+  test('exporting downloads a CSV named after the period', async () => {
+    // The CSV content itself (including the BOM prefix, delimiter, and section
+    // layout) is covered by exportMetricsCsv.test.js against the pure builder
+    // function — this test only checks the download glue: filename, blob type,
+    // and that the temporary link is created, clicked, and cleaned up.
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function noop() {});
+    const createObjectURL = vi.fn(() => 'blob:mock-url');
+    const revokeObjectURL = vi.fn();
+    global.URL.createObjectURL = createObjectURL;
+    global.URL.revokeObjectURL = revokeObjectURL;
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'agent',
+      own: { closedCount: 3, avgResolutionMinutes: 12.5, avgFirstResponseMinutes: 4.2 },
+    });
+    renderPage();
+    await screen.findByText('3');
+
+    await userEvent.click(screen.getByRole('button', { name: /exportar csv/i }));
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    const anchor = clickSpy.mock.instances[0];
+    expect(anchor.download).toMatch(/^relatorio-today-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    const blob = createObjectURL.mock.calls[0][0];
+    expect(blob.type).toBe('text/csv;charset=utf-8;');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+
+    clickSpy.mockRestore();
+  });
+
+  test('the export button is disabled before metrics finish loading', () => {
+    api.getMetrics.mockImplementation(() => new Promise(() => {})); // never resolves during this test
+    renderPage();
+
+    expect(screen.getByRole('button', { name: /exportar csv/i })).toBeDisabled();
+  });
 });

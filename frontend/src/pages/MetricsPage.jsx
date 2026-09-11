@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getMetrics } from '../services/api';
+import { buildMetricsCsv } from '../utils/exportMetricsCsv';
 import NavRail from '../components/NavRail';
 import ProfileModal from '../components/ProfileModal';
 
@@ -100,6 +101,16 @@ function IconAlert(props) {
       <path d="M12 9v4" />
       <path d="M12 17h.01" />
       <path d="M10.3 4.3l-8 14A1.7 1.7 0 0 0 3.7 21h16.6a1.7 1.7 0 0 0 1.4-2.7l-8-14a1.7 1.7 0 0 0-2.8 0z" />
+    </svg>
+  );
+}
+
+function IconDownload(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M12 3v12" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M4 19h16" />
     </svg>
   );
 }
@@ -211,6 +222,20 @@ function MetricsPage() {
     setPeriod('custom');
   }
 
+  function handleExportCsv() {
+    if (!data) return;
+    const csv = buildMetricsCsv(data);
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio-${data.period}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   const isAdmin = data && data.scope === 'admin';
   const summary = useMemo(() => (isAdmin ? summarize(data.byAgent) : null), [isAdmin, data]);
 
@@ -287,6 +312,16 @@ function MetricsPage() {
                 </div>
               </>
             )}
+
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={!data}
+              className="ml-auto flex shrink-0 items-center gap-2 rounded-full border border-white/[0.12] px-[18px] py-[9px] text-[14.5px] text-chat-muted transition hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <IconDownload className="h-4 w-4" />
+              Exportar CSV
+            </button>
           </div>
 
           <div className="chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-2">

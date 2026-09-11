@@ -27,8 +27,14 @@ async function ingestInboundMessage({
   const { wasCreated, ...contact } = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   const contactJustCreated = Boolean(wasCreated);
 
-  const businessHoursConfig = await getBusinessHoursConfig();
-  const outsideBusinessHours = businessHoursConfig.enabled && isOutsideBusinessHours(businessHoursConfig);
+  let businessHoursConfig = { enabled: false, startTime: '08:00', endTime: '18:00', message: '' };
+  let outsideBusinessHours = false;
+  try {
+    businessHoursConfig = await getBusinessHoursConfig();
+    outsideBusinessHours = businessHoursConfig.enabled && isOutsideBusinessHours(businessHoursConfig);
+  } catch (err) {
+    console.error('Failed to load business hours config', err);
+  }
 
   let conversation = await findOpenConversation(contact.id, channelId);
   if (conversation && conversation.status === 'silent') {
@@ -84,7 +90,7 @@ async function ingestInboundMessage({
     console.error(`Failed to send city notice for conversation ${conversation.id}`, err);
   }
 
-  if (outsideBusinessHours && !conversation.businessHoursNoticeSentAt) {
+  if (outsideBusinessHours && !conversation.businessHoursNoticeSentAt && !conversation.assignedAgentId) {
     try {
       await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: businessHoursConfig.message });
       conversation = await markBusinessHoursNoticeSent(conversation.id);

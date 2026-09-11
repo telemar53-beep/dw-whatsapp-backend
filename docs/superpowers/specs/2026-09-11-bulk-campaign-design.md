@@ -42,8 +42,9 @@ CREATE TABLE campaigns (
   name TEXT,
   channel_id UUID NOT NULL REFERENCES channels(id),
   message_type TEXT NOT NULL CHECK (message_type IN ('text', 'template')),
-  content TEXT,
-  template_id UUID REFERENCES templates(id),
+  content TEXT NOT NULL,
+  template_name TEXT,
+  template_language TEXT,
   template_variables JSONB,
   created_by UUID NOT NULL REFERENCES agents(id),
   total_recipients INT NOT NULL DEFAULT 0,
@@ -69,10 +70,16 @@ CREATE TABLE campaign_recipients (
 CREATE INDEX campaign_recipients_campaign_id_idx ON campaign_recipients(campaign_id);
 ```
 
-`message_type = 'text'` é usado com canais Baileys (`content` preenchido,
-`template_id`/`template_variables` nulos); `message_type = 'template'` é usado com
-canais oficiais (`template_id`/`template_variables` preenchidos, `content` nulo) —
-mesma distinção que `POST /start` já faz hoje por tipo de canal.
+`message_type = 'text'` é usado com canais Baileys — `content` é o texto livre digitado,
+`template_name`/`template_language`/`template_variables` ficam nulos. `message_type =
+'template'` é usado com canais oficiais — o template é resolvido e validado **uma única
+vez, na criação da campanha** (não por destinatário): `content` guarda o texto já com as
+variáveis substituídas (via `substituteVariables`, mesma função que `POST /start` já usa
+— serve só de registro local do que foi mandado), e `template_name`/`template_language`/
+`template_variables` guardam o que a API do WhatsApp realmente precisa para reenviar o
+template a cada destinatário. Evita que cada um dos N destinatários busque o template no
+banco de novo — a validação (aprovado, WABA correto, contagem de variáveis) já aconteceu
+uma vez, igual a `POST /start` já faz hoje.
 
 ## 3. Backend
 
@@ -104,8 +111,11 @@ destinatário.
 5. Senão, `createConversation(contact.id, channel.id)` (status `'waiting'` por padrão —
    **não chama `claimConversation`**, ao contrário de `/start`).
 6. `enqueueOutboundMessage({conversationId, channelId, content, templateName,
-   templateLanguage, templateVariables})` — mesma função já usada por todo envio de
-   saída do sistema (grava a mensagem, entra na fila de entrega com retry).
+   templateLanguage, templateVariables})` — usa `content`/`templateName`/
+   `templateLanguage`/`templateVariables` que já vieram prontos da própria campanha
+   (resolvidos uma vez na criação, não buscados de novo aqui). Mesma função já usada
+   por todo envio de saída do sistema (grava a mensagem, entra na fila de entrega com
+   retry).
 7. Marca o destinatário `sent`, incrementa o contador da campanha correspondente
    (`sent`/`failed`/`skipped`).
 
@@ -121,10 +131,12 @@ tudo — qualquer atendente):
   template exatamente como `/start` já valida hoje. Faz o parse da lista: ignora linhas
   em branco, normaliza e deduplica telefones (mantém a 1ª ocorrência), separa linhas
   com telefone vazio/sem dígitos como recipients já `failed` desde a criação. Se
-  **nenhuma** linha resultar em destinatário válido (mesmo entre os `failed`), 400. Cria
-  a campanha + os `campaign_recipients` (todos, incluindo os já `failed` do parse), e
-  para cada um que ainda está `pending` chama `enqueueCampaignRecipient`. Retorna a
-  campanha criada (`201`).
+  **nenhuma** linha resultar em destinatário `pending` (mesmo que haja linhas já
+  `failed` do parse), 400. Cria a campanha (já com `content`/`template_name`/
+  `template_language`/`template_variables` resolvidos) + os `campaign_recipients`
+  (todos, incluindo os já `failed` do parse — e incrementa `failed_count` da campanha
+  na hora para esses), e para cada um que ainda está `pending` chama
+  `enqueueCampaignRecipient`. Retorna a campanha criada (`201`).
 - `GET /` — lista campanhas (mais recentes primeiro), com os contadores.
 - `GET /:id` — detalhe da campanha + lista de destinatários com status individual.
 

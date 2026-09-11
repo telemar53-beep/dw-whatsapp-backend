@@ -49,6 +49,7 @@
   --color-wa-surface-soft: rgba(255, 255, 255, 0.4);
   --color-wa-surface-line: rgba(255, 255, 255, 0.55);
   --color-wa-field: #ffffff;
+  --color-wa-link: #0f766e;
   --color-sgp-blue: #1a73e8;
   --color-sgp-red: #d93025;
   --color-sgp-gray: #57626d;
@@ -117,6 +118,7 @@
   --color-wa-surface-soft: rgba(255, 255, 255, 0.04);
   --color-wa-surface-line: rgba(255, 255, 255, 0.08);
   --color-wa-field: rgba(255, 255, 255, 0.06);
+  --color-wa-link: #ff9a6b;
   --color-sgp-blue: #7ab0ff;
   --color-sgp-red: #ff8d82;
   --color-sgp-gray: #c7c2bd;

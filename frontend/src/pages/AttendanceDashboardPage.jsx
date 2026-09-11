@@ -39,19 +39,19 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
       <button
         type="button"
         onClick={() => onOpenChange(!open)}
-        className="rounded-full border border-white/60 bg-white/40 px-3 py-1.5 text-[13px] text-ink-950/70 backdrop-blur-md transition hover:bg-white/60 hover:text-ink-950"
+        className="h-[38px] rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-muted transition hover:bg-white/[0.10] hover:text-chat-text"
       >
         {label}
-        {selected.length > 0 && <span className="ml-1.5 font-medium text-teal-signal">{selected.length}</span>}
+        {selected.length > 0 && <span className="ml-1.5 font-medium text-chat-orange">{selected.length}</span>}
       </button>
       {open && (
-        <div className="absolute z-10 mt-1 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/70 bg-white/90 p-2 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+        <div className="chat-scroll absolute z-10 mt-2 max-h-64 w-56 overflow-y-auto rounded-[16px] border border-white/[0.10] bg-wa-panel p-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
           {options.length === 0 ? (
-            <p className="px-2 py-1 text-[13px] text-ink-950/50">Nenhuma opção</p>
+            <p className="px-2 py-1 text-[13px] text-wa-muted">Nenhuma opção</p>
           ) : (
             options.map((option) => (
-              <label key={option.value} className="flex items-center gap-2 rounded-lg px-2 py-1 text-[13px] text-ink-950/80 hover:bg-teal-signal/10">
-                <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} />
+              <label key={option.value} className="flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-[13.5px] text-chat-muted hover:bg-white/[0.07] hover:text-chat-text">
+                <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} className="h-4 w-4 accent-chat-orange" />
                 {option.label}
               </label>
             ))
@@ -64,14 +64,16 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
 
 function DashboardColumn({ title, count, conversations, onSelect, emptyMessage, footer }) {
   return (
-    <div className="flex min-w-[280px] flex-1 flex-col rounded-2xl border border-white/70 bg-white/50 backdrop-blur-xl shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)]">
-      <div className="flex items-center justify-between border-b border-white/50 px-4 py-3">
-        <h2 className="font-display text-[15px] font-semibold text-ink-950">{title}</h2>
-        <span className="rounded-full bg-teal-signal/10 px-2 py-[1px] text-[12px] font-medium text-teal-signal">{count}</span>
+    <div className="flex min-w-[300px] flex-1 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl">
+      <div className="flex items-center justify-between px-5 py-4">
+        <h2 className="font-display text-[16px] font-semibold text-chat-text">{title}</h2>
+        <span className="rounded-full border border-white/10 bg-white/[0.07] px-2.5 py-[2px] text-[12px] font-medium text-chat-muted">
+          {count}
+        </span>
       </div>
-      <div className="wa-scroll min-h-0 flex-1 overflow-y-auto">
+      <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-0.5">
         {conversations.length === 0 ? (
-          <p className="px-4 py-8 text-center text-[13px] text-ink-950/50">{emptyMessage}</p>
+          <p className="px-4 py-10 text-center text-[13.5px] text-chat-faint">{emptyMessage}</p>
         ) : (
           <ul>
             {conversations.map((conversation) => (
@@ -172,40 +174,45 @@ function AttendanceDashboardPage() {
   }
 
   return (
-    <div className="relative flex h-dvh overflow-hidden">
+    <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-signal/20 blur-[100px]"
+        className="pointer-events-none absolute left-[38%] -top-[10%] h-[38rem] w-[42rem] rounded-full bg-chat-copper/45 blur-[150px]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-20 bottom-0 h-96 w-96 rounded-full bg-amber-signal/20 blur-[120px]"
+        className="pointer-events-none absolute -right-[6%] bottom-[-15%] h-[30rem] w-[32rem] rounded-full bg-chat-copper/25 blur-[150px]"
       />
-      <NavRail active="dashboard" onProfileClick={() => setProfileOpen(true)} />
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans text-ink-950">
-      <header className="flex items-center justify-between px-6 py-5">
+      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-3">
+      <NavRail active="dashboard" onProfileClick={() => setProfileOpen(true)} dark />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <header className="flex shrink-0 items-center justify-between px-2 pb-4 pt-2">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink-950">Dashboard de atendimento</h1>
-          <p className="mt-1 text-sm text-ink-950/55">Acompanhe os atendimentos da equipe em tempo real</p>
+          <h1 className="font-display text-[26px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
+            Dashboard de atendimento
+          </h1>
+          <p className="mt-1.5 text-[14px] text-chat-muted">Acompanhe os atendimentos da equipe em tempo real</p>
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-3 px-6 pb-4">
-        <div role="tablist" className="inline-flex gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl shadow-sm">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 px-2 pb-4">
+        <div role="tablist" className="flex gap-3.5">
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'all'}
             onClick={() => setActiveTab('all')}
-            className={`relative rounded-full px-4 py-1.5 text-sm transition ${
-              activeTab === 'all' ? 'bg-teal-signal font-semibold text-white shadow-sm' : 'font-medium text-ink-950/55 hover:text-ink-950'
+            className={`relative shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition ${
+              activeTab === 'all'
+                ? 'border-chat-orange/70 text-chat-text'
+                : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
             }`}
           >
             Todos atendimentos
             {totalActiveCount > 0 && (
               <span
                 data-testid="tab-count-all"
-                className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white"
+                className="absolute -right-2 -top-2 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-chat-orange px-1 text-[12px] font-semibold text-white"
               >
                 {totalActiveCount}
               </span>
@@ -216,21 +223,24 @@ function AttendanceDashboardPage() {
             role="tab"
             aria-selected={activeTab === 'closed'}
             onClick={() => setActiveTab('closed')}
-            className={`relative rounded-full px-4 py-1.5 text-sm transition ${
-              activeTab === 'closed' ? 'bg-teal-signal font-semibold text-white shadow-sm' : 'font-medium text-ink-950/55 hover:text-ink-950'
+            className={`relative shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition ${
+              activeTab === 'closed'
+                ? 'border-chat-orange/70 text-chat-text'
+                : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
             }`}
           >
             Encerrados hoje
             {closedCount > 0 && (
               <span
                 data-testid="tab-count-closed"
-                className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white"
+                className="absolute -right-2 -top-2 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-chat-orange px-1 text-[12px] font-semibold text-white"
               >
                 {closedCount}
               </span>
             )}
           </button>
         </div>
+        <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10" />
         <FilterDropdown
           label="Canais"
           options={channels.map((c) => ({ value: c.id, label: c.name }))}
@@ -258,7 +268,7 @@ function AttendanceDashboardPage() {
       </div>
 
       {activeTab === 'all' ? (
-        <div role="tabpanel" className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4">
+        <div role="tabpanel" className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-2 pb-2">
           <DashboardColumn
             title="Em andamento"
             count={filteredInProgress.length}
@@ -282,11 +292,11 @@ function AttendanceDashboardPage() {
           />
         </div>
       ) : (
-        <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div role="tabpanel" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {displayClosed.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[13px] text-ink-950/50">Nenhum atendimento encerrado nas últimas 24 horas.</p>
+            <p className="px-4 py-10 text-center text-[13.5px] text-chat-faint">Nenhum atendimento encerrado nas últimas 24 horas.</p>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-hidden [&>li]:rounded-xl [&>li]:border [&>li]:border-white/70 [&>li]:bg-white/50 [&>li]:backdrop-blur-xl [&>li]:shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)]">
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08] [&>li]:backdrop-blur-2xl">
               {displayClosed.map((conversation) => (
                 <ConversationListItem key={conversation.id} conversation={conversation} onSelect={openConversation} selected={false} />
               ))}
@@ -297,13 +307,14 @@ function AttendanceDashboardPage() {
               type="button"
               onClick={loadMoreClosed}
               disabled={loadingClosed}
-              className="mt-4 w-full rounded-xl border border-white/70 bg-white/50 px-4 py-2 text-[13px] font-medium text-teal-signal backdrop-blur-xl transition hover:bg-white/70 disabled:opacity-50"
+              className="mt-3 w-full rounded-[16px] border border-white/[0.10] bg-white/[0.06] px-4 py-3 text-[14px] font-medium text-chat-text transition hover:bg-white/[0.10] disabled:opacity-50"
             >
               {loadingClosed ? 'Carregando...' : 'Carregar mais'}
             </button>
           )}
         </div>
       )}
+      </div>
       </div>
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
       {selectedConversation && (

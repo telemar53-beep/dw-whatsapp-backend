@@ -15,16 +15,48 @@ import IntegrationsAdminTab from '../components/IntegrationsAdminTab';
 import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannelHidden, deleteChannel } from '../services/api';
 import { isOfficialChannelType, channelTypeLabel } from '../utils/channelTypes';
 
-const TABS = [
-  { value: 'channels', label: 'Canais' },
-  { value: 'agents', label: 'Atendentes' },
-  { value: 'quickReplies', label: 'Mensagens' },
-  { value: 'sectors', label: 'Setores' },
-  { value: 'reasons', label: 'Motivos' },
-  { value: 'cities', label: 'Cidades' },
-  { value: 'triage', label: 'Triagem' },
-  { value: 'integrations', label: 'Integrações' },
+// As seções ficam agrupadas pelo que a pessoa quer mudar, em vez de uma fileira
+// de oito abas soltas: por onde o cliente fala, quem atende, o que é enviado.
+const SECTION_GROUPS = [
+  {
+    group: 'Canais',
+    items: [
+      { value: 'channels', label: 'Canais', description: 'Os números de WhatsApp ligados ao atendimento.' },
+      { value: 'triage', label: 'Triagem', description: 'O menu que o cliente recebe antes de falar com um atendente.' },
+    ],
+  },
+  {
+    group: 'Equipe',
+    items: [
+      { value: 'agents', label: 'Atendentes', description: 'Quem entra no painel e responde os clientes.' },
+      { value: 'sectors', label: 'Setores', description: 'Os times para onde um atendimento pode ser transferido.' },
+    ],
+  },
+  {
+    group: 'Atendimento',
+    items: [
+      {
+        value: 'quickReplies',
+        label: 'Mensagens',
+        description: 'Os textos que o sistema envia sozinho e as respostas rápidas da equipe.',
+      },
+      { value: 'reasons', label: 'Motivos', description: 'O motivo que o atendente escolhe ao encerrar um atendimento.' },
+      { value: 'cities', label: 'Cidades', description: 'As cidades usadas no cadastro do cliente e nos avisos por região.' },
+    ],
+  },
+  {
+    group: 'Integrações',
+    items: [
+      {
+        value: 'integrations',
+        label: 'Integrações',
+        description: 'A conexão com o SGP para consultar cliente, contrato e fatura.',
+      },
+    ],
+  },
 ];
+
+const SECTIONS = SECTION_GROUPS.flatMap((group) => group.items);
 
 const STATUS_LABELS = {
   connected: 'Conectado',
@@ -33,17 +65,21 @@ const STATUS_LABELS = {
 };
 
 function StatusDot({ status }) {
-  const color = status === 'connected' ? 'bg-teal-signal' : status === 'awaiting_qr' ? 'bg-amber-signal' : 'bg-ink-950/25';
+  const color =
+    status === 'connected' ? 'bg-wa-chip-text' : status === 'awaiting_qr' ? 'bg-wa-warn-text' : 'bg-wa-border-strong';
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-950/60">
-      <span className={`h-2 w-2 rounded-full ${color}`} aria-hidden="true" />
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-wa-border bg-wa-surface-soft px-2.5 py-[3px] text-[12.5px] font-medium text-wa-muted">
+      <span className={`h-1.5 w-1.5 rounded-full ${color}`} aria-hidden="true" />
       {STATUS_LABELS[status] || status}
     </span>
   );
 }
 
 const cardButtonClass =
-  'rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded-[10px] border border-wa-border bg-wa-surface px-3 py-1.5 text-[13.5px] font-medium text-wa-text transition hover:bg-wa-hover disabled:cursor-not-allowed disabled:opacity-50';
+
+const primaryButtonClass =
+  'shrink-0 rounded-[12px] bg-wa-green px-4 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
 
 function ChannelCard({
   channel,
@@ -58,49 +94,49 @@ function ChannelCard({
   busy,
 }) {
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="font-medium text-ink-950">{channel.name}</p>
-          <p className="text-sm text-ink-950/55">
+    <div className="rounded-[18px] border border-wa-border bg-wa-surface p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[16px] font-medium text-wa-text">{channel.name}</p>
+          <p className="mt-0.5 truncate text-[13.5px] text-wa-muted">
             {channelTypeLabel(channel.type)} — {channel.phoneNumber}
           </p>
         </div>
         <StatusDot status={channel.status} />
       </div>
-      <label className="mt-3 flex items-center gap-2 text-sm text-ink-950/70">
+
+      <label className="mt-4 flex items-center gap-2 text-[14px] text-wa-muted">
         <input
           type="checkbox"
           checked={!!channel.triageEnabled}
           onChange={(e) => onToggleTriage(channel.id, e.target.checked)}
-          className="h-4 w-4 accent-teal-signal"
+          className="h-4 w-4 accent-wa-green"
         />
         Usar triagem automática
       </label>
+
       {isOfficialChannelType(channel.type) && (
-        <div className="mt-3 flex flex-wrap items-end gap-2">
+        <div className="mt-4 flex flex-wrap items-end gap-2">
           <div>
-            <label htmlFor={`waba-id-${channel.id}`} className="mb-1.5 block text-sm font-medium text-ink-950/70">
+            <label htmlFor={`waba-id-${channel.id}`} className="mb-1.5 block text-[13px] font-medium text-wa-muted">
               WABA ID
             </label>
             <input
               id={`waba-id-${channel.id}`}
               value={wabaIdDrafts[channel.id] ?? channel.wabaId ?? ''}
               onChange={(e) => setWabaIdDrafts((prev) => ({ ...prev, [channel.id]: e.target.value }))}
-              className="rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2 text-sm text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+              className="h-[42px] rounded-[12px] border border-wa-border bg-wa-field px-3.5 text-[14px] text-wa-text outline-none transition focus:border-wa-green/60"
             />
           </div>
-          <button
-            onClick={() => onSaveWabaId(channel.id)}
-            className="rounded-lg bg-teal-signal px-3 py-2 text-sm font-medium text-white transition hover:brightness-110"
-          >
+          <button onClick={() => onSaveWabaId(channel.id)} className={primaryButtonClass}>
             Salvar WABA ID
           </button>
         </div>
       )}
+
       <QrCodeView channel={channel} onRefresh={onRefresh} />
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ink-950/10 pt-3">
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-wa-border pt-4">
         {channel.type === 'baileys' && (
           <button type="button" onClick={() => onReconnect(channel)} disabled={busy} className={cardButtonClass}>
             Reconectar
@@ -113,13 +149,18 @@ function ChannelCard({
           type="button"
           onClick={() => onDelete(channel)}
           disabled={busy}
-          className="rounded-lg border border-red-300 bg-white/60 px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-1.5 text-[13.5px] font-medium text-wa-error-text transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Excluir
         </button>
       </div>
     </div>
   );
+}
+
+function ErrorNote({ children }) {
+  if (!children) return null;
+  return <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text">{children}</p>;
 }
 
 function AdminChannelsPage() {
@@ -201,112 +242,141 @@ function AdminChannelsPage() {
     }
   }
 
+  const section = SECTIONS.find((item) => item.value === activeTab) || SECTIONS[0];
+
+  function sectionButtonClass(value) {
+    return `relative flex w-auto shrink-0 items-center whitespace-nowrap rounded-[14px] px-3 py-2.5 text-left text-[14.5px] transition md:w-full ${
+      activeTab === value
+        ? 'bg-white/[0.10] font-medium text-chat-text'
+        : 'text-chat-muted hover:bg-white/[0.05] hover:text-chat-text'
+    }`;
+  }
+
   return (
-    <div className="flex h-dvh">
-      <NavRail active="admin" onProfileClick={() => setProfileOpen(true)} />
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gradient-to-br from-sky-mist via-teal-mist to-sand-mist font-sans">
+    <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-teal-signal/20 blur-[100px]"
+        className="pointer-events-none absolute left-[34%] -top-[12%] h-[38rem] w-[42rem] rounded-full bg-chat-copper/40 blur-[150px]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-16 top-96 h-96 w-96 rounded-full bg-amber-signal/25 blur-[120px]"
+        className="pointer-events-none absolute -right-[8%] bottom-[-18%] h-[30rem] w-[32rem] rounded-full bg-chat-copper/25 blur-[150px]"
       />
 
-      <div className="relative mx-auto max-w-3xl space-y-6 px-4 py-10 sm:px-6">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink-950">Administração</h1>
-          <p className="mt-1 text-sm text-ink-950/55">Canais, equipe e automações do atendimento</p>
-        </div>
+      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-3">
+        <NavRail active="admin" onProfileClick={() => setProfileOpen(true)} dark />
 
-        <div className="inline-flex flex-wrap gap-1 rounded-full border border-white/70 bg-white/40 p-1 backdrop-blur-xl">
-          {TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setActiveTab(tab.value)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                activeTab === tab.value ? 'bg-teal-signal text-white shadow-sm' : 'text-ink-950/60 hover:text-ink-950'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:flex-row">
 
-        {activeTab === 'channels' ? (
-          <div className="space-y-6">
-            {triageToggleError && (
-              <div className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">
-                {triageToggleError}
-              </div>
-            )}
-            {wabaIdError && (
-              <div className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{wabaIdError}</div>
-            )}
-            {channelActionError && (
-              <div className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{channelActionError}</div>
-            )}
-            <label className="flex items-center gap-2 text-sm text-ink-950/70">
-              <input
-                type="checkbox"
-                checked={showHidden}
-                onChange={(e) => setShowHidden(e.target.checked)}
-                className="h-4 w-4 accent-teal-signal"
-              />
-              Mostrar canais ocultos
-            </label>
-            <div className="space-y-3">
-              {channels.map((channel) => (
-                <ChannelCard
-                  key={channel.id}
-                  channel={channel}
-                  wabaIdDrafts={wabaIdDrafts}
-                  setWabaIdDrafts={setWabaIdDrafts}
-                  onToggleTriage={handleToggleTriage}
-                  onSaveWabaId={handleSaveWabaId}
-                  onRefresh={refresh}
-                  onReconnect={handleReconnect}
-                  onToggleHidden={handleToggleHidden}
-                  onDelete={handleDelete}
-                  busy={busyChannelId === channel.id}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setCreatingChannel(true)}
-              className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
-            >
-              Criar canal
-            </button>
-            {creatingChannel && (
-              <CreateChannelModal
-                onClose={() => setCreatingChannel(false)}
-                onCreated={() => {
-                  refresh();
-                  setCreatingChannel(false);
-                }}
-              />
-            )}
+        <aside className="flex min-w-0 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.09] backdrop-blur-2xl md:w-[250px] md:shrink-0">
+          <div className="shrink-0 px-5 pb-2 pt-4 md:pb-3 md:pt-6">
+            <h1 className="font-display text-[22px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
+              Administração
+            </h1>
+            <p className="mt-1.5 text-[13.5px] leading-[19px] text-chat-muted">Como o atendimento funciona</p>
           </div>
-        ) : activeTab === 'agents' ? (
-          <AgentsAdminTab />
-        ) : activeTab === 'quickReplies' ? (
-          <MessagesAdminTab />
-        ) : activeTab === 'sectors' ? (
-          <SectorsAdminTab />
-        ) : activeTab === 'reasons' ? (
-          <ReasonsAdminTab />
-        ) : activeTab === 'cities' ? (
-          <CitiesAdminTab />
-        ) : activeTab === 'triage' ? (
-          <TriageAdminTab />
-        ) : (
-          <IntegrationsAdminTab />
-        )}
+          <nav className="chat-scroll flex min-h-0 gap-1 overflow-x-auto px-2 pb-3 md:flex-1 md:flex-col md:gap-0 md:overflow-x-hidden md:overflow-y-auto md:pb-5">
+            {SECTION_GROUPS.map((group) => (
+              <div key={group.group} className="flex gap-1 md:block">
+                <p className="hidden px-3 pb-1.5 pt-4 text-[12px] font-medium text-chat-faint md:block">{group.group}</p>
+                {group.items.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setActiveTab(item.value)}
+                    className={sectionButtonClass(item.value)}
+                  >
+                    {activeTab === item.value && (
+                      <span aria-hidden="true" className="absolute left-0 h-5 w-[3px] rounded-full bg-chat-orange" />
+                    )}
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </nav>
+        </aside>
+
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl">
+          <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/[0.06] px-6 py-5">
+            <div className="min-w-0">
+              <h2 className="font-display text-[20px] font-semibold leading-tight text-chat-text">{section.label}</h2>
+              <p className="mt-1 text-[14px] leading-[20px] text-chat-muted">{section.description}</p>
+            </div>
+            {activeTab === 'channels' && (
+              <button type="button" onClick={() => setCreatingChannel(true)} className={primaryButtonClass}>
+                Criar canal
+              </button>
+            )}
+          </header>
+
+          <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-6 py-6">
+            <div className="max-w-3xl">
+              {activeTab === 'channels' ? (
+                <div className="space-y-4">
+                  <ErrorNote>{triageToggleError}</ErrorNote>
+                  <ErrorNote>{wabaIdError}</ErrorNote>
+                  <ErrorNote>{channelActionError}</ErrorNote>
+
+                  <label className="flex items-center gap-2 text-[14px] text-wa-muted">
+                    <input
+                      type="checkbox"
+                      checked={showHidden}
+                      onChange={(e) => setShowHidden(e.target.checked)}
+                      className="h-4 w-4 accent-wa-green"
+                    />
+                    Mostrar canais ocultos
+                  </label>
+
+                  <div className="space-y-3">
+                    {channels.map((channel) => (
+                      <ChannelCard
+                        key={channel.id}
+                        channel={channel}
+                        wabaIdDrafts={wabaIdDrafts}
+                        setWabaIdDrafts={setWabaIdDrafts}
+                        onToggleTriage={handleToggleTriage}
+                        onSaveWabaId={handleSaveWabaId}
+                        onRefresh={refresh}
+                        onReconnect={handleReconnect}
+                        onToggleHidden={handleToggleHidden}
+                        onDelete={handleDelete}
+                        busy={busyChannelId === channel.id}
+                      />
+                    ))}
+                  </div>
+
+                  {creatingChannel && (
+                    <CreateChannelModal
+                      onClose={() => setCreatingChannel(false)}
+                      onCreated={() => {
+                        refresh();
+                        setCreatingChannel(false);
+                      }}
+                    />
+                  )}
+                </div>
+              ) : activeTab === 'agents' ? (
+                <AgentsAdminTab />
+              ) : activeTab === 'quickReplies' ? (
+                <MessagesAdminTab />
+              ) : activeTab === 'sectors' ? (
+                <SectorsAdminTab />
+              ) : activeTab === 'reasons' ? (
+                <ReasonsAdminTab />
+              ) : activeTab === 'cities' ? (
+                <CitiesAdminTab />
+              ) : activeTab === 'triage' ? (
+                <TriageAdminTab />
+              ) : (
+                <IntegrationsAdminTab />
+              )}
+            </div>
+          </div>
+        </main>
+        </div>
       </div>
-      </div>
+
       {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
     </div>
   );

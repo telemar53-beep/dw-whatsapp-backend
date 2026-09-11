@@ -4,9 +4,9 @@ import { useSgpQueryConfig } from '../hooks/useSgpQueryConfig';
 import { updateSgpQueryConfig } from '../services/api';
 
 const inputClass =
-  'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
-const labelClass = 'mb-1.5 block text-sm font-medium text-ink-950/70';
-const cardClass = 'space-y-3 rounded-2xl border border-white/70 bg-white/50 p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
+const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
 
 function SgpQueryConfigCard() {
   const { token } = useAuth();
@@ -86,12 +86,12 @@ function SgpQueryConfigCard() {
   if (!editing) {
     if (!config.configured) {
       return (
-        <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-          <p className="font-medium text-ink-950">Consulta ao SGP (cliente/boleto)</p>
+        <div className="flex items-center justify-between rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+          <p className="font-medium text-wa-text">Consulta ao SGP (cliente/boleto)</p>
           <button
             type="button"
             onClick={handleEditClick}
-            className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+            className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
           >
             Criar integração
           </button>
@@ -99,18 +99,18 @@ function SgpQueryConfigCard() {
       );
     }
     return (
-      <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+      <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="font-medium text-ink-950">Consulta ao SGP (cliente/boleto)</p>
-            <p className="text-sm text-ink-950/55">
+            <p className="font-medium text-wa-text">Consulta ao SGP (cliente/boleto)</p>
+            <p className="text-sm text-wa-muted">
               {config.baseUrl} — {config.enabled ? 'Ativo' : 'Inativo'}
             </p>
           </div>
           <button
             type="button"
             onClick={handleEditClick}
-            className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+            className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
           >
             Editar
           </button>
@@ -121,7 +121,7 @@ function SgpQueryConfigCard() {
 
   return (
     <form onSubmit={handleSave} className={cardClass}>
-      <h3 className="font-display text-base font-semibold text-ink-950">Consulta ao SGP (cliente/boleto)</h3>
+      <h3 className="font-display text-base font-semibold text-wa-text">Consulta ao SGP (cliente/boleto)</h3>
       <div>
         <label htmlFor="sgp-query-base-url" className={labelClass}>URL de acesso ao SGP</label>
         <input id="sgp-query-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className={inputClass} />
@@ -133,8 +133,8 @@ function SgpQueryConfigCard() {
       <div>
         {config.configured && !changingToken ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-ink-950/60">Token terminando em ...{config.tokenLast4}</span>
-            <button type="button" onClick={() => setChangingToken(true)} className="text-sm font-medium text-teal-signal underline">
+            <span className="text-sm text-wa-muted">Token terminando em ...{config.tokenLast4}</span>
+            <button type="button" onClick={() => setChangingToken(true)} className="text-sm font-medium text-wa-link underline">
               Trocar token
             </button>
           </div>
@@ -145,23 +145,23 @@ function SgpQueryConfigCard() {
           </>
         )}
       </div>
-      <label className="flex items-center gap-2 text-sm text-ink-950/70">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-teal-signal" />
+      <label className="flex items-center gap-2 text-sm text-wa-muted">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
         Ativo
       </label>
-      {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={saving}
-          className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
         >
           Salvar
         </button>
         <button
           type="button"
           onClick={handleCancel}
-          className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+          className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
         >
           Cancelar
         </button>

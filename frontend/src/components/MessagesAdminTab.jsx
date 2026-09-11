@@ -19,7 +19,7 @@ import WaDialog from './WaDialog';
 import SectionHelp from './SectionHelp';
 
 const inputClass =
-  'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 
 function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   const { token } = useAuth();
@@ -79,7 +79,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-2 rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
       >
         <input
           value={title}
@@ -93,19 +93,19 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
           className={inputClass}
           required
         />
-        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
           >
             Cancelar
           </button>
@@ -115,27 +115,27 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-ink-950">{quickReply.title}</p>
-          <p className="text-sm text-ink-950/55">{quickReply.content}</p>
+          <p className="font-medium text-wa-text">{quickReply.title}</p>
+          <p className="text-sm text-wa-muted">{quickReply.content}</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
             Editar
           </button>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+            className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
           >
             Excluir
           </button>
         </div>
       </div>
       {deleteError && (
-        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
       )}
     </div>
   );
@@ -212,28 +212,28 @@ function ChannelWelcomeMessageRow({ channel, onSaved }) {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-2 rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
       >
-        <p className="font-medium text-ink-950">{channel.name}</p>
+        <p className="font-medium text-wa-text">{channel.name}</p>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
           required
         />
-        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
           >
             Cancelar
           </button>
@@ -244,9 +244,9 @@ function ChannelWelcomeMessageRow({ channel, onSaved }) {
 
   if (!channel.welcomeMessage) {
     return (
-      <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-        <p className="font-medium text-ink-950">{channel.name}</p>
-        <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+      <div className="flex items-center justify-between rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+        <p className="font-medium text-wa-text">{channel.name}</p>
+        <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
           Criar boas-vindas
         </button>
       </div>
@@ -254,27 +254,27 @@ function ChannelWelcomeMessageRow({ channel, onSaved }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-ink-950">{channel.name}</p>
-          <p className="text-sm text-ink-950/55">{channel.welcomeMessage}</p>
+          <p className="font-medium text-wa-text">{channel.name}</p>
+          <p className="text-sm text-wa-muted">{channel.welcomeMessage}</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
             Editar
           </button>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+            className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
           >
             Excluir
           </button>
         </div>
       </div>
       {deleteError && (
-        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
       )}
     </div>
   );
@@ -282,8 +282,8 @@ function ChannelWelcomeMessageRow({ channel, onSaved }) {
 
 function CityStatusDot({ enabled }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-950/60">
-      <span className={`h-2 w-2 rounded-full ${enabled ? 'bg-teal-signal' : 'bg-ink-950/25'}`} aria-hidden="true" />
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-wa-muted">
+      <span className={`h-2 w-2 rounded-full ${enabled ? 'bg-wa-chip-text' : 'bg-wa-border-strong'}`} aria-hidden="true" />
       {enabled ? 'Ativo' : 'Inativo'}
     </span>
   );
@@ -347,37 +347,37 @@ function CityNoticeRow({ city, onSaved }) {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-2 rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
       >
-        <p className="font-medium text-ink-950">{city.name}</p>
+        <p className="font-medium text-wa-text">{city.name}</p>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
           required
         />
-        <label className="flex items-center gap-2 text-sm text-ink-950/70">
+        <label className="flex items-center gap-2 text-sm text-wa-muted">
           <input
             type="checkbox"
             checked={enabled}
             onChange={(e) => setEnabled(e.target.checked)}
-            className="h-4 w-4 accent-teal-signal"
+            className="h-4 w-4 accent-wa-green"
           />
           Ativo
         </label>
-        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
           >
             Cancelar
           </button>
@@ -388,9 +388,9 @@ function CityNoticeRow({ city, onSaved }) {
 
   if (!city.notice) {
     return (
-      <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-        <p className="font-medium text-ink-950">{city.name}</p>
-        <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+      <div className="flex items-center justify-between rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+        <p className="font-medium text-wa-text">{city.name}</p>
+        <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
           Criar aviso
         </button>
       </div>
@@ -398,28 +398,28 @@ function CityNoticeRow({ city, onSaved }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="font-medium text-ink-950">{city.name}</p>
-          <p className="text-sm text-ink-950/55">{city.notice.message}</p>
+          <p className="font-medium text-wa-text">{city.name}</p>
+          <p className="text-sm text-wa-muted">{city.notice.message}</p>
         </div>
         <div className="flex items-center gap-3">
           <CityStatusDot enabled={city.notice.enabled} />
-          <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
             Editar
           </button>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+            className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
           >
             Excluir
           </button>
         </div>
       </div>
       {deleteError && (
-        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
       )}
     </div>
   );
@@ -492,14 +492,14 @@ function AssignmentMessageSection() {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-3 rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
       >
-        <label className="flex items-center gap-2 text-sm text-ink-950/70">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-teal-signal" />
+        <label className="flex items-center gap-2 text-sm text-wa-muted">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
           Ativo
         </label>
         <div className="space-y-1">
-          <label htmlFor="assignment-opening-message" className="text-sm font-medium text-ink-950">
+          <label htmlFor="assignment-opening-message" className="text-sm font-medium text-wa-text">
             Mensagem de abertura
           </label>
           <textarea
@@ -512,7 +512,7 @@ function AssignmentMessageSection() {
           />
         </div>
         <div className="space-y-1">
-          <label htmlFor="assignment-closing-message" className="text-sm font-medium text-ink-950">
+          <label htmlFor="assignment-closing-message" className="text-sm font-medium text-wa-text">
             Mensagem de encerramento
           </label>
           <textarea
@@ -525,15 +525,15 @@ function AssignmentMessageSection() {
           />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-ink-950">Atendentes</p>
+          <p className="text-sm font-medium text-wa-text">Atendentes</p>
           <div className="space-y-1">
             {agents.map((agent) => (
-              <label key={agent.id} className="flex items-center gap-2 text-sm text-ink-950/70">
+              <label key={agent.id} className="flex items-center gap-2 text-sm text-wa-muted">
                 <input
                   type="checkbox"
                   checked={agentIds.includes(agent.id)}
                   onChange={() => toggleAgent(agent.id)}
-                  className="h-4 w-4 accent-teal-signal"
+                  className="h-4 w-4 accent-wa-green"
                 />
                 {agent.name}
               </label>
@@ -541,34 +541,34 @@ function AssignmentMessageSection() {
           </div>
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-ink-950">Canais</p>
+          <p className="text-sm font-medium text-wa-text">Canais</p>
           <div className="space-y-1">
             {channels.map((channel) => (
-              <label key={channel.id} className="flex items-center gap-2 text-sm text-ink-950/70">
+              <label key={channel.id} className="flex items-center gap-2 text-sm text-wa-muted">
                 <input
                   type="checkbox"
                   checked={channelIds.includes(channel.id)}
                   onChange={() => toggleChannel(channel.id)}
-                  className="h-4 w-4 accent-teal-signal"
+                  className="h-4 w-4 accent-wa-green"
                 />
                 {channel.name}
               </label>
             ))}
           </div>
         </div>
-        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
           >
             Cancelar
           </button>
@@ -579,9 +579,9 @@ function AssignmentMessageSection() {
 
   if (config.id === null) {
     return (
-      <div className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-        <p className="text-sm text-ink-950/55">Nenhuma configuração criada ainda.</p>
-        <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+      <div className="flex items-center justify-between rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+        <p className="text-sm text-wa-muted">Nenhuma configuração criada ainda.</p>
+        <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
           Criar atribuição
         </button>
       </div>
@@ -589,14 +589,14 @@ function AssignmentMessageSection() {
   }
 
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-ink-950/70">
+        <p className="text-sm text-wa-muted">
           {config.agentIds.length} atendentes, {config.channelIds.length} canais
         </p>
         <div className="flex items-center gap-3">
           <CityStatusDot enabled={config.enabled} />
-          <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
             Editar
           </button>
         </div>
@@ -616,7 +616,7 @@ function MessagesAdminTab() {
     <div className="space-y-8">
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <h2 className="font-display text-lg font-semibold text-ink-950">Boas-vindas por canal</h2>
+          <h2 className="font-display text-lg font-semibold text-wa-text">Boas-vindas por canal</h2>
           <SectionHelp label="Boas-vindas por canal" title="Boas-vindas por canal">
             <p>
               Enviada automaticamente para o cliente assim que ele manda a primeira mensagem em um
@@ -635,7 +635,7 @@ function MessagesAdminTab() {
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <h2 className="font-display text-lg font-semibold text-ink-950">Avisos por cidade</h2>
+          <h2 className="font-display text-lg font-semibold text-wa-text">Avisos por cidade</h2>
           <SectionHelp label="Avisos por cidade" title="Avisos por cidade">
             <p>
               Enviado automaticamente para clientes daquela cidade quando entram em contato, além
@@ -648,7 +648,7 @@ function MessagesAdminTab() {
           </SectionHelp>
         </div>
         {cityNotices.length === 0 && (
-          <p className="rounded-lg border border-amber-300 bg-amber-50/80 px-3 py-2 text-sm text-amber-800">
+          <p className="rounded-lg border border-wa-warn-text/30 bg-wa-warn-bg px-3 py-2 text-sm text-wa-warn-text">
             Nenhuma cidade cadastrada ainda. Cadastre cidades na aba Cidades para poder criar avisos.
           </p>
         )}
@@ -659,7 +659,7 @@ function MessagesAdminTab() {
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <h2 className="font-display text-lg font-semibold text-ink-950">Atribuir um atendimento</h2>
+          <h2 className="font-display text-lg font-semibold text-wa-text">Atribuir um atendimento</h2>
           <SectionHelp label="Atribuir um atendimento" title="Atribuir um atendimento">
             <p>
               Enviada automaticamente para o cliente quando um atendente assume o
@@ -683,7 +683,7 @@ function MessagesAdminTab() {
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <h2 className="font-display text-lg font-semibold text-ink-950">Respostas rápidas</h2>
+          <h2 className="font-display text-lg font-semibold text-wa-text">Respostas rápidas</h2>
           <SectionHelp label="Respostas rápidas" title="Respostas rápidas">
             <p>
               Mensagens prontas que o atendente pode inserir com um clique durante o
@@ -699,14 +699,14 @@ function MessagesAdminTab() {
           <button
             type="button"
             onClick={() => setCreatingQuickReply(true)}
-            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+            className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
           >
             Criar resposta rápida
           </button>
           <button
             type="button"
             onClick={() => setViewingQuickReplies(true)}
-            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+            className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
           >
             Ver mensagens ({quickReplies.length})
           </button>
@@ -732,7 +732,7 @@ function MessagesAdminTab() {
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <h2 className="font-display text-lg font-semibold text-ink-950">Templates</h2>
+          <h2 className="font-display text-lg font-semibold text-wa-text">Templates</h2>
           <SectionHelp label="Templates" title="Templates">
             <p>
               Templates são mensagens pré-aprovadas pela Meta, usadas para iniciar

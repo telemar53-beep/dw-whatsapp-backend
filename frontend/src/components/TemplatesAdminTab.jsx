@@ -27,25 +27,25 @@ function TemplateRow({ template, onDeleted }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-ink-950">{template.name}</p>
-          <p className="text-sm text-ink-950/55">
+          <p className="font-medium text-wa-text">{template.name}</p>
+          <p className="text-sm text-wa-muted">
             <span>{template.language}</span> · <span>{template.category}</span> · <span>{template.status}</span>
           </p>
-          {template.rejectionReason && <p className="text-sm text-red-600">{template.rejectionReason}</p>}
+          {template.rejectionReason && <p className="text-sm text-wa-error-text">{template.rejectionReason}</p>}
         </div>
         <button
           onClick={handleDelete}
           disabled={deleting}
-          className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+          className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
         >
           Excluir
         </button>
       </div>
       {deleteError && (
-        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
       )}
     </div>
   );
@@ -98,19 +98,19 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
     <form
       onSubmit={handleSubmit}
       aria-label="Registrar template existente"
-      className="space-y-3 rounded-2xl border border-white/70 bg-white/50 p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
     >
-      <h3 className="font-display text-base font-semibold text-ink-950">Registrar template existente</h3>
-      <p className="text-sm text-ink-950/55">
+      <h3 className="font-display text-base font-semibold text-wa-text">Registrar template existente</h3>
+      <p className="text-sm text-wa-muted">
         Para um template já aprovado pela Meta fora deste sistema — busca o corpo e a quantidade de variáveis automaticamente pelo nome.
       </p>
       <div>
-        <label htmlFor="existing-template-channel" className="mb-1.5 block text-sm font-medium text-ink-950/70">Canal</label>
+        <label htmlFor="existing-template-channel" className="mb-1.5 block text-sm font-medium text-wa-muted">Canal</label>
         <select
           id="existing-template-channel"
           value={channelId}
           onChange={(e) => setChannelId(e.target.value)}
-          className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
           required
         >
           <option value="">Selecione um canal</option>
@@ -120,32 +120,32 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
         </select>
       </div>
       <div>
-        <label htmlFor="existing-template-name" className="mb-1.5 block text-sm font-medium text-ink-950/70">Nome exato na Meta</label>
+        <label htmlFor="existing-template-name" className="mb-1.5 block text-sm font-medium text-wa-muted">Nome exato na Meta</label>
         <input
           id="existing-template-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
           required
         />
       </div>
       <div>
-        <label htmlFor="existing-template-language" className="mb-1.5 block text-sm font-medium text-ink-950/70">Idioma</label>
+        <label htmlFor="existing-template-language" className="mb-1.5 block text-sm font-medium text-wa-muted">Idioma</label>
         <input
           id="existing-template-language"
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
-          className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
           required
         />
       </div>
       <div>
-        <label htmlFor="existing-template-header" className="mb-1.5 block text-sm font-medium text-ink-950/70">Cabeçalho</label>
+        <label htmlFor="existing-template-header" className="mb-1.5 block text-sm font-medium text-wa-muted">Cabeçalho</label>
         <select
           id="existing-template-header"
           value={headerType}
           onChange={(e) => setHeaderType(e.target.value)}
-          className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
         >
           <option value="">Nenhum</option>
           <option value="document">Documento</option>
@@ -153,12 +153,12 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
           <option value="video">Vídeo</option>
         </select>
       </div>
-      {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
         >
           Registrar
         </button>
@@ -166,7 +166,7 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
           >
             Cancelar
           </button>
@@ -246,7 +246,7 @@ function TemplatesAdminTab() {
             <button
               key={wabaId}
               onClick={() => handleSync(wabaId)}
-              className="rounded-lg border border-teal-signal/30 bg-teal-signal/10 px-3 py-1.5 text-sm font-medium text-teal-signal transition hover:bg-teal-signal/15"
+              className="rounded-[10px] border border-wa-border bg-wa-surface px-3 py-1.5 text-[13.5px] font-medium text-wa-text transition hover:bg-wa-hover"
             >
               Sincronizar agora ({wabaId})
             </button>
@@ -254,14 +254,14 @@ function TemplatesAdminTab() {
         </div>
       )}
       {syncError && (
-        <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{syncError}</p>
+        <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{syncError}</p>
       )}
 
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setViewingTemplates(true)}
-          className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+          className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
         >
           Ver templates ({templates.length})
         </button>
@@ -269,7 +269,7 @@ function TemplatesAdminTab() {
           <button
             type="button"
             onClick={() => setCreatingTemplate(true)}
-            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+            className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
           >
             Cadastrar novo template
           </button>
@@ -278,7 +278,7 @@ function TemplatesAdminTab() {
           <button
             type="button"
             onClick={() => setRegisteringTemplate(true)}
-            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+            className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
           >
             Registrar template existente
           </button>
@@ -293,18 +293,18 @@ function TemplatesAdminTab() {
       <form
         onSubmit={handleCreate}
         aria-label="Cadastrar novo template"
-        className="space-y-3 rounded-2xl border border-white/70 bg-white/50 p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
       >
-        <h3 className="font-display text-base font-semibold text-ink-950">Cadastrar novo template</h3>
+        <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar novo template</h3>
         <div>
-          <label htmlFor="template-channel" className="mb-1.5 block text-sm font-medium text-ink-950/70">
+          <label htmlFor="template-channel" className="mb-1.5 block text-sm font-medium text-wa-muted">
             Canal
           </label>
           <select
             id="template-channel"
             value={channelId}
             onChange={(e) => setChannelId(e.target.value)}
-            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
             required
           >
             {officialChannels.map((channel) => (
@@ -315,7 +315,7 @@ function TemplatesAdminTab() {
           </select>
         </div>
         <div>
-          <label htmlFor="template-name" className="mb-1.5 block text-sm font-medium text-ink-950/70">
+          <label htmlFor="template-name" className="mb-1.5 block text-sm font-medium text-wa-muted">
             Nome
           </label>
           <input
@@ -323,38 +323,38 @@ function TemplatesAdminTab() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="fatura_vencida"
-            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
             required
           />
         </div>
         <div>
-          <label htmlFor="template-category" className="mb-1.5 block text-sm font-medium text-ink-950/70">
+          <label htmlFor="template-category" className="mb-1.5 block text-sm font-medium text-wa-muted">
             Categoria
           </label>
           <select
             id="template-category"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
           >
             <option value="UTILITY">Utilidade</option>
             <option value="MARKETING">Marketing</option>
           </select>
         </div>
         <div>
-          <label htmlFor="template-language" className="mb-1.5 block text-sm font-medium text-ink-950/70">
+          <label htmlFor="template-language" className="mb-1.5 block text-sm font-medium text-wa-muted">
             Idioma
           </label>
           <input
             id="template-language"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
             required
           />
         </div>
         <div>
-          <label htmlFor="template-body" className="mb-1.5 block text-sm font-medium text-ink-950/70">
+          <label htmlFor="template-body" className="mb-1.5 block text-sm font-medium text-wa-muted">
             Corpo da mensagem
           </label>
           <textarea
@@ -362,25 +362,25 @@ function TemplatesAdminTab() {
             value={bodyText}
             onChange={(e) => setBodyText(e.target.value)}
             placeholder="Olá {{1}}, sua fatura de {{2}} venceu."
-            className="w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25"
+            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
             required
           />
         </div>
         {error && (
-          <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>
+          <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>
         )}
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cadastrar
           </button>
           <button
             type="button"
             onClick={handleCancelCreate}
-            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
           >
             Cancelar
           </button>

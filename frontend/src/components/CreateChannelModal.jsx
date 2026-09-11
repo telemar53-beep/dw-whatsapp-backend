@@ -32,10 +32,10 @@ function CreateChannelModal({ onClose, onCreated }) {
               key={option.value}
               type="button"
               onClick={() => setType(option.value)}
-              className="w-full rounded-2xl border border-white/70 bg-white/50 p-4 text-left shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl transition hover:bg-white/80"
+              className="w-full rounded-2xl border border-wa-surface-line bg-wa-surface p-4 text-left shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl transition hover:bg-wa-panel"
             >
-              <p className="font-medium text-ink-950">{option.label}</p>
-              <p className="mt-1 text-sm text-ink-950/55">{option.description}</p>
+              <p className="font-medium text-wa-text">{option.label}</p>
+              <p className="mt-1 text-sm text-wa-muted">{option.description}</p>
             </button>
           ))}
         </div>
@@ -51,7 +51,7 @@ function CreateChannelModal({ onClose, onCreated }) {
         <button
           type="button"
           onClick={() => setType(null)}
-          className="mb-3 text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+          className="mb-3 text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
         >
           ← Voltar
         </button>

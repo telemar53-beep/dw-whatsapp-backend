@@ -5,7 +5,7 @@ import { updateSector, deleteSector } from '../services/api';
 import CreateSectorForm from './CreateSectorForm';
 
 const inputClass =
-  'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 
 function SectorRow({ sector, onSaved, onDeleted }) {
   const { token } = useAuth();
@@ -62,22 +62,22 @@ function SectorRow({ sector, onSaved, onDeleted }) {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-2 rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
       >
         <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
-        {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
           >
             Cancelar
           </button>
@@ -87,24 +87,24 @@ function SectorRow({ sector, onSaved, onDeleted }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
-        <p className="font-medium text-ink-950">{sector.name}</p>
+        <p className="font-medium text-wa-text">{sector.name}</p>
         <div className="flex items-center gap-3">
-          <button onClick={handleEditClick} className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline">
+          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
             Editar
           </button>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-sm font-medium text-red-600 hover:text-red-700 hover:underline disabled:opacity-50"
+            className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
           >
             Excluir
           </button>
         </div>
       </div>
       {deleteError && (
-        <p className="mt-2 rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
       )}
     </div>
   );

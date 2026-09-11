@@ -9,7 +9,7 @@ function SectionHelp({ label, title, children }) {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={`O que é isso: ${label}`}
-        className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+        className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
       >
         O que é isso?
       </button>

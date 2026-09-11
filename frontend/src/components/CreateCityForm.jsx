@@ -3,8 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { createCity } from '../services/api';
 
 const inputClass =
-  'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 placeholder-ink-950/35 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
-const labelClass = 'mb-1.5 block text-sm font-medium text-ink-950/70';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 
 function CreateCityForm({ onCreated }) {
   const { token } = useAuth();
@@ -30,20 +30,20 @@ function CreateCityForm({ onCreated }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-2xl border border-white/70 bg-white/50 p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
     >
-      <h3 className="font-display text-base font-semibold text-ink-950">Cadastrar nova cidade</h3>
+      <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar nova cidade</h3>
       <div>
         <label htmlFor="city-name" className={labelClass}>
           Nome
         </label>
         <input id="city-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
       </div>
-      {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <button
         type="submit"
         disabled={submitting}
-        className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-signal/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
       >
         Cadastrar
       </button>

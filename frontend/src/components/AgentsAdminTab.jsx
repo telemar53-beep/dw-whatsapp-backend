@@ -43,31 +43,31 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
   }
 
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/50 p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-medium text-ink-950">{agentRow.name}</p>
-          <p className="text-sm text-ink-950/55">
+          <p className="font-medium text-wa-text">{agentRow.name}</p>
+          <p className="text-sm text-wa-muted">
             {agentRow.email} — {agentRow.role === 'admin' ? 'Administrador' : 'Atendente'}
           </p>
-          <p className="text-sm text-ink-950/55">
+          <p className="text-sm text-wa-muted">
             Setores: {agentRow.sectors.length > 0 ? agentRow.sectors.map((s) => s.name).join(', ') : 'Nenhum setor'}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`text-sm font-medium ${agentRow.active ? 'text-teal-signal' : 'text-ink-950/40'}`}>
+          <span className={`text-sm font-medium ${agentRow.active ? 'text-wa-link' : 'text-wa-muted'}`}>
             {agentRow.active ? 'Ativo' : 'Desativado'}
           </span>
           <button
             onClick={handleEditSectorsClick}
-            className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+            className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
           >
             Editar setores
           </button>
           {agentRow.id !== currentAgent?.id && (
             <button
               onClick={() => onToggleActive(agentRow)}
-              className="text-sm font-medium text-teal-signal hover:text-teal-signal/80 hover:underline"
+              className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
             >
               {agentRow.active ? 'Desativar' : 'Reativar'}
             </button>
@@ -75,32 +75,32 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
         </div>
       </div>
       {editingSectors && (
-        <div className="mt-3 space-y-2 rounded-2xl border border-white/70 bg-white/50 p-3 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+        <div className="mt-3 space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-3 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
           {sectors.map((sector) => (
-            <label key={sector.id} className="flex items-center gap-2 text-sm text-ink-950/70">
+            <label key={sector.id} className="flex items-center gap-2 text-sm text-wa-muted">
               <input
                 type="checkbox"
                 checked={selectedIds.includes(sector.id)}
                 onChange={() => toggleSector(sector.id)}
-                className="h-4 w-4 accent-teal-signal"
+                className="h-4 w-4 accent-wa-green"
               />
               {sector.name}
             </label>
           ))}
-          {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
           <div className="flex gap-2">
             <button
               type="button"
               onClick={handleSaveSectors}
               disabled={submitting}
-              className="rounded-lg bg-teal-signal px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Salvar
             </button>
             <button
               type="button"
               onClick={handleCancel}
-              className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+              className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
             >
               Cancelar
             </button>
@@ -140,7 +140,7 @@ function AgentsAdminTab() {
         <button
           type="button"
           onClick={() => setCreatingAgent(true)}
-          className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+          className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
         >
           Criar atendente
         </button>

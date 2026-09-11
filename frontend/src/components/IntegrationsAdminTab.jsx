@@ -8,9 +8,9 @@ import { isOfficialChannelType } from '../utils/channelTypes';
 import SgpQueryConfigCard from './SgpQueryConfigCard';
 
 const inputClass =
-  'w-full rounded-xl border border-ink-950/15 bg-white/60 px-3.5 py-2.5 text-ink-950 outline-none transition focus:border-teal-signal/60 focus:bg-white/90 focus:ring-2 focus:ring-teal-signal/25';
-const labelClass = 'mb-1.5 block text-sm font-medium text-ink-950/70';
-const cardClass = 'space-y-3 rounded-2xl border border-white/70 bg-white/50 p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
+const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
 
 const MODE_LABELS = { freetext: 'Texto livre (Baileys)', template: 'Template (oficial)' };
 
@@ -106,35 +106,35 @@ function IntegrationCard({ integration, channels, templates, onChanged }) {
     <div className={cardClass}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="font-medium text-ink-950">{integration.description}</p>
-          <p className="text-sm text-ink-950/55">
+          <p className="font-medium text-wa-text">{integration.description}</p>
+          <p className="text-sm text-wa-muted">
             {channel ? channel.name : 'Canal removido'} — {MODE_LABELS[integration.mode] || integration.mode}
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-ink-950/70">
+        <label className="flex items-center gap-2 text-sm text-wa-muted">
           <input
             type="checkbox"
             checked={integration.enabled}
             onChange={handleToggleEnabled}
             aria-label={`Ativo: ${integration.description}`}
-            className="h-4 w-4 accent-teal-signal"
+            className="h-4 w-4 accent-wa-green"
           />
           Ativo
         </label>
       </div>
-      <p className="text-sm text-ink-950/55">{integration.hasApiKey ? 'Uma chave já foi gerada.' : 'Nenhuma chave foi gerada ainda.'}</p>
+      <p className="text-sm text-wa-muted">{integration.hasApiKey ? 'Uma chave já foi gerada.' : 'Nenhuma chave foi gerada ainda.'}</p>
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={handleRotateKey}
           disabled={rotating}
-          className="rounded-lg bg-teal-signal px-3 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-wa-green px-3 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Gerar nova chave
         </button>
         {!editing && (
           <button
             onClick={handleStartEdit}
-            className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-2 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+            className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
           >
             Editar
           </button>
@@ -144,7 +144,7 @@ function IntegrationCard({ integration, channels, templates, onChanged }) {
         <form
           onSubmit={handleSaveEdit}
           aria-label={`Editar integração: ${integration.description}`}
-          className="space-y-3 rounded-xl border border-white/70 bg-white/40 p-4"
+          className="space-y-3 rounded-xl border border-wa-surface-line bg-wa-surface-soft p-4"
         >
           <div>
             <label htmlFor={`sgp-edit-description-${integration.id}`} className={labelClass}>Descrição</label>
@@ -189,14 +189,14 @@ function IntegrationCard({ integration, channels, templates, onChanged }) {
             <button
               type="submit"
               disabled={savingEdit}
-              className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
             >
               Salvar
             </button>
             <button
               type="button"
               onClick={handleCancelEdit}
-              className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-2 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+              className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
             >
               Cancelar
             </button>
@@ -204,12 +204,12 @@ function IntegrationCard({ integration, channels, templates, onChanged }) {
         </form>
       )}
       {generatedKey && (
-        <div className="rounded-lg border border-amber-signal/50 bg-amber-signal/10 px-3 py-2 text-sm text-ink-950">
+        <div className="rounded-lg border border-wa-warn-text/40 bg-wa-warn-bg px-3 py-2 text-sm text-wa-text">
           <p className="font-medium">Copie agora — esta chave não será mostrada novamente:</p>
-          <code className="mt-1 block break-all rounded bg-white/70 px-2 py-1">{generatedKey}</code>
+          <code className="mt-1 block break-all rounded bg-wa-surface px-2 py-1">{generatedKey}</code>
         </div>
       )}
-      {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
     </div>
   );
 }
@@ -290,14 +290,14 @@ function IntegrationsAdminTab() {
         <button
           type="button"
           onClick={() => setCreatingIntegration(true)}
-          className="rounded-lg border border-ink-950/15 bg-white/60 px-3 py-1.5 text-sm font-medium text-ink-950 transition hover:bg-white/90"
+          className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
         >
           Nova integração SGP
         </button>
       )}
       {creatingIntegration && (
         <form onSubmit={handleCreate} className={cardClass}>
-          <h3 className="font-display text-base font-semibold text-ink-950">Nova integração SGP</h3>
+          <h3 className="font-display text-base font-semibold text-wa-text">Nova integração SGP</h3>
           <div>
             <label htmlFor="sgp-description" className={labelClass}>Descrição</label>
             <input id="sgp-description" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
@@ -322,23 +322,23 @@ function IntegrationsAdminTab() {
               </select>
             </div>
           )}
-          <label className="flex items-center gap-2 text-sm text-ink-950/70">
-            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-teal-signal" />
+          <label className="flex items-center gap-2 text-sm text-wa-muted">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
             Ativo
           </label>
-          {error && <p className="rounded-lg border border-red-300 bg-red-50/80 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={saving}
-              className="rounded-xl bg-gradient-to-r from-amber-signal to-amber-signal-dark px-4 py-2.5 font-medium text-ink-950 shadow-[0_10px_30px_-8px_rgba(242,169,60,0.5)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cadastrar
             </button>
             <button
               type="button"
               onClick={handleCancelCreate}
-              className="rounded-lg border border-ink-950/15 bg-white/50 px-3 py-1.5 text-sm font-medium text-ink-950/70 transition hover:bg-white/80 hover:text-ink-950"
+              className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
             >
               Cancelar
             </button>

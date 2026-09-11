@@ -6,6 +6,7 @@ import AdminChannelsPage from './AdminChannelsPage';
 import { useChannels } from '../hooks/useChannels';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
 import { useAssignmentMessageConfig } from '../hooks/useAssignmentMessageConfig';
+import { useBusinessHoursConfig } from '../hooks/useBusinessHoursConfig';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useSectors } from '../hooks/useSectors';
 import { useCities } from '../hooks/useCities';
@@ -18,6 +19,7 @@ import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannel
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
 vi.mock('../hooks/useAssignmentMessageConfig');
+vi.mock('../hooks/useBusinessHoursConfig');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useSectors');
 vi.mock('../hooks/useCities');
@@ -33,6 +35,11 @@ beforeEach(() => {
   useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
   useAssignmentMessageConfig.mockReturnValue({
     config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+    loading: false,
+    refresh: vi.fn(),
+  });
+  useBusinessHoursConfig.mockReturnValue({
+    config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' },
     loading: false,
     refresh: vi.fn(),
   });

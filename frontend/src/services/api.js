@@ -338,6 +338,14 @@ export function updateAssignmentMessageConfig(payload, token) {
   return apiFetch('/api/admin/assignment-message', { method: 'PUT', body: payload, token });
 }
 
+export function getBusinessHoursConfig(token) {
+  return apiFetch('/api/admin/business-hours', { token });
+}
+
+export function updateBusinessHoursConfig(payload, token) {
+  return apiFetch('/api/admin/business-hours', { method: 'PUT', body: payload, token });
+}
+
 export function lookupSgpClient(cpf, token) {
   return apiFetch(`/api/sgp/clientes?cpf=${encodeURIComponent(cpf)}`, { token });
 }

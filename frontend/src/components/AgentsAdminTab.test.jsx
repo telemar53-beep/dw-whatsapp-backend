@@ -73,6 +73,61 @@ describe('AgentsAdminTab', () => {
     expect(screen.queryByRole('button', { name: /desativar/i })).not.toBeInTheDocument();
   });
 
+  test('generates a new password for an agent and shows it in a dialog', async () => {
+    useAgentsAdmin.mockReturnValue({
+      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [] }],
+      refresh: vi.fn(),
+    });
+    api.resetAgentPassword.mockResolvedValue({ newPassword: 'Xy9kFpQr2z' });
+    render(<AgentsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova senha/i }));
+
+    await waitFor(() => expect(api.resetAgentPassword).toHaveBeenCalledWith('a1', 'tok-123'));
+    expect(screen.getByText('Xy9kFpQr2z')).toBeInTheDocument();
+  });
+
+  test('does not show a "Gerar nova senha" button for the currently logged-in admin', () => {
+    useAgentsAdmin.mockReturnValue({
+      agents: [{ id: 'admin-1', name: 'Você', email: 'voce@dw.com', role: 'admin', active: true, sectors: [] }],
+      refresh: vi.fn(),
+    });
+    render(<AgentsAdminTab />);
+    expect(screen.queryByRole('button', { name: /gerar nova senha/i })).not.toBeInTheDocument();
+  });
+
+  test('copying the generated password writes it to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue();
+    Object.assign(navigator, { clipboard: { writeText } });
+    useAgentsAdmin.mockReturnValue({
+      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [] }],
+      refresh: vi.fn(),
+    });
+    api.resetAgentPassword.mockResolvedValue({ newPassword: 'Xy9kFpQr2z' });
+    render(<AgentsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova senha/i }));
+    await screen.findByText('Xy9kFpQr2z');
+    await userEvent.click(screen.getByRole('button', { name: /copiar/i }));
+
+    expect(writeText).toHaveBeenCalledWith('Xy9kFpQr2z');
+  });
+
+  test('closing the generated-password dialog hides the password', async () => {
+    useAgentsAdmin.mockReturnValue({
+      agents: [{ id: 'a1', name: 'Ana', email: 'ana@dw.com', role: 'agent', active: true, sectors: [] }],
+      refresh: vi.fn(),
+    });
+    api.resetAgentPassword.mockResolvedValue({ newPassword: 'Xy9kFpQr2z' });
+    render(<AgentsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /gerar nova senha/i }));
+    await screen.findByText('Xy9kFpQr2z');
+    await userEvent.click(screen.getByRole('button', { name: /^fechar$/i }));
+
+    expect(screen.queryByText('Xy9kFpQr2z')).not.toBeInTheDocument();
+  });
+
   test('does not show the create-agent form until its button is clicked', () => {
     useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
     render(<AgentsAdminTab />);

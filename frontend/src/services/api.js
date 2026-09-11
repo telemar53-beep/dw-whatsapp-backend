@@ -145,6 +145,10 @@ export function setAgentActive(agentId, active, token) {
   return apiFetch(`/api/admin/agents/${agentId}`, { method: 'PATCH', body: { active }, token });
 }
 
+export function resetAgentPassword(agentId, token) {
+  return apiFetch(`/api/admin/agents/${agentId}/password`, { method: 'PUT', token });
+}
+
 export function changePassword(currentPassword, newPassword, token) {
   return apiFetch('/api/auth/password', { method: 'PUT', body: { currentPassword, newPassword }, token });
 }

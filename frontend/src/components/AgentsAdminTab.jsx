@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAgentsAdmin } from '../hooks/useAgentsAdmin';
 import { useSectors } from '../hooks/useSectors';
-import { setAgentActive, setAgentSectors } from '../services/api';
+import { setAgentActive, setAgentSectors, resetAgentPassword } from '../services/api';
 import CreateAgentForm from './CreateAgentForm';
+import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
 
 function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSaved }) {
   const { token } = useAuth();
@@ -11,6 +12,29 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
   const [selectedIds, setSelectedIds] = useState(agentRow.sectors.map((s) => s.id));
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState(null);
+  const [generatingPassword, setGeneratingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleGeneratePassword() {
+    setPasswordError(null);
+    setGeneratingPassword(true);
+    try {
+      const { newPassword } = await resetAgentPassword(agentRow.id, token);
+      setGeneratedPassword(newPassword);
+      setCopied(false);
+    } catch (err) {
+      setPasswordError((err.body && err.body.error) || 'Falha ao gerar senha');
+    } finally {
+      setGeneratingPassword(false);
+    }
+  }
+
+  async function handleCopyPassword() {
+    await navigator.clipboard.writeText(generatedPassword);
+    setCopied(true);
+  }
 
   function handleEditSectorsClick() {
     setSelectedIds(agentRow.sectors.map((s) => s.id));
@@ -66,6 +90,15 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
           </button>
           {agentRow.id !== currentAgent?.id && (
             <button
+              onClick={handleGeneratePassword}
+              disabled={generatingPassword}
+              className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline disabled:opacity-50"
+            >
+              Gerar nova senha
+            </button>
+          )}
+          {agentRow.id !== currentAgent?.id && (
+            <button
               onClick={() => onToggleActive(agentRow)}
               className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
             >
@@ -74,6 +107,29 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
           )}
         </div>
       </div>
+      {passwordError && <p className={`mt-2 ${waErrorClass}`}>{passwordError}</p>}
+      {generatedPassword && (
+        <WaDialog title="Nova senha gerada" onClose={() => setGeneratedPassword(null)} size="max-w-sm">
+          <div className="space-y-3 px-6 py-4">
+            <p className="text-sm text-wa-muted">
+              Copie e repasse essa senha pro atendente — ela só aparece essa vez.
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm text-wa-text">
+                {generatedPassword}
+              </code>
+              <button type="button" onClick={handleCopyPassword} className={waPrimaryButtonClass}>
+                {copied ? 'Copiado!' : 'Copiar'}
+              </button>
+            </div>
+          </div>
+          <div className="flex shrink-0 justify-end px-4 py-3">
+            <button type="button" onClick={() => setGeneratedPassword(null)} className={waGhostButtonClass}>
+              Fechar
+            </button>
+          </div>
+        </WaDialog>
+      )}
       {editingSectors && (
         <div className="mt-3 space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-3 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
           {sectors.map((sector) => (

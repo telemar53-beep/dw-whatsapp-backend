@@ -32,7 +32,7 @@ async function processCampaignRecipient({ recipientId, campaignId, channelId, ph
       return markRecipient(recipientId, campaignId, 'skipped', { errorMessage: 'Já existe conversa em andamento', contactId: contact.id });
     }
 
-    const conversation = await createConversation(contact.id, channel.id);
+    const conversation = await createConversation(contact.id, channel.id, null, 'silent');
 
     try {
       await enqueueOutboundMessage({

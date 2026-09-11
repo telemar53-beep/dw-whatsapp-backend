@@ -26,7 +26,10 @@ function CampaignDetailPage() {
 
   useEffect(() => {
     if (!stillProcessing) return undefined;
-    const interval = setInterval(() => refresh(), 3000);
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      refresh();
+    }, 5000);
     return () => clearInterval(interval);
   }, [stillProcessing, refresh]);
 

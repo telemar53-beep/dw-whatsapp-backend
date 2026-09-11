@@ -112,6 +112,10 @@ async function incrementCampaignCounter(campaignId, outcome, amount = 1) {
   await getPool().query(`UPDATE campaigns SET ${column} = ${column} + $2 WHERE id = $1`, [campaignId, amount]);
 }
 
+async function deleteCampaign(id) {
+  await getPool().query('DELETE FROM campaigns WHERE id = $1', [id]);
+}
+
 module.exports = {
   createCampaign,
   findCampaignById,
@@ -120,4 +124,5 @@ module.exports = {
   listCampaignRecipients,
   updateCampaignRecipientStatus,
   incrementCampaignCounter,
+  deleteCampaign,
 };

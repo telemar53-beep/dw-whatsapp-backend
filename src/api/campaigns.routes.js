@@ -12,11 +12,21 @@ const {
   listCampaignRecipients,
   updateCampaignRecipientStatus,
   incrementCampaignCounter,
+  deleteCampaign,
 } = require('../campaigns/campaign.repository');
 const { enqueueCampaignRecipient } = require('../queue/campaign-queue');
 
 const router = express.Router();
 router.use(requireAuth);
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+router.param('id', (req, res, next, id) => {
+  if (!UUID_PATTERN.test(id)) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+  next();
+});
 
 function parseRecipients(raw) {
   const lines = (raw || '').split('\n').map((line) => line.trim()).filter(Boolean);
@@ -59,10 +69,16 @@ router.post('/', async (req, res) => {
   if (channel.type !== 'baileys' && !isOfficialChannelType(channel.type)) {
     return res.status(400).json({ error: 'Unsupported channel type' });
   }
+  if (channel.type === 'baileys' && channel.status !== 'connected') {
+    return res.status(400).json({ error: 'This channel is not connected' });
+  }
 
   const parsedRecipients = parseRecipients(recipients);
   if (!parsedRecipients.some((r) => r.status === 'pending')) {
     return res.status(400).json({ error: 'No valid recipient found in the list' });
+  }
+  if (parsedRecipients.length > 2000) {
+    return res.status(400).json({ error: 'A lista não pode ter mais de 2000 destinatários' });
   }
 
   let messageType;
@@ -117,7 +133,13 @@ router.post('/', async (req, res) => {
     totalRecipients: parsedRecipients.length,
   });
 
-  const createdRecipients = await createCampaignRecipients(campaign.id, parsedRecipients);
+  let createdRecipients;
+  try {
+    createdRecipients = await createCampaignRecipients(campaign.id, parsedRecipients);
+  } catch (err) {
+    await deleteCampaign(campaign.id);
+    throw err;
+  }
 
   const preFailedCount = createdRecipients.filter((r) => r.status === 'failed').length;
   if (preFailedCount > 0) {

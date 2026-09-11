@@ -47,7 +47,7 @@ describe('processCampaignRecipient', () => {
 
     await processCampaignRecipient(BASE_JOB);
 
-    expect(createConversation).toHaveBeenCalledWith('contact-1', 'channel-1');
+    expect(createConversation).toHaveBeenCalledWith('contact-1', 'channel-1', null, 'silent');
     expect(enqueueOutboundMessage).toHaveBeenCalledWith({
       conversationId: 'conversation-1',
       channelId: 'channel-1',

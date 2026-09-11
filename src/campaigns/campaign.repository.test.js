@@ -7,6 +7,7 @@ const {
   listCampaignRecipients,
   updateCampaignRecipientStatus,
   incrementCampaignCounter,
+  deleteCampaign,
 } = require('./campaign.repository');
 const { createAgent } = require('../agents/agent.repository');
 const { createChannel } = require('../channels/channel.repository');
@@ -152,5 +153,15 @@ describe('campaign repository', () => {
     expect(updated.sentCount).toBe(2);
     expect(updated.failedCount).toBe(3);
     expect(updated.skippedCount).toBe(0);
+  });
+
+  test('deleteCampaign removes the campaign row', async () => {
+    const agent = await makeAgent();
+    const channel = await makeChannel();
+    const campaign = await createCampaign({ channelId: channel.id, messageType: 'text', content: 'a', createdBy: agent.id, totalRecipients: 1 });
+
+    await deleteCampaign(campaign.id);
+
+    expect(await findCampaignById(campaign.id)).toBeNull();
   });
 });

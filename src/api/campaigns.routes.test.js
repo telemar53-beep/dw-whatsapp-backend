@@ -15,6 +15,7 @@ const {
   listCampaignRecipients,
   updateCampaignRecipientStatus,
   incrementCampaignCounter,
+  deleteCampaign,
 } = require('../campaigns/campaign.repository');
 const { enqueueCampaignRecipient } = require('../queue/campaign-queue');
 const campaignsRoutes = require('./campaigns.routes');
@@ -37,7 +38,7 @@ beforeEach(() => {
 
 describe('POST /api/campaigns', () => {
   test('creates a text campaign for a baileys channel', async () => {
-    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', config: {} });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
     createCampaign.mockResolvedValue({ id: 'campaign-1', totalRecipients: 2 });
     createCampaignRecipients.mockResolvedValue([
       { id: 'r1', phoneNumber: '5511999990000', displayName: null, status: 'pending' },
@@ -78,7 +79,7 @@ describe('POST /api/campaigns', () => {
   });
 
   test('rejects when recipients has no valid line', async () => {
-    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', config: {} });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
 
     const res = await request(buildApp())
       .post('/api/campaigns')
@@ -90,7 +91,7 @@ describe('POST /api/campaigns', () => {
   });
 
   test('deduplicates repeated phone numbers in the pasted list', async () => {
-    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', config: {} });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
     createCampaign.mockResolvedValue({ id: 'campaign-1', totalRecipients: 1 });
     createCampaignRecipients.mockResolvedValue([{ id: 'r1', phoneNumber: '5511999990000', displayName: null, status: 'pending' }]);
 
@@ -103,7 +104,7 @@ describe('POST /api/campaigns', () => {
   });
 
   test('records invalid lines as pre-failed recipients and bumps failedCount, without blocking valid ones', async () => {
-    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', config: {} });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
     createCampaign.mockResolvedValue({ id: 'campaign-1', totalRecipients: 2 });
     createCampaignRecipients.mockResolvedValue([
       { id: 'r1', phoneNumber: '', displayName: null, status: 'failed' },
@@ -121,7 +122,7 @@ describe('POST /api/campaigns', () => {
   });
 
   test('marks a recipient failed instead of crashing when enqueueing rejects', async () => {
-    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', config: {} });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
     createCampaign.mockResolvedValue({ id: 'campaign-1', totalRecipients: 1 });
     createCampaignRecipients.mockResolvedValue([{ id: 'r1', phoneNumber: '5511999990000', displayName: null, status: 'pending' }]);
     enqueueCampaignRecipient.mockRejectedValue(new Error('redis unavailable'));
@@ -138,7 +139,7 @@ describe('POST /api/campaigns', () => {
   });
 
   test('does not crash even when recording the enqueue failure itself fails', async () => {
-    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', config: {} });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
     createCampaign.mockResolvedValue({ id: 'campaign-1', totalRecipients: 1 });
     createCampaignRecipients.mockResolvedValue([{ id: 'r1', phoneNumber: '5511999990000', displayName: null, status: 'pending' }]);
     enqueueCampaignRecipient.mockRejectedValue(new Error('redis unavailable'));
@@ -169,6 +170,45 @@ describe('POST /api/campaigns', () => {
     const res = await request(buildApp()).post('/api/campaigns').send({ channelId: 'channel-1', content: 'Oi', recipients: '5511999990000' });
     expect(res.status).toBe(401);
   });
+
+  test('rejects a disconnected baileys channel', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'awaiting_qr', config: {} });
+
+    const res = await request(buildApp())
+      .post('/api/campaigns')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', content: 'Oi', recipients: '5511999990000' });
+
+    expect(res.status).toBe(400);
+    expect(createCampaign).not.toHaveBeenCalled();
+  });
+
+  test('rejects a recipients list larger than 2000 entries', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
+    const hugeList = Array.from({ length: 2001 }, (_, i) => `55119999${String(i).padStart(5, '0')}`).join('\n');
+
+    const res = await request(buildApp())
+      .post('/api/campaigns')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', content: 'Oi', recipients: hugeList });
+
+    expect(res.status).toBe(400);
+    expect(createCampaign).not.toHaveBeenCalled();
+  });
+
+  test('deletes the orphaned campaign if creating recipients fails', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
+    createCampaign.mockResolvedValue({ id: 'campaign-1', totalRecipients: 1 });
+    createCampaignRecipients.mockRejectedValue(new Error('db error'));
+
+    const res = await request(buildApp())
+      .post('/api/campaigns')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', content: 'Oi', recipients: '5511999990000' });
+
+    expect(res.status).toBe(500);
+    expect(deleteCampaign).toHaveBeenCalledWith('campaign-1');
+  });
 });
 
 describe('GET /api/campaigns', () => {
@@ -185,7 +225,9 @@ describe('GET /api/campaigns/:id', () => {
     findCampaignById.mockResolvedValue({ id: 'campaign-1', totalRecipients: 1 });
     listCampaignRecipients.mockResolvedValue([{ id: 'r1', status: 'sent' }]);
 
-    const res = await request(buildApp()).get('/api/campaigns/campaign-1').set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    const res = await request(buildApp())
+      .get('/api/campaigns/11111111-1111-1111-1111-111111111111')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe('campaign-1');
@@ -194,7 +236,18 @@ describe('GET /api/campaigns/:id', () => {
 
   test('returns 404 when the campaign does not exist', async () => {
     findCampaignById.mockResolvedValue(null);
-    const res = await request(buildApp()).get('/api/campaigns/does-not-exist').set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    const res = await request(buildApp())
+      .get('/api/campaigns/22222222-2222-2222-2222-222222222222')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(404);
+  });
+
+  test('returns 404 for a malformed id', async () => {
+    const res = await request(buildApp())
+      .get('/api/campaigns/not-a-uuid')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(404);
+    expect(findCampaignById).not.toHaveBeenCalled();
   });
 });

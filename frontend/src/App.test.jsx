@@ -24,7 +24,6 @@ describe('App', () => {
     api.login.mockResolvedValue({ token: 'tok-123', agent: { id: 'agent-1', email: 'a@dw.com', role: 'agent' } });
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);
-    api.getMyClosedConversations.mockResolvedValue({ items: [], hasMore: false });
     api.listChannels.mockResolvedValue([]);
     api.listAgents.mockResolvedValue([]);
 
@@ -43,7 +42,6 @@ describe('App', () => {
     window.history.pushState({}, '', '/admin/channels');
     api.getQueue.mockResolvedValue([]);
     api.getMyConversations.mockResolvedValue([]);
-    api.getMyClosedConversations.mockResolvedValue({ items: [], hasMore: false });
     api.listChannels.mockResolvedValue([]);
     api.listAgents.mockResolvedValue([]);
 

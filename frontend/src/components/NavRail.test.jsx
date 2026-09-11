@@ -5,9 +5,11 @@ import { MemoryRouter } from 'react-router-dom';
 import NavRail from './NavRail';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
+import { useMyClosedConversations } from '../hooks/useMyClosedConversations';
 
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useQueueNotificationSound');
+vi.mock('../hooks/useMyClosedConversations');
 
 function renderRail(props = {}) {
   return render(
@@ -89,5 +91,22 @@ describe('NavRail', () => {
     useQueueNotificationSound.mockReturnValue({ muted: true, toggleMuted: vi.fn() });
     renderRail();
     expect(screen.getByLabelText('Som desativado')).toBeInTheDocument();
+  });
+
+  test('clicking Atendimentos encerrados opens a popup with the agent\'s closed conversations', async () => {
+    useMyClosedConversations.mockReturnValue({
+      items: [{ id: 'c-old', contactDisplayName: 'Ana Encerrada', status: 'closed', assignedAgentId: 'agent-1' }],
+      hasMore: false,
+      loading: false,
+      loadMore: vi.fn(),
+      refresh: vi.fn(),
+    });
+    renderRail();
+
+    expect(screen.queryByText('Ana Encerrada')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('Atendimentos encerrados'));
+
+    expect(screen.getByText('Ana Encerrada')).toBeInTheDocument();
   });
 });

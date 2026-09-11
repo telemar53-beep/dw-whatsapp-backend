@@ -44,8 +44,24 @@ describe('EditContactModal', () => {
     expect(screen.getByLabelText(/cidade/i)).toHaveValue('');
   });
 
+  test('pre-fills the internal note when the contact has one', () => {
+    render(
+      <EditContactModal
+        conversation={{ ...CONVERSATION, contactInternalNote: 'Já reclamou 3x' }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText(/nota interna/i)).toHaveValue('Já reclamou 3x');
+  });
+
+  test('pre-fills an empty internal note when the contact has none', () => {
+    render(<EditContactModal conversation={CONVERSATION} onClose={vi.fn()} onSaved={vi.fn()} />);
+    expect(screen.getByLabelText(/nota interna/i)).toHaveValue('');
+  });
+
   test('saving calls the API with the edited values, resolves the city name, then closes', async () => {
-    api.updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Carlos Editado', cityId: 'city-2' });
+    api.updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Carlos Editado', cityId: 'city-2', internalNote: 'Cliente VIP' });
     const onClose = vi.fn();
     const onSaved = vi.fn();
     render(<EditContactModal conversation={CONVERSATION} onClose={onClose} onSaved={onSaved} />);
@@ -53,16 +69,22 @@ describe('EditContactModal', () => {
     await userEvent.clear(screen.getByLabelText(/nome/i));
     await userEvent.type(screen.getByLabelText(/nome/i), 'Carlos Editado');
     await userEvent.selectOptions(screen.getByLabelText(/cidade/i), 'city-2');
+    await userEvent.type(screen.getByLabelText(/nota interna/i), 'Cliente VIP');
     await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
 
     await waitFor(() =>
       expect(api.updateContact).toHaveBeenCalledWith(
         'contact-1',
-        { displayName: 'Carlos Editado', cityId: 'city-2' },
+        { displayName: 'Carlos Editado', cityId: 'city-2', internalNote: 'Cliente VIP' },
         'tok-123'
       )
     );
-    expect(onSaved).toHaveBeenCalledWith({ displayName: 'Carlos Editado', cityId: 'city-2', cityName: 'São Luís' });
+    expect(onSaved).toHaveBeenCalledWith({
+      displayName: 'Carlos Editado',
+      cityId: 'city-2',
+      cityName: 'São Luís',
+      internalNote: 'Cliente VIP',
+    });
     expect(onClose).toHaveBeenCalled();
   });
 

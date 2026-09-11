@@ -51,6 +51,15 @@ function ConversationInfoPanel({ conversation }) {
         <span className={`mt-3 rounded-full px-3 py-1 text-[12px] font-medium ${status.className}`}>{status.label}</span>
       </div>
 
+      {conversation.contactInternalNote && (
+        <div className="mt-6 rounded-xl bg-wa-active px-3.5 py-3 text-left">
+          <span className="text-[12px] leading-[16px] text-wa-muted">Nota interna</span>
+          <p className="mt-1 whitespace-pre-wrap text-[14px] leading-[19px] text-wa-text">
+            {conversation.contactInternalNote}
+          </p>
+        </div>
+      )}
+
       <div className="my-6 border-t border-wa-border" />
 
       <div className="flex flex-col gap-4">

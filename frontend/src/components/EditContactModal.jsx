@@ -9,6 +9,7 @@ function EditContactModal({ conversation, onClose, onSaved }) {
   const { cities } = useCities();
   const [displayName, setDisplayName] = useState(conversation.contactDisplayName || '');
   const [cityId, setCityId] = useState(conversation.contactCityId || '');
+  const [internalNote, setInternalNote] = useState(conversation.contactInternalNote || '');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -17,9 +18,13 @@ function EditContactModal({ conversation, onClose, onSaved }) {
     setError(null);
     setSubmitting(true);
     try {
-      const updated = await updateContact(conversation.contactId, { displayName, cityId: cityId || null }, token);
+      const updated = await updateContact(
+        conversation.contactId,
+        { displayName, cityId: cityId || null, internalNote: internalNote || null },
+        token
+      );
       const cityName = updated.cityId ? cities.find((c) => c.id === updated.cityId)?.name || null : null;
-      onSaved({ displayName: updated.displayName, cityId: updated.cityId, cityName });
+      onSaved({ displayName: updated.displayName, cityId: updated.cityId, cityName, internalNote: updated.internalNote });
       onClose();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao salvar');
@@ -60,6 +65,19 @@ function EditContactModal({ conversation, onClose, onSaved }) {
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label htmlFor="contact-internal-note" className={waLabelClass}>
+              Nota interna
+            </label>
+            <textarea
+              id="contact-internal-note"
+              value={internalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
+              rows={3}
+              placeholder="Visível só para os atendentes"
+              className={waInputClass}
+            />
           </div>
           {error && <p className={waErrorClass}>{error}</p>}
         </div>

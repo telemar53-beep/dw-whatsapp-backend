@@ -112,9 +112,11 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
           <RailButton label={muted ? 'Som desativado' : 'Som ativado'} onClick={toggleMuted} highlight={muted}>
             {muted ? <IconBellOff size={22} /> : <IconBellOn size={22} />}
           </RailButton>
-          <RailButton label="Atendimentos encerrados" onClick={() => setClosedConversationsOpen(true)}>
-            <IconCheckCircle size={22} />
-          </RailButton>
+          {agent?.role !== 'admin' && (
+            <RailButton label="Atendimentos encerrados" onClick={() => setClosedConversationsOpen(true)}>
+              <IconCheckCircle size={22} />
+            </RailButton>
+          )}
           <RailButton label="Meu perfil" onClick={onProfileClick}>
             <IconUser size={22} />
           </RailButton>

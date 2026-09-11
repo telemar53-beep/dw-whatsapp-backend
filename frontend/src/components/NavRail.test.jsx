@@ -93,6 +93,17 @@ describe('NavRail', () => {
     expect(screen.getByLabelText('Som desativado')).toBeInTheDocument();
   });
 
+  test('hides Atendimentos encerrados for an admin agent (they already see this via the Attendance Dashboard)', () => {
+    useAuth.mockReturnValue({ agent: { id: 'admin-1', name: 'Ana', role: 'admin' }, logout: vi.fn() });
+    renderRail();
+    expect(screen.queryByLabelText('Atendimentos encerrados')).not.toBeInTheDocument();
+  });
+
+  test('shows Atendimentos encerrados for a regular agent', () => {
+    renderRail();
+    expect(screen.getByLabelText('Atendimentos encerrados')).toBeInTheDocument();
+  });
+
   test('clicking Atendimentos encerrados opens a popup with the agent\'s closed conversations', async () => {
     useMyClosedConversations.mockReturnValue({
       items: [{ id: 'c-old', contactDisplayName: 'Ana Encerrada', status: 'closed', assignedAgentId: 'agent-1' }],

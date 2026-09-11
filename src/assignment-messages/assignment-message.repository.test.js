@@ -6,6 +6,7 @@ const {
   upsertAssignmentMessageConfig,
   claimProtocolNumber,
   clearProtocolNumber,
+  todaySaoPauloDateString,
 } = require('./assignment-message.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { createConversation } = require('../conversations/conversation.repository');
@@ -104,7 +105,7 @@ describe('assignment message repository', () => {
     expect(updated.agentIds).toEqual([agent2.id]);
   });
 
-  test('claimProtocolNumber generates a number on the first call for a conversation', async () => {
+  test('claimProtocolNumber generates an AAAAMMDD-XXXX protocol on the first call for a conversation', async () => {
     const contact = await findOrCreateContactByPhoneNumber('+5511977776666', 'Joao');
     const channel = await createChannel({
       type: 'meta_cloud',
@@ -115,8 +116,8 @@ describe('assignment message repository', () => {
     const conversation = await createConversation(contact.id, channel.id);
 
     const protocolNumber = await claimProtocolNumber(conversation.id);
-    expect(typeof protocolNumber).toBe('number');
-    expect(protocolNumber).toBeGreaterThan(0);
+    expect(protocolNumber).toMatch(/^\d{8}-\d{4,}$/);
+    expect(protocolNumber.startsWith(todaySaoPauloDateString())).toBe(true);
   });
 
   test('claimProtocolNumber reuses the same number on a second call for the same conversation', async () => {
@@ -134,7 +135,7 @@ describe('assignment message repository', () => {
     expect(second).toBe(first);
   });
 
-  test('claimProtocolNumber assigns different numbers to different conversations', async () => {
+  test('claimProtocolNumber assigns consecutive sequence numbers to different conversations claimed the same day', async () => {
     const contact = await findOrCreateContactByPhoneNumber('+5511977776666', 'Joao');
     const otherContact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Segunda Pessoa');
     const channel = await createChannel({
@@ -148,7 +149,10 @@ describe('assignment message repository', () => {
 
     const numberA = await claimProtocolNumber(conversationA.id);
     const numberB = await claimProtocolNumber(conversationB.id);
-    expect(numberA).not.toBe(numberB);
+
+    const seqA = Number(numberA.split('-')[1]);
+    const seqB = Number(numberB.split('-')[1]);
+    expect(seqB).toBe(seqA + 1);
   });
 
   test('clearProtocolNumber resets a claimed protocol number back to null', async () => {
@@ -166,5 +170,16 @@ describe('assignment message repository', () => {
 
     const result = await getPool().query('SELECT protocol_number FROM conversations WHERE id = $1', [conversation.id]);
     expect(result.rows[0].protocol_number).toBeNull();
+  });
+});
+
+describe('todaySaoPauloDateString', () => {
+  test('returns AAAAMMDD for a time comfortably inside the São Paulo day', () => {
+    expect(todaySaoPauloDateString(new Date('2026-09-11T15:00:00.000Z'))).toBe('20260911');
+  });
+
+  test('uses the São Paulo day, not the UTC day, right after UTC midnight', () => {
+    // 2026-09-11T02:30:00.000Z is 2026-09-10T23:30:00 in São Paulo (UTC-3, no DST).
+    expect(todaySaoPauloDateString(new Date('2026-09-11T02:30:00.000Z'))).toBe('20260910');
   });
 });

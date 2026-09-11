@@ -66,13 +66,38 @@ async function upsertAssignmentMessageConfig({ enabled, openingMessage, closingM
   });
 }
 
+const PROTOCOL_TIMEZONE = 'America/Sao_Paulo';
+
+function todaySaoPauloDateString(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: PROTOCOL_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  // en-CA formats as YYYY-MM-DD; strip the dashes for the AAAAMMDD segment.
+  return formatter.format(date).replace(/-/g, '');
+}
+
+async function nextProtocolSequenceForToday() {
+  const day = todaySaoPauloDateString();
+  const result = await getPool().query(
+    `INSERT INTO protocol_counters (day, last_seq) VALUES ($1, 1)
+     ON CONFLICT (day) DO UPDATE SET last_seq = protocol_counters.last_seq + 1
+     RETURNING last_seq`,
+    [day]
+  );
+  return `${day}-${String(result.rows[0].last_seq).padStart(4, '0')}`;
+}
+
 async function claimProtocolNumber(conversationId) {
+  const candidate = await nextProtocolSequenceForToday();
   const result = await getPool().query(
     `UPDATE conversations
-     SET protocol_number = COALESCE(protocol_number, nextval('assignment_protocol_seq'))
+     SET protocol_number = COALESCE(protocol_number, $2)
      WHERE id = $1
      RETURNING protocol_number`,
-    [conversationId]
+    [conversationId, candidate]
   );
   return result.rows[0].protocol_number;
 }
@@ -86,4 +111,5 @@ module.exports = {
   upsertAssignmentMessageConfig,
   claimProtocolNumber,
   clearProtocolNumber,
+  todaySaoPauloDateString,
 };

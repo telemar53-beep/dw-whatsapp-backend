@@ -39,13 +39,13 @@ router.get('/conversations/closed-today', requireAuth, requireRole('admin'), asy
   res.json({ items, hasMore: offset + items.length < total });
 });
 
-const PROTOCOL_NUMBER_PATTERN = /^\d+$/;
+const PROTOCOL_NUMBER_PATTERN = /^(\d+|\d{8}-\d{4,})$/;
 
 router.get('/conversations/by-protocol/:protocolNumber', requireAuth, requireRole('admin'), async (req, res) => {
   if (!PROTOCOL_NUMBER_PATTERN.test(req.params.protocolNumber)) {
-    return res.status(400).json({ error: 'protocolNumber must be a positive integer' });
+    return res.status(400).json({ error: 'protocolNumber must be a valid protocol number' });
   }
-  const conversation = await findConversationByProtocolNumber(Number(req.params.protocolNumber));
+  const conversation = await findConversationByProtocolNumber(req.params.protocolNumber);
   if (!conversation) {
     return res.status(404).json({ error: 'No conversation found with that protocol number' });
   }

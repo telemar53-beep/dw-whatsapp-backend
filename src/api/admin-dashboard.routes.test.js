@@ -127,16 +127,28 @@ describe('GET /api/admin/dashboard/conversations/closed-today', () => {
 describe('GET /api/admin/dashboard/conversations/by-protocol/:protocolNumber', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  test('returns the conversation with that protocol number', async () => {
-    findConversationByProtocolNumber.mockResolvedValue({ id: 'conv-1', protocolNumber: 1042 });
+  test('returns the conversation with that protocol number (legacy plain-integer format)', async () => {
+    findConversationByProtocolNumber.mockResolvedValue({ id: 'conv-1', protocolNumber: '1042' });
 
     const res = await request(buildApp())
       .get('/api/admin/dashboard/conversations/by-protocol/1042')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.status).toBe(200);
-    expect(findConversationByProtocolNumber).toHaveBeenCalledWith(1042);
-    expect(res.body).toEqual({ id: 'conv-1', protocolNumber: 1042 });
+    expect(findConversationByProtocolNumber).toHaveBeenCalledWith('1042');
+    expect(res.body).toEqual({ id: 'conv-1', protocolNumber: '1042' });
+  });
+
+  test('returns the conversation with that protocol number (new AAAAMMDD-XXXX format)', async () => {
+    findConversationByProtocolNumber.mockResolvedValue({ id: 'conv-2', protocolNumber: '20260911-0001' });
+
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/by-protocol/20260911-0001')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.status).toBe(200);
+    expect(findConversationByProtocolNumber).toHaveBeenCalledWith('20260911-0001');
+    expect(res.body).toEqual({ id: 'conv-2', protocolNumber: '20260911-0001' });
   });
 
   test('returns 404 when no conversation has that protocol number', async () => {

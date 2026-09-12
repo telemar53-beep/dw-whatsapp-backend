@@ -31,6 +31,12 @@ describe('ai.service', () => {
     expect(await shouldRunAi('ch-1')).toBe(false);
   });
 
+  test('shouldRunAi is false when there is no model configured, even with a valid key', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true });
+    getAiConfig.mockResolvedValue({ mode: 'assistant', apiKey: 'sk', model: null });
+    expect(await shouldRunAi('ch-1')).toBe(false);
+  });
+
   test('scheduleAiReply only enqueues text messages, carrying the triggering message id', async () => {
     await scheduleAiReply({ id: 'c-1' }, { id: 'm-1', messageType: 'text', content: 'oi' });
     expect(enqueueAiReply).toHaveBeenCalledWith({ conversationId: 'c-1', messageId: 'm-1' });

@@ -43,6 +43,12 @@ describe('shouldStartTriage', () => {
     listTriageOptions.mockResolvedValue(OPTIONS);
     expect(await shouldStartTriage('channel-1')).toBe(true);
   });
+
+  test('returns false when the channel has AI enabled, even with triage enabled and options configured (one robot per channel)', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-1', triageEnabled: true, aiEnabled: true });
+    listTriageOptions.mockResolvedValue(OPTIONS);
+    expect(await shouldStartTriage('channel-1')).toBe(false);
+  });
 });
 
 describe('sendTriageQuestion', () => {

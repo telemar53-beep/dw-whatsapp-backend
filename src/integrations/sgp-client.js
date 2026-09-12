@@ -193,6 +193,10 @@ async function requestTrustUnlock(contratoId) {
   return {
     liberado,
     liberadoDias: liberado && Number.isInteger(dias) && dias > 0 ? dias : null,
+    // Observado no teste real (2026-09-12), embora ausente do exemplo da
+    // documentação: a data-limite da promessa, 'AAAA-MM-DD'. É o que o
+    // cliente quer saber ("até quando?").
+    dataPromessa: liberado && /^\d{4}-\d{2}-\d{2}$/.test(String(data.data_promessa || '')) ? data.data_promessa : null,
     protocolo: liberado ? (data.protocolo != null ? String(data.protocolo) : null) : null,
     motivo: liberado ? null : (data.msg || 'Liberação não permitida'),
   };

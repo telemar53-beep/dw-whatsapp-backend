@@ -398,8 +398,9 @@ const TOOLS = [
         console.error(`Failed to record trust unlock for contract ${args.contratoId}: ${err.message}`);
       }
       const resposta = { liberado: true, dias: resultado.liberadoDias, protocolo: resultado.protocolo };
+      if (resultado.dataPromessa) resposta.pagarAte = resultado.dataPromessa;
       // Sem prazo devolvido, o modelo não pode inventar um "uns 3 dias".
-      if (resposta.dias == null) resposta.prazoDesconhecido = true;
+      if (resposta.dias == null && !resposta.pagarAte) resposta.prazoDesconhecido = true;
       return resposta;
     },
   },

@@ -426,3 +426,20 @@ describe('consultar_faturas_todos_contratos — lista parcial', () => {
     expect(r.contratos[0].listaParcial).toBeUndefined();
   });
 });
+
+describe('desbloqueio_confianca — data-limite da promessa', () => {
+  const SUSPENSO = { id: 26515, statusCode: 4, status: 'Suspenso', plan: '100MB', address: 'RUA Z', paymentPromisesThisMonth: 0 };
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listTrustUnlocksByContract.mockResolvedValue([]);
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [], paginacao: { total: 0 } });
+    recordTrustUnlock.mockResolvedValue({ id: 'l-1' });
+  });
+
+  test('repassa pagarAte ao modelo quando o SGP devolve a data', async () => {
+    // Formato observado no teste real de 2026-09-12 no contrato 26515.
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: true, liberadoDias: 3, dataPromessa: '2026-09-15', protocolo: '260912153100', motivo: null });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, { contracts: [SUSPENSO], contact: { id: 'ct-1' } });
+    expect(r).toEqual({ liberado: true, dias: 3, protocolo: '260912153100', pagarAte: '2026-09-15' });
+  });
+});

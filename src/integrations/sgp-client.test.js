@@ -363,7 +363,7 @@ describe("requestTrustUnlock (desbloqueio em confiança)", () => {
     expect(params.get("contrato")).toBe("26515");
     expect(params.get("token")).toBe("tok-123");
     expect(params.has("data_promessa")).toBe(false);
-    expect(r).toEqual({ liberado: true, liberadoDias: 3, protocolo: "9999", motivo: null });
+    expect(r).toEqual({ liberado: true, liberadoDias: 3, dataPromessa: null, protocolo: "9999", motivo: null });
   });
 
   test("a msg de sucesso (com login PPPoE) não sai do módulo", async () => {
@@ -400,7 +400,7 @@ describe("requestTrustUnlock — coerção de tipos da API form-encoded", () => 
   test('liberado "true" e liberado_dias "3" como texto contam como liberação de 3 dias', async () => {
     // Ler estrito demais viraria uma liberação REAL em "não liberou", sem registro.
     axios.post.mockResolvedValue({ data: { status: "1", liberado: "true", liberado_dias: "3", protocolo: 9999 } });
-    expect(await requestTrustUnlock(1)).toEqual({ liberado: true, liberadoDias: 3, protocolo: "9999", motivo: null });
+    expect(await requestTrustUnlock(1)).toEqual({ liberado: true, liberadoDias: 3, dataPromessa: null, protocolo: "9999", motivo: null });
   });
 
   test("liberado sem dias devolve liberadoDias nulo, nunca um chute", async () => {
@@ -415,5 +415,19 @@ describe("requestTrustUnlock — 'True' capitalizado (Django) também é libera�
     getSgpQueryConfig.mockResolvedValue(CONFIG);
     axios.post.mockResolvedValue({ data: { status: 1, liberado: "True", liberado_dias: 2, protocolo: "7" } });
     expect((await requestTrustUnlock(1)).liberado).toBe(true);
+  });
+});
+
+describe("requestTrustUnlock — data_promessa (observada no teste real)", () => {
+  const CONFIG = { baseUrl: "https://dwtelecom.sgp.tsmx.com.br", app: "chatmix", token: "tok-123", enabled: true };
+  test("repassa a data-limite quando vem no formato AAAA-MM-DD", async () => {
+    getSgpQueryConfig.mockResolvedValue(CONFIG);
+    axios.post.mockResolvedValue({ data: { status: 1, liberado: true, liberado_dias: 3, data_promessa: "2026-09-15", protocolo: "260912153100" } });
+    expect((await requestTrustUnlock(26515)).dataPromessa).toBe("2026-09-15");
+  });
+  test("ignora data_promessa malformada", async () => {
+    getSgpQueryConfig.mockResolvedValue(CONFIG);
+    axios.post.mockResolvedValue({ data: { status: 1, liberado: true, liberado_dias: 3, data_promessa: "15/09/2026", protocolo: "1" } });
+    expect((await requestTrustUnlock(26515)).dataPromessa).toBeNull();
   });
 });

@@ -114,6 +114,15 @@ describe('openai-client', () => {
       const [url, , options] = axios.post.mock.calls[0];
       expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
       expect(options.headers.Authorization).toBe('Bearer sk-secreta');
+      const contentType = options.headers['content-type'] || options.headers['Content-Type'];
+      expect(contentType).toMatch(/^multipart\/form-data; boundary=/);
+      // axios's AxiosHeaders merges header names case-insensitively, so a
+      // capitalized 'Content-Type' surviving alongside the lowercase one from
+      // form-data collides in the real request and overwrites the boundary
+      // (see Finding 1). Since axios is mocked here, the case-insensitive
+      // collision itself can't be observed on this plain object — but its
+      // cause (a stray capitalized key) can: assert it is simply absent.
+      expect(options.headers['Content-Type']).toBeUndefined();
       expect(result).toEqual({ texto: 'minha internet caiu' });
 
       const campos = appendSpy.mock.calls.map((c) => c[0]);
@@ -132,6 +141,15 @@ describe('openai-client', () => {
       const result = await transcribeAudio({ apiKey: 'sk', model: 'm', filePath: '/tmp/a.ogg', mimeType: 'audio/ogg' });
       expect(result).toEqual({ texto: 'oi' });
       fs.createReadStream.mockRestore();
+    });
+
+    test('filePath inválido não escapa do módulo cru: ainda sai como OpenAiRequestError', async () => {
+      // Sem mockar fs.createReadStream aqui de propósito: queremos o erro
+      // síncrono real que o Node lança para um filePath do tipo errado, para
+      // confirmar que ele é capturado e traduzido, não vazado cru.
+      await expect(
+        transcribeAudio({ apiKey: 'sk', model: 'm', filePath: undefined, mimeType: 'audio/ogg' })
+      ).rejects.toBeInstanceOf(OpenAiRequestError);
     });
 
     test('401 vira OpenAiAuthError', async () => {

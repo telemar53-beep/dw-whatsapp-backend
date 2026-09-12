@@ -58,18 +58,23 @@ async function listModels(apiKey) {
 const TRANSCRIPTION_TIMEOUT_MS = 120000;
 
 async function transcribeAudio({ apiKey, model, filePath, mimeType, prompt }) {
-  const form = new FormData();
-  form.append('file', fs.createReadStream(filePath), {
-    filename: 'audio' + (mimeType === 'audio/mpeg' ? '.mp3' : '.ogg'),
-    contentType: mimeType || 'audio/ogg',
-  });
-  form.append('model', model);
-  if (prompt) form.append('prompt', prompt);
-
   let response;
   try {
+    const form = new FormData();
+    form.append('file', fs.createReadStream(filePath), {
+      filename: 'audio' + (mimeType === 'audio/mpeg' ? '.mp3' : '.ogg'),
+      contentType: mimeType || 'audio/ogg',
+    });
+    form.append('model', model);
+    if (prompt) form.append('prompt', prompt);
+
+    // Só o Authorization é somado aos cabeçalhos do form-data: espalhar o
+    // objeto inteiro de `headers(apiKey)` reintroduziria um 'Content-Type'
+    // com C maiúsculo, que o AxiosHeaders do axios trata como o mesmo campo
+    // (case-insensitive) do 'content-type' minúsculo do form-data e acaba
+    // vencendo — apagando o boundary multipart e quebrando toda chamada real.
     response = await axios.post(`${BASE_URL}/audio/transcriptions`, form, {
-      headers: { ...form.getHeaders(), ...headers(apiKey) },
+      headers: { ...form.getHeaders(), Authorization: `Bearer ${apiKey}` },
       timeout: TRANSCRIPTION_TIMEOUT_MS,
       maxBodyLength: Infinity,
     });

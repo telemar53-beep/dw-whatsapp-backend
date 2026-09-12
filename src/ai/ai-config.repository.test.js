@@ -1,12 +1,17 @@
 const { getPool, closePool } = require('../db/pool');
 const {
-  getAiConfig, updateAiConfig, listToolPermissions, setToolPermission, isToolEnabled,
+  getAiConfig, updateAiConfig, updateTranscriptionConfig, listToolPermissions, setToolPermission, isToolEnabled,
 } = require('./ai-config.repository');
 
 describe('ai config repository', () => {
   beforeEach(async () => {
     await getPool().query('TRUNCATE ai_tool_permissions');
     await getPool().query("UPDATE ai_config SET api_key = NULL, model = '', mode = 'disabled' WHERE id = 1");
+    await getPool().query(
+      "UPDATE ai_config SET transcription_enabled = false, transcription_model = '', " +
+      'transcription_max_seconds = 300, transcription_max_bytes = 26214400, ' +
+      'transcription_feed_ai = true WHERE id = 1'
+    );
   });
 
   afterAll(async () => { await closePool(); });
@@ -45,5 +50,44 @@ describe('ai config repository', () => {
     expect(await isToolEnabled('nunca_cadastrada')).toBe(false);
     await setToolPermission('consultar_plano', true);
     expect(await isToolEnabled('consultar_plano')).toBe(true);
+  });
+
+  test('getAiConfig devolve os campos de transcrição com os defaults', async () => {
+    const config = await getAiConfig();
+    expect(config.transcriptionEnabled).toBe(false);
+    expect(config.transcriptionMaxSeconds).toBe(300);
+    expect(config.transcriptionMaxBytes).toBe(26214400);
+    expect(config.transcriptionFeedAi).toBe(true);
+    expect(typeof config.transcriptionPrompt).toBe('string');
+  });
+
+  test('updateTranscriptionConfig grava e relê', async () => {
+    const updated = await updateTranscriptionConfig({
+      transcriptionEnabled: true,
+      transcriptionModel: 'modelo-transcricao',
+      transcriptionMaxSeconds: 120,
+      transcriptionMaxBytes: 1048576,
+      transcriptionPrompt: 'PPPoE, ONU',
+      transcriptionFeedAi: false,
+    });
+    expect(updated.transcriptionEnabled).toBe(true);
+    expect(updated.transcriptionModel).toBe('modelo-transcricao');
+    expect(updated.transcriptionFeedAi).toBe(false);
+
+    const relido = await getAiConfig();
+    expect(relido.transcriptionMaxSeconds).toBe(120);
+    expect(relido.transcriptionPrompt).toBe('PPPoE, ONU');
+  });
+
+  test('updateTranscriptionConfig não mexe na configuração de chat', async () => {
+    await updateAiConfig({ apiKey: 'sk-chat', model: 'gpt-chat', mode: 'assistant' });
+    await updateTranscriptionConfig({
+      transcriptionEnabled: true, transcriptionModel: 'm', transcriptionMaxSeconds: 60,
+      transcriptionMaxBytes: 1000, transcriptionPrompt: '', transcriptionFeedAi: true,
+    });
+    const config = await getAiConfig();
+    expect(config.apiKey).toBe('sk-chat');
+    expect(config.model).toBe('gpt-chat');
+    expect(config.mode).toBe('assistant');
   });
 });

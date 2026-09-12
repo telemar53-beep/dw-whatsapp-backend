@@ -8,6 +8,12 @@ function toConfig(row) {
     mode: row.mode,
     systemPrompt: row.system_prompt,
     maxToolsPerInteraction: row.max_tools_per_interaction,
+    transcriptionEnabled: row.transcription_enabled,
+    transcriptionModel: row.transcription_model,
+    transcriptionMaxSeconds: row.transcription_max_seconds,
+    transcriptionMaxBytes: row.transcription_max_bytes,
+    transcriptionPrompt: row.transcription_prompt,
+    transcriptionFeedAi: row.transcription_feed_ai,
   };
 }
 
@@ -32,6 +38,22 @@ async function updateAiConfig({ apiKey, model, mode, systemPrompt }) {
             updated_at = now()
       WHERE id = 1 RETURNING *`,
     [apiKey || null, model, mode, systemPrompt || null]
+  );
+  return toConfig(result.rows[0]);
+}
+
+async function updateTranscriptionConfig({
+  transcriptionEnabled, transcriptionModel, transcriptionMaxSeconds,
+  transcriptionMaxBytes, transcriptionPrompt, transcriptionFeedAi,
+}) {
+  const result = await getPool().query(
+    `UPDATE ai_config
+        SET transcription_enabled = $1, transcription_model = $2,
+            transcription_max_seconds = $3, transcription_max_bytes = $4,
+            transcription_prompt = $5, transcription_feed_ai = $6, updated_at = now()
+      WHERE id = 1 RETURNING *`,
+    [transcriptionEnabled, transcriptionModel, transcriptionMaxSeconds,
+     transcriptionMaxBytes, transcriptionPrompt, transcriptionFeedAi]
   );
   return toConfig(result.rows[0]);
 }
@@ -63,4 +85,4 @@ async function isToolEnabled(toolName) {
   return result.rows[0].enabled;
 }
 
-module.exports = { getAiConfig, updateAiConfig, listToolPermissions, setToolPermission, isToolEnabled };
+module.exports = { getAiConfig, updateAiConfig, updateTranscriptionConfig, listToolPermissions, setToolPermission, isToolEnabled };

@@ -66,6 +66,34 @@ describe('ConversationView', () => {
     expect(screen.getByTitle('Entregue')).toBeInTheDocument();
   });
 
+  test('shows an "IA" marker on an outbound message sent by the AI', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'outbound', content: 'Vou te ajudar com isso.', status: 'delivered', sentBy: 'ai' }],
+      sendMessage: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByText('IA')).toBeInTheDocument();
+  });
+
+  test('shows no "IA" marker on an outbound message sent by a human', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'outbound', content: 'Vou te ajudar com isso.', status: 'delivered', sentBy: 'human' }],
+      sendMessage: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('IA')).not.toBeInTheDocument();
+  });
+
   test('shows no delivery status ticks on an inbound message bubble', () => {
     useConversationMessages.mockReturnValue({
       messages: [{ id: 'm1', direction: 'inbound', content: 'Oi, tudo bem?', status: 'received' }],

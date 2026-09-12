@@ -101,6 +101,10 @@ export function closeConversation(conversationId, reasonId, token) {
   return apiFetch(`/api/conversations/${conversationId}/close`, { method: 'POST', body: { reasonId }, token });
 }
 
+export function setConversationSector(conversationId, sectorId, token) {
+  return apiFetch(`/api/conversations/${conversationId}/sector`, { method: 'PUT', body: { sectorId }, token });
+}
+
 export function listAgents(token) {
   return apiFetch('/api/agents', { token });
 }

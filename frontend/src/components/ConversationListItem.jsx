@@ -100,6 +100,17 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
               )}
             </span>
           </span>
+          {conversation.aiTriageCompletedAt && (
+            <p className="mt-0.5 truncate text-[11px] text-wa-muted">
+              Triagem IA{conversation.aiTriageReasonName ? ` · ${conversation.aiTriageReasonName}` : ''}
+              {conversation.aiTriageLowConfidence && (
+                <span className="ml-1 rounded bg-amber-400/20 px-1 text-amber-700">confiança baixa</span>
+              )}
+              {conversation.aiTriageResolvedByAi && (
+                <span className="ml-1 rounded bg-wa-green/15 px-1 text-wa-green">resolvido pela IA</span>
+              )}
+            </p>
+          )}
         </span>
         {onQuickClose && (
           <button

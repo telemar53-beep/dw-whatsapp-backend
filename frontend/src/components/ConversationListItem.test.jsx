@@ -407,6 +407,90 @@ describe('ConversationListItem', () => {
     window.confirm.mockRestore();
   });
 
+  test('shows the AI triage line when the conversation has completed triage', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            aiTriageCompletedAt: '2026-09-12T10:00:00.000Z',
+            aiTriageReasonName: 'Segunda via',
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('Triagem IA · Segunda via')).toBeInTheDocument();
+  });
+
+  test('shows the AI triage line without a reason when there is none', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            aiTriageCompletedAt: '2026-09-12T10:00:00.000Z',
+            aiTriageReasonName: null,
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('Triagem IA')).toBeInTheDocument();
+  });
+
+  test('shows no AI triage line when the triage has not completed', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000', aiTriageCompletedAt: null }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.queryByText(/Triagem IA/)).not.toBeInTheDocument();
+  });
+
+  test('shows a low-confidence badge on the AI triage line when flagged', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            aiTriageCompletedAt: '2026-09-12T10:00:00.000Z',
+            aiTriageLowConfidence: true,
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('confiança baixa')).toBeInTheDocument();
+  });
+
+  test('shows a resolved-by-AI badge on the AI triage line when flagged', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            aiTriageCompletedAt: '2026-09-12T10:00:00.000Z',
+            aiTriageResolvedByAi: true,
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('resolvido pela IA')).toBeInTheDocument();
+  });
+
   test('clicking the row still calls onSelect as before', async () => {
     const onSelect = vi.fn();
     render(

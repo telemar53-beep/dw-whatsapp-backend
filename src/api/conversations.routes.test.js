@@ -13,6 +13,7 @@ jest.mock('../templates/template.repository');
 jest.mock('../assignment-messages/assignment-message.service');
 jest.mock('../reasons/reason.repository');
 jest.mock('../ai/ai-suggestion.repository');
+jest.mock('../sectors/sector.repository');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -31,6 +32,7 @@ const {
   listClosedConversationsByContact,
   findOpenConversation,
   createConversation,
+  setConversationSector,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -43,6 +45,7 @@ const {
   sendClosingMessageIfApplicable,
 } = require('../assignment-messages/assignment-message.service');
 const { findReasonById } = require('../reasons/reason.repository');
+const { listSectors } = require('../sectors/sector.repository');
 const conversationsRoutes = require('./conversations.routes');
 
 function buildApp() {
@@ -1644,5 +1647,98 @@ describe('AI suggestion routes', () => {
 
     expect(res.status).toBe(404);
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/conversations/:id/sector', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('troca o setor final sem apagar o da triagem IA', async () => {
+    getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, assignedAgentId: 'agent-1', aiTriageSectorId: 's-1' });
+    listSectors.mockResolvedValue([{ id: 's-1', name: 'Financeiro' }, { id: 's-2', name: 'Suporte' }]);
+    setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, sectorId: 's-2', aiTriageSectorId: 's-1' });
+
+    const res = await request(buildApp())
+      .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ sectorId: 's-2' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.aiTriageSectorId).toBe('s-1');
+    expect(setConversationSector).toHaveBeenCalledWith(CONVERSATION_ID, 's-2');
+  });
+
+  test('é recusado para atendente que não é o da conversa; admin pode', async () => {
+    getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, assignedAgentId: 'outro-agente', aiTriageSectorId: 's-1' });
+    listSectors.mockResolvedValue([{ id: 's-2', name: 'Suporte' }]);
+
+    const res = await request(buildApp())
+      .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ sectorId: 's-2' });
+
+    expect(res.status).toBe(403);
+    expect(setConversationSector).not.toHaveBeenCalled();
+
+    setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, sectorId: 's-2' });
+
+    const adminRes = await request(buildApp())
+      .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ sectorId: 's-2' });
+
+    expect(adminRes.status).toBe(200);
+  });
+
+  test('rejeita setor inexistente', async () => {
+    getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, assignedAgentId: 'agent-1' });
+    listSectors.mockResolvedValue([{ id: 's-1', name: 'F' }]);
+
+    const res = await request(buildApp())
+      .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ sectorId: 's-9' });
+
+    expect(res.status).toBe(400);
+    expect(setConversationSector).not.toHaveBeenCalled();
+  });
+
+  test('retorna 404 quando a conversa não existe', async () => {
+    getConversationWithContact.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .put(`/api/conversations/${NON_EXISTENT_ID}/sector`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ sectorId: 's-2' });
+
+    expect(res.status).toBe(404);
+  });
+
+  test('aceita sectorId null para limpar o setor', async () => {
+    getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, assignedAgentId: 'agent-1' });
+    setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, sectorId: null });
+
+    const res = await request(buildApp())
+      .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ sectorId: null });
+
+    expect(res.status).toBe(200);
+    expect(listSectors).not.toHaveBeenCalled();
+    expect(setConversationSector).toHaveBeenCalledWith(CONVERSATION_ID, null);
+  });
+
+  test('broadcasts queue:new e dashboard:conversation ao trocar o setor', async () => {
+    getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, assignedAgentId: 'agent-1' });
+    listSectors.mockResolvedValue([{ id: 's-2', name: 'Suporte' }]);
+    setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, sectorId: 's-2' });
+
+    await request(buildApp())
+      .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ sectorId: 's-2' });
+
+    expect(broadcast).toHaveBeenCalledWith('queue:new', { conversation: expect.objectContaining({ id: CONVERSATION_ID }), message: null });
+    expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', { conversation: expect.objectContaining({ id: CONVERSATION_ID }) });
   });
 });

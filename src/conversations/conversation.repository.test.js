@@ -1060,6 +1060,46 @@ describe('conversation repository', () => {
     expect(moved.aiTriageSummary).toBe('resumo X');
   });
 
+  test('aiTriageReasonName (nome do motivo da triagem IA) chega pelas consultas que alimentam a fila, "minhas conversas" e o encerramento', async () => {
+    // Mesma armadilha das colunas enumeradas do teste acima, mas para o LEFT JOIN
+    // contact_reasons: escreve pela conclusão da triagem, relê pelas consultas
+    // de resumo (toConversationSummary) que a fila, o painel do atendente e o
+    // relatório de encerrados usam.
+    const conv = await createConversation(contactId, channelId, 'pending');
+    const setor = (await getPool().query("INSERT INTO sectors (name) VALUES ('Comercial') RETURNING id")).rows[0].id;
+    const motivo = (await getPool().query("INSERT INTO contact_reasons (name) VALUES ('Mudança de endereço') RETURNING id")).rows[0].id;
+    await concludeAiTriage(conv.id, {
+      sectorId: setor, reasonId: motivo, confidence: 0.9, summary: 'resumo Y',
+      identifiedBy: 'memory', lowConfidence: false, resolvedByAi: false,
+    });
+
+    const leituras = {
+      getConversationWithContact: await getConversationWithContact(conv.id),
+      listConversationsByContact: (await listConversationsByContact(contactId)).find((c) => c.id === conv.id),
+      listWaitingConversations: (await listWaitingConversations()).find((c) => c.id === conv.id),
+      listWaitingForAgentConversations: (await listWaitingForAgentConversations()).find((c) => c.id === conv.id),
+    };
+    for (const [nome, c] of Object.entries(leituras)) {
+      if (!c) throw new Error(`${nome}: esperava encontrar a conversa`);
+      expect(c.aiTriageReasonName).toBe('Mudança de endereço');
+    }
+
+    const agent = await createAgent({ email: 'ai-triage-reason-name@dw.com', password: 'secret123', role: 'agent' });
+    const claimed = await claimConversation(conv.id, agent.id);
+    expect(claimed).not.toBeNull();
+
+    const assigned = (await listConversationsByAgent(agent.id)).find((c) => c.id === conv.id);
+    expect(assigned.aiTriageReasonName).toBe('Mudança de endereço');
+    const inProgress = (await listInProgressConversations()).find((c) => c.id === conv.id);
+    expect(inProgress.aiTriageReasonName).toBe('Mudança de endereço');
+
+    await closeConversation(conv.id, agent.id, null);
+    const closedByAgent = (await listClosedConversationsByAgent(agent.id, { limit: 10, offset: 0 })).find((c) => c.id === conv.id);
+    expect(closedByAgent.aiTriageReasonName).toBe('Mudança de endereço');
+    const closedSince = (await listClosedSince(new Date(Date.now() - 60000), { limit: 10, offset: 0 })).find((c) => c.id === conv.id);
+    expect(closedSince.aiTriageReasonName).toBe('Mudança de endereço');
+  });
+
   describe('ai_triage_phone_contested', () => {
     test('isPhoneContested é false por padrão numa conversa nova', async () => {
       const conv = await createConversation(contactId, channelId, 'pending');

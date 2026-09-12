@@ -306,6 +306,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 metaMode === 'overlay' ? 'text-white' : 'text-chat-faint'
               }`}
             >
+              {outbound && message.sentBy === 'ai' && (
+                <span className="mr-1 rounded bg-white/20 px-1 text-[10px] uppercase tracking-wide">IA</span>
+              )}
               {clockLabel(message.createdAt)}
               {outbound && <MessageStatusTicks status={message.status} />}
             </span>

@@ -15,6 +15,7 @@ const {
   listClosedConversationsByContact,
   findOpenConversation,
   createConversation,
+  setConversationSector,
 } = require('../conversations/conversation.repository');
 const { listMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
@@ -30,6 +31,7 @@ const { sendOpeningMessageIfApplicable, sendClosingMessageIfApplicable } = requi
 const { findReasonById } = require('../reasons/reason.repository');
 const { isOfficialChannelType } = require('../channels/channel-types');
 const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
+const { listSectors } = require('../sectors/sector.repository');
 
 const router = express.Router();
 
@@ -344,6 +346,37 @@ router.post('/:id/transfer', async (req, res) => {
   emitToAgent(toAgentId, 'conversation:assigned', { conversation: conversationWithContact });
   broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact });
   res.json(conversation);
+});
+
+/**
+ * Correção de setor pelo atendente (ou admin): troca o setor FINAL da conversa
+ * (sector_id) sem mexer no que a triagem da IA sugeriu (ai_triage_sector_id) —
+ * a diferença entre os dois é o que a UI mostra como "triagem corrigida".
+ */
+router.put('/:id/sector', async (req, res) => {
+  const { sectorId } = req.body || {};
+  if (sectorId !== null && (typeof sectorId !== 'string' || !sectorId)) {
+    return res.status(400).json({ error: 'sectorId is required (or null)' });
+  }
+  const conversation = await getConversationWithContact(req.params.id);
+  if (!conversation) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+  const isAdmin = req.agent.role === 'admin';
+  if (!isAdmin && conversation.assignedAgentId !== req.agent.agentId) {
+    return res.status(403).json({ error: 'Only the assigned agent can change the sector' });
+  }
+  if (sectorId) {
+    const setores = await listSectors();
+    if (!setores.some((s) => s.id === sectorId)) {
+      return res.status(400).json({ error: 'Unknown sectorId' });
+    }
+  }
+  const updated = await setConversationSector(req.params.id, sectorId);
+  const completa = await getConversationWithContact(updated.id);
+  broadcast('queue:new', { conversation: completa, message: null });
+  broadcastToDashboard('dashboard:conversation', { conversation: completa });
+  res.json(completa);
 });
 
 router.post('/:id/close', async (req, res) => {

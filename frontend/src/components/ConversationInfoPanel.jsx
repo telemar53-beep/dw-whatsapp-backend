@@ -1,4 +1,16 @@
+import { useEffect, useState } from 'react';
 import ContactAvatar from './ContactAvatar';
+import { useAuth } from '../contexts/AuthContext';
+import { useSectors } from '../hooks/useSectors';
+import { setConversationSector } from '../services/api';
+
+const IDENTIFIED_BY_LABELS = {
+  memory: 'memória',
+  phone: 'telefone',
+  cpf: 'CPF',
+  cpf_confirmed: 'CPF + nascimento',
+  none: 'não identificado',
+};
 
 function getStatusMeta(conversation) {
   if (conversation.status === 'closed' || conversation.closedAt) {
@@ -26,11 +38,33 @@ function InfoRow({ label, value }) {
 }
 
 function ConversationInfoPanel({ conversation }) {
+  const { token, agent } = useAuth();
+  const { sectors } = useSectors();
+  const [sectorId, setSectorId] = useState(conversation.sectorId || '');
+
+  useEffect(() => {
+    setSectorId(conversation.sectorId || '');
+  }, [conversation.id, conversation.sectorId]);
+
   const displayName = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
   const status = getStatusMeta(conversation);
   const closedAtLabel = conversation.closedAt
     ? new Date(conversation.closedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
     : null;
+
+  const canEditSector = Boolean(agent) && (agent.role === 'admin' || conversation.assignedAgentId === agent.id);
+
+  function handleSectorChange(event) {
+    const value = event.target.value || null;
+    setSectorId(value || '');
+    setConversationSector(conversation.id, value, token).catch(() => {});
+  }
+
+  const aiSectorName = conversation.aiTriageCompletedAt
+    ? sectors.find((s) => s.id === conversation.aiTriageSectorId)?.name || 'Não definido'
+    : null;
+  const identifiedByLabel = IDENTIFIED_BY_LABELS[conversation.aiTriageIdentifiedBy] || 'não identificado';
+  const confidenceLabel = conversation.aiTriageConfidence != null ? `${Math.round(conversation.aiTriageConfidence * 100)}%` : '—';
 
   return (
     <aside className="hidden w-[272px] shrink-0 flex-col overflow-y-auto border-l border-wa-surface-line bg-wa-surface-soft px-6 py-8 md:flex">
@@ -65,10 +99,42 @@ function ConversationInfoPanel({ conversation }) {
       <div className="flex flex-col gap-4">
         <InfoRow label="Cidade" value={conversation.contactCityName || 'Não informada'} />
         <InfoRow label="Setor" value={conversation.sectorName || 'Não definido'} />
+        {canEditSector && (
+          <label className="-mt-2.5 flex flex-col gap-1">
+            <span className="sr-only">Alterar setor</span>
+            <select
+              aria-label="Alterar setor"
+              value={sectorId}
+              onChange={handleSectorChange}
+              className="rounded-lg border border-wa-border bg-wa-panel px-2 py-1.5 text-[13px] text-wa-text"
+            >
+              <option value="">Selecione um setor</option>
+              {sectors.map((sector) => (
+                <option key={sector.id} value={sector.id}>
+                  {sector.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <InfoRow label="Atendente" value={conversation.assignedAgentName || 'Não atribuído'} />
         {conversation.protocolNumber && <InfoRow label="Protocolo" value={conversation.protocolNumber} />}
         {closedAtLabel && <InfoRow label="Encerrado em" value={closedAtLabel} />}
       </div>
+
+      {conversation.aiTriageCompletedAt && (
+        <>
+          <div className="my-6 border-t border-wa-border" />
+          <div className="flex flex-col gap-4">
+            <h3 className="text-[13px] font-semibold text-wa-text">Triagem por IA</h3>
+            <InfoRow label="Setor da IA" value={aiSectorName} />
+            <InfoRow label="Motivo" value={conversation.aiTriageReasonName || 'não definido'} />
+            <InfoRow label="Identificação" value={identifiedByLabel} />
+            <InfoRow label="Confiança" value={confidenceLabel} />
+            <pre className="whitespace-pre-wrap text-[13px] leading-[18px] text-wa-text">{conversation.aiTriageSummary}</pre>
+          </div>
+        </>
+      )}
     </aside>
   );
 }

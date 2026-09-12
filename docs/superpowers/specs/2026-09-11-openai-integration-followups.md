@@ -45,6 +45,37 @@ Mitigação da Fase 1: **manter a ferramenta desligada** (o padrão já é desli
 Correção real, para a Fase 2: a ferramenta devolve a intenção e a gravação
 acontece quando o atendente aceita.
 
+## Fase 2 — ideias pendentes (registradas em 2026-09-12, sem desenho)
+
+Pedido do usuário: o atendimento humano vai até 20:00 e volta 08:00; nesse
+intervalo a IA deve atender sozinha — enviar boleto (PDF) e PIX copia-e-cola,
+fazer o desbloqueio em confiança quando o cliente manda comprovante à noite
+(avisando que um colega dá baixa de manhã), abrir chamado técnico quando a
+conexão está offline, explicar suspensão por boleto vencido — e deixar a
+conversa na fila da manhã já com o resumo do que fez. Segunda ideia: triagem
+com IA no lugar do menu numérico.
+
+Decomposição proposta, cada item com spec → plano → entrega própria:
+
+- **A. Ferramentas de ação que faltam.** `abrir_chamado` — a API do SGP tem
+  `POST /api/ura/chamado/` (contrato, conteudo, ocorrenciatipo, metodo 5 =
+  WhatsApp, setor; devolve protocolo) e `POST /api/ura/ocorrencia/list/` para
+  não duplicar chamado aberto. `enviar_boleto` como PDF, reaproveitando
+  `enqueueOutboundMessage({ messageType: 'document' })` de `sgp-query.routes.js`.
+  Comprovante de pagamento: imagem hoje não aciona a IA — exige visão ou
+  detecção de intenção. Entram primeiro no modo Assistente, com humano revisando.
+- **B. Modo Automático noturno.** `ai_config.mode = 'automatic'` já existe como
+  stub em `ai-worker.js`. Bloqueio: o item 2 acima (dono do CPF) precisa de um
+  fator de confirmação antes de qualquer resposta automática. Janela
+  configurável (reaproveitar `business-hours`), e resumo de handoff para a fila.
+- **C. Triagem com IA.** Resolve o item 1 acima; depende do que B decidir sobre
+  setor (item 3).
+
+Ordem recomendada: A → B → C. A sonda de 2026-09-11 **não** testou chamados
+nem promessa de pagamento (excluiu nomes de escrita por segurança) — a seção
+"O que NÃO existe" da spec principal está errada nesses dois pontos; a fonte
+correta é a coleção Postman oficial do SGP.
+
 ## Antes de ligar num canal de produção
 
 - Conferir que `ai_tool_permissions` está vazia ou só com ferramentas de

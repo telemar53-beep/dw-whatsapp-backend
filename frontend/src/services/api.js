@@ -414,3 +414,23 @@ export function listCampaigns(token) {
 export function getCampaign(id, token) {
   return apiFetch(`/api/campaigns/${id}`, { token });
 }
+
+export function getAiConfig(token) {
+  return apiFetch('/api/admin/ai/config', { token });
+}
+
+export function updateAiConfig(payload, token) {
+  return apiFetch('/api/admin/ai/config', { method: 'PUT', body: payload, token });
+}
+
+export function testAiConnection(apiKey, token) {
+  return apiFetch('/api/admin/ai/test-connection', { method: 'POST', body: { apiKey }, token });
+}
+
+export function listAiTools(token) {
+  return apiFetch('/api/admin/ai/tools', { token });
+}
+
+export function setAiToolEnabled(nome, enabled, token) {
+  return apiFetch(`/api/admin/ai/tools/${nome}`, { method: 'PUT', body: { enabled }, token });
+}

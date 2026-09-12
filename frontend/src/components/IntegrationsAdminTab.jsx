@@ -6,6 +6,8 @@ import { useTemplates } from '../hooks/useTemplates';
 import { createSgpIntegration, updateSgpIntegration, rotateSgpIntegrationKey } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
 import SgpQueryConfigCard from './SgpQueryConfigCard';
+import OpenAiConfigCard from './OpenAiConfigCard';
+import AiToolPermissionsCard from './AiToolPermissionsCard';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
@@ -281,6 +283,8 @@ function IntegrationsAdminTab() {
   return (
     <div className="space-y-6">
       <SgpQueryConfigCard />
+      <OpenAiConfigCard />
+      <AiToolPermissionsCard />
       <div className="space-y-3">
         {integrations.map((integration) => (
           <IntegrationCard key={integration.id} integration={integration} channels={channels} templates={approvedTemplates} onChanged={refresh} />

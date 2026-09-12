@@ -27,6 +27,8 @@ beforeEach(() => {
   useChannels.mockReturnValue({ channels: [BAILEYS_CHANNEL, META_CHANNEL] });
   useTemplates.mockReturnValue({ templates: [APPROVED_TEMPLATE] });
   useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
+  api.getAiConfig.mockResolvedValue({ configured: false, mode: 'disabled', model: '' });
+  api.listAiTools.mockResolvedValue([]);
 });
 
 describe('IntegrationsAdminTab', () => {

@@ -484,6 +484,26 @@ async function listClosedConversationsByAgent(agentId, { limit, offset }) {
   return result.rows.map((row) => ({ ...toConversationSummary(row), closedAt: row.updated_at }));
 }
 
+async function setSuggestedReason(conversationId, reasonId) {
+  const result = await getPool().query(
+    'UPDATE conversations SET suggested_reason_id = $2, updated_at = now() WHERE id = $1 RETURNING *',
+    [conversationId, reasonId]
+  );
+  if (result.rowCount === 0) return null;
+  return toConversation(result.rows[0]);
+}
+
+async function setConversationSector(conversationId, sectorId) {
+  const result = await getPool().query(
+    `UPDATE conversations SET sector_id = $2, updated_at = now()
+     WHERE id = $1
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, created_at, updated_at`,
+    [conversationId, sectorId]
+  );
+  if (result.rowCount === 0) return null;
+  return toConversation(result.rows[0]);
+}
+
 async function listClosedConversationsByContact(contactId) {
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.created_at, c.updated_at,
@@ -527,4 +547,6 @@ module.exports = {
   countClosedSince,
   listClosedSince,
   markBusinessHoursNoticeSent,
+  setSuggestedReason,
+  setConversationSector,
 };

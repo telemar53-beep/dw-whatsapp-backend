@@ -1,0 +1,119 @@
+jest.mock('../integrations/sgp-client');
+jest.mock('../sectors/sector.repository');
+jest.mock('../conversations/conversation.repository');
+
+const { listTools, findTool, toOpenAiTools } = require('./tool-registry');
+const { listSectors } = require('../sectors/sector.repository');
+const { setConversationSector } = require('../conversations/conversation.repository');
+
+describe('tool-registry', () => {
+  test('registers exactly the eight phase-one tools plus the two disabled sensitive ones', () => {
+    const nomes = listTools().map((t) => t.nome).sort();
+    expect(nomes).toEqual([
+      'buscar_cliente', 'consultar_faturas', 'consultar_financeiro', 'consultar_plano',
+      'consultar_status_conexao', 'consultar_status_contrato',
+      'definir_motivo_atendimento', 'gerar_pix', 'gerar_segunda_via', 'transferir_atendimento',
+    ]);
+  });
+
+  test('every tool declares a category the executor understands', () => {
+    for (const tool of listTools()) {
+      expect(['CONSULTA', 'ACAO', 'ACAO_SENSIVEL']).toContain(tool.categoria);
+    }
+  });
+
+  test('every tool has a validator and an executor', () => {
+    for (const tool of listTools()) {
+      expect(typeof tool.validar).toBe('function');
+      expect(typeof tool.executar).toBe('function');
+      expect(tool.descricao.length).toBeGreaterThan(10);
+    }
+  });
+
+  test('the sensitive tools are the invoice ones', () => {
+    expect(findTool('gerar_segunda_via').categoria).toBe('ACAO_SENSIVEL');
+    expect(findTool('gerar_pix').categoria).toBe('ACAO_SENSIVEL');
+  });
+
+  test('toOpenAiTools exposes only name, description and parameters', () => {
+    const exposto = toOpenAiTools(['consultar_plano']);
+    expect(exposto).toHaveLength(1);
+    expect(exposto[0]).toEqual({
+      type: 'function',
+      function: {
+        name: 'consultar_plano',
+        description: expect.any(String),
+        parameters: expect.any(Object),
+      },
+    });
+    // Nada do nosso lado interno pode vazar para o modelo.
+    expect(JSON.stringify(exposto)).not.toContain('executar');
+    expect(JSON.stringify(exposto)).not.toContain('categoria');
+  });
+
+  test('toOpenAiTools omits tools that are not enabled', () => {
+    expect(toOpenAiTools([])).toEqual([]);
+    expect(toOpenAiTools(['gerar_pix']).map((t) => t.function.name)).toEqual(['gerar_pix']);
+  });
+
+  test('validar rejects a contratoId that is not a positive integer', () => {
+    const tool = findTool('consultar_status_conexao');
+    expect(tool.validar({ contratoId: 17402 }).ok).toBe(true);
+    expect(tool.validar({ contratoId: 'abc' }).ok).toBe(false);
+    expect(tool.validar({ contratoId: -1 }).ok).toBe(false);
+    expect(tool.validar({}).ok).toBe(false);
+  });
+
+  test('buscar_cliente validar strips non-digits and rejects an empty document', () => {
+    const tool = findTool('buscar_cliente');
+    expect(tool.validar({ cpf: '529.982.247-25' })).toEqual({ ok: true, args: { cpf: '52998224725' } });
+    expect(tool.validar({ cpf: 'abc' }).ok).toBe(false);
+  });
+});
+
+describe('transferir_atendimento executar', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('an unknown setorId returns a failure result and never touches the repository', async () => {
+    listSectors.mockResolvedValue([{ id: 'sector-1', name: 'Financeiro', createdAt: new Date() }]);
+    const tool = findTool('transferir_atendimento');
+
+    const resultado = await tool.executar(
+      { setorId: 'sector-unknown', resumo: 'Cliente relata cobrança indevida.' },
+      { conversationId: 'conv-1' }
+    );
+
+    expect(resultado.ok).toBe(false);
+    expect(setConversationSector).not.toHaveBeenCalled();
+  });
+
+  test('a known sector where setConversationSector returns a conversation returns success naming the sector', async () => {
+    listSectors.mockResolvedValue([{ id: 'sector-1', name: 'Financeiro', createdAt: new Date() }]);
+    setConversationSector.mockResolvedValue({ id: 'conv-1', sectorId: 'sector-1' });
+    const tool = findTool('transferir_atendimento');
+
+    const resultado = await tool.executar(
+      { setorId: 'sector-1', resumo: 'Cliente relata cobrança indevida.' },
+      { conversationId: 'conv-1' }
+    );
+
+    expect(resultado).toEqual({ transferido: true, setor: 'Financeiro' });
+    expect(setConversationSector).toHaveBeenCalledWith('conv-1', 'sector-1');
+  });
+
+  test('a known sector where setConversationSector returns null returns a failure, not {transferido: true}', async () => {
+    listSectors.mockResolvedValue([{ id: 'sector-1', name: 'Financeiro', createdAt: new Date() }]);
+    setConversationSector.mockResolvedValue(null);
+    const tool = findTool('transferir_atendimento');
+
+    const resultado = await tool.executar(
+      { setorId: 'sector-1', resumo: 'Cliente relata cobrança indevida.' },
+      { conversationId: 'conv-1' }
+    );
+
+    expect(resultado.ok).toBe(false);
+    expect(resultado).not.toEqual({ transferido: true, setor: 'Financeiro' });
+  });
+});

@@ -7,6 +7,7 @@ const {
   updateMessageStatus,
   recordMessageSent,
   listMessagesByConversation,
+  listRecentMessagesByConversation,
   findMessageById,
   advanceMessageStatus,
 } = require('./message.repository');
@@ -123,6 +124,24 @@ describe('message repository', () => {
     await createMessage({ conversationId, direction: 'outbound', content: 'segunda', whatsappMessageId: null, status: 'sent' });
     const messages = await listMessagesByConversation(conversationId);
     expect(messages.map((m) => m.content)).toEqual(['primeira', 'segunda']);
+  });
+
+  describe('listRecentMessagesByConversation', () => {
+    test('returns only the newest messages, in chronological order', async () => {
+      // 5 mensagens, mas o atendimento só pode ver as 3 mais novas: se a
+      // consulta usasse ORDER BY created_at ASC LIMIT 3 (o erro que a IA
+      // cometeria se lesse a mais antiga em vez da mais recente), o resultado
+      // seria ['m1', 'm2', 'm3'] em vez de ['m3', 'm4', 'm5'].
+      await createMessage({ conversationId, direction: 'inbound', content: 'm1', whatsappMessageId: 'wamid.REC1', status: 'received' });
+      await createMessage({ conversationId, direction: 'outbound', content: 'm2', whatsappMessageId: null, status: 'sent' });
+      await createMessage({ conversationId, direction: 'inbound', content: 'm3', whatsappMessageId: 'wamid.REC3', status: 'received' });
+      await createMessage({ conversationId, direction: 'outbound', content: 'm4', whatsappMessageId: null, status: 'sent' });
+      await createMessage({ conversationId, direction: 'inbound', content: 'm5', whatsappMessageId: 'wamid.REC5', status: 'received' });
+
+      const messages = await listRecentMessagesByConversation(conversationId, 3);
+
+      expect(messages.map((m) => m.content)).toEqual(['m3', 'm4', 'm5']);
+    });
   });
 
   test('findMessageById returns the message with its media fields', async () => {

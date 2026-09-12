@@ -119,6 +119,31 @@ async function listMessagesByConversation(conversationId) {
   return result.rows.map(toMessageWithReplyPreview);
 }
 
+/**
+ * As últimas `limit` mensagens da conversa, em ordem cronológica (mais antiga
+ * primeiro). Diferente de listMessagesByConversation (que não pagina e serve
+ * a tela de atendimento inteira), esta função existe para alimentar o
+ * histórico enviado à IA: pega as mais NOVAS via ORDER BY created_at DESC
+ * LIMIT, e só então inverte para a ordem de leitura. Um LIMIT aplicado direto
+ * num ORDER BY ASC devolveria as mensagens mais antigas da conversa, fazendo
+ * a IA nunca ver o que o cliente acabou de escrever.
+ */
+async function listRecentMessagesByConversation(conversationId, limit) {
+  const result = await getPool().query(
+    `SELECT m.id, m.conversation_id, m.direction, m.content, m.whatsapp_message_id, m.status,
+            m.message_type, m.media_path, m.media_mime_type, m.media_filename,
+            m.location_latitude, m.location_longitude, m.replied_to_message_id, m.created_at,
+            rm.content AS replied_to_content, rm.direction AS replied_to_direction
+     FROM messages m
+     LEFT JOIN messages rm ON rm.id = m.replied_to_message_id
+     WHERE m.conversation_id = $1
+     ORDER BY m.created_at DESC
+     LIMIT $2`,
+    [conversationId, limit]
+  );
+  return result.rows.map(toMessageWithReplyPreview).reverse();
+}
+
 async function findMessageById(id) {
   const result = await getPool().query(`SELECT ${MESSAGE_COLUMNS} FROM messages WHERE id = $1`, [id]);
   if (result.rowCount === 0) return null;
@@ -131,5 +156,6 @@ module.exports = {
   advanceMessageStatus,
   recordMessageSent,
   listMessagesByConversation,
+  listRecentMessagesByConversation,
   findMessageById,
 };

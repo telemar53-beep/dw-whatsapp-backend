@@ -1787,7 +1787,10 @@ const BYTES_POR_MB = 1048576;
 
 function AudioTranscriptionConfigCard() {
   const { token } = useAuth();
-  const { config, refresh } = useAiConfig();
+  // `loading` trava o Salvar: antes de a config chegar, o estado guarda os
+  // defaults do useState, e um Save nessa janela gravaria defaults por cima dos
+  // valores reais — o backend escreve as seis colunas sem COALESCE.
+  const { config, loading, refresh } = useAiConfig();
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState('');
   const [maxMinutes, setMaxMinutes] = useState(5);
@@ -1836,14 +1839,22 @@ function AudioTranscriptionConfigCard() {
       setError('Modelo é obrigatório');
       return;
     }
+    // Espelha a regra do backend (inteiro positivo). Sem isto, limpar o campo
+    // manda Number('') === 0 e o admin vê o erro cru em inglês da API.
+    const minutos = Number(maxMinutes);
+    const mb = Number(maxMb);
+    if (!Number.isInteger(minutos) || minutos < 1 || !Number.isInteger(mb) || mb < 1) {
+      setError('Duração e tamanho máximos devem ser números inteiros maiores que zero');
+      return;
+    }
     setSaving(true);
     try {
       await updateTranscriptionConfig(
         {
           transcriptionEnabled: enabled,
           transcriptionModel: model.trim(),
-          transcriptionMaxSeconds: Number(maxMinutes) * 60,
-          transcriptionMaxBytes: Number(maxMb) * BYTES_POR_MB,
+          transcriptionMaxSeconds: minutos * 60,
+          transcriptionMaxBytes: mb * BYTES_POR_MB,
           transcriptionPrompt: vocabulary,
           transcriptionFeedAi: feedAi,
         },

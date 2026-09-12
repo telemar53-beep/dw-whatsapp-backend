@@ -32,6 +32,33 @@ describe('tool-registry', () => {
     }
   });
 
+  // Estas três travam o desenho do executor de ferramentas (tool-executor.js):
+  // ele decide a checagem de propriedade lendo estas duas marcações, não mais
+  // farejando um "contratoId" fixo. Sem estes testes, um erro de digitação ou
+  // uma marcação incorreta aqui vira um jeito legítimo de burlar a checagem lá.
+  test('every tool declares exactly one ownership marker: chaveProprietario xor isentoDeProprietario', () => {
+    for (const tool of listTools()) {
+      const declaraChave = typeof tool.chaveProprietario === 'string';
+      const declaraIsencao = tool.isentoDeProprietario === true;
+      expect(declaraChave).not.toBe(declaraIsencao);
+    }
+  });
+
+  test('a declared chaveProprietario names an argument that exists in that tool\'s parametros.properties', () => {
+    for (const tool of listTools()) {
+      if (typeof tool.chaveProprietario === 'string') {
+        expect(tool.parametros.properties).toHaveProperty(tool.chaveProprietario);
+      }
+    }
+  });
+
+  test('the ownership exemption list is exactly these three tools, by name', () => {
+    // Adicionar uma quarta isenção exige editar esta lista — a decisão passa
+    // por um revisor em vez de escapar dentro da definição de uma ferramenta.
+    const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
+    expect(isentas).toEqual(['buscar_cliente', 'definir_motivo_atendimento', 'transferir_atendimento']);
+  });
+
   test('the sensitive tools are the invoice ones', () => {
     expect(findTool('gerar_segunda_via').categoria).toBe('ACAO_SENSIVEL');
     expect(findTool('gerar_pix').categoria).toBe('ACAO_SENSIVEL');

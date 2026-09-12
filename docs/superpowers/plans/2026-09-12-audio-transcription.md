@@ -1324,7 +1324,7 @@ Em `src/conversations/inbound-message.service.js`:
 
 ```js
   try {
-    if (await shouldTranscribe(channelId)) {
+    if (message.messageType === 'audio' && await shouldTranscribe(channelId)) {
       await scheduleTranscription(conversation, message, audioDurationSeconds);
     }
   } catch (err) {
@@ -1332,9 +1332,21 @@ Em `src/conversations/inbound-message.service.js`:
   }
 ```
 
-A ordem importa: a transcrição é agendada antes do bloco da IA porque é ela quem
-vai disparar o turno de IA do áudio, pelo worker. `scheduleAiReply` continua
-ignorando áudio (só aceita `messageType === 'text'`), então não há disparo duplo.
+**O prefixo `message.messageType === 'audio' &&` é obrigatório** — é como a spec
+escreve o gancho. Sem ele, `shouldTranscribe` (duas consultas ao banco) roda para
+toda mensagem inbound, inclusive texto e figurinha, com a feature desligada — e a
+constraint global "desligado = exatamente como hoje" deixa de valer. (A primeira
+versão deste plano perdeu o prefixo; a revisão final do branch o restaurou.)
+
+`scheduleAiReply` continua ignorando áudio (só aceita `messageType === 'text'`),
+então não há disparo duplo.
+
+**Ordem dentro da ingestão (ajustada na revisão final):** marcar `pending` ANTES
+do `message:new` e usar a linha devolvida por `markTranscriptionPending` como a
+mensagem emitida — senão o cartão nasce sem "Transcrevendo…" até um F5. E
+enfileirar o job só DEPOIS do `message:new`, senão um ramo de falha rápida do
+worker pode emitir `message:transcription` antes de a tela ter a mensagem na
+lista, e o evento se perde.
 
 Teste em `inbound-message.service.test.js` (com `shouldTranscribe` devolvendo
 `false` no `beforeEach` para não afetar os testes existentes):
@@ -2270,6 +2282,19 @@ git push -u origin audio-transcription
 ```
 
 ---
+
+## Ajustes vindos da revisão final do branch
+
+Seis correções entraram depois das 10 tasks, todas pequenas (commit `10b0469`):
+
+| # | Onde | O quê |
+|---|---|---|
+| 1 | `inbound-message.service.js` | prefixo `messageType === 'audio' &&` restaurado da spec (ver Task 7, Step 3) |
+| 2 | `openai-client.js` + `transcription.service.js` | `transcribeAudio` ganha `filename`; o serviço passa `'audio' + path.extname(mediaPath)` — antes tudo ia como `.ogg`, e a OpenAI escolhe o decodificador pela extensão (Meta/360dialog mandam mp4/mpeg) |
+| 3 | `inbound-message.service.js` + `ai.service.js` | `pending` antes do emit, enfileirar depois (ver Task 7, Step 3) |
+| 4 | migração | `CHECK (...) NOT VALID` + `VALIDATE CONSTRAINT` em statement separado — sem isso o build do Render faz full scan de `messages` sob `ACCESS EXCLUSIVE` com o código antigo servindo |
+| 5 | `transcription-worker.js` | o `catch` grava `failed` e emite o socket — um throw fora do serviço deixava "Transcrevendo…" eterno |
+| 6 | `transcription.service.js` | guarda para `getAiConfig()` nulo, gatilho do item 5 |
 
 ## Cobertura da spec
 

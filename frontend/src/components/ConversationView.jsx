@@ -101,7 +101,10 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const [replyingTo, setReplyingTo] = useState(null);
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
   const [closingReason, setClosingReason] = useState(false);
-  const [draftEdit, setDraftEdit] = useState(null);
+  // A sugestão que o atendente escolheu editar: { id, content } enquanto o texto
+  // está no campo de digitação, ou null. Enquanto ela existir, o próximo envio de
+  // texto simples é atribuído a essa sugestão (rota de IA) em vez do envio comum.
+  const [editedSuggestion, setEditedSuggestion] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -110,7 +113,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     setReplyingTo(null);
     setSgpPanelOpen(false);
     setClosingReason(false);
-    setDraftEdit(null);
+    setEditedSuggestion(null);
   }, [conversation.id]);
 
   useEffect(() => {
@@ -132,6 +135,27 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
       : conversation.sectorName || 'clique aqui para ver os dados do contato';
 
   async function handleSend(content, file, repliedToMessageId, isVoiceNote) {
+    const pending = editedSuggestion;
+    setEditedSuggestion(null);
+
+    if (pending && file) {
+      // Anexo ou áudio não passam pela rota de sugestão da IA (ela só aceita texto):
+      // o rascunho foi abandonado em favor do arquivo, então descarta a sugestão
+      // (melhor esforço — uma falha aqui não pode travar o envio do anexo) e segue
+      // pelo caminho comum.
+      try {
+        await discardSuggestion(pending);
+      } catch (err) {
+        // ignorado de propósito: ver comentário acima
+      }
+    } else if (pending) {
+      // Texto simples com uma sugestão pendente: marca 'edited' (ou 'sent', se o
+      // atendente não mudou nada) no backend em vez de um envio comum.
+      await sendSuggestion(pending, content);
+      setReplyingTo(null);
+      return;
+    }
+
     await sendMessage(content, file, repliedToMessageId, isVoiceNote);
     setReplyingTo(null);
   }
@@ -165,7 +189,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
 
   function handleEditSuggestion(item) {
     const text = editSuggestion(item);
-    setDraftEdit({ key: item.id, content: text });
+    setEditedSuggestion({ id: item.id, content: text });
   }
 
   async function handleDiscardSuggestion(item) {
@@ -379,8 +403,8 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             quickReplies={quickReplies}
             replyingTo={replyingTo}
             onCancelReply={() => setReplyingTo(null)}
-            draftContent={draftEdit ? draftEdit.content : undefined}
-            draftKey={draftEdit ? draftEdit.key : undefined}
+            draftContent={editedSuggestion ? editedSuggestion.content : undefined}
+            draftKey={editedSuggestion ? editedSuggestion.id : undefined}
           />
         </>
       )}

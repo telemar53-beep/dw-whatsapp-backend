@@ -728,4 +728,107 @@ describe('AI suggestion card', () => {
     expect(screen.getByLabelText('Troca de senha')).not.toBeChecked();
     expect(screen.getByRole('button', { name: /confirmar encerramento/i })).toBeDisabled();
   });
+
+  // These four tests use mockImplementation with a mutable closure variable, instead of a
+  // static mockReturnValue, so that calling the mocked edit() can make the mocked suggestion
+  // disappear on the next render — mirroring what the real hook does (edit clears its state
+  // synchronously) and letting the card give way to the composer's own "Enviar" button, the
+  // same way the real hook wiring depends on.
+  test('a plain-text send after editing a suggestion goes through the suggestion route, with the edited content', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const discard = vi.fn();
+    const sendMessageMock = vi.fn().mockResolvedValue({});
+    let currentSuggestion = { id: 's-1', content: 'Seu plano é 600MB.' };
+    const edit = vi.fn((item) => {
+      currentSuggestion = null;
+      return item.content;
+    });
+    useAiSuggestion.mockImplementation(() => ({ suggestion: currentSuggestion, send, edit, discard }));
+    useConversationMessages.mockReturnValue({ messages: [], sendMessage: sendMessageMock });
+
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    const textbox = screen.getByPlaceholderText(/digite uma mensagem/i);
+    await userEvent.clear(textbox);
+    await userEvent.type(textbox, 'Texto editado pelo atendente');
+    await userEvent.click(screen.getByRole('button', { name: /^enviar$/i }));
+
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledWith({ id: 's-1', content: 'Seu plano é 600MB.' }, 'Texto editado pelo atendente')
+    );
+    expect(sendMessageMock).not.toHaveBeenCalled();
+    expect(discard).not.toHaveBeenCalled();
+  });
+
+  test('sending an attachment after editing a suggestion discards it first, then sends normally', async () => {
+    const send = vi.fn();
+    const discard = vi.fn().mockResolvedValue(undefined);
+    const sendMessageMock = vi.fn().mockResolvedValue({});
+    let currentSuggestion = { id: 's-1', content: 'Seu plano é 600MB.' };
+    const edit = vi.fn((item) => {
+      currentSuggestion = null;
+      return item.content;
+    });
+    useAiSuggestion.mockImplementation(() => ({ suggestion: currentSuggestion, send, edit, discard }));
+    useConversationMessages.mockReturnValue({ messages: [], sendMessage: sendMessageMock });
+
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    const fakeFile = new File(['bytes'], 'foto.jpg', { type: 'image/jpeg' });
+    const fileInput = document.querySelector('input[type="file"]');
+    await userEvent.upload(fileInput, fakeFile);
+    await userEvent.click(screen.getByRole('button', { name: /^enviar$/i }));
+
+    await waitFor(() => expect(discard).toHaveBeenCalledWith({ id: 's-1', content: 'Seu plano é 600MB.' }));
+    expect(send).not.toHaveBeenCalled();
+    expect(sendMessageMock).toHaveBeenCalledWith('Seu plano é 600MB.', fakeFile, null, false);
+  });
+
+  test('switching to a different conversation clears the pending edited suggestion', async () => {
+    const send = vi.fn();
+    const sendMessageMock = vi.fn().mockResolvedValue({});
+    let currentSuggestion = { id: 's-1', content: 'Seu plano é 600MB.' };
+    const edit = vi.fn((item) => {
+      currentSuggestion = null;
+      return item.content;
+    });
+    useAiSuggestion.mockImplementation(() => ({ suggestion: currentSuggestion, send, edit, discard: vi.fn() }));
+    useConversationMessages.mockReturnValue({ messages: [], sendMessage: sendMessageMock });
+
+    const { rerender } = render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+
+    rerender(
+      <ConversationView
+        conversation={{ id: 'c2', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    const textbox = screen.getByPlaceholderText(/digite uma mensagem/i);
+    await userEvent.clear(textbox);
+    await userEvent.type(textbox, 'Mensagem nova');
+    await userEvent.click(screen.getByRole('button', { name: /^enviar$/i }));
+
+    await waitFor(() => expect(sendMessageMock).toHaveBeenCalledWith('Mensagem nova', null, null, false));
+    expect(send).not.toHaveBeenCalled();
+  });
 });

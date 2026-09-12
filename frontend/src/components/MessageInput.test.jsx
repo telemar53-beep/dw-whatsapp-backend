@@ -167,4 +167,61 @@ describe('MessageInput', () => {
 
     await waitFor(() => expect(onSend).toHaveBeenCalledWith('R$150,00', null, 'msg-1', false));
   });
+
+  test('pressing Enter sends the message, the same as clicking Enviar', async () => {
+    const onSend = vi.fn().mockResolvedValue({});
+    render(<MessageInput onSend={onSend} />);
+
+    await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), 'Oi{Enter}');
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledWith('Oi', null, null, false));
+  });
+
+  test('pressing Shift+Enter inserts a newline instead of sending — a plain <input> cannot hold this', async () => {
+    const onSend = vi.fn();
+    render(<MessageInput onSend={onSend} />);
+    const textbox = screen.getByPlaceholderText(/digite uma mensagem/i);
+
+    await userEvent.type(textbox, 'Linha 1{Shift>}{Enter}{/Shift}Linha 2');
+
+    expect(textbox).toHaveValue('Linha 1\nLinha 2');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  test('loads draftContent into the field and focuses it when draftKey is provided', () => {
+    render(<MessageInput onSend={vi.fn()} draftContent="Rascunho da IA" draftKey="s-1" />);
+
+    const textbox = screen.getByPlaceholderText(/digite uma mensagem/i);
+    expect(textbox).toHaveValue('Rascunho da IA');
+    expect(textbox).toHaveFocus();
+  });
+
+  test('a new draftKey replaces the field content, even mid-edit', async () => {
+    const { rerender } = render(<MessageInput onSend={vi.fn()} draftContent="Primeiro rascunho" draftKey="s-1" />);
+    await userEvent.type(screen.getByPlaceholderText(/digite uma mensagem/i), ' editado');
+
+    rerender(<MessageInput onSend={vi.fn()} draftContent="Segundo rascunho" draftKey="s-2" />);
+
+    expect(screen.getByPlaceholderText(/digite uma mensagem/i)).toHaveValue('Segundo rascunho');
+  });
+
+  test('does not reload draftContent on a re-render where draftKey is unchanged, preserving what the attendant typed', async () => {
+    const { rerender } = render(<MessageInput onSend={vi.fn()} draftContent="Rascunho" draftKey="s-1" />);
+    const textbox = screen.getByPlaceholderText(/digite uma mensagem/i);
+    await userEvent.clear(textbox);
+    await userEvent.type(textbox, 'Editado pelo atendente');
+
+    rerender(<MessageInput onSend={vi.fn()} draftContent="Rascunho" draftKey="s-1" />);
+
+    expect(textbox).toHaveValue('Editado pelo atendente');
+  });
+
+  test('leaves the field untouched when draftContent/draftKey are not provided at all', async () => {
+    render(<MessageInput onSend={vi.fn()} />);
+    const textbox = screen.getByPlaceholderText(/digite uma mensagem/i);
+
+    await userEvent.type(textbox, 'Texto digitado normalmente');
+
+    expect(textbox).toHaveValue('Texto digitado normalmente');
+  });
 });

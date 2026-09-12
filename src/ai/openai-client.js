@@ -13,10 +13,12 @@ function headers(apiKey) {
 
 function traduzErro(err, contexto) {
   if (err.response && err.response.status === 401) {
-    return new OpenAiAuthError('OpenAI rejected the API key');
+    const cause = { status: err.response.status, message: err.response.data?.error?.message || err.message };
+    return new OpenAiAuthError('OpenAI rejected the API key', { cause });
   }
   console.error(`OpenAI request failed: ${contexto}`, err.response ? { status: err.response.status } : { message: err.message });
-  return new OpenAiRequestError(`Failed to reach OpenAI at ${contexto}`, { cause: err });
+  const cause = { status: err.response && err.response.status, message: err.message };
+  return new OpenAiRequestError(`Failed to reach OpenAI at ${contexto}`, { cause });
 }
 
 async function createChatCompletion({ apiKey, model, messages, tools }) {

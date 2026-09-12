@@ -51,4 +51,46 @@ describe('openai-client', () => {
     axios.get.mockResolvedValue({ data: { data: [{ id: 'gpt-b' }, { id: 'gpt-a' }] } });
     expect(await listModels('sk')).toEqual(['gpt-a', 'gpt-b']);
   });
+
+  test('does not leak the API key in the error cause on non-401 failures', async () => {
+    const axiosError = {
+      response: { status: 500, data: { error: { message: 'server error' } } },
+      config: {
+        headers: { Authorization: 'Bearer sk-secreta' },
+        data: '{"model":"gpt-x"}',
+      },
+      message: 'Request failed with status code 500',
+    };
+    axios.post.mockRejectedValue(axiosError);
+
+    try {
+      await createChatCompletion({ apiKey: 'sk-secreta', model: 'gpt-x', messages: [], tools: [] });
+      fail('should have thrown');
+    } catch (err) {
+      const serialized = JSON.stringify(err) + JSON.stringify(err.cause);
+      expect(serialized).not.toContain('sk-secreta');
+      expect(serialized).not.toContain('Bearer');
+    }
+  });
+
+  test('does not leak the API key in the error cause on 401 failures', async () => {
+    const axiosError = {
+      response: { status: 401, data: { error: { message: 'bad key' } } },
+      config: {
+        headers: { Authorization: 'Bearer sk-secreta' },
+        data: '{"model":"gpt-x"}',
+      },
+      message: 'Request failed with status code 401',
+    };
+    axios.post.mockRejectedValue(axiosError);
+
+    try {
+      await createChatCompletion({ apiKey: 'sk-secreta', model: 'gpt-x', messages: [], tools: [] });
+      fail('should have thrown');
+    } catch (err) {
+      const serialized = JSON.stringify(err) + JSON.stringify(err.cause);
+      expect(serialized).not.toContain('sk-secreta');
+      expect(serialized).not.toContain('Bearer');
+    }
+  });
 });

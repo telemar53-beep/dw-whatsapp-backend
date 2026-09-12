@@ -59,6 +59,10 @@ function toContract(c) {
     popName: c.popNome,
     openInvoicesCount: c.contratoTitulosAReceber,
     openAmount: c.contratoValorAberto,
+    // Contador do SGP de promessas de pagamento no mês corrente. É a única
+    // visão que temos de liberações feitas por fora do sistema (app da Central,
+    // atendente no SGP): a listagem de promessas não existe nesta instalação.
+    paymentPromisesThisMonth: Number(c.promessasPagamentoMes) || 0,
     address: formatAddress(c),
     phones: (c.telefones || []).map((t) => t.contato),
     emails: (c.emails || []).map((e) => e.contato),
@@ -162,12 +166,40 @@ async function listInvoices(contratoId) {
   return { faturas: Array.isArray(data.faturas) ? data.faturas : [], paginacao: data.paginacao || {} };
 }
 
+/**
+ * Desbloqueio em confiança (liberação por promessa de pagamento). Endpoint
+ * documentado na coleção oficial da API do SGP: POST /api/ura/liberacaopromessa/.
+ * Só `contrato` é enviado — `data_promessa` fica de fora de propósito: quem
+ * decide os dias é a configuração do SGP (URA_PROMESSA_DIAS), nunca o chamador.
+ *
+ * A `msg` de sucesso traz o login PPPoE do cliente e por isso não sai daqui;
+ * a de recusa é a explicação legível ("Contrato precisa estar ativo, suspenso
+ * ou com velocidade reduzida", "já atingiu quantidade permitida"...) e essa
+ * sim volta ao chamador.
+ */
+async function requestTrustUnlock(contratoId) {
+  const config = await requireConfig();
+  const response = await postSgp(config, '/api/ura/liberacaopromessa/', { contrato: contratoId });
+  const data = response.data;
+  if (!data || typeof data !== 'object') {
+    throw new SgpRequestError('Unexpected response from SGP');
+  }
+  const liberado = data.liberado === true;
+  return {
+    liberado,
+    liberadoDias: liberado && Number.isInteger(data.liberado_dias) ? data.liberado_dias : null,
+    protocolo: liberado ? (data.protocolo || null) : null,
+    motivo: liberado ? null : (data.msg || 'Liberação não permitida'),
+  };
+}
+
 module.exports = {
   lookupClientByCpf,
   getDuplicateInvoice,
   downloadBoletoPdf,
   checkConnection,
   listInvoices,
+  requestTrustUnlock,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,

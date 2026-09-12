@@ -2,19 +2,23 @@ jest.mock('../integrations/sgp-client');
 jest.mock('../sectors/sector.repository');
 jest.mock('../reasons/reason.repository');
 jest.mock('../conversations/conversation.repository');
+jest.mock('./trust-unlock.repository');
 
+const sgpClient = require('../integrations/sgp-client');
+const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { listTools, findTool, toOpenAiTools } = require('./tool-registry');
 const { listSectors } = require('../sectors/sector.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const { setConversationSector, setSuggestedReason } = require('../conversations/conversation.repository');
 
 describe('tool-registry', () => {
-  test('registers exactly the eight phase-one tools plus the two disabled sensitive ones', () => {
+  test('registers exactly the known tools, sensitive ones included', () => {
     const nomes = listTools().map((t) => t.nome).sort();
     expect(nomes).toEqual([
-      'buscar_cliente', 'consultar_faturas', 'consultar_financeiro', 'consultar_plano',
-      'consultar_status_conexao', 'consultar_status_contrato',
-      'definir_motivo_atendimento', 'gerar_pix', 'gerar_segunda_via', 'transferir_atendimento',
+      'buscar_cliente', 'consultar_faturas', 'consultar_faturas_todos_contratos', 'consultar_financeiro',
+      'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
+      'definir_motivo_atendimento', 'desbloqueio_confianca', 'gerar_pix', 'gerar_segunda_via',
+      'transferir_atendimento',
     ]);
   });
 
@@ -52,11 +56,16 @@ describe('tool-registry', () => {
     }
   });
 
-  test('the ownership exemption list is exactly these three tools, by name', () => {
-    // Adicionar uma quarta isenção exige editar esta lista — a decisão passa
-    // por um revisor em vez de escapar dentro da definição de uma ferramenta.
+  test('the ownership exemption list is exactly these four tools, by name', () => {
+    // Adicionar uma isenção exige editar esta lista — a decisão passa por um
+    // revisor em vez de escapar dentro da definição de uma ferramenta.
+    // consultar_faturas_todos_contratos entrou porque não recebe id nenhum do
+    // modelo: percorre contexto.contracts, carregado pelo servidor a partir do
+    // CPF do próprio contato — não há valor vindo do modelo para conferir.
     const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
-    expect(isentas).toEqual(['buscar_cliente', 'definir_motivo_atendimento', 'transferir_atendimento']);
+    expect(isentas).toEqual([
+      'buscar_cliente', 'consultar_faturas_todos_contratos', 'definir_motivo_atendimento', 'transferir_atendimento',
+    ]);
   });
 
   test('the sensitive tools are the invoice ones', () => {
@@ -220,5 +229,114 @@ describe('definir_motivo_atendimento executar', () => {
 
     expect(resultado.ok).toBe(false);
     expect(resultado).not.toEqual({ registrado: true, motivo: 'Cancelamento' });
+  });
+});
+
+describe('consultar_faturas_todos_contratos executar', () => {
+  const CONTRATO_A = { id: 1, statusCode: 1, status: 'Ativo', plan: '600MB', address: 'RUA X, 1', login: 'a' };
+  const CONTRATO_B = { id: 2, statusCode: 4, status: 'Suspenso', plan: '300MB', address: 'AV Y, 2', login: 'b' };
+  const FATURA = { id: 10, status: 'Gerado', statusid: 1, valor: 99.9, vencimento: '2026-09-30', data_pagamento: null, gerapix: true };
+
+  beforeEach(() => jest.clearAllMocks());
+
+  test('sem cliente identificado, responde que precisa de buscar_cliente', async () => {
+    const r = await findTool('consultar_faturas_todos_contratos').executar({}, { contracts: [] });
+    expect(r.sucesso).toBe(false);
+    expect(sgpClient.listInvoices).not.toHaveBeenCalled();
+  });
+
+  test('consulta cada contrato do contexto e agrupa por endereço e plano', async () => {
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [FATURA] });
+    const r = await findTool('consultar_faturas_todos_contratos').executar({}, { contracts: [CONTRATO_A, CONTRATO_B] });
+    expect(sgpClient.listInvoices).toHaveBeenCalledTimes(2);
+    expect(r.contratos).toHaveLength(2);
+    expect(r.contratos[0]).toMatchObject({ contratoId: 1, endereco: 'RUA X, 1', plano: '600MB', status: 'ativo' });
+    expect(r.contratos[1]).toMatchObject({ contratoId: 2, endereco: 'AV Y, 2', status: 'suspenso' });
+    expect(r.contratos[0].faturas[0]).toMatchObject({ faturaId: 10, valorOriginal: 99.9, vencimentoOriginal: '2026-09-30' });
+    expect(JSON.stringify(r)).not.toContain('"login"');
+  });
+
+  test('falha do SGP num contrato não esconde os outros', async () => {
+    sgpClient.listInvoices.mockImplementation((id) => (id === 2 ? Promise.reject(new Error('SGP fora')) : Promise.resolve({ faturas: [FATURA] })));
+    const r = await findTool('consultar_faturas_todos_contratos').executar({}, { contracts: [CONTRATO_A, CONTRATO_B] });
+    expect(r.contratos[0].faturas).toHaveLength(1);
+    expect(r.contratos[1].faturas).toBeNull();
+    expect(r.contratos[1].erro).toMatch(/não foi possível/i);
+  });
+
+  test('é isenta da checagem de dono e não tem parâmetros', () => {
+    const tool = findTool('consultar_faturas_todos_contratos');
+    expect(tool.isentoDeProprietario).toBe(true);
+    expect(tool.validar({ contratoId: 999 })).toEqual({ ok: true, args: {} });
+  });
+});
+
+describe('desbloqueio_confianca executar', () => {
+  const SUSPENSO = { id: 26515, statusCode: 4, status: 'Suspenso', plan: '100MB', address: 'RUA Z', paymentPromisesThisMonth: 0 };
+  const ATIVO = { id: 17402, statusCode: 1, status: 'Ativo', plan: '600MB', address: 'RUA X', paymentPromisesThisMonth: 0 };
+  const FATURA_VENCIDA = { id: 1, status: 'Gerado', statusid: 1, valor: 100, vencimento: '2026-08-30', data_pagamento: null };
+  const contexto = (contract) => ({ contracts: [contract], contact: { id: 'ct-1' } });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listTrustUnlocksByContract.mockResolvedValue([]);
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [FATURA_VENCIDA] });
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: true, liberadoDias: 3, protocolo: '9999', motivo: null });
+    recordTrustUnlock.mockResolvedValue({ id: 'l-1' });
+  });
+
+  test('é ação sensível com dono verificado pelo contratoId', () => {
+    const tool = findTool('desbloqueio_confianca');
+    expect(tool.categoria).toBe('ACAO_SENSIVEL');
+    expect(tool.chaveProprietario).toBe('contratoId');
+  });
+
+  test('contrato que não está suspenso não é liberado e o SGP não é chamado', async () => {
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 17402 }, contexto(ATIVO));
+    expect(r.liberado).toBe(false);
+    expect(r.motivo).toMatch(/não está suspenso/);
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+  });
+
+  test('contador mensal do SGP > 0 bloqueia antes de chamar', async () => {
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto({ ...SUSPENSO, paymentPromisesThisMonth: 1 }));
+    expect(r).toEqual({ liberado: false, motivo: expect.stringMatching(/neste mês/) });
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+  });
+
+  test('liberação nossa há menos de 30 dias bloqueia, com os dias restantes', async () => {
+    listTrustUnlocksByContract.mockResolvedValue([{ createdAt: new Date(Date.now() - 10 * 86400000) }]);
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto(SUSPENSO));
+    expect(r.liberado).toBe(false);
+    expect(r.diasRestantes).toBe(20);
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+  });
+
+  test('liberação anterior não paga bloqueia', async () => {
+    listTrustUnlocksByContract.mockResolvedValue([{ createdAt: new Date(Date.now() - 45 * 86400000) }]);
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [{ ...FATURA_VENCIDA, vencimento: '2026-06-30' }] });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto(SUSPENSO));
+    expect(r.motivo).toMatch(/não foi paga/);
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+  });
+
+  test('elegível: chama o SGP, registra e devolve prazo e protocolo', async () => {
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto(SUSPENSO));
+    expect(sgpClient.requestTrustUnlock).toHaveBeenCalledWith(26515);
+    expect(recordTrustUnlock).toHaveBeenCalledWith({ contactId: 'ct-1', contractId: 26515, protocolo: '9999', liberadoDias: 3 });
+    expect(r).toEqual({ liberado: true, dias: 3, protocolo: '9999' });
+  });
+
+  test('recusa do SGP volta como motivo, sem registrar', async () => {
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: false, liberadoDias: null, protocolo: null, motivo: 'Quantidade de títulos atrasados maior que o limite. Recurso não disponível' });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto(SUSPENSO));
+    expect(r).toEqual({ liberado: false, motivo: expect.stringMatching(/títulos atrasados/) });
+    expect(recordTrustUnlock).not.toHaveBeenCalled();
+  });
+
+  test('falha ao registrar não transforma uma liberação feita em "não liberou"', async () => {
+    recordTrustUnlock.mockRejectedValue(new Error('db down'));
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto(SUSPENSO));
+    expect(r.liberado).toBe(true);
   });
 });

@@ -4,6 +4,8 @@ const { setContactSgpLink } = require('../conversations/contact.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const { setSuggestedReason, setConversationSector } = require('../conversations/conversation.repository');
+const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
+const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
 
 function erro(mensagem) {
   return { ok: false, erro: mensagem };
@@ -151,6 +153,40 @@ const TOOLS = [
     },
   },
   {
+    nome: 'consultar_faturas_todos_contratos',
+    categoria: 'CONSULTA',
+    descricao: 'Lista as faturas de TODOS os contratos do cliente identificado, agrupadas por contrato com endereço e plano, numa chamada só. Prefira esta a consultar_faturas quando o cliente tem mais de um contrato e pergunta sobre conta, fatura, atraso ou quanto deve. NÃO gera boleto nem PIX.',
+    // Isento: não recebe id nenhum do modelo — percorre contexto.contracts, que
+    // o servidor carregou pelo CPF do próprio contato. Existe porque "consulte
+    // contrato a contrato" estourava o limite de ferramentas do turno no
+    // cliente com vários contratos, que é justamente quem mais precisa.
+    isentoDeProprietario: true,
+    parametros: { type: 'object', properties: {} },
+    validar() {
+      return { ok: true, args: {} };
+    },
+    async executar(args, contexto) {
+      const contratos = contexto.contracts || [];
+      if (contratos.length === 0) {
+        return { sucesso: false, motivo: 'Cliente ainda não identificado. Use buscar_cliente.' };
+      }
+      // allSettled: um contrato com falha no SGP não pode esconder os outros —
+      // a resposta parcial é o objetivo, não a exceção.
+      const resultados = await Promise.allSettled(
+        contratos.map((c) => sgpClient.listInvoices(c.id))
+      );
+      return {
+        contratos: contratos.map((c, i) => {
+          const n = normalizeContract(c);
+          const base = { contratoId: c.id, endereco: n.endereco, plano: n.plano, status: n.status };
+          const r = resultados[i];
+          if (r.status === 'fulfilled') return { ...base, faturas: normalizeInvoices(r.value.faturas) };
+          return { ...base, faturas: null, erro: 'Não foi possível consultar as faturas deste contrato agora.' };
+        }),
+      };
+    },
+  },
+  {
     nome: 'definir_motivo_atendimento',
     categoria: 'ACAO',
     descricao: 'Registra o motivo do atendimento, escolhido entre os motivos existentes no sistema.',
@@ -248,6 +284,59 @@ const TOOLS = [
       if (!result.hasOpenInvoice) return { sucesso: false, motivo: 'Nenhuma fatura em aberto' };
       const primeira = result.duplicates[0];
       return { sucesso: true, valor: primeira.value, vencimento: primeira.dueDate, pixCopiaCola: primeira.pixCode };
+    },
+  },
+  {
+    nome: 'desbloqueio_confianca',
+    categoria: 'ACAO_SENSIVEL',
+    descricao: 'Libera em confiança (promessa de pagamento) um contrato SUSPENSO por inadimplência, devolvendo a internet por alguns dias até o pagamento. Use só quando o cliente pedir a liberação e o contrato estiver suspenso. Regras da casa: uma liberação a cada 30 dias, e nunca se a liberação anterior não foi paga. Ao responder, informe o prazo devolvido pela ferramenta e que a fatura continua devida.',
+    chaveProprietario: 'contratoId',
+    parametros: {
+      type: 'object',
+      properties: { contratoId: { type: 'integer' } },
+      required: ['contratoId'],
+    },
+    validar: validarContratoId,
+    async executar(args, contexto) {
+      const contrato = (contexto.contracts || []).find((c) => c.id === args.contratoId);
+      const status = normalizeContract(contrato).status;
+      // A DW não usa velocidade reduzida: só contrato suspenso é elegível.
+      if (status !== 'suspenso') {
+        return { liberado: false, motivo: `O contrato não está suspenso (status: ${status}). A liberação em confiança só se aplica a contrato suspenso.` };
+      }
+
+      const [liberacoes, { faturas }] = await Promise.all([
+        listTrustUnlocksByContract(args.contratoId),
+        sgpClient.listInvoices(args.contratoId),
+      ]);
+      const avaliacao = avaliarElegibilidade({
+        liberacoes,
+        faturas: normalizeInvoices(faturas),
+        promessasPagamentoMes: contrato.paymentPromisesThisMonth,
+      });
+      if (!avaliacao.ok) {
+        const resposta = { liberado: false, motivo: MENSAGENS_DESBLOQUEIO[avaliacao.motivo] };
+        if (avaliacao.diasRestantes) resposta.diasRestantes = avaliacao.diasRestantes;
+        return resposta;
+      }
+
+      const resultado = await sgpClient.requestTrustUnlock(args.contratoId);
+      if (!resultado.liberado) return { liberado: false, motivo: resultado.motivo };
+
+      // A liberação já aconteceu no SGP. Falhar em registrá-la não pode virar
+      // "não liberou" para o modelo — o registro falho vai para o log, e a
+      // resposta continua verdadeira.
+      try {
+        await recordTrustUnlock({
+          contactId: contexto.contact && contexto.contact.id,
+          contractId: args.contratoId,
+          protocolo: resultado.protocolo,
+          liberadoDias: resultado.liberadoDias,
+        });
+      } catch (err) {
+        console.error(`Failed to record trust unlock for contract ${args.contratoId}: ${err.message}`);
+      }
+      return { liberado: true, dias: resultado.liberadoDias, protocolo: resultado.protocolo };
     },
   },
 ];

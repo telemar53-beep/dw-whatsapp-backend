@@ -8,6 +8,7 @@ const {
   downloadBoletoPdf,
   checkConnection,
   listInvoices,
+  requestTrustUnlock,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,
@@ -87,6 +88,7 @@ describe('sgp-client', () => {
           popName: undefined,
           openInvoicesCount: 1,
           openAmount: 89.9,
+          paymentPromisesThisMonth: 0,
           address: 'RUA EXEMPLO, 523 - CENTRO - CANDIDO MENDES/MA',
           phones: ['(98) 98512-0338'],
           emails: ['exemplo@dominio.com'],
@@ -345,5 +347,48 @@ describe('sgp-client', () => {
       });
       expect(JSON.stringify(contracts)).not.toContain('segredo');
     });
+  });
+});
+
+describe("requestTrustUnlock (desbloqueio em confiança)", () => {
+  const CONFIG = { baseUrl: "https://dwtelecom.sgp.tsmx.com.br", app: "chatmix", token: "tok-123", enabled: true };
+  beforeEach(() => { jest.clearAllMocks(); getSgpQueryConfig.mockResolvedValue(CONFIG); });
+
+  test("chama liberacaopromessa só com o contrato — nunca manda data_promessa", async () => {
+    axios.post.mockResolvedValue({ data: { status: 1, liberado: true, liberado_dias: 3, protocolo: "9999", razaoSocial: "X", cpfCnpj: "001", msg: "Liberação via URA -\nServiço ID: 999, Login: LOGIN-PPPOE\nMotivo: Promessa de Pagamento\n", contratoId: 26515 } });
+    const r = await requestTrustUnlock(26515);
+    const [url, body] = axios.post.mock.calls[0];
+    expect(url).toBe("https://dwtelecom.sgp.tsmx.com.br/api/ura/liberacaopromessa/");
+    const params = new URLSearchParams(body);
+    expect(params.get("contrato")).toBe("26515");
+    expect(params.get("token")).toBe("tok-123");
+    expect(params.has("data_promessa")).toBe(false);
+    expect(r).toEqual({ liberado: true, liberadoDias: 3, protocolo: "9999", motivo: null });
+  });
+
+  test("a msg de sucesso (com login PPPoE) não sai do módulo", async () => {
+    axios.post.mockResolvedValue({ data: { status: 1, liberado: true, liberado_dias: 1, protocolo: "1", msg: "Login: LOGIN-PPPOE" } });
+    expect(JSON.stringify(await requestTrustUnlock(1))).not.toContain("LOGIN-PPPOE");
+  });
+
+  test("recusa do SGP devolve liberado=false com o motivo legível", async () => {
+    axios.post.mockResolvedValue({ data: { status: 2, liberado: false, msg: "O recurso de promessa de pagamento já atingiu quantidade permitida. Recurso não disponível" } });
+    const r = await requestTrustUnlock(26515);
+    expect(r.liberado).toBe(false);
+    expect(r.motivo).toMatch(/quantidade permitida/);
+    expect(r.protocolo).toBeNull();
+  });
+
+  test("resposta sem corpo vira SgpRequestError", async () => {
+    axios.post.mockResolvedValue({ data: "" });
+    await expect(requestTrustUnlock(1)).rejects.toBeInstanceOf(SgpRequestError);
+  });
+
+  test("falha de rede vira SgpRequestError saneado, sem o token na causa", async () => {
+    const err = new Error("Request failed with status code 500"); err.response = { status: 500 }; err.config = { data: "token=tok-123&app=chatmix" };
+    axios.post.mockRejectedValue(err);
+    let capturado; try { await requestTrustUnlock(1); } catch (e) { capturado = e; }
+    expect(capturado).toBeInstanceOf(SgpRequestError);
+    expect(JSON.stringify(capturado.cause)).not.toContain("tok-123");
   });
 });

@@ -101,7 +101,15 @@ describe('ai-orchestrator', () => {
       expect(contexto).toContain('17405');
       expect(contexto).toContain('AV Y, 10 - BAIRRO Z');
       expect(contexto).toMatch(/nunca peça o número do contrato/i);
-      expect(contexto).toMatch(/consulte todos os contratos/i);
+      expect(contexto).toContain('consultar_faturas_todos_contratos');
+    });
+
+    test('instrui o desbloqueio em confiança só para contrato suspenso e sem prometer prazo', async () => {
+      sgpClient.lookupClientByCpf.mockResolvedValue({ contracts: [CONTRATO_A] });
+      const contexto = await contextoDoSistema();
+      expect(contexto).toContain('desbloqueio_confianca');
+      expect(contexto).toMatch(/"suspenso"/);
+      expect(contexto).toMatch(/nunca prometa prazo/i);
     });
 
     test('com um contrato só, diz para usá-lo sem perguntar', async () => {

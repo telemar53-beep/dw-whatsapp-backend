@@ -35,9 +35,21 @@ describe('sgp-normalizer', () => {
   });
 
   test('normalizeContract falls back to desconhecido for an unmapped status code', () => {
-    const result = normalizeContract({ ...RAW_CONTRACT, statusCode: 7, status: 'Algo Novo' });
+    const result = normalizeContract({ ...RAW_CONTRACT, statusCode: 99, status: 'Algo Novo' });
     expect(result.status).toBe('desconhecido');
     expect(result.statusLabel).toBe('Algo Novo');
+  });
+
+  test('normalizeContract maps every documented status code', () => {
+    // Tabela da documentação oficial da API. 4 e 7 são os que autorizam o
+    // desbloqueio em confiança.
+    const esperado = {
+      1: 'ativo', 2: 'inativo', 3: 'cancelado', 4: 'suspenso',
+      5: 'inviabilidade_tecnica', 6: 'novo', 7: 'velocidade_reduzida',
+    };
+    for (const [codigo, status] of Object.entries(esperado)) {
+      expect(normalizeContract({ ...RAW_CONTRACT, statusCode: Number(codigo) }).status).toBe(status);
+    }
   });
 
   test('normalizeConnection maps SGP status 1 to online and 2 to offline', () => {

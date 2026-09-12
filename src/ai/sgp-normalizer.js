@@ -11,9 +11,19 @@ const CAMPOS_BLOQUEADOS = [
   'servico_wifi_password_5',
 ];
 
-// Só o código 1 (Ativo) foi observado na sondagem real contra a API.
-// Os demais entram aqui quando houver captura de um contrato suspenso/cancelado.
-const STATUS_POR_CODIGO = { 1: 'ativo' };
+// Tabela oficial da documentação da API (coleção Postman do SGP, filtro
+// `status` de consultacliente): 1 Ativo; 2 Inativo; 3 Cancelado; 4 Suspenso;
+// 5 Inviabilidade Técnica; 6 Novo; 7 Ativo com Velocidade Reduzida.
+// Só o 1 foi observado em contrato real; os demais vêm da documentação.
+const STATUS_POR_CODIGO = {
+  1: 'ativo',
+  2: 'inativo',
+  3: 'cancelado',
+  4: 'suspenso',
+  5: 'inviabilidade_tecnica',
+  6: 'novo',
+  7: 'velocidade_reduzida',
+};
 
 function maskDocument(doc) {
   if (!doc) return null;

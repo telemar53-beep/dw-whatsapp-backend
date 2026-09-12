@@ -68,8 +68,8 @@ async function montarContextoSistema(config, contact, contracts) {
       linhas.push('O cliente tem mais de um contrato:');
       for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
       linhas.push(
-        'NUNCA peça o número do contrato: o cliente não o conhece. Identifique cada contrato pelo endereço.',
-        'Se a pergunta for sobre fatura, pagamento, boleto ou PIX, consulte TODOS os contratos e responda separando por endereço, sem perguntar qual é.',
+        'NUNCA peça o número do contrato: o cliente não o conhece. Identifique cada contrato pelo endereço e, se o endereço se repetir, pelo plano.',
+        'Se a pergunta for sobre fatura, pagamento, boleto ou PIX, use consultar_faturas_todos_contratos (uma chamada só) e responda separando por endereço e plano, sem perguntar qual é. Se ela não estiver disponível, consulte contrato a contrato.',
         'Se for indispensável que ele escolha (ex.: status da conexão), pergunte pelo endereço, nunca pelo número.'
       );
       if (contact.sgpContractId) linhas.push(`Contrato usado por último nesta conversa: ${contact.sgpContractId}.`);
@@ -82,6 +82,8 @@ async function montarContextoSistema(config, contact, contracts) {
     linhas.push('O cliente ainda NÃO foi identificado. Use buscar_cliente com o CPF ou CNPJ dele.');
   }
   linhas.push(
+    '',
+    'Desbloqueio em confiança (se a ferramenta desbloqueio_confianca estiver disponível): só para contrato com status "suspenso", e só quando o cliente pedir. Nunca prometa prazo por conta própria — informe os dias que a ferramenta devolver, e que a fatura continua devida. Se ela recusar, transmita o motivo com educação.',
     '',
     'Formatação: a resposta vai para o WhatsApp. Negrito com *um asterisco*, itálico com _sublinhado_.',
     'Nunca use markdown: nada de **, ##, nem links no formato [texto](url).'
@@ -176,7 +178,7 @@ async function runAiTurn({ conversation, contact }) {
         if (Date.now() - iniciadoEm < TURNO_MAX_MS) {
           messages.push({
             role: 'system',
-            content: 'O limite de consultas deste atendimento foi atingido. Responda agora com o que já apurou e diga claramente o que não pôde verificar.',
+            content: 'Não é possível fazer mais consultas neste turno. Responda agora com o que já apurou, diga o que não conseguiu verificar e ofereça encaminhar para um atendente. Não mencione limites internos do sistema.',
           });
           const final = await createChatCompletion({ apiKey: config.apiKey, model: config.model, messages, tools: [] });
           promptTokens += final.usage.promptTokens || 0;

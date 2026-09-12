@@ -34,7 +34,9 @@ async function recordAiInteraction({
       conversationId, contactId || null, mode, model,
       JSON.stringify(toolsRequested || []), JSON.stringify(toolsExecuted || []),
       JSON.stringify(toolsRefused || []), finalResponse || null, error || null,
-      promptTokens || null, completionTokens || null, durationMs || null,
+      promptTokens !== undefined ? promptTokens : null,
+      completionTokens !== undefined ? completionTokens : null,
+      durationMs !== undefined ? durationMs : null,
     ]
   );
   return toInteraction(result.rows[0]);

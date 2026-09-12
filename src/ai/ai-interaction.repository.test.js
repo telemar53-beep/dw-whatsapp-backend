@@ -49,4 +49,30 @@ describe('ai interaction repository', () => {
     expect(rows[0].error).toBe('timeout');
     expect(rows[0].toolsRefused[0].motivo).toBe('unknown_tool');
   });
+
+  test('preserves zero values for numeric fields (completion_tokens and duration_ms)', async () => {
+    await recordAiInteraction({
+      conversationId, contactId: null, mode: 'assistant', model: 'gpt-x',
+      toolsRequested: [], toolsExecuted: [], toolsRefused: [],
+      finalResponse: null, error: null,
+      promptTokens: 50, completionTokens: 0, durationMs: 0,
+    });
+
+    const rows = await listAiInteractionsByConversation(conversationId);
+    expect(rows[0].completionTokens).toBe(0);
+    expect(rows[0].durationMs).toBe(0);
+  });
+
+  test('records omitted numeric fields as null', async () => {
+    await recordAiInteraction({
+      conversationId, contactId: null, mode: 'assistant', model: 'gpt-x',
+      toolsRequested: [], toolsExecuted: [], toolsRefused: [],
+      finalResponse: null, error: null,
+    });
+
+    const rows = await listAiInteractionsByConversation(conversationId);
+    expect(rows[0].promptTokens).toBe(null);
+    expect(rows[0].completionTokens).toBe(null);
+    expect(rows[0].durationMs).toBe(null);
+  });
 });

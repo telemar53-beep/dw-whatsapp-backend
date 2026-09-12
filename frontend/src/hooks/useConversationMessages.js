@@ -27,11 +27,22 @@ export function useConversationMessages(conversationId) {
       setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, ...message } : m)));
     }
 
+    function onTranscription({ conversationId: msgConversationId, messageId, transcription, transcriptionStatus, transcriptionDetail }) {
+      if (msgConversationId !== conversationId) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, transcription, transcriptionStatus, transcriptionDetail } : m
+        )
+      );
+    }
+
     socket.on('message:new', onNew);
     socket.on('message:updated', onUpdated);
+    socket.on('message:transcription', onTranscription);
     return () => {
       socket.off('message:new', onNew);
       socket.off('message:updated', onUpdated);
+      socket.off('message:transcription', onTranscription);
     };
   }, [socket, conversationId]);
 

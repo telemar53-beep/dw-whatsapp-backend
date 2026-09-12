@@ -179,4 +179,54 @@ describe('useConversationMessages', () => {
 
     await waitFor(() => expect(result.current.messages).toEqual([{ id: 'm2' }]));
   });
+
+  test('message:transcription preenche a transcrição da mensagem', async () => {
+    api.getMessages.mockResolvedValue([{ id: 'm1', messageType: 'audio', transcriptionStatus: 'pending' }]);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    act(() => {
+      fakeSocket.trigger('message:transcription', {
+        conversationId: 'conv-1',
+        messageId: 'm1',
+        transcription: 'minha internet caiu',
+        transcriptionStatus: 'completed',
+        transcriptionDetail: null,
+      });
+    });
+
+    expect(result.current.messages[0].transcription).toBe('minha internet caiu');
+    expect(result.current.messages[0].transcriptionStatus).toBe('completed');
+    expect(result.current.messages[0].messageType).toBe('audio');
+  });
+
+  test('message:transcription de outra conversa é ignorado', async () => {
+    api.getMessages.mockResolvedValue([{ id: 'm1', messageType: 'audio', transcriptionStatus: 'pending' }]);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    act(() => {
+      fakeSocket.trigger('message:transcription', {
+        conversationId: 'conv-2', messageId: 'm1',
+        transcription: 'texto errado', transcriptionStatus: 'completed', transcriptionDetail: null,
+      });
+    });
+
+    expect(result.current.messages[0].transcription).toBeUndefined();
+  });
+
+  test('message:transcription para mensagem desconhecida não quebra a lista', async () => {
+    api.getMessages.mockResolvedValue([{ id: 'm1', messageType: 'audio' }]);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    act(() => {
+      fakeSocket.trigger('message:transcription', {
+        conversationId: 'conv-1', messageId: 'm-inexistente',
+        transcription: 'x', transcriptionStatus: 'completed', transcriptionDetail: null,
+      });
+    });
+
+    expect(result.current.messages).toHaveLength(1);
+  });
 });

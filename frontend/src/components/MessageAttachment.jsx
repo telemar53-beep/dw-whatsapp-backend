@@ -345,6 +345,30 @@ function DocumentCard({ url, filename, outbound, dark }) {
   );
 }
 
+function TranscriptionBlock({ message, dark }) {
+  const status = message.transcriptionStatus;
+  if (!status) return null;
+
+  const base = 'rounded-xl px-3 py-2 text-sm';
+  const muted = dark ? 'text-wa-muted' : 'text-gray-500';
+
+  if (status === 'pending' || status === 'processing') {
+    return <p className={`${base} ${muted} italic`}>Transcrevendo…</p>;
+  }
+  // 'skipped' cobre mais de um motivo (duração, tamanho, formato não suportado),
+  // por isso a frase é única e o detalhe técnico fica só no banco — o atendente
+  // precisa saber que não há texto, não por que o modelo recusou.
+  if (status === 'failed' || status === 'skipped') {
+    return <p className={`${base} ${muted}`}>Não foi possível transcrever este áudio.</p>;
+  }
+  return (
+    <div className={`${base} ${dark ? 'bg-wa-field' : 'bg-gray-100'}`}>
+      <p className={`mb-1 text-[11px] font-medium uppercase tracking-wide ${muted}`}>Transcrição por IA</p>
+      <p className="whitespace-pre-wrap">{message.transcription}</p>
+    </div>
+  );
+}
+
 function MessageAttachment({ message, avatar, dark = false }) {
   const { token } = useAuth();
   const outbound = message.direction === 'outbound';
@@ -396,7 +420,12 @@ function MessageAttachment({ message, avatar, dark = false }) {
   }
 
   if (message.messageType === 'audio') {
-    return <VoiceNote url={url} seed={message.id || ''} outbound={outbound} avatar={avatar} dark={dark} />;
+    return (
+      <div className="flex flex-col gap-1.5">
+        <VoiceNote url={url} seed={message.id || ''} outbound={outbound} avatar={avatar} dark={dark} />
+        <TranscriptionBlock message={message} dark={dark} />
+      </div>
+    );
   }
 
   if (message.messageType === 'video') {

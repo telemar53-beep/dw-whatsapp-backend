@@ -56,4 +56,43 @@ describe('MessageAttachment', () => {
     const link = screen.getByRole('link', { name: /ver localiza/i });
     expect(link.href).toBe('https://www.google.com/maps?q=-3.119,-60.021');
   });
+
+  test('áudio sem transcrição renderiza só o player', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm1', messageType: 'audio', mediaPath: 'a.ogg' }} />);
+    expect(container.querySelector('audio')).toBeInTheDocument();
+    expect(screen.queryByText(/transcrição por ia/i)).not.toBeInTheDocument();
+  });
+
+  test('mostra Transcrevendo enquanto processa', () => {
+    render(<MessageAttachment message={{ id: 'm1', messageType: 'audio', mediaPath: 'a.ogg', transcriptionStatus: 'processing' }} />);
+    expect(screen.getByText(/transcrevendo/i)).toBeInTheDocument();
+  });
+
+  test('mostra o texto e o rótulo quando concluída, sem tirar o player', () => {
+    const { container } = render(<MessageAttachment message={{
+      id: 'm1', messageType: 'audio', mediaPath: 'a.ogg',
+      transcriptionStatus: 'completed', transcription: 'minha internet caiu',
+    }} />);
+    expect(screen.getByText(/transcrição por ia/i)).toBeInTheDocument();
+    expect(screen.getByText('minha internet caiu')).toBeInTheDocument();
+    expect(container.querySelector('audio')).toBeInTheDocument();
+  });
+
+  test('mostra aviso na falha', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm1', messageType: 'audio', mediaPath: 'a.ogg', transcriptionStatus: 'failed' }} />);
+    expect(screen.getByText(/não foi possível transcrever/i)).toBeInTheDocument();
+    expect(container.querySelector('audio')).toBeInTheDocument();
+  });
+
+  test('mostra aviso quando pulada por limite', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm1', messageType: 'audio', mediaPath: 'a.ogg', transcriptionStatus: 'skipped' }} />);
+    expect(screen.getByText(/não foi possível transcrever/i)).toBeInTheDocument();
+    expect(container.querySelector('audio')).toBeInTheDocument();
+  });
+
+  test('o player sobrevive ao estado de processamento', () => {
+    // O atendente precisa poder ouvir o áudio enquanto a máquina ainda transcreve.
+    const { container } = render(<MessageAttachment message={{ id: 'm1', messageType: 'audio', mediaPath: 'a.ogg', transcriptionStatus: 'processing' }} />);
+    expect(container.querySelector('audio')).toBeInTheDocument();
+  });
 });

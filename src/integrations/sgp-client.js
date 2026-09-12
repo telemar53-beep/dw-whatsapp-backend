@@ -202,6 +202,38 @@ async function requestTrustUnlock(contratoId) {
   };
 }
 
+/**
+ * Localiza UM cliente por telefone ou CPF/CNPJ em /api/ura/clientes/.
+ * Allowlist estrita: a resposta traz contratoCentralSenha, contratoCentralLogin,
+ * endereço e contatos — nada disso sai daqui. dataNascimento sai porque é o
+ * fator de confirmação da triagem; quem recebe guarda no servidor e nunca o
+ * envia ao modelo (ver identity-resolver.js e confirmar_nascimento).
+ * `cliente` só vem preenchido quando o total é exatamente 1 — telefone zerado
+ * casa com vários cadastros no SGP da DW (sondagem de 2026-09-12).
+ */
+async function findClientRecord(filtro) {
+  const config = await requireConfig();
+  const params = { omitir_titulos: 1, omitir_contatos: 1, limit: 2 };
+  if (filtro.telefone) params.telefone = filtro.telefone;
+  else if (filtro.cpfcnpj) params.cpfcnpj = filtro.cpfcnpj;
+  else throw new SgpRequestError('findClientRecord needs telefone or cpfcnpj');
+  const response = await postSgp(config, '/api/ura/clientes/', params);
+  const data = response.data;
+  if (!data || typeof data !== 'object') throw new SgpRequestError('Unexpected response from SGP');
+  const clientes = Array.isArray(data.clientes) ? data.clientes : [];
+  const total = data.paginacao && Number.isInteger(Number(data.paginacao.total)) ? Number(data.paginacao.total) : clientes.length;
+  if (total !== 1 || clientes.length !== 1) return { total, cliente: null };
+  const c = clientes[0];
+  return {
+    total: 1,
+    cliente: {
+      id: c.id,
+      cpfcnpj: String(c.cpfcnpj || '').replace(/\D/g, ''),
+      dataNascimento: /^\d{4}-\d{2}-\d{2}$/.test(String(c.dataNascimento || '')) ? c.dataNascimento : null,
+    },
+  };
+}
+
 module.exports = {
   lookupClientByCpf,
   getDuplicateInvoice,
@@ -209,6 +241,7 @@ module.exports = {
   checkConnection,
   listInvoices,
   requestTrustUnlock,
+  findClientRecord,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,

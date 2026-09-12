@@ -9,6 +9,7 @@ const {
   checkConnection,
   listInvoices,
   requestTrustUnlock,
+  findClientRecord,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,
@@ -429,5 +430,47 @@ describe("requestTrustUnlock — data_promessa (observada no teste real)", () =>
     getSgpQueryConfig.mockResolvedValue(CONFIG);
     axios.post.mockResolvedValue({ data: { status: 1, liberado: true, liberado_dias: 3, data_promessa: "15/09/2026", protocolo: "1" } });
     expect((await requestTrustUnlock(26515)).dataPromessa).toBeNull();
+  });
+});
+
+describe('findClientRecord', () => {
+  const CONFIG = { baseUrl: 'https://dwtelecom.sgp.tsmx.com.br', app: 'chatmix', token: 'tok-123', enabled: true };
+  beforeEach(() => { jest.clearAllMocks(); getSgpQueryConfig.mockResolvedValue(CONFIG); });
+
+  test('busca por telefone com omitir_* e limit 2, e devolve só id, cpfcnpj e dataNascimento', async () => {
+    axios.post.mockResolvedValue({ data: { paginacao: { total: 1 }, clientes: [{
+      id: 16957, nome: 'CLIENTE EXEMPLO', cpfcnpj: '529.982.247-25', dataNascimento: '1990-05-20',
+      contratos: [{ id: 17402, contratoCentralSenha: 'SEGREDO', contratoCentralLogin: 'user' }],
+      endereco: { logradouro: 'RUA X' }, contatos: [] } ] } });
+    const r = await findClientRecord({ telefone: '98985120338' });
+    const [url, body] = axios.post.mock.calls[0];
+    expect(url).toBe('https://dwtelecom.sgp.tsmx.com.br/api/ura/clientes/');
+    const p = new URLSearchParams(body);
+    expect(p.get('telefone')).toBe('98985120338');
+    expect(p.get('omitir_titulos')).toBe('1');
+    expect(p.get('omitir_contatos')).toBe('1');
+    expect(p.get('limit')).toBe('2');
+    expect(r).toEqual({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
+    expect(JSON.stringify(r)).not.toContain('SEGREDO');
+    expect(JSON.stringify(r)).not.toContain('RUA X');
+  });
+
+  test('busca por cpfcnpj', async () => {
+    axios.post.mockResolvedValue({ data: { paginacao: { total: 1 }, clientes: [{ id: 1, cpfcnpj: '52998224725', dataNascimento: null }] } });
+    const r = await findClientRecord({ cpfcnpj: '52998224725' });
+    expect(new URLSearchParams(axios.post.mock.calls[0][1]).get('cpfcnpj')).toBe('52998224725');
+    expect(r.cliente.dataNascimento).toBeNull();
+  });
+
+  test('zero ou vários resultados devolvem cliente nulo com o total', async () => {
+    axios.post.mockResolvedValue({ data: { paginacao: { total: 3 }, clientes: [{ id: 1, cpfcnpj: '1' }, { id: 2, cpfcnpj: '2' }] } });
+    expect(await findClientRecord({ telefone: '00000000000' })).toEqual({ total: 3, cliente: null });
+    axios.post.mockResolvedValue({ data: { paginacao: { total: 0 }, clientes: [] } });
+    expect(await findClientRecord({ telefone: '1' })).toEqual({ total: 0, cliente: null });
+  });
+
+  test('resposta sem corpo vira SgpRequestError', async () => {
+    axios.post.mockResolvedValue({ data: '' });
+    await expect(findClientRecord({ telefone: '1' })).rejects.toBeInstanceOf(SgpRequestError);
   });
 });

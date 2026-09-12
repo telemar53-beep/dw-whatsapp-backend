@@ -14,6 +14,7 @@ const {
   updateChannelHidden,
   updateChannelWelcomeMessage,
   updateChannelAiEnabled,
+  updateChannelAiTriageEnabled,
   countChannelDependents,
   deleteChannel,
 } = require('./channel.repository');
@@ -211,6 +212,15 @@ describe('channel repository', () => {
   test('updateChannelAiEnabled returns null when the channel does not exist', async () => {
     const result = await updateChannelAiEnabled('00000000-0000-0000-0000-000000000000', true);
     expect(result).toBeNull();
+  });
+
+  test('aiTriageEnabled nasce false, é alterável e volta por findChannelById e listChannels', async () => {
+    const ch = await createChannel({ type: 'baileys', name: 'C', phoneNumber: '+5511999990027', config: {} });
+    expect(ch.aiTriageEnabled).toBe(false);
+    const on = await updateChannelAiTriageEnabled(ch.id, true);
+    expect(on.aiTriageEnabled).toBe(true);
+    expect((await findChannelById(ch.id)).aiTriageEnabled).toBe(true);
+    expect((await listChannels()).find((c) => c.id === ch.id).aiTriageEnabled).toBe(true);
   });
 
   test('createChannel stores and returns a 360dialog channel', async () => {

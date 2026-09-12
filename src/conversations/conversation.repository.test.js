@@ -31,6 +31,8 @@ const {
   listClosedConversationsByAgent,
   markBusinessHoursNoticeSent,
   setSuggestedReason,
+  setConversationSector,
+  concludeAiTriage,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -980,5 +982,62 @@ describe('conversation repository', () => {
     const activated = await activateConversation(conversation.id);
 
     expect(activated.businessHoursNoticeSentAt).not.toBeNull();
+  });
+
+  test('concludeAiTriage grava a triagem, o setor final e o motivo sugerido, e conclui', async () => {
+    const conv = await createConversation(contactId, channelId, 'pending');
+    const setor = (await getPool().query("INSERT INTO sectors (name) VALUES ('Financeiro') RETURNING id")).rows[0].id;
+    const motivo = (await getPool().query("INSERT INTO contact_reasons (name) VALUES ('Segunda via') RETURNING id")).rows[0].id;
+
+    const done = await concludeAiTriage(conv.id, {
+      sectorId: setor, reasonId: motivo, confidence: 0.93, summary: 'Cliente pediu segunda via.',
+      identifiedBy: 'phone', lowConfidence: false, resolvedByAi: true,
+    });
+
+    expect(done.triageState).toBe('completed');
+    expect(done.sectorId).toBe(setor);
+    expect(done.aiTriageSectorId).toBe(setor);
+    expect(done.suggestedReasonId).toBe(motivo);
+    expect(done.aiTriageReasonId).toBe(motivo);
+    expect(done.aiTriageConfidence).toBeCloseTo(0.93, 3);
+    expect(done.aiTriageIdentifiedBy).toBe('phone');
+    expect(done.aiTriageResolvedByAi).toBe(true);
+    expect(done.aiTriageCompletedAt).toBeInstanceOf(Date);
+  });
+
+  test('concludeAiTriage aceita setor nulo (triagem inconclusiva) e é idempotente', async () => {
+    const conv = await createConversation(contactId, channelId, 'pending');
+    const first = await concludeAiTriage(conv.id, { sectorId: null, reasonId: null, confidence: null, summary: 'inconclusiva', identifiedBy: 'none', lowConfidence: true, resolvedByAi: false });
+    expect(first.sectorId).toBeNull();
+    expect(first.aiTriageLowConfidence).toBe(true);
+    expect(await concludeAiTriage(conv.id, { sectorId: null, reasonId: null, confidence: null, summary: 'x', identifiedBy: 'none', lowConfidence: false, resolvedByAi: false })).toBeNull();
+  });
+
+  test('os campos da triagem IA chegam por TODAS as leituras, não só pelo RETURNING', async () => {
+    // A armadilha das colunas enumeradas: escreve por uma função, relê por outras.
+    const conv = await createConversation(contactId, channelId, 'pending');
+    const setor = (await getPool().query("INSERT INTO sectors (name) VALUES ('Suporte') RETURNING id")).rows[0].id;
+    await concludeAiTriage(conv.id, { sectorId: setor, reasonId: null, confidence: 0.5, summary: 'resumo X', identifiedBy: 'cpf_confirmed', lowConfidence: true, resolvedByAi: false });
+
+    const agent = await createAgent({ email: 'ai-triage-reads@dw.com', password: 'secret123', role: 'agent' });
+
+    const leituras = {
+      getConversationWithContact: await getConversationWithContact(conv.id),
+      listWaiting: (await listWaitingConversations()).find((c) => c.id === conv.id),
+      listWaitingForAgent: (await listWaitingForAgentConversations()).find((c) => c.id === conv.id),
+      findOpen: await findOpenConversation(contactId, channelId),
+    };
+    for (const [nome, c] of Object.entries(leituras)) {
+      if (!c) throw new Error(`${nome}: esperava encontrar a conversa`);
+      expect(c.aiTriageSummary).toBe('resumo X');
+      expect(c.aiTriageIdentifiedBy).toBe('cpf_confirmed');
+      expect(c.aiTriageLowConfidence).toBe(true);
+      expect(c.aiTriageSectorId).toBe(setor);
+    }
+    // E as escritas que devolvem a conversa também precisam carregá-los.
+    const claimed = await claimConversation(conv.id, agent.id);
+    expect(claimed.aiTriageSummary).toBe('resumo X');
+    const moved = await setConversationSector(conv.id, setor);
+    expect(moved.aiTriageSummary).toBe('resumo X');
   });
 });

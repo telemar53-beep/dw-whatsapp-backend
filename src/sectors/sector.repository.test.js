@@ -52,6 +52,16 @@ describe('sector repository', () => {
     expect(updated).toBeNull();
   });
 
+  test('aiHint nasce vazio, é gravado por updateSector e mantido quando não informado', async () => {
+    const s = await createSector({ name: 'Reativação' });
+    expect(s.aiHint).toBe('');
+    const com = await updateSector(s.id, { name: 'Reativação', aiHint: 'Cliente antigo, meses sem pagar, quer voltar.' });
+    expect(com.aiHint).toBe('Cliente antigo, meses sem pagar, quer voltar.');
+    const renomeado = await updateSector(s.id, { name: 'Reativações' });
+    expect(renomeado.aiHint).toBe('Cliente antigo, meses sem pagar, quer voltar.');
+    expect((await listSectors()).find((x) => x.id === s.id).aiHint).toBe('Cliente antigo, meses sem pagar, quer voltar.');
+  });
+
   test('deleteSector removes the row and returns true', async () => {
     const sector = await createSector({ name: 'Para excluir' });
 

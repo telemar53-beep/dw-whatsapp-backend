@@ -14,6 +14,10 @@ function toConfig(row) {
     transcriptionMaxBytes: row.transcription_max_bytes,
     transcriptionPrompt: row.transcription_prompt,
     transcriptionFeedAi: row.transcription_feed_ai,
+    triageConfidenceThreshold: Number(row.triage_confidence_threshold),
+    triageMaxQuestions: row.triage_max_questions,
+    triageTimeoutMinutes: row.triage_timeout_minutes,
+    triageExtraInstructions: row.triage_extra_instructions,
   };
 }
 
@@ -58,6 +62,16 @@ async function updateTranscriptionConfig({
   return toConfig(result.rows[0]);
 }
 
+async function updateTriageConfig({ triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions }) {
+  const result = await getPool().query(
+    `UPDATE ai_config SET triage_confidence_threshold = $1, triage_max_questions = $2,
+            triage_timeout_minutes = $3, triage_extra_instructions = $4, updated_at = now()
+      WHERE id = 1 RETURNING *`,
+    [triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions]
+  );
+  return toConfig(result.rows[0]);
+}
+
 async function listToolPermissions() {
   const result = await getPool().query(
     'SELECT tool_name, enabled FROM ai_tool_permissions ORDER BY tool_name ASC'
@@ -85,4 +99,4 @@ async function isToolEnabled(toolName) {
   return result.rows[0].enabled;
 }
 
-module.exports = { getAiConfig, updateAiConfig, updateTranscriptionConfig, listToolPermissions, setToolPermission, isToolEnabled };
+module.exports = { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission, isToolEnabled };

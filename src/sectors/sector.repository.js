@@ -1,26 +1,26 @@
 const { getPool, withTransaction } = require('../db/pool');
 
 function toSector(row) {
-  return { id: row.id, name: row.name, createdAt: row.created_at };
+  return { id: row.id, name: row.name, aiHint: row.ai_hint, createdAt: row.created_at };
 }
 
 async function listSectors() {
-  const result = await getPool().query('SELECT id, name, created_at FROM sectors ORDER BY name ASC');
+  const result = await getPool().query('SELECT id, name, ai_hint, created_at FROM sectors ORDER BY name ASC');
   return result.rows.map(toSector);
 }
 
 async function createSector({ name }) {
   const result = await getPool().query(
-    'INSERT INTO sectors (name) VALUES ($1) RETURNING id, name, created_at',
+    'INSERT INTO sectors (name) VALUES ($1) RETURNING id, name, ai_hint, created_at',
     [name]
   );
   return toSector(result.rows[0]);
 }
 
-async function updateSector(id, { name }) {
+async function updateSector(id, { name, aiHint }) {
   const result = await getPool().query(
-    'UPDATE sectors SET name = $2 WHERE id = $1 RETURNING id, name, created_at',
-    [id, name]
+    'UPDATE sectors SET name = $2, ai_hint = COALESCE($3, ai_hint) WHERE id = $1 RETURNING id, name, ai_hint, created_at',
+    [id, name, aiHint === undefined ? null : aiHint]
   );
   if (result.rowCount === 0) return null;
   return toSector(result.rows[0]);

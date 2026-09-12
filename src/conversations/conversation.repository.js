@@ -13,6 +13,14 @@ function toConversation(row) {
     protocolNumber: row.protocol_number !== undefined ? row.protocol_number : null,
     businessHoursNoticeSentAt: row.business_hours_notice_sent_at !== undefined ? row.business_hours_notice_sent_at : null,
     suggestedReasonId: row.suggested_reason_id !== undefined ? row.suggested_reason_id : null,
+    aiTriageSectorId: row.ai_triage_sector_id !== undefined ? row.ai_triage_sector_id : null,
+    aiTriageReasonId: row.ai_triage_reason_id !== undefined ? row.ai_triage_reason_id : null,
+    aiTriageConfidence: row.ai_triage_confidence != null ? Number(row.ai_triage_confidence) : null,
+    aiTriageSummary: row.ai_triage_summary !== undefined ? row.ai_triage_summary : null,
+    aiTriageIdentifiedBy: row.ai_triage_identified_by !== undefined ? row.ai_triage_identified_by : null,
+    aiTriageLowConfidence: Boolean(row.ai_triage_low_confidence),
+    aiTriageResolvedByAi: Boolean(row.ai_triage_resolved_by_ai),
+    aiTriageCompletedAt: row.ai_triage_completed_at !== undefined ? row.ai_triage_completed_at : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -38,7 +46,7 @@ function toConversationSummary(row) {
 
 async function findOpenConversation(contactId, channelId) {
   const result = await getPool().query(
-    `SELECT id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, suggested_reason_id, created_at, updated_at
+    `SELECT id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at
      FROM conversations WHERE contact_id = $1 AND channel_id = $2 AND status <> 'closed'`,
     [contactId, channelId]
   );
@@ -49,7 +57,7 @@ async function findOpenConversation(contactId, channelId) {
 async function createConversation(contactId, channelId, triageState = null, status = 'waiting') {
   const result = await getPool().query(
     `INSERT INTO conversations (contact_id, channel_id, triage_state, status) VALUES ($1, $2, $3, $4)
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, suggested_reason_id, created_at, updated_at`,
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
     [contactId, channelId, triageState, status]
   );
   return toConversation(result.rows[0]);
@@ -60,7 +68,7 @@ async function claimConversation(conversationId, agentId) {
     const result = await client.query(
       `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, triage_state = 'completed', updated_at = now()
        WHERE id = $1 AND assigned_agent_id IS NULL AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, suggested_reason_id, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
       [conversationId, agentId]
     );
     if (result.rowCount === 0) return null;
@@ -77,7 +85,7 @@ async function transferConversation(conversationId, fromAgentId, toAgentId) {
     const result = await client.query(
       `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, triage_state = 'completed', updated_at = now()
        WHERE id = $1 AND (assigned_agent_id = $3 OR assigned_agent_id IS NULL) AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, suggested_reason_id, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
       [conversationId, toAgentId, fromAgentId]
     );
     if (result.rowCount === 0) return null;
@@ -94,7 +102,7 @@ async function closeConversation(conversationId, agentId, reasonId) {
     const result = await client.query(
       `UPDATE conversations SET status = 'closed', updated_at = now()
        WHERE id = $1 AND (assigned_agent_id = $2 OR assigned_agent_id IS NULL) AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, suggested_reason_id, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
       [conversationId, agentId]
     );
     if (result.rowCount === 0) return null;
@@ -116,7 +124,7 @@ async function adminTransferConversation(conversationId, toAgentId) {
     const result = await client.query(
       `UPDATE conversations SET status = 'assigned', assigned_agent_id = $2, triage_state = 'completed', updated_at = now()
        WHERE id = $1 AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, suggested_reason_id, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
       [conversationId, toAgentId]
     );
     if (result.rowCount === 0) return null;
@@ -133,7 +141,7 @@ async function adminCloseConversation(conversationId, adminAgentId, reasonId) {
     const result = await client.query(
       `UPDATE conversations SET status = 'closed', updated_at = now()
        WHERE id = $1 AND status <> 'closed'
-       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, suggested_reason_id, created_at, updated_at`,
+       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
       [conversationId]
     );
     if (result.rowCount === 0) return null;
@@ -149,8 +157,34 @@ async function completeTriage(conversationId, sectorId) {
   const result = await getPool().query(
     `UPDATE conversations SET sector_id = $2, triage_state = 'completed', updated_at = now()
      WHERE id = $1 AND triage_state = 'pending'
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, suggested_reason_id, created_at, updated_at`,
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
     [conversationId, sectorId]
+  );
+  if (result.rowCount === 0) return null;
+  return toConversation(result.rows[0]);
+}
+
+/**
+ * Conclusão da triagem feita pela IA. Guardada por triage_state = 'pending'
+ * como completeTriage: dois turnos (ou o job de timeout e um turno) que
+ * tentem concluir a mesma conversa — só o primeiro ganha, o outro recebe null.
+ * sector_id (setor FINAL) recebe o mesmo valor que ai_triage_sector_id; o
+ * atendente pode mudar sector_id depois, e a diferença é a "triagem corrigida".
+ */
+async function concludeAiTriage(conversationId, { sectorId, reasonId, confidence, summary, identifiedBy, lowConfidence, resolvedByAi }) {
+  const result = await getPool().query(
+    `UPDATE conversations
+        SET triage_state = 'completed', sector_id = $2, suggested_reason_id = $3,
+            ai_triage_sector_id = $2, ai_triage_reason_id = $3, ai_triage_confidence = $4,
+            ai_triage_summary = $5, ai_triage_identified_by = $6, ai_triage_low_confidence = $7,
+            ai_triage_resolved_by_ai = $8, ai_triage_completed_at = now(), updated_at = now()
+      WHERE id = $1 AND triage_state = 'pending'
+      RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts,
+                protocol_number, business_hours_notice_sent_at, suggested_reason_id, created_at, updated_at,
+                ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary,
+                ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at`,
+    [conversationId, sectorId || null, reasonId || null, confidence != null ? confidence : null,
+     summary, identifiedBy || 'none', Boolean(lowConfidence), Boolean(resolvedByAi)]
   );
   if (result.rowCount === 0) return null;
   return toConversation(result.rows[0]);
@@ -160,7 +194,7 @@ async function incrementTriageAttempts(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET triage_attempts = triage_attempts + 1, updated_at = now()
      WHERE id = $1 AND triage_state = 'pending'
-     RETURNING triage_attempts`,
+     RETURNING triage_attempts, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at`,
     [conversationId]
   );
   if (result.rowCount === 0) return 0;
@@ -171,7 +205,7 @@ async function activateConversation(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET status = 'waiting', updated_at = now()
      WHERE id = $1 AND status = 'silent'
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, suggested_reason_id, created_at, updated_at`,
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
     [conversationId]
   );
   if (result.rowCount === 0) return null;
@@ -181,7 +215,7 @@ async function activateConversation(conversationId) {
 async function markBusinessHoursNoticeSent(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET business_hours_notice_sent_at = now() WHERE id = $1
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, suggested_reason_id, created_at, updated_at`,
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, business_hours_notice_sent_at, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
     [conversationId]
   );
   return toConversation(result.rows[0]);
@@ -189,7 +223,7 @@ async function markBusinessHoursNoticeSent(conversationId) {
 
 async function getConversationWithContact(conversationId) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -218,7 +252,7 @@ async function getConversationWithContact(conversationId) {
 
 async function findConversationByProtocolNumber(protocolNumber) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -247,7 +281,7 @@ async function findConversationByProtocolNumber(protocolNumber) {
 
 async function listConversationsByContact(contactId) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -275,7 +309,7 @@ async function listConversationsByContact(contactId) {
 
 async function listWaitingConversations() {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -302,7 +336,7 @@ async function listWaitingConversations() {
 
 async function listInProgressConversations() {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -329,7 +363,7 @@ async function listInProgressConversations() {
 
 async function listWaitingForAgentConversations() {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -356,7 +390,7 @@ async function listWaitingForAgentConversations() {
 
 async function listInAutomationConversations() {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -391,7 +425,7 @@ async function countClosedSince(since) {
 
 async function listClosedSince(since, { limit, offset }) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -422,7 +456,7 @@ async function listClosedSince(since, { limit, offset }) {
 
 async function listConversationsByAgent(agentId) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -458,7 +492,7 @@ async function countClosedConversationsByAgent(agentId) {
 
 async function listClosedConversationsByAgent(agentId, { limit, offset }) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name,
@@ -498,7 +532,7 @@ async function setConversationSector(conversationId, sectorId) {
   const result = await getPool().query(
     `UPDATE conversations SET sector_id = $2, updated_at = now()
      WHERE id = $1
-     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, suggested_reason_id, created_at, updated_at`,
+     RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
     [conversationId, sectorId]
   );
   if (result.rowCount === 0) return null;
@@ -532,6 +566,7 @@ module.exports = {
   adminTransferConversation,
   adminCloseConversation,
   completeTriage,
+  concludeAiTriage,
   incrementTriageAttempts,
   activateConversation,
   getConversationWithContact,

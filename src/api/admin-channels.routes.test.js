@@ -46,6 +46,7 @@ describe('GET /api/admin/channels', () => {
         config: { phoneNumberId: '1', accessToken: 'tok' },
         status: 'connected',
         triageEnabled: false,
+        aiTriageEnabled: false,
       },
     ]);
 
@@ -62,8 +63,10 @@ describe('GET /api/admin/channels', () => {
         phoneNumber: '+5511999990001',
         status: 'connected',
         triageEnabled: false,
+        aiTriageEnabled: false,
       },
     ]);
+    expect(res.body[0]).toHaveProperty('aiTriageEnabled');
   });
 
   test('returns 403 for a non-admin agent', async () => {

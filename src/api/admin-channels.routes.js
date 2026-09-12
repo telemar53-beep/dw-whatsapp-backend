@@ -53,6 +53,7 @@ function toChannelResponse(channel) {
     hidden: channel.hidden,
     welcomeMessage: channel.welcomeMessage,
     aiEnabled: channel.aiEnabled,
+    aiTriageEnabled: channel.aiTriageEnabled,
     wabaId: isOfficialChannelType(channel.type) ? channel.config.wabaId : undefined,
   };
 }

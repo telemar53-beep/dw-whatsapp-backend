@@ -1,6 +1,6 @@
 const { getPool, closePool } = require('../db/pool');
 const {
-  getAiConfig, updateAiConfig, updateTranscriptionConfig, listToolPermissions, setToolPermission, isToolEnabled,
+  getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission, isToolEnabled,
 } = require('./ai-config.repository');
 
 describe('ai config repository', () => {
@@ -11,6 +11,10 @@ describe('ai config repository', () => {
       "UPDATE ai_config SET transcription_enabled = false, transcription_model = '', " +
       'transcription_max_seconds = 300, transcription_max_bytes = 26214400, ' +
       'transcription_feed_ai = true WHERE id = 1'
+    );
+    await getPool().query(
+      "UPDATE ai_config SET triage_confidence_threshold = 0.800, triage_max_questions = 2, " +
+      "triage_timeout_minutes = 3, triage_extra_instructions = '' WHERE id = 1"
     );
   });
 
@@ -89,5 +93,18 @@ describe('ai config repository', () => {
     expect(config.apiKey).toBe('sk-chat');
     expect(config.model).toBe('gpt-chat');
     expect(config.mode).toBe('assistant');
+  });
+
+  test('getAiConfig devolve os defaults da triagem e updateTriageConfig grava sem tocar o resto', async () => {
+    const c = await getAiConfig();
+    expect(c.triageConfidenceThreshold).toBeCloseTo(0.8, 3);
+    expect(c.triageMaxQuestions).toBe(2);
+    expect(c.triageTimeoutMinutes).toBe(3);
+    expect(c.triageExtraInstructions).toBe('');
+    await updateAiConfig({ apiKey: 'sk-x', model: 'gpt-x', mode: 'assistant' });
+    const up = await updateTriageConfig({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'Seja breve.' });
+    expect(up.triageConfidenceThreshold).toBeCloseTo(0.9, 3);
+    expect(up.triageMaxQuestions).toBe(3);
+    expect((await getAiConfig()).apiKey).toBe('sk-x');
   });
 });

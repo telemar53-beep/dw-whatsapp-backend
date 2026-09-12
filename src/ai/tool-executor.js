@@ -40,7 +40,13 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     const tool = findTool(nome);
     if (!tool) return recusa('unknown_tool', nome);
 
-    if (!(await isToolEnabled(nome))) return recusa('tool_disabled', nome);
+    // Um perfil (a triagem) pode trazer a própria lista fixa de ferramentas:
+    // ela substitui a tabela de permissões, que governa só o assistente.
+    if (Array.isArray(contexto.ferramentasPermitidas)) {
+      if (!contexto.ferramentasPermitidas.includes(nome)) return recusa('tool_not_in_profile', nome);
+    } else if (!(await isToolEnabled(nome))) {
+      return recusa('tool_disabled', nome);
+    }
 
     const validacao = tool.validar(args);
     if (!validacao.ok) return recusa('invalid_args', validacao.erro);
@@ -66,6 +72,13 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       const valor = argsValidados[tool.chaveProprietario];
       const pertence = (contexto.contracts || []).some((c) => c.id === valor);
       if (!pertence) return recusa('contract_not_owned', valor);
+    }
+
+    // Entrega de dado (boleto, PIX) só com identidade forte — regra em código,
+    // não em prompt. Sem identidade no contexto (modo assistente, humano
+    // revisando) a marcação não se aplica.
+    if (tool.exigeIdentidadeForte && contexto.identidade && contexto.identidade.nivel !== 'forte') {
+      return recusa('identity_not_confirmed', nome);
     }
 
     // Uma ferramenta pode declarar o próprio orçamento (tool.timeoutMs): a

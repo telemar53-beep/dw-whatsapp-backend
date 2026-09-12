@@ -178,6 +178,40 @@ describe('tool-executor', () => {
   });
 });
 
+describe('tool-executor — perfil com lista fixa e identidade', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('com ferramentasPermitidas no contexto, a tabela de permissões é ignorada', async () => {
+    findTool.mockReturnValue(toolFake());
+    isToolEnabled.mockResolvedValue(false);
+    const ctx = { ...CONTEXTO, ferramentasPermitidas: ['consultar_plano'] };
+    expect((await executeTool('consultar_plano', { contratoId: 17402 }, ctx)).ok).toBe(true);
+    expect(isToolEnabled).not.toHaveBeenCalled();
+  });
+
+  test('ferramenta fora da lista fixa é recusada mesmo ligada na tabela', async () => {
+    findTool.mockReturnValue(toolFake());
+    isToolEnabled.mockResolvedValue(true);
+    const ctx = { ...CONTEXTO, ferramentasPermitidas: ['buscar_cliente'] };
+    expect((await executeTool('consultar_plano', { contratoId: 17402 }, ctx)).motivo).toBe('tool_not_in_profile');
+  });
+
+  test('exigeIdentidadeForte recusa com identidade fraca e passa com forte', async () => {
+    findTool.mockReturnValue(toolFake({ exigeIdentidadeForte: true }));
+    isToolEnabled.mockResolvedValue(true);
+    const fraca = await executeTool('consultar_plano', { contratoId: 17402 }, { ...CONTEXTO, identidade: { nivel: 'fraca' } });
+    expect(fraca.motivo).toBe('identity_not_confirmed');
+    const forte = await executeTool('consultar_plano', { contratoId: 17402 }, { ...CONTEXTO, identidade: { nivel: 'forte' } });
+    expect(forte.ok).toBe(true);
+  });
+
+  test('exigeIdentidadeForte não se aplica quando não há identidade no contexto (modo assistente)', async () => {
+    findTool.mockReturnValue(toolFake({ exigeIdentidadeForte: true }));
+    isToolEnabled.mockResolvedValue(true);
+    expect((await executeTool('consultar_plano', { contratoId: 17402 }, CONTEXTO)).ok).toBe(true);
+  });
+});
+
 describe('tool-executor — orçamento de tempo declarado pela ferramenta', () => {
   beforeEach(() => jest.clearAllMocks());
 

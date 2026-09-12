@@ -3,9 +3,15 @@ const { normalizeContract, normalizeConnection, normalizeInvoices } = require('.
 const { setContactSgpLink } = require('../conversations/contact.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
-const { setSuggestedReason, setConversationSector } = require('../conversations/conversation.repository');
+const {
+  setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
+} = require('../conversations/conversation.repository');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
+const { saveMediaFile } = require('../media/media-storage');
+const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
+const { primeiroNome } = require('./identity-resolver');
 
 function erro(mensagem) {
   return { ok: false, erro: mensagem };
@@ -27,6 +33,18 @@ function validarContratoId(args) {
 function totalDaPaginacao(paginacao) {
   const total = paginacao && Number(paginacao.total);
   return Number.isInteger(total) ? total : null;
+}
+
+/** '20/05/1990', '20/5/90', '1990-05-20' → '1990-05-20'; senão null. */
+function normalizarDataNascimento(texto) {
+  const t = String(texto || '').trim();
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return t;
+  m = t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+  if (!m) return null;
+  let [, d, mo, y] = m;
+  if (y.length === 2) y = (Number(y) > 30 ? '19' : '20') + y;
+  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
 }
 
 /** Busca no cache do turno; só chama o SGP se ainda não houver nada. */
@@ -68,6 +86,19 @@ const TOOLS = [
       // contexto.contact.sgpDocument) nunca dispara dentro do mesmo turno:
       // duas chamadas com CPFs diferentes na mesma conversa passariam batidas.
       contexto.contact.sgpDocument = args.cpf;
+      // No perfil de triagem, CPF digitado por número desconhecido é identidade
+      // FRACA: classifica, mas não entrega nada até confirmar_nascimento.
+      if (contexto.identidade) {
+        let dataNascimento = null;
+        try {
+          const rec = await sgpClient.findClientRecord({ cpfcnpj: args.cpf });
+          dataNascimento = rec.cliente ? rec.cliente.dataNascimento : null;
+        } catch (err) { /* sem data, a confirmação simplesmente não estará disponível */ }
+        contexto.identidade = {
+          nivel: 'fraca', origem: 'cpf', primeiroNome: primeiroNome(client.name), contracts,
+          client: { id: client.id, document: args.cpf }, dataNascimento, contestado: false, nascimentoTentado: false,
+        };
+      }
       return {
         cliente: { nome: client.name },
         contratos: contracts.map((c) => ({
@@ -268,6 +299,7 @@ const TOOLS = [
     timeoutMs: 40000,
     descricao: 'Gera a segunda via do boleto do contrato, com linha digitável e link.',
     chaveProprietario: 'contratoId',
+    exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },
@@ -293,17 +325,20 @@ const TOOLS = [
     timeoutMs: 40000,
     descricao: 'Gera o código PIX copia e cola da fatura em aberto do contrato.',
     chaveProprietario: 'contratoId',
+    exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
-    async executar(args) {
+    async executar(args, contexto) {
       const result = await sgpClient.getDuplicateInvoice(args.contratoId);
       if (!result.hasOpenInvoice) return { sucesso: false, motivo: 'Nenhuma fatura em aberto' };
       const primeira = result.duplicates[0];
-      return { sucesso: true, valor: primeira.value, vencimento: primeira.dueDate, pixCopiaCola: primeira.pixCode };
+      const resposta = { sucesso: true, valor: primeira.value, vencimento: primeira.dueDate, pixCopiaCola: primeira.pixCode };
+      if (contexto && contexto.identidade) contexto.resolvidoPelaIa = true;
+      return resposta;
     },
   },
   {
@@ -402,6 +437,137 @@ const TOOLS = [
       // Sem prazo devolvido, o modelo não pode inventar um "uns 3 dias".
       if (resposta.dias == null && !resposta.pagarAte) resposta.prazoDesconhecido = true;
       return resposta;
+    },
+  },
+  {
+    nome: 'confirmar_nascimento',
+    categoria: 'CONSULTA',
+    descricao: 'Confirma a identidade do cliente identificado por CPF comparando a data de nascimento que ele informou. Use antes de entregar boleto ou PIX quando a identificação for por CPF. Uma tentativa só.',
+    isentoDeProprietario: true,
+    parametros: { type: 'object', properties: { data: { type: 'string', description: 'Data informada pelo cliente, ex.: 20/05/1990' } }, required: ['data'] },
+    validar(args) {
+      if (typeof (args && args.data) !== 'string' || !args.data.trim()) return erro('data is required');
+      return { ok: true, args: { data: args.data.trim() } };
+    },
+    async executar(args, contexto) {
+      const id = contexto.identidade;
+      if (!id || !id.dataNascimento) return { confirmado: false, motivo: 'Não há data de nascimento no cadastro para confirmar. Encaminhe sem entregar dados.' };
+      if (id.nascimentoTentado) return { confirmado: false, motivo: 'A confirmação já foi feita neste atendimento. Encaminhe sem entregar dados.' };
+      id.nascimentoTentado = true;
+      const informada = normalizarDataNascimento(args.data);
+      if (informada && informada === id.dataNascimento) {
+        id.nivel = 'forte';
+        id.origem = 'cpf_confirmed';
+        return { confirmado: true };
+      }
+      return { confirmado: false, motivo: 'Data não confere. Não entregue dados; encaminhe para o setor.' };
+    },
+  },
+  {
+    nome: 'esquecer_identificacao',
+    categoria: 'ACAO',
+    descricao: 'Use quando o cliente disser que o nome pelo qual foi chamado não é dele. Descarta a identificação atual; em seguida peça o CPF.',
+    isentoDeProprietario: true,
+    parametros: { type: 'object', properties: {} },
+    validar() { return { ok: true, args: {} }; },
+    async executar(args, contexto) {
+      contexto.identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], client: null, dataNascimento: null, contestado: true, nascimentoTentado: false };
+      contexto.contracts = [];
+      if (contexto.contact) {
+        contexto.contact.sgpDocument = null;
+        await setContactSgpLink(contexto.contact.id, { sgpClientId: null, sgpContractId: null, sgpDocument: null });
+      }
+      return { esquecido: true };
+    },
+  },
+  {
+    nome: 'enviar_boleto',
+    categoria: 'ACAO_SENSIVEL',
+    descricao: 'Envia ao cliente, como arquivo PDF nesta conversa, a segunda via do boleto da fatura em aberto do contrato. Só para cliente com identidade confirmada.',
+    chaveProprietario: 'contratoId',
+    exigeIdentidadeForte: true,
+    timeoutMs: 40000,
+    parametros: { type: 'object', properties: { contratoId: { type: 'integer' } }, required: ['contratoId'] },
+    validar: validarContratoId,
+    async executar(args, contexto) {
+      const result = await sgpClient.getDuplicateInvoice(args.contratoId);
+      if (!result.hasOpenInvoice) return { enviado: false, motivo: 'Nenhuma fatura em aberto' };
+      const primeira = result.duplicates[0];
+      if (!primeira.boletoLink) return { enviado: false, motivo: 'Boleto sem link para download' };
+      const buffer = await sgpClient.downloadBoletoPdf(primeira.boletoLink);
+      const mediaPath = await saveMediaFile(buffer, '.pdf');
+      await enqueueOutboundMessage({
+        conversationId: contexto.conversationId, channelId: contexto.channelId,
+        content: null, messageType: 'document', mediaPath,
+        mediaMimeType: 'application/pdf', mediaFilename: 'boleto.pdf', sentBy: 'ai',
+      });
+      contexto.resolvidoPelaIa = true;
+      return { enviado: true, valor: primeira.value, vencimento: primeira.dueDate };
+    },
+  },
+  {
+    nome: 'concluir_triagem',
+    categoria: 'ACAO',
+    descricao: 'Encerra a triagem: define o setor, o motivo e um resumo para o atendente, e coloca a conversa na fila. Informe a confiança (0 a 1) na classificação.',
+    isentoDeProprietario: true,
+    parametros: {
+      type: 'object',
+      properties: {
+        setorId: { type: 'string', description: 'UUID de um setor existente.' },
+        motivoId: { type: ['string', 'null'], description: 'UUID de um motivo existente, ou null se nenhum se aplica.' },
+        resumo: { type: 'string', description: 'Resumo objetivo para o atendente: o que o cliente quer e o que já foi apurado.' },
+        confianca: { type: 'number', description: 'Confiança na classificação, de 0 a 1.' },
+      },
+      required: ['setorId', 'resumo', 'confianca'],
+    },
+    validar(args) {
+      const setorId = args && args.setorId;
+      const motivoId = args && args.motivoId;
+      const resumo = args && args.resumo;
+      const confianca = Number(args && args.confianca);
+      if (typeof setorId !== 'string' || !UUID_PATTERN.test(setorId)) return erro('setorId must be a UUID');
+      if (motivoId != null && (typeof motivoId !== 'string' || !UUID_PATTERN.test(motivoId))) return erro('motivoId must be a UUID or null');
+      if (typeof resumo !== 'string' || !resumo.trim()) return erro('resumo is required');
+      if (!Number.isFinite(confianca) || confianca < 0 || confianca > 1) return erro('confianca must be between 0 and 1');
+      return { ok: true, args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca } };
+    },
+    async executar(args, contexto) {
+      const setor = (await listSectors()).find((s) => s.id === args.setorId);
+      if (!setor) return erro('Unknown setorId');
+      let motivo = null;
+      if (args.motivoId) {
+        motivo = await findReasonById(args.motivoId);
+        if (!motivo || !motivo.active) return erro('Invalid or inactive motivoId');
+      }
+      const t = contexto.triagem || { threshold: 0.8, maxQuestions: 2, attempts: 0 };
+      const baixa = args.confianca < t.threshold;
+      if (baixa && t.attempts < t.maxQuestions) {
+        return { concluido: false, motivo: 'baixa_confianca', instrucao: 'Faça UMA pergunta curta de esclarecimento ao cliente e chame concluir_triagem de novo depois da resposta.' };
+      }
+      const id = contexto.identidade || { nivel: 'none', origem: 'none' };
+      const identifiedBy = id.origem === 'none' ? 'none' : id.origem;
+      const rotuloId = { memory: 'memória', phone: 'telefone', cpf: 'CPF (não confirmado)', cpf_confirmed: 'CPF + data de nascimento', none: 'não identificado' }[identifiedBy];
+      const linhas = [
+        `Setor: ${setor.name}`,
+        `Motivo: ${motivo ? motivo.name : 'não definido'}`,
+        `Cliente: ${id.primeiroNome || 'não identificado'}${id.client ? ` (SGP ${id.client.id})` : ''}`,
+        `Contratos: ${(contexto.contracts || []).map((c) => `${c.id} — ${c.address || 'sem endereço'}`).join('; ') || 'nenhum'}`,
+        `Identificação: ${rotuloId}`,
+        `Origem: ${contexto.origemMensagem || 'texto'}`,
+        `Confiança: ${Math.round(args.confianca * 100)}%${baixa ? ' (BAIXA)' : ''}`,
+      ];
+      if (contexto.resolvidoPelaIa) linhas.push('Resolvido pela IA: boleto/PIX enviado — só confirmar.');
+      linhas.push('', args.resumo);
+      const conversa = await concludeAiTriage(contexto.conversationId, {
+        sectorId: setor.id, reasonId: motivo ? motivo.id : null, confidence: args.confianca,
+        summary: linhas.join('\n'), identifiedBy, lowConfidence: baixa, resolvedByAi: Boolean(contexto.resolvidoPelaIa),
+      });
+      if (!conversa) return { concluido: false, motivo: 'A conversa já saiu da triagem (um atendente assumiu ou ela já foi concluída).' };
+      const completa = await getConversationWithContact(contexto.conversationId);
+      broadcast('queue:new', { conversation: completa, message: null });
+      broadcastToDashboard('dashboard:conversation', { conversation: completa });
+      contexto.triagemConcluida = { setor: setor.name };
+      return { concluido: true, setor: setor.name, instrucao: `Responda ao cliente em uma frase: use o primeiro nome se souber, diga que o atendimento vai para o setor ${setor.name} e que um atendente continua daqui. Não faça mais perguntas.` };
     },
   },
 ];

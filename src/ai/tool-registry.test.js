@@ -2,23 +2,34 @@ jest.mock('../integrations/sgp-client');
 jest.mock('../sectors/sector.repository');
 jest.mock('../reasons/reason.repository');
 jest.mock('../conversations/conversation.repository');
+jest.mock('../conversations/contact.repository');
 jest.mock('./trust-unlock.repository');
+jest.mock('../media/media-storage');
+jest.mock('../queue/outbound-queue');
+jest.mock('../realtime/socket-server');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { listTools, findTool, toOpenAiTools } = require('./tool-registry');
 const { listSectors } = require('../sectors/sector.repository');
 const { findReasonById } = require('../reasons/reason.repository');
-const { setConversationSector, setSuggestedReason } = require('../conversations/conversation.repository');
+const {
+  setConversationSector, setSuggestedReason, concludeAiTriage, getConversationWithContact,
+} = require('../conversations/conversation.repository');
+const { setContactSgpLink } = require('../conversations/contact.repository');
+const { saveMediaFile } = require('../media/media-storage');
+const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 
 describe('tool-registry', () => {
   test('registers exactly the known tools, sensitive ones included', () => {
     const nomes = listTools().map((t) => t.nome).sort();
     expect(nomes).toEqual([
-      'buscar_cliente', 'consultar_faturas', 'consultar_faturas_todos_contratos', 'consultar_financeiro',
+      'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas',
+      'consultar_faturas_todos_contratos', 'consultar_financeiro',
       'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
-      'definir_motivo_atendimento', 'desbloqueio_confianca', 'gerar_pix', 'gerar_segunda_via',
-      'transferir_atendimento',
+      'definir_motivo_atendimento', 'desbloqueio_confianca', 'enviar_boleto', 'esquecer_identificacao',
+      'gerar_pix', 'gerar_segunda_via', 'transferir_atendimento',
     ]);
   });
 
@@ -64,7 +75,8 @@ describe('tool-registry', () => {
     // CPF do próprio contato — não há valor vindo do modelo para conferir.
     const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
     expect(isentas).toEqual([
-      'buscar_cliente', 'consultar_faturas_todos_contratos', 'definir_motivo_atendimento', 'transferir_atendimento',
+      'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas_todos_contratos',
+      'definir_motivo_atendimento', 'esquecer_identificacao', 'transferir_atendimento',
     ]);
   });
 
@@ -441,5 +453,194 @@ describe('desbloqueio_confianca — data-limite da promessa', () => {
     sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: true, liberadoDias: 3, dataPromessa: '2026-09-15', protocolo: '260912153100', motivo: null });
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, { contracts: [SUSPENSO], contact: { id: 'ct-1' } });
     expect(r).toEqual({ liberado: true, dias: 3, protocolo: '260912153100', pagarAte: '2026-09-15' });
+  });
+});
+
+describe('confirmar_nascimento', () => {
+  const ctx = () => ({ identidade: { nivel: 'fraca', origem: 'cpf', dataNascimento: '1990-05-20', nascimentoTentado: false } });
+  test('data certa em DD/MM/AAAA eleva para forte', async () => {
+    const c = ctx();
+    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(r).toEqual({ confirmado: true });
+    expect(c.identidade.nivel).toBe('forte');
+    expect(c.identidade.origem).toBe('cpf_confirmed');
+  });
+  test('aceita AAAA-MM-DD e D/M/AA', async () => {
+    for (const data of ['1990-05-20', '20/5/90']) {
+      const c = ctx();
+      expect((await findTool('confirmar_nascimento').executar({ data }, c)).confirmado).toBe(true);
+    }
+  });
+  test('data errada mantém fraca e só permite uma tentativa', async () => {
+    const c = ctx();
+    expect((await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c)).confirmado).toBe(false);
+    expect(c.identidade.nivel).toBe('fraca');
+    const segunda = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(segunda.confirmado).toBe(false);
+    expect(segunda.motivo).toMatch(/já foi feita/);
+  });
+  test('sem data de nascimento no cadastro, não confirma e explica', async () => {
+    const c = { identidade: { nivel: 'fraca', dataNascimento: null, nascimentoTentado: false } };
+    expect((await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c)).confirmado).toBe(false);
+  });
+  test('o resultado nunca contém a data cadastrada', async () => {
+    const c = ctx();
+    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
+    expect(JSON.stringify(r)).not.toContain('1990');
+  });
+});
+
+describe('esquecer_identificacao', () => {
+  test('zera a identidade do turno e o vínculo do contato', async () => {
+    const c = { identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', dataNascimento: 'x' }, contracts: [{ id: 1 }], contact: { id: 'ct-1', sgpDocument: '1' } };
+    const r = await findTool('esquecer_identificacao').executar({}, c);
+    expect(r).toEqual({ esquecido: true });
+    expect(c.identidade).toMatchObject({ nivel: 'none', origem: 'none', primeiroNome: null, contestado: true });
+    expect(c.contracts).toEqual([]);
+    expect(c.contact.sgpDocument).toBeNull();
+    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: null, sgpContractId: null, sgpDocument: null });
+  });
+});
+
+describe('buscar_cliente no perfil de triagem', () => {
+  beforeEach(() => jest.clearAllMocks());
+  test('atualiza a identidade para fraca com primeiro nome e data de nascimento no servidor', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, login: 'l', plan: 'p', statusCode: 1 }] });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
+    const c = { contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(c.identidade).toMatchObject({ nivel: 'fraca', origem: 'cpf', primeiroNome: 'Maria', dataNascimento: '1985-01-02', nascimentoTentado: false });
+    expect(JSON.stringify(r)).not.toContain('1985');
+  });
+  test('sem identidade no contexto (assistente) não muda nada', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'X', document: '1' }, contracts: [] });
+    const c = { contact: { id: 'ct-1' } };
+    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(c.identidade).toBeUndefined();
+    expect(sgpClient.findClientRecord).not.toHaveBeenCalled();
+  });
+});
+
+describe('enviar_boleto', () => {
+  const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte' } });
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix' }] });
+    sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+    saveMediaFile.mockResolvedValue('abc.pdf');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-9' });
+  });
+  test('baixa o PDF, manda como documento com sentBy ai e marca resolvido', async () => {
+    const c = ctx();
+    const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'c-1', channelId: 'ch-1', messageType: 'document', mediaPath: 'abc.pdf',
+      mediaMimeType: 'application/pdf', mediaFilename: 'boleto.pdf', sentBy: 'ai',
+    }));
+    expect(r).toEqual({ enviado: true, valor: 89.9, vencimento: '2026-09-20' });
+    expect(c.resolvidoPelaIa).toBe(true);
+  });
+  test('sem fatura em aberto, não envia nada', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
+    const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+    expect(r).toEqual({ enviado: false, motivo: 'Nenhuma fatura em aberto' });
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+  test('declara exigeIdentidadeForte e dono por contratoId', () => {
+    const t = findTool('enviar_boleto');
+    expect(t.exigeIdentidadeForte).toBe(true);
+    expect(t.chaveProprietario).toBe('contratoId');
+  });
+  test('gerar_pix e gerar_segunda_via também exigem identidade forte', () => {
+    expect(findTool('gerar_pix').exigeIdentidadeForte).toBe(true);
+    expect(findTool('gerar_segunda_via').exigeIdentidadeForte).toBe(true);
+  });
+  test('gerar_pix no perfil de triagem marca resolvidoPelaIa', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ value: 1, dueDate: 'd', pixCode: 'p' }] });
+    const c = ctx();
+    await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+    expect(c.resolvidoPelaIa).toBe(true);
+  });
+});
+
+describe('concluir_triagem', () => {
+  const SETOR = '11111111-1111-1111-1111-111111111111';
+  const MOTIVO = '22222222-2222-2222-2222-222222222222';
+  const ctx = (extra = {}) => ({
+    conversationId: 'c-1', contact: { id: 'ct-1' },
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', client: { id: 9 } },
+    contracts: [{ id: 17402, address: 'RUA X', plan: '600MB', statusCode: 1 }],
+    triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0 },
+    origemMensagem: 'texto', resolvidoPelaIa: false, ...extra,
+  });
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+    findReasonById.mockResolvedValue({ id: MOTIVO, name: 'Segunda via', active: true });
+    concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null });
+  });
+
+  test('validar exige setor UUID, confiança 0-1 e resumo', () => {
+    const v = findTool('concluir_triagem').validar;
+    expect(v({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9 }).ok).toBe(true);
+    expect(v({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }).ok).toBe(true);
+    expect(v({ setorId: 'x', resumo: 'r', confianca: 0.9 }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: '', confianca: 0.9 }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: 'r', confianca: 1.5 }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: 'r', confianca: '0.9' }).ok).toBe(true);
+  });
+
+  test('confiança baixa com pergunta sobrando: não conclui e manda perguntar', async () => {
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.5 }, ctx());
+    expect(r.concluido).toBe(false);
+    expect(r.instrucao).toMatch(/UMA pergunta/);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  test('confiança baixa sem pergunta sobrando: conclui e marca baixa confiança', async () => {
+    const c = ctx({ triagem: { threshold: 0.8, maxQuestions: 2, attempts: 2 } });
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.5 }, c);
+    expect(r.concluido).toBe(true);
+    expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ lowConfidence: true, sectorId: SETOR }));
+  });
+
+  test('conclui: grava, prefixa o resumo com o que o código sabe, avisa a fila e instrui uma frase final', async () => {
+    const c = ctx({ resolvidoPelaIa: true, origemMensagem: 'áudio' });
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, c);
+    expect(r).toMatchObject({ concluido: true, setor: 'Financeiro' });
+    expect(r.instrucao).toMatch(/uma frase/i);
+    const args = concludeAiTriage.mock.calls[0][1];
+    expect(args).toMatchObject({ sectorId: SETOR, reasonId: MOTIVO, confidence: 0.95, identifiedBy: 'phone', lowConfidence: false, resolvedByAi: true });
+    expect(args.summary).toContain('Setor: Financeiro');
+    expect(args.summary).toContain('Motivo: Segunda via');
+    expect(args.summary).toContain('Cliente: João');
+    expect(args.summary).toContain('Identificação: telefone');
+    expect(args.summary).toContain('Origem: áudio');
+    expect(args.summary).toContain('Resolvido pela IA');
+    expect(args.summary).toContain('Cliente pediu boleto.');
+    expect(broadcast).toHaveBeenCalledWith('queue:new', expect.objectContaining({ conversation: expect.any(Object) }));
+    expect(c.triagemConcluida).toEqual({ setor: 'Financeiro' });
+  });
+
+  test('setor desconhecido ou motivo inativo são recusados', async () => {
+    listSectors.mockResolvedValue([]);
+    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx())).ok).toBe(false);
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'F' }]);
+    findReasonById.mockResolvedValue({ id: MOTIVO, active: false });
+    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9 }, ctx())).ok).toBe(false);
+  });
+
+  test('conversa que já saiu de pending (atendente assumiu) devolve concluido:false sem quebrar', async () => {
+    concludeAiTriage.mockResolvedValue(null);
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx());
+    expect(r.concluido).toBe(false);
+    expect(broadcast).not.toHaveBeenCalled();
+  });
+
+  test('cpf_confirmed é gravado como identificação quando a origem for essa', async () => {
+    const c = ctx({ identidade: { nivel: 'forte', origem: 'cpf_confirmed', primeiroNome: 'Ana', client: { id: 1 } } });
+    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, c);
+    expect(concludeAiTriage.mock.calls[0][1].identifiedBy).toBe('cpf_confirmed');
   });
 });

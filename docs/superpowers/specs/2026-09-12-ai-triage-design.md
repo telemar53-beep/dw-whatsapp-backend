@@ -314,7 +314,9 @@ documento** somente no perfil de triagem (placeholder). Texto continua igual.
 | SGP fora na identificação | `none`; triagem segue e pede CPF se o setor exigir; resumo anota "SGP indisponível". |
 | OpenAI fora | Turno falha, `ai_interactions.error`; conversa fica `pending` **por no máximo N minutos** (`ai_config.triage_timeout_minutes`, padrão 3): ao abrir a triagem o gancho enfileira um job atrasado `ai-triage-timeout` (mesma fila Bull, `delay = N min`, sem jobId fixo) que, ao rodar, conclui com setor `null` e resumo "IA indisponível" **se** a conversa ainda estiver `pending`; se já concluiu, não faz nada. O cliente nunca fica invisível na fila. |
 | Modelo não conclui após o limite | Turno final com `tool_choice` forçado; senão conclusão em código com setor `null`. |
-| Atendente assume no meio | Turno descartado; mensagem não enviada. |
+| Atendente assume no meio, ou admin fecha da fila | Turno descartado; mensagem não enviada (releitura antes de enviar checa `assigned_agent_id`, `triage_state` e `status`). |
+| Flag do canal desligada com triagem em andamento | O turno apenas retorna; o job de timeout conclui sem setor. Nunca concluir em código a partir do turno — isso abortaria a triagem numérica de um canal recém-migrado. |
+| Sticker, vídeo ou localização durante a triagem | Não geram turno e **não** contam como "mensagem mais nova" — o turno da mensagem anterior segue normalmente. |
 | Entrega de boleto falha (SGP/PDF) | Ferramenta devolve erro; a IA diz que o Financeiro envia; triagem conclui sem `resolved_by_ai`. |
 
 ## Testes

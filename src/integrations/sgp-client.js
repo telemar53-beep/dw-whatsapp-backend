@@ -40,13 +40,26 @@ function toContract(c) {
   return {
     id: c.contratoId,
     status: c.contratoStatusDisplay,
+    statusCode: c.contratoStatus,
+    statusReason: c.motivo_status,
     plan: c.servico_plano,
+    internetPlan: c.planointernet,
+    tvPlan: c.planotv,
+    login: c.servico_login,
+    mac: c.servico_mac,
+    vlan: c.servico_vlan,
+    grupo: c.servico_grupo,
+    connectionType: c.servico_tipo_conexao,
+    popId: c.popId,
+    popName: c.popNome,
     openInvoicesCount: c.contratoTitulosAReceber,
     openAmount: c.contratoValorAberto,
     address: formatAddress(c),
     phones: (c.telefones || []).map((t) => t.contato),
     emails: (c.emails || []).map((e) => e.contato),
   };
+  // servico_senha, contratoCentralSenha e contratoCentralLogin são
+  // deliberadamente omitidos: senhas do cliente não saem deste módulo.
 }
 
 async function lookupClientByCpf(cpf) {
@@ -116,10 +129,38 @@ async function downloadBoletoPdf(link) {
   }
 }
 
+async function checkConnection(contratoId) {
+  const config = await requireConfig();
+  const response = await postSgp(config, '/api/ura/verificaacesso', { contrato: contratoId });
+  const data = response.data;
+  if (!data || typeof data !== 'object') {
+    throw new SgpRequestError('Unexpected response from SGP');
+  }
+  return {
+    status: data.status,
+    msg: data.msg,
+    contratoId: data.contratoId,
+    login: data.login,
+    servicoId: data.servico_id,
+  };
+}
+
+async function listInvoices(contratoId) {
+  const config = await requireConfig();
+  const response = await postSgp(config, '/api/central/titulos', { contrato: contratoId, nao_gerar_os: 1 });
+  const data = response.data;
+  if (!data || typeof data !== 'object') {
+    throw new SgpRequestError('Unexpected response from SGP');
+  }
+  return { faturas: Array.isArray(data.faturas) ? data.faturas : [], paginacao: data.paginacao || {} };
+}
+
 module.exports = {
   lookupClientByCpf,
   getDuplicateInvoice,
   downloadBoletoPdf,
+  checkConnection,
+  listInvoices,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,

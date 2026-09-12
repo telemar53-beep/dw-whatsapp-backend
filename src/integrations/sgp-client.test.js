@@ -6,6 +6,8 @@ const {
   lookupClientByCpf,
   getDuplicateInvoice,
   downloadBoletoPdf,
+  checkConnection,
+  listInvoices,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,
@@ -71,7 +73,18 @@ describe('sgp-client', () => {
         {
           id: 17402,
           status: 'Ativo',
+          statusCode: 1,
+          statusReason: undefined,
           plan: '1GB',
+          internetPlan: undefined,
+          tvPlan: undefined,
+          login: undefined,
+          mac: undefined,
+          vlan: undefined,
+          grupo: undefined,
+          connectionType: undefined,
+          popId: undefined,
+          popName: undefined,
           openInvoicesCount: 1,
           openAmount: 89.9,
           address: 'RUA EXEMPLO, 523 - CENTRO - CANDIDO MENDES/MA',
@@ -202,6 +215,108 @@ describe('sgp-client', () => {
       axios.get.mockRejectedValue(new Error('timeout'));
 
       await expect(downloadBoletoPdf('https://dwtelecom.sgp.tsmx.com.br/boleto/999')).rejects.toBeInstanceOf(SgpRequestError);
+    });
+  });
+
+  describe('checkConnection', () => {
+    test('maps status 1 to the online payload', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValue({
+        data: { status: 1, msg: 'Serviço Online', contratoId: 17402, cpfCnpj: '529.982.247-25',
+                razaoSocial: 'CLIENTE EXEMPLO', login: 'cliente-dw', servico_id: 13169 },
+      });
+
+      const result = await checkConnection(17402);
+
+      expect(axios.post).toHaveBeenCalledWith(
+        'https://dwtelecom.sgp.tsmx.com.br/api/ura/verificaacesso',
+        expect.stringContaining('contrato=17402'),
+        expect.objectContaining({ timeout: 15000 })
+      );
+      expect(result).toEqual({ status: 1, msg: 'Serviço Online', contratoId: 17402, login: 'cliente-dw', servicoId: 13169 });
+    });
+
+    test('maps status 2 (offline) without inventing fields', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValue({
+        data: { status: 2, msg: 'Serviço Offline', contratoId: 17405, login: 'outro-dw', servico_id: 13172 },
+      });
+
+      const result = await checkConnection(17405);
+
+      expect(result.status).toBe(2);
+      expect(result.msg).toBe('Serviço Offline');
+    });
+
+    test('throws SgpRequestError when the call fails', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockRejectedValue(new Error('timeout'));
+      await expect(checkConnection(17402)).rejects.toBeInstanceOf(SgpRequestError);
+    });
+  });
+
+  describe('listInvoices', () => {
+    test('returns faturas and paginacao from central/titulos', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValue({
+        data: {
+          paginacao: { offset: 0, limit: 50, parcial: 2, total: 2 },
+          faturas: [
+            { id: 999, status: 'Aberto', statusid: 1, numero_documento: 123, valor: 89.9,
+              valorcorrigido: 92.1, vencimento: '2026-09-20', vencimento_atualizado: '2026-09-25',
+              data_pagamento: null, linhadigitavel: '836100000012', codigopix: '000201-pix',
+              gerapix: true, link: 'https://x/boleto/999', link_completo: 'https://x/boleto/999/full' },
+          ],
+        },
+      });
+
+      const result = await listInvoices(17402);
+
+      expect(axios.post).toHaveBeenCalledWith(
+        'https://dwtelecom.sgp.tsmx.com.br/api/central/titulos',
+        expect.stringContaining('nao_gerar_os=1'),
+        expect.any(Object)
+      );
+      expect(result.faturas).toHaveLength(1);
+      expect(result.faturas[0].id).toBe(999);
+      expect(result.paginacao.total).toBe(2);
+    });
+
+    test('returns an empty list when SGP sends no faturas', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValue({ data: {} });
+      const result = await listInvoices(17402);
+      expect(result).toEqual({ faturas: [], paginacao: {} });
+    });
+  });
+
+  describe('toContract via lookupClientByCpf', () => {
+    test('carries the technical fields that used to be dropped', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValue({
+        data: { contratos: [{
+          contratoId: 17402, clienteId: 16957, cpfCnpj: '529.982.247-25', razaoSocial: 'CLIENTE',
+          contratoStatus: 1, contratoStatusDisplay: 'Ativo', motivo_status: '',
+          contratoTitulosAReceber: 2, contratoValorAberto: 89.9,
+          servico_plano: '600MB', planointernet: 'FIBRA 600', planotv: '',
+          servico_login: 'cliente-dw', servico_mac: 'AA:BB:CC', servico_vlan: '101',
+          servico_grupo: 'GRUPO A', servico_tipo_conexao: 'PPPoE',
+          popId: 1, popNome: 'POP CENTRO',
+          servico_senha: 'segredo-login', contratoCentralSenha: 'segredo-central',
+          contratoCentralLogin: 'segredo-user',
+          telefones: [], emails: [],
+        }] },
+      });
+
+      const { contracts } = await lookupClientByCpf('52998224725');
+
+      expect(contracts[0]).toMatchObject({
+        id: 17402, statusCode: 1, status: 'Ativo', statusReason: '',
+        plan: '600MB', internetPlan: 'FIBRA 600',
+        login: 'cliente-dw', mac: 'AA:BB:CC', vlan: '101', grupo: 'GRUPO A',
+        connectionType: 'PPPoE', popId: 1, popName: 'POP CENTRO',
+      });
+      expect(JSON.stringify(contracts)).not.toContain('segredo');
     });
   });
 });

@@ -177,6 +177,21 @@ describe('channel repository', () => {
     expect(found.welcomeMessage).toBe('Seja bem-vindo!');
   });
 
+  test('createChannel defaults aiEnabled to false, and findChannelById reads it back after a direct update', async () => {
+    const channel = await createChannel({
+      type: 'baileys',
+      name: 'Canal Com IA',
+      phoneNumber: '+5511999990025',
+      config: {},
+    });
+    expect(channel.aiEnabled).toBe(false);
+
+    await getPool().query('UPDATE channels SET ai_enabled = true WHERE id = $1', [channel.id]);
+
+    const found = await findChannelById(channel.id);
+    expect(found.aiEnabled).toBe(true);
+  });
+
   test('createChannel stores and returns a 360dialog channel', async () => {
     const channel = await createChannel({
       type: '360dialog',

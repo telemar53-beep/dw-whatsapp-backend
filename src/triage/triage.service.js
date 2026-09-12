@@ -12,6 +12,8 @@ function composeQuestionMessage(config, options) {
 async function shouldStartTriage(channelId) {
   const channel = await findChannelById(channelId);
   if (!channel || !channel.triageEnabled) return false;
+  // Um robô por vez: num canal com IA, o menu numérico não roda.
+  if (channel.aiEnabled) return false;
   const options = await listTriageOptions();
   return options.length > 0;
 }

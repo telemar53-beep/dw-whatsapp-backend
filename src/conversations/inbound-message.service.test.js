@@ -8,6 +8,7 @@ jest.mock('../queue/outbound-queue');
 jest.mock('../city-notices/city-notice.repository');
 jest.mock('../business-hours/business-hours.repository');
 jest.mock('../business-hours/business-hours.service');
+jest.mock('../ai/ai.service');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
@@ -22,6 +23,7 @@ const {
 } = require('../city-notices/city-notice.repository');
 const { getBusinessHoursConfig } = require('../business-hours/business-hours.repository');
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
+const { shouldRunAi, scheduleAiReply } = require('../ai/ai.service');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
 describe('ingestInboundMessage', () => {
@@ -32,6 +34,7 @@ describe('ingestInboundMessage', () => {
     findActiveCityNoticeByCityId.mockResolvedValue(null);
     getBusinessHoursConfig.mockResolvedValue({ enabled: false, startTime: '08:00', endTime: '18:00', message: '' });
     isOutsideBusinessHours.mockReturnValue(false);
+    shouldRunAi.mockResolvedValue(false);
   });
 
   test('reuses an existing open conversation and broadcasts queue:new when unassigned', async () => {
@@ -997,6 +1000,46 @@ describe('ingestInboundMessage', () => {
 
       expect(markBusinessHoursNoticeSent).not.toHaveBeenCalled();
       expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('AI hook', () => {
+    test('schedules an AI reply when the channel has AI enabled', async () => {
+      shouldRunAi.mockResolvedValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-ai-1' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-ai-1', assignedAgentId: null });
+      createMessage.mockResolvedValue({ id: 'msg-ai-1' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-ai-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '5598900001111',
+        contactDisplayName: 'Fulano',
+        whatsappMessageId: 'wa-ai-1',
+        content: 'minha internet caiu',
+        messageType: 'text',
+      });
+
+      expect(scheduleAiReply).toHaveBeenCalled();
+    });
+
+    test('a failing AI scheduler never blocks message ingestion', async () => {
+      shouldRunAi.mockRejectedValue(new Error('redis down'));
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-ai-2' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-ai-2', assignedAgentId: null });
+      createMessage.mockResolvedValue({ id: 'msg-ai-2' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-ai-2', assignedAgentId: null });
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '5598900002222',
+        contactDisplayName: 'Fulano',
+        whatsappMessageId: 'wa-ai-2',
+        content: 'oi',
+        messageType: 'text',
+      });
+
+      expect(result.message).not.toBeNull();
     });
   });
 });

@@ -8,6 +8,7 @@ const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { findActiveCityNoticeByCityId, recordNoticeDelivery } = require('../city-notices/city-notice.repository');
 const { getBusinessHoursConfig } = require('../business-hours/business-hours.repository');
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
+const { shouldRunAi, scheduleAiReply } = require('../ai/ai.service');
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -110,6 +111,15 @@ async function ingestInboundMessage({
   } else if (!justCreated && conversation.triageState === 'pending') {
     conversation = await processTriageReply(conversation, channelId, content);
   }
+
+  try {
+    if (await shouldRunAi(channelId)) {
+      await scheduleAiReply(conversation, message);
+    }
+  } catch (err) {
+    console.error(`Failed to schedule AI reply for conversation ${conversation.id}`, err);
+  }
+
   const conversationWithContact = await getConversationWithContact(conversation.id);
   if (conversationWithContact.assignedAgentId) {
     emitToAgent(conversationWithContact.assignedAgentId, 'message:new', { conversation: conversationWithContact, message });

@@ -11,6 +11,7 @@ function toChannel(row) {
     triageEnabled: row.triage_enabled,
     hidden: row.hidden,
     welcomeMessage: row.welcome_message,
+    aiEnabled: row.ai_enabled,
     createdAt: row.created_at,
   };
 }
@@ -19,7 +20,7 @@ async function createChannel({ type, name, phoneNumber, config }) {
   const result = await getPool().query(
     `INSERT INTO channels (type, name, phone_number, config)
      VALUES ($1, $2, $3, $4)
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at`,
     [type, name, phoneNumber, JSON.stringify(config)]
   );
   return toChannel(result.rows[0]);
@@ -27,7 +28,7 @@ async function createChannel({ type, name, phoneNumber, config }) {
 
 async function findChannelById(id) {
   const result = await getPool().query(
-    'SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at FROM channels WHERE id = $1',
+    'SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at FROM channels WHERE id = $1',
     [id]
   );
   if (result.rowCount === 0) return null;
@@ -36,7 +37,7 @@ async function findChannelById(id) {
 
 async function findChannelByMetaPhoneNumberId(phoneNumberId) {
   const result = await getPool().query(
-    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at FROM channels
+    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at FROM channels
      WHERE type = 'meta_cloud' AND config->>'phoneNumberId' = $1`,
     [phoneNumberId]
   );
@@ -46,7 +47,7 @@ async function findChannelByMetaPhoneNumberId(phoneNumberId) {
 
 async function findChannelByWabaId(wabaId) {
   const result = await getPool().query(
-    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at FROM channels
+    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at FROM channels
      WHERE config->>'wabaId' = $1
      LIMIT 1`,
     [wabaId]
@@ -57,7 +58,7 @@ async function findChannelByWabaId(wabaId) {
 
 async function findChannelByWebhookToken(webhookToken) {
   const result = await getPool().query(
-    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at FROM channels
+    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at FROM channels
      WHERE type = '360dialog' AND config->>'webhookToken' = $1`,
     [webhookToken]
   );
@@ -67,7 +68,7 @@ async function findChannelByWebhookToken(webhookToken) {
 
 async function listChannels({ includeHidden = false } = {}) {
   const result = await getPool().query(
-    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at FROM channels
+    `SELECT id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at FROM channels
      ${includeHidden ? '' : 'WHERE hidden = false'}
      ORDER BY created_at ASC`
   );
@@ -77,7 +78,7 @@ async function listChannels({ includeHidden = false } = {}) {
 async function updateChannelStatus(id, status) {
   const result = await getPool().query(
     `UPDATE channels SET status = $2 WHERE id = $1
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at`,
     [id, status]
   );
   if (result.rowCount === 0) return null;
@@ -87,7 +88,7 @@ async function updateChannelStatus(id, status) {
 async function updateChannelTriageEnabled(id, triageEnabled) {
   const result = await getPool().query(
     `UPDATE channels SET triage_enabled = $2 WHERE id = $1
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at`,
     [id, triageEnabled]
   );
   if (result.rowCount === 0) return null;
@@ -97,7 +98,7 @@ async function updateChannelTriageEnabled(id, triageEnabled) {
 async function updateChannelWabaId(id, wabaId) {
   const result = await getPool().query(
     `UPDATE channels SET config = jsonb_set(config, '{wabaId}', to_jsonb($2::text)) WHERE id = $1 AND type IN ('meta_cloud', '360dialog')
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at`,
     [id, wabaId]
   );
   if (result.rowCount === 0) return null;
@@ -107,7 +108,7 @@ async function updateChannelWabaId(id, wabaId) {
 async function updateChannelHidden(id, hidden) {
   const result = await getPool().query(
     `UPDATE channels SET hidden = $2 WHERE id = $1
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at`,
     [id, hidden]
   );
   if (result.rowCount === 0) return null;
@@ -117,7 +118,7 @@ async function updateChannelHidden(id, hidden) {
 async function updateChannelWelcomeMessage(id, welcomeMessage) {
   const result = await getPool().query(
     `UPDATE channels SET welcome_message = $2 WHERE id = $1
-     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, created_at`,
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at`,
     [id, welcomeMessage]
   );
   if (result.rowCount === 0) return null;

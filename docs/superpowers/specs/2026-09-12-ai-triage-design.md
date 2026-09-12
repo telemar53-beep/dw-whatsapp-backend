@@ -103,7 +103,9 @@ ALTER TABLE conversations
     CHECK (ai_triage_identified_by IS NULL OR ai_triage_identified_by IN ('memory','phone','cpf','cpf_confirmed','none')),
   ADD COLUMN IF NOT EXISTS ai_triage_low_confidence BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS ai_triage_resolved_by_ai BOOLEAN NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS ai_triage_completed_at  TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS ai_triage_completed_at  TIMESTAMPTZ,
+  -- lida só pelo UPDATE ... RETURNING de confirmar_nascimento; fora do mapper
+  ADD COLUMN IF NOT EXISTS ai_triage_birthdate_attempts INTEGER NOT NULL DEFAULT 0;
 
 ALTER TABLE ai_config
   ADD COLUMN IF NOT EXISTS triage_confidence_threshold NUMERIC(4,3) NOT NULL DEFAULT 0.800,
@@ -194,8 +196,8 @@ permissões** (que governa só o assistente):
 
 | Ferramenta | Uso na triagem |
 |---|---|
-| `buscar_cliente` (existe) | CPF quando `none`, ou após `esquecer_identificacao`. Resultado eleva para `fraca`. |
-| `confirmar_nascimento(data)` (nova) | Compara com `dataNascimento` do servidor (aceita `DD/MM/AAAA` e variações). Acerto → `forte`; erro → segue `fraca`, uma tentativa só. |
+| `buscar_cliente` (existe) | CPF quando `none`, ou após `esquecer_identificacao`. Resultado eleva para `fraca`. **Na triagem não persiste o vínculo** (senão o CPF digitado viraria `memory`→`forte` na mensagem seguinte, pulando a confirmação) e devolve ao modelo só o primeiro nome e `{id, plano, status}` dos contratos — nunca nome completo nem login. Máximo de 2 CPFs distintos por turno. |
+| `confirmar_nascimento(data)` (nova) | Compara com `dataNascimento` do servidor (aceita `DD/MM/AAAA` e variações). Acerto → `forte` **e aí sim persiste o vínculo** (`setContactSgpLink`). Tentativas contadas em `conversations.ai_triage_birthdate_attempts` (persistido, teto 2 por conversa; `esquecer`/`buscar` não zeram). |
 | `esquecer_identificacao()` (nova) | Nome contestado: zera identidade do turno e o vínculo do contato (`setContactSgpLink(null)`). |
 | `consultar_status_contrato`, `consultar_status_conexao`, `consultar_faturas_todos_contratos` (existem) | Só para o resumo. |
 | `gerar_pix`, `gerar_segunda_via` (existem) + `enviar_boleto(contratoId)` (nova: PDF via `downloadBoletoPdf` + `enqueueOutboundMessage`) | **Recusam em código se `identidade !== 'forte'`** (`contexto.identidade.nivel`, checado no executor por marcação `exigeIdentidadeForte: true`). Marcam `ai_triage_resolved_by_ai`. |

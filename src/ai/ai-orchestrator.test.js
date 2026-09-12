@@ -174,6 +174,31 @@ describe('ai-orchestrator', () => {
     expect(recordAiInteraction).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'c-1', error: expect.any(String) }));
   });
 
+  // Fix 4 (final review): buscar_cliente's args carry the customer's full CPF.
+  // toolsRequested feeds ai_interactions.tools_requested (the audit table), which
+  // must never store the document in clear. maskDocument (sgp-normalizer.js) is
+  // the existing masking helper; this proves it is actually wired in, and that
+  // the real (unmasked) document still reaches the tool itself.
+  test('masks a cpf/documento argument in the audit trail, but still passes the real one to the tool', async () => {
+    const { maskDocument } = require('./sgp-normalizer');
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: {
+          tool_calls: [{ id: 'c1', type: 'function', function: { name: 'buscar_cliente', arguments: '{"cpf":"52998224725"}' } }],
+        },
+        usage: {},
+      })
+      .mockResolvedValueOnce({ message: { content: 'Encontrei seu cadastro.' }, usage: {} });
+    executeTool.mockResolvedValue({ ok: true, resultado: { cliente: { nome: 'Ana' } } });
+
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    expect(executeTool).toHaveBeenCalledWith('buscar_cliente', { cpf: '52998224725' }, expect.any(Object));
+    const { toolsRequested } = recordAiInteraction.mock.calls[0][0];
+    expect(toolsRequested).toEqual([{ nome: 'buscar_cliente', args: { cpf: maskDocument('52998224725') } }]);
+    expect(JSON.stringify(toolsRequested)).not.toContain('52998224725');
+  });
+
   test('never sends the api key inside the messages', async () => {
     createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });

@@ -8,6 +8,23 @@ const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { mensagemSegura } = require('./safe-error-log');
+const { maskDocument } = require('./sgp-normalizer');
+
+// A auditoria (ai_interactions.tools_requested) grava os argumentos como o
+// modelo os enviou, verbatim — inclui o CPF/CNPJ inteiro de buscar_cliente se
+// não passar por aqui primeiro. O padrão é por nome do argumento (não por
+// nome da ferramenta) de propósito: cobre qualquer ferramenta futura que
+// receba um documento, não só a de hoje.
+const CHAVE_DOCUMENTO = /cpf|documento/i;
+
+function mascararArgsParaAuditoria(args) {
+  if (!args || typeof args !== 'object') return args;
+  const mascarado = { ...args };
+  for (const chave of Object.keys(mascarado)) {
+    if (CHAVE_DOCUMENTO.test(chave)) mascarado[chave] = maskDocument(mascarado[chave]);
+  }
+  return mascarado;
+}
 
 const HISTORICO_MAX = 20;
 
@@ -119,7 +136,7 @@ async function runAiTurn({ conversation, contact }) {
           } catch (parseErr) {
             return { chamada, resposta: { ok: false, motivo: 'invalid_args', detalhe: 'malformed JSON' } };
           }
-          toolsRequested.push({ nome, args });
+          toolsRequested.push({ nome, args: mascararArgsParaAuditoria(args) });
           const resposta = await executeTool(nome, args, contexto);
           return { chamada, resposta };
         })

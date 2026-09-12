@@ -519,6 +519,9 @@ git commit -m "Add transcription settings to the AI configuration"
       const [url, , options] = axios.post.mock.calls[0];
       expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
       expect(options.headers.Authorization).toBe('Bearer sk-secreta');
+      // Guarda de regressão: o boundary do multipart precisa sobreviver ao merge.
+      const contentType = options.headers['content-type'] || options.headers['Content-Type'];
+      expect(contentType).toMatch(/^multipart\/form-data; boundary=/);
       expect(result).toEqual({ texto: 'minha internet caiu' });
 
       const campos = appendSpy.mock.calls.map((c) => c[0]);
@@ -600,7 +603,7 @@ async function transcribeAudio({ apiKey, model, filePath, mimeType, prompt }) {
   let response;
   try {
     response = await axios.post(`${BASE_URL}/audio/transcriptions`, form, {
-      headers: { ...form.getHeaders(), ...headers(apiKey) },
+      headers: { ...form.getHeaders(), Authorization: `Bearer ${apiKey}` },
       timeout: TRANSCRIPTION_TIMEOUT_MS,
       maxBodyLength: Infinity,
     });
@@ -614,8 +617,13 @@ async function transcribeAudio({ apiKey, model, filePath, mimeType, prompt }) {
 }
 ```
 
-`headers(apiKey)` vem depois do spread de `form.getHeaders()` de propósito: se
-algum dia colidirem, a autorização vence.
+**Só o `Authorization` é espalhado, nunca o `headers(apiKey)` inteiro.** Aquele
+helper carrega `'Content-Type': 'application/json'`, e o `AxiosHeaders` casa nomes
+de cabeçalho sem diferenciar maiúsculas: o `Content-Type` do helper sobrescreveria
+o `content-type` multipart que o `form-data` acabou de montar, apagando o
+`boundary`. O corpo sairia rotulado como JSON e a OpenAI não conseguiria lê-lo —
+sem erro local, sem teste falhando. É o mesmo formato usado em
+`meta-cloud.adapter.js:105`.
 
 Acrescentar `transcribeAudio` ao `module.exports`.
 

@@ -23,9 +23,10 @@ function traduzErro(err, contexto) {
   return new OpenAiRequestError(`Failed to reach OpenAI at ${contexto}`, { cause });
 }
 
-async function createChatCompletion({ apiKey, model, messages, tools }) {
+async function createChatCompletion({ apiKey, model, messages, tools, toolChoice }) {
   const body = { model, messages };
   if (Array.isArray(tools) && tools.length > 0) body.tools = tools;
+  if (toolChoice && body.tools) body.tool_choice = { type: 'function', function: { name: toolChoice } };
 
   let response;
   try {

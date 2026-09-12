@@ -15,7 +15,7 @@ const { listRecentMessagesByConversation } = require('../conversations/message.r
 const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
-const { runAiTurn } = require('./ai-orchestrator');
+const { runAiTurn, FERRAMENTAS_TRIAGEM } = require('./ai-orchestrator');
 
 const CONVERSATION = { id: 'c-1', channelId: 'ch-1' };
 const CONTACT = { id: 'ct-1', sgpClientId: null, sgpContractId: null, sgpDocument: null };
@@ -415,5 +415,87 @@ describe('ai-orchestrator', () => {
 
     const { messages } = createChatCompletion.mock.calls[0][0];
     expect(messages.filter((m) => m.role === 'user')).toHaveLength(1);
+  });
+});
+
+describe('perfil de triagem', () => {
+  const IDENT_FORTE = { nivel: 'forte', origem: 'phone', primeiroNome: 'João', contracts: [{ id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X' }], client: { id: 9 }, dataNascimento: '1990-05-20', contestado: false, nascimentoTentado: false };
+  const TRIAGEM = { threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false };
+
+  beforeEach(() => {
+    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2 });
+    listSectors.mockResolvedValue([{ id: 's-1', name: 'Financeiro', aiHint: 'Boleto, PIX, cobrança.' }, { id: 's-2', name: 'Suporte', aiHint: '' }]);
+    listActiveReasons.mockResolvedValue([{ id: 'r-1', name: 'Segunda via' }]);
+    listToolPermissions.mockResolvedValue([{ toolName: 'desbloqueio_confianca', enabled: true }]);
+    createChatCompletion.mockResolvedValue({ message: { content: 'Oi, João!' }, usage: {} });
+  });
+
+  async function contexto(extra = {}) {
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto', ...extra });
+    return createChatCompletion.mock.calls[0][0];
+  }
+
+  test('manda só a lista fixa de ferramentas, ignorando o cartão de permissões', async () => {
+    const req = await contexto();
+    const nomes = req.tools.map((t) => t.function.name).sort();
+    expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM].sort());
+    expect(nomes).not.toContain('desbloqueio_confianca');
+  });
+
+  test('o contexto traz setores com orientação, motivos, e identidade só com primeiro nome', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toContain('Financeiro');
+    expect(sys).toContain('Boleto, PIX, cobrança.');
+    expect(sys).toContain('r-1');
+    expect(sys).toContain('João');
+    expect(sys).toContain('RUA X');
+    expect(sys).toMatch(/primeiro nome/i);
+    expect(sys).toContain('Seja breve.');
+    expect(sys).not.toContain('1990');
+    expect(sys).not.toMatch(/fatura(s)? em aberto|valor/i);
+  });
+
+  test('identidade none instrui a pedir CPF só se o setor exigir', async () => {
+    const sys = (await contexto({ identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] } })).messages[0].content;
+    expect(sys).toMatch(/não identificado/i);
+    expect(sys).toMatch(/Comercial/);
+  });
+
+  test('identidade fraca instrui a confirmar nascimento antes de entregar', async () => {
+    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
+    expect(sys).toMatch(/confirmar_nascimento/);
+  });
+
+  test('imagem e documento entram no histórico como placeholder', async () => {
+    listRecentMessagesByConversation.mockResolvedValue([
+      { direction: 'inbound', content: null, messageType: 'image' },
+      { direction: 'inbound', content: 'já paguei', messageType: 'text' },
+    ]);
+    const req = await contexto();
+    expect(req.messages.map((m) => m.content).join('|')).toContain('[cliente enviou uma imagem]');
+  });
+
+  test('forcarConclusao envia tool_choice concluir_triagem na primeira chamada', async () => {
+    await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
+    expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('concluir_triagem');
+  });
+
+  test('devolve triagemConcluida e a identidade final, e grava mode triage na auditoria', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"r","confianca":0.9}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Perfeito, João — o Financeiro continua daqui.' }, usage: {} });
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctx.triagemConcluida = { setor: 'Financeiro' }; return { ok: true, resultado: { concluido: true } }; });
+    const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    expect(r.triagemConcluida).toEqual({ setor: 'Financeiro' });
+    expect(r.identidade.nivel).toBe('forte');
+    expect(recordAiInteraction).toHaveBeenCalledWith(expect.objectContaining({ mode: 'triage' }));
+  });
+
+  test('perfil assistente continua igual: sem identidade, ferramentas do cartão', async () => {
+    createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+    const req = createChatCompletion.mock.calls[0][0];
+    expect(req.tools.map((t) => t.function.name)).toEqual(['desbloqueio_confianca']);
+    expect(req.messages[0].content).not.toMatch(/recepcionista/i);
   });
 });

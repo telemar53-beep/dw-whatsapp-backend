@@ -36,6 +36,14 @@ describe('openai-client', () => {
     expect(axios.post.mock.calls[0][1]).not.toHaveProperty('tools');
   });
 
+  test('toolChoice vira tool_choice de função no corpo; ausente, nada é enviado', async () => {
+    axios.post.mockResolvedValue({ data: { choices: [{ message: { content: 'ok' } }], usage: {} } });
+    await createChatCompletion({ apiKey: 'sk', model: 'm', messages: [], tools: [{ type: 'function', function: { name: 'concluir_triagem' } }], toolChoice: 'concluir_triagem' });
+    expect(axios.post.mock.calls[0][1].tool_choice).toEqual({ type: 'function', function: { name: 'concluir_triagem' } });
+    await createChatCompletion({ apiKey: 'sk', model: 'm', messages: [], tools: [] });
+    expect(axios.post.mock.calls[1][1]).not.toHaveProperty('tool_choice');
+  });
+
   test('throws OpenAiAuthError on 401', async () => {
     axios.post.mockRejectedValue({ response: { status: 401, data: { error: { message: 'bad key' } } } });
     await expect(createChatCompletion({ apiKey: 'sk', model: 'g', messages: [], tools: [] }))

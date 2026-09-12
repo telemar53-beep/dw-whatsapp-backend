@@ -50,9 +50,22 @@ function papelDaMensagem(message) {
 // Áudio transcrito entra no histórico como o texto da transcrição: para o modelo
 // não há diferença entre o cliente ter digitado ou falado. Áudio sem transcrição
 // concluída fica de fora — a IA nunca deve receber conteúdo em branco.
-function conteudoParaModelo(m) {
+//
+// No perfil de triagem, mídia do cliente (imagem, documento, áudio que não
+// transcreveu) vira um placeholder em vez de sumir: a recepcionista precisa
+// saber que algo chegou (ex.: para perguntar se é um comprovante), mesmo sem
+// "ver" o conteúdo. Isso só vale para o que o CLIENTE mandou (direction
+// inbound) — o próprio boleto que a IA envia (enviar_boleto, messageType
+// 'document', outbound) não pode virar "cliente enviou um documento" no
+// histórico.
+function conteudoParaModelo(m, perfil) {
   if (m.messageType === 'text') return m.content || null;
   if (m.messageType === 'audio' && m.transcriptionStatus === 'completed') return m.transcription || null;
+  if (perfil === 'triagem' && m.direction === 'inbound') {
+    if (m.messageType === 'image') return '[cliente enviou uma imagem]';
+    if (m.messageType === 'document') return '[cliente enviou um documento]';
+    if (m.messageType === 'audio') return '[cliente enviou um áudio que não pôde ser transcrito]';
+  }
   return null;
 }
 
@@ -126,15 +139,88 @@ async function carregarContratos(contact) {
   }
 }
 
-async function runAiTurn({ conversation, contact }) {
+const FERRAMENTAS_TRIAGEM = [
+  'buscar_cliente', 'confirmar_nascimento', 'esquecer_identificacao',
+  'consultar_status_contrato', 'consultar_status_conexao', 'consultar_faturas_todos_contratos',
+  'gerar_pix', 'gerar_segunda_via', 'enviar_boleto', 'concluir_triagem',
+];
+
+// O contexto de sistema da triagem é deliberadamente separado de
+// montarContextoSistema (o do assistente): a recepcionista tem outro
+// objetivo (classificar e encaminhar, não resolver), outra postura (uma
+// pergunta por vez) e proibições próprias (nunca revelar fatura, valor,
+// endereço ou "pagamento confirmado" — isso vai só no resumo interno para o
+// atendente humano).
+async function montarContextoTriagem(config, identidade) {
+  const [setores, motivos] = await Promise.all([listSectors(), listActiveReasons()]);
+  const linhas = [
+    config.systemPrompt, '',
+    'Você está na TRIAGEM: é a recepcionista. Objetivo: entender → identificar (se preciso) → classificar setor e motivo → coletar o mínimo → resumir → encaminhar com concluir_triagem. Não tente resolver o atendimento inteiro.',
+    'Uma pergunta por vez. Faça só perguntas indispensáveis. A mensagem mais recente manda quando o cliente muda de assunto.',
+    '',
+    'Setores (use o id exato em concluir_triagem):',
+  ];
+  for (const s of setores) linhas.push(`- ${s.id} = ${s.name}${s.aiHint ? ` — ${s.aiHint}` : ''}`);
+  linhas.push('', 'Motivos (use o id exato, ou null se nenhum se aplica):');
+  for (const m of motivos) linhas.push(`- ${m.id} = ${m.name}`);
+  linhas.push('');
+  const contratos = (identidade.contracts || []).map(normalizeContract);
+  if (identidade.nivel === 'none') {
+    linhas.push('Cliente NÃO identificado. Peça o CPF/CNPJ só se o setor exigir identificação (Financeiro, Suporte, Reativação): "Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Comercial de cliente novo nunca exige CPF. Depois de buscar_cliente, continue a triagem.');
+    if (identidade.contestado) linhas.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');
+  } else {
+    linhas.push(`Cliente identificado (${identidade.origem === 'memory' ? 'memória' : identidade.origem === 'phone' ? 'telefone' : 'CPF'}): primeiro nome ${identidade.primeiroNome}. Cumprimente-o pelo primeiro nome na primeira resposta. Se ele disser que não é ele ou que o nome está errado, chame esquecer_identificacao e peça o CPF.`);
+    if (contratos.length > 0) {
+      linhas.push('Contratos dele:');
+      for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
+      linhas.push('Nunca peça o número do contrato; identifique pelo endereço e, se repetir, pelo plano. Pergunte qual ponto SÓ quando a resposta depender dele.');
+    }
+    if (identidade.nivel === 'fraca') {
+      linhas.push('Identificação por CPF ainda NÃO confirmada: para entregar boleto ou PIX, pergunte a data de nascimento e chame confirmar_nascimento. Se não confirmar, apenas encaminhe.');
+    } else {
+      linhas.push('Identidade confirmada: se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.');
+    }
+  }
+  linhas.push(
+    '',
+    'NUNCA diga ao cliente: status do contrato, faturas, quanto ele deve, plano contratado ou endereço (isso vai só para o resumo); "pagamento confirmado"; prazos ou "um técnico vai"; preços ou cobertura (diga que o Comercial informa).',
+    'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
+    'Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou.',
+  );
+  if (config.triageExtraInstructions) linhas.push('', config.triageExtraInstructions);
+  linhas.push('', 'Formatação: WhatsApp. Negrito com *um asterisco*. Nunca markdown.');
+  return linhas.join('\n');
+}
+
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
-  const permissoes = await listToolPermissions();
-  const habilitadas = permissoes.filter((p) => p.enabled).map((p) => p.toolName);
-  const tools = toOpenAiTools(habilitadas);
 
-  const contracts = await carregarContratos(contact);
-  const contexto = { conversationId: conversation.id, contact, contracts, sgpCache: {} };
+  let tools;
+  let contexto;
+  let systemContent;
+
+  if (perfil === 'triagem') {
+    tools = toOpenAiTools(FERRAMENTAS_TRIAGEM);
+    // Perfil fixo: os contratos vêm da identidade já resolvida (Task 2), não
+    // de uma nova consulta ao SGP via carregarContratos — o cache do turno
+    // (contexto.contracts) é o que tool-executor.js usa para a checagem de
+    // propriedade (chaveProprietario).
+    contexto = {
+      conversationId: conversation.id, contact, contracts: (identidade && identidade.contracts) || [], sgpCache: {},
+      identidade, channelId: conversation.channelId, ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+      triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
+    };
+    systemContent = await montarContextoTriagem(config, identidade);
+  } else {
+    const permissoes = await listToolPermissions();
+    const habilitadas = permissoes.filter((p) => p.enabled).map((p) => p.toolName);
+    tools = toOpenAiTools(habilitadas);
+
+    const contracts = await carregarContratos(contact);
+    contexto = { conversationId: conversation.id, contact, contracts, sgpCache: {} };
+    systemContent = await montarContextoSistema(config, contact, contracts, habilitadas);
+  }
 
   // listRecentMessagesByConversation (não listMessagesByConversation): esta
   // pega as 20 mensagens mais NOVAS, já em ordem cronológica. A outra função
@@ -143,9 +229,9 @@ async function runAiTurn({ conversation, contact }) {
   // acabou de escrever.
   const historico = await listRecentMessagesByConversation(conversation.id, HISTORICO_MAX);
   const messages = [
-    { role: 'system', content: await montarContextoSistema(config, contact, contracts, habilitadas) },
+    { role: 'system', content: systemContent },
     ...historico
-      .map((m) => ({ role: papelDaMensagem(m), content: conteudoParaModelo(m) }))
+      .map((m) => ({ role: papelDaMensagem(m), content: conteudoParaModelo(m, perfil) }))
       .filter((m) => m.content),
   ];
 
@@ -156,6 +242,11 @@ async function runAiTurn({ conversation, contact }) {
   let erro = null;
   let promptTokens = 0;
   let completionTokens = 0;
+  // toolChoice forçado (concluir_triagem) só vale na PRIMEIRA chamada do
+  // turno: depois disso o modelo já viu a exigência e as chamadas seguintes
+  // (após tool results) voltam a ser livres, senão o modelo nunca conseguiria
+  // fazer a pergunta de esclarecimento que a própria concluir_triagem pede.
+  let primeiraChamada = true;
 
   try {
     while (true) {
@@ -164,8 +255,12 @@ async function runAiTurn({ conversation, contact }) {
         break;
       }
 
+      const toolChoice = perfil === 'triagem' && primeiraChamada && triagem && triagem.forcarConclusao
+        ? 'concluir_triagem' : undefined;
+      primeiraChamada = false;
+
       const { message, usage } = await createChatCompletion({
-        apiKey: config.apiKey, model: config.model, messages, tools,
+        apiKey: config.apiKey, model: config.model, messages, tools, toolChoice,
       });
       promptTokens += usage.promptTokens || 0;
       completionTokens += usage.completionTokens || 0;
@@ -250,7 +345,7 @@ async function runAiTurn({ conversation, contact }) {
   await recordAiInteraction({
     conversationId: conversation.id,
     contactId: contact.id,
-    mode: config.mode,
+    mode: perfil === 'triagem' ? 'triage' : config.mode,
     model: config.model,
     toolsRequested, toolsExecuted, toolsRefused,
     finalResponse: texto,
@@ -260,7 +355,11 @@ async function runAiTurn({ conversation, contact }) {
     durationMs: Date.now() - iniciadoEm,
   });
 
-  return { texto, toolsExecutadas: toolsExecuted, erro };
+  return {
+    texto, toolsExecutadas: toolsExecuted, erro,
+    triagemConcluida: contexto.triagemConcluida || null,
+    identidade: contexto.identidade || null,
+  };
 }
 
-module.exports = { runAiTurn };
+module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM };

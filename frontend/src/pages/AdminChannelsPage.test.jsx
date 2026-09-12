@@ -338,6 +338,35 @@ describe('AdminChannelsPage', () => {
     expect(await screen.findByText('Canal não encontrado')).toBeInTheDocument();
   });
 
+  test('when AI turns on but disabling triage then fails, shows the error and still refreshes to reveal the true state', async () => {
+    const refresh = vi.fn();
+    useChannels.mockReturnValue({
+      channels: [
+        { id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', triageEnabled: true, aiEnabled: false },
+      ],
+      loading: false,
+      refresh,
+    });
+    setChannelAiEnabled.mockResolvedValue({});
+    setChannelTriageEnabled.mockRejectedValue({ body: { error: 'Falha ao desligar a triagem' } });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /usar atendimento por ia/i }));
+
+    expect(await screen.findByText('Falha ao desligar a triagem')).toBeInTheDocument();
+    expect(setChannelAiEnabled).toHaveBeenCalledWith('ch1', true, 'tok-123');
+    expect(setChannelTriageEnabled).toHaveBeenCalledWith('ch1', false, 'tok-123');
+    // Even though the second call failed, refresh() still runs (in a
+    // `finally`) so the admin's screen stops showing the stale pre-click
+    // state and reflects the real channel — both flags on in the database —
+    // alongside the error, instead of silently hiding it.
+    expect(refresh).toHaveBeenCalled();
+  });
+
   test('lets an admin edit the WABA ID of a meta_cloud channel', async () => {
     useChannels.mockReturnValue({
       channels: [{ id: 'ch1', type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', status: 'disconnected', triageEnabled: false, wabaId: 'old-waba' }],

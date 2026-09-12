@@ -253,9 +253,13 @@ function AdminChannelsPage() {
 
   // Um robô por vez: ligar a IA num canal desliga a triagem dele na mesma
   // ação. A IA é ligada primeiro — se a segunda chamada falhar, o canal fica
-  // com a IA respondendo e a triagem ainda marcada, o que é seguro (o backend
-  // já para de iniciar a triagem quando a IA está ligada); a ordem inversa
-  // arriscaria deixar o canal sem nenhum robô caso a chamada da IA falhasse.
+  // com a IA respondendo e a triagem ainda marcada no banco, o que é seguro
+  // (o backend já para de iniciar a triagem quando a IA está ligada); a ordem
+  // inversa arriscaria deixar o canal sem nenhum robô caso a chamada da IA
+  // falhasse. O refresh() roda sempre (sucesso ou falha) para que, se a
+  // segunda chamada falhar, a tela pare de mostrar o estado antigo (anterior
+  // ao clique) e passe a mostrar o estado real do canal junto com o erro —
+  // sem isso o admin veria a tela como se nada tivesse mudado.
   async function handleToggleAi(channelId, aiEnabled) {
     setAiToggleError(null);
     try {
@@ -263,9 +267,10 @@ function AdminChannelsPage() {
       if (aiEnabled) {
         await setChannelTriageEnabled(channelId, false, token);
       }
-      refresh();
     } catch (err) {
       setAiToggleError((err.body && err.body.error) || 'Falha ao atualizar a IA deste canal');
+    } finally {
+      refresh();
     }
   }
 

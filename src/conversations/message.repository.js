@@ -15,6 +15,7 @@ function toMessage(row) {
     whatsappMessageId: row.whatsapp_message_id,
     status: row.status,
     repliedToMessageId: row.replied_to_message_id,
+    sentBy: row.sent_by,
     createdAt: row.created_at,
   };
 }
@@ -30,7 +31,7 @@ function toMessageWithReplyPreview(row) {
 
 const MESSAGE_COLUMNS = `id, conversation_id, direction, content, whatsapp_message_id, status,
        message_type, media_path, media_mime_type, media_filename,
-       location_latitude, location_longitude, replied_to_message_id, created_at`;
+       location_latitude, location_longitude, replied_to_message_id, sent_by, created_at`;
 
 async function createMessage({
   conversationId,
@@ -45,14 +46,15 @@ async function createMessage({
   locationLatitude,
   locationLongitude,
   repliedToMessageId,
+  sentBy,
 }) {
   const result = await getPool().query(
     `INSERT INTO messages (
        conversation_id, direction, content, whatsapp_message_id, status,
        message_type, media_path, media_mime_type, media_filename,
-       location_latitude, location_longitude, replied_to_message_id
+       location_latitude, location_longitude, replied_to_message_id, sent_by
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING ${MESSAGE_COLUMNS}`,
     [
       conversationId,
@@ -67,6 +69,7 @@ async function createMessage({
       locationLatitude != null ? locationLatitude : null,
       locationLongitude != null ? locationLongitude : null,
       repliedToMessageId || null,
+      sentBy || 'human',
     ]
   );
   return toMessage(result.rows[0]);
@@ -108,7 +111,7 @@ async function listMessagesByConversation(conversationId) {
   const result = await getPool().query(
     `SELECT m.id, m.conversation_id, m.direction, m.content, m.whatsapp_message_id, m.status,
             m.message_type, m.media_path, m.media_mime_type, m.media_filename,
-            m.location_latitude, m.location_longitude, m.replied_to_message_id, m.created_at,
+            m.location_latitude, m.location_longitude, m.replied_to_message_id, m.sent_by, m.created_at,
             rm.content AS replied_to_content, rm.direction AS replied_to_direction
      FROM messages m
      LEFT JOIN messages rm ON rm.id = m.replied_to_message_id
@@ -132,7 +135,7 @@ async function listRecentMessagesByConversation(conversationId, limit) {
   const result = await getPool().query(
     `SELECT m.id, m.conversation_id, m.direction, m.content, m.whatsapp_message_id, m.status,
             m.message_type, m.media_path, m.media_mime_type, m.media_filename,
-            m.location_latitude, m.location_longitude, m.replied_to_message_id, m.created_at,
+            m.location_latitude, m.location_longitude, m.replied_to_message_id, m.sent_by, m.created_at,
             rm.content AS replied_to_content, rm.direction AS replied_to_direction
      FROM messages m
      LEFT JOIN messages rm ON rm.id = m.replied_to_message_id

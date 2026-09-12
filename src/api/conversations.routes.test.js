@@ -12,6 +12,7 @@ jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../templates/template.repository');
 jest.mock('../assignment-messages/assignment-message.service');
 jest.mock('../reasons/reason.repository');
+jest.mock('../ai/ai-suggestion.repository');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -1488,5 +1489,69 @@ describe('POST /start (meta_cloud)', () => {
     expect(res.status).toBe(201);
     expect(sendOpeningMessageIfApplicable).not.toHaveBeenCalled();
     expect(enqueueOutboundMessage).toHaveBeenCalled();
+  });
+});
+
+describe('AI suggestion routes', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('GET /:id/ai-suggestion returns the pending suggestion for the owner', async () => {
+    const { findPendingSuggestion } = require('../ai/ai-suggestion.repository');
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'assigned' });
+    findPendingSuggestion.mockResolvedValue({ id: 's-1', content: 'texto', status: 'pending' });
+
+    const res = await request(buildApp()).get(`/api/conversations/${CONVERSATION_ID}/ai-suggestion`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`).expect(200);
+
+    expect(res.body.suggestion.id).toBe('s-1');
+  });
+
+  test('GET /:id/ai-suggestion is forbidden for an agent who does not own it', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-2', status: 'assigned' });
+    await request(buildApp()).get(`/api/conversations/${CONVERSATION_ID}/ai-suggestion`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`).expect(403);
+  });
+
+  test('POST send marks the suggestion and enqueues the message as AI-authored', async () => {
+    const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'assigned' });
+    findPendingSuggestion.mockResolvedValue({ id: 's-1', content: 'Seu plano é 600MB.', status: 'pending' });
+    markSuggestion.mockResolvedValue({ id: 's-1', status: 'sent' });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-1' });
+
+    await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/ai-suggestion/s-1/send`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`).send({}).expect(201);
+
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'c-1', content: 'Seu plano é 600MB.', sentBy: 'ai',
+    }));
+    expect(markSuggestion).toHaveBeenCalledWith('s-1', 'sent');
+  });
+
+  test('POST send with edited content marks it as edited and sends the edit', async () => {
+    const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'assigned' });
+    findPendingSuggestion.mockResolvedValue({ id: 's-1', content: 'original', status: 'pending' });
+    markSuggestion.mockResolvedValue({ id: 's-1', status: 'edited' });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-1' });
+
+    await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/ai-suggestion/s-1/send`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`)
+      .send({ content: 'texto editado' }).expect(201);
+
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'texto editado' }));
+    expect(markSuggestion).toHaveBeenCalledWith('s-1', 'edited');
+  });
+
+  test('POST discard marks it without sending anything', async () => {
+    const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'assigned' });
+    findPendingSuggestion.mockResolvedValue({ id: 's-1', content: 'x', status: 'pending' });
+    markSuggestion.mockResolvedValue({ id: 's-1', status: 'discarded' });
+
+    await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/ai-suggestion/s-1/discard`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`).expect(204);
+
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 });

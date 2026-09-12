@@ -127,6 +127,23 @@ describe('message repository', () => {
     expect(messages.map((m) => m.content)).toEqual(['primeira', 'segunda']);
   });
 
+  test('listMessagesByConversation reports which messages were authored by the AI', async () => {
+    // The join list on this query is written out inline (not via MESSAGE_COLUMNS), so it is
+    // easy to add sent_by to the column elsewhere and still leave the attendant's own
+    // conversation view unable to tell an AI-authored message from a human one.
+    await createMessage({
+      conversationId, direction: 'outbound', content: 'Sugestão da IA', whatsappMessageId: null, status: 'sent', sentBy: 'ai',
+    });
+    await createMessage({
+      conversationId, direction: 'outbound', content: 'Resposta humana', whatsappMessageId: null, status: 'sent',
+    });
+
+    const messages = await listMessagesByConversation(conversationId);
+
+    expect(messages.find((m) => m.content === 'Sugestão da IA').sentBy).toBe('ai');
+    expect(messages.find((m) => m.content === 'Resposta humana').sentBy).toBe('human');
+  });
+
   describe('listRecentMessagesByConversation', () => {
     test('returns only the newest messages, in chronological order', async () => {
       // 5 mensagens, mas o atendimento só pode ver as 3 mais novas: se a

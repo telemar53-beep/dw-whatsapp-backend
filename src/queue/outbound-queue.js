@@ -12,7 +12,7 @@ function getOutboundQueue() {
   return queue;
 }
 
-async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) {
+async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId, sentBy }) {
   const message = await createMessage({
     conversationId,
     direction: 'outbound',
@@ -24,6 +24,9 @@ async function enqueueOutboundMessage({ conversationId, channelId, content, mess
     mediaMimeType,
     mediaFilename,
     repliedToMessageId,
+    // createMessage owns the 'human' default — sentBy is passed through as-is so
+    // there is exactly one place that decides what an absent sentBy means.
+    sentBy,
   });
   await getOutboundQueue().add(
     {

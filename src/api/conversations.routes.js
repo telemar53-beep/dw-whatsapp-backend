@@ -29,6 +29,7 @@ const { substituteVariables } = require('../templates/template-validator');
 const { sendOpeningMessageIfApplicable, sendClosingMessageIfApplicable } = require('../assignment-messages/assignment-message.service');
 const { findReasonById } = require('../reasons/reason.repository');
 const { isOfficialChannelType } = require('../channels/channel-types');
+const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
 
 const router = express.Router();
 
@@ -375,6 +376,58 @@ router.post('/:id/close', async (req, res) => {
   const conversationWithContact = await getConversationWithContact(conversation.id);
   broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact, closedAt: new Date().toISOString() });
   res.json(conversation);
+});
+
+async function loadOwnedConversation(req, res) {
+  const conversation = await getConversationWithContact(req.params.id);
+  if (!conversation) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return null;
+  }
+  if (conversation.assignedAgentId !== req.agent.agentId) {
+    res.status(403).json({ error: 'Only the assigned agent can act on this conversation' });
+    return null;
+  }
+  return conversation;
+}
+
+router.get('/:id/ai-suggestion', requireAuth, async (req, res) => {
+  const conversation = await loadOwnedConversation(req, res);
+  if (!conversation) return;
+  const suggestion = await findPendingSuggestion(conversation.id);
+  res.json({ suggestion });
+});
+
+router.post('/:id/ai-suggestion/:sid/send', requireAuth, async (req, res) => {
+  const conversation = await loadOwnedConversation(req, res);
+  if (!conversation) return;
+  const suggestion = await findPendingSuggestion(conversation.id);
+  if (!suggestion || suggestion.id !== req.params.sid) {
+    return res.status(404).json({ error: 'Suggestion not found' });
+  }
+  const { content } = req.body || {};
+  const edited = typeof content === 'string' && content.trim() && content.trim() !== suggestion.content;
+  const text = edited ? content.trim() : suggestion.content;
+
+  const message = await enqueueOutboundMessage({
+    conversationId: conversation.id,
+    channelId: conversation.channelId,
+    content: text,
+    sentBy: 'ai',
+  });
+  await markSuggestion(suggestion.id, edited ? 'edited' : 'sent');
+  res.status(201).json(message);
+});
+
+router.post('/:id/ai-suggestion/:sid/discard', requireAuth, async (req, res) => {
+  const conversation = await loadOwnedConversation(req, res);
+  if (!conversation) return;
+  const suggestion = await findPendingSuggestion(conversation.id);
+  if (!suggestion || suggestion.id !== req.params.sid) {
+    return res.status(404).json({ error: 'Suggestion not found' });
+  }
+  await markSuggestion(suggestion.id, 'discarded');
+  res.status(204).end();
 });
 
 module.exports = router;

@@ -232,4 +232,34 @@ describe('ai-orchestrator', () => {
     const { messages } = createChatCompletion.mock.calls[0][0];
     expect(JSON.stringify(messages)).not.toContain('sk');
   });
+
+  test('o histórico usa o texto do áudio transcrito', async () => {
+    listRecentMessagesByConversation.mockResolvedValue([
+      { direction: 'inbound', content: null, messageType: 'audio',
+        transcription: 'minha internet caiu ontem', transcriptionStatus: 'completed' },
+      { direction: 'inbound', content: 'e até agora não voltou', messageType: 'text' },
+    ]);
+    createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
+
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    const { messages } = createChatCompletion.mock.calls[0][0];
+    const conteudos = messages.map((m) => m.content).join(' | ');
+    expect(conteudos).toContain('minha internet caiu ontem');
+    expect(conteudos).toContain('e até agora não voltou');
+  });
+
+  test('áudio sem transcrição concluída fica fora do histórico', async () => {
+    listRecentMessagesByConversation.mockResolvedValue([
+      { direction: 'inbound', content: null, messageType: 'audio',
+        transcription: null, transcriptionStatus: 'failed' },
+      { direction: 'inbound', content: 'oi', messageType: 'text' },
+    ]);
+    createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
+
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    const { messages } = createChatCompletion.mock.calls[0][0];
+    expect(messages.filter((m) => m.role === 'user')).toHaveLength(1);
+  });
 });

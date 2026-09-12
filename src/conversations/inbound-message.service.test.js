@@ -23,7 +23,7 @@ const {
 } = require('../city-notices/city-notice.repository');
 const { getBusinessHoursConfig } = require('../business-hours/business-hours.repository');
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
-const { shouldRunAi, scheduleAiReply } = require('../ai/ai.service');
+const { shouldRunAi, scheduleAiReply, shouldTranscribe, scheduleTranscription } = require('../ai/ai.service');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
 describe('ingestInboundMessage', () => {
@@ -35,6 +35,7 @@ describe('ingestInboundMessage', () => {
     getBusinessHoursConfig.mockResolvedValue({ enabled: false, startTime: '08:00', endTime: '18:00', message: '' });
     isOutsideBusinessHours.mockReturnValue(false);
     shouldRunAi.mockResolvedValue(false);
+    shouldTranscribe.mockResolvedValue(false);
   });
 
   test('reuses an existing open conversation and broadcasts queue:new when unassigned', async () => {
@@ -1037,6 +1038,42 @@ describe('ingestInboundMessage', () => {
         whatsappMessageId: 'wa-ai-2',
         content: 'oi',
         messageType: 'text',
+      });
+
+      expect(result.message).not.toBeNull();
+    });
+  });
+
+  describe('transcription hook', () => {
+    test('agenda transcrição para áudio quando habilitada', async () => {
+      const { shouldTranscribe, scheduleTranscription } = require('../ai/ai.service');
+      shouldTranscribe.mockResolvedValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-audio-1' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-audio-1', assignedAgentId: null });
+      createMessage.mockResolvedValue({ id: 'msg-audio-1', messageType: 'audio' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-audio-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900003333', contactDisplayName: 'Fulano',
+        whatsappMessageId: 'wa-audio-1', messageType: 'audio', content: null,
+        mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg',
+      });
+
+      expect(scheduleTranscription).toHaveBeenCalled();
+    });
+
+    test('transcrição que falha ao agendar nunca bloqueia a ingestão', async () => {
+      const { shouldTranscribe } = require('../ai/ai.service');
+      shouldTranscribe.mockRejectedValue(new Error('redis fora'));
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-audio-2' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-audio-2', assignedAgentId: null });
+      createMessage.mockResolvedValue({ id: 'msg-audio-2', messageType: 'audio' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-audio-2', assignedAgentId: null });
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900004444', contactDisplayName: 'Fulano',
+        whatsappMessageId: 'wa-audio-2', messageType: 'audio', content: null,
+        mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg',
       });
 
       expect(result.message).not.toBeNull();

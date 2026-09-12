@@ -407,6 +407,7 @@ describe('baileys.manager', () => {
         mediaPath: 'generated-image.jpg',
         mediaMimeType: 'image/jpeg',
         mediaFilename: null,
+        audioDurationSeconds: null,
       });
     });
 
@@ -436,6 +437,7 @@ describe('baileys.manager', () => {
         mediaPath: 'generated-doc.pdf',
         mediaMimeType: 'application/pdf',
         mediaFilename: 'comprovante.pdf',
+        audioDurationSeconds: null,
       });
     });
 
@@ -468,7 +470,50 @@ describe('baileys.manager', () => {
         mediaPath: `generated-${type}.bin`,
         mediaMimeType: `application/${type}-test`,
         mediaFilename: null,
+        audioDurationSeconds: null,
       });
+    });
+
+    test('carries the WhatsApp-reported duration through for an audio message', async () => {
+      const { saveMediaFile } = require('../media/media-storage');
+      saveMediaFile.mockResolvedValue('generated-audio-duration.ogg');
+      baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-audio-bytes'));
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999991112@s.whatsapp.net', fromMe: false, id: 'BAILEYS_AUDIO_DURATION_1' },
+            pushName: 'Cliente Baileys',
+            message: { audioMessage: { mimetype: 'audio/ogg', seconds: 12 } },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ audioDurationSeconds: 12 })
+      );
+    });
+
+    test('falls back to null when WhatsApp does not report an audio duration', async () => {
+      const { saveMediaFile } = require('../media/media-storage');
+      saveMediaFile.mockResolvedValue('generated-audio-noduration.ogg');
+      baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-audio-bytes'));
+
+      await sock.handlers['messages.upsert']({
+        type: 'notify',
+        messages: [
+          {
+            key: { remoteJid: '5511999991113@s.whatsapp.net', fromMe: false, id: 'BAILEYS_AUDIO_DURATION_2' },
+            pushName: 'Cliente Baileys',
+            message: { audioMessage: { mimetype: 'audio/ogg' } },
+          },
+        ],
+      });
+
+      expect(ingestInboundMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ audioDurationSeconds: null })
+      );
     });
 
     test('unwraps an ephemeral (disappearing-messages) envelope to find the real image content', async () => {
@@ -501,6 +546,7 @@ describe('baileys.manager', () => {
         mediaPath: 'generated-ephemeral-image.jpg',
         mediaMimeType: 'image/jpeg',
         mediaFilename: null,
+        audioDurationSeconds: null,
       });
     });
 
@@ -534,6 +580,7 @@ describe('baileys.manager', () => {
         mediaPath: 'generated-viewonce-audio.ogg',
         mediaMimeType: 'audio/ogg',
         mediaFilename: null,
+        audioDurationSeconds: null,
       });
     });
 

@@ -8,7 +8,7 @@ const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { findActiveCityNoticeByCityId, recordNoticeDelivery } = require('../city-notices/city-notice.repository');
 const { getBusinessHoursConfig } = require('../business-hours/business-hours.repository');
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
-const { shouldRunAi, scheduleAiReply } = require('../ai/ai.service');
+const { shouldRunAi, scheduleAiReply, shouldTranscribe, scheduleTranscription } = require('../ai/ai.service');
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -24,6 +24,7 @@ async function ingestInboundMessage({
   mediaFilename,
   locationLatitude,
   locationLongitude,
+  audioDurationSeconds,
 }) {
   const { wasCreated, ...contact } = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   const contactJustCreated = Boolean(wasCreated);
@@ -110,6 +111,14 @@ async function ingestInboundMessage({
     }
   } else if (!justCreated && conversation.triageState === 'pending') {
     conversation = await processTriageReply(conversation, channelId, content);
+  }
+
+  try {
+    if (await shouldTranscribe(channelId)) {
+      await scheduleTranscription(conversation, message, audioDurationSeconds);
+    }
+  } catch (err) {
+    console.error(`Failed to schedule transcription for conversation ${conversation.id}`, err);
   }
 
   try {

@@ -94,7 +94,13 @@ function extractMediaInfo(message) {
     };
   }
   if (message.audioMessage) {
-    return { type: 'audio', mimeType: message.audioMessage.mimetype, caption: null, filename: null };
+    return {
+      type: 'audio',
+      mimeType: message.audioMessage.mimetype,
+      caption: null,
+      filename: null,
+      durationSeconds: message.audioMessage.seconds || null,
+    };
   }
   if (message.videoMessage) {
     return { type: 'video', mimeType: message.videoMessage.mimetype, caption: message.videoMessage.caption || null, filename: null };
@@ -314,6 +320,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         mediaPath,
         mediaMimeType: mediaInfo.mimeType,
         mediaFilename: mediaInfo.filename,
+        audioDurationSeconds: mediaInfo.durationSeconds || null,
       });
       scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
       continue;

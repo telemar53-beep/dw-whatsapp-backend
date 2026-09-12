@@ -41,6 +41,15 @@ function papelDaMensagem(message) {
   return message.direction === 'inbound' ? 'user' : 'assistant';
 }
 
+// Áudio transcrito entra no histórico como o texto da transcrição: para o modelo
+// não há diferença entre o cliente ter digitado ou falado. Áudio sem transcrição
+// concluída fica de fora — a IA nunca deve receber conteúdo em branco.
+function conteudoParaModelo(m) {
+  if (m.messageType === 'text') return m.content || null;
+  if (m.messageType === 'audio' && m.transcriptionStatus === 'completed') return m.transcription || null;
+  return null;
+}
+
 async function montarContextoSistema(config, contact, contracts) {
   const [motivos, setores] = await Promise.all([listActiveReasons(), listSectors()]);
   const linhas = [config.systemPrompt, '', 'Motivos de atendimento disponíveis (use o id exato):'];
@@ -93,8 +102,8 @@ async function runAiTurn({ conversation, contact }) {
   const messages = [
     { role: 'system', content: await montarContextoSistema(config, contact, contracts) },
     ...historico
-      .filter((m) => m.messageType === 'text' && m.content)
-      .map((m) => ({ role: papelDaMensagem(m), content: m.content })),
+      .map((m) => ({ role: papelDaMensagem(m), content: conteudoParaModelo(m) }))
+      .filter((m) => m.content),
   ];
 
   const toolsRequested = [];

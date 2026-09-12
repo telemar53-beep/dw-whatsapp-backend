@@ -369,6 +369,34 @@ describe('message repository', () => {
 
       expect(latestInboundId).toBeNull();
     });
+
+    test('áudio transcrito conta como mensagem mais recente utilizável', async () => {
+      await createMessage({ conversationId, direction: 'inbound', content: 'texto', whatsappMessageId: 'w1',
+        status: 'received', messageType: 'text' });
+      const audio = await createMessage({ conversationId, direction: 'inbound', content: null, whatsappMessageId: 'w2',
+        status: 'received', messageType: 'audio', mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg' });
+      await saveTranscription(audio.id, { transcription: 'falei isso', model: 'm', ms: 5 });
+
+      expect(await findLatestInboundMessageId(conversationId)).toBe(audio.id);
+    });
+
+    test('áudio SEM transcrição não conta', async () => {
+      const texto = await createMessage({ conversationId, direction: 'inbound', content: 'texto', whatsappMessageId: 'w3',
+        status: 'received', messageType: 'text' });
+      await createMessage({ conversationId, direction: 'inbound', content: null, whatsappMessageId: 'w4',
+        status: 'received', messageType: 'audio', mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg' });
+
+      expect(await findLatestInboundMessageId(conversationId)).toBe(texto.id);
+    });
+
+    test('foto continua não contando', async () => {
+      const texto = await createMessage({ conversationId, direction: 'inbound', content: 'texto', whatsappMessageId: 'w5',
+        status: 'received', messageType: 'text' });
+      await createMessage({ conversationId, direction: 'inbound', content: null, whatsappMessageId: 'w6',
+        status: 'received', messageType: 'image', mediaPath: 'a.jpg', mediaMimeType: 'image/jpeg' });
+
+      expect(await findLatestInboundMessageId(conversationId)).toBe(texto.id);
+    });
   });
 
   test('uma mensagem de áudio carrega os campos de transcrição em branco por padrão', async () => {

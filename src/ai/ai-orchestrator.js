@@ -171,14 +171,18 @@ async function runAiTurn({ conversation, contact }) {
         // atendente sem sugestão nenhuma — e "consulte todos os contratos"
         // torna este caminho provável justamente no cliente com vários
         // contratos, que é quem mais precisa da ajuda.
-        messages.push({
-          role: 'system',
-          content: 'O limite de consultas deste atendimento foi atingido. Responda agora com o que já apurou e diga claramente o que não pôde verificar.',
-        });
-        const final = await createChatCompletion({ apiKey: config.apiKey, model: config.model, messages, tools: [] });
-        promptTokens += final.usage.promptTokens || 0;
-        completionTokens += final.usage.completionTokens || 0;
-        texto = final.message.content || null;
+        // Respeita o mesmo teto de tempo do laço: perto do limite, a chamada
+        // extra estouraria a janela que a fila de concorrência 1 assume.
+        if (Date.now() - iniciadoEm < TURNO_MAX_MS) {
+          messages.push({
+            role: 'system',
+            content: 'O limite de consultas deste atendimento foi atingido. Responda agora com o que já apurou e diga claramente o que não pôde verificar.',
+          });
+          const final = await createChatCompletion({ apiKey: config.apiKey, model: config.model, messages, tools: [] });
+          promptTokens += final.usage.promptTokens || 0;
+          completionTokens += final.usage.completionTokens || 0;
+          texto = final.message.content || null;
+        }
         break;
       }
 

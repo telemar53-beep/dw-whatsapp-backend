@@ -9,6 +9,12 @@ function erro(mensagem) {
   return { ok: false, erro: mensagem };
 }
 
+// Mesmo formato usado em conversations.routes.js: exige os hifens nas posições
+// certas. /^[0-9a-f-]{36}$/i (a versão antiga aqui) aceitava 36 caracteres hex
+// sem hífen nenhum — isso chega ao Postgres e vira erro de cast (22P02) em vez
+// de uma recusa limpa. Este validador recebe argumentos gerados pelo modelo.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function validarContratoId(args) {
   const id = Number(args && args.contratoId);
   if (!Number.isInteger(id) || id <= 0) return erro('contratoId must be a positive integer');
@@ -158,7 +164,7 @@ const TOOLS = [
     },
     validar(args) {
       const id = args && args.motivoId;
-      if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) return erro('motivoId must be a UUID');
+      if (typeof id !== 'string' || !UUID_PATTERN.test(id)) return erro('motivoId must be a UUID');
       return { ok: true, args: { motivoId: id } };
     },
     async executar(args, contexto) {
@@ -187,7 +193,7 @@ const TOOLS = [
     validar(args) {
       const setorId = args && args.setorId;
       const resumo = args && args.resumo;
-      if (typeof setorId !== 'string' || !/^[0-9a-f-]{36}$/i.test(setorId)) return erro('setorId must be a UUID');
+      if (typeof setorId !== 'string' || !UUID_PATTERN.test(setorId)) return erro('setorId must be a UUID');
       if (typeof resumo !== 'string' || !resumo.trim()) return erro('resumo is required');
       return { ok: true, args: { setorId, resumo: resumo.trim() } };
     },

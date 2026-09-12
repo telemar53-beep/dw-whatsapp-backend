@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
-const { getAiConfig, updateAiConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
+const { getAiConfig, updateAiConfig, updateTranscriptionConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listTools, findTool } = require('../ai/tool-registry');
 const { listModels } = require('../ai/openai-client');
 
@@ -15,6 +15,12 @@ function toConfigResponse(config) {
     mode: config.mode,
     systemPrompt: config.systemPrompt,
     maxToolsPerInteraction: config.maxToolsPerInteraction,
+    transcriptionEnabled: config.transcriptionEnabled,
+    transcriptionModel: config.transcriptionModel,
+    transcriptionMaxSeconds: config.transcriptionMaxSeconds,
+    transcriptionMaxBytes: config.transcriptionMaxBytes,
+    transcriptionPrompt: config.transcriptionPrompt,
+    transcriptionFeedAi: config.transcriptionFeedAi,
   };
 }
 
@@ -48,6 +54,47 @@ router.put('/config', requireAuth, requireRole('admin'), async (req, res) => {
     model: model.trim(),
     mode,
     systemPrompt: typeof systemPrompt === 'string' && systemPrompt.trim() ? systemPrompt.trim() : null,
+  });
+  res.json(toConfigResponse(config));
+});
+
+router.put('/transcription', requireAuth, requireRole('admin'), async (req, res) => {
+  const {
+    transcriptionEnabled, transcriptionModel, transcriptionMaxSeconds,
+    transcriptionMaxBytes, transcriptionPrompt, transcriptionFeedAi,
+  } = req.body || {};
+
+  if (typeof transcriptionEnabled !== 'boolean') {
+    return res.status(400).json({ error: 'transcriptionEnabled must be a boolean' });
+  }
+  if (typeof transcriptionFeedAi !== 'boolean') {
+    return res.status(400).json({ error: 'transcriptionFeedAi must be a boolean' });
+  }
+  if (typeof transcriptionModel !== 'string') {
+    return res.status(400).json({ error: 'transcriptionModel is required' });
+  }
+  if (!Number.isInteger(transcriptionMaxSeconds) || transcriptionMaxSeconds <= 0) {
+    return res.status(400).json({ error: 'transcriptionMaxSeconds must be a positive integer' });
+  }
+  if (!Number.isInteger(transcriptionMaxBytes) || transcriptionMaxBytes <= 0) {
+    return res.status(400).json({ error: 'transcriptionMaxBytes must be a positive integer' });
+  }
+  if (typeof transcriptionPrompt !== 'string') {
+    return res.status(400).json({ error: 'transcriptionPrompt must be a string' });
+  }
+  // Ligar sem modelo deixaria a transcrição habilitada e inerte, exatamente o
+  // estado que shouldTranscribe recusa em silêncio.
+  if (transcriptionEnabled && !transcriptionModel.trim()) {
+    return res.status(400).json({ error: 'transcriptionModel is required when transcription is enabled' });
+  }
+
+  const config = await updateTranscriptionConfig({
+    transcriptionEnabled,
+    transcriptionModel: transcriptionModel.trim(),
+    transcriptionMaxSeconds,
+    transcriptionMaxBytes,
+    transcriptionPrompt,
+    transcriptionFeedAi,
   });
   res.json(toConfigResponse(config));
 });

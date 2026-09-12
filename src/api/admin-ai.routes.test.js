@@ -4,7 +4,7 @@ jest.mock('../ai/openai-client');
 const express = require('express');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
-const { getAiConfig, updateAiConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
+const { getAiConfig, updateAiConfig, updateTranscriptionConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listModels, OpenAiAuthError } = require('../ai/openai-client');
 const adminAiRoutes = require('./admin-ai.routes');
 
@@ -156,5 +156,56 @@ describe('admin ai routes', () => {
       .set('Authorization', `Bearer ${tokenFor('admin')}`)
       .send({ enabled: false }).expect(200);
     expect(setToolPermission).toHaveBeenCalledWith('consultar_plano', false);
+  });
+
+  test('GET /config devolve os campos de transcrição', async () => {
+    getAiConfig.mockResolvedValue({
+      id: 1, apiKey: 'sk-1234567890abcd', model: 'gpt-x', mode: 'assistant',
+      systemPrompt: 'p', maxToolsPerInteraction: 8,
+      transcriptionEnabled: true, transcriptionModel: 'modelo-t',
+      transcriptionMaxSeconds: 300, transcriptionMaxBytes: 26214400,
+      transcriptionPrompt: 'PPPoE', transcriptionFeedAi: true,
+    });
+    const res = await request(buildApp()).get('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`).expect(200);
+    expect(res.body.transcriptionEnabled).toBe(true);
+    expect(res.body.transcriptionModel).toBe('modelo-t');
+    expect(JSON.stringify(res.body)).not.toContain('sk-1234567890abcd');
+  });
+
+  test('PUT /transcription exige admin', async () => {
+    await request(buildApp()).put('/api/admin/ai/transcription')
+      .set('Authorization', `Bearer ${tokenFor('agent')}`)
+      .send({ transcriptionEnabled: false }).expect(403);
+  });
+
+  test('PUT /transcription rejeita tipos errados', async () => {
+    await request(buildApp()).put('/api/admin/ai/transcription')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ transcriptionEnabled: 'sim', transcriptionModel: 'm', transcriptionMaxSeconds: 60,
+              transcriptionMaxBytes: 1000, transcriptionPrompt: '', transcriptionFeedAi: true })
+      .expect(400);
+    expect(updateTranscriptionConfig).not.toHaveBeenCalled();
+  });
+
+  test('PUT /transcription exige modelo quando está sendo ligada', async () => {
+    await request(buildApp()).put('/api/admin/ai/transcription')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ transcriptionEnabled: true, transcriptionModel: '', transcriptionMaxSeconds: 60,
+              transcriptionMaxBytes: 1000, transcriptionPrompt: '', transcriptionFeedAi: true })
+      .expect(400);
+  });
+
+  test('PUT /transcription salva', async () => {
+    updateTranscriptionConfig.mockResolvedValue({
+      transcriptionEnabled: true, transcriptionModel: 'm', transcriptionMaxSeconds: 60,
+      transcriptionMaxBytes: 1000, transcriptionPrompt: 'PPPoE', transcriptionFeedAi: true,
+    });
+    const res = await request(buildApp()).put('/api/admin/ai/transcription')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ transcriptionEnabled: true, transcriptionModel: 'm', transcriptionMaxSeconds: 60,
+              transcriptionMaxBytes: 1000, transcriptionPrompt: 'PPPoE', transcriptionFeedAi: true })
+      .expect(200);
+    expect(res.body.transcriptionModel).toBe('m');
   });
 });

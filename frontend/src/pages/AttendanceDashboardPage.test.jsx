@@ -16,6 +16,7 @@ import {
 } from '../services/api';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
+import { useAiSuggestion } from '../hooks/useAiSuggestion';
 
 vi.mock('../hooks/useAttendanceDashboard');
 vi.mock('../hooks/useChannels');
@@ -25,6 +26,7 @@ vi.mock('../contexts/AuthContext');
 vi.mock('../services/api');
 vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
+vi.mock('../hooks/useAiSuggestion');
 
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -50,6 +52,7 @@ beforeEach(() => {
   closeConversation.mockResolvedValue({ id: 'c2', status: 'closed' });
   useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
+  useAiSuggestion.mockReturnValue({ suggestion: null, send: vi.fn(), edit: vi.fn(), discard: vi.fn() });
   useAttendanceDashboard.mockReturnValue({
     inProgress: [{ id: 'c1', contactDisplayName: 'Carlos', channelId: 'chan-1', assignedAgentId: 'agent-1', sectorId: 'sector-1' }],
     waiting: [{ id: 'c2', contactDisplayName: 'Maria', channelId: 'chan-1', assignedAgentId: null, sectorId: null }],

@@ -38,7 +38,7 @@ function ComposerButton({ label, onClick, disabled, active, children, as = 'butt
   );
 }
 
-function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelReply }) {
+function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelReply, draftContent, draftKey }) {
   const [content, setContent] = useState('');
   const [file, setFile] = useState(null);
   // A microphone recording is a voice note; a file picked from disk is an attachment.
@@ -55,6 +55,16 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
   const popoverRef = useRef(null);
+
+  useEffect(() => {
+    // Carrega o texto de uma sugestão da IA que o atendente escolheu editar.
+    // draftKey muda a cada "Editar" (mesmo que o texto seja repetido), então
+    // só dispara quando há um pedido novo de edição, não a cada render.
+    if (draftKey === undefined || draftKey === null) return;
+    setContent(draftContent || '');
+    if (textInputRef.current) textInputRef.current.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
 
   useEffect(() => {
     if (!showingQuickReplies && !showingEmojis) return undefined;
@@ -132,8 +142,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
     if (textInputRef.current) textInputRef.current.focus();
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault();
+  async function submit() {
     if (!content.trim() && !file) return;
     setSending(true);
     setError(null);
@@ -145,6 +154,20 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
       setError((err.body && err.body.error) || 'Falha ao enviar mensagem');
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    await submit();
+  }
+
+  // Enter envia (como no restante do app); Shift+Enter quebra linha — necessário
+  // agora que o campo é multi-linha, para caber uma sugestão da IA com parágrafos.
+  function handleComposerKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      submit();
     }
   }
 
@@ -253,13 +276,14 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                 <IconEmoji size={24} />
               </ComposerButton>
 
-              <input
-                type="text"
+              <textarea
                 ref={textInputRef}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                onKeyDown={handleComposerKeyDown}
                 placeholder="Digite uma mensagem..."
-                className="h-[48px] min-w-0 flex-1 rounded-full border border-white/[0.10] bg-white/[0.03] px-[18px] text-[15px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
+                rows={1}
+                className="max-h-[120px] min-h-[48px] min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
               />
 
               {showingEmojis && (

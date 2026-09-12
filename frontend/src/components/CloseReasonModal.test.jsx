@@ -72,4 +72,30 @@ describe('CloseReasonModal', () => {
     expect(screen.getByText(/nenhum motivo de contato cadastrado ainda/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /confirmar encerramento/i })).toBeDisabled();
   });
+
+  test('pre-selects the reason the AI suggested', () => {
+    render(<CloseReasonModal onConfirm={vi.fn()} onClose={vi.fn()} suggestedReasonId="r2" />);
+
+    expect(screen.getByLabelText('Pagamento - sem conexão')).toBeChecked();
+    expect(screen.getByLabelText('Troca de senha')).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /confirmar encerramento/i })).not.toBeDisabled();
+  });
+
+  test('falls back to no selection when the AI suggested nothing, exactly as before this feature existed', () => {
+    render(<CloseReasonModal onConfirm={vi.fn()} onClose={vi.fn()} suggestedReasonId={null} />);
+
+    expect(screen.getByLabelText('Troca de senha')).not.toBeChecked();
+    expect(screen.getByLabelText('Pagamento - sem conexão')).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /confirmar encerramento/i })).toBeDisabled();
+  });
+
+  test('the attendant can still change the pre-selected reason before confirming', async () => {
+    const onConfirm = vi.fn().mockResolvedValue(undefined);
+    render(<CloseReasonModal onConfirm={onConfirm} onClose={vi.fn()} suggestedReasonId="r2" />);
+
+    await userEvent.click(screen.getByLabelText('Troca de senha'));
+    await userEvent.click(screen.getByRole('button', { name: /confirmar encerramento/i }));
+
+    expect(onConfirm).toHaveBeenCalledWith('r1');
+  });
 });

@@ -2,9 +2,12 @@ import { useState } from 'react';
 import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
 import { useReasons } from '../hooks/useReasons';
 
-function CloseReasonModal({ onConfirm, onClose }) {
+function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
   const { reasons } = useReasons();
-  const [reasonId, setReasonId] = useState(null);
+  // Pré-seleciona o motivo que a IA classificou, mas o atendente pode trocar:
+  // a escolha final continua sendo dele. O modal é montado do zero a cada
+  // "Fechar", então o valor inicial já nasce certo, sem precisar de efeito.
+  const [reasonId, setReasonId] = useState(suggestedReasonId || null);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 

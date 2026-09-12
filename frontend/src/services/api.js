@@ -434,3 +434,19 @@ export function listAiTools(token) {
 export function setAiToolEnabled(nome, enabled, token) {
   return apiFetch(`/api/admin/ai/tools/${nome}`, { method: 'PUT', body: { enabled }, token });
 }
+
+export function getAiSuggestion(conversationId, token) {
+  return apiFetch(`/api/conversations/${conversationId}/ai-suggestion`, { token });
+}
+
+export function sendAiSuggestion(conversationId, suggestionId, content, token) {
+  return apiFetch(`/api/conversations/${conversationId}/ai-suggestion/${suggestionId}/send`, {
+    method: 'POST', body: { content }, token,
+  });
+}
+
+export function discardAiSuggestion(conversationId, suggestionId, token) {
+  return apiFetch(`/api/conversations/${conversationId}/ai-suggestion/${suggestionId}/discard`, {
+    method: 'POST', token,
+  });
+}

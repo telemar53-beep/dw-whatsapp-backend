@@ -30,6 +30,7 @@ const {
   countClosedConversationsByAgent,
   listClosedConversationsByAgent,
   markBusinessHoursNoticeSent,
+  setSuggestedReason,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -498,6 +499,24 @@ describe('conversation repository', () => {
 
     expect(result.lastMessageContent).toBeNull();
     expect(result.lastMessageType).toBe('image');
+  });
+
+  test('getConversationWithContact carries the reason the AI suggested', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const reason = await getPool().query("INSERT INTO contact_reasons (name) VALUES ('Lentidão') RETURNING id");
+    await setSuggestedReason(conversation.id, reason.rows[0].id);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.suggestedReasonId).toBe(reason.rows[0].id);
+  });
+
+  test('getConversationWithContact has a null suggestedReasonId when the AI has not classified this conversation', async () => {
+    const conversation = await createConversation(contactId, channelId);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.suggestedReasonId).toBeNull();
   });
 
   test('listWaitingConversations returns only waiting conversations with contact info, oldest first', async () => {

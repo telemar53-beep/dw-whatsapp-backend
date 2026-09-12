@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
+import { useAiSuggestion } from '../hooks/useAiSuggestion';
 import { claimConversation, closeConversation, sendSgpBoletoPdf } from '../services/api';
 import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
@@ -11,6 +12,7 @@ import CloseReasonModal from './CloseReasonModal';
 import ContactAvatar from './ContactAvatar';
 import EditContactModal from './EditContactModal';
 import SgpLookupPanel from './SgpLookupPanel';
+import AiSuggestionCard from './AiSuggestionCard';
 import {
   IconArrowLeft,
   IconChevronDown,
@@ -90,12 +92,16 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
   const { messages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
   const { quickReplies } = useQuickReplies();
+  const { suggestion, send: sendSuggestion, edit: editSuggestion, discard: discardSuggestion } = useAiSuggestion(
+    conversation.id
+  );
   const [showingHistory, setShowingHistory] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const [contactOverride, setContactOverride] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
   const [closingReason, setClosingReason] = useState(false);
+  const [draftEdit, setDraftEdit] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -104,6 +110,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     setReplyingTo(null);
     setSgpPanelOpen(false);
     setClosingReason(false);
+    setDraftEdit(null);
   }, [conversation.id]);
 
   useEffect(() => {
@@ -146,6 +153,27 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   async function handleConfirmClose(reasonId) {
     await closeConversation(conversation.id, reasonId, token);
     setClosingReason(false);
+  }
+
+  async function handleSendSuggestion(item) {
+    try {
+      await sendSuggestion(item);
+    } catch (err) {
+      window.alert((err.body && err.body.error) || 'Não foi possível enviar a sugestão da IA.');
+    }
+  }
+
+  function handleEditSuggestion(item) {
+    const text = editSuggestion(item);
+    setDraftEdit({ key: item.id, content: text });
+  }
+
+  async function handleDiscardSuggestion(item) {
+    try {
+      await discardSuggestion(item);
+    } catch (err) {
+      window.alert((err.body && err.body.error) || 'Não foi possível descartar a sugestão da IA.');
+    }
   }
 
   const timeline = buildTimeline(messages);
@@ -339,12 +367,22 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
       </div>
 
       {isMine && (
-        <MessageInput
-          onSend={handleSend}
-          quickReplies={quickReplies}
-          replyingTo={replyingTo}
-          onCancelReply={() => setReplyingTo(null)}
-        />
+        <>
+          <AiSuggestionCard
+            suggestion={suggestion}
+            onSend={handleSendSuggestion}
+            onEdit={handleEditSuggestion}
+            onDiscard={handleDiscardSuggestion}
+          />
+          <MessageInput
+            onSend={handleSend}
+            quickReplies={quickReplies}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+            draftContent={draftEdit ? draftEdit.content : undefined}
+            draftKey={draftEdit ? draftEdit.key : undefined}
+          />
+        </>
       )}
       {showingHistory && (
         <ConversationHistoryModal contactId={conversation.contactId} onClose={() => setShowingHistory(false)} />
@@ -360,7 +398,13 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           onSaved={(updated) => setContactOverride(updated)}
         />
       )}
-      {closingReason && <CloseReasonModal onConfirm={handleConfirmClose} onClose={() => setClosingReason(false)} />}
+      {closingReason && (
+        <CloseReasonModal
+          onConfirm={handleConfirmClose}
+          onClose={() => setClosingReason(false)}
+          suggestedReasonId={conversation.suggestedReasonId}
+        />
+      )}
       </div>
       {sgpPanelOpen && (
         <SgpLookupPanel

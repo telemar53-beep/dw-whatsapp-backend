@@ -8,6 +8,7 @@ import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useCities } from '../hooks/useCities';
 import { useSgpLookup } from '../hooks/useSgpLookup';
 import { useReasons } from '../hooks/useReasons';
+import { useAiSuggestion } from '../hooks/useAiSuggestion';
 import * as api from '../services/api';
 
 vi.mock('../contexts/AuthContext');
@@ -16,6 +17,7 @@ vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useCities');
 vi.mock('../hooks/useSgpLookup');
 vi.mock('../hooks/useReasons');
+vi.mock('../hooks/useAiSuggestion');
 vi.mock('../services/api');
 
 beforeEach(() => {
@@ -41,6 +43,7 @@ beforeEach(() => {
     loading: false,
     refresh: vi.fn(),
   });
+  useAiSuggestion.mockReturnValue({ suggestion: null, send: vi.fn(), edit: vi.fn(), discard: vi.fn() });
 });
 
 describe('ConversationView', () => {
@@ -589,5 +592,140 @@ describe('SGP lookup panel', () => {
 
     rerender(<ConversationView conversation={CONVERSATION_B} onTransferClick={vi.fn()} onBack={vi.fn()} />);
     expect(screen.queryByText('Motivo do contato')).not.toBeInTheDocument();
+  });
+});
+
+describe('AI suggestion card', () => {
+  test('shows the AI suggestion card above the message input when there is one pending', () => {
+    useAiSuggestion.mockReturnValue({
+      suggestion: { id: 's-1', content: 'Seu plano é 600MB.' },
+      send: vi.fn(),
+      edit: vi.fn(),
+      discard: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Seu plano é 600MB.')).toBeInTheDocument();
+    expect(screen.getByText(/sugestão da ia/i)).toBeInTheDocument();
+  });
+
+  test('does not show the AI suggestion card when the conversation is not assigned to me', () => {
+    useAiSuggestion.mockReturnValue({
+      suggestion: { id: 's-1', content: 'Seu plano é 600MB.' },
+      send: vi.fn(),
+      edit: vi.fn(),
+      discard: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('Seu plano é 600MB.')).not.toBeInTheDocument();
+  });
+
+  test('clicking Enviar on the AI suggestion card calls the hook\'s send with that suggestion', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    useAiSuggestion.mockReturnValue({
+      suggestion: { id: 's-1', content: 'Seu plano é 600MB.' },
+      send,
+      edit: vi.fn(),
+      discard: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^enviar$/i }));
+
+    expect(send).toHaveBeenCalledWith({ id: 's-1', content: 'Seu plano é 600MB.' });
+  });
+
+  test('clicking Descartar on the AI suggestion card calls the hook\'s discard with that suggestion', async () => {
+    const discard = vi.fn().mockResolvedValue(undefined);
+    useAiSuggestion.mockReturnValue({
+      suggestion: { id: 's-1', content: 'Seu plano é 600MB.' },
+      send: vi.fn(),
+      edit: vi.fn(),
+      discard,
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /descartar/i }));
+
+    expect(discard).toHaveBeenCalledWith({ id: 's-1', content: 'Seu plano é 600MB.' });
+  });
+
+  test('clicking Editar loads the suggested text into the message box, including line breaks, without sending or discarding', async () => {
+    const edit = vi.fn().mockReturnValue('Primeira linha\nSegunda linha');
+    const send = vi.fn();
+    const discard = vi.fn();
+    useAiSuggestion.mockReturnValue({
+      suggestion: { id: 's-1', content: 'Primeira linha\nSegunda linha' },
+      send,
+      edit,
+      discard,
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+
+    expect(edit).toHaveBeenCalledWith({ id: 's-1', content: 'Primeira linha\nSegunda linha' });
+    expect(send).not.toHaveBeenCalled();
+    expect(discard).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText(/digite uma mensagem/i)).toHaveValue('Primeira linha\nSegunda linha');
+  });
+
+  test('passes the AI-suggested reason through to the close-reason popup, pre-selecting it', async () => {
+    useReasons.mockReturnValue({
+      reasons: [
+        { id: 'r1', name: 'Troca de senha', active: true },
+        { id: 'r2', name: 'Sem conexão', active: true },
+      ],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', suggestedReasonId: 'r2' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+
+    expect(screen.getByLabelText('Sem conexão')).toBeChecked();
+  });
+
+  test('opens the close-reason popup with nothing pre-selected when there is no AI-suggested reason', async () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+
+    expect(screen.getByLabelText('Troca de senha')).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /confirmar encerramento/i })).toBeDisabled();
   });
 });

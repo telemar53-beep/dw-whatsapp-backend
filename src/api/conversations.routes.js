@@ -401,6 +401,13 @@ router.get('/:id/ai-suggestion', requireAuth, async (req, res) => {
 router.post('/:id/ai-suggestion/:sid/send', requireAuth, async (req, res) => {
   const conversation = await loadOwnedConversation(req, res);
   if (!conversation) return;
+  // closeConversation keeps assigned_agent_id, so the ownership check above still
+  // passes after closing — without this, a suggestion card left on screen could
+  // enqueue a message to the customer on an already-closed conversation. Same
+  // status code and message shape as the ordinary message route's closed check.
+  if (conversation.status === 'closed') {
+    return res.status(409).json({ error: 'Conversation is closed' });
+  }
   const suggestion = await findPendingSuggestion(conversation.id);
   if (!suggestion || suggestion.id !== req.params.sid) {
     return res.status(404).json({ error: 'Suggestion not found' });
@@ -433,6 +440,10 @@ router.post('/:id/ai-suggestion/:sid/send', requireAuth, async (req, res) => {
 router.post('/:id/ai-suggestion/:sid/discard', requireAuth, async (req, res) => {
   const conversation = await loadOwnedConversation(req, res);
   if (!conversation) return;
+  // See the same check in /send: ownership alone survives closing the conversation.
+  if (conversation.status === 'closed') {
+    return res.status(409).json({ error: 'Conversation is closed' });
+  }
   const suggestion = await findPendingSuggestion(conversation.id);
   if (!suggestion || suggestion.id !== req.params.sid) {
     return res.status(404).json({ error: 'Suggestion not found' });

@@ -1543,6 +1543,39 @@ describe('AI suggestion routes', () => {
     expect(markSuggestion).toHaveBeenCalledWith('s-1', 'edited');
   });
 
+  test('POST send returns 409 on a closed conversation, even though closing kept assignedAgentId', async () => {
+    // closeConversation keeps assigned_agent_id, so loadOwnedConversation's ownership
+    // check alone would still pass here — a suggestion card left on screen could
+    // otherwise enqueue a message to the customer on an already-closed conversation.
+    const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'closed' });
+    findPendingSuggestion.mockResolvedValue({ id: 's-1', content: 'texto', status: 'pending' });
+    markSuggestion.mockResolvedValue({ id: 's-1', status: 'sent' });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-1' });
+
+    const res = await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/ai-suggestion/s-1/send`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`).send({});
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('Conversation is closed');
+    expect(markSuggestion).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('POST discard returns 409 on a closed conversation', async () => {
+    const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'closed' });
+    findPendingSuggestion.mockResolvedValue({ id: 's-1', content: 'texto', status: 'pending' });
+    markSuggestion.mockResolvedValue({ id: 's-1', status: 'discarded' });
+
+    const res = await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/ai-suggestion/s-1/discard`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('Conversation is closed');
+    expect(markSuggestion).not.toHaveBeenCalled();
+  });
+
   test('POST discard marks it without sending anything', async () => {
     const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
     getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'assigned' });

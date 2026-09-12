@@ -1,6 +1,7 @@
 jest.mock('axios');
 const axios = require('axios');
-const { createChatCompletion, listModels, OpenAiRequestError, OpenAiAuthError } = require('./openai-client');
+const FormData = require('form-data');
+const { createChatCompletion, listModels, transcribeAudio, OpenAiRequestError, OpenAiAuthError } = require('./openai-client');
 
 describe('openai-client', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -92,5 +93,73 @@ describe('openai-client', () => {
       expect(serialized).not.toContain('sk-secreta');
       expect(serialized).not.toContain('Bearer');
     }
+  });
+
+  describe('transcribeAudio', () => {
+    const fs = require('fs');
+
+    test('manda a chave só no cabeçalho e o modelo no formulário', async () => {
+      jest.spyOn(fs, 'createReadStream').mockReturnValue('STREAM_FALSO');
+      axios.post.mockResolvedValue({ data: { text: 'minha internet caiu' } });
+      // Spy no append em vez de espiar o interno `_streams` do form-data: se a
+      // chave algum dia for anexada ao corpo, ESTA asserção falha. Uma checagem
+      // sobre `_streams` passaria a vazio caso a propriedade não exista.
+      const appendSpy = jest.spyOn(FormData.prototype, 'append');
+
+      const result = await transcribeAudio({
+        apiKey: 'sk-secreta', model: 'modelo-x', filePath: '/tmp/a.ogg',
+        mimeType: 'audio/ogg', prompt: 'PPPoE, ONU',
+      });
+
+      const [url, , options] = axios.post.mock.calls[0];
+      expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
+      expect(options.headers.Authorization).toBe('Bearer sk-secreta');
+      expect(result).toEqual({ texto: 'minha internet caiu' });
+
+      const campos = appendSpy.mock.calls.map((c) => c[0]);
+      expect(campos).toContain('model');
+      expect(campos).toContain('file');
+      expect(campos).toContain('prompt');
+      expect(appendSpy.mock.calls.some((c) => String(c[1]).includes('sk-secreta'))).toBe(false);
+
+      appendSpy.mockRestore();
+      fs.createReadStream.mockRestore();
+    });
+
+    test('devolve apenas o texto, ignorando campos extras da resposta', async () => {
+      jest.spyOn(fs, 'createReadStream').mockReturnValue('STREAM_FALSO');
+      axios.post.mockResolvedValue({ data: { text: 'oi', language: 'pt', duration: 3.2, segments: [] } });
+      const result = await transcribeAudio({ apiKey: 'sk', model: 'm', filePath: '/tmp/a.ogg', mimeType: 'audio/ogg' });
+      expect(result).toEqual({ texto: 'oi' });
+      fs.createReadStream.mockRestore();
+    });
+
+    test('401 vira OpenAiAuthError', async () => {
+      jest.spyOn(fs, 'createReadStream').mockReturnValue('STREAM_FALSO');
+      axios.post.mockRejectedValue({ response: { status: 401 }, message: 'bad key' });
+      await expect(
+        transcribeAudio({ apiKey: 'sk', model: 'm', filePath: '/tmp/a.ogg', mimeType: 'audio/ogg' })
+      ).rejects.toBeInstanceOf(OpenAiAuthError);
+      fs.createReadStream.mockRestore();
+    });
+
+    test('a chave não vaza pela causa do erro', async () => {
+      jest.spyOn(fs, 'createReadStream').mockReturnValue('STREAM_FALSO');
+      const erroReal = new Error('Request failed with status code 500');
+      erroReal.response = { status: 500 };
+      erroReal.config = { headers: { Authorization: 'Bearer sk-secreta' }, data: 'binario' };
+      axios.post.mockRejectedValue(erroReal);
+
+      let capturado;
+      try {
+        await transcribeAudio({ apiKey: 'sk-secreta', model: 'm', filePath: '/tmp/a.ogg', mimeType: 'audio/ogg' });
+      } catch (err) {
+        capturado = err;
+      }
+      const serializado = JSON.stringify(capturado) + JSON.stringify(capturado.cause);
+      expect(serializado).not.toContain('sk-secreta');
+      expect(serializado).not.toContain('Bearer');
+      fs.createReadStream.mockRestore();
+    });
   });
 });

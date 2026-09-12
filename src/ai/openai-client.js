@@ -1,4 +1,6 @@
 const axios = require('axios');
+const fs = require('fs');
+const FormData = require('form-data');
 
 const BASE_URL = 'https://api.openai.com/v1';
 const TIMEOUT_MS = 60000;
@@ -53,4 +55,31 @@ async function listModels(apiKey) {
   return (response.data.data || []).map((m) => m.id).sort();
 }
 
-module.exports = { createChatCompletion, listModels, OpenAiRequestError, OpenAiAuthError };
+const TRANSCRIPTION_TIMEOUT_MS = 120000;
+
+async function transcribeAudio({ apiKey, model, filePath, mimeType, prompt }) {
+  const form = new FormData();
+  form.append('file', fs.createReadStream(filePath), {
+    filename: 'audio' + (mimeType === 'audio/mpeg' ? '.mp3' : '.ogg'),
+    contentType: mimeType || 'audio/ogg',
+  });
+  form.append('model', model);
+  if (prompt) form.append('prompt', prompt);
+
+  let response;
+  try {
+    response = await axios.post(`${BASE_URL}/audio/transcriptions`, form, {
+      headers: { ...form.getHeaders(), ...headers(apiKey) },
+      timeout: TRANSCRIPTION_TIMEOUT_MS,
+      maxBodyLength: Infinity,
+    });
+  } catch (err) {
+    throw traduzErro(err, '/audio/transcriptions');
+  }
+
+  // Só o texto é lido: a resposta traz campos diferentes conforme o modelo e o
+  // formato pedido, e o módulo não deve quebrar quando o admin trocar de modelo.
+  return { texto: (response.data && response.data.text) || '' };
+}
+
+module.exports = { createChatCompletion, listModels, transcribeAudio, OpenAiRequestError, OpenAiAuthError };

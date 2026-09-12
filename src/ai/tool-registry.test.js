@@ -19,7 +19,7 @@ const { listSectors } = require('../sectors/sector.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const {
   setConversationSector, setSuggestedReason, concludeAiTriage, getConversationWithContact,
-  incrementBirthdateAttempts,
+  incrementBirthdateAttempts, markPhoneContested,
 } = require('../conversations/conversation.repository');
 const { setContactSgpLink } = require('../conversations/contact.repository');
 const { saveMediaFile } = require('../media/media-storage');
@@ -567,11 +567,14 @@ describe('confirmar_nascimento', () => {
 });
 
 describe('esquecer_identificacao', () => {
+  beforeEach(() => jest.clearAllMocks());
+
   test('zera a identidade do turno e o vínculo do contato', async () => {
     const c = {
       identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', dataNascimento: 'x' },
       contracts: [{ id: 1 }],
       contact: { id: 'ct-1', sgpDocument: '1', sgpClientId: 9, sgpContractId: 5 },
+      conversationId: 'conv-1',
     };
     const r = await findTool('esquecer_identificacao').executar({}, c);
     expect(r).toEqual({ esquecido: true });
@@ -584,6 +587,31 @@ describe('esquecer_identificacao', () => {
     expect(c.contact.sgpClientId).toBeNull();
     expect(c.contact.sgpContractId).toBeNull();
     expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: null, sgpContractId: null, sgpDocument: null });
+  });
+
+  test('marca o telefone contestado na conversa, para o próximo turno não repetir o mesmo telefone no SGP', async () => {
+    const c = {
+      identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João' },
+      contracts: [],
+      contact: { id: 'ct-1', sgpDocument: '1', sgpClientId: 9, sgpContractId: 5 },
+      conversationId: 'conv-1',
+    };
+    await findTool('esquecer_identificacao').executar({}, c);
+    expect(markPhoneContested).toHaveBeenCalledWith('conv-1');
+  });
+
+  test('markPhoneContested falhando não derruba a limpeza em memória nem do vínculo', async () => {
+    markPhoneContested.mockRejectedValue(new Error('db fora'));
+    const c = {
+      identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João' },
+      contracts: [{ id: 1 }],
+      contact: { id: 'ct-1', sgpDocument: '1', sgpClientId: 9, sgpContractId: 5 },
+      conversationId: 'conv-1',
+    };
+    const r = await findTool('esquecer_identificacao').executar({}, c);
+    expect(r).toEqual({ esquecido: true });
+    expect(c.identidade.nivel).toBe('none');
+    expect(setContactSgpLink).toHaveBeenCalled();
   });
 });
 

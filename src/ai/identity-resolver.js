@@ -51,9 +51,13 @@ async function porCpf(cpf, origem) {
   };
 }
 
-async function resolverIdentidade({ contact }) {
+async function resolverIdentidade({ contact, ignorarTelefone = false }) {
   try {
     if (contact.sgpDocument) return await porCpf(contact.sgpDocument, 'memory');
+    // ignorarTelefone: true depois de esquecer_identificacao (contestação do
+    // nome) — buscar de novo pelo MESMO telefone cumprimentaria a mesma
+    // pessoa errada outra vez. A memória (acima) continua valendo.
+    if (ignorarTelefone) return vazio();
     for (const telefone of variantesTelefone(contact.phoneNumber)) {
       const rec = await sgpClient.findClientRecord({ telefone });
       if (rec.total === 0) continue;

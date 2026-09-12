@@ -10,7 +10,10 @@ const { getBusinessHoursConfig } = require('../business-hours/business-hours.rep
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
 const {
   shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
+  shouldStartAiTriage, scheduleAiTriage,
 } = require('../ai/ai.service');
+const { getAiConfig } = require('../ai/ai-config.repository');
+const { enqueueTriageTimeout } = require('../queue/ai-queue');
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -46,10 +49,20 @@ async function ingestInboundMessage({
   }
   let justCreated = false;
   if (!conversation) {
-    const startTriage = !outsideBusinessHours && (await shouldStartTriage(channelId));
+    // Triagem por IA tem prioridade sobre a triagem numérica: um canal nunca
+    // roda as duas ao mesmo tempo (shouldStartAiTriage já confere aiEnabled +
+    // aiTriageEnabled + shouldRunAi).
+    const aiTriage = await shouldStartAiTriage(channelId);
+    const startTriage = !aiTriage && !outsideBusinessHours && (await shouldStartTriage(channelId));
     try {
-      conversation = await createConversation(contact.id, channelId, startTriage ? 'pending' : null);
+      conversation = await createConversation(contact.id, channelId, aiTriage || startTriage ? 'pending' : null);
       justCreated = true;
+      if (aiTriage) {
+        // Job de segurança: se a IA ficar fora do ar, a conversa não pode
+        // ficar 'pending' (invisível na fila) para sempre.
+        const cfg = await getAiConfig();
+        await enqueueTriageTimeout({ conversationId: conversation.id, delayMs: (cfg.triageTimeoutMinutes || 3) * 60000 });
+      }
     } catch (err) {
       if (err.code !== UNIQUE_VIOLATION) throw err;
       conversation = await findOpenConversation(contact.id, channelId);
@@ -103,15 +116,19 @@ async function ingestInboundMessage({
     }
   }
 
+  // Recalculado aqui (e não reaproveitado do bloco de criação acima) porque
+  // esta checagem também precisa valer numa conversa que já existia — a
+  // triagem por IA de uma conversa reaberta não passa pelo bloco `!conversation`.
+  const triagemIa = conversation.triageState === 'pending' && (await shouldStartAiTriage(channelId));
   if (justCreated) {
     try {
-      if (conversation.triageState === 'pending') {
+      if (conversation.triageState === 'pending' && !triagemIa) {
         await sendTriageQuestion(conversation.id, channelId);
       }
     } catch (err) {
       console.error(`Failed to start triage for conversation ${conversation.id}`, err);
     }
-  } else if (!justCreated && conversation.triageState === 'pending') {
+  } else if (conversation.triageState === 'pending' && !triagemIa) {
     conversation = await processTriageReply(conversation, channelId, content);
   }
 
@@ -130,7 +147,9 @@ async function ingestInboundMessage({
   }
 
   try {
-    if (await shouldRunAi(channelId)) {
+    if (triagemIa) {
+      await scheduleAiTriage(conversation, message);
+    } else if (await shouldRunAi(channelId)) {
       await scheduleAiReply(conversation, message);
     }
   } catch (err) {

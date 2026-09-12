@@ -220,6 +220,30 @@ async function incrementBirthdateAttempts(conversationId) {
   return result.rows[0].ai_triage_birthdate_attempts;
 }
 
+/**
+ * ai_triage_phone_contested vive fora do mapper e das 25 consultas que
+ * enumeram colunas (mesmo tratamento de ai_triage_birthdate_attempts): só
+ * estas duas funções a leem/escrevem. Registra que esquecer_identificacao já
+ * foi chamado nesta conversa — sem isso, o turno seguinte de resolverIdentidade
+ * buscaria de novo pelo MESMO telefone no SGP e cumprimentaria a mesma pessoa
+ * errada.
+ */
+async function markPhoneContested(conversationId) {
+  await getPool().query(
+    `UPDATE conversations SET ai_triage_phone_contested = true WHERE id = $1`,
+    [conversationId]
+  );
+}
+
+async function isPhoneContested(conversationId) {
+  const result = await getPool().query(
+    `SELECT ai_triage_phone_contested FROM conversations WHERE id = $1`,
+    [conversationId]
+  );
+  if (result.rowCount === 0) return false;
+  return Boolean(result.rows[0].ai_triage_phone_contested);
+}
+
 async function activateConversation(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET status = 'waiting', updated_at = now()
@@ -605,4 +629,6 @@ module.exports = {
   markBusinessHoursNoticeSent,
   setSuggestedReason,
   setConversationSector,
+  markPhoneContested,
+  isPhoneContested,
 };

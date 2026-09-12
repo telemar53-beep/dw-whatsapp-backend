@@ -5,7 +5,7 @@ const addMock = jest.fn();
 
 Queue.mockImplementation(() => ({ add: addMock, process: jest.fn(), close: jest.fn() }));
 
-const { enqueueAiReply, AI_DEBOUNCE_MS } = require('./ai-queue');
+const { enqueueAiReply, enqueueTriageTimeout, AI_DEBOUNCE_MS } = require('./ai-queue');
 
 describe('ai-queue', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -27,6 +27,14 @@ describe('ai-queue', () => {
     expect(addMock).toHaveBeenCalledWith(
       { conversationId: 'c-1', messageId: 'm-1' },
       expect.objectContaining({ removeOnComplete: true, removeOnFail: true })
+    );
+  });
+
+  test('enqueueTriageTimeout enfileira o job de segurança com o delay pedido', async () => {
+    await enqueueTriageTimeout({ conversationId: 'c-1', delayMs: 180000 });
+    expect(addMock).toHaveBeenCalledWith(
+      { conversationId: 'c-1', tipo: 'triage-timeout' },
+      expect.objectContaining({ delay: 180000 })
     );
   });
 });

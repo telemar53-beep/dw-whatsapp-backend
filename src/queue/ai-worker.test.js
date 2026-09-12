@@ -6,14 +6,22 @@ jest.mock('../conversations/conversation.repository');
 jest.mock('../conversations/contact.repository');
 jest.mock('../conversations/message.repository');
 jest.mock('../realtime/socket-server');
+jest.mock('../ai/identity-resolver');
+jest.mock('../channels/channel.repository');
+jest.mock('../queue/outbound-queue');
 
 const { runAiTurn } = require('../ai/ai-orchestrator');
 const { createSuggestion } = require('../ai/ai-suggestion.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
-const { getConversationWithContact } = require('../conversations/conversation.repository');
+const {
+  getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
+} = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
-const { findLatestInboundMessageId } = require('../conversations/message.repository');
-const { emitToAgent } = require('../realtime/socket-server');
+const { findLatestInboundMessageId, findMessageById } = require('../conversations/message.repository');
+const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
+const { resolverIdentidade } = require('../ai/identity-resolver');
+const { findChannelById } = require('../channels/channel.repository');
+const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { handleAiJob } = require('./ai-worker');
 
 beforeEach(() => {
@@ -138,5 +146,116 @@ describe('ai-worker', () => {
 
       expect(findLatestInboundMessageId).toHaveBeenCalledWith('c-1', { incluirAudioTranscrito: true });
     });
+  });
+});
+
+describe('ai-worker — triagem', () => {
+  const PENDING = { id: 'c-1', channelId: 'ch-1', status: 'waiting', assignedAgentId: null, triageState: 'pending', triageAttempts: 0, contactId: 'ct-1' };
+  beforeEach(() => {
+    getAiConfig.mockResolvedValue({ mode: 'assistant', apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3, transcriptionFeedAi: true });
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
+    getConversationWithContact.mockResolvedValue(PENDING);
+    findContactById.mockResolvedValue({ id: 'ct-1', phoneNumber: '55989', sgpDocument: null });
+    resolverIdentidade.mockResolvedValue({ nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] });
+    findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text' });
+    findLatestInboundMessageId.mockResolvedValue('m-1');
+    isPhoneContested.mockResolvedValue(false);
+    runAiTurn.mockResolvedValue({ texto: 'Para localizar seu cadastro, me informe seu CPF.', toolsExecutadas: [], erro: null, triagemConcluida: null });
+    // Default: concludeAiTriage "ganha a corrida" (devolve a conversa
+    // atualizada) — sem isto, concluirEmCodigo's guard (if (!conversa) return)
+    // descartaria o broadcast em qualquer teste que não mocke isto por conta
+    // própria, mesmo sem corrida nenhuma acontecendo no cenário.
+    concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+  });
+
+  test('conversa pending sem atendente roda o perfil de triagem e responde ao cliente como IA', async () => {
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ perfil: 'triagem', triagem: expect.objectContaining({ threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false }) }));
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'c-1', channelId: 'ch-1', content: 'Para localizar seu cadastro, me informe seu CPF.', sentBy: 'ai' }));
+    expect(incrementTriageAttempts).toHaveBeenCalledWith('c-1');
+    expect(createSuggestion).not.toHaveBeenCalled();
+  });
+
+  test('turno que concluiu a triagem envia a frase final e não conta pergunta', async () => {
+    runAiTurn.mockResolvedValue({ texto: 'Perfeito, João — o Financeiro continua daqui.', toolsExecutadas: [], erro: null, triagemConcluida: { setor: 'Financeiro' } });
+    getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, triageState: 'completed' });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(enqueueOutboundMessage).toHaveBeenCalled();
+    expect(incrementTriageAttempts).not.toHaveBeenCalled();
+  });
+
+  test('atendente assumiu durante o turno: descarta sem enviar', async () => {
+    getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, status: 'assigned', assignedAgentId: 'a-1' });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('no limite de perguntas força a conclusão; se ainda assim não concluir, conclui em código sem setor', async () => {
+    getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 2 });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ triagem: expect.objectContaining({ forcarConclusao: true }) }));
+    expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ sectorId: null, lowConfidence: true }));
+    expect(broadcast).toHaveBeenCalledWith('queue:new', expect.any(Object));
+  });
+
+  test('canal com triagem desligada no meio: conclui em código e não chama o modelo', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: false });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(runAiTurn).not.toHaveBeenCalled();
+    expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ sectorId: null }));
+  });
+
+  test('conversa assigned continua no perfil assistente, como hoje', async () => {
+    getConversationWithContact.mockResolvedValue({ ...PENDING, status: 'assigned', assignedAgentId: 'a-1', triageState: 'completed' });
+    runAiTurn.mockResolvedValue({ texto: 'sugestão', toolsExecutadas: [], erro: null });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(runAiTurn).toHaveBeenCalledWith(expect.not.objectContaining({ perfil: 'triagem' }));
+    expect(createSuggestion).toHaveBeenCalled();
+  });
+
+  test('job triage-timeout conclui só se ainda estiver pending', async () => {
+    await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+    expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ sectorId: null, summary: expect.stringMatching(/IA indisponível/) }));
+    jest.clearAllMocks();
+    getConversationWithContact.mockResolvedValue({ ...PENDING, triageState: 'completed' });
+    await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  test('a mensagem mais nova ganha também na triagem', async () => {
+    findLatestInboundMessageId.mockResolvedValue('m-2');
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(runAiTurn).not.toHaveBeenCalled();
+  });
+
+  test('a checagem de "mensagem mais nova" na triagem conta qualquer tipo (imagem/documento entram como placeholder)', async () => {
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(findLatestInboundMessageId).toHaveBeenCalledWith('c-1', { qualquerTipo: true });
+  });
+
+  test('o resolutor de identidade recebe ignorarTelefone: true quando o telefone já foi contestado nesta conversa', async () => {
+    isPhoneContested.mockResolvedValue(true);
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(resolverIdentidade).toHaveBeenCalledWith(expect.objectContaining({ ignorarTelefone: true }));
+  });
+
+  test('o resolutor de identidade recebe ignorarTelefone: false quando o telefone não foi contestado', async () => {
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(resolverIdentidade).toHaveBeenCalledWith(expect.objectContaining({ ignorarTelefone: false }));
+  });
+
+  test('a identidade devolvida pelo turno (com data de nascimento e CPF) nunca é logada nem persistida pelo worker', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    runAiTurn.mockResolvedValue({
+      texto: 'Perfeito.', toolsExecutadas: [], erro: null, triagemConcluida: null,
+      identidade: { nivel: 'forte', origem: 'cpf_confirmed', dataNascimento: '1990-05-20', client: { document: '52998224725' } },
+    });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    const tudoLogado = [...logSpy.mock.calls, ...errorSpy.mock.calls].map((args) => JSON.stringify(args)).join(' ');
+    expect(tudoLogado).not.toContain('1990-05-20');
+    expect(tudoLogado).not.toContain('52998224725');
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 });

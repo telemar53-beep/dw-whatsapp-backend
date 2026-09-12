@@ -412,6 +412,26 @@ describe('message repository', () => {
 
       expect(await findLatestInboundMessageId(conversationId)).toBe(texto.id);
     });
+
+    test('com qualquerTipo: true, uma imagem enviada depois de um texto é a mais recente', async () => {
+      // Na triagem a IA reage a imagem e documento (placeholder no histórico),
+      // então o job da imagem não pode se achar ultrapassado.
+      await createMessage({ conversationId, direction: 'inbound', content: 'texto', whatsappMessageId: 'w7',
+        status: 'received', messageType: 'text' });
+      const foto = await createMessage({ conversationId, direction: 'inbound', content: null, whatsappMessageId: 'w8',
+        status: 'received', messageType: 'image', mediaPath: 'a.jpg', mediaMimeType: 'image/jpeg' });
+
+      expect(await findLatestInboundMessageId(conversationId, { qualquerTipo: true })).toBe(foto.id);
+    });
+
+    test('sem qualquerTipo, a mesma imagem continua não contando (a mais recente é o texto)', async () => {
+      const texto = await createMessage({ conversationId, direction: 'inbound', content: 'texto', whatsappMessageId: 'w9',
+        status: 'received', messageType: 'text' });
+      await createMessage({ conversationId, direction: 'inbound', content: null, whatsappMessageId: 'w10',
+        status: 'received', messageType: 'image', mediaPath: 'a.jpg', mediaMimeType: 'image/jpeg' });
+
+      expect(await findLatestInboundMessageId(conversationId)).toBe(texto.id);
+    });
   });
 
   test('uma mensagem de áudio carrega os campos de transcrição em branco por padrão', async () => {

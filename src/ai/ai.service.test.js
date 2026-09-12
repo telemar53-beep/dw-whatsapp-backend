@@ -11,6 +11,7 @@ const { enqueueTranscription } = require('../queue/transcription-queue');
 const { markTranscriptionPending } = require('../conversations/message.repository');
 const {
   shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
+  shouldStartAiTriage, scheduleAiTriage,
 } = require('./ai.service');
 
 beforeEach(() => jest.clearAllMocks());
@@ -103,5 +104,26 @@ describe('ai.service', () => {
     jest.clearAllMocks();
     await enqueueTranscriptionJob({ id: 'c-1' }, { id: 'm-2', messageType: 'image' });
     expect(enqueueTranscription).not.toHaveBeenCalled();
+  });
+
+  test('shouldStartAiTriage exige IA no canal, triagem no canal e config válida', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
+    getAiConfig.mockResolvedValue({ mode: 'assistant', apiKey: 'k', model: 'm' });
+    expect(await shouldStartAiTriage('ch-1')).toBe(true);
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: false });
+    expect(await shouldStartAiTriage('ch-1')).toBe(false);
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: false, aiTriageEnabled: true });
+    expect(await shouldStartAiTriage('ch-1')).toBe(false);
+  });
+
+  test('scheduleAiTriage enfileira texto, imagem, documento e áudio sem transcrição; não enfileira áudio com transcrição agendada', async () => {
+    for (const m of [{ id: 'm1', messageType: 'text', content: 'oi' }, { id: 'm2', messageType: 'image' }, { id: 'm3', messageType: 'document' }, { id: 'm4', messageType: 'audio', transcriptionStatus: null }]) {
+      await scheduleAiTriage({ id: 'c-1' }, m);
+    }
+    expect(enqueueAiReply).toHaveBeenCalledTimes(4);
+    jest.clearAllMocks();
+    await scheduleAiTriage({ id: 'c-1' }, { id: 'm5', messageType: 'audio', transcriptionStatus: 'pending' });
+    await scheduleAiTriage({ id: 'c-1' }, { id: 'm6', messageType: 'location' });
+    expect(enqueueAiReply).not.toHaveBeenCalled();
   });
 });

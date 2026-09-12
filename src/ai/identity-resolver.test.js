@@ -81,4 +81,27 @@ describe('resolverIdentidade', () => {
     const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '55', sgpDocument: '52998224725' } });
     expect(JSON.stringify({ ...r, contracts: [] })).not.toContain('SILVA');
   });
+
+  test('ignorarTelefone: true pula a busca por telefone quando não há memória (contestação persiste)', async () => {
+    // Ruling da Task 4: depois de esquecer_identificacao, o vínculo do
+    // contato é limpo, mas buscar pelo MESMO telefone de novo cumprimentaria
+    // a mesma pessoa errada outra vez.
+    const r = await resolverIdentidade({
+      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null },
+      ignorarTelefone: true,
+    });
+    expect(r).toMatchObject({ nivel: 'none', origem: 'none' });
+    expect(sgpClient.findClientRecord).not.toHaveBeenCalled();
+  });
+
+  test('ignorarTelefone: true não afeta a memória (sgpDocument já vinculado continua identificando)', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
+    const r = await resolverIdentidade({
+      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725' },
+      ignorarTelefone: true,
+    });
+    expect(r.nivel).toBe('forte');
+    expect(r.origem).toBe('memory');
+  });
 });

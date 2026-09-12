@@ -9,6 +9,8 @@ jest.mock('../city-notices/city-notice.repository');
 jest.mock('../business-hours/business-hours.repository');
 jest.mock('../business-hours/business-hours.service');
 jest.mock('../ai/ai.service');
+jest.mock('../ai/ai-config.repository');
+jest.mock('../queue/ai-queue');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent } = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
@@ -25,7 +27,10 @@ const { getBusinessHoursConfig } = require('../business-hours/business-hours.rep
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
 const {
   shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
+  shouldStartAiTriage, scheduleAiTriage,
 } = require('../ai/ai.service');
+const { getAiConfig } = require('../ai/ai-config.repository');
+const { enqueueTriageTimeout } = require('../queue/ai-queue');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
 describe('ingestInboundMessage', () => {
@@ -38,6 +43,8 @@ describe('ingestInboundMessage', () => {
     isOutsideBusinessHours.mockReturnValue(false);
     shouldRunAi.mockResolvedValue(false);
     shouldTranscribe.mockResolvedValue(false);
+    shouldStartAiTriage.mockResolvedValue(false);
+    getAiConfig.mockResolvedValue({ triageTimeoutMinutes: 3 });
   });
 
   test('reuses an existing open conversation and broadcasts queue:new when unassigned', async () => {
@@ -1043,6 +1050,117 @@ describe('ingestInboundMessage', () => {
       });
 
       expect(result.message).not.toBeNull();
+    });
+  });
+
+  describe('AI triage hook', () => {
+    test('canal com triagem IA: nasce pending, não pergunta a triagem numérica, agenda o turno de IA e o timeout de segurança', async () => {
+      shouldStartAiTriage.mockResolvedValue(true);
+      getAiConfig.mockResolvedValue({ triageTimeoutMinutes: 5 });
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-triageai-1' });
+      findOpenConversation.mockResolvedValue(null);
+      createConversation.mockResolvedValue({ id: 'conv-triageai-1', assignedAgentId: null, triageState: 'pending' });
+      createMessage.mockResolvedValue({ id: 'msg-triageai-1', messageType: 'text' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-triageai-1', assignedAgentId: null, triageState: 'pending' });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999970001',
+        contactDisplayName: 'Cliente IA',
+        whatsappMessageId: 'wamid.TRIAGEAI1',
+        content: 'Oi',
+        messageType: 'text',
+      });
+
+      expect(createConversation).toHaveBeenCalledWith('contact-triageai-1', 'channel-1', 'pending');
+      expect(sendTriageQuestion).not.toHaveBeenCalled();
+      expect(processTriageReply).not.toHaveBeenCalled();
+      expect(scheduleAiTriage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'conv-triageai-1' }),
+        expect.objectContaining({ id: 'msg-triageai-1' })
+      );
+      expect(enqueueTriageTimeout).toHaveBeenCalledWith({ conversationId: 'conv-triageai-1', delayMs: 5 * 60000 });
+      expect(scheduleAiReply).not.toHaveBeenCalled();
+    });
+
+    test('mensagem seguinte com triagem IA ainda pending: não roda a triagem numérica, agenda de novo o turno de IA', async () => {
+      shouldStartAiTriage.mockResolvedValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-triageai-2' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-triageai-2', assignedAgentId: null, triageState: 'pending' });
+      createMessage.mockResolvedValue({ id: 'msg-triageai-2', messageType: 'text' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-triageai-2', assignedAgentId: null, triageState: 'pending' });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999970002',
+        contactDisplayName: 'Cliente IA',
+        whatsappMessageId: 'wamid.TRIAGEAI2',
+        content: 'meu cpf é 111',
+        messageType: 'text',
+      });
+
+      expect(createConversation).not.toHaveBeenCalled();
+      expect(processTriageReply).not.toHaveBeenCalled();
+      expect(enqueueTriageTimeout).not.toHaveBeenCalled();
+      expect(scheduleAiTriage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'conv-triageai-2' }),
+        expect.objectContaining({ id: 'msg-triageai-2' })
+      );
+      expect(scheduleAiReply).not.toHaveBeenCalled();
+    });
+
+    test('canal sem a flag de triagem por IA: comportamento igual ao de hoje (triagem numérica normal)', async () => {
+      shouldStartAiTriage.mockResolvedValue(false);
+      shouldStartTriage.mockResolvedValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-triageai-3' });
+      findOpenConversation.mockResolvedValue(null);
+      createConversation.mockResolvedValue({ id: 'conv-triageai-3', assignedAgentId: null, triageState: 'pending' });
+      createMessage.mockResolvedValue({ id: 'msg-triageai-3', messageType: 'text' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-triageai-3', assignedAgentId: null, triageState: 'pending' });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999970003',
+        contactDisplayName: 'Cliente Normal',
+        whatsappMessageId: 'wamid.TRIAGEAI3',
+        content: 'Oi',
+        messageType: 'text',
+      });
+
+      expect(createConversation).toHaveBeenCalledWith('contact-triageai-3', 'channel-1', 'pending');
+      expect(sendTriageQuestion).toHaveBeenCalledWith('conv-triageai-3', 'channel-1');
+      expect(scheduleAiTriage).not.toHaveBeenCalled();
+      expect(enqueueTriageTimeout).not.toHaveBeenCalled();
+    });
+
+    test('fora do horário comercial com triagem por IA: ainda nasce pending, e o aviso de horário sai como hoje', async () => {
+      getBusinessHoursConfig.mockResolvedValue({
+        enabled: true, startTime: '08:00', endTime: '18:00', message: 'Fora do horário.',
+      });
+      isOutsideBusinessHours.mockReturnValue(true);
+      shouldStartAiTriage.mockResolvedValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-triageai-4' });
+      findOpenConversation.mockResolvedValue(null);
+      createConversation.mockResolvedValue({ id: 'conv-triageai-4', assignedAgentId: null, triageState: 'pending', businessHoursNoticeSentAt: null });
+      createMessage.mockResolvedValue({ id: 'msg-triageai-4', messageType: 'text' });
+      markBusinessHoursNoticeSent.mockResolvedValue({ id: 'conv-triageai-4', assignedAgentId: null, triageState: 'pending', businessHoursNoticeSentAt: '2026-09-14T03:00:00.000Z' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-triageai-4', assignedAgentId: null, triageState: 'pending' });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999970004',
+        contactDisplayName: 'Cliente IA Fora Horário',
+        whatsappMessageId: 'wamid.TRIAGEAI4',
+        content: 'Oi',
+        messageType: 'text',
+      });
+
+      expect(createConversation).toHaveBeenCalledWith('contact-triageai-4', 'channel-1', 'pending');
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+        conversationId: 'conv-triageai-4', channelId: 'channel-1', content: 'Fora do horário.',
+      });
+      expect(scheduleAiTriage).toHaveBeenCalled();
+      expect(sendTriageQuestion).not.toHaveBeenCalled();
     });
   });
 

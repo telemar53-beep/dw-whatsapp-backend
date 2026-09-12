@@ -34,6 +34,8 @@ const {
   setSuggestedReason,
   setConversationSector,
   concludeAiTriage,
+  markPhoneContested,
+  isPhoneContested,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -1056,5 +1058,22 @@ describe('conversation repository', () => {
     expect(claimed.aiTriageSummary).toBe('resumo X');
     const moved = await setConversationSector(conv.id, setor);
     expect(moved.aiTriageSummary).toBe('resumo X');
+  });
+
+  describe('ai_triage_phone_contested', () => {
+    test('isPhoneContested é false por padrão numa conversa nova', async () => {
+      const conv = await createConversation(contactId, channelId, 'pending');
+      expect(await isPhoneContested(conv.id)).toBe(false);
+    });
+
+    test('markPhoneContested marca a coluna e isPhoneContested passa a devolver true', async () => {
+      const conv = await createConversation(contactId, channelId, 'pending');
+      await markPhoneContested(conv.id);
+      expect(await isPhoneContested(conv.id)).toBe(true);
+    });
+
+    test('isPhoneContested devolve false para uma conversa que não existe', async () => {
+      expect(await isPhoneContested('00000000-0000-0000-0000-000000000000')).toBe(false);
+    });
   });
 });

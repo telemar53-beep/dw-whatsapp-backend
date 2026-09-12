@@ -5,7 +5,7 @@ const { findReasonById } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const {
   setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
-  incrementBirthdateAttempts,
+  incrementBirthdateAttempts, markPhoneContested,
 } = require('../conversations/conversation.repository');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
@@ -554,6 +554,16 @@ const TOOLS = [
         contexto.contact.sgpClientId = null;
         contexto.contact.sgpContractId = null;
         await setContactSgpLink(contexto.contact.id, { sgpClientId: null, sgpContractId: null, sgpDocument: null });
+      }
+      // Persiste a contestação na conversa: sem isso, o turno seguinte
+      // (resolverIdentidade) buscaria de novo pelo MESMO telefone no SGP e
+      // cumprimentaria a mesma pessoa errada de novo. Try/catch de propósito:
+      // a limpeza em memória e do vínculo já aconteceu e não pode falhar por
+      // causa disto.
+      try {
+        await markPhoneContested(contexto.conversationId);
+      } catch (err) {
+        console.error(`Failed to mark phone contested for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
       }
       return { esquecido: true };
     },

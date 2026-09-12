@@ -19,6 +19,25 @@ async function scheduleAiReply(conversation, message) {
   await enqueueAiReply({ conversationId: conversation.id, messageId: message.id });
 }
 
+async function shouldStartAiTriage(channelId) {
+  const channel = await findChannelById(channelId);
+  if (!channel || !channel.aiEnabled || !channel.aiTriageEnabled) return false;
+  return shouldRunAi(channelId);
+}
+
+// Na triagem a IA precisa reagir a tudo que o cliente manda: imagem e
+// documento viram placeholder no histórico (ela pergunta "é um comprovante?");
+// áudio COM transcrição agendada não entra aqui — o worker de transcrição
+// enfileira o turno quando o texto ficar pronto.
+async function scheduleAiTriage(conversation, message) {
+  if (!message) return;
+  const tipo = message.messageType;
+  const entra = (tipo === 'text' && message.content) || tipo === 'image' || tipo === 'document'
+    || (tipo === 'audio' && !message.transcriptionStatus);
+  if (!entra) return;
+  await enqueueAiReply({ conversationId: conversation.id, messageId: message.id });
+}
+
 async function shouldTranscribe(channelId) {
   const channel = await findChannelById(channelId);
   if (!channel || !channel.aiEnabled) return false;
@@ -51,4 +70,5 @@ async function enqueueTranscriptionJob(conversation, message) {
 
 module.exports = {
   shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
+  shouldStartAiTriage, scheduleAiTriage,
 };

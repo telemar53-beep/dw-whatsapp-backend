@@ -44,6 +44,19 @@ async function enqueueAiReply({ conversationId, messageId }) {
   );
 }
 
+/**
+ * Job de segurança da triagem: se a IA ficar fora do ar, a conversa não pode
+ * ficar 'pending' (invisível na fila) para sempre. Sem jobId fixo — ver o
+ * comentário de enqueueAiReply; o handler é idempotente (só age se ainda
+ * estiver pending).
+ */
+async function enqueueTriageTimeout({ conversationId, delayMs }) {
+  await getAiQueue().add(
+    { conversationId, tipo: 'triage-timeout' },
+    { delay: delayMs, attempts: 1, removeOnComplete: true, removeOnFail: true }
+  );
+}
+
 function processAiQueue(handler) {
   getAiQueue().process(async (job) => handler(job.data));
 }
@@ -55,4 +68,4 @@ async function closeAiQueue() {
   }
 }
 
-module.exports = { getAiQueue, enqueueAiReply, processAiQueue, closeAiQueue, AI_DEBOUNCE_MS };
+module.exports = { getAiQueue, enqueueAiReply, enqueueTriageTimeout, processAiQueue, closeAiQueue, AI_DEBOUNCE_MS };

@@ -187,14 +187,20 @@ async function findMessageById(id) {
  * que o filtro original evita para foto/documento, só que do lado do áudio.
  * O chamador (ai-worker.js) passa `config.transcriptionFeedAi` nessa opção.
  */
-async function findLatestInboundMessageId(conversationId, { incluirAudioTranscrito = true } = {}) {
-  const filtroTipo = incluirAudioTranscrito
-    ? `(message_type = 'text' OR (message_type = 'audio' AND transcription_status = 'completed'))`
-    : `message_type = 'text'`;
+async function findLatestInboundMessageId(conversationId, { incluirAudioTranscrito = true, qualquerTipo = false } = {}) {
+  // qualquerTipo existe para a triagem por IA: lá, imagem, documento e áudio
+  // sem transcrição também geram turno (viram placeholder no histórico) — sem
+  // esta opção o job da imagem se acharia sempre ultrapassado pelo filtro de
+  // texto/áudio-transcrito abaixo, e nunca rodaria.
+  const filtroTipo = qualquerTipo
+    ? ''
+    : incluirAudioTranscrito
+      ? `AND (message_type = 'text' OR (message_type = 'audio' AND transcription_status = 'completed'))`
+      : `AND message_type = 'text'`;
   const result = await getPool().query(
     `SELECT id FROM messages
       WHERE conversation_id = $1 AND direction = 'inbound'
-        AND ${filtroTipo}
+        ${filtroTipo}
       ORDER BY created_at DESC LIMIT 1`,
     [conversationId]
   );

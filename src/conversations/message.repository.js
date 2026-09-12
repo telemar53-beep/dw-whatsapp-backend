@@ -150,6 +150,23 @@ async function findMessageById(id) {
   return toMessage(result.rows[0]);
 }
 
+/**
+ * O id da mensagem inbound mais recente da conversa (ou null, se não houver
+ * nenhuma). Usada pela fila da IA para saber se um job ainda representa a
+ * última coisa que o cliente escreveu — filtra por direction porque a
+ * mensagem cronologicamente mais nova pode muito bem ser uma resposta da
+ * própria IA, o que faria todo job se achar "ultrapassado".
+ */
+async function findLatestInboundMessageId(conversationId) {
+  const result = await getPool().query(
+    `SELECT id FROM messages WHERE conversation_id = $1 AND direction = 'inbound'
+     ORDER BY created_at DESC LIMIT 1`,
+    [conversationId]
+  );
+  if (result.rowCount === 0) return null;
+  return result.rows[0].id;
+}
+
 module.exports = {
   createMessage,
   updateMessageStatus,
@@ -158,4 +175,5 @@ module.exports = {
   listMessagesByConversation,
   listRecentMessagesByConversation,
   findMessageById,
+  findLatestInboundMessageId,
 };

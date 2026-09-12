@@ -10,6 +10,7 @@ const {
   listRecentMessagesByConversation,
   findMessageById,
   advanceMessageStatus,
+  findLatestInboundMessageId,
 } = require('./message.repository');
 
 describe('message repository', () => {
@@ -286,6 +287,48 @@ describe('message repository', () => {
     test('returns null when no message has that whatsapp message id', async () => {
       const result = await advanceMessageStatus('wamid.UNKNOWN', 'delivered');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('findLatestInboundMessageId', () => {
+    test('ignores an outbound message sent after the last inbound one', async () => {
+      // A mensagem cronologicamente mais nova da conversa é a de saída (a
+      // resposta automática) — se a função não filtrasse por direction, ela
+      // devolveria o id dela, e todo job da fila da IA acharia que a "última
+      // mensagem do cliente" foi escrita pela própria IA.
+      const inbound = await createMessage({
+        conversationId, direction: 'inbound', content: 'oi', whatsappMessageId: 'wamid.LATEST1', status: 'received',
+      });
+      await createMessage({
+        conversationId, direction: 'outbound', content: 'resposta automática', whatsappMessageId: null, status: 'sent',
+      });
+
+      const latestInboundId = await findLatestInboundMessageId(conversationId);
+
+      expect(latestInboundId).toBe(inbound.id);
+    });
+
+    test('returns the newest inbound message when there is more than one', async () => {
+      await createMessage({
+        conversationId, direction: 'inbound', content: 'oi', whatsappMessageId: 'wamid.OLD1', status: 'received',
+      });
+      const newest = await createMessage({
+        conversationId, direction: 'inbound', content: 'minha internet caiu', whatsappMessageId: 'wamid.NEW1', status: 'received',
+      });
+
+      const latestInboundId = await findLatestInboundMessageId(conversationId);
+
+      expect(latestInboundId).toBe(newest.id);
+    });
+
+    test('returns null when the conversation has no inbound messages', async () => {
+      await createMessage({
+        conversationId, direction: 'outbound', content: 'oi', whatsappMessageId: null, status: 'sent',
+      });
+
+      const latestInboundId = await findLatestInboundMessageId(conversationId);
+
+      expect(latestInboundId).toBeNull();
     });
   });
 });

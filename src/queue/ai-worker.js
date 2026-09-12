@@ -4,10 +4,11 @@ const { createSuggestion } = require('../ai/ai-suggestion.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
+const { findLatestInboundMessageId } = require('../conversations/message.repository');
 const { emitToAgent } = require('../realtime/socket-server');
 const { mensagemSegura } = require('../ai/safe-error-log');
 
-async function handleAiJob({ conversationId }) {
+async function handleAiJob({ conversationId, messageId }) {
   const conversation = await getConversationWithContact(conversationId);
   if (!conversation || conversation.status === 'closed' || conversation.status === 'silent') return;
 
@@ -18,6 +19,13 @@ async function handleAiJob({ conversationId }) {
   if (config.mode === 'assistant' && !conversation.assignedAgentId) return;
   // Automático para no instante em que um humano assume.
   if (config.mode === 'automatic' && conversation.assignedAgentId) return;
+
+  // A mensagem mais nova ganha: se o cliente já escreveu de novo depois desta
+  // mensagem, um job mais novo (com o histórico completo) já está agendado ou
+  // vai ser — este aqui sai sem gastar uma chamada à OpenAI. Ver o comentário
+  // em ai-queue.js sobre por que isto substituiu o debounce por jobId fixo.
+  const latestInboundMessageId = await findLatestInboundMessageId(conversationId);
+  if (latestInboundMessageId !== messageId) return;
 
   const contact = await findContactById(conversation.contactId);
   if (!contact) return;

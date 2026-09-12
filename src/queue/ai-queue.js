@@ -14,34 +14,31 @@ function getAiQueue() {
 }
 
 /**
- * Debounce por conversa: o jobId é o id da conversa, então três mensagens
- * seguidas do cliente viram uma resposta só. Um job que já começou a rodar não
- * pode ser removido — nesse caso agendamos outro ciclo mesmo assim, senão a
- * última mensagem ficaria sem resposta.
+ * Sem jobId fixo por conversa: cada mensagem gera seu próprio job, atrasado
+ * AI_DEBOUNCE_MS. N mensagens em rajada produzem N jobs, mas o handler (em
+ * ai-worker.js) confere se o messageId do job ainda é a última mensagem
+ * inbound da conversa antes de gastar uma chamada à OpenAI — só o job da
+ * mensagem mais recente faz trabalho de verdade; os anteriores saem baratos.
+ *
+ * Uma versão anterior usava jobId = conversationId, removendo o job pendente
+ * antes de agendar o próximo (debounce "de verdade", via reset do timer). Foi
+ * abandonada: o script addJob do Bull silencia add() sempre que já existe um
+ * job com aquele id em QUALQUER estado, inclusive 'active'. Isso tornava a
+ * mensagem chegada durante um turno de IA em andamento (a janela mais comum,
+ * já que o turno leva segundos) incapaz de agendar um novo ciclo — o
+ * "agendamos mesmo assim" virava um no-op silencioso, e a IA emudecia pra
+ * aquele cliente sem erro nenhum. "A mensagem mais nova ganha" tem um modo de
+ * falha visível (a IA responder duas vezes) em vez de invisível.
  */
-async function enqueueAiReply({ conversationId }) {
-  const q = getAiQueue();
-  const pendente = await q.getJob(conversationId);
-  if (pendente) {
-    try {
-      await pendente.remove();
-    } catch (err) {
-      // Já estava rodando; segue para agendar o próximo ciclo.
-    }
-  }
-  await q.add(
-    { conversationId },
+async function enqueueAiReply({ conversationId, messageId }) {
+  await getAiQueue().add(
+    { conversationId, messageId },
     {
-      jobId: conversationId,
       delay: AI_DEBOUNCE_MS,
       attempts: 1,
       removeOnComplete: true,
-      // Bull ignora add() em silêncio quando já existe um job com o mesmo
-      // jobId em QUALQUER estado, inclusive 'failed'. Como o jobId aqui é o
-      // id da conversa, um job que falhasse ficaria parado no failed set
-      // para sempre sob esse id, e toda mensagem seguinte dessa conversa
-      // seria descartada sem erro nenhum em lugar nenhum. Não remova isto
-      // achando redundante — é exatamente essa falha que ele evita.
+      // Mantém a fila limpa mesmo sem jobId fixo: um job falho não deve
+      // acumular no failed set indefinidamente.
       removeOnFail: true,
     }
   );

@@ -10,6 +10,7 @@ const {
   findContactByPhoneNumber,
   updateContact,
   listContactsMissingAvatarForBaileysBackfill,
+  setContactSgpLink,
 } = require('./contact.repository');
 
 describe('contact repository', () => {
@@ -169,6 +170,27 @@ describe('contact repository', () => {
   test('a freshly created contact has no internal note', async () => {
     const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
     expect(contact.internalNote).toBeNull();
+  });
+
+  test('setContactSgpLink stores the SGP client link on the contact', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('5598911112222', 'Fulano');
+    const updated = await setContactSgpLink(contact.id, {
+      sgpClientId: 16957, sgpContractId: 17402, sgpDocument: '52998224725',
+    });
+    expect(updated.sgpClientId).toBe(16957);
+    expect(updated.sgpContractId).toBe(17402);
+    expect(updated.sgpDocument).toBe('52998224725');
+
+    const reread = await findContactById(contact.id);
+    expect(reread.sgpContractId).toBe(17402);
+  });
+
+  test('setContactSgpLink can switch the chosen contract without losing the client', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('5598933334444', null);
+    await setContactSgpLink(contact.id, { sgpClientId: 16957, sgpContractId: 17402, sgpDocument: '52998224725' });
+    const updated = await setContactSgpLink(contact.id, { sgpClientId: 16957, sgpContractId: 18511, sgpDocument: '52998224725' });
+    expect(updated.sgpClientId).toBe(16957);
+    expect(updated.sgpContractId).toBe(18511);
   });
 
   describe('listContactsMissingAvatarForBaileysBackfill', () => {

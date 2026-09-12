@@ -413,6 +413,12 @@ router.post('/:id/ai-suggestion/:sid/send', requireAuth, async (req, res) => {
     return res.status(404).json({ error: 'Suggestion not found' });
   }
   const { content } = req.body || {};
+  // content is genuinely optional — absent still means "send unedited" — but a
+  // present, non-string value must not silently fall through to that same
+  // "unedited" path and end up sending the AI's original draft to the customer.
+  if (content !== undefined && typeof content !== 'string') {
+    return res.status(400).json({ error: 'content must be a string' });
+  }
   const edited = typeof content === 'string' && content.trim() && content.trim() !== suggestion.content;
   const text = edited ? content.trim() : suggestion.content;
 

@@ -1528,6 +1528,25 @@ describe('AI suggestion routes', () => {
     expect(markSuggestion).toHaveBeenCalledWith('s-1', 'sent');
   });
 
+  test('POST send rejects a non-string content instead of silently sending the original draft', async () => {
+    // content is genuinely optional (absent still means "send unedited" — see the
+    // very first send test above, which posts {}), but a malformed, present value
+    // must not fall through to "no edit" and end up sent to the customer as-is.
+    const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'assigned' });
+    findPendingSuggestion.mockResolvedValue({ id: 's-1', content: 'Seu plano é 600MB.', status: 'pending' });
+    markSuggestion.mockResolvedValue({ id: 's-1', status: 'sent' });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-1' });
+
+    const res = await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/ai-suggestion/s-1/send`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`)
+      .send({ content: 123 });
+
+    expect(res.status).toBe(400);
+    expect(markSuggestion).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
   test('POST send with edited content marks it as edited and sends the edit', async () => {
     const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
     getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'assigned' });

@@ -48,24 +48,39 @@ async function ingestInboundMessage({
     conversation = await activateConversation(conversation.id);
   }
   let justCreated = false;
+  // Hoisted para fora do bloco `if (!conversation)`: reaproveitado mais abaixo
+  // (triagemIa) para não chamar shouldStartAiTriage duas vezes quando a
+  // conversa acabou de nascer.
+  let aiTriage = false;
   if (!conversation) {
     // Triagem por IA tem prioridade sobre a triagem numérica: um canal nunca
     // roda as duas ao mesmo tempo (shouldStartAiTriage já confere aiEnabled +
     // aiTriageEnabled + shouldRunAi).
-    const aiTriage = await shouldStartAiTriage(channelId);
+    aiTriage = await shouldStartAiTriage(channelId);
     const startTriage = !aiTriage && !outsideBusinessHours && (await shouldStartTriage(channelId));
     try {
       conversation = await createConversation(contact.id, channelId, aiTriage || startTriage ? 'pending' : null);
       justCreated = true;
-      if (aiTriage) {
-        // Job de segurança: se a IA ficar fora do ar, a conversa não pode
-        // ficar 'pending' (invisível na fila) para sempre.
-        const cfg = await getAiConfig();
-        await enqueueTriageTimeout({ conversationId: conversation.id, delayMs: (cfg.triageTimeoutMinutes || 3) * 60000 });
-      }
     } catch (err) {
       if (err.code !== UNIQUE_VIOLATION) throw err;
       conversation = await findOpenConversation(contact.id, channelId);
+    }
+  }
+
+  // I2 (fix round 1): fora do try/catch de createConversation de propósito.
+  // Aquele catch só perdoa 23505 (corrida de criação) e relança qualquer
+  // outro erro — um enqueueTriageTimeout (Redis) ou getAiConfig (Postgres)
+  // que falhasse ali dentro faria o erro subir e a mensagem do cliente NUNCA
+  // ser persistida (createMessage, mais abaixo, nem seria alcançado), mesmo a
+  // conversa já tendo sido criada. Aqui, uma falha só loga — a conversa já
+  // nasceu 'pending' e o pior caso é depender só da triagem por IA responder
+  // no prazo normal, sem o job de segurança.
+  if (justCreated && aiTriage) {
+    try {
+      const cfg = await getAiConfig();
+      await enqueueTriageTimeout({ conversationId: conversation.id, delayMs: (cfg.triageTimeoutMinutes || 3) * 60000 });
+    } catch (err) {
+      console.error(`Failed to schedule triage timeout for conversation ${conversation.id}`, err);
     }
   }
   let message;
@@ -116,10 +131,14 @@ async function ingestInboundMessage({
     }
   }
 
-  // Recalculado aqui (e não reaproveitado do bloco de criação acima) porque
-  // esta checagem também precisa valer numa conversa que já existia — a
-  // triagem por IA de uma conversa reaberta não passa pelo bloco `!conversation`.
-  const triagemIa = conversation.triageState === 'pending' && (await shouldStartAiTriage(channelId));
+  // Reaproveita `aiTriage` (computado no bloco de criação) quando a conversa
+  // acabou de nascer, em vez de chamar shouldStartAiTriage de novo — mas essa
+  // checagem também precisa valer numa conversa que já existia (triagem por
+  // IA de uma conversa reaberta não passa pelo bloco `!conversation`), daí o
+  // fallback para o `justCreated ? false : ...` não servir: só pulamos a
+  // segunda chamada quando `justCreated` é true.
+  const triagemIa = conversation.triageState === 'pending'
+    && (justCreated ? aiTriage : await shouldStartAiTriage(channelId));
   if (justCreated) {
     try {
       if (conversation.triageState === 'pending' && !triagemIa) {

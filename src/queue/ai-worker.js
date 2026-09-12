@@ -99,11 +99,23 @@ async function handleTriageTimeout(conversationId) {
 async function handleTriageTurn({ conversation, config, messageId }) {
   const channel = await findChannelById(conversation.channelId);
   if (!channel || !channel.aiEnabled || !channel.aiTriageEnabled) {
-    return concluirEmCodigo(conversation.id, 'Triagem por IA desligada no canal durante a triagem.');
+    // I3 (fix round 1): NÃO conclui em código aqui. Um canal migrado do menu
+    // numérico para a IA (ai_enabled ligado, ai_triage_enabled ainda
+    // desligado) pode ter conversas 'pending' abertas de antes da migração;
+    // a próxima mensagem cai neste ramo (emTriagem olha só triageState +
+    // status, não a flag do canal), e concluir mataria o menu numérico com um
+    // resumo de "IA desligada" — o cliente nunca mais veria a pergunta
+    // numérica de novo. O job de timeout já é o dono do caso "triagem por IA
+    // interrompida"; aqui só sai sem fazer nada, deixando o fluxo normal
+    // (numérico, se houver) seguir na próxima mensagem.
+    return;
   }
-  // Na triagem qualquer tipo conta como "a mais nova": imagem e documento
-  // viram placeholder no histórico e precisam de turno (ver message.repository.js).
-  const latest = await findLatestInboundMessageId(conversation.id, { qualquerTipo: true });
+  // Na triagem, qualquer um dos tipos que realmente geram turno conta como "a
+  // mais nova" — restrito a text/image/document/audio (fix round 1, I1):
+  // sticker, vídeo e localização NUNCA são enfileirados por scheduleAiTriage,
+  // então não podem contar aqui, ou o job de um texto anterior se acharia
+  // ultrapassado e sairia sem responder.
+  const latest = await findLatestInboundMessageId(conversation.id, { tiposTriagem: true });
   if (latest !== messageId) return;
 
   const contact = await findContactById(conversation.contactId);
@@ -116,22 +128,33 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   const mensagem = await findMessageById(messageId);
   const origemMensagem = mensagem && mensagem.messageType === 'audio' ? 'áudio' : 'texto';
   const attempts = conversation.triageAttempts || 0;
-  const forcarConclusao = attempts >= config.triageMaxQuestions;
+  // config vem do banco (ai_config) — uma config incompleta/corrompida não
+  // pode virar `attempts >= undefined` (sempre false) nem contaminar o que o
+  // modelo recebe como maxQuestions.
+  const maxQuestions = Number.isInteger(config.triageMaxQuestions) ? config.triageMaxQuestions : 2;
+  const forcarConclusao = attempts >= maxQuestions;
 
   // O turno pode devolver identidade.dataNascimento e o CPF do cliente
   // (contexto.identidade em ai-orchestrator.js) — nunca vão a log nem são
   // persistidos aqui; o worker só olha turno.texto e turno.triagemConcluida.
   const turno = await runAiTurn({
     conversation, contact, perfil: 'triagem', identidade, origemMensagem,
-    triagem: { threshold: config.triageConfidenceThreshold, maxQuestions: config.triageMaxQuestions, attempts, forcarConclusao },
+    triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao },
   });
 
   // Nunca IA e humano ao mesmo tempo: relê antes de enviar. Se o próprio turno
   // concluiu a triagem, a conversa já está 'completed' e a frase final DEVE
-  // sair; se foi outro (atendente assumiu, timeout), descarta.
+  // sair; se foi outro (atendente assumiu, timeout, ou um admin fechou/
+  // silenciou a conversa sem nem assumi-la — I4 fix round 1), descarta.
   const agora = await getConversationWithContact(conversation.id);
   const concluiuAqui = Boolean(turno.triagemConcluida);
-  if (!agora || agora.assignedAgentId || (agora.triageState !== 'pending' && !concluiuAqui)) return;
+  if (
+    !agora
+    || agora.status === 'closed'
+    || agora.status === 'silent'
+    || agora.assignedAgentId
+    || (agora.triageState !== 'pending' && !concluiuAqui)
+  ) return;
 
   const texto = paraWhatsApp(turno.texto);
   if (texto) {

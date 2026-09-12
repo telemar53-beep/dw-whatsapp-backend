@@ -186,14 +186,19 @@ async function findMessageById(id) {
  * anterior se acharia ultrapassado e sairia sem responder — o mesmo silêncio
  * que o filtro original evita para foto/documento, só que do lado do áudio.
  * O chamador (ai-worker.js) passa `config.transcriptionFeedAi` nessa opção.
+ *
+ * `tiposTriagem: true` existe para a triagem por IA: lá, imagem, documento e
+ * áudio (transcrito ou não) também geram turno — viram placeholder no
+ * histórico — então o filtro conta exatamente
+ * `text|image|document|audio` (fix round 1, I1). Um `qualquerTipo` sem
+ * restrição nenhuma era amplo demais: figurinha, vídeo e localização (que
+ * NUNCA agendam job — ver scheduleAiTriage em ai.service.js) viravam "a mais
+ * nova" e faziam o job do texto anterior se achar ultrapassado, emudecendo a
+ * triagem até o timeout.
  */
-async function findLatestInboundMessageId(conversationId, { incluirAudioTranscrito = true, qualquerTipo = false } = {}) {
-  // qualquerTipo existe para a triagem por IA: lá, imagem, documento e áudio
-  // sem transcrição também geram turno (viram placeholder no histórico) — sem
-  // esta opção o job da imagem se acharia sempre ultrapassado pelo filtro de
-  // texto/áudio-transcrito abaixo, e nunca rodaria.
-  const filtroTipo = qualquerTipo
-    ? ''
+async function findLatestInboundMessageId(conversationId, { incluirAudioTranscrito = true, tiposTriagem = false } = {}) {
+  const filtroTipo = tiposTriagem
+    ? `AND message_type IN ('text', 'image', 'document', 'audio')`
     : incluirAudioTranscrito
       ? `AND (message_type = 'text' OR (message_type = 'audio' AND transcription_status = 'completed'))`
       : `AND message_type = 'text'`;

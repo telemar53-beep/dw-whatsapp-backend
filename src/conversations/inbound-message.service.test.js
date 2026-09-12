@@ -1162,6 +1162,34 @@ describe('ingestInboundMessage', () => {
       expect(scheduleAiTriage).toHaveBeenCalled();
       expect(sendTriageQuestion).not.toHaveBeenCalled();
     });
+
+    // I2 (fix round 1): enqueueTriageTimeout ficava dentro do try/catch de
+    // createConversation, cujo catch relança qualquer erro que não seja
+    // 23505 (corrida de criação) — um blip do Redis ali fazia o erro subir
+    // ANTES de createMessage, perdendo a mensagem do cliente mesmo com a
+    // conversa já criada no banco.
+    test('um blip no Redis ao agendar o timeout de segurança não perde a mensagem do cliente', async () => {
+      shouldStartAiTriage.mockResolvedValue(true);
+      getAiConfig.mockResolvedValue({ triageTimeoutMinutes: 5 });
+      enqueueTriageTimeout.mockRejectedValue(new Error('redis down'));
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-triageai-5' });
+      findOpenConversation.mockResolvedValue(null);
+      createConversation.mockResolvedValue({ id: 'conv-triageai-5', assignedAgentId: null, triageState: 'pending' });
+      createMessage.mockResolvedValue({ id: 'msg-triageai-5', messageType: 'text' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-triageai-5', assignedAgentId: null, triageState: 'pending' });
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999970005',
+        contactDisplayName: 'Cliente IA Redis Fora',
+        whatsappMessageId: 'wamid.TRIAGEAI5',
+        content: 'Oi',
+        messageType: 'text',
+      });
+
+      expect(createMessage).toHaveBeenCalled();
+      expect(result.message).toEqual({ id: 'msg-triageai-5', messageType: 'text' });
+    });
   });
 
   describe('transcription hook', () => {

@@ -413,7 +413,7 @@ describe('message repository', () => {
       expect(await findLatestInboundMessageId(conversationId)).toBe(texto.id);
     });
 
-    test('com qualquerTipo: true, uma imagem enviada depois de um texto é a mais recente', async () => {
+    test('com tiposTriagem: true, uma imagem enviada depois de um texto é a mais recente', async () => {
       // Na triagem a IA reage a imagem e documento (placeholder no histórico),
       // então o job da imagem não pode se achar ultrapassado.
       await createMessage({ conversationId, direction: 'inbound', content: 'texto', whatsappMessageId: 'w7',
@@ -421,16 +421,31 @@ describe('message repository', () => {
       const foto = await createMessage({ conversationId, direction: 'inbound', content: null, whatsappMessageId: 'w8',
         status: 'received', messageType: 'image', mediaPath: 'a.jpg', mediaMimeType: 'image/jpeg' });
 
-      expect(await findLatestInboundMessageId(conversationId, { qualquerTipo: true })).toBe(foto.id);
+      expect(await findLatestInboundMessageId(conversationId, { tiposTriagem: true })).toBe(foto.id);
     });
 
-    test('sem qualquerTipo, a mesma imagem continua não contando (a mais recente é o texto)', async () => {
+    test('sem tiposTriagem, a mesma imagem continua não contando (a mais recente é o texto)', async () => {
       const texto = await createMessage({ conversationId, direction: 'inbound', content: 'texto', whatsappMessageId: 'w9',
         status: 'received', messageType: 'text' });
       await createMessage({ conversationId, direction: 'inbound', content: null, whatsappMessageId: 'w10',
         status: 'received', messageType: 'image', mediaPath: 'a.jpg', mediaMimeType: 'image/jpeg' });
 
       expect(await findLatestInboundMessageId(conversationId)).toBe(texto.id);
+    });
+
+    test('I1 (fix round 1): com tiposTriagem: true, uma figurinha depois do texto NÃO conta — só text/image/document/audio', async () => {
+      // scheduleAiTriage (ai.service.js) nunca enfileira job para sticker,
+      // vídeo ou localização. Se tiposTriagem contasse QUALQUER tipo (como o
+      // antigo qualquerTipo fazia), a figurinha viraria "a mais nova" sem
+      // nenhum job existir para ela — o job do texto (que respondeu de
+      // verdade) se acharia ultrapassado e sairia sem responder, emudecendo a
+      // triagem até o job de timeout.
+      const texto = await createMessage({ conversationId, direction: 'inbound', content: 'meu cpf é 111', whatsappMessageId: 'w11',
+        status: 'received', messageType: 'text' });
+      await createMessage({ conversationId, direction: 'inbound', content: null, whatsappMessageId: 'w12',
+        status: 'received', messageType: 'sticker', mediaPath: 'a.webp', mediaMimeType: 'image/webp' });
+
+      expect(await findLatestInboundMessageId(conversationId, { tiposTriagem: true })).toBe(texto.id);
     });
   });
 

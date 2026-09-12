@@ -152,15 +152,22 @@ describe('ai-worker', () => {
 describe('ai-worker — triagem', () => {
   const PENDING = { id: 'c-1', channelId: 'ch-1', status: 'waiting', assignedAgentId: null, triageState: 'pending', triageAttempts: 0, contactId: 'ct-1' };
   beforeEach(() => {
+    // mockReset (não só o clearAllMocks do beforeEach de topo) para estes
+    // dois: vários testes abaixo empilham mockResolvedValueOnce, e
+    // clearAllMocks/mockClear NÃO esvazia a fila de "once" pendente — só
+    // mockReset remove implementações (incluindo once-queue). Sem isto, um
+    // valor "once" que sobrou de um teste anterior (por o código ter chamado
+    // o mock menos vezes do que a fila tinha) vazaria para o teste seguinte,
+    // antes do mockResolvedValue "default" abaixo.
+    getConversationWithContact.mockReset().mockResolvedValue(PENDING);
+    runAiTurn.mockReset().mockResolvedValue({ texto: 'Para localizar seu cadastro, me informe seu CPF.', toolsExecutadas: [], erro: null, triagemConcluida: null });
     getAiConfig.mockResolvedValue({ mode: 'assistant', apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3, transcriptionFeedAi: true });
     findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
-    getConversationWithContact.mockResolvedValue(PENDING);
     findContactById.mockResolvedValue({ id: 'ct-1', phoneNumber: '55989', sgpDocument: null });
     resolverIdentidade.mockResolvedValue({ nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] });
     findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text' });
     findLatestInboundMessageId.mockResolvedValue('m-1');
     isPhoneContested.mockResolvedValue(false);
-    runAiTurn.mockResolvedValue({ texto: 'Para localizar seu cadastro, me informe seu CPF.', toolsExecutadas: [], erro: null, triagemConcluida: null });
     // Default: concludeAiTriage "ganha a corrida" (devolve a conversa
     // atualizada) — sem isto, concluirEmCodigo's guard (if (!conversa) return)
     // descartaria o broadcast em qualquer teste que não mocke isto por conta
@@ -198,11 +205,17 @@ describe('ai-worker — triagem', () => {
     expect(broadcast).toHaveBeenCalledWith('queue:new', expect.any(Object));
   });
 
-  test('canal com triagem desligada no meio: conclui em código e não chama o modelo', async () => {
+  test('canal com triagem desligada no meio: não chama o modelo, não conclui e não envia nada (I3, fix round 1)', async () => {
+    // Ruling: um canal migrado do menu numérico para a IA (ai_enabled ligado,
+    // ai_triage_enabled ainda desligado) pode ter conversas 'pending' abertas
+    // de antes da migração. Concluir em código aqui mataria o menu numérico
+    // com um resumo de "IA desligada" — o job de timeout já é o dono do caso
+    // "triagem por IA interrompida"; este job apenas sai sem fazer nada.
     findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: false });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     expect(runAiTurn).not.toHaveBeenCalled();
-    expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ sectorId: null }));
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 
   test('conversa assigned continua no perfil assistente, como hoje', async () => {
@@ -222,15 +235,21 @@ describe('ai-worker — triagem', () => {
     expect(concludeAiTriage).not.toHaveBeenCalled();
   });
 
+  test('job triage-timeout não faz nada quando a conversa não está mais em waiting (ex.: silenciada ou fechada)', async () => {
+    getConversationWithContact.mockResolvedValue({ ...PENDING, status: 'silent' });
+    await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
   test('a mensagem mais nova ganha também na triagem', async () => {
     findLatestInboundMessageId.mockResolvedValue('m-2');
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     expect(runAiTurn).not.toHaveBeenCalled();
   });
 
-  test('a checagem de "mensagem mais nova" na triagem conta qualquer tipo (imagem/documento entram como placeholder)', async () => {
+  test('a checagem de "mensagem mais nova" na triagem conta os tipos que geram turno (text/image/document/audio)', async () => {
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
-    expect(findLatestInboundMessageId).toHaveBeenCalledWith('c-1', { qualquerTipo: true });
+    expect(findLatestInboundMessageId).toHaveBeenCalledWith('c-1', { tiposTriagem: true });
   });
 
   test('o resolutor de identidade recebe ignorarTelefone: true quando o telefone já foi contestado nesta conversa', async () => {
@@ -257,5 +276,40 @@ describe('ai-worker — triagem', () => {
     expect(tudoLogado).not.toContain('52998224725');
     logSpy.mockRestore();
     errorSpy.mockRestore();
+  });
+
+  // I4 (fix round 1): um admin pode fechar (ou silenciar) uma conversa em
+  // fila sem assumi-la — a releitura antes de enviar precisa notar isso,
+  // senão a IA manda mensagem pro cliente numa conversa já fechada.
+  test('conversa fechada durante o turno (admin fechou sem assumir): descarta sem enviar', async () => {
+    getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, status: 'closed' });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('conversa silenciada durante o turno: descarta sem enviar', async () => {
+    getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, status: 'silent' });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  describe('corridas (I5, fix round 1)', () => {
+    test('o timeout venceu a corrida: releitura mostra triageState completed com triagemConcluida null — descarta e não conta tentativa', async () => {
+      // Diferente do teste "turno que concluiu a triagem": aqui é o job de
+      // TIMEOUT (não o próprio turno) quem concluiu a conversa enquanto o
+      // turno rodava — turno.triagemConcluida continua null.
+      getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, triageState: 'completed' });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      expect(incrementTriageAttempts).not.toHaveBeenCalled();
+    });
+
+    test('concluirEmCodigo não faz broadcast nenhum quando concludeAiTriage perde a corrida (devolve null)', async () => {
+      getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 2 });
+      concludeAiTriage.mockResolvedValue(null);
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(broadcast).not.toHaveBeenCalledWith('queue:new', expect.any(Object));
+      expect(broadcastToDashboard).not.toHaveBeenCalledWith('dashboard:conversation', expect.any(Object));
+    });
   });
 });

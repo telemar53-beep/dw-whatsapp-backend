@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const { getAiConfig } = require('./ai-config.repository');
 const { transcribeAudio } = require('./openai-client');
 const {
@@ -43,6 +44,10 @@ async function transcribeMessage(messageId) {
   }
 
   const config = await getAiConfig();
+  if (!config) {
+    await markTranscriptionFailed(messageId, { status: 'failed', detail: 'configuração de IA ausente', ms: null });
+    return recusa('disabled');
+  }
   const iniciadoEm = Date.now();
 
   // Trava de desligamento: o gate em shouldTranscribe roda no enfileiramento, e
@@ -90,12 +95,17 @@ async function transcribeMessage(messageId) {
 
   let resultado;
   try {
+    // O nome do arquivo manda na OpenAI, não o contentType (ver openai-client.js):
+    // mantém a extensão real que extensionForMimeType gravou em disco, senão
+    // mp4/aac/wav/webm chegam como 'audio.ogg' e a API rejeita o decode.
+    const extensao = path.extname(message.mediaPath);
     resultado = await transcribeAudio({
       apiKey: config.apiKey,
       model: config.transcriptionModel,
       filePath,
       mimeType: message.mediaMimeType,
       prompt: config.transcriptionPrompt || undefined,
+      filename: 'audio' + (extensao || '.ogg'),
     });
   } catch (err) {
     console.error(`Transcription failed for message ${messageId}: ${mensagemSegura(err)}`);

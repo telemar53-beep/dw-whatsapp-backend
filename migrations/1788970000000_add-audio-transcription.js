@@ -15,8 +15,19 @@ exports.up = (pgm) => {
     ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_transcription_status_check;
     ALTER TABLE messages ADD CONSTRAINT messages_transcription_status_check
       CHECK (transcription_status IS NULL OR transcription_status IN
-        ('pending', 'processing', 'completed', 'failed', 'skipped'));
+        ('pending', 'processing', 'completed', 'failed', 'skipped'))
+      NOT VALID;
+  `);
 
+  // Separado da criação: NOT VALID evita o scan de tabela inteira sob ACCESS
+  // EXCLUSIVE durante o build do Render (com código antigo ainda servindo).
+  // VALIDATE CONSTRAINT faz o scan depois, sob SHARE UPDATE EXCLUSIVE, que não
+  // bloqueia leitura nem escrita concorrente.
+  pgm.sql(`
+    ALTER TABLE messages VALIDATE CONSTRAINT messages_transcription_status_check;
+  `);
+
+  pgm.sql(`
     ALTER TABLE ai_config
       ADD COLUMN IF NOT EXISTS transcription_enabled     BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS transcription_model       TEXT    NOT NULL DEFAULT '',

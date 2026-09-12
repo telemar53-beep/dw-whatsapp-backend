@@ -28,13 +28,27 @@ async function shouldTranscribe(channelId) {
   return true;
 }
 
-async function scheduleTranscription(conversation, message, audioDurationSeconds) {
+/**
+ * Marca pending e devolve a linha atualizada, para o chamador poder usá-la no
+ * message:new que está prestes a emitir — sem isso a tela só mostra
+ * "Transcrevendo…" depois de um refresh. É também onde a duração vinda do
+ * Baileys é persistida — ela não passa pelo INSERT de createMessage.
+ *
+ * NÃO enfileira: o enfileiramento é o passo separado enqueueTranscriptionJob,
+ * que o chamador deve rodar só DEPOIS de emitir message:new/queue:new — senão
+ * o worker pode publicar message:transcription antes de a tela sequer saber
+ * que a mensagem existe, e o evento se perde.
+ */
+async function markTranscriptionScheduled(message, audioDurationSeconds) {
+  if (!message || message.messageType !== 'audio') return null;
+  return markTranscriptionPending(message.id, audioDurationSeconds != null ? audioDurationSeconds : null);
+}
+
+async function enqueueTranscriptionJob(conversation, message) {
   if (!message || message.messageType !== 'audio') return;
-  // Marca pending já aqui para a tela mostrar "Transcrevendo…" de imediato, em
-  // vez de ficar sem sinal até o worker pegar o job. É também onde a duração
-  // vinda do Baileys é persistida — ela não passa pelo INSERT de createMessage.
-  await markTranscriptionPending(message.id, audioDurationSeconds != null ? audioDurationSeconds : null);
   await enqueueTranscription({ conversationId: conversation.id, messageId: message.id });
 }
 
-module.exports = { shouldRunAi, scheduleAiReply, shouldTranscribe, scheduleTranscription };
+module.exports = {
+  shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
+};

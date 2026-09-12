@@ -9,7 +9,9 @@ const { getAiConfig } = require('./ai-config.repository');
 const { enqueueAiReply } = require('../queue/ai-queue');
 const { enqueueTranscription } = require('../queue/transcription-queue');
 const { markTranscriptionPending } = require('../conversations/message.repository');
-const { shouldRunAi, scheduleAiReply, shouldTranscribe, scheduleTranscription } = require('./ai.service');
+const {
+  shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
+} = require('./ai.service');
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -74,21 +76,32 @@ describe('ai.service', () => {
     expect(await shouldTranscribe('ch-1')).toBe(false);
   });
 
-  test('scheduleTranscription só enfileira áudio, e marca pending com a duração', async () => {
-    await scheduleTranscription({ id: 'c-1' }, { id: 'm-1', messageType: 'audio' }, 12);
+  test('markTranscriptionScheduled só marca pending para áudio, com a duração, e devolve a linha', async () => {
+    markTranscriptionPending.mockResolvedValue({ id: 'm-1', transcriptionStatus: 'pending' });
+    const result = await markTranscriptionScheduled({ id: 'm-1', messageType: 'audio' }, 12);
     expect(markTranscriptionPending).toHaveBeenCalledWith('m-1', 12);
+    expect(result).toEqual({ id: 'm-1', transcriptionStatus: 'pending' });
+
+    jest.clearAllMocks();
+    const naoAudio = await markTranscriptionScheduled({ id: 'm-2', messageType: 'image' }, null);
+    expect(markTranscriptionPending).not.toHaveBeenCalled();
+    expect(naoAudio).toBeNull();
+  });
+
+  test('markTranscriptionScheduled sem duração no metadado marca pending mesmo assim', async () => {
+    // O WhatsApp nem sempre manda `seconds`. O limite de tamanho em bytes continua
+    // protegendo, então áudio sem duração não pode ser descartado.
+    markTranscriptionPending.mockResolvedValue({ id: 'm-3', transcriptionStatus: 'pending' });
+    await markTranscriptionScheduled({ id: 'm-3', messageType: 'audio' }, null);
+    expect(markTranscriptionPending).toHaveBeenCalledWith('m-3', null);
+  });
+
+  test('enqueueTranscriptionJob só enfileira áudio', async () => {
+    await enqueueTranscriptionJob({ id: 'c-1' }, { id: 'm-1', messageType: 'audio' });
     expect(enqueueTranscription).toHaveBeenCalledWith({ conversationId: 'c-1', messageId: 'm-1' });
 
     jest.clearAllMocks();
-    await scheduleTranscription({ id: 'c-1' }, { id: 'm-2', messageType: 'image' }, null);
+    await enqueueTranscriptionJob({ id: 'c-1' }, { id: 'm-2', messageType: 'image' });
     expect(enqueueTranscription).not.toHaveBeenCalled();
-  });
-
-  test('sem duração no metadado, enfileira mesmo assim', async () => {
-    // O WhatsApp nem sempre manda `seconds`. O limite de tamanho em bytes continua
-    // protegendo, então áudio sem duração não pode ser descartado.
-    await scheduleTranscription({ id: 'c-1' }, { id: 'm-3', messageType: 'audio' }, null);
-    expect(markTranscriptionPending).toHaveBeenCalledWith('m-3', null);
-    expect(enqueueTranscription).toHaveBeenCalled();
   });
 });

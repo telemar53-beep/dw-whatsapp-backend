@@ -8,7 +8,9 @@ const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { findActiveCityNoticeByCityId, recordNoticeDelivery } = require('../city-notices/city-notice.repository');
 const { getBusinessHoursConfig } = require('../business-hours/business-hours.repository');
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
-const { shouldRunAi, scheduleAiReply, shouldTranscribe, scheduleTranscription } = require('../ai/ai.service');
+const {
+  shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
+} = require('../ai/ai.service');
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -113,9 +115,15 @@ async function ingestInboundMessage({
     conversation = await processTriageReply(conversation, channelId, content);
   }
 
+  // Gate no tipo antes de tocar o banco: sem ele, shouldTranscribe (2 queries)
+  // rodaria para toda mensagem de texto/figurinha/localização, mesmo com a
+  // funcionalidade desligada — quebrando a garantia de "desligado é transparente".
+  let audioTranscriptionScheduled = false;
   try {
-    if (await shouldTranscribe(channelId)) {
-      await scheduleTranscription(conversation, message, audioDurationSeconds);
+    if (message.messageType === 'audio' && (await shouldTranscribe(channelId))) {
+      audioTranscriptionScheduled = true;
+      const updated = await markTranscriptionScheduled(message, audioDurationSeconds);
+      if (updated) message = updated;
     }
   } catch (err) {
     console.error(`Failed to schedule transcription for conversation ${conversation.id}`, err);
@@ -136,6 +144,17 @@ async function ingestInboundMessage({
     broadcast('queue:new', { conversation: conversationWithContact, message });
   }
   broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact });
+
+  // Só depois do emit: um job pego pelo worker antes disso pode publicar
+  // message:transcription antes de a tela saber que a mensagem existe.
+  if (audioTranscriptionScheduled) {
+    try {
+      await enqueueTranscriptionJob(conversation, message);
+    } catch (err) {
+      console.error(`Failed to enqueue transcription for conversation ${conversation.id}`, err);
+    }
+  }
+
   return { contact, conversation, message, contactJustCreated };
 }
 

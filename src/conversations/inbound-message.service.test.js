@@ -23,7 +23,9 @@ const {
 } = require('../city-notices/city-notice.repository');
 const { getBusinessHoursConfig } = require('../business-hours/business-hours.repository');
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
-const { shouldRunAi, scheduleAiReply, shouldTranscribe, scheduleTranscription } = require('../ai/ai.service');
+const {
+  shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
+} = require('../ai/ai.service');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
 describe('ingestInboundMessage', () => {
@@ -1045,14 +1047,30 @@ describe('ingestInboundMessage', () => {
   });
 
   describe('transcription hook', () => {
+    test('Finding 1: não chama shouldTranscribe para mensagem de texto (feature desligada é transparente)', async () => {
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-txt-1' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-txt-1', assignedAgentId: null });
+      createMessage.mockResolvedValue({ id: 'msg-txt-1', messageType: 'text' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-txt-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900009999', contactDisplayName: 'Fulano',
+        whatsappMessageId: 'wa-txt-1', messageType: 'text', content: 'oi',
+      });
+
+      expect(shouldTranscribe).not.toHaveBeenCalled();
+      expect(markTranscriptionScheduled).not.toHaveBeenCalled();
+      expect(enqueueTranscriptionJob).not.toHaveBeenCalled();
+    });
+
     test('agenda transcrição para áudio quando habilitada, carregando a duração até o final', async () => {
       // Finding 2 (fix round 1): a duração não passa pelo createMessage — ela
-      // só chega ao banco via o terceiro argumento de scheduleTranscription
+      // só chega ao banco via o segundo argumento de markTranscriptionScheduled
       // (que markTranscriptionPending grava). Se esse argumento for perdido
       // no meio do caminho, audio_duration_seconds fica sempre NULL e o
       // limite transcriptionMaxSeconds nunca mais dispara, em silêncio.
-      const { shouldTranscribe, scheduleTranscription } = require('../ai/ai.service');
       shouldTranscribe.mockResolvedValue(true);
+      markTranscriptionScheduled.mockResolvedValue({ id: 'msg-audio-1', messageType: 'audio', transcriptionStatus: 'pending' });
       findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-audio-1' });
       findOpenConversation.mockResolvedValue({ id: 'conv-audio-1', assignedAgentId: null });
       createMessage.mockResolvedValue({ id: 'msg-audio-1', messageType: 'audio' });
@@ -1064,11 +1082,59 @@ describe('ingestInboundMessage', () => {
         mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg', audioDurationSeconds: 12,
       });
 
-      expect(scheduleTranscription).toHaveBeenCalledWith(expect.anything(), expect.anything(), 12);
+      expect(markTranscriptionScheduled).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'msg-audio-1' }), 12
+      );
+      expect(enqueueTranscriptionJob).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'conv-audio-1' }), expect.objectContaining({ id: 'msg-audio-1' })
+      );
     });
 
-    test('transcrição que falha ao agendar nunca bloqueia a ingestão', async () => {
-      const { shouldTranscribe } = require('../ai/ai.service');
+    test('Finding 3: message:new carrega transcriptionStatus pending, e o job só é enfileirado depois do emit', async () => {
+      shouldTranscribe.mockResolvedValue(true);
+      markTranscriptionScheduled.mockResolvedValue({
+        id: 'msg-audio-3', messageType: 'audio', transcriptionStatus: 'pending',
+      });
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-audio-3' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-audio-3', assignedAgentId: null });
+      createMessage.mockResolvedValue({ id: 'msg-audio-3', messageType: 'audio', transcriptionStatus: null });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-audio-3', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900005555', contactDisplayName: 'Fulano',
+        whatsappMessageId: 'wa-audio-3', messageType: 'audio', content: null,
+        mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg', audioDurationSeconds: 8,
+      });
+
+      expect(broadcast).toHaveBeenCalledWith('queue:new', expect.objectContaining({
+        message: expect.objectContaining({ id: 'msg-audio-3', transcriptionStatus: 'pending' }),
+      }));
+      expect(broadcast.mock.invocationCallOrder[0]).toBeLessThan(enqueueTranscriptionJob.mock.invocationCallOrder[0]);
+    });
+
+    test('Finding 3: para agente atribuído, o job também só é enfileirado depois do emitToAgent', async () => {
+      shouldTranscribe.mockResolvedValue(true);
+      markTranscriptionScheduled.mockResolvedValue({
+        id: 'msg-audio-4', messageType: 'audio', transcriptionStatus: 'pending',
+      });
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-audio-4' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-audio-4', assignedAgentId: 'agent-4' });
+      createMessage.mockResolvedValue({ id: 'msg-audio-4', messageType: 'audio', transcriptionStatus: null });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-audio-4', assignedAgentId: 'agent-4' });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900006666', contactDisplayName: 'Fulano',
+        whatsappMessageId: 'wa-audio-4', messageType: 'audio', content: null,
+        mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg', audioDurationSeconds: 8,
+      });
+
+      expect(emitToAgent).toHaveBeenCalledWith('agent-4', 'message:new', expect.objectContaining({
+        message: expect.objectContaining({ id: 'msg-audio-4', transcriptionStatus: 'pending' }),
+      }));
+      expect(emitToAgent.mock.invocationCallOrder[0]).toBeLessThan(enqueueTranscriptionJob.mock.invocationCallOrder[0]);
+    });
+
+    test('transcrição que falha ao agendar nunca bloqueia a ingestão, nem enfileira o job', async () => {
       shouldTranscribe.mockRejectedValue(new Error('redis fora'));
       findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-audio-2' });
       findOpenConversation.mockResolvedValue({ id: 'conv-audio-2', assignedAgentId: null });
@@ -1082,6 +1148,25 @@ describe('ingestInboundMessage', () => {
       });
 
       expect(result.message).not.toBeNull();
+      expect(enqueueTranscriptionJob).not.toHaveBeenCalled();
+    });
+
+    test('marcar pending falhando ainda assim tenta enfileirar o job (worker lida sem o pending)', async () => {
+      shouldTranscribe.mockResolvedValue(true);
+      markTranscriptionScheduled.mockRejectedValue(new Error('db fora'));
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-audio-5' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-audio-5', assignedAgentId: null });
+      createMessage.mockResolvedValue({ id: 'msg-audio-5', messageType: 'audio' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-audio-5', assignedAgentId: null });
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900007777', contactDisplayName: 'Fulano',
+        whatsappMessageId: 'wa-audio-5', messageType: 'audio', content: null,
+        mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg',
+      });
+
+      expect(result.message).not.toBeNull();
+      expect(enqueueTranscriptionJob).toHaveBeenCalled();
     });
   });
 });

@@ -52,6 +52,26 @@ describe('transcribeMessage', () => {
     expect(result.ok).toBe(true);
   });
 
+  test('Finding 2: manda o filename com a extensão real do arquivo em disco, não sempre .ogg', async () => {
+    findMessageById.mockResolvedValue({ ...AUDIO, mediaPath: 'abc-123.m4a', mediaMimeType: 'audio/mp4' });
+    transcribeAudio.mockResolvedValue({ texto: 'ok' });
+    saveTranscription.mockResolvedValue({});
+
+    await transcribeMessage('m-1');
+
+    expect(transcribeAudio).toHaveBeenCalledWith(expect.objectContaining({ filename: 'audio.m4a' }));
+  });
+
+  test('Finding 2: caminho sem extensão cai no fallback .ogg', async () => {
+    findMessageById.mockResolvedValue({ ...AUDIO, mediaPath: 'abc-123' });
+    transcribeAudio.mockResolvedValue({ texto: 'ok' });
+    saveTranscription.mockResolvedValue({});
+
+    await transcribeMessage('m-1');
+
+    expect(transcribeAudio).toHaveBeenCalledWith(expect.objectContaining({ filename: 'audio.ogg' }));
+  });
+
   test('aceita o MIME com parâmetro de codec que o WhatsApp manda', async () => {
     findMessageById.mockResolvedValue({ ...AUDIO, mediaMimeType: 'audio/ogg; codecs=opus' });
     transcribeAudio.mockResolvedValue({ texto: 'ok' });
@@ -132,6 +152,17 @@ describe('transcribeMessage', () => {
     const result = await transcribeMessage('m-1');
     expect(result.ok).toBe(false);
     expect(saveTranscription).not.toHaveBeenCalled();
+  });
+
+  test('Finding 6: getAiConfig() retornando null vira failed em vez de estourar TypeError', async () => {
+    getAiConfig.mockResolvedValue(null);
+    findMessageById.mockResolvedValue(AUDIO);
+
+    const result = await transcribeMessage('m-1');
+
+    expect(result).toEqual({ ok: false, motivo: 'disabled' });
+    expect(transcribeAudio).not.toHaveBeenCalled();
+    expect(markTranscriptionFailed).toHaveBeenCalledWith('m-1', expect.objectContaining({ status: 'failed' }));
   });
 
   test('duração ausente não bloqueia — o limite de tamanho ainda protege', async () => {

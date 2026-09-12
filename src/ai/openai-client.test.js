@@ -135,6 +135,36 @@ describe('openai-client', () => {
       fs.createReadStream.mockRestore();
     });
 
+    test('Finding 2: usa o filename recebido, para a OpenAI escolher o decodificador certo (ex.: .m4a)', async () => {
+      jest.spyOn(fs, 'createReadStream').mockReturnValue('STREAM_FALSO');
+      axios.post.mockResolvedValue({ data: { text: 'ok' } });
+      const appendSpy = jest.spyOn(FormData.prototype, 'append');
+
+      await transcribeAudio({
+        apiKey: 'sk', model: 'm', filePath: '/tmp/a.m4a', mimeType: 'audio/mp4', filename: 'audio.m4a',
+      });
+
+      const fileCall = appendSpy.mock.calls.find((c) => c[0] === 'file');
+      expect(fileCall[2]).toEqual(expect.objectContaining({ filename: 'audio.m4a', contentType: 'audio/mp4' }));
+
+      appendSpy.mockRestore();
+      fs.createReadStream.mockRestore();
+    });
+
+    test('sem filename, cai no fallback antigo por mimeType (compatibilidade)', async () => {
+      jest.spyOn(fs, 'createReadStream').mockReturnValue('STREAM_FALSO');
+      axios.post.mockResolvedValue({ data: { text: 'ok' } });
+      const appendSpy = jest.spyOn(FormData.prototype, 'append');
+
+      await transcribeAudio({ apiKey: 'sk', model: 'm', filePath: '/tmp/a.ogg', mimeType: 'audio/ogg' });
+
+      const fileCall = appendSpy.mock.calls.find((c) => c[0] === 'file');
+      expect(fileCall[2].filename).toBe('audio.ogg');
+
+      appendSpy.mockRestore();
+      fs.createReadStream.mockRestore();
+    });
+
     test('devolve apenas o texto, ignorando campos extras da resposta', async () => {
       jest.spyOn(fs, 'createReadStream').mockReturnValue('STREAM_FALSO');
       axios.post.mockResolvedValue({ data: { text: 'oi', language: 'pt', duration: 3.2, segments: [] } });

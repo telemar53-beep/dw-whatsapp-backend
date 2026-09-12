@@ -57,12 +57,16 @@ async function listModels(apiKey) {
 
 const TRANSCRIPTION_TIMEOUT_MS = 120000;
 
-async function transcribeAudio({ apiKey, model, filePath, mimeType, prompt }) {
+async function transcribeAudio({ apiKey, model, filePath, mimeType, prompt, filename }) {
   let response;
   try {
     const form = new FormData();
     form.append('file', fs.createReadStream(filePath), {
-      filename: 'audio' + (mimeType === 'audio/mpeg' ? '.mp3' : '.ogg'),
+      // A OpenAI escolhe o decodificador pela extensão do nome, não pelo
+      // contentType — por isso o chamador manda o filename com a extensão real
+      // do arquivo salvo em disco (extensionForMimeType em media-storage.js).
+      // O fallback só cobre uma chamada antiga sem esse campo.
+      filename: filename || 'audio' + (mimeType === 'audio/mpeg' ? '.mp3' : '.ogg'),
       contentType: mimeType || 'audio/ogg',
     });
     form.append('model', model);

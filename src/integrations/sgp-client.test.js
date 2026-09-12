@@ -107,6 +107,33 @@ describe('sgp-client', () => {
       await expect(lookupClientByCpf('03666811337')).rejects.toBeInstanceOf(SgpRequestError);
     });
 
+    // Modelado no teste de vazamento de openai-client.test.js: um axios error
+    // realista carrega, em config.data, o corpo form-encoded que inclui o
+    // token do SGP e o CPF do cliente. A causa anexada ao erro lançado não
+    // pode repassar isso adiante — só quem chama console.error aqui dentro
+    // (com {status}/{message}) pode ver o valor cru.
+    test('does not leak the SGP token or the request body in the error cause', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      const axiosError = {
+        response: { status: 500, data: { error: 'server error' } },
+        config: {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          data: `token=${CONFIG.token}&app=chatmix&cpfcnpj=03666811337`,
+        },
+        message: 'Request failed with status code 500',
+      };
+      axios.post.mockRejectedValue(axiosError);
+
+      try {
+        await lookupClientByCpf('03666811337');
+        fail('should have thrown');
+      } catch (err) {
+        const serialized = JSON.stringify(err) + JSON.stringify(err.cause);
+        expect(serialized).not.toContain(CONFIG.token);
+        expect(serialized).not.toContain('03666811337');
+      }
+    });
+
     test('throws SgpRequestError when SGP returns a malformed/non-object response', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post.mockResolvedValue({ data: '<html>login page</html>' });

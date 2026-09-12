@@ -7,6 +7,7 @@ const { listRecentMessagesByConversation } = require('../conversations/message.r
 const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
+const { mensagemSegura } = require('./safe-error-log');
 
 const HISTORICO_MAX = 20;
 
@@ -39,7 +40,10 @@ async function carregarContratos(contact) {
     const { contracts } = await sgpClient.lookupClientByCpf(contact.sgpDocument);
     return contracts;
   } catch (err) {
-    console.error(`Failed to preload SGP contracts for contact ${contact.id}`, err);
+    // Nunca loga err inteiro: err.cause pode ser (ou ter sido, antes do
+    // saneamento em sgp-client.js) o axios error cru, cujo config.data é o
+    // corpo form-encoded com o token do SGP e o CPF do cliente.
+    console.error(`Failed to preload SGP contracts for contact ${contact.id}: ${mensagemSegura(err)}`);
     return [];
   }
 }
@@ -86,6 +90,11 @@ async function runAiTurn({ conversation, contact }) {
       const chamadas = message.tool_calls || [];
       if (chamadas.length === 0) {
         texto = message.content || null;
+        // Sem tool_calls e sem texto utilizável (corte por content_filter,
+        // turno vazio etc.) não é sucesso silencioso: sem isto, quem consome
+        // o retorno não teria como distinguir "respondeu" de "falhou", e a
+        // auditoria registraria a mesma ambiguidade.
+        if (!texto) erro = 'empty_model_response';
         break;
       }
 

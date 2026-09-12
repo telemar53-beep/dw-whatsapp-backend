@@ -47,6 +47,24 @@ describe('ai-orchestrator', () => {
     expect(executeTool).not.toHaveBeenCalled();
   });
 
+  // Finding 1 (fix round 1): sem tool_calls e sem content utilizável (ex.: um
+  // corte por content_filter, ou um turno vazio), o laço não pode terminar em
+  // silêncio — nem para quem chama runAiTurn, nem para a auditoria.
+  test('records an error instead of finishing silently when the model returns no tool calls and no text', async () => {
+    createChatCompletion.mockResolvedValue({
+      message: { role: 'assistant', content: null },
+      usage: { promptTokens: 8, completionTokens: 0 },
+    });
+
+    const result = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    expect(result.texto).toBeNull();
+    expect(result.erro).toBeTruthy();
+    expect(recordAiInteraction).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'c-1', error: expect.any(String), finalResponse: null })
+    );
+  });
+
   test('sends only enabled tools to the model', async () => {
     createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });

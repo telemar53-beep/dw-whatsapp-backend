@@ -1,5 +1,6 @@
 const { findTool } = require('./tool-registry');
 const { isToolEnabled } = require('./ai-config.repository');
+const { mensagemSegura } = require('./safe-error-log');
 
 const TIMEOUT_PADRAO_MS = 15000;
 
@@ -17,10 +18,11 @@ function comTimeout(promise, ms) {
 
 // Nunca loga o objeto de erro inteiro: para chamadas ao SGP, err.cause carrega
 // a config do axios (token, cpf/cnpj) e o console imprime a cadeia de causa
-// inteira. Mesma disciplina já usada em sgp-client.js (só {status} ou {message}).
+// inteira. Mesma disciplina já usada em sgp-client.js (só {status} ou
+// {message}); mensagemSegura é a implementação compartilhada, para não
+// divergir dela (ver ai-orchestrator.js, que loga a mesma classe de erro).
 function logFalha(nome, err) {
-  const causa = err && err.cause && err.cause.message;
-  console.error(`AI tool ${nome} failed: ${err && err.message}${causa ? ` (cause: ${causa})` : ''}`);
+  console.error(`AI tool ${nome} failed: ${mensagemSegura(err)}`);
 }
 
 /**

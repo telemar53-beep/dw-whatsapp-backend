@@ -21,7 +21,12 @@ async function postSgp(config, path, params) {
     });
   } catch (err) {
     console.error(`SGP request failed: ${path}`, err.response ? { status: err.response.status } : { message: err.message });
-    throw new SgpRequestError(`Failed to reach SGP at ${path}`, { cause: err });
+    // A causa anexada ao erro precisa ser saneada aqui, na origem: err bruto
+    // carrega err.config.data, o corpo form-encoded com o token do SGP e o
+    // CPF/CNPJ do cliente. Mesmo formato de causa que openai-client.js usa
+    // para o mesmo problema (token da OpenAI em vez do token do SGP).
+    const cause = { status: err.response && err.response.status, message: err.message };
+    throw new SgpRequestError(`Failed to reach SGP at ${path}`, { cause });
   }
 }
 
@@ -125,7 +130,9 @@ async function downloadBoletoPdf(link) {
     const response = await axios.get(link, { responseType: 'arraybuffer', timeout: 15000 });
     return Buffer.from(response.data);
   } catch (err) {
-    throw new SgpRequestError('Failed to download boleto PDF', { cause: err });
+    // Mesmo saneamento de postSgp: nunca anexar o err bruto como causa.
+    const cause = { status: err.response && err.response.status, message: err.message };
+    throw new SgpRequestError('Failed to download boleto PDF', { cause });
   }
 }
 

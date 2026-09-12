@@ -21,6 +21,19 @@ describe('paraWhatsApp', () => {
     expect(paraWhatsApp('segunda via: [boleto](https://x.y/b.pdf)')).toBe('segunda via: boleto (https://x.y/b.pdf)');
   });
 
+  test('negrito+itálico com três asteriscos vira negrito simples, sem sobrar **', () => {
+    expect(paraWhatsApp('isso é ***muito importante***')).toBe('isso é *muito importante*');
+  });
+
+  test('não corrompe URL com sublinhado duplo dentro de link markdown', () => {
+    expect(paraWhatsApp('[baixe aqui](https://x/a__b__c)')).toBe('baixe aqui (https://x/a__b__c)');
+  });
+
+  test('não corrompe URL solta com sublinhado duplo nem asteriscos', () => {
+    const texto = 'veja https://x/y_z__w/**k** agora';
+    expect(paraWhatsApp(texto)).toBe(texto);
+  });
+
   test('não mexe em texto que já está no formato do WhatsApp', () => {
     const texto = 'Olá! *Fatura* de R$ 99,90 vence _hoje_.\n- Pix\n- Boleto';
     expect(paraWhatsApp(texto)).toBe(texto);

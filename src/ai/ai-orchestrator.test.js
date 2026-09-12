@@ -128,6 +128,39 @@ describe('ai-orchestrator', () => {
     });
   });
 
+  test('ao bater o limite de ferramentas, pede uma resposta final sem ferramentas em vez de sair sem texto', async () => {
+    // "Consulte todos os contratos" pode passar do orçamento do turno. Sem esta
+    // saída, o turno terminava com texto nulo e o atendente ficava sem
+    // sugestão nenhuma — justamente no cliente com vários contratos.
+    getAiConfig.mockResolvedValue({
+      apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'p', maxToolsPerInteraction: 1,
+    });
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: {
+          role: 'assistant', content: null,
+          tool_calls: [
+            { id: 't1', function: { name: 'consultar_plano', arguments: '{"contratoId":1}' } },
+            { id: 't2', function: { name: 'consultar_plano', arguments: '{"contratoId":2}' } },
+          ],
+        },
+        usage: {},
+      })
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: 'Consegui verificar só parte dos contratos.' },
+        usage: {},
+      });
+
+    const result = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    expect(result.texto).toBe('Consegui verificar só parte dos contratos.');
+    expect(result.erro).toBe('tool_limit_reached');
+    expect(executeTool).not.toHaveBeenCalled();
+    const segundaChamada = createChatCompletion.mock.calls[1][0];
+    expect(segundaChamada.tools || []).toHaveLength(0);
+    expect(segundaChamada.messages[segundaChamada.messages.length - 1].role).toBe('system');
+  });
+
   test('puts the existing reasons and sectors in the system context', async () => {
     createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });

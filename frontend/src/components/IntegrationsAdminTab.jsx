@@ -8,6 +8,7 @@ import { isOfficialChannelType } from '../utils/channelTypes';
 import SgpQueryConfigCard from './SgpQueryConfigCard';
 import OpenAiConfigCard from './OpenAiConfigCard';
 import AudioTranscriptionConfigCard from './AudioTranscriptionConfigCard';
+import AiTriageConfigCard from './AiTriageConfigCard';
 import AiToolPermissionsCard from './AiToolPermissionsCard';
 
 const inputClass =
@@ -286,6 +287,7 @@ function IntegrationsAdminTab() {
       <SgpQueryConfigCard />
       <OpenAiConfigCard />
       <AudioTranscriptionConfigCard />
+      <AiTriageConfigCard />
       <AiToolPermissionsCard />
       <div className="space-y-3">
         {integrations.map((integration) => (

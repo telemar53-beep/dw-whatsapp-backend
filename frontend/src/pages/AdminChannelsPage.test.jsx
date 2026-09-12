@@ -21,6 +21,7 @@ import {
   setChannelHidden,
   deleteChannel,
   setChannelAiEnabled,
+  setChannelAiTriageEnabled,
 } from '../services/api';
 
 vi.mock('../hooks/useChannels');
@@ -365,6 +366,62 @@ describe('AdminChannelsPage', () => {
     // state and reflects the real channel — both flags on in the database —
     // alongside the error, instead of silently hiding it.
     expect(refresh).toHaveBeenCalled();
+  });
+
+  test('shows a checkbox to toggle AI triage, disabled while the channel has no AI', () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', aiEnabled: false, aiTriageEnabled: false }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+    const checkbox = screen.getByRole('checkbox', { name: /triagem com ia/i });
+    expect(checkbox).toBeDisabled();
+    expect(checkbox).not.toBeChecked();
+  });
+
+  test('lets an admin turn on AI triage for a channel that already has AI enabled', async () => {
+    const refresh = vi.fn();
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', aiEnabled: true, aiTriageEnabled: false }],
+      loading: false,
+      refresh,
+    });
+    setChannelAiTriageEnabled.mockResolvedValue({});
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    const checkbox = screen.getByRole('checkbox', { name: /triagem com ia/i });
+    expect(checkbox).not.toBeDisabled();
+    await userEvent.click(checkbox);
+
+    await waitFor(() => expect(setChannelAiTriageEnabled).toHaveBeenCalledWith('ch1', true, 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('shows an error message when toggling AI triage fails', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', aiEnabled: true, aiTriageEnabled: false }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    setChannelAiTriageEnabled.mockRejectedValue({ body: { error: 'Canal não encontrado' } });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /triagem com ia/i }));
+
+    expect(await screen.findByText('Canal não encontrado')).toBeInTheDocument();
   });
 
   test('lets an admin edit the WABA ID of a meta_cloud channel', async () => {

@@ -15,6 +15,7 @@ const {
   updateChannelHidden,
   updateChannelWelcomeMessage,
   updateChannelAiEnabled,
+  updateChannelAiTriageEnabled,
   countChannelDependents,
   deleteChannel,
 } = require('../channels/channel.repository');
@@ -652,6 +653,31 @@ describe('PATCH /api/admin/channels/:id (aiEnabled)', () => {
       .send({ aiEnabled: true });
     expect(res.status).toBe(403);
     expect(updateChannelAiEnabled).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/admin/channels/:id (aiTriageEnabled)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const admin = { Authorization: `Bearer ${tokenFor('agent-1', 'admin')}` };
+
+  test('PATCH aiTriageEnabled exige boolean e canal com IA ligada', async () => {
+    const app = buildApp();
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: false });
+    await request(app).patch('/api/admin/channels/ch-1').set(admin).send({ aiTriageEnabled: true }).expect(400);
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true });
+    updateChannelAiTriageEnabled.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
+    const res = await request(app).patch('/api/admin/channels/ch-1').set(admin).send({ aiTriageEnabled: true }).expect(200);
+    expect(res.body.aiTriageEnabled).toBe(true);
+  });
+
+  test('returns 400 when aiTriageEnabled is not a boolean', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiTriageEnabled: 'sim' });
+    expect(res.status).toBe(400);
+    expect(updateChannelAiTriageEnabled).not.toHaveBeenCalled();
   });
 });
 

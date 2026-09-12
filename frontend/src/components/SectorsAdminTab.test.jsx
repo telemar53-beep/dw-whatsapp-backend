@@ -35,7 +35,38 @@ describe('SectorsAdminTab', () => {
     await userEvent.type(nameInput, 'Editado');
     await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
 
-    await waitFor(() => expect(api.updateSector).toHaveBeenCalledWith('sector-1', { name: 'Editado' }, 'tok-123'));
+    await waitFor(() => expect(api.updateSector).toHaveBeenCalledWith('sector-1', { name: 'Editado', aiHint: '' }, 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('loads the saved aiHint into the textarea when editing', async () => {
+    useSectors.mockReturnValue({
+      sectors: [{ id: 'sector-1', name: 'Financeiro', aiHint: 'Só recebe boletos vencidos há mais de 5 dias' }],
+      refresh: vi.fn(),
+    });
+    render(<SectorsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /editar/i }));
+
+    expect(screen.getByDisplayValue('Só recebe boletos vencidos há mais de 5 dias')).toBeInTheDocument();
+  });
+
+  test('saving an edited aiHint sends it along with name', async () => {
+    const refresh = vi.fn();
+    useSectors.mockReturnValue({
+      sectors: [{ id: 'sector-1', name: 'Financeiro', aiHint: 'Antigo' }],
+      refresh,
+    });
+    api.updateSector.mockResolvedValue({ id: 'sector-1', name: 'Financeiro', aiHint: 'Novo' });
+    render(<SectorsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /editar/i }));
+    const hintInput = screen.getByDisplayValue('Antigo');
+    await userEvent.clear(hintInput);
+    await userEvent.type(hintInput, 'Novo');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    await waitFor(() => expect(api.updateSector).toHaveBeenCalledWith('sector-1', { name: 'Financeiro', aiHint: 'Novo' }, 'tok-123'));
     expect(refresh).toHaveBeenCalled();
   });
 

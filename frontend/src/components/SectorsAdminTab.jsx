@@ -11,6 +11,7 @@ function SectorRow({ sector, onSaved, onDeleted }) {
   const { token } = useAuth();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(sector.name);
+  const [aiHint, setAiHint] = useState(sector.aiHint || '');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -21,7 +22,7 @@ function SectorRow({ sector, onSaved, onDeleted }) {
     setError(null);
     setSubmitting(true);
     try {
-      await updateSector(sector.id, { name }, token);
+      await updateSector(sector.id, { name, aiHint }, token);
       setEditing(false);
       onSaved();
     } catch (err) {
@@ -33,12 +34,14 @@ function SectorRow({ sector, onSaved, onDeleted }) {
 
   function handleEditClick() {
     setName(sector.name);
+    setAiHint(sector.aiHint || '');
     setError(null);
     setEditing(true);
   }
 
   function handleCancel() {
     setName(sector.name);
+    setAiHint(sector.aiHint || '');
     setError(null);
     setEditing(false);
   }
@@ -65,6 +68,18 @@ function SectorRow({ sector, onSaved, onDeleted }) {
         className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
       >
         <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
+        <div>
+          <label htmlFor={`sector-ai-hint-${sector.id}`} className="mb-1.5 block text-sm font-medium text-wa-muted">
+            Orientação para a IA
+          </label>
+          <textarea
+            id={`sector-ai-hint-${sector.id}`}
+            rows={3}
+            value={aiHint}
+            onChange={(e) => setAiHint(e.target.value)}
+            className={inputClass}
+          />
+        </div>
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button

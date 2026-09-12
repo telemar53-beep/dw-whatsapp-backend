@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
-const { getAiConfig, updateAiConfig, updateTranscriptionConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
+const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listTools, findTool } = require('../ai/tool-registry');
 const { listModels } = require('../ai/openai-client');
 
@@ -21,6 +21,10 @@ function toConfigResponse(config) {
     transcriptionMaxBytes: config.transcriptionMaxBytes,
     transcriptionPrompt: config.transcriptionPrompt,
     transcriptionFeedAi: config.transcriptionFeedAi,
+    triageConfidenceThreshold: config.triageConfidenceThreshold,
+    triageMaxQuestions: config.triageMaxQuestions,
+    triageTimeoutMinutes: config.triageTimeoutMinutes,
+    triageExtraInstructions: config.triageExtraInstructions,
   };
 }
 
@@ -96,6 +100,17 @@ router.put('/transcription', requireAuth, requireRole('admin'), async (req, res)
     transcriptionPrompt,
     transcriptionFeedAi,
   });
+  res.json(toConfigResponse(config));
+});
+
+router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
+  const { triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions } = req.body || {};
+  const t = Number(triageConfidenceThreshold);
+  if (!Number.isFinite(t) || t < 0 || t > 1) return res.status(400).json({ error: 'triageConfidenceThreshold must be between 0 and 1' });
+  if (!Number.isInteger(triageMaxQuestions) || triageMaxQuestions < 0 || triageMaxQuestions > 5) return res.status(400).json({ error: 'triageMaxQuestions must be an integer from 0 to 5' });
+  if (!Number.isInteger(triageTimeoutMinutes) || triageTimeoutMinutes < 1 || triageTimeoutMinutes > 60) return res.status(400).json({ error: 'triageTimeoutMinutes must be an integer from 1 to 60' });
+  if (typeof triageExtraInstructions !== 'string') return res.status(400).json({ error: 'triageExtraInstructions must be a string' });
+  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions });
   res.json(toConfigResponse(config));
 });
 

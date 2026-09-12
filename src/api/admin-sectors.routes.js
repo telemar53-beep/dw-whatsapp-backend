@@ -20,7 +20,8 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   if (!name) {
     return res.status(400).json({ error: 'name is required' });
   }
-  const sector = await updateSector(req.params.id, { name });
+  const aiHint = typeof req.body.aiHint === 'string' ? req.body.aiHint.trim() : undefined;
+  const sector = await updateSector(req.params.id, { name, aiHint });
   if (!sector) {
     return res.status(404).json({ error: 'Sector not found' });
   }

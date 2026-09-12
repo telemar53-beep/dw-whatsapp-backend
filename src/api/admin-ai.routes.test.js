@@ -4,7 +4,7 @@ jest.mock('../ai/openai-client');
 const express = require('express');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
-const { getAiConfig, updateAiConfig, updateTranscriptionConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
+const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listModels, OpenAiAuthError } = require('../ai/openai-client');
 const adminAiRoutes = require('./admin-ai.routes');
 
@@ -207,5 +207,15 @@ describe('admin ai routes', () => {
               transcriptionMaxBytes: 1000, transcriptionPrompt: 'PPPoE', transcriptionFeedAi: true })
       .expect(200);
     expect(res.body.transcriptionModel).toBe('m');
+  });
+
+  test('PUT /triage valida e salva', async () => {
+    updateTriageConfig.mockResolvedValue({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x' });
+    const res = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x' }).expect(200);
+    expect(res.body.triageMaxQuestions).toBe(3);
+    await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ triageConfidenceThreshold: 1.5, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: '' }).expect(400);
+    await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('agent')}`).send({}).expect(403);
   });
 });

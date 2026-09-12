@@ -277,6 +277,10 @@ export function setChannelAiEnabled(id, aiEnabled, token) {
   return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { aiEnabled }, token });
 }
 
+export function setChannelAiTriageEnabled(id, aiTriageEnabled, token) {
+  return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { aiTriageEnabled }, token });
+}
+
 export function setChannelWabaId(id, wabaId, token) {
   return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { wabaId }, token });
 }
@@ -433,6 +437,10 @@ export function testAiConnection(apiKey, token) {
 
 export function updateTranscriptionConfig(payload, token) {
   return apiFetch('/api/admin/ai/transcription', { method: 'PUT', body: payload, token });
+}
+
+export function updateAiTriageConfig(payload, token) {
+  return apiFetch('/api/admin/ai/triage', { method: 'PUT', body: payload, token });
 }
 
 export function listAiTools(token) {

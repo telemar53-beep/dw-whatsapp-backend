@@ -121,6 +121,17 @@ describe('PATCH /api/admin/sectors/:id', () => {
     expect(res.status).toBe(403);
     expect(updateSector).not.toHaveBeenCalled();
   });
+
+  test('PATCH /sectors/:id aceita aiHint', async () => {
+    updateSector.mockResolvedValue({ id: 's-1', name: 'Reativação', aiHint: 'h' });
+    const res = await request(buildApp())
+      .patch('/api/admin/sectors/s-1')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ name: 'Reativação', aiHint: 'h' })
+      .expect(200);
+    expect(updateSector).toHaveBeenCalledWith('s-1', { name: 'Reativação', aiHint: 'h' });
+    expect(res.body.aiHint).toBe('h');
+  });
 });
 
 describe('DELETE /api/admin/sectors/:id', () => {

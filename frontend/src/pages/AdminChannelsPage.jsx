@@ -19,6 +19,7 @@ import {
   setChannelHidden,
   deleteChannel,
   setChannelAiEnabled,
+  setChannelAiTriageEnabled,
 } from '../services/api';
 import { isOfficialChannelType, channelTypeLabel } from '../utils/channelTypes';
 
@@ -94,6 +95,7 @@ function ChannelCard({
   setWabaIdDrafts,
   onToggleTriage,
   onToggleAi,
+  onToggleAiTriage,
   onSaveWabaId,
   onRefresh,
   onReconnect,
@@ -131,6 +133,17 @@ function ChannelCard({
           className="h-4 w-4 accent-wa-green"
         />
         Usar atendimento por IA
+      </label>
+
+      <label className="mt-2 flex items-center gap-2 text-[14px] text-wa-muted">
+        <input
+          type="checkbox"
+          checked={!!channel.aiTriageEnabled}
+          disabled={!channel.aiEnabled}
+          onChange={(e) => onToggleAiTriage(channel.id, e.target.checked)}
+          className="h-4 w-4 accent-wa-green"
+        />
+        Triagem com IA
       </label>
 
       {isOfficialChannelType(channel.type) && (
@@ -188,6 +201,7 @@ function AdminChannelsPage() {
   const [activeTab, setActiveTab] = useState('channels');
   const [triageToggleError, setTriageToggleError] = useState(null);
   const [aiToggleError, setAiToggleError] = useState(null);
+  const [aiTriageToggleError, setAiTriageToggleError] = useState(null);
   const [wabaIdDrafts, setWabaIdDrafts] = useState({});
   const [wabaIdError, setWabaIdError] = useState(null);
   const [channelActionError, setChannelActionError] = useState(null);
@@ -271,6 +285,16 @@ function AdminChannelsPage() {
       setAiToggleError((err.body && err.body.error) || 'Falha ao atualizar a IA deste canal');
     } finally {
       refresh();
+    }
+  }
+
+  async function handleToggleAiTriage(channelId, aiTriageEnabled) {
+    setAiTriageToggleError(null);
+    try {
+      await setChannelAiTriageEnabled(channelId, aiTriageEnabled, token);
+      refresh();
+    } catch (err) {
+      setAiTriageToggleError((err.body && err.body.error) || 'Falha ao atualizar a triagem com IA deste canal');
     }
   }
 
@@ -358,6 +382,7 @@ function AdminChannelsPage() {
                 <div className="space-y-4">
                   <ErrorNote>{triageToggleError}</ErrorNote>
                   <ErrorNote>{aiToggleError}</ErrorNote>
+                  <ErrorNote>{aiTriageToggleError}</ErrorNote>
                   <ErrorNote>{wabaIdError}</ErrorNote>
                   <ErrorNote>{channelActionError}</ErrorNote>
 
@@ -380,6 +405,7 @@ function AdminChannelsPage() {
                         setWabaIdDrafts={setWabaIdDrafts}
                         onToggleTriage={handleToggleTriage}
                         onToggleAi={handleToggleAi}
+                        onToggleAiTriage={handleToggleAiTriage}
                         onSaveWabaId={handleSaveWabaId}
                         onRefresh={refresh}
                         onReconnect={handleReconnect}

@@ -32,8 +32,12 @@ async function findPendingSuggestion(conversationId) {
 }
 
 async function markSuggestion(id, status) {
+  // Conditional on status = 'pending', same pattern as claimConversation/transferConversation
+  // in conversation.repository.js: two requests racing on the same suggestion (double click,
+  // two open tabs) both pass a prior findPendingSuggestion check, but only one of them can win
+  // this UPDATE — the loser gets rowCount 0 and null, instead of marking (and sending) twice.
   const result = await getPool().query(
-    'UPDATE ai_suggestions SET status = $2 WHERE id = $1 RETURNING *',
+    "UPDATE ai_suggestions SET status = $2 WHERE id = $1 AND status = 'pending' RETURNING *",
     [id, status]
   );
   if (result.rowCount === 0) return null;

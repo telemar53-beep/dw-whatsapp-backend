@@ -37,4 +37,16 @@ describe('ai suggestion repository', () => {
   test('markSuggestion returns null for an unknown id', async () => {
     expect(await markSuggestion('00000000-0000-0000-0000-000000000000', 'sent')).toBeNull();
   });
+
+  test('markSuggestion on an already-marked suggestion returns null instead of marking it again', async () => {
+    // Guards against a double-send: two concurrent requests for the same suggestion must not
+    // both succeed. An unconditional `UPDATE ... WHERE id = $1` would happily match and update
+    // the row a second time (this assertion would then see the 'sent' object, not null).
+    const created = await createSuggestion({ conversationId, messageId: null, content: 'x' });
+    const first = await markSuggestion(created.id, 'sent');
+    expect(first.status).toBe('sent');
+
+    const second = await markSuggestion(created.id, 'sent');
+    expect(second).toBeNull();
+  });
 });

@@ -1554,4 +1554,43 @@ describe('AI suggestion routes', () => {
 
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
+
+  test('POST send does not enqueue and returns not-found when markSuggestion loses the race (already acted on)', async () => {
+    // markSuggestion's conditional UPDATE is what actually resolves a race between two
+    // concurrent requests for the same suggestion (double click, two open tabs): the loser
+    // gets null back. The route must treat that exactly like an unknown suggestion, and above
+    // all must never have already called enqueueOutboundMessage by that point.
+    const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'assigned' });
+    findPendingSuggestion.mockResolvedValue({ id: 's-1', content: 'texto', status: 'pending' });
+    markSuggestion.mockResolvedValue(null);
+
+    const res = await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/ai-suggestion/s-1/send`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`).send({});
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Suggestion not found');
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('POST send after the suggestion was already discarded does not send anything', async () => {
+    const { findPendingSuggestion, markSuggestion } = require('../ai/ai-suggestion.repository');
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'assigned' });
+    findPendingSuggestion.mockResolvedValue({ id: 's-1', content: 'texto', status: 'pending' });
+    // First call simulates the discard's own conditional UPDATE succeeding; the second call
+    // simulates the later send's conditional UPDATE matching zero rows, because the row is no
+    // longer 'pending' by the time it runs.
+    markSuggestion
+      .mockResolvedValueOnce({ id: 's-1', status: 'discarded' })
+      .mockResolvedValueOnce(null);
+
+    await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/ai-suggestion/s-1/discard`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`).expect(204);
+
+    const res = await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/ai-suggestion/s-1/send`)
+      .set('Authorization', `Bearer ${tokenFor('a-1', 'agent')}`).send({});
+
+    expect(res.status).toBe(404);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
 });

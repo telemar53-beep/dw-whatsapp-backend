@@ -409,13 +409,24 @@ router.post('/:id/ai-suggestion/:sid/send', requireAuth, async (req, res) => {
   const edited = typeof content === 'string' && content.trim() && content.trim() !== suggestion.content;
   const text = edited ? content.trim() : suggestion.content;
 
+  // Mark before acting, not after: markSuggestion's conditional UPDATE is what actually
+  // resolves the race between two concurrent requests for the same suggestion (double click,
+  // two open tabs). Marking first and only enqueuing on success means the loser never reaches
+  // enqueueOutboundMessage, so the customer can't receive the message twice. The alternative
+  // (send, then mark) would leave both requests sending before either mark lands — the race
+  // this route exists to close. Marking without a subsequent send is recoverable (the attendant
+  // sees the error and retries); a duplicate send to the customer is not.
+  const marked = await markSuggestion(suggestion.id, edited ? 'edited' : 'sent');
+  if (!marked) {
+    return res.status(404).json({ error: 'Suggestion not found' });
+  }
+
   const message = await enqueueOutboundMessage({
     conversationId: conversation.id,
     channelId: conversation.channelId,
     content: text,
     sentBy: 'ai',
   });
-  await markSuggestion(suggestion.id, edited ? 'edited' : 'sent');
   res.status(201).json(message);
 });
 
@@ -426,7 +437,10 @@ router.post('/:id/ai-suggestion/:sid/discard', requireAuth, async (req, res) => 
   if (!suggestion || suggestion.id !== req.params.sid) {
     return res.status(404).json({ error: 'Suggestion not found' });
   }
-  await markSuggestion(suggestion.id, 'discarded');
+  const marked = await markSuggestion(suggestion.id, 'discarded');
+  if (!marked) {
+    return res.status(404).json({ error: 'Suggestion not found' });
+  }
   res.status(204).end();
 });
 

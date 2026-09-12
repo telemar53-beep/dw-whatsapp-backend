@@ -16,6 +16,12 @@ function toMessage(row) {
     status: row.status,
     repliedToMessageId: row.replied_to_message_id,
     sentBy: row.sent_by,
+    transcription: row.transcription,
+    transcriptionStatus: row.transcription_status,
+    transcriptionDetail: row.transcription_detail,
+    transcriptionModel: row.transcription_model,
+    transcriptionMs: row.transcription_ms,
+    audioDurationSeconds: row.audio_duration_seconds,
     createdAt: row.created_at,
   };
 }
@@ -31,7 +37,9 @@ function toMessageWithReplyPreview(row) {
 
 const MESSAGE_COLUMNS = `id, conversation_id, direction, content, whatsapp_message_id, status,
        message_type, media_path, media_mime_type, media_filename,
-       location_latitude, location_longitude, replied_to_message_id, sent_by, created_at`;
+       location_latitude, location_longitude, replied_to_message_id, sent_by, created_at,
+       transcription, transcription_status, transcription_detail,
+       transcription_model, transcription_ms, audio_duration_seconds`;
 
 async function createMessage({
   conversationId,
@@ -112,6 +120,8 @@ async function listMessagesByConversation(conversationId) {
     `SELECT m.id, m.conversation_id, m.direction, m.content, m.whatsapp_message_id, m.status,
             m.message_type, m.media_path, m.media_mime_type, m.media_filename,
             m.location_latitude, m.location_longitude, m.replied_to_message_id, m.sent_by, m.created_at,
+            m.transcription, m.transcription_status, m.transcription_detail,
+            m.transcription_model, m.transcription_ms, m.audio_duration_seconds,
             rm.content AS replied_to_content, rm.direction AS replied_to_direction
      FROM messages m
      LEFT JOIN messages rm ON rm.id = m.replied_to_message_id
@@ -136,6 +146,8 @@ async function listRecentMessagesByConversation(conversationId, limit) {
     `SELECT m.id, m.conversation_id, m.direction, m.content, m.whatsapp_message_id, m.status,
             m.message_type, m.media_path, m.media_mime_type, m.media_filename,
             m.location_latitude, m.location_longitude, m.replied_to_message_id, m.sent_by, m.created_at,
+            m.transcription, m.transcription_status, m.transcription_detail,
+            m.transcription_model, m.transcription_ms, m.audio_duration_seconds,
             rm.content AS replied_to_content, rm.direction AS replied_to_direction
      FROM messages m
      LEFT JOIN messages rm ON rm.id = m.replied_to_message_id
@@ -175,6 +187,49 @@ async function findLatestInboundMessageId(conversationId) {
   return result.rows[0].id;
 }
 
+async function markTranscriptionPending(messageId, audioDurationSeconds) {
+  const result = await getPool().query(
+    `UPDATE messages SET transcription_status = 'pending', audio_duration_seconds = $2
+     WHERE id = $1 RETURNING ${MESSAGE_COLUMNS}`,
+    [messageId, audioDurationSeconds !== undefined ? audioDurationSeconds : null]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
+async function markTranscriptionProcessing(messageId) {
+  const result = await getPool().query(
+    `UPDATE messages SET transcription_status = 'processing'
+     WHERE id = $1 RETURNING ${MESSAGE_COLUMNS}`,
+    [messageId]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
+async function saveTranscription(messageId, { transcription, model, ms }) {
+  const result = await getPool().query(
+    `UPDATE messages
+        SET transcription = $2, transcription_status = 'completed',
+            transcription_model = $3, transcription_ms = $4, transcription_detail = NULL
+      WHERE id = $1 RETURNING ${MESSAGE_COLUMNS}`,
+    [messageId, transcription, model, ms !== undefined ? ms : null]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
+async function markTranscriptionFailed(messageId, { status, detail, ms }) {
+  const result = await getPool().query(
+    `UPDATE messages
+        SET transcription_status = $2, transcription_detail = $3, transcription_ms = $4
+      WHERE id = $1 RETURNING ${MESSAGE_COLUMNS}`,
+    [messageId, status, detail || null, ms !== undefined ? ms : null]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
 module.exports = {
   createMessage,
   updateMessageStatus,
@@ -184,4 +239,8 @@ module.exports = {
   listRecentMessagesByConversation,
   findMessageById,
   findLatestInboundMessageId,
+  markTranscriptionPending,
+  markTranscriptionProcessing,
+  saveTranscription,
+  markTranscriptionFailed,
 };

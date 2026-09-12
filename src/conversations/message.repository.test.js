@@ -11,6 +11,10 @@ const {
   findMessageById,
   advanceMessageStatus,
   findLatestInboundMessageId,
+  markTranscriptionPending,
+  markTranscriptionProcessing,
+  saveTranscription,
+  markTranscriptionFailed,
 } = require('./message.repository');
 
 describe('message repository', () => {
@@ -365,5 +369,76 @@ describe('message repository', () => {
 
       expect(latestInboundId).toBeNull();
     });
+  });
+
+  test('uma mensagem de áudio carrega os campos de transcrição em branco por padrão', async () => {
+    const message = await createMessage({
+      conversationId, direction: 'inbound', content: null, whatsappMessageId: 'wa-audio-1',
+      status: 'received', messageType: 'audio', mediaPath: 'x.ogg', mediaMimeType: 'audio/ogg',
+    });
+    expect(message.transcription).toBeNull();
+    expect(message.transcriptionStatus).toBeNull();
+    expect(message.audioDurationSeconds).toBeNull();
+  });
+
+  test('markTranscriptionPending grava o status e a duração', async () => {
+    const message = await createMessage({
+      conversationId, direction: 'inbound', content: null, whatsappMessageId: 'wa-audio-2',
+      status: 'received', messageType: 'audio', mediaPath: 'x.ogg', mediaMimeType: 'audio/ogg',
+    });
+    const updated = await markTranscriptionPending(message.id, 42);
+    expect(updated.transcriptionStatus).toBe('pending');
+    expect(updated.audioDurationSeconds).toBe(42);
+  });
+
+  test('saveTranscription grava texto, modelo e tempo, e marca completed', async () => {
+    const message = await createMessage({
+      conversationId, direction: 'inbound', content: null, whatsappMessageId: 'wa-audio-3',
+      status: 'received', messageType: 'audio', mediaPath: 'x.ogg', mediaMimeType: 'audio/ogg',
+    });
+    const updated = await saveTranscription(message.id, {
+      transcription: 'minha internet caiu', model: 'modelo-x', ms: 1234,
+    });
+    expect(updated.transcription).toBe('minha internet caiu');
+    expect(updated.transcriptionStatus).toBe('completed');
+    expect(updated.transcriptionModel).toBe('modelo-x');
+    expect(updated.transcriptionMs).toBe(1234);
+  });
+
+  test('markTranscriptionFailed aceita failed e skipped com motivo', async () => {
+    const message = await createMessage({
+      conversationId, direction: 'inbound', content: null, whatsappMessageId: 'wa-audio-4',
+      status: 'received', messageType: 'audio', mediaPath: 'x.ogg', mediaMimeType: 'audio/ogg',
+    });
+    const falhou = await markTranscriptionFailed(message.id, { status: 'failed', detail: 'timeout', ms: 900 });
+    expect(falhou.transcriptionStatus).toBe('failed');
+    expect(falhou.transcriptionDetail).toBe('timeout');
+
+    const pulado = await markTranscriptionFailed(message.id, { status: 'skipped', detail: 'áudio longo demais', ms: null });
+    expect(pulado.transcriptionStatus).toBe('skipped');
+  });
+
+  test('as funções devolvem null para id inexistente', async () => {
+    expect(await markTranscriptionProcessing('00000000-0000-0000-0000-000000000000')).toBeNull();
+  });
+
+  test('a transcrição chega por listMessagesByConversation, não só pelo RETURNING', async () => {
+    // Este é o teste que pega a armadilha das colunas enumeradas: escreve por uma
+    // função e relê por OUTRA. Se a coluna faltar na lista inline daquela consulta,
+    // o texto vem undefined mesmo estando no banco.
+    const message = await createMessage({
+      conversationId, direction: 'inbound', content: null, whatsappMessageId: 'wa-audio-5',
+      status: 'received', messageType: 'audio', mediaPath: 'x.ogg', mediaMimeType: 'audio/ogg',
+    });
+    await saveTranscription(message.id, { transcription: 'texto relido', model: 'm', ms: 10 });
+
+    const lista = await listMessagesByConversation(conversationId);
+    const relida = lista.find((m) => m.id === message.id);
+    expect(relida.transcription).toBe('texto relido');
+    expect(relida.transcriptionStatus).toBe('completed');
+
+    const recentes = await listRecentMessagesByConversation(conversationId, 50);
+    const naRecente = recentes.find((m) => m.id === message.id);
+    expect(naRecente.transcription).toBe('texto relido');
   });
 });

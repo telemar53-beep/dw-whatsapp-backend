@@ -251,8 +251,14 @@ describe('ai-orchestrator', () => {
 
   test('áudio sem transcrição concluída fica fora do histórico', async () => {
     listRecentMessagesByConversation.mockResolvedValue([
+      // Finding 3 (fix round 1): transcription não-nulo com status 'pending'
+      // é um estado real — markTranscriptionProcessing muda o status sem
+      // apagar uma transcrição anterior. Com transcription: null a checagem
+      // de status podia ser removida sem o teste perceber (content/
+      // transcription já eram falsy por conta própria); com texto presente
+      // e status != 'completed', só a checagem de status salva o teste.
       { direction: 'inbound', content: null, messageType: 'audio',
-        transcription: null, transcriptionStatus: 'failed' },
+        transcription: 'texto parcial', transcriptionStatus: 'pending' },
       { direction: 'inbound', content: 'oi', messageType: 'text' },
     ]);
     createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });

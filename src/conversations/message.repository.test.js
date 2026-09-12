@@ -380,6 +380,21 @@ describe('message repository', () => {
       expect(await findLatestInboundMessageId(conversationId)).toBe(audio.id);
     });
 
+    test('com incluirAudioTranscrito: false, áudio transcrito não conta — o job do texto continua valendo', async () => {
+      // Cenário do finding 1: com transcriptionFeedAi desligado, um áudio
+      // transcrito nunca vai gerar turno de IA (o worker de transcrição não
+      // enfileira job pra ele). Se ele ainda contasse como "última mensagem
+      // utilizável" aqui, o job do texto anterior se acharia ultrapassado e
+      // ninguém responderia ao cliente — silenciosamente.
+      const texto = await createMessage({ conversationId, direction: 'inbound', content: 'texto', whatsappMessageId: 'w1b',
+        status: 'received', messageType: 'text' });
+      const audio = await createMessage({ conversationId, direction: 'inbound', content: null, whatsappMessageId: 'w2b',
+        status: 'received', messageType: 'audio', mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg' });
+      await saveTranscription(audio.id, { transcription: 'falei isso', model: 'm', ms: 5 });
+
+      expect(await findLatestInboundMessageId(conversationId, { incluirAudioTranscrito: false })).toBe(texto.id);
+    });
+
     test('áudio SEM transcrição não conta', async () => {
       const texto = await createMessage({ conversationId, direction: 'inbound', content: 'texto', whatsappMessageId: 'w3',
         status: 'received', messageType: 'text' });

@@ -80,4 +80,30 @@ describe('ai-worker', () => {
 
     expect(runAiTurn).toHaveBeenCalled();
   });
+
+  describe('transcriptionFeedAi e a mensagem mais recente', () => {
+    // Finding 1 (fix round 1): com transcriptionFeedAi desligado, um áudio
+    // transcrito nunca gera job de IA (o worker de transcrição não enfileira
+    // um pra ele). Se findLatestInboundMessageId ainda contasse esse áudio
+    // como "a mais nova", o job do texto anterior se acharia ultrapassado e
+    // sairia sem responder — silenciosamente, sem log nenhum.
+    test('com transcriptionFeedAi desligado, pede a mais recente SEM contar áudio transcrito', async () => {
+      getAiConfig.mockResolvedValue({ mode: 'assistant', transcriptionFeedAi: false });
+      runAiTurn.mockResolvedValue({ texto: 'Seu plano é 600MB.', toolsExecutadas: [], erro: null });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(findLatestInboundMessageId).toHaveBeenCalledWith('c-1', { incluirAudioTranscrito: false });
+      expect(runAiTurn).toHaveBeenCalled();
+    });
+
+    test('com transcriptionFeedAi ligado (padrão), pede a mais recente contando áudio transcrito', async () => {
+      getAiConfig.mockResolvedValue({ mode: 'assistant', transcriptionFeedAi: true });
+      runAiTurn.mockResolvedValue({ texto: 'Seu plano é 600MB.', toolsExecutadas: [], erro: null });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(findLatestInboundMessageId).toHaveBeenCalledWith('c-1', { incluirAudioTranscrito: true });
+    });
+  });
 });

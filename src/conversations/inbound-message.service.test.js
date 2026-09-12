@@ -1045,7 +1045,12 @@ describe('ingestInboundMessage', () => {
   });
 
   describe('transcription hook', () => {
-    test('agenda transcrição para áudio quando habilitada', async () => {
+    test('agenda transcrição para áudio quando habilitada, carregando a duração até o final', async () => {
+      // Finding 2 (fix round 1): a duração não passa pelo createMessage — ela
+      // só chega ao banco via o terceiro argumento de scheduleTranscription
+      // (que markTranscriptionPending grava). Se esse argumento for perdido
+      // no meio do caminho, audio_duration_seconds fica sempre NULL e o
+      // limite transcriptionMaxSeconds nunca mais dispara, em silêncio.
       const { shouldTranscribe, scheduleTranscription } = require('../ai/ai.service');
       shouldTranscribe.mockResolvedValue(true);
       findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-audio-1' });
@@ -1056,10 +1061,10 @@ describe('ingestInboundMessage', () => {
       await ingestInboundMessage({
         channelId: 'channel-1', fromPhoneNumber: '5598900003333', contactDisplayName: 'Fulano',
         whatsappMessageId: 'wa-audio-1', messageType: 'audio', content: null,
-        mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg',
+        mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg', audioDurationSeconds: 12,
       });
 
-      expect(scheduleTranscription).toHaveBeenCalled();
+      expect(scheduleTranscription).toHaveBeenCalledWith(expect.anything(), expect.anything(), 12);
     });
 
     test('transcrição que falha ao agendar nunca bloqueia a ingestão', async () => {

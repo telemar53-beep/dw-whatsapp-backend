@@ -24,7 +24,15 @@ async function handleAiJob({ conversationId, messageId }) {
   // mensagem, um job mais novo (com o histórico completo) já está agendado ou
   // vai ser — este aqui sai sem gastar uma chamada à OpenAI. Ver o comentário
   // em ai-queue.js sobre por que isto substituiu o debounce por jobId fixo.
-  const latestInboundMessageId = await findLatestInboundMessageId(conversationId);
+  //
+  // incluirAudioTranscrito segue config.transcriptionFeedAi: com a flag
+  // desligada, um áudio transcrito nunca vai gerar job de IA (o worker de
+  // transcrição não enfileira um pra ele) — se ele ainda contasse aqui como
+  // "a mais nova", o job de um texto anterior se acharia ultrapassado e
+  // sairia sem responder, sem log nenhum.
+  const latestInboundMessageId = await findLatestInboundMessageId(conversationId, {
+    incluirAudioTranscrito: config.transcriptionFeedAi,
+  });
   if (latestInboundMessageId !== messageId) return;
 
   const contact = await findContactById(conversation.contactId);

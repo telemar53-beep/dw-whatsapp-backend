@@ -172,18 +172,29 @@ async function findMessageById(id) {
  * mensagem cronologicamente mais nova pode muito bem ser uma resposta da
  * própria IA, o que faria todo job se achar "ultrapassado".
  *
- * "Utilizável pela IA" = texto, ou áudio já transcrito. Foto e documento
- * continuam de fora: uma foto enviada após um texto não deve fazer a IA
- * desistir de responder ao texto — sem esse filtro ela ainda viraria "a
- * última inbound", e o job do texto, ao comparar seu messageId contra ela, se
+ * "Utilizável pela IA" = texto, ou áudio já transcrito — mas só quando
+ * `incluirAudioTranscrito` é true (padrão). Foto e documento continuam de
+ * fora sempre: uma foto enviada após um texto não deve fazer a IA desistir
+ * de responder ao texto — sem esse filtro ela ainda viraria "a última
+ * inbound", e o job do texto, ao comparar seu messageId contra ela, se
  * acharia ultrapassado e sairia sem responder. Ninguém respondia ao cliente.
+ *
+ * `incluirAudioTranscrito: false` existe para o mesmo motivo, do lado do
+ * áudio: com `transcriptionFeedAi` desligado, um áudio transcrito nunca gera
+ * turno de IA (o worker de transcrição não enfileira job pra ele). Se ele
+ * ainda contasse aqui como "última mensagem utilizável", o job do texto
+ * anterior se acharia ultrapassado e sairia sem responder — o mesmo silêncio
+ * que o filtro original evita para foto/documento, só que do lado do áudio.
+ * O chamador (ai-worker.js) passa `config.transcriptionFeedAi` nessa opção.
  */
-async function findLatestInboundMessageId(conversationId) {
+async function findLatestInboundMessageId(conversationId, { incluirAudioTranscrito = true } = {}) {
+  const filtroTipo = incluirAudioTranscrito
+    ? `(message_type = 'text' OR (message_type = 'audio' AND transcription_status = 'completed'))`
+    : `message_type = 'text'`;
   const result = await getPool().query(
     `SELECT id FROM messages
       WHERE conversation_id = $1 AND direction = 'inbound'
-        AND (message_type = 'text'
-             OR (message_type = 'audio' AND transcription_status = 'completed'))
+        AND ${filtroTipo}
       ORDER BY created_at DESC LIMIT 1`,
     [conversationId]
   );

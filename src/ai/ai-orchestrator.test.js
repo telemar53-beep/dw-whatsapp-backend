@@ -345,6 +345,30 @@ describe('ai-orchestrator', () => {
     expect(JSON.stringify(toolsRequested)).not.toContain('52998224725');
   });
 
+  // I4 (fix round 1, ai-triage): confirmar_nascimento's argument is named
+  // "data", not "cpf"/"documento" — CHAVE_DOCUMENTO didn't cover it, so the
+  // customer's birth date reached ai_interactions unmasked. Widened the
+  // pattern to also catch "nascimento" and an exact "data" key.
+  test('masks the data (birth date) argument of confirmar_nascimento in the audit trail, but still passes it to the tool', async () => {
+    const { maskDocument } = require('./sgp-normalizer');
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: {
+          tool_calls: [{ id: 'c1', type: 'function', function: { name: 'confirmar_nascimento', arguments: '{"data":"20/05/1990"}' } }],
+        },
+        usage: {},
+      })
+      .mockResolvedValueOnce({ message: { content: 'Confirmado.' }, usage: {} });
+    executeTool.mockResolvedValue({ ok: true, resultado: { confirmado: true } });
+
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    expect(executeTool).toHaveBeenCalledWith('confirmar_nascimento', { data: '20/05/1990' }, expect.any(Object));
+    const { toolsRequested } = recordAiInteraction.mock.calls[0][0];
+    expect(toolsRequested).toEqual([{ nome: 'confirmar_nascimento', args: { data: maskDocument('20/05/1990') } }]);
+    expect(JSON.stringify(toolsRequested)).not.toContain('20/05/1990');
+  });
+
   test('never sends the api key inside the messages', async () => {
     createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });

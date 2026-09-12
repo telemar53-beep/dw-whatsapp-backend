@@ -5,6 +5,7 @@ const { findReasonById } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const {
   setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
+  incrementBirthdateAttempts,
 } = require('../conversations/conversation.repository');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
@@ -12,6 +13,7 @@ const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { primeiroNome } = require('./identity-resolver');
+const { mensagemSegura } = require('./safe-error-log');
 
 function erro(mensagem) {
   return { ok: false, erro: mensagem };
@@ -75,30 +77,60 @@ const TOOLS = [
       return { ok: true, args: { cpf } };
     },
     async executar(args, contexto) {
+      // No perfil de triagem, um CPF errado é esperado (o cliente pode digitar
+      // o número errado uma vez) — mas sem limite, o modelo poderia varrer
+      // CPFs até achar um que bata. Três distintos no mesmo turno é o teto;
+      // o mesmo CPF repetido não conta.
+      if (contexto.identidade) {
+        if (!contexto.cpfsBuscados) contexto.cpfsBuscados = new Set();
+        if (!contexto.cpfsBuscados.has(args.cpf) && contexto.cpfsBuscados.size >= 2) {
+          return erro('CPF lookup limit reached for this turn');
+        }
+        contexto.cpfsBuscados.add(args.cpf);
+      }
+
       const { client, contracts } = await sgpClient.lookupClientByCpf(args.cpf);
-      await setContactSgpLink(contexto.contact.id, {
-        sgpClientId: client.id,
-        sgpContractId: contracts.length === 1 ? contracts[0].id : null,
-        sgpDocument: args.cpf,
-      });
       contexto.contracts = contracts;
-      // Sem isto, o guard de "troca de cliente" do executor (que lê
-      // contexto.contact.sgpDocument) nunca dispara dentro do mesmo turno:
-      // duas chamadas com CPFs diferentes na mesma conversa passariam batidas.
-      contexto.contact.sgpDocument = args.cpf;
+
       // No perfil de triagem, CPF digitado por número desconhecido é identidade
-      // FRACA: classifica, mas não entrega nada até confirmar_nascimento.
+      // FRACA: classifica, mas não entrega nada até confirmar_nascimento. Por
+      // isso o vínculo do contato NÃO é persistido aqui — é
+      // confirmar_nascimento quem persiste, só depois de bater a data. Sem
+      // isso, um CPF errado (ou de outra pessoa) vazaria para o próximo turno
+      // como identidade forte via memória (contact.sgpDocument já setado).
       if (contexto.identidade) {
         let dataNascimento = null;
         try {
           const rec = await sgpClient.findClientRecord({ cpfcnpj: args.cpf });
           dataNascimento = rec.cliente ? rec.cliente.dataNascimento : null;
-        } catch (err) { /* sem data, a confirmação simplesmente não estará disponível */ }
+        } catch (err) {
+          console.error(`Birth date lookup failed: ${mensagemSegura(err)}`);
+        }
         contexto.identidade = {
           nivel: 'fraca', origem: 'cpf', primeiroNome: primeiroNome(client.name), contracts,
           client: { id: client.id, document: args.cpf }, dataNascimento, contestado: false, nascimentoTentado: false,
         };
+        // As palavras do modelo vão direto ao cliente na triagem: nunca o
+        // sobrenome completo nem o login PPPoE, só o que já se apresentaria
+        // por telefone.
+        return {
+          cliente: { nome: primeiroNome(client.name) },
+          contratos: contracts.map((c) => ({
+            id: c.id, plano: c.plan, status: normalizeContract(c).status,
+          })),
+        };
       }
+
+      // Perfil assistente: um atendente humano acompanha a conversa, então o
+      // vínculo é persistido de imediato — o guard de "troca de cliente" do
+      // executor (que lê contexto.contact.sgpDocument) depende disso para
+      // disparar dentro do mesmo turno.
+      await setContactSgpLink(contexto.contact.id, {
+        sgpClientId: client.id,
+        sgpContractId: contracts.length === 1 ? contracts[0].id : null,
+        sgpDocument: args.cpf,
+      });
+      contexto.contact.sgpDocument = args.cpf;
       return {
         cliente: { nome: client.name },
         contratos: contracts.map((c) => ({
@@ -452,12 +484,27 @@ const TOOLS = [
     async executar(args, contexto) {
       const id = contexto.identidade;
       if (!id || !id.dataNascimento) return { confirmado: false, motivo: 'Não há data de nascimento no cadastro para confirmar. Encaminhe sem entregar dados.' };
-      if (id.nascimentoTentado) return { confirmado: false, motivo: 'A confirmação já foi feita neste atendimento. Encaminhe sem entregar dados.' };
-      id.nascimentoTentado = true;
+      // O limite de tentativas é por conversa, gravado no banco — não no
+      // objeto de identidade em memória, que zera a cada turno e também com
+      // esquecer_identificacao. Sem isso, o cliente podia tentar de novo só
+      // chamando esquecer_identificacao e buscar_cliente outra vez.
+      const tentativas = await incrementBirthdateAttempts(contexto.conversationId);
+      if (tentativas > 2) {
+        return { confirmado: false, motivo: 'Limite de tentativas de confirmação atingido. Encaminhe sem entregar dados.' };
+      }
       const informada = normalizarDataNascimento(args.data);
       if (informada && informada === id.dataNascimento) {
         id.nivel = 'forte';
         id.origem = 'cpf_confirmed';
+        // Só agora, com a confirmação batida, o vínculo do contato é
+        // persistido — antes disso (buscar_cliente) a identidade era só
+        // FRACA e não podia vazar como memória para o próximo turno.
+        await setContactSgpLink(contexto.contact.id, {
+          sgpClientId: id.client.id,
+          sgpContractId: id.contracts.length === 1 ? id.contracts[0].id : null,
+          sgpDocument: id.client.document,
+        });
+        contexto.contact.sgpDocument = id.client.document;
         return { confirmado: true };
       }
       return { confirmado: false, motivo: 'Data não confere. Não entregue dados; encaminhe para o setor.' };
@@ -475,6 +522,8 @@ const TOOLS = [
       contexto.contracts = [];
       if (contexto.contact) {
         contexto.contact.sgpDocument = null;
+        contexto.contact.sgpClientId = null;
+        contexto.contact.sgpContractId = null;
         await setContactSgpLink(contexto.contact.id, { sgpClientId: null, sgpContractId: null, sgpDocument: null });
       }
       return { esquecido: true };
@@ -490,6 +539,11 @@ const TOOLS = [
     parametros: { type: 'object', properties: { contratoId: { type: 'integer' } }, required: ['contratoId'] },
     validar: validarContratoId,
     async executar(args, contexto) {
+      // Fora da triagem (contexto.identidade ausente) não há confirmar_nascimento
+      // no meio do caminho, nem instrução para o modelo saber quando é seguro
+      // entregar — enviar_boleto EXECUTA (entrega um arquivo real ao cliente),
+      // então não é uma ferramenta de assistente/humano-no-comando.
+      if (!contexto.identidade) return erro('enviar_boleto is only available during AI triage');
       const result = await sgpClient.getDuplicateInvoice(args.contratoId);
       if (!result.hasOpenInvoice) return { enviado: false, motivo: 'Nenhuma fatura em aberto' };
       const primeira = result.duplicates[0];
@@ -524,10 +578,14 @@ const TOOLS = [
       const setorId = args && args.setorId;
       const motivoId = args && args.motivoId;
       const resumo = args && args.resumo;
-      const confianca = Number(args && args.confianca);
+      const confiancaBruta = args && args.confianca;
       if (typeof setorId !== 'string' || !UUID_PATTERN.test(setorId)) return erro('setorId must be a UUID');
       if (motivoId != null && (typeof motivoId !== 'string' || !UUID_PATTERN.test(motivoId))) return erro('motivoId must be a UUID or null');
       if (typeof resumo !== 'string' || !resumo.trim()) return erro('resumo is required');
+      // Number(true) === 1: sem esta checagem de tipo, um booleano passava
+      // pela validação de faixa (0 a 1) como se fosse confiança máxima.
+      if (typeof confiancaBruta !== 'number' && typeof confiancaBruta !== 'string') return erro('confianca must be a number');
+      const confianca = Number(confiancaBruta);
       if (!Number.isFinite(confianca) || confianca < 0 || confianca > 1) return erro('confianca must be between 0 and 1');
       return { ok: true, args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca } };
     },

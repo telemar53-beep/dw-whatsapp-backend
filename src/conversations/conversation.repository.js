@@ -201,6 +201,25 @@ async function incrementTriageAttempts(conversationId) {
   return result.rows[0].triage_attempts;
 }
 
+/**
+ * Tentativas de confirmar_nascimento (ai/tool-registry.js), por conversa —
+ * gravado no banco de propósito, não no contexto em memória do turno: um
+ * contador em memória zera a cada turno e também com esquecer_identificacao,
+ * que é justamente a brecha que este contador fecha. Sem condição de
+ * triage_state = 'pending': confirmar_nascimento pode ser chamado a
+ * qualquer momento da triagem, não só enquanto pendente.
+ */
+async function incrementBirthdateAttempts(conversationId) {
+  const result = await getPool().query(
+    `UPDATE conversations SET ai_triage_birthdate_attempts = ai_triage_birthdate_attempts + 1
+     WHERE id = $1
+     RETURNING ai_triage_birthdate_attempts`,
+    [conversationId]
+  );
+  if (result.rowCount === 0) return 0;
+  return result.rows[0].ai_triage_birthdate_attempts;
+}
+
 async function activateConversation(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET status = 'waiting', updated_at = now()
@@ -568,6 +587,7 @@ module.exports = {
   completeTriage,
   concludeAiTriage,
   incrementTriageAttempts,
+  incrementBirthdateAttempts,
   activateConversation,
   getConversationWithContact,
   findConversationByProtocolNumber,

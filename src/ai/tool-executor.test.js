@@ -190,17 +190,24 @@ describe('tool-executor — perfil com lista fixa e identidade', () => {
   });
 
   test('ferramenta fora da lista fixa é recusada mesmo ligada na tabela', async () => {
-    findTool.mockReturnValue(toolFake());
+    const tool = toolFake();
+    findTool.mockReturnValue(tool);
     isToolEnabled.mockResolvedValue(true);
     const ctx = { ...CONTEXTO, ferramentasPermitidas: ['buscar_cliente'] };
-    expect((await executeTool('consultar_plano', { contratoId: 17402 }, ctx)).motivo).toBe('tool_not_in_profile');
+    const resultado = await executeTool('consultar_plano', { contratoId: 17402 }, ctx);
+    expect(resultado.motivo).toBe('tool_not_in_profile');
+    // I3 (fix round 1): a recusa tem que acontecer ANTES de executar() —
+    // mover a checagem para depois deixaria os testes verdes sem barrar nada.
+    expect(tool.executar).not.toHaveBeenCalled();
   });
 
   test('exigeIdentidadeForte recusa com identidade fraca e passa com forte', async () => {
-    findTool.mockReturnValue(toolFake({ exigeIdentidadeForte: true }));
+    const tool = toolFake({ exigeIdentidadeForte: true });
+    findTool.mockReturnValue(tool);
     isToolEnabled.mockResolvedValue(true);
     const fraca = await executeTool('consultar_plano', { contratoId: 17402 }, { ...CONTEXTO, identidade: { nivel: 'fraca' } });
     expect(fraca.motivo).toBe('identity_not_confirmed');
+    expect(tool.executar).not.toHaveBeenCalled();
     const forte = await executeTool('consultar_plano', { contratoId: 17402 }, { ...CONTEXTO, identidade: { nivel: 'forte' } });
     expect(forte.ok).toBe(true);
   });
@@ -209,6 +216,19 @@ describe('tool-executor — perfil com lista fixa e identidade', () => {
     findTool.mockReturnValue(toolFake({ exigeIdentidadeForte: true }));
     isToolEnabled.mockResolvedValue(true);
     expect((await executeTool('consultar_plano', { contratoId: 17402 }, CONTEXTO)).ok).toBe(true);
+  });
+
+  // I1 (fix round 1): a marcação era inerte sem contexto.identidade — mas um
+  // perfil fixo (ferramentasPermitidas) É a triagem, mesmo antes de qualquer
+  // identidade ter sido resolvida (ex.: o primeiro turno, antes de
+  // buscar_cliente rodar). A regra tem que valer ali também.
+  test('exigeIdentidadeForte também vale no perfil fixo mesmo sem contexto.identidade', async () => {
+    const tool = toolFake({ exigeIdentidadeForte: true });
+    findTool.mockReturnValue(tool);
+    const ctx = { ...CONTEXTO, ferramentasPermitidas: ['consultar_plano'] };
+    const resultado = await executeTool('consultar_plano', { contratoId: 17402 }, ctx);
+    expect(resultado.motivo).toBe('identity_not_confirmed');
+    expect(tool.executar).not.toHaveBeenCalled();
   });
 });
 

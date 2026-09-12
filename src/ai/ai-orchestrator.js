@@ -15,7 +15,7 @@ const { maskDocument, normalizeContract } = require('./sgp-normalizer');
 // não passar por aqui primeiro. O padrão é por nome do argumento (não por
 // nome da ferramenta) de propósito: cobre qualquer ferramenta futura que
 // receba um documento, não só a de hoje.
-const CHAVE_DOCUMENTO = /cpf|documento/i;
+const CHAVE_DOCUMENTO = /cpf|documento|nascimento|^data$/i;
 
 function mascararArgsParaAuditoria(args) {
   if (!args || typeof args !== 'object') return args;

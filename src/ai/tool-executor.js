@@ -75,11 +75,14 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     }
 
     // Entrega de dado (boleto, PIX) só com identidade forte — regra em código,
-    // não em prompt. Sem identidade no contexto (modo assistente, humano
-    // revisando) a marcação não se aplica.
-    if (tool.exigeIdentidadeForte && contexto.identidade && contexto.identidade.nivel !== 'forte') {
-      return recusa('identity_not_confirmed', nome);
-    }
+    // não em prompt. A marcação vale sempre que o turno usa um perfil fixo
+    // (a triagem, via contexto.ferramentasPermitidas) OU já existe
+    // contexto.identidade; só fica inerte quando nenhum dos dois está
+    // presente (o assistente clássico, sem perfil de triagem e sem
+    // resolução de identidade — um humano acompanha ali).
+    const perfilFixo = Array.isArray(contexto.ferramentasPermitidas);
+    if (tool.exigeIdentidadeForte && (perfilFixo || contexto.identidade)
+        && !(contexto.identidade && contexto.identidade.nivel === 'forte')) return recusa('identity_not_confirmed', nome);
 
     // Uma ferramenta pode declarar o próprio orçamento (tool.timeoutMs): a
     // de liberação em confiança faz duas leituras E uma escrita no SGP, cada

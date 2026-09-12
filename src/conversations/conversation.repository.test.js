@@ -21,6 +21,7 @@ const {
   listClosedConversationsByContact,
   completeTriage,
   incrementTriageAttempts,
+  incrementBirthdateAttempts,
   activateConversation,
   listInProgressConversations,
   listWaitingForAgentConversations,
@@ -711,6 +712,22 @@ describe('conversation repository', () => {
 
     expect(first).toBe(1);
     expect(second).toBe(2);
+  });
+
+  test('incrementBirthdateAttempts increases the counter and returns the new value, regardless of triage_state', async () => {
+    const conversation = await createConversation(contactId, channelId, 'pending');
+    await completeTriage(conversation.id, (await createSector({ name: 'Financeiro' })).id);
+
+    const first = await incrementBirthdateAttempts(conversation.id);
+    const second = await incrementBirthdateAttempts(conversation.id);
+
+    expect(first).toBe(1);
+    expect(second).toBe(2);
+  });
+
+  test('incrementBirthdateAttempts returns 0 for a conversation that does not exist', async () => {
+    const result = await incrementBirthdateAttempts('00000000-0000-0000-0000-000000000000');
+    expect(result).toBe(0);
   });
 
   test('getConversationWithContact includes the sector name when a sector is set', async () => {

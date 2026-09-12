@@ -1,4 +1,8 @@
-// Campos que jamais podem sair deste módulo, em nenhuma saída.
+// A garantia de que estes campos nunca saem é a seleção explícita de campos
+// em cada normalizer (allowlist): normalizeContract e normalizeInvoices constroem
+// seus outputs nomeando cada campo, então um campo novo da API não pode vazar por acaso.
+// Este array é o fixture do teste que prova essa garantia: a poisoned contract contém
+// todos os cinco, e o teste asserta que nenhum nome e nenhum valor sobrevivem.
 const CAMPOS_BLOQUEADOS = [
   'servico_senha',
   'contratoCentralSenha',

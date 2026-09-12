@@ -27,6 +27,11 @@ const TOOLS = [
     nome: 'buscar_cliente',
     categoria: 'CONSULTA',
     descricao: 'Localiza o cliente no sistema a partir do CPF ou CNPJ e retorna os contratos dele. Use quando o cliente ainda não foi identificado.',
+    // Isento da checagem de propriedade: é o próprio passo que estabelece a
+    // identificação, então ainda não há contrato para conferir. A troca de
+    // cliente no meio da conversa é barrada à parte, pelo nome da ferramenta,
+    // no executor (client_already_identified).
+    isentoDeProprietario: true,
     parametros: {
       type: 'object',
       properties: { cpf: { type: 'string', description: 'CPF ou CNPJ do cliente, com ou sem pontuação.' } },
@@ -45,6 +50,10 @@ const TOOLS = [
         sgpDocument: args.cpf,
       });
       contexto.contracts = contracts;
+      // Sem isto, o guard de "troca de cliente" do executor (que lê
+      // contexto.contact.sgpDocument) nunca dispara dentro do mesmo turno:
+      // duas chamadas com CPFs diferentes na mesma conversa passariam batidas.
+      contexto.contact.sgpDocument = args.cpf;
       return {
         cliente: { nome: client.name },
         contratos: contracts.map((c) => ({
@@ -57,6 +66,7 @@ const TOOLS = [
     nome: 'consultar_status_contrato',
     categoria: 'CONSULTA',
     descricao: 'Informa se o contrato está ativo, suspenso ou cancelado, e o motivo quando houver. NÃO informa se a internet está funcionando.',
+    chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },
@@ -73,6 +83,7 @@ const TOOLS = [
     nome: 'consultar_status_conexao',
     categoria: 'CONSULTA',
     descricao: 'Verifica em tempo real se a conexão de internet do contrato está online ou offline. Diferente do status do contrato.',
+    chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },
@@ -88,6 +99,7 @@ const TOOLS = [
     nome: 'consultar_plano',
     categoria: 'CONSULTA',
     descricao: 'Informa o plano contratado, a velocidade e o login de acesso do contrato.',
+    chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },
@@ -104,6 +116,7 @@ const TOOLS = [
     nome: 'consultar_financeiro',
     categoria: 'CONSULTA',
     descricao: 'Resumo financeiro do contrato: valor total em aberto e quantidade de faturas a receber.',
+    chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },
@@ -119,6 +132,7 @@ const TOOLS = [
     nome: 'consultar_faturas',
     categoria: 'CONSULTA',
     descricao: 'Lista as faturas do contrato com status, valor e vencimento. Use para responder se há conta atrasada, quanto o cliente deve, quando vence ou se já foi paga. NÃO gera boleto nem PIX.',
+    chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },
@@ -134,6 +148,9 @@ const TOOLS = [
     nome: 'definir_motivo_atendimento',
     categoria: 'ACAO',
     descricao: 'Registra o motivo do atendimento, escolhido entre os motivos existentes no sistema.',
+    // Isento: atua apenas sobre contexto.conversationId, que é fornecido pelo
+    // servidor (nunca pelo modelo) — não há contratoId nenhum a conferir aqui.
+    isentoDeProprietario: true,
     parametros: {
       type: 'object',
       properties: { motivoId: { type: 'string', description: 'UUID de um motivo existente.' } },
@@ -156,6 +173,9 @@ const TOOLS = [
     nome: 'transferir_atendimento',
     categoria: 'ACAO',
     descricao: 'Encaminha o atendimento para um setor humano, com um resumo do que já foi apurado. Use quando não for possível resolver com segurança.',
+    // Isento: atua apenas sobre contexto.conversationId, que é fornecido pelo
+    // servidor (nunca pelo modelo) — não há contratoId nenhum a conferir aqui.
+    isentoDeProprietario: true,
     parametros: {
       type: 'object',
       properties: {
@@ -187,6 +207,7 @@ const TOOLS = [
     nome: 'gerar_segunda_via',
     categoria: 'ACAO_SENSIVEL',
     descricao: 'Gera a segunda via do boleto do contrato, com linha digitável e link.',
+    chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },
@@ -209,6 +230,7 @@ const TOOLS = [
     nome: 'gerar_pix',
     categoria: 'ACAO_SENSIVEL',
     descricao: 'Gera o código PIX copia e cola da fatura em aberto do contrato.',
+    chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },

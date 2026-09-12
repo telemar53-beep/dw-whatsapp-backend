@@ -166,6 +166,33 @@ describe('ai-orchestrator', () => {
     expect(result.erro).toBe('tool_limit_reached');
   });
 
+  // Fix 5 (final review): there was a tool ceiling and per-call timeouts (60s
+  // OpenAI, 15s per tool) but no wall clock for the whole turn — worst case,
+  // roughly eight OpenAI round trips plus tools, minutes of one job holding the
+  // worker (Bull's default concurrency is 1) while other conversations wait.
+  test('stops at the global turn timeout instead of running forever', async () => {
+    let now = 0;
+    jest.spyOn(Date, 'now').mockImplementation(() => now);
+    // Each simulated OpenAI round trip "takes" 70s: two of them cross the 120s
+    // ceiling, so the loop must stop before a third call is ever made.
+    createChatCompletion.mockImplementation(async () => {
+      now += 70000;
+      return {
+        message: { tool_calls: [{ id: 'c', function: { name: 'consultar_plano', arguments: '{"contratoId":17402}' } }] },
+        usage: {},
+      };
+    });
+    executeTool.mockResolvedValue({ ok: true, resultado: {} });
+
+    const result = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    expect(result.erro).toBe('turn_timeout');
+    expect(createChatCompletion.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(recordAiInteraction).toHaveBeenCalledWith(expect.objectContaining({ error: 'turn_timeout' }));
+
+    Date.now.mockRestore();
+  });
+
   test('records the interaction for auditing even when it fails', async () => {
     createChatCompletion.mockRejectedValue(new Error('openai down'));
     const result = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });

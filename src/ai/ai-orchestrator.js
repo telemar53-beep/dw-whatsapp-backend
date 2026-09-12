@@ -28,6 +28,15 @@ function mascararArgsParaAuditoria(args) {
 
 const HISTORICO_MAX = 20;
 
+// Teto de parede para o turno inteiro. Existe um limite de ferramentas e um
+// timeout por chamada (60s na OpenAI, 15s por ferramenta em tool-executor.js),
+// mas nenhum limite para a soma de tudo — no pior caso (perto de oito idas e
+// vindas à OpenAI mais ferramentas) um único job prende o worker por minutos
+// enquanto outras conversas esperam (a fila da IA roda com concorrência 1).
+// 120s cobre folgadamente um atendimento saudável (poucos segundos por
+// chamada) e ainda assim corta bem antes do pior caso multi-minuto.
+const TURNO_MAX_MS = 120000;
+
 function papelDaMensagem(message) {
   return message.direction === 'inbound' ? 'user' : 'assistant';
 }
@@ -98,6 +107,11 @@ async function runAiTurn({ conversation, contact }) {
 
   try {
     while (true) {
+      if (Date.now() - iniciadoEm > TURNO_MAX_MS) {
+        erro = 'turn_timeout';
+        break;
+      }
+
       const { message, usage } = await createChatCompletion({
         apiKey: config.apiKey, model: config.model, messages, tools,
       });

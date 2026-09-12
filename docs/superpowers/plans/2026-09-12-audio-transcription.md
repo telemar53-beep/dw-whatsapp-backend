@@ -128,7 +128,7 @@ node -e "
 require('dotenv').config({path:'.env.test'});
 const {getPool,closePool}=require('./src/db/pool');
 (async()=>{
-  const c = await getPool().query(\"SELECT column_name FROM information_schema.columns WHERE table_name='messages' AND column_name LIKE 'transcription%' OR column_name='audio_duration_seconds'\");
+  const c = await getPool().query(\"SELECT column_name FROM information_schema.columns WHERE table_name='messages' AND (column_name LIKE 'transcription%' OR column_name='audio_duration_seconds')\");
   console.log('colunas em messages:', c.rows.map(r=>r.column_name).sort());
   const a = await getPool().query('SELECT transcription_enabled, transcription_max_seconds, length(transcription_prompt) AS vocab FROM ai_config');
   console.log('ai_config:', a.rows);
@@ -506,18 +506,28 @@ git commit -m "Add transcription settings to the AI configuration"
     test('manda a chave só no cabeçalho e o modelo no formulário', async () => {
       jest.spyOn(fs, 'createReadStream').mockReturnValue('STREAM_FALSO');
       axios.post.mockResolvedValue({ data: { text: 'minha internet caiu' } });
+      // Spy no append em vez de espiar o interno `_streams` do form-data: se a
+      // chave algum dia for anexada ao corpo, ESTA asserção falha. Uma checagem
+      // sobre `_streams` passaria a vazio caso a propriedade não exista.
+      const appendSpy = jest.spyOn(FormData.prototype, 'append');
 
       const result = await transcribeAudio({
         apiKey: 'sk-secreta', model: 'modelo-x', filePath: '/tmp/a.ogg',
         mimeType: 'audio/ogg', prompt: 'PPPoE, ONU',
       });
 
-      const [url, form, options] = axios.post.mock.calls[0];
+      const [url, , options] = axios.post.mock.calls[0];
       expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
       expect(options.headers.Authorization).toBe('Bearer sk-secreta');
       expect(result).toEqual({ texto: 'minha internet caiu' });
-      // O formulário não pode carregar a chave em nenhum campo.
-      expect(JSON.stringify(form._streams || [])).not.toContain('sk-secreta');
+
+      const campos = appendSpy.mock.calls.map((c) => c[0]);
+      expect(campos).toContain('model');
+      expect(campos).toContain('file');
+      expect(campos).toContain('prompt');
+      expect(appendSpy.mock.calls.some((c) => String(c[1]).includes('sk-secreta'))).toBe(false);
+
+      appendSpy.mockRestore();
       fs.createReadStream.mockRestore();
     });
 

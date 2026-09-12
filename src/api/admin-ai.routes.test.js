@@ -68,6 +68,41 @@ describe('admin ai routes', () => {
       .expect(200);
     expect(updateAiConfig).toHaveBeenCalledWith(expect.objectContaining({ apiKey: null, model: 'gpt-y', mode: 'automatic' }));
     expect(res.body.apiKeyLast4).toBe('abcd');
+    expect(JSON.stringify(res.body)).not.toContain('sk-1234567890abcd');
+  });
+
+  test('PUT /config requires apiKey on first save when mode is not disabled', async () => {
+    getAiConfig.mockResolvedValue({ id: 1, apiKey: null, model: '', mode: 'disabled', systemPrompt: 'p', maxToolsPerInteraction: 8 });
+    const res = await request(buildApp()).put('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ model: 'gpt-x', mode: 'assistant' })
+      .expect(400);
+    expect(res.body.error).toBe('apiKey is required');
+    expect(updateAiConfig).not.toHaveBeenCalled();
+  });
+
+  test('PUT /config allows saving disabled mode without a key', async () => {
+    getAiConfig.mockResolvedValue({ id: 1, apiKey: null, model: '', mode: 'disabled', systemPrompt: 'p', maxToolsPerInteraction: 8 });
+    updateAiConfig.mockResolvedValue({ id: 1, apiKey: null, model: 'gpt-x', mode: 'disabled', systemPrompt: 'p', maxToolsPerInteraction: 8 });
+    const res = await request(buildApp()).put('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ model: 'gpt-x', mode: 'disabled' })
+      .expect(200);
+    expect(updateAiConfig).toHaveBeenCalled();
+    expect(res.body.configured).toBe(false);
+  });
+
+  test('PUT /config allows saving with apiKey on first configuration', async () => {
+    getAiConfig.mockResolvedValue({ id: 1, apiKey: null, model: '', mode: 'disabled', systemPrompt: 'p', maxToolsPerInteraction: 8 });
+    updateAiConfig.mockResolvedValue({ id: 1, apiKey: 'sk-newapikey1234', model: 'gpt-x', mode: 'assistant', systemPrompt: 'p', maxToolsPerInteraction: 8 });
+    const res = await request(buildApp()).put('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ apiKey: 'sk-newapikey1234', model: 'gpt-x', mode: 'assistant' })
+      .expect(200);
+    expect(updateAiConfig).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk-newapikey1234', model: 'gpt-x', mode: 'assistant' }));
+    expect(res.body.configured).toBe(true);
+    expect(res.body.apiKeyLast4).toBe('1234');
+    expect(JSON.stringify(res.body)).not.toContain('sk-newapikey1234');
   });
 
   test('POST /test-connection returns the available models', async () => {

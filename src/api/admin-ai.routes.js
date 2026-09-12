@@ -50,7 +50,7 @@ router.post('/test-connection', requireAuth, requireRole('admin'), async (req, r
   const existing = await getAiConfig();
   const chave = typeof apiKey === 'string' && apiKey.trim() ? apiKey.trim() : existing.apiKey;
   if (!chave) {
-    return res.json({ ok: false, error: 'Nenhuma chave configurada' });
+    return res.json({ ok: false, error: 'No API key configured' });
   }
   try {
     const models = await listModels(chave);

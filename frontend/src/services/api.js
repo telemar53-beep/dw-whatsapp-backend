@@ -431,6 +431,10 @@ export function testAiConnection(apiKey, token) {
   return apiFetch('/api/admin/ai/test-connection', { method: 'POST', body: { apiKey }, token });
 }
 
+export function updateTranscriptionConfig(payload, token) {
+  return apiFetch('/api/admin/ai/transcription', { method: 'PUT', body: payload, token });
+}
+
 export function listAiTools(token) {
   return apiFetch('/api/admin/ai/tools', { token });
 }

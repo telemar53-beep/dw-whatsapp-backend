@@ -12,7 +12,7 @@ const BYTES_POR_MB = 1048576;
 
 function AudioTranscriptionConfigCard() {
   const { token } = useAuth();
-  const { config, refresh } = useAiConfig();
+  const { config, loading, refresh } = useAiConfig();
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState('');
   const [maxMinutes, setMaxMinutes] = useState(5);
@@ -26,6 +26,10 @@ function AudioTranscriptionConfigCard() {
 
   // A tela trabalha em minutos e MB; o banco guarda segundos e bytes. A conversão
   // acontece só nas duas bordas: aqui ao carregar, e no handleSave ao gravar.
+  // Enquanto `loading` for true este efeito ainda não rodou (ou está rodando de
+  // novo após um refresh) e os states acima ainda carregam os defaults do
+  // useState — o botão Salvar fica desabilitado nesse intervalo (ver `loading`
+  // no JSX) para nunca gravar um default por engano no lugar do valor real.
   useEffect(() => {
     setEnabled(Boolean(config.transcriptionEnabled));
     setModel(config.transcriptionModel || '');
@@ -61,14 +65,22 @@ function AudioTranscriptionConfigCard() {
       setError('Modelo é obrigatório');
       return;
     }
+    // Espelha a validação do backend (Number.isInteger(...) > 0) para nunca mandar
+    // um 0 (campo vazio) e devolver ao admin o erro em inglês da API.
+    const minutos = Number(maxMinutes);
+    const mb = Number(maxMb);
+    if (!Number.isInteger(minutos) || minutos < 1 || !Number.isInteger(mb) || mb < 1) {
+      setError('Duração e tamanho máximos devem ser números inteiros maiores que zero');
+      return;
+    }
     setSaving(true);
     try {
       await updateTranscriptionConfig(
         {
           transcriptionEnabled: enabled,
           transcriptionModel: model.trim(),
-          transcriptionMaxSeconds: Number(maxMinutes) * 60,
-          transcriptionMaxBytes: Number(maxMb) * BYTES_POR_MB,
+          transcriptionMaxSeconds: minutos * 60,
+          transcriptionMaxBytes: mb * BYTES_POR_MB,
           transcriptionPrompt: vocabulary,
           transcriptionFeedAi: feedAi,
         },
@@ -169,7 +181,7 @@ function AudioTranscriptionConfigCard() {
         </button>
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || loading}
           className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
         >
           Salvar

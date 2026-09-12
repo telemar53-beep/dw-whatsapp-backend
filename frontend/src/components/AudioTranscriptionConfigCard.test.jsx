@@ -19,9 +19,16 @@ describe('AudioTranscriptionConfigCard', () => {
   });
 
   test('mostra a duração em minutos e o tamanho em MB', async () => {
+    // Valores diferentes dos defaults do useState (5 minutos / 25 MB) — se o
+    // useEffect de conversão fosse removido, este teste falharia.
+    getAiConfig.mockResolvedValue({
+      configured: true, transcriptionEnabled: false, transcriptionModel: '',
+      transcriptionMaxSeconds: 120, transcriptionMaxBytes: 10485760,
+      transcriptionPrompt: 'PPPoE, ONU', transcriptionFeedAi: true,
+    });
     render(<AudioTranscriptionConfigCard />);
-    expect(await screen.findByDisplayValue('5')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('25')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('2')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('10')).toBeInTheDocument();
   });
 
   test('carrega o vocabulário salvo', async () => {
@@ -45,13 +52,23 @@ describe('AudioTranscriptionConfigCard', () => {
     await waitFor(() => screen.getByRole('option', { name: 'modelo-a' }));
     await userEvent.selectOptions(screen.getByLabelText(/modelo/i), 'modelo-a');
     await userEvent.click(screen.getByLabelText(/transcrever áudios/i));
+    // Digita valores diferentes dos que vieram do config (5/25) para o teste
+    // conseguir distinguir Number(maxMinutes) * 60 de um bug tipo maxMinutes * 60.
+    await userEvent.clear(screen.getByLabelText(/duração máxima/i));
+    await userEvent.type(screen.getByLabelText(/duração máxima/i), '3');
+    await userEvent.clear(screen.getByLabelText(/tamanho máximo/i));
+    await userEvent.type(screen.getByLabelText(/tamanho máximo/i), '10');
     await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
 
     await waitFor(() => expect(updateTranscriptionConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        transcriptionEnabled: true, transcriptionModel: 'modelo-a',
-        transcriptionMaxSeconds: 300, transcriptionMaxBytes: 26214400,
-      }),
+      {
+        transcriptionEnabled: true,
+        transcriptionModel: 'modelo-a',
+        transcriptionMaxSeconds: 180,
+        transcriptionMaxBytes: 10485760,
+        transcriptionPrompt: 'PPPoE, ONU',
+        transcriptionFeedAi: true,
+      },
       't'
     ));
   });
@@ -62,5 +79,24 @@ describe('AudioTranscriptionConfigCard', () => {
     await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
     expect(await screen.findByText(/modelo é obrigatório/i)).toBeInTheDocument();
     expect(updateTranscriptionConfig).not.toHaveBeenCalled();
+  });
+
+  test('não deixa salvar com duração máxima vazia', async () => {
+    render(<AudioTranscriptionConfigCard />);
+    await screen.findByDisplayValue('5');
+    await userEvent.clear(screen.getByLabelText(/duração máxima/i));
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+    expect(await screen.findByText(/duração e tamanho máximos devem ser números inteiros maiores que zero/i)).toBeInTheDocument();
+    expect(updateTranscriptionConfig).not.toHaveBeenCalled();
+  });
+
+  test('desabilita o botão Salvar enquanto a configuração ainda está carregando', async () => {
+    // Uma promise que nunca resolve simula a janela de carregamento em que
+    // `loading` do useAiConfig ainda é true e os states carregam os defaults.
+    getAiConfig.mockReturnValue(new Promise(() => {}));
+    render(<AudioTranscriptionConfigCard />);
+
+    expect(screen.getByRole('button', { name: /salvar/i })).toBeDisabled();
   });
 });

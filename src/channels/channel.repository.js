@@ -125,6 +125,16 @@ async function updateChannelWelcomeMessage(id, welcomeMessage) {
   return toChannel(result.rows[0]);
 }
 
+async function updateChannelAiEnabled(id, aiEnabled) {
+  const result = await getPool().query(
+    `UPDATE channels SET ai_enabled = $2 WHERE id = $1
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, created_at`,
+    [id, aiEnabled]
+  );
+  if (result.rowCount === 0) return null;
+  return toChannel(result.rows[0]);
+}
+
 async function countChannelDependents(id) {
   const result = await getPool().query(
     `SELECT
@@ -155,6 +165,7 @@ module.exports = {
   updateChannelWabaId,
   updateChannelHidden,
   updateChannelWelcomeMessage,
+  updateChannelAiEnabled,
   countChannelDependents,
   deleteChannel,
 };

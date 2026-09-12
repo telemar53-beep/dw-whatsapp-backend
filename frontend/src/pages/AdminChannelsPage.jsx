@@ -12,7 +12,14 @@ import ReasonsAdminTab from '../components/ReasonsAdminTab';
 import CitiesAdminTab from '../components/CitiesAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
 import IntegrationsAdminTab from '../components/IntegrationsAdminTab';
-import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannelHidden, deleteChannel } from '../services/api';
+import {
+  setChannelTriageEnabled,
+  setChannelWabaId,
+  reconnectChannel,
+  setChannelHidden,
+  deleteChannel,
+  setChannelAiEnabled,
+} from '../services/api';
 import { isOfficialChannelType, channelTypeLabel } from '../utils/channelTypes';
 
 // As seções ficam agrupadas pelo que a pessoa quer mudar, em vez de uma fileira
@@ -86,6 +93,7 @@ function ChannelCard({
   wabaIdDrafts,
   setWabaIdDrafts,
   onToggleTriage,
+  onToggleAi,
   onSaveWabaId,
   onRefresh,
   onReconnect,
@@ -113,6 +121,16 @@ function ChannelCard({
           className="h-4 w-4 accent-wa-green"
         />
         Usar triagem automática
+      </label>
+
+      <label className="mt-2 flex items-center gap-2 text-[14px] text-wa-muted">
+        <input
+          type="checkbox"
+          checked={!!channel.aiEnabled}
+          onChange={(e) => onToggleAi(channel.id, e.target.checked)}
+          className="h-4 w-4 accent-wa-green"
+        />
+        Usar atendimento por IA
       </label>
 
       {isOfficialChannelType(channel.type) && (
@@ -169,6 +187,7 @@ function AdminChannelsPage() {
   const { channels, refresh } = useChannels(true, showHidden);
   const [activeTab, setActiveTab] = useState('channels');
   const [triageToggleError, setTriageToggleError] = useState(null);
+  const [aiToggleError, setAiToggleError] = useState(null);
   const [wabaIdDrafts, setWabaIdDrafts] = useState({});
   const [wabaIdError, setWabaIdError] = useState(null);
   const [channelActionError, setChannelActionError] = useState(null);
@@ -229,6 +248,24 @@ function AdminChannelsPage() {
       refresh();
     } catch (err) {
       setTriageToggleError((err.body && err.body.error) || 'Falha ao atualizar a triagem deste canal');
+    }
+  }
+
+  // Um robô por vez: ligar a IA num canal desliga a triagem dele na mesma
+  // ação. A IA é ligada primeiro — se a segunda chamada falhar, o canal fica
+  // com a IA respondendo e a triagem ainda marcada, o que é seguro (o backend
+  // já para de iniciar a triagem quando a IA está ligada); a ordem inversa
+  // arriscaria deixar o canal sem nenhum robô caso a chamada da IA falhasse.
+  async function handleToggleAi(channelId, aiEnabled) {
+    setAiToggleError(null);
+    try {
+      await setChannelAiEnabled(channelId, aiEnabled, token);
+      if (aiEnabled) {
+        await setChannelTriageEnabled(channelId, false, token);
+      }
+      refresh();
+    } catch (err) {
+      setAiToggleError((err.body && err.body.error) || 'Falha ao atualizar a IA deste canal');
     }
   }
 
@@ -315,6 +352,7 @@ function AdminChannelsPage() {
               {activeTab === 'channels' ? (
                 <div className="space-y-4">
                   <ErrorNote>{triageToggleError}</ErrorNote>
+                  <ErrorNote>{aiToggleError}</ErrorNote>
                   <ErrorNote>{wabaIdError}</ErrorNote>
                   <ErrorNote>{channelActionError}</ErrorNote>
 
@@ -336,6 +374,7 @@ function AdminChannelsPage() {
                         wabaIdDrafts={wabaIdDrafts}
                         setWabaIdDrafts={setWabaIdDrafts}
                         onToggleTriage={handleToggleTriage}
+                        onToggleAi={handleToggleAi}
                         onSaveWabaId={handleSaveWabaId}
                         onRefresh={refresh}
                         onReconnect={handleReconnect}

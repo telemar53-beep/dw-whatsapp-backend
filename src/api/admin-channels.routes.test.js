@@ -14,6 +14,7 @@ const {
   updateChannelWabaId,
   updateChannelHidden,
   updateChannelWelcomeMessage,
+  updateChannelAiEnabled,
   countChannelDependents,
   deleteChannel,
 } = require('../channels/channel.repository');
@@ -593,6 +594,61 @@ describe('PATCH /api/admin/channels/:id (hidden)', () => {
       .send({ hidden: 'yes' });
     expect(res.status).toBe(400);
     expect(updateChannelHidden).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/admin/channels/:id (aiEnabled)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('turns AI on for the channel', async () => {
+    updateChannelAiEnabled.mockResolvedValue({
+      id: 'ch-1',
+      type: 'baileys',
+      name: 'Suporte',
+      phoneNumber: '+5511999990001',
+      status: 'connected',
+      triageEnabled: false,
+      aiEnabled: true,
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ aiEnabled: true });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelAiEnabled).toHaveBeenCalledWith('ch-1', true);
+    expect(res.body.aiEnabled).toBe(true);
+  });
+
+  test('returns 400 when aiEnabled is not a boolean', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ aiEnabled: 'sim' });
+
+    expect(res.status).toBe(400);
+    expect(updateChannelAiEnabled).not.toHaveBeenCalled();
+  });
+
+  test('returns 404 when the channel does not exist', async () => {
+    updateChannelAiEnabled.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/does-not-exist')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ aiEnabled: true });
+
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 403 for a non-admin agent', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ aiEnabled: true });
+    expect(res.status).toBe(403);
+    expect(updateChannelAiEnabled).not.toHaveBeenCalled();
   });
 });
 

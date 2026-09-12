@@ -13,6 +13,7 @@ const {
   updateChannelWabaId,
   updateChannelHidden,
   updateChannelWelcomeMessage,
+  updateChannelAiEnabled,
   countChannelDependents,
   deleteChannel,
 } = require('./channel.repository');
@@ -190,6 +191,26 @@ describe('channel repository', () => {
 
     const found = await findChannelById(channel.id);
     expect(found.aiEnabled).toBe(true);
+  });
+
+  test('updateChannelAiEnabled turns AI on and off', async () => {
+    const channel = await createChannel({
+      type: 'baileys',
+      name: 'Canal IA Liga Desliga',
+      phoneNumber: '+5511999990026',
+      config: {},
+    });
+
+    const enabled = await updateChannelAiEnabled(channel.id, true);
+    expect(enabled.aiEnabled).toBe(true);
+
+    const disabled = await updateChannelAiEnabled(channel.id, false);
+    expect(disabled.aiEnabled).toBe(false);
+  });
+
+  test('updateChannelAiEnabled returns null when the channel does not exist', async () => {
+    const result = await updateChannelAiEnabled('00000000-0000-0000-0000-000000000000', true);
+    expect(result).toBeNull();
   });
 
   test('createChannel stores and returns a 360dialog channel', async () => {

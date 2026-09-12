@@ -14,7 +14,14 @@ import { useTriage } from '../hooks/useTriage';
 import { useTemplates } from '../hooks/useTemplates';
 import { useCityNotices } from '../hooks/useCityNotices';
 import { useAuth } from '../contexts/AuthContext';
-import { setChannelTriageEnabled, setChannelWabaId, reconnectChannel, setChannelHidden, deleteChannel } from '../services/api';
+import {
+  setChannelTriageEnabled,
+  setChannelWabaId,
+  reconnectChannel,
+  setChannelHidden,
+  deleteChannel,
+  setChannelAiEnabled,
+} from '../services/api';
 
 vi.mock('../hooks/useChannels');
 vi.mock('../hooks/useAgentsAdmin');
@@ -249,6 +256,84 @@ describe('AdminChannelsPage', () => {
     );
 
     await userEvent.click(screen.getByRole('checkbox', { name: /usar triagem automática/i }));
+
+    expect(await screen.findByText('Canal não encontrado')).toBeInTheDocument();
+  });
+
+  test('shows a checkbox per channel to toggle AI', () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', aiEnabled: true }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('checkbox', { name: /usar atendimento por ia/i })).toBeChecked();
+  });
+
+  test('turning AI on for a channel also turns its triage off, so only one robot answers', async () => {
+    const refresh = vi.fn();
+    useChannels.mockReturnValue({
+      channels: [
+        { id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', triageEnabled: true, aiEnabled: false },
+      ],
+      loading: false,
+      refresh,
+    });
+    setChannelAiEnabled.mockResolvedValue({});
+    setChannelTriageEnabled.mockResolvedValue({});
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /usar atendimento por ia/i }));
+
+    await waitFor(() => expect(setChannelAiEnabled).toHaveBeenCalledWith('ch1', true, 'tok-123'));
+    expect(setChannelTriageEnabled).toHaveBeenCalledWith('ch1', false, 'tok-123');
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('turning AI off does not touch the triage setting', async () => {
+    const refresh = vi.fn();
+    useChannels.mockReturnValue({
+      channels: [
+        { id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', triageEnabled: false, aiEnabled: true },
+      ],
+      loading: false,
+      refresh,
+    });
+    setChannelAiEnabled.mockResolvedValue({});
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /usar atendimento por ia/i }));
+
+    await waitFor(() => expect(setChannelAiEnabled).toHaveBeenCalledWith('ch1', false, 'tok-123'));
+    expect(setChannelTriageEnabled).not.toHaveBeenCalled();
+  });
+
+  test('shows an error message when toggling AI fails', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', aiEnabled: false }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    setChannelAiEnabled.mockRejectedValue({ body: { error: 'Canal não encontrado' } });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /usar atendimento por ia/i }));
 
     expect(await screen.findByText('Canal não encontrado')).toBeInTheDocument();
   });

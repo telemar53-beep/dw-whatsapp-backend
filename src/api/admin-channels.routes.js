@@ -12,6 +12,7 @@ const {
   updateChannelWabaId,
   updateChannelHidden,
   updateChannelWelcomeMessage,
+  updateChannelAiEnabled,
   countChannelDependents,
   deleteChannel,
 } = require('../channels/channel.repository');
@@ -51,6 +52,7 @@ function toChannelResponse(channel) {
     triageEnabled: channel.triageEnabled,
     hidden: channel.hidden,
     welcomeMessage: channel.welcomeMessage,
+    aiEnabled: channel.aiEnabled,
     wabaId: isOfficialChannelType(channel.type) ? channel.config.wabaId : undefined,
   };
 }
@@ -110,12 +112,21 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  const { triageEnabled, wabaId, hidden, welcomeMessage } = req.body || {};
-  if (triageEnabled === undefined && wabaId === undefined && hidden === undefined && welcomeMessage === undefined) {
-    return res.status(400).json({ error: 'triageEnabled, wabaId, hidden or welcomeMessage is required' });
+  const { triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled } = req.body || {};
+  if (
+    triageEnabled === undefined &&
+    wabaId === undefined &&
+    hidden === undefined &&
+    welcomeMessage === undefined &&
+    aiEnabled === undefined
+  ) {
+    return res.status(400).json({ error: 'triageEnabled, wabaId, hidden, welcomeMessage or aiEnabled is required' });
   }
   if (hidden !== undefined && typeof hidden !== 'boolean') {
     return res.status(400).json({ error: 'hidden must be a boolean' });
+  }
+  if (aiEnabled !== undefined && typeof aiEnabled !== 'boolean') {
+    return res.status(400).json({ error: 'aiEnabled must be a boolean' });
   }
   if (welcomeMessage !== undefined && welcomeMessage !== null && typeof welcomeMessage !== 'string') {
     return res.status(400).json({ error: 'welcomeMessage must be a string' });
@@ -160,6 +171,12 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   if (welcomeMessage !== undefined) {
     const normalizedWelcomeMessage = typeof welcomeMessage === 'string' ? welcomeMessage.trim() || null : null;
     channel = await updateChannelWelcomeMessage(req.params.id, normalizedWelcomeMessage);
+    if (!channel) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+  }
+  if (aiEnabled !== undefined) {
+    channel = await updateChannelAiEnabled(req.params.id, aiEnabled);
     if (!channel) {
       return res.status(404).json({ error: 'Channel not found' });
     }

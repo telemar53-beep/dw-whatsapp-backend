@@ -33,6 +33,7 @@ const adminAssignmentMessagesRoutes = require('./api/admin-assignment-messages.r
 const adminBusinessHoursRoutes = require('./api/admin-business-hours.routes');
 const reasonsRoutes = require('./api/reasons.routes');
 const adminReasonsRoutes = require('./api/admin-reasons.routes');
+const adminAiRoutes = require('./api/admin-ai.routes');
 const sgpQueryRoutes = require('./api/sgp-query.routes');
 const campaignsRoutes = require('./api/campaigns.routes');
 const { globalLimiter } = require('./config/rate-limiters');
@@ -95,6 +96,7 @@ app.use('/api/admin/assignment-message', adminAssignmentMessagesRoutes);
 app.use('/api/admin/business-hours', adminBusinessHoursRoutes);
 app.use('/api/reasons', reasonsRoutes);
 app.use('/api/admin/reasons', adminReasonsRoutes);
+app.use('/api/admin/ai', adminAiRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/templates', templatesRoutes);

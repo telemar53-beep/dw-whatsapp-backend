@@ -147,7 +147,8 @@ const TOOLS = [
     async executar(args, contexto) {
       const motivo = await findReasonById(args.motivoId);
       if (!motivo || !motivo.active) return erro('Invalid or inactive motivoId');
-      await setSuggestedReason(contexto.conversationId, motivo.id);
+      const conversa = await setSuggestedReason(contexto.conversationId, motivo.id);
+      if (!conversa) return erro('Failed to record the conversation reason');
       return { registrado: true, motivo: motivo.name };
     },
   },

@@ -1,10 +1,12 @@
 jest.mock('../integrations/sgp-client');
 jest.mock('../sectors/sector.repository');
+jest.mock('../reasons/reason.repository');
 jest.mock('../conversations/conversation.repository');
 
 const { listTools, findTool, toOpenAiTools } = require('./tool-registry');
 const { listSectors } = require('../sectors/sector.repository');
-const { setConversationSector } = require('../conversations/conversation.repository');
+const { findReasonById } = require('../reasons/reason.repository');
+const { setConversationSector, setSuggestedReason } = require('../conversations/conversation.repository');
 
 describe('tool-registry', () => {
   test('registers exactly the eight phase-one tools plus the two disabled sensitive ones', () => {
@@ -115,5 +117,65 @@ describe('transferir_atendimento executar', () => {
 
     expect(resultado.ok).toBe(false);
     expect(resultado).not.toEqual({ transferido: true, setor: 'Financeiro' });
+  });
+});
+
+describe('definir_motivo_atendimento executar', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('an unknown motivoId returns a failure result and never touches the repository', async () => {
+    findReasonById.mockResolvedValue(null);
+    const tool = findTool('definir_motivo_atendimento');
+
+    const resultado = await tool.executar(
+      { motivoId: '11111111-1111-1111-1111-111111111111' },
+      { conversationId: 'conv-1' }
+    );
+
+    expect(resultado.ok).toBe(false);
+    expect(setSuggestedReason).not.toHaveBeenCalled();
+  });
+
+  test('an inactive motivoId returns a failure result and never touches the repository', async () => {
+    findReasonById.mockResolvedValue({ id: 'reason-1', name: 'Cancelamento', active: false, createdAt: new Date() });
+    const tool = findTool('definir_motivo_atendimento');
+
+    const resultado = await tool.executar(
+      { motivoId: '11111111-1111-1111-1111-111111111111' },
+      { conversationId: 'conv-1' }
+    );
+
+    expect(resultado.ok).toBe(false);
+    expect(setSuggestedReason).not.toHaveBeenCalled();
+  });
+
+  test('an active motivoId where setSuggestedReason returns a conversation returns success naming the reason', async () => {
+    findReasonById.mockResolvedValue({ id: 'reason-1', name: 'Cancelamento', active: true, createdAt: new Date() });
+    setSuggestedReason.mockResolvedValue({ id: 'conv-1', suggestedReasonId: 'reason-1' });
+    const tool = findTool('definir_motivo_atendimento');
+
+    const resultado = await tool.executar(
+      { motivoId: '11111111-1111-1111-1111-111111111111' },
+      { conversationId: 'conv-1' }
+    );
+
+    expect(resultado).toEqual({ registrado: true, motivo: 'Cancelamento' });
+    expect(setSuggestedReason).toHaveBeenCalledWith('conv-1', 'reason-1');
+  });
+
+  test('an active motivoId where setSuggestedReason returns null returns a failure, not {registrado: true}', async () => {
+    findReasonById.mockResolvedValue({ id: 'reason-1', name: 'Cancelamento', active: true, createdAt: new Date() });
+    setSuggestedReason.mockResolvedValue(null);
+    const tool = findTool('definir_motivo_atendimento');
+
+    const resultado = await tool.executar(
+      { motivoId: '11111111-1111-1111-1111-111111111111' },
+      { conversationId: 'conv-1' }
+    );
+
+    expect(resultado.ok).toBe(false);
+    expect(resultado).not.toEqual({ registrado: true, motivo: 'Cancelamento' });
   });
 });

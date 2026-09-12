@@ -596,6 +596,31 @@ describe('SGP lookup panel', () => {
 });
 
 describe('AI suggestion card', () => {
+  // Fix 8 (final review): useAiSuggestion(conversation.id) fired unconditionally,
+  // so every conversation opened called GET /:id/ai-suggestion — including when
+  // the attendant is not the assigned agent (a 403 in the logs) and when the AI
+  // is off entirely. Guarded with the same isMine condition that gates the
+  // card's rendering.
+  test('does not fetch the AI suggestion when the conversation is not assigned to me', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(useAiSuggestion).toHaveBeenCalledWith(null);
+  });
+
+  test('fetches the AI suggestion when the conversation is mine', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(useAiSuggestion).toHaveBeenCalledWith('c1');
+  });
+
   test('shows the AI suggestion card above the message input when there is one pending', () => {
     useAiSuggestion.mockReturnValue({
       suggestion: { id: 's-1', content: 'Seu plano é 600MB.' },

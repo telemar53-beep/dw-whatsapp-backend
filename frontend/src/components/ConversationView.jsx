@@ -92,8 +92,12 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
   const { messages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
   const { quickReplies } = useQuickReplies();
+  const isMine = conversation.assignedAgentId === agent.id && conversation.status !== 'closed';
+  // Sem este guard, toda conversa aberta disparava GET /:id/ai-suggestion — mesmo
+  // quando o atendente não é o dono (um 403 nos logs) e mesmo com a IA desligada.
+  // Mesma condição isMine que já controla a exibição do card, mais abaixo.
   const { suggestion, send: sendSuggestion, edit: editSuggestion, discard: discardSuggestion } = useAiSuggestion(
-    conversation.id
+    isMine ? conversation.id : null
   );
   const [showingHistory, setShowingHistory] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
@@ -123,7 +127,6 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   }, [messages.length, conversation.id]);
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
-  const isMine = conversation.assignedAgentId === agent.id && conversation.status !== 'closed';
   const isAdmin = agent.role === 'admin' && conversation.status !== 'closed';
   const displayName = contactOverride ? contactOverride.displayName : conversation.contactDisplayName;
   const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;

@@ -75,6 +75,23 @@ describe('transcribeMessage', () => {
     expect(transcribeAudio).not.toHaveBeenCalled();
   });
 
+  test('mensagem de áudio sem mediaPath vira failed, não deixa a mensagem pendurada', async () => {
+    findMessageById.mockResolvedValue({ ...AUDIO, mediaPath: null });
+    const result = await transcribeMessage('m-1');
+    expect(result).toEqual({ ok: false, motivo: 'no_media' });
+    expect(transcribeAudio).not.toHaveBeenCalled();
+    expect(markTranscriptionFailed).toHaveBeenCalledWith('m-1', expect.objectContaining({ status: 'failed' }));
+  });
+
+  test('transcrição desligada é skipped e nunca chama a OpenAI', async () => {
+    getAiConfig.mockResolvedValue({ ...CONFIG, transcriptionEnabled: false });
+    findMessageById.mockResolvedValue(AUDIO);
+    const result = await transcribeMessage('m-1');
+    expect(result).toEqual({ ok: false, motivo: 'disabled' });
+    expect(transcribeAudio).not.toHaveBeenCalled();
+    expect(markTranscriptionFailed).toHaveBeenCalledWith('m-1', expect.objectContaining({ status: 'skipped' }));
+  });
+
   test('áudio longo demais é skipped, não failed', async () => {
     findMessageById.mockResolvedValue({ ...AUDIO, audioDurationSeconds: 999 });
     const result = await transcribeMessage('m-1');

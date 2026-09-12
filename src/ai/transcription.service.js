@@ -30,7 +30,10 @@ function recusa(motivo) {
 async function transcribeMessage(messageId) {
   const message = await findMessageById(messageId);
   if (!message || message.messageType !== 'audio') return recusa('not_audio');
-  if (!message.mediaPath) return recusa('no_media');
+  if (!message.mediaPath) {
+    await markTranscriptionFailed(messageId, { status: 'failed', detail: 'mensagem de áudio sem arquivo', ms: null });
+    return recusa('no_media');
+  }
 
   if (!mimeAceito(message.mediaMimeType)) {
     await markTranscriptionFailed(messageId, {
@@ -41,6 +44,15 @@ async function transcribeMessage(messageId) {
 
   const config = await getAiConfig();
   const iniciadoEm = Date.now();
+
+  // Trava de desligamento: o gate em shouldTranscribe roda no enfileiramento, e
+  // um job já na fila quando o admin desliga chegaria aqui e gastaria uma
+  // chamada paga à OpenAI depois de desligada. Este é o ponto único por onde
+  // toda transcrição passa.
+  if (!config.transcriptionEnabled) {
+    await markTranscriptionFailed(messageId, { status: 'skipped', detail: 'transcrição desativada', ms: null });
+    return recusa('disabled');
+  }
 
   // Limite de duração: só aplica quando o metadado do WhatsApp trouxe o valor.
   if (message.audioDurationSeconds && message.audioDurationSeconds > config.transcriptionMaxSeconds) {

@@ -199,7 +199,8 @@ permissões** (que governa só o assistente):
 | `buscar_cliente` (existe) | CPF quando `none`, ou após `esquecer_identificacao`. Resultado eleva para `fraca`. **Na triagem não persiste o vínculo** (senão o CPF digitado viraria `memory`→`forte` na mensagem seguinte, pulando a confirmação) e devolve ao modelo só o primeiro nome e `{id, plano, status}` dos contratos — nunca nome completo nem login. Máximo de 2 CPFs distintos por turno. |
 | `confirmar_nascimento(data)` (nova) | Compara com `dataNascimento` do servidor (aceita `DD/MM/AAAA` e variações). Acerto → `forte` **e aí sim persiste o vínculo** (`setContactSgpLink`). Tentativas contadas em `conversations.ai_triage_birthdate_attempts` (persistido, teto 2 por conversa; `esquecer`/`buscar` não zeram). |
 | `esquecer_identificacao()` (nova) | Nome contestado: zera identidade do turno e o vínculo do contato (`setContactSgpLink(null)`). |
-| `consultar_status_contrato`, `consultar_status_conexao`, `consultar_faturas_todos_contratos` (existem) | Só para o resumo. |
+| `consultar_status_contrato`, `consultar_status_conexao` (existem) | Só para o resumo; liberadas também para identidade `fraca` (Reativação e Suporte dependem delas e não carregam valores). |
+| `consultar_faturas_todos_contratos` (existe) | Só para o resumo e **só com identidade forte** (`exigeIdentidadeForte`): valores, vencimentos e endereço não chegam ao modelo com CPF não confirmado. |
 | `gerar_pix`, `gerar_segunda_via` (existem) + `enviar_boleto(contratoId)` (nova: PDF via `downloadBoletoPdf` + `enqueueOutboundMessage`) | **Recusam em código se `identidade !== 'forte'`** (`contexto.identidade.nivel`, checado no executor por marcação `exigeIdentidadeForte: true`). Marcam `ai_triage_resolved_by_ai`. |
 | `concluir_triagem(setorId, motivoId, resumo, confianca)` (nova) | Ver abaixo. |
 

@@ -7,6 +7,10 @@ jest.mock('./trust-unlock.repository');
 jest.mock('../media/media-storage');
 jest.mock('../queue/outbound-queue');
 jest.mock('../realtime/socket-server');
+// Só para o teste de composição do perfil assistente (fix round 2): sem isto,
+// o executor de verdade chamaria isToolEnabled contra o banco de verdade
+// (ai_tool_permissions), que pode nem ter linha para a ferramenta.
+jest.mock('./ai-config.repository');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
@@ -21,6 +25,7 @@ const { setContactSgpLink } = require('../conversations/contact.repository');
 const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
+const { isToolEnabled } = require('./ai-config.repository');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
 const { executeTool } = require('./tool-executor');
@@ -511,6 +516,19 @@ describe('confirmar_nascimento', () => {
     expect((await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c)).confirmado).toBe(false);
     expect(incrementBirthdateAttempts).not.toHaveBeenCalled();
   });
+  // Fix round 2: incrementBirthdateAttempts devolve 0 quando a conversa não
+  // é encontrada — e 0 > 2 é falso, então sem esta checagem extra o contador
+  // "falhando" deixaria passar como se fosse a primeira tentativa. Falha
+  // fechado: sem contador confiável, recusa.
+  test('contador devolvendo 0 (conversa não encontrada) recusa em vez de deixar passar', async () => {
+    incrementBirthdateAttempts.mockResolvedValue(0);
+    const c = ctx();
+    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(r.confirmado).toBe(false);
+    expect(r.motivo).toMatch(/não foi possível registrar/i);
+    expect(setContactSgpLink).not.toHaveBeenCalled();
+    expect(c.identidade.nivel).toBe('fraca');
+  });
   test('o resultado nunca contém a data cadastrada', async () => {
     const c = ctx();
     const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
@@ -641,6 +659,23 @@ describe('buscar_cliente no perfil de triagem', () => {
     expect(r3.cliente).toBeDefined();
     expect(sgpClient.lookupClientByCpf).toHaveBeenCalledTimes(3);
   });
+
+  // Fix round 2 (discriminator alignment): a checagem antiga usava
+  // `contexto.identidade` diretamente. Se o runner de triagem (Task 4)
+  // algum dia passasse `identidade: null` (falsy, mas o perfil ainda É de
+  // triagem, porque ferramentasPermitidas está presente), buscar_cliente
+  // cairia no ramo assistente por engano — persistindo o vínculo e
+  // devolvendo o nome completo. perfilTriagem() usa o mesmo discriminador do
+  // executor (ferramentasPermitidas OU identidade) para não reabrir C1/C2.
+  test('com ferramentasPermitidas e identidade: null, ainda usa o ramo de triagem', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, login: 'l', plan: 'p', statusCode: 1 }] });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
+    const c = { contact: { id: 'ct-1' }, ferramentasPermitidas: ['buscar_cliente'], identidade: null };
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(r).toEqual({ cliente: { nome: 'Maria' }, contratos: [{ id: 5, plano: 'p', status: 'ativo' }] });
+    expect(setContactSgpLink).not.toHaveBeenCalled();
+    expect(c.contact.sgpDocument).toBeUndefined();
+  });
 });
 
 describe('enviar_boleto', () => {
@@ -713,6 +748,48 @@ describe('tool-executor + enviar_boleto (composição real, I3 fix round 1)', ()
     expect(resultado.motivo).toBe('identity_not_confirmed');
     expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+});
+
+// Fix round 2: consultar_faturas_todos_contratos devolve valor em aberto,
+// vencimento e endereço — dado sensível demais para uma identidade fraca
+// (CPF ainda não confirmado) na triagem, onde o modelo repassa a resposta
+// direto ao cliente. consultar_status_contrato/consultar_status_conexao
+// continuam abertos com fraca de propósito (classificação de
+// Reativação/Suporte depende deles e nenhum carrega valor).
+describe('tool-executor + consultar_faturas_todos_contratos (composição real, fix round 2)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('identidade fraca no perfil de triagem recusa e não chama o SGP', async () => {
+    const contexto = {
+      contracts: [{ id: 1, statusCode: 1, plan: '600MB', address: 'RUA X' }],
+      identidade: { nivel: 'fraca' },
+      ferramentasPermitidas: ['consultar_faturas_todos_contratos'],
+    };
+    const resultado = await executeTool('consultar_faturas_todos_contratos', {}, contexto);
+    expect(resultado.motivo).toBe('identity_not_confirmed');
+    expect(sgpClient.listInvoices).not.toHaveBeenCalled();
+  });
+
+  test('identidade forte no perfil de triagem roda normalmente', async () => {
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [] });
+    const contexto = {
+      contracts: [{ id: 1, statusCode: 1, plan: '600MB', address: 'RUA X' }],
+      identidade: { nivel: 'forte' },
+      ferramentasPermitidas: ['consultar_faturas_todos_contratos'],
+    };
+    const resultado = await executeTool('consultar_faturas_todos_contratos', {}, contexto);
+    expect(resultado.ok).toBe(true);
+    expect(sgpClient.listInvoices).toHaveBeenCalledTimes(1);
+  });
+
+  test('perfil assistente (sem identidade, sem lista fixa) continua sem a marcação atrapalhando', async () => {
+    isToolEnabled.mockResolvedValue(true);
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [] });
+    const contexto = { contracts: [{ id: 1, statusCode: 1, plan: '600MB', address: 'RUA X' }] };
+    const resultado = await executeTool('consultar_faturas_todos_contratos', {}, contexto);
+    expect(resultado.ok).toBe(true);
+    expect(sgpClient.listInvoices).toHaveBeenCalledTimes(1);
   });
 });
 

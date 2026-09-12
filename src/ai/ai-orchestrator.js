@@ -15,13 +15,19 @@ const { maskDocument, normalizeContract } = require('./sgp-normalizer');
 // não passar por aqui primeiro. O padrão é por nome do argumento (não por
 // nome da ferramenta) de propósito: cobre qualquer ferramenta futura que
 // receba um documento, não só a de hoje.
-const CHAVE_DOCUMENTO = /cpf|documento|nascimento|^data$/i;
+const CHAVE_DOCUMENTO = /cpf|documento/i;
+// Data de nascimento (confirmar_nascimento) não é um documento — maskDocument
+// mantém os 3 primeiros e os 4 últimos caracteres, o que em '20/05/1990'
+// ainda entrega o dia e o ano de nascimento (fix round 2). Aqui não há nada
+// para preservar parcialmente: o valor inteiro vira '[data]'.
+const CHAVE_DATA_NASCIMENTO = /nascimento|^data$/i;
 
 function mascararArgsParaAuditoria(args) {
   if (!args || typeof args !== 'object') return args;
   const mascarado = { ...args };
   for (const chave of Object.keys(mascarado)) {
-    if (CHAVE_DOCUMENTO.test(chave)) mascarado[chave] = maskDocument(mascarado[chave]);
+    if (CHAVE_DATA_NASCIMENTO.test(chave)) mascarado[chave] = '[data]';
+    else if (CHAVE_DOCUMENTO.test(chave)) mascarado[chave] = maskDocument(mascarado[chave]);
   }
   return mascarado;
 }

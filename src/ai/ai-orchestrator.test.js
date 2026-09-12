@@ -349,8 +349,11 @@ describe('ai-orchestrator', () => {
   // "data", not "cpf"/"documento" — CHAVE_DOCUMENTO didn't cover it, so the
   // customer's birth date reached ai_interactions unmasked. Widened the
   // pattern to also catch "nascimento" and an exact "data" key.
-  test('masks the data (birth date) argument of confirmar_nascimento in the audit trail, but still passes it to the tool', async () => {
-    const { maskDocument } = require('./sgp-normalizer');
+  // Fix round 2: maskDocument mantém os 3 primeiros e os 4 últimos
+  // caracteres — em '20/05/1990' isso ainda entrega o dia ('20/') e o ano
+  // ('1990') de nascimento. Uma data não é um documento parcialmente
+  // mascarável; o valor inteiro precisa virar um literal fixo.
+  test('replaces the data (birth date) argument of confirmar_nascimento with a fixed literal in the audit trail, but still passes the real value to the tool', async () => {
     createChatCompletion
       .mockResolvedValueOnce({
         message: {
@@ -365,8 +368,10 @@ describe('ai-orchestrator', () => {
 
     expect(executeTool).toHaveBeenCalledWith('confirmar_nascimento', { data: '20/05/1990' }, expect.any(Object));
     const { toolsRequested } = recordAiInteraction.mock.calls[0][0];
-    expect(toolsRequested).toEqual([{ nome: 'confirmar_nascimento', args: { data: maskDocument('20/05/1990') } }]);
-    expect(JSON.stringify(toolsRequested)).not.toContain('20/05/1990');
+    expect(toolsRequested).toEqual([{ nome: 'confirmar_nascimento', args: { data: '[data]' } }]);
+    const gravado = JSON.stringify(toolsRequested);
+    expect(gravado).not.toContain('1990');
+    expect(gravado).not.toContain('20/');
   });
 
   test('never sends the api key inside the messages', async () => {

@@ -49,6 +49,20 @@ function normalizarDataNascimento(texto) {
   return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
 }
 
+/**
+ * True quando o turno usa o perfil de triagem — seja porque o servidor já
+ * fixou a lista de ferramentas (contexto.ferramentasPermitidas), seja porque
+ * já existe contexto.identidade. Mesmo discriminador usado pelo executor
+ * (tool-executor.js, perfilFixo) — manter os dois em sincronia é o que
+ * garante que um `identidade: null` (ou qualquer outro valor falsy) não
+ * faça buscar_cliente/enviar_boleto cair de volta no ramo assistente (fix
+ * round 2: antes bastava contexto.identidade ser truthy, e um null bugado
+ * reabriria C1/C2).
+ */
+function perfilTriagem(contexto) {
+  return Array.isArray(contexto.ferramentasPermitidas) || Boolean(contexto.identidade);
+}
+
 /** Busca no cache do turno; só chama o SGP se ainda não houver nada. */
 async function contratoDoCache(contexto, contratoId) {
   const achado = (contexto.contracts || []).find((c) => c.id === contratoId);
@@ -79,9 +93,9 @@ const TOOLS = [
     async executar(args, contexto) {
       // No perfil de triagem, um CPF errado é esperado (o cliente pode digitar
       // o número errado uma vez) — mas sem limite, o modelo poderia varrer
-      // CPFs até achar um que bata. Três distintos no mesmo turno é o teto;
-      // o mesmo CPF repetido não conta.
-      if (contexto.identidade) {
+      // CPFs até achar um que bata. Dois distintos no mesmo turno é o teto: o
+      // terceiro é recusado. O mesmo CPF repetido não conta.
+      if (perfilTriagem(contexto)) {
         if (!contexto.cpfsBuscados) contexto.cpfsBuscados = new Set();
         if (!contexto.cpfsBuscados.has(args.cpf) && contexto.cpfsBuscados.size >= 2) {
           return erro('CPF lookup limit reached for this turn');
@@ -98,7 +112,7 @@ const TOOLS = [
       // confirmar_nascimento quem persiste, só depois de bater a data. Sem
       // isso, um CPF errado (ou de outra pessoa) vazaria para o próximo turno
       // como identidade forte via memória (contact.sgpDocument já setado).
-      if (contexto.identidade) {
+      if (perfilTriagem(contexto)) {
         let dataNascimento = null;
         try {
           const rec = await sgpClient.findClientRecord({ cpfcnpj: args.cpf });
@@ -230,6 +244,12 @@ const TOOLS = [
     // contrato a contrato" estourava o limite de ferramentas do turno no
     // cliente com vários contratos, que é justamente quem mais precisa.
     isentoDeProprietario: true,
+    // Devolve valor em aberto, vencimento e endereço — dado que só deve ir a
+    // quem já confirmou quem é (fix round 2). consultar_status_contrato e
+    // consultar_status_conexao ficam abertos com identidade fraca de
+    // propósito: a triagem de Reativação/Suporte depende deles e nenhum dos
+    // dois carrega valor ou endereço.
+    exigeIdentidadeForte: true,
     parametros: { type: 'object', properties: {} },
     validar() {
       return { ok: true, args: {} };
@@ -474,7 +494,7 @@ const TOOLS = [
   {
     nome: 'confirmar_nascimento',
     categoria: 'CONSULTA',
-    descricao: 'Confirma a identidade do cliente identificado por CPF comparando a data de nascimento que ele informou. Use antes de entregar boleto ou PIX quando a identificação for por CPF. Uma tentativa só.',
+    descricao: 'Confirma a identidade do cliente identificado por CPF comparando a data de nascimento que ele informou. Use antes de entregar boleto ou PIX quando a identificação for por CPF. No máximo duas tentativas por atendimento.',
     isentoDeProprietario: true,
     parametros: { type: 'object', properties: { data: { type: 'string', description: 'Data informada pelo cliente, ex.: 20/05/1990' } }, required: ['data'] },
     validar(args) {
@@ -489,8 +509,17 @@ const TOOLS = [
       // esquecer_identificacao. Sem isso, o cliente podia tentar de novo só
       // chamando esquecer_identificacao e buscar_cliente outra vez.
       const tentativas = await incrementBirthdateAttempts(contexto.conversationId);
-      if (tentativas > 2) {
-        return { confirmado: false, motivo: 'Limite de tentativas de confirmação atingido. Encaminhe sem entregar dados.' };
+      // tentativas === 0 significa que a conversa não foi encontrada (a
+      // função devolve 0 nesse caso) — falha fechado: sem contador
+      // confiável, não há como saber se o limite já estourou, então trata
+      // como recusa em vez de deixar passar (0 > 2 é falso).
+      if (tentativas === 0 || tentativas > 2) {
+        return {
+          confirmado: false,
+          motivo: tentativas === 0
+            ? 'Não foi possível registrar a tentativa. Encaminhe sem entregar dados.'
+            : 'Limite de tentativas de confirmação atingido. Encaminhe sem entregar dados.',
+        };
       }
       const informada = normalizarDataNascimento(args.data);
       if (informada && informada === id.dataNascimento) {
@@ -539,11 +568,12 @@ const TOOLS = [
     parametros: { type: 'object', properties: { contratoId: { type: 'integer' } }, required: ['contratoId'] },
     validar: validarContratoId,
     async executar(args, contexto) {
-      // Fora da triagem (contexto.identidade ausente) não há confirmar_nascimento
-      // no meio do caminho, nem instrução para o modelo saber quando é seguro
-      // entregar — enviar_boleto EXECUTA (entrega um arquivo real ao cliente),
-      // então não é uma ferramenta de assistente/humano-no-comando.
-      if (!contexto.identidade) return erro('enviar_boleto is only available during AI triage');
+      // Fora da triagem não há confirmar_nascimento no meio do caminho, nem
+      // instrução para o modelo saber quando é seguro entregar — enviar_boleto
+      // EXECUTA (entrega um arquivo real ao cliente), então não é uma
+      // ferramenta de assistente/humano-no-comando. perfilTriagem (não só
+      // contexto.identidade) para não reabrir com um identidade: null bugado.
+      if (!perfilTriagem(contexto)) return erro('enviar_boleto is only available during AI triage');
       const result = await sgpClient.getDuplicateInvoice(args.contratoId);
       if (!result.hasOpenInvoice) return { enviado: false, motivo: 'Nenhuma fatura em aberto' };
       const primeira = result.duplicates[0];

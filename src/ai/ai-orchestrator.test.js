@@ -419,7 +419,11 @@ describe('ai-orchestrator', () => {
 });
 
 describe('perfil de triagem', () => {
-  const IDENT_FORTE = { nivel: 'forte', origem: 'phone', primeiroNome: 'João', contracts: [{ id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X' }], client: { id: 9 }, dataNascimento: '1990-05-20', contestado: false, nascimentoTentado: false };
+  const IDENT_FORTE = {
+    nivel: 'forte', origem: 'phone', primeiroNome: 'João', nome: 'João Da Silva Pereira',
+    contracts: [{ id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X', login: 'joao.pppoe' }],
+    client: { id: 9, document: '11122233344' }, dataNascimento: '1990-05-20', contestado: false, nascimentoTentado: false,
+  };
   const TRIAGEM = { threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false };
 
   beforeEach(() => {
@@ -440,6 +444,12 @@ describe('perfil de triagem', () => {
     const nomes = req.tools.map((t) => t.function.name).sort();
     expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM].sort());
     expect(nomes).not.toContain('desbloqueio_confianca');
+    // Nominal: nenhuma ferramenta do assistente clássico (fora da lista fixa
+    // de dez) pode vazar para a triagem por engano.
+    expect(FERRAMENTAS_TRIAGEM).not.toEqual(expect.arrayContaining([
+      'consultar_plano', 'transferir_atendimento', 'definir_motivo_atendimento',
+      'desbloqueio_confianca', 'consultar_financeiro', 'consultar_faturas',
+    ]));
   });
 
   test('o contexto traz setores com orientação, motivos, e identidade só com primeiro nome', async () => {
@@ -452,7 +462,26 @@ describe('perfil de triagem', () => {
     expect(sys).toMatch(/primeiro nome/i);
     expect(sys).toContain('Seja breve.');
     expect(sys).not.toContain('1990');
-    expect(sys).not.toMatch(/fatura(s)? em aberto|valor/i);
+    // Não é a PALAVRA "valor" que é proibida (ela aparece dentro da própria
+    // regra "nunca diga... valores") — é um valor em R$ ou uma fatura em
+    // aberto vazando de verdade para o texto do sistema.
+    expect(sys).not.toMatch(/fatura(s)? em aberto|R\$|\bvalor (da|de|em)\b/i);
+  });
+
+  // I1 (review): o endereço só pode ser dito de volta ao cliente quando a
+  // identidade já é FORTE — é o endereço do próprio cliente. Com identidade
+  // fraca (CPF ainda não confirmado por data de nascimento) o endereço
+  // pertence a quem quer que seja o dono do CPF digitado, que pode não ser
+  // quem está no WhatsApp.
+  test('com identidade forte, pode desambiguar contratos pelo endereço', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toContain('Rua X ou');
+  });
+
+  test('com identidade fraca, nunca cita endereço/plano/cadastro para desambiguar', async () => {
+    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
+    expect(sys).toContain('NUNCA cite endereço');
+    expect(sys).not.toContain('Rua X ou');
   });
 
   test('identidade none instrui a pedir CPF só se o setor exigir', async () => {
@@ -466,6 +495,17 @@ describe('perfil de triagem', () => {
     expect(sys).toMatch(/confirmar_nascimento/);
   });
 
+  // I3 (review): a fixture original (IDENT_FORTE) não tinha nenhum campo
+  // perigoso — um teste de "não vaza nada" que não pode vazar nada não prova
+  // nada. Agora o fixture carrega CPF, login PPPoE e sobrenome de verdade.
+  test('não vaza cpf, login pppoe, sobrenome nem data de nascimento no contexto de sistema', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).not.toContain('11122233344');
+    expect(sys).not.toContain('pppoe');
+    expect(sys).not.toContain('Silva');
+    expect(sys).not.toContain('1990');
+  });
+
   test('imagem e documento entram no histórico como placeholder', async () => {
     listRecentMessagesByConversation.mockResolvedValue([
       { direction: 'inbound', content: null, messageType: 'image' },
@@ -475,9 +515,66 @@ describe('perfil de triagem', () => {
     expect(req.messages.map((m) => m.content).join('|')).toContain('[cliente enviou uma imagem]');
   });
 
+  // Minor (review): a legenda que acompanha a mídia é informação real da
+  // triagem (o cliente pode escrever "já paguei isso" na legenda da foto do
+  // boleto) — perdê-la perderia contexto.
+  test('a legenda acompanha o placeholder de imagem/documento quando existir', async () => {
+    listRecentMessagesByConversation.mockResolvedValue([
+      { direction: 'inbound', content: 'já paguei isso', messageType: 'image' },
+      { direction: 'inbound', content: 'segue o contrato', messageType: 'document' },
+    ]);
+    const req = await contexto();
+    const conteudos = req.messages.map((m) => m.content);
+    expect(conteudos).toContain('[cliente enviou uma imagem] já paguei isso');
+    expect(conteudos).toContain('[cliente enviou um documento] segue o contrato');
+  });
+
+  // I4a (review): documento inbound vira o placeholder; áudio inbound com
+  // transcrição malsucedida (status 'failed', não só ausência de status)
+  // também vira placeholder.
+  test('documento inbound vira placeholder, e áudio com transcrição falha também', async () => {
+    listRecentMessagesByConversation.mockResolvedValue([
+      { direction: 'inbound', content: null, messageType: 'document' },
+      { direction: 'inbound', content: null, messageType: 'audio', transcriptionStatus: 'failed' },
+    ]);
+    const req = await contexto();
+    const conteudos = req.messages.map((m) => m.content);
+    expect(conteudos).toContain('[cliente enviou um documento]');
+    expect(conteudos).toContain('[cliente enviou um áudio que não pôde ser transcrito]');
+  });
+
+  // I4b (review): o boleto que a própria IA envia (enviar_boleto) entra no
+  // histórico como uma mensagem outbound messageType 'document' — isso NUNCA
+  // pode virar "[cliente enviou um documento]", ou o modelo se confunde
+  // sobre quem mandou o quê.
+  test('documento outbound (o boleto que a IA enviou) não vira o placeholder do cliente', async () => {
+    listRecentMessagesByConversation.mockResolvedValue([
+      { direction: 'outbound', content: null, messageType: 'document' },
+      { direction: 'inbound', content: 'oi', messageType: 'text' },
+    ]);
+    const req = await contexto();
+    expect(req.messages.map((m) => m.content)).not.toContain('[cliente enviou um documento]');
+  });
+
   test('forcarConclusao envia tool_choice concluir_triagem na primeira chamada', async () => {
     await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
     expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('concluir_triagem');
+  });
+
+  // I4c (review): o toolChoice forçado não pode "grudar" nas chamadas
+  // seguintes do turno, senão o modelo nunca conseguiria fazer a pergunta de
+  // esclarecimento que a própria concluir_triagem pede em baixa confiança.
+  test('forcarConclusao não persiste na segunda chamada do turno', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"r","confianca":0.9}' } }] },
+        usage: {},
+      })
+      .mockResolvedValueOnce({ message: { content: 'ok' }, usage: {} });
+    executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
+    await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
+    expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('concluir_triagem');
+    expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
   });
 
   test('devolve triagemConcluida e a identidade final, e grava mode triage na auditoria', async () => {

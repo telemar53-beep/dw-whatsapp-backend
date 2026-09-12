@@ -62,8 +62,11 @@ function conteudoParaModelo(m, perfil) {
   if (m.messageType === 'text') return m.content || null;
   if (m.messageType === 'audio' && m.transcriptionStatus === 'completed') return m.transcription || null;
   if (perfil === 'triagem' && m.direction === 'inbound') {
-    if (m.messageType === 'image') return '[cliente enviou uma imagem]';
-    if (m.messageType === 'document') return '[cliente enviou um documento]';
+    // A legenda (m.content) acompanha o placeholder quando existir: o
+    // cliente pode mandar uma foto do boleto E escrever "já paguei isso" na
+    // legenda — perder esse texto perderia informação real da triagem.
+    if (m.messageType === 'image') return m.content ? `[cliente enviou uma imagem] ${m.content}` : '[cliente enviou uma imagem]';
+    if (m.messageType === 'document') return m.content ? `[cliente enviou um documento] ${m.content}` : '[cliente enviou um documento]';
     if (m.messageType === 'audio') return '[cliente enviou um áudio que não pôde ser transcrito]';
   }
   return null;
@@ -152,6 +155,9 @@ const FERRAMENTAS_TRIAGEM = [
 // endereço ou "pagamento confirmado" — isso vai só no resumo interno para o
 // atendente humano).
 async function montarContextoTriagem(config, identidade) {
+  // Guarda defensiva: um identidade null/undefined não pode derrubar a
+  // montagem do contexto — cai no mesmo tratamento de "não identificado".
+  identidade = identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
   const [setores, motivos] = await Promise.all([listSectors(), listActiveReasons()]);
   const linhas = [
     config.systemPrompt, '',
@@ -173,7 +179,16 @@ async function montarContextoTriagem(config, identidade) {
     if (contratos.length > 0) {
       linhas.push('Contratos dele:');
       for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
-      linhas.push('Nunca peça o número do contrato; identifique pelo endereço e, se repetir, pelo plano. Pergunte qual ponto SÓ quando a resposta depender dele.');
+      // O endereço só pode ser falado de volta ao cliente quando a
+      // identidade já é FORTE: é o endereço do próprio cliente. Com
+      // identidade fraca (CPF ainda não confirmado por data de nascimento) o
+      // endereço pertence a quem quer que seja o dono do CPF digitado — pode
+      // não ser quem está no WhatsApp, então nada do cadastro pode ser dito.
+      linhas.push(
+        identidade.nivel === 'forte'
+          ? 'Nunca peça o número do contrato. Se precisar saber de qual ponto ele fala, pergunte pelo endereço ("é o da Rua X ou o da Av. Y?") ou pelo plano. Pergunte SÓ quando a resposta depender do ponto.'
+          : 'Nunca peça o número do contrato e NUNCA cite endereço, plano ou qualquer dado do cadastro ao cliente: a identificação ainda não foi confirmada. Se precisar desambiguar, peça que ELE descreva o local, sem você citar nada.'
+      );
     }
     if (identidade.nivel === 'fraca') {
       linhas.push('Identificação por CPF ainda NÃO confirmada: para entregar boleto ou PIX, pergunte a data de nascimento e chame confirmar_nascimento. Se não confirmar, apenas encaminhe.');
@@ -183,7 +198,7 @@ async function montarContextoTriagem(config, identidade) {
   }
   linhas.push(
     '',
-    'NUNCA diga ao cliente: status do contrato, faturas, quanto ele deve, plano contratado ou endereço (isso vai só para o resumo); "pagamento confirmado"; prazos ou "um técnico vai"; preços ou cobertura (diga que o Comercial informa).',
+    'NUNCA diga ao cliente: status do contrato, faturas, valores, plano contratado ou endereço (exceto, com identidade confirmada, para perguntar de qual ponto ele fala) (isso vai só para o resumo); "pagamento confirmado"; prazos ou "um técnico vai"; preços ou cobertura (diga que o Comercial informa).',
     'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
     'Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou.',
   );
@@ -202,16 +217,20 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
 
   if (perfil === 'triagem') {
     tools = toOpenAiTools(FERRAMENTAS_TRIAGEM);
+    // Guarda defensiva: mesmo fallback usado em montarContextoTriagem — um
+    // identidade null/undefined não pode derrubar o turno nem deixar
+    // contexto.contracts inconsistente com o que o contexto de sistema viu.
+    const identidadeEfetiva = identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
     // Perfil fixo: os contratos vêm da identidade já resolvida (Task 2), não
     // de uma nova consulta ao SGP via carregarContratos — o cache do turno
     // (contexto.contracts) é o que tool-executor.js usa para a checagem de
     // propriedade (chaveProprietario).
     contexto = {
-      conversationId: conversation.id, contact, contracts: (identidade && identidade.contracts) || [], sgpCache: {},
-      identidade, channelId: conversation.channelId, ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+      conversationId: conversation.id, contact, contracts: identidadeEfetiva.contracts || [], sgpCache: {},
+      identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
     };
-    systemContent = await montarContextoTriagem(config, identidade);
+    systemContent = await montarContextoTriagem(config, identidadeEfetiva);
   } else {
     const permissoes = await listToolPermissions();
     const habilitadas = permissoes.filter((p) => p.enabled).map((p) => p.toolName);

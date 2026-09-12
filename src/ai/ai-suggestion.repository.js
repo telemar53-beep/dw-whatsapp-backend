@@ -7,11 +7,15 @@ function toSuggestion(row) {
     messageId: row.message_id,
     content: row.content,
     status: row.status,
+    // Ferramentas de ação que a IA executou no turno que gerou esta sugestão
+    // (ex.: liberação em confiança). Persistido aqui, e não só no evento de
+    // socket, para o atendente ver o aviso também depois de um F5.
+    acoesExecutadas: Array.isArray(row.acoes_executadas) ? row.acoes_executadas : [],
     createdAt: row.created_at,
   };
 }
 
-async function createSuggestion({ conversationId, messageId, content }) {
+async function createSuggestion({ conversationId, messageId, content, acoesExecutadas = [] }) {
   // Sem isto, um rascunho anterior (A) continua 'pending' depois que a IA gera
   // um novo (B) para uma mensagem mais recente do cliente: A ressurge na
   // próxima carga da tela e o atendente pode mandar uma resposta obsoleta.
@@ -24,9 +28,9 @@ async function createSuggestion({ conversationId, messageId, content }) {
       [conversationId]
     );
     const result = await client.query(
-      `INSERT INTO ai_suggestions (conversation_id, message_id, content)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [conversationId, messageId || null, content]
+      `INSERT INTO ai_suggestions (conversation_id, message_id, content, acoes_executadas)
+       VALUES ($1, $2, $3, $4::jsonb) RETURNING *`,
+      [conversationId, messageId || null, content, JSON.stringify(acoesExecutadas || [])]
     );
     return toSuggestion(result.rows[0]);
   });

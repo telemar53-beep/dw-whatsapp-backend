@@ -58,23 +58,25 @@ describe('useAiSuggestion', () => {
       });
     });
 
-    expect(result.current.suggestion).toEqual({ id: 's-2', content: 'Resposta sugerida', acoesExecutadas: [] });
+    expect(result.current.suggestion).toEqual({ id: 's-2', content: 'Resposta sugerida' });
   });
 
-  test('ai:suggestion carrega as ações que a IA executou no turno', async () => {
-    api.getAiSuggestion.mockResolvedValue({ suggestion: null });
+  test('as ações executadas chegam dentro da sugestão, pelo socket e pelo GET', async () => {
+    // Persistido no backend: o aviso de ação sensível sobrevive a um F5.
+    api.getAiSuggestion.mockResolvedValue({
+      suggestion: { id: 's-3', content: 'Liberado por 3 dias.', acoesExecutadas: ['desbloqueio_confianca'] },
+    });
     const { result } = renderHook(() => useAiSuggestion('conv-1'));
-    await waitFor(() => expect(api.getAiSuggestion).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.suggestion).not.toBeNull());
+    expect(result.current.suggestion.acoesExecutadas).toEqual(['desbloqueio_confianca']);
 
     act(() => {
       fakeSocket.trigger('ai:suggestion', {
         conversationId: 'conv-1',
-        suggestion: { id: 's-3', content: 'Liberado por 3 dias.' },
-        acoesExecutadas: ['desbloqueio_confianca'],
+        suggestion: { id: 's-4', content: 'Outra', acoesExecutadas: ['gerar_pix'] },
       });
     });
-
-    expect(result.current.suggestion.acoesExecutadas).toEqual(['desbloqueio_confianca']);
+    expect(result.current.suggestion.acoesExecutadas).toEqual(['gerar_pix']);
   });
 
   test('ai:suggestion for a different conversation is ignored', async () => {

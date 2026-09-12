@@ -46,13 +46,13 @@ async function handleAiJob({ conversationId, messageId }) {
   if (!texto) return;
 
   if (config.mode === 'assistant') {
-    const suggestion = await createSuggestion({ conversationId, messageId: null, content: texto });
-    // As ações executadas vão junto: uma ferramenta sensível (liberação em
-    // confiança) age no serviço do cliente NO TURNO, antes de o atendente ver
-    // o texto — ele precisa saber que aconteceu, e não só o que a IA sugere
-    // dizer. Persistido em ai_interactions; aqui é o aviso imediato.
+    // As ações executadas ficam gravadas NA sugestão: uma ferramenta sensível
+    // (liberação em confiança) age no serviço do cliente no turno, antes de o
+    // atendente ver o texto — ele precisa saber que aconteceu, e precisa
+    // continuar sabendo depois de um F5, quando a tela relê pelo GET.
     const acoesExecutadas = (turno.toolsExecutadas || []).map((t) => t.nome);
-    emitToAgent(conversation.assignedAgentId, 'ai:suggestion', { conversationId, suggestion, acoesExecutadas });
+    const suggestion = await createSuggestion({ conversationId, messageId: null, content: texto, acoesExecutadas });
+    emitToAgent(conversation.assignedAgentId, 'ai:suggestion', { conversationId, suggestion });
     return;
   }
 

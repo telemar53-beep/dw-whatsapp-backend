@@ -408,3 +408,12 @@ describe("requestTrustUnlock — coerção de tipos da API form-encoded", () => 
     expect((await requestTrustUnlock(1)).liberadoDias).toBeNull();
   });
 });
+
+describe("requestTrustUnlock — 'True' capitalizado (Django) também é liberação", () => {
+  const CONFIG = { baseUrl: "https://dwtelecom.sgp.tsmx.com.br", app: "chatmix", token: "tok-123", enabled: true };
+  test("liberado 'True' é lido como verdadeiro", async () => {
+    getSgpQueryConfig.mockResolvedValue(CONFIG);
+    axios.post.mockResolvedValue({ data: { status: 1, liberado: "True", liberado_dias: 2, protocolo: "7" } });
+    expect((await requestTrustUnlock(1)).liberado).toBe(true);
+  });
+});

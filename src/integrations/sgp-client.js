@@ -187,7 +187,8 @@ async function requestTrustUnlock(contratoId) {
   // API form-encoded: booleanos e números podem chegar como texto ("true",
   // "1", "3"). Ler estrito demais aqui viraria uma liberação REAL em "não
   // liberou" — e ela ficaria sem registro. Coerção deliberada.
-  const liberado = [true, 'true', 1, '1'].includes(data.liberado);
+  const liberado = data.liberado === true || data.liberado === 1
+    || ['true', '1'].includes(String(data.liberado).trim().toLowerCase());
   const dias = Number(data.liberado_dias);
   return {
     liberado,

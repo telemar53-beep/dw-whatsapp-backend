@@ -50,9 +50,15 @@ function diasEntre(diaInicio, diaFim) {
   return Math.floor((new Date(`${diaFim}T00:00:00Z`) - new Date(`${diaInicio}T00:00:00Z`)) / MS_POR_DIA);
 }
 
+// Só o status EXATO, palavra inteira, conta como encerrado. Um trecho solto
+// ("pag") casaria "Aguardando pagamento" — e uma fatura em aberto viraria
+// paga, entregando uma segunda liberação a quem nunca pagou. Na dúvida, a
+// fatura é considerada aberta: é a direção conservadora.
+const STATUS_ENCERRADO = /^(cancelad[oa]|pag[oa]|baixad[oa]|quitad[oa]|liquidad[oa])$/i;
+
 function faturaEmAberto(f) {
   if (f.dataPagamento) return false;
-  return !/cancel|pag|baix|quit/i.test(String(f.status || ''));
+  return !STATUS_ENCERRADO.test(String(f.status || '').trim());
 }
 
 /**

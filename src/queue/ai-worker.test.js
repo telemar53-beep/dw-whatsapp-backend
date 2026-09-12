@@ -36,7 +36,7 @@ describe('ai-worker', () => {
 
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-    expect(createSuggestion).toHaveBeenCalledWith({ conversationId: 'c-1', messageId: null, content: 'Seu plano é 600MB.' });
+    expect(createSuggestion).toHaveBeenCalledWith({ conversationId: 'c-1', messageId: null, content: 'Seu plano é 600MB.', acoesExecutadas: [] });
     expect(emitToAgent).toHaveBeenCalledWith('a-1', 'ai:suggestion', expect.objectContaining({ conversationId: 'c-1' }));
   });
 
@@ -49,10 +49,15 @@ describe('ai-worker', () => {
       erro: null,
     });
 
+    createSuggestion.mockResolvedValue({ id: 's-9', content: 'Sua internet foi liberada por 3 dias.', acoesExecutadas: ['consultar_faturas', 'desbloqueio_confianca'] });
+
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-    expect(emitToAgent).toHaveBeenCalledWith('a-1', 'ai:suggestion', expect.objectContaining({
+    expect(createSuggestion).toHaveBeenCalledWith(expect.objectContaining({
       acoesExecutadas: ['consultar_faturas', 'desbloqueio_confianca'],
+    }));
+    expect(emitToAgent).toHaveBeenCalledWith('a-1', 'ai:suggestion', expect.objectContaining({
+      suggestion: expect.objectContaining({ acoesExecutadas: ['consultar_faturas', 'desbloqueio_confianca'] }),
     }));
   });
 

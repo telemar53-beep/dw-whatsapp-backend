@@ -261,6 +261,11 @@ const TOOLS = [
   {
     nome: 'gerar_segunda_via',
     categoria: 'ACAO_SENSIVEL',
+    // getDuplicateInvoice faz até três chamadas sequenciais de 15 s ao SGP:
+    // com o orçamento padrão do executor (15 s) o race podia vencer com
+    // "timeout" enquanto a 2ª via já estava emitida. Mesma classe do
+    // desbloqueio em confiança.
+    timeoutMs: 40000,
     descricao: 'Gera a segunda via do boleto do contrato, com linha digitável e link.',
     chaveProprietario: 'contratoId',
     parametros: {
@@ -284,6 +289,8 @@ const TOOLS = [
   {
     nome: 'gerar_pix',
     categoria: 'ACAO_SENSIVEL',
+    // Mesma cadeia de até três chamadas ao SGP de gerar_segunda_via.
+    timeoutMs: 40000,
     descricao: 'Gera o código PIX copia e cola da fatura em aberto do contrato.',
     chaveProprietario: 'contratoId',
     parametros: {

@@ -25,14 +25,10 @@ export function useAiSuggestion(conversationId) {
     function onSuggestion(payload) {
       // Só a conversa aberta: o socket entrega tudo do atendente.
       if (payload.conversationId !== conversationId) return;
-      // As ações que a IA já executou neste turno (ex.: liberação em
-      // confiança) viajam junto: elas aconteceram antes de o atendente ver o
-      // texto, e ele precisa saber disso ao decidir o que enviar.
-      setSuggestion(
-        payload.suggestion
-          ? { ...payload.suggestion, acoesExecutadas: payload.acoesExecutadas || [] }
-          : null
-      );
+      // A sugestão já traz `acoesExecutadas` (persistido no backend), então o
+      // evento e o GET entregam a mesma coisa — inclusive o aviso de ação
+      // sensível executada, que precisa sobreviver a um F5.
+      setSuggestion(payload.suggestion || null);
     }
     socket.on('ai:suggestion', onSuggestion);
     return () => socket.off('ai:suggestion', onSuggestion);

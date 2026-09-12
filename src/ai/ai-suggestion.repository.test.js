@@ -21,6 +21,22 @@ describe('ai suggestion repository', () => {
     expect(found.id).toBe(created.id);
   });
 
+  test('as ações executadas são gravadas e voltam na leitura pendente', async () => {
+    // É o caminho do F5: o aviso de "liberação executada" precisa sobreviver
+    // ao recarregamento da tela, não só ao evento de socket.
+    await createSuggestion({
+      conversationId, messageId: null, content: 'Liberado por 3 dias.',
+      acoesExecutadas: ['consultar_faturas', 'desbloqueio_confianca'],
+    });
+    const found = await findPendingSuggestion(conversationId);
+    expect(found.acoesExecutadas).toEqual(['consultar_faturas', 'desbloqueio_confianca']);
+  });
+
+  test('sem ações informadas, a lista vem vazia', async () => {
+    await createSuggestion({ conversationId, messageId: null, content: 'x' });
+    expect((await findPendingSuggestion(conversationId)).acoesExecutadas).toEqual([]);
+  });
+
   test('a marked suggestion is no longer pending', async () => {
     const created = await createSuggestion({ conversationId, messageId: null, content: 'x' });
     await markSuggestion(created.id, 'sent');

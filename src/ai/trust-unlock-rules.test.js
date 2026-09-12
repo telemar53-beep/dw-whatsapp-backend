@@ -95,6 +95,19 @@ describe('avaliarElegibilidade (desbloqueio em confiança)', () => {
     }
   });
 
+  test('status que só CONTÉM "pagamento" continua sendo fatura aberta', () => {
+    // "Aguardando pagamento" não é pago. Tratar como pago daria uma segunda
+    // liberação a quem nunca pagou.
+    for (const status of ['Aguardando pagamento', 'Pagamento pendente', 'Gerado', 'Vencido']) {
+      const r = avaliarElegibilidade({
+        liberacoes: [liberacao('2026-08-01T12:00:00Z')],
+        faturas: [fatura('2026-07-25', null, status)],
+        hoje: HOJE,
+      });
+      expect(r).toEqual({ ok: false, motivo: 'promessa_quebrada' });
+    }
+  });
+
   test('fatura que só venceu DEPOIS da liberação não conta como quebra', () => {
     const r = avaliarElegibilidade({
       liberacoes: [liberacao('2026-08-01T12:00:00Z')],

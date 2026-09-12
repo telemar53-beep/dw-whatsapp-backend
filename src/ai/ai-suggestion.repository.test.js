@@ -34,6 +34,25 @@ describe('ai suggestion repository', () => {
     expect(found.id).toBe(nova.id);
   });
 
+  test('creating a new suggestion discards the conversation\'s previous pending ones, leaving exactly one pending', async () => {
+    // Real sequence this guards against: customer writes -> AI drafts A (pending);
+    // attendant does nothing; customer writes again -> AI drafts B. Without this,
+    // A stays 'pending' forever and resurfaces on the next load, answering a
+    // message that was already handled by B.
+    const antiga = await createSuggestion({ conversationId, messageId: null, content: 'draft A' });
+    const nova = await createSuggestion({ conversationId, messageId: null, content: 'draft B' });
+
+    const pendentes = await getPool().query(
+      "SELECT id FROM ai_suggestions WHERE conversation_id = $1 AND status = 'pending'",
+      [conversationId]
+    );
+    expect(pendentes.rows).toHaveLength(1);
+    expect(pendentes.rows[0].id).toBe(nova.id);
+
+    const antigaAtualizada = await getPool().query('SELECT status FROM ai_suggestions WHERE id = $1', [antiga.id]);
+    expect(antigaAtualizada.rows[0].status).toBe('discarded');
+  });
+
   test('markSuggestion returns null for an unknown id', async () => {
     expect(await markSuggestion('00000000-0000-0000-0000-000000000000', 'sent')).toBeNull();
   });

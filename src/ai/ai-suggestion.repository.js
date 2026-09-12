@@ -1,4 +1,4 @@
-const { getPool } = require('../db/pool');
+const { getPool, withTransaction } = require('../db/pool');
 
 function toSuggestion(row) {
   return {
@@ -12,12 +12,24 @@ function toSuggestion(row) {
 }
 
 async function createSuggestion({ conversationId, messageId, content }) {
-  const result = await getPool().query(
-    `INSERT INTO ai_suggestions (conversation_id, message_id, content)
-     VALUES ($1, $2, $3) RETURNING *`,
-    [conversationId, messageId || null, content]
-  );
-  return toSuggestion(result.rows[0]);
+  // Sem isto, um rascunho anterior (A) continua 'pending' depois que a IA gera
+  // um novo (B) para uma mensagem mais recente do cliente: A ressurge na
+  // próxima carga da tela e o atendente pode mandar uma resposta obsoleta.
+  // As duas operações precisam da mesma transação — se a invalidação de A
+  // for confirmada mas o INSERT de B falhar, a conversa ficaria sem sugestão
+  // nenhuma em vez de com A ainda válida.
+  return withTransaction(async (client) => {
+    await client.query(
+      "UPDATE ai_suggestions SET status = 'discarded' WHERE conversation_id = $1 AND status = 'pending'",
+      [conversationId]
+    );
+    const result = await client.query(
+      `INSERT INTO ai_suggestions (conversation_id, message_id, content)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [conversationId, messageId || null, content]
+    );
+    return toSuggestion(result.rows[0]);
+  });
 }
 
 async function findPendingSuggestion(conversationId) {

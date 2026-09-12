@@ -91,6 +91,7 @@ function OpenAiConfigCard() {
       refresh();
       setChangingKey(false);
       setApiKey('');
+      setTestError(null);
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao salvar');
     } finally {

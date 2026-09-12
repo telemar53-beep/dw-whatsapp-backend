@@ -519,9 +519,14 @@ git commit -m "Add transcription settings to the AI configuration"
       const [url, , options] = axios.post.mock.calls[0];
       expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
       expect(options.headers.Authorization).toBe('Bearer sk-secreta');
-      // Guarda de regressão: o boundary do multipart precisa sobreviver ao merge.
+      // Guarda de regressão do boundary. A checagem de formato abaixo NÃO basta
+      // sozinha: com o axios mockado não existe colisão case-insensitive, então
+      // ela passa mesmo com o bug presente. Quem realmente trava o defeito é a
+      // segunda asserção — com o merge errado, 'Content-Type' chega
+      // 'application/json' e ela falha.
       const contentType = options.headers['content-type'] || options.headers['Content-Type'];
       expect(contentType).toMatch(/^multipart\/form-data; boundary=/);
+      expect(options.headers['Content-Type']).toBeUndefined();
       expect(result).toEqual({ texto: 'minha internet caiu' });
 
       const campos = appendSpy.mock.calls.map((c) => c[0]);

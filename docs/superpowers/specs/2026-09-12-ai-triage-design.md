@@ -183,7 +183,13 @@ em código.
   cobertura (é "vou encaminhar ao Comercial").
 - Vários contratos: perguntar qual ponto **só** quando a resposta depende dele
   (Suporte, boleto com fatura aberta em mais de um). Nunca pedir número de
-  contrato; identificar por endereço e plano.
+  contrato. **Endereço só pode ser dito com identidade forte** (é o do próprio
+  cliente: "é o da Rua X ou o da Av. Y?"); com `fraca`/`none` a IA nunca cita
+  endereço, plano ou dado do cadastro — pede que o cliente descreva o local.
+- **Contestação persiste.** Depois de `esquecer_identificacao`, a busca por
+  telefone reidentificaria a mesma pessoa errada no turno seguinte. A
+  ferramenta marca `conversations.ai_triage_phone_contested`; o worker lê a
+  coluna e chama o resolutor com `ignorarTelefone: true` nessa conversa.
 - Formatação WhatsApp (já existe).
 
 **Histórico**: como hoje (texto + áudio transcrito). Imagem/documento entram

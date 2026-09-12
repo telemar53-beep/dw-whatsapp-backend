@@ -658,8 +658,8 @@ git commit -m "Add the OpenAI audio transcription call"
   `getMediaFilePath` de `src/media/media-storage.js`.
 - Produces: `transcribeMessage(messageId)` →
   `Promise<{ ok: true, transcription } | { ok: false, motivo }>`
-  Motivos: `'not_audio'`, `'no_media'`, `'unsupported_mime'`, `'too_long'`, `'too_large'`,
-  `'transcription_failed'`.
+  Motivos: `'not_audio'`, `'no_media'`, `'disabled'`, `'unsupported_mime'`, `'too_long'`,
+  `'too_large'`, `'transcription_failed'`.
 
 **Divergência deliberada da spec.** A spec listava "emite o evento de socket" como
 passo 6 do serviço. O plano emite no **worker** (Task 6): o serviço fica puro e
@@ -838,7 +838,11 @@ function recusa(motivo) {
 async function transcribeMessage(messageId) {
   const message = await findMessageById(messageId);
   if (!message || message.messageType !== 'audio') return recusa('not_audio');
-  if (!message.mediaPath) return recusa('no_media');
+
+  if (!message.mediaPath) {
+    await markTranscriptionFailed(messageId, { status: 'failed', detail: 'mensagem de áudio sem arquivo', ms: null });
+    return recusa('no_media');
+  }
 
   if (!mimeAceito(message.mediaMimeType)) {
     await markTranscriptionFailed(messageId, {
@@ -849,6 +853,15 @@ async function transcribeMessage(messageId) {
 
   const config = await getAiConfig();
   const iniciadoEm = Date.now();
+
+  // Trava de desligamento. O gate em shouldTranscribe roda no enfileiramento; um
+  // job já na fila quando o admin desliga chegaria aqui e gastaria uma chamada
+  // paga à OpenAI depois de desligada. Este é o ponto único por onde toda
+  // transcrição passa, então a trava mora aqui e não no worker.
+  if (!config.transcriptionEnabled) {
+    await markTranscriptionFailed(messageId, { status: 'skipped', detail: 'transcrição desativada', ms: null });
+    return recusa('disabled');
+  }
 
   // Limite de duração: só aplica quando o metadado do WhatsApp trouxe o valor.
   if (message.audioDurationSeconds && message.audioDurationSeconds > config.transcriptionMaxSeconds) {

@@ -36,6 +36,9 @@ function normalizeContract(contract) {
     motivo: contract.statusReason || null,
     plano: contract.plan,
     velocidade: contract.internetPlan || null,
+    // O endereço é como o cliente reconhece o próprio contrato: ele não sabe o
+    // número. É o dado que permite à IA perguntar "o da Rua X ou o da Av. Y?".
+    endereco: contract.address || null,
     loginPPPoE: contract.login || null,
     mac: contract.mac || null,
     vlan: contract.vlan || null,

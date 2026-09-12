@@ -7,6 +7,7 @@ const { findContactById } = require('../conversations/contact.repository');
 const { findLatestInboundMessageId } = require('../conversations/message.repository');
 const { emitToAgent } = require('../realtime/socket-server');
 const { mensagemSegura } = require('../ai/safe-error-log');
+const { paraWhatsApp } = require('../ai/whatsapp-format');
 
 async function handleAiJob({ conversationId, messageId }) {
   const conversation = await getConversationWithContact(conversationId);
@@ -38,7 +39,9 @@ async function handleAiJob({ conversationId, messageId }) {
   const contact = await findContactById(conversation.contactId);
   if (!contact) return;
 
-  const { texto } = await runAiTurn({ conversation, contact });
+  // Convertido aqui, e não no orquestrador: a auditoria (ai_interactions)
+  // guarda o que o modelo escreveu; o cliente recebe o formato do WhatsApp.
+  const texto = paraWhatsApp((await runAiTurn({ conversation, contact })).texto);
   if (!texto) return;
 
   if (config.mode === 'assistant') {

@@ -14,6 +14,7 @@ const { recordAiInteraction } = require('./ai-interaction.repository');
 const { listRecentMessagesByConversation } = require('../conversations/message.repository');
 const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
+const sgpClient = require('../integrations/sgp-client');
 const { runAiTurn } = require('./ai-orchestrator');
 
 const CONVERSATION = { id: 'c-1', channelId: 'ch-1' };
@@ -70,6 +71,61 @@ describe('ai-orchestrator', () => {
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
     const nomes = createChatCompletion.mock.calls[0][0].tools.map((t) => t.function.name);
     expect(nomes).toEqual(['consultar_plano']);
+  });
+
+  describe('contratos no contexto do sistema', () => {
+    const IDENTIFICADO = { id: 'ct-1', sgpClientId: 10, sgpContractId: null, sgpDocument: '52998224725' };
+    const CONTRATO_A = {
+      id: 17402, status: 'Ativo', statusCode: 1, plan: '600MB', internetPlan: 'FIBRA 600',
+      login: 'cliente-dw', address: 'RUA X, 523 - CENTRO', servico_senha: 'SEGREDO-PPPOE',
+    };
+    const CONTRATO_B = {
+      id: 17405, status: 'Ativo', statusCode: 1, plan: '300MB', internetPlan: 'FIBRA 300',
+      login: 'cliente-dw2', address: 'AV Y, 10 - BAIRRO Z', servico_senha: 'OUTRO-SEGREDO',
+    };
+
+    async function contextoDoSistema() {
+      createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
+      await runAiTurn({ conversation: CONVERSATION, contact: IDENTIFICADO });
+      return createChatCompletion.mock.calls[0][0].messages[0].content;
+    }
+
+    test('com mais de um contrato, lista cada um pelo endereço e proíbe pedir o número', async () => {
+      // O cliente não sabe o número do contrato dele. Antes, o contexto mandava
+      // "peça para ele escolher" sem listar nada — a IA perguntava "qual
+      // contrato?" e a conversa travava.
+      sgpClient.lookupClientByCpf.mockResolvedValue({ contracts: [CONTRATO_A, CONTRATO_B] });
+      const contexto = await contextoDoSistema();
+      expect(contexto).toContain('17402');
+      expect(contexto).toContain('RUA X, 523 - CENTRO');
+      expect(contexto).toContain('17405');
+      expect(contexto).toContain('AV Y, 10 - BAIRRO Z');
+      expect(contexto).toMatch(/nunca peça o número do contrato/i);
+      expect(contexto).toMatch(/consulte todos os contratos/i);
+    });
+
+    test('com um contrato só, diz para usá-lo sem perguntar', async () => {
+      sgpClient.lookupClientByCpf.mockResolvedValue({ contracts: [CONTRATO_A] });
+      const contexto = await contextoDoSistema();
+      expect(contexto).toContain('17402');
+      expect(contexto).toMatch(/sem perguntar/i);
+      expect(contexto).not.toMatch(/nunca peça o número/i);
+    });
+
+    test('a listagem passa pelo normalizador: senha PPPoE e login nunca entram no contexto', async () => {
+      sgpClient.lookupClientByCpf.mockResolvedValue({ contracts: [CONTRATO_A, CONTRATO_B] });
+      const contexto = await contextoDoSistema();
+      expect(contexto).not.toContain('SEGREDO-PPPOE');
+      expect(contexto).not.toContain('OUTRO-SEGREDO');
+      expect(contexto).not.toContain('cliente-dw');
+    });
+
+    test('sempre instrui o formato do WhatsApp em vez de markdown', async () => {
+      sgpClient.lookupClientByCpf.mockResolvedValue({ contracts: [] });
+      const contexto = await contextoDoSistema();
+      expect(contexto).toMatch(/whatsapp/i);
+      expect(contexto).toContain('*um asterisco*');
+    });
   });
 
   test('puts the existing reasons and sectors in the system context', async () => {

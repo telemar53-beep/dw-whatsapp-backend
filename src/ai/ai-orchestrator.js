@@ -8,7 +8,7 @@ const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { mensagemSegura } = require('./safe-error-log');
-const { maskDocument } = require('./sgp-normalizer');
+const { maskDocument, normalizeContract } = require('./sgp-normalizer');
 
 // A auditoria (ai_interactions.tools_requested) grava os argumentos como o
 // modelo os enviou, verbatim — inclui o CPF/CNPJ inteiro de buscar_cliente se
@@ -58,14 +58,40 @@ async function montarContextoSistema(config, contact, contracts) {
   for (const s of setores) linhas.push(`- ${s.id} = ${s.name}`);
   linhas.push('');
   if (contact.sgpClientId) {
-    linhas.push(`O cliente já está identificado. Contrato selecionado: ${contact.sgpContractId || 'ainda não escolhido'}.`);
-    if (contracts.length > 1) {
-      linhas.push('O cliente tem mais de um contrato. Não assuma qual é — peça para ele escolher.');
+    linhas.push('O cliente já está identificado.');
+    // Passa pelo normalizador de propósito: é a allowlist que garante que senha
+    // PPPoE, login e afins nunca entram no contexto do modelo.
+    const contratos = contracts.map(normalizeContract);
+    if (contratos.length > 1) {
+      // O cliente não sabe o número do contrato dele — sabe o endereço. Pedir
+      // "qual contrato?" sem listar travava a conversa.
+      linhas.push('O cliente tem mais de um contrato:');
+      for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
+      linhas.push(
+        'NUNCA peça o número do contrato: o cliente não o conhece. Identifique cada contrato pelo endereço.',
+        'Se a pergunta for sobre fatura, pagamento, boleto ou PIX, consulte TODOS os contratos e responda separando por endereço, sem perguntar qual é.',
+        'Se for indispensável que ele escolha (ex.: status da conexão), pergunte pelo endereço, nunca pelo número.'
+      );
+      if (contact.sgpContractId) linhas.push(`Contrato usado por último nesta conversa: ${contact.sgpContractId}.`);
+    } else if (contratos.length === 1) {
+      linhas.push(`Contrato único: ${descreverContrato(contratos[0])}. Use-o sem perguntar.`);
+    } else {
+      linhas.push(`Contrato selecionado: ${contact.sgpContractId || 'ainda não escolhido'}.`);
     }
   } else {
     linhas.push('O cliente ainda NÃO foi identificado. Use buscar_cliente com o CPF ou CNPJ dele.');
   }
+  linhas.push(
+    '',
+    'Formatação: a resposta vai para o WhatsApp. Negrito com *um asterisco*, itálico com _sublinhado_.',
+    'Nunca use markdown: nada de **, ##, nem links no formato [texto](url).'
+  );
   return linhas.join('\n');
+}
+
+function descreverContrato(c) {
+  const plano = c.velocidade ? `${c.plano} (${c.velocidade})` : c.plano;
+  return `contrato ${c.id} — ${plano} — ${c.endereco || 'endereço não informado'} — ${c.status}`;
 }
 
 /** Carrega os contratos do cliente uma vez por turno, para alimentar o cache. */

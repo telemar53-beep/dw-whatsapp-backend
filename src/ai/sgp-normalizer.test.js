@@ -27,6 +27,13 @@ describe('sgp-normalizer', () => {
     expect(result.pop).toBe('POP CENTRO');
   });
 
+  test('normalizeContract carries the address so the AI can tell contracts apart', () => {
+    // O cliente não sabe o número do contrato; sabe o endereço. Sem este campo a
+    // IA só consegue perguntar "qual contrato?" — pergunta que ninguém responde.
+    expect(normalizeContract(RAW_CONTRACT).endereco).toBe('RUA X, 523 - CENTRO - CIDADE/MA');
+    expect(normalizeContract({ ...RAW_CONTRACT, address: '' }).endereco).toBeNull();
+  });
+
   test('normalizeContract falls back to desconhecido for an unmapped status code', () => {
     const result = normalizeContract({ ...RAW_CONTRACT, statusCode: 7, status: 'Algo Novo' });
     expect(result.status).toBe('desconhecido');

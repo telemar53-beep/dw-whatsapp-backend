@@ -40,6 +40,18 @@ describe('ai-worker', () => {
     expect(emitToAgent).toHaveBeenCalledWith('a-1', 'ai:suggestion', expect.objectContaining({ conversationId: 'c-1' }));
   });
 
+  test('converte o markdown do modelo para o formato do WhatsApp antes de gravar a sugestão', async () => {
+    // O modelo escreve **negrito**; o WhatsApp só entende *negrito*. Sem a
+    // conversão o cliente vê os asteriscos duplos literalmente.
+    runAiTurn.mockResolvedValue({ texto: 'Preciso saber **qual contrato** consultar.', toolsExecutadas: [], erro: null });
+
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+    expect(createSuggestion).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Preciso saber *qual contrato* consultar.' })
+    );
+  });
+
   test('does nothing when the turn produced no text', async () => {
     runAiTurn.mockResolvedValue({ texto: null, toolsExecutadas: [], erro: 'openai down' });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });

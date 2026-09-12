@@ -23,6 +23,12 @@ function validarContratoId(args) {
   return { ok: true, args: { contratoId: id } };
 }
 
+/** Total informado pela paginação do SGP, ou null quando não há como saber. */
+function totalDaPaginacao(paginacao) {
+  const total = paginacao && Number(paginacao.total);
+  return Number.isInteger(total) ? total : null;
+}
+
 /** Busca no cache do turno; só chama o SGP se ainda não houver nada. */
 async function contratoDoCache(contexto, contratoId) {
   const achado = (contexto.contracts || []).find((c) => c.id === contratoId);
@@ -180,8 +186,15 @@ const TOOLS = [
           const n = normalizeContract(c);
           const base = { contratoId: c.id, endereco: n.endereco, plano: n.plano, status: n.status };
           const r = resultados[i];
-          if (r.status === 'fulfilled') return { ...base, faturas: normalizeInvoices(r.value.faturas) };
-          return { ...base, faturas: null, erro: 'Não foi possível consultar as faturas deste contrato agora.' };
+          if (r.status !== 'fulfilled') {
+            return { ...base, faturas: null, erro: 'Não foi possível consultar as faturas deste contrato agora.' };
+          }
+          const faturas = normalizeInvoices(r.value.faturas);
+          const total = totalDaPaginacao(r.value.paginacao);
+          // O SGP pagina (50 por página). Uma lista parcial precisa dizer que é
+          // parcial, senão o modelo afirma "não há outras faturas" sem saber.
+          const listaParcial = total != null && total > faturas.length;
+          return { ...base, faturas, ...(listaParcial ? { listaParcial: true, totalFaturas: total } : {}) };
         }),
       };
     },
@@ -297,30 +310,71 @@ const TOOLS = [
       required: ['contratoId'],
     },
     validar: validarContratoId,
+    // Orçamento próprio: duas leituras + uma escrita no SGP, 15 s de HTTP cada.
+    // Com o padrão do executor (15 s), o timeout dele podia vencer enquanto o
+    // SGP ainda liberava — ação real reportada como falha.
+    timeoutMs: 40000,
     async executar(args, contexto) {
       const contrato = (contexto.contracts || []).find((c) => c.id === args.contratoId);
+      // O executor já garante que o contrato é do contato; esta guarda existe
+      // para a ferramenta mais perigosa do registro não depender de outro
+      // arquivo para não explodir.
+      if (!contrato) return { liberado: false, motivo: 'Contrato não encontrado entre os contratos do cliente.' };
+
       const status = normalizeContract(contrato).status;
       // A DW não usa velocidade reduzida: só contrato suspenso é elegível.
       if (status !== 'suspenso') {
         return { liberado: false, motivo: `O contrato não está suspenso (status: ${status}). A liberação em confiança só se aplica a contrato suspenso.` };
       }
 
-      const [liberacoes, { faturas }] = await Promise.all([
+      // Uma tentativa por contrato por turno. Fecha duas brechas de uma vez:
+      // o modelo pedir duas liberações na mesma rodada (as duas leriam o
+      // histórico antes de qualquer registro), e o modelo insistir depois de
+      // um resultado indeterminado. Síncrono até aqui de propósito — o
+      // segundo executar só roda depois que o primeiro já marcou. Entre
+      // conversas não há corrida: o worker da IA roda com concorrência 1.
+      if (!contexto.desbloqueiosTentados) contexto.desbloqueiosTentados = new Set();
+      if (contexto.desbloqueiosTentados.has(args.contratoId)) {
+        return { liberado: false, motivo: 'A liberação deste contrato já foi tentada neste atendimento. Encaminhe para um atendente se precisar de nova verificação.' };
+      }
+      contexto.desbloqueiosTentados.add(args.contratoId);
+
+      const [liberacoes, invoices] = await Promise.all([
         listTrustUnlocksByContract(args.contratoId),
         sgpClient.listInvoices(args.contratoId),
       ]);
       const avaliacao = avaliarElegibilidade({
         liberacoes,
-        faturas: normalizeInvoices(faturas),
+        faturas: normalizeInvoices(invoices.faturas),
+        totalFaturas: totalDaPaginacao(invoices.paginacao),
         promessasPagamentoMes: contrato.paymentPromisesThisMonth,
       });
       if (!avaliacao.ok) {
-        const resposta = { liberado: false, motivo: MENSAGENS_DESBLOQUEIO[avaliacao.motivo] };
+        const resposta = {
+          liberado: false,
+          motivo: MENSAGENS_DESBLOQUEIO[avaliacao.motivo] || 'Liberação em confiança não permitida para este contrato.',
+        };
         if (avaliacao.diasRestantes) resposta.diasRestantes = avaliacao.diasRestantes;
         return resposta;
       }
 
-      const resultado = await sgpClient.requestTrustUnlock(args.contratoId);
+      let resultado;
+      try {
+        resultado = await sgpClient.requestTrustUnlock(args.contratoId);
+      } catch (err) {
+        // Timeout na escrita: o SGP pode ter liberado e a resposta se perdido.
+        // Nem "liberou" nem "não liberou" seriam verdade — o modelo precisa
+        // dizer que não conseguiu confirmar e encaminhar.
+        if (/timeout|timed out/i.test(String((err && err.cause && err.cause.message) || (err && err.message) || ''))) {
+          console.error(`Trust unlock for contract ${args.contratoId} timed out: outcome unknown`);
+          return {
+            liberado: null,
+            indeterminado: true,
+            motivo: 'Não foi possível confirmar se a liberação foi realizada. Diga ao cliente que a solicitação será verificada por um atendente e encaminhe.',
+          };
+        }
+        throw err;
+      }
       if (!resultado.liberado) return { liberado: false, motivo: resultado.motivo };
 
       // A liberação já aconteceu no SGP. Falhar em registrá-la não pode virar
@@ -336,7 +390,10 @@ const TOOLS = [
       } catch (err) {
         console.error(`Failed to record trust unlock for contract ${args.contratoId}: ${err.message}`);
       }
-      return { liberado: true, dias: resultado.liberadoDias, protocolo: resultado.protocolo };
+      const resposta = { liberado: true, dias: resultado.liberadoDias, protocolo: resultado.protocolo };
+      // Sem prazo devolvido, o modelo não pode inventar um "uns 3 dias".
+      if (resposta.dias == null) resposta.prazoDesconhecido = true;
+      return resposta;
     },
   },
 ];

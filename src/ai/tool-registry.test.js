@@ -316,7 +316,7 @@ describe('desbloqueio_confianca executar', () => {
     listTrustUnlocksByContract.mockResolvedValue([{ createdAt: new Date(Date.now() - 45 * 86400000) }]);
     sgpClient.listInvoices.mockResolvedValue({ faturas: [{ ...FATURA_VENCIDA, vencimento: '2026-06-30' }] });
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto(SUSPENSO));
-    expect(r.motivo).toMatch(/não foi paga/);
+    expect(r.motivo).toMatch(/fatura em aberto anterior à última liberação/);
     expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
   });
 
@@ -338,5 +338,91 @@ describe('desbloqueio_confianca executar', () => {
     recordTrustUnlock.mockRejectedValue(new Error('db down'));
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto(SUSPENSO));
     expect(r.liberado).toBe(true);
+  });
+});
+
+describe('desbloqueio_confianca — condições operacionais (revisão)', () => {
+  const SUSPENSO = { id: 26515, statusCode: 4, status: 'Suspenso', plan: '100MB', address: 'RUA Z', paymentPromisesThisMonth: 0 };
+  const FATURA_VENCIDA = { id: 1, status: 'Gerado', statusid: 1, valor: 100, vencimento: '2026-08-30', data_pagamento: null };
+  const contexto = () => ({ contracts: [SUSPENSO], contact: { id: 'ct-1' } });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listTrustUnlocksByContract.mockResolvedValue([]);
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [FATURA_VENCIDA], paginacao: { total: 1 } });
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: true, liberadoDias: 3, protocolo: '9999', motivo: null });
+    recordTrustUnlock.mockResolvedValue({ id: 'l-1' });
+  });
+
+  test('declara orçamento de tempo maior que o HTTP do SGP', () => {
+    expect(findTool('desbloqueio_confianca').timeoutMs).toBeGreaterThan(15000);
+  });
+
+  test('contrato ausente do contexto não explode nem chama o SGP', async () => {
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 1 }, { contracts: [], contact: { id: 'ct-1' } });
+    expect(r.liberado).toBe(false);
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+  });
+
+  test('timeout na escrita devolve resultado indeterminado, sem registrar e sem afirmar nada', async () => {
+    sgpClient.requestTrustUnlock.mockRejectedValue(Object.assign(new Error('Failed to reach SGP'), { cause: { message: 'timeout of 15000ms exceeded' } }));
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto());
+    expect(r).toMatchObject({ liberado: null, indeterminado: true });
+    expect(r.motivo).toMatch(/não foi possível confirmar/i);
+    expect(recordTrustUnlock).not.toHaveBeenCalled();
+  });
+
+  test('outro erro na escrita propaga (o executor transforma em execution_error)', async () => {
+    sgpClient.requestTrustUnlock.mockRejectedValue(new Error('SGP fora'));
+    await expect(findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto())).rejects.toThrow('SGP fora');
+  });
+
+  test('segunda tentativa no mesmo turno é recusada sem tocar o SGP', async () => {
+    const ctx = contexto();
+    const tool = findTool('desbloqueio_confianca');
+    await tool.executar({ contratoId: 26515 }, ctx);
+    const segunda = await tool.executar({ contratoId: 26515 }, ctx);
+    expect(segunda.liberado).toBe(false);
+    expect(segunda.motivo).toMatch(/já foi tentada/);
+    expect(sgpClient.requestTrustUnlock).toHaveBeenCalledTimes(1);
+  });
+
+  test('duas chamadas em paralelo na mesma rodada: só uma chega ao SGP', async () => {
+    const ctx = contexto();
+    const tool = findTool('desbloqueio_confianca');
+    const [a, b] = await Promise.all([tool.executar({ contratoId: 26515 }, ctx), tool.executar({ contratoId: 26515 }, ctx)]);
+    expect([a.liberado, b.liberado].filter((v) => v === true)).toHaveLength(1);
+    expect(sgpClient.requestTrustUnlock).toHaveBeenCalledTimes(1);
+  });
+
+  test('liberado sem prazo devolve prazoDesconhecido em vez de deixar o modelo chutar', async () => {
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: true, liberadoDias: null, protocolo: '1', motivo: null });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto());
+    expect(r).toEqual({ liberado: true, dias: null, protocolo: '1', prazoDesconhecido: true });
+  });
+
+  test('histórico de faturas truncado que não cobre a janela falha fechado', async () => {
+    listTrustUnlocksByContract.mockResolvedValue([{ createdAt: new Date(Date.now() - 45 * 86400000) }]);
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [{ ...FATURA_VENCIDA, vencimento: '2026-12-30' }], paginacao: { total: 90 } });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, contexto());
+    expect(r.liberado).toBe(false);
+    expect(r.motivo).toMatch(/histórico/i);
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+  });
+});
+
+describe('consultar_faturas_todos_contratos — lista parcial', () => {
+  test('sinaliza quando o SGP paginou e a lista não é completa', async () => {
+    const contrato = { id: 1, statusCode: 1, status: 'Ativo', plan: '600MB', address: 'RUA X' };
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [{ id: 1, status: 'Gerado', vencimento: '2026-09-30' }], paginacao: { total: 70, limit: 50 } });
+    const r = await findTool('consultar_faturas_todos_contratos').executar({}, { contracts: [contrato] });
+    expect(r.contratos[0]).toMatchObject({ listaParcial: true, totalFaturas: 70 });
+  });
+
+  test('lista completa não carrega a marcação', async () => {
+    const contrato = { id: 1, statusCode: 1, status: 'Ativo', plan: '600MB', address: 'RUA X' };
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [{ id: 1, status: 'Gerado', vencimento: '2026-09-30' }], paginacao: { total: 1 } });
+    const r = await findTool('consultar_faturas_todos_contratos').executar({}, { contracts: [contrato] });
+    expect(r.contratos[0].listaParcial).toBeUndefined();
   });
 });

@@ -40,6 +40,22 @@ describe('ai-worker', () => {
     expect(emitToAgent).toHaveBeenCalledWith('a-1', 'ai:suggestion', expect.objectContaining({ conversationId: 'c-1' }));
   });
 
+  test('envia ao atendente as ações que a IA executou no turno', async () => {
+    // Uma ação sensível age no serviço do cliente antes de o atendente ver o
+    // texto — ele precisa saber que aconteceu, não só o que a IA sugere dizer.
+    runAiTurn.mockResolvedValue({
+      texto: 'Sua internet foi liberada por 3 dias.',
+      toolsExecutadas: [{ nome: 'consultar_faturas' }, { nome: 'desbloqueio_confianca' }],
+      erro: null,
+    });
+
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+    expect(emitToAgent).toHaveBeenCalledWith('a-1', 'ai:suggestion', expect.objectContaining({
+      acoesExecutadas: ['consultar_faturas', 'desbloqueio_confianca'],
+    }));
+  });
+
   test('converte o markdown do modelo para o formato do WhatsApp antes de gravar a sugestão', async () => {
     // O modelo escreve **negrito**; o WhatsApp só entende *negrito*. Sem a
     // conversão o cliente vê os asteriscos duplos literalmente.

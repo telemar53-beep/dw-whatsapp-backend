@@ -184,11 +184,15 @@ async function requestTrustUnlock(contratoId) {
   if (!data || typeof data !== 'object') {
     throw new SgpRequestError('Unexpected response from SGP');
   }
-  const liberado = data.liberado === true;
+  // API form-encoded: booleanos e números podem chegar como texto ("true",
+  // "1", "3"). Ler estrito demais aqui viraria uma liberação REAL em "não
+  // liberou" — e ela ficaria sem registro. Coerção deliberada.
+  const liberado = [true, 'true', 1, '1'].includes(data.liberado);
+  const dias = Number(data.liberado_dias);
   return {
     liberado,
-    liberadoDias: liberado && Number.isInteger(data.liberado_dias) ? data.liberado_dias : null,
-    protocolo: liberado ? (data.protocolo || null) : null,
+    liberadoDias: liberado && Number.isInteger(dias) && dias > 0 ? dias : null,
+    protocolo: liberado ? (data.protocolo != null ? String(data.protocolo) : null) : null,
     motivo: liberado ? null : (data.msg || 'Liberação não permitida'),
   };
 }

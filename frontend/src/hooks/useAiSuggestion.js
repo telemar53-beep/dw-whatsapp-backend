@@ -25,7 +25,14 @@ export function useAiSuggestion(conversationId) {
     function onSuggestion(payload) {
       // Só a conversa aberta: o socket entrega tudo do atendente.
       if (payload.conversationId !== conversationId) return;
-      setSuggestion(payload.suggestion);
+      // As ações que a IA já executou neste turno (ex.: liberação em
+      // confiança) viajam junto: elas aconteceram antes de o atendente ver o
+      // texto, e ele precisa saber disso ao decidir o que enviar.
+      setSuggestion(
+        payload.suggestion
+          ? { ...payload.suggestion, acoesExecutadas: payload.acoesExecutadas || [] }
+          : null
+      );
     }
     socket.on('ai:suggestion', onSuggestion);
     return () => socket.off('ai:suggestion', onSuggestion);

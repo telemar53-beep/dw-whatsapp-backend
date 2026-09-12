@@ -50,7 +50,7 @@ function conteudoParaModelo(m) {
   return null;
 }
 
-async function montarContextoSistema(config, contact, contracts) {
+async function montarContextoSistema(config, contact, contracts, habilitadas = []) {
   const [motivos, setores] = await Promise.all([listActiveReasons(), listSectors()]);
   const linhas = [config.systemPrompt, '', 'Motivos de atendimento disponíveis (use o id exato):'];
   for (const m of motivos) linhas.push(`- ${m.id} = ${m.name}`);
@@ -69,7 +69,9 @@ async function montarContextoSistema(config, contact, contracts) {
       for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
       linhas.push(
         'NUNCA peça o número do contrato: o cliente não o conhece. Identifique cada contrato pelo endereço e, se o endereço se repetir, pelo plano.',
-        'Se a pergunta for sobre fatura, pagamento, boleto ou PIX, use consultar_faturas_todos_contratos (uma chamada só) e responda separando por endereço e plano, sem perguntar qual é. Se ela não estiver disponível, consulte contrato a contrato.',
+        habilitadas.includes('consultar_faturas_todos_contratos')
+          ? 'Se a pergunta for sobre fatura, pagamento, boleto ou PIX, use consultar_faturas_todos_contratos (uma chamada só) e responda separando por endereço e plano, sem perguntar qual é.'
+          : 'Se a pergunta for sobre fatura, pagamento, boleto ou PIX, consulte contrato a contrato e responda separando por endereço e plano, sem perguntar qual é.',
         'Se for indispensável que ele escolha (ex.: status da conexão), pergunte pelo endereço, nunca pelo número.'
       );
       if (contact.sgpContractId) linhas.push(`Contrato usado por último nesta conversa: ${contact.sgpContractId}.`);
@@ -81,9 +83,16 @@ async function montarContextoSistema(config, contact, contracts) {
   } else {
     linhas.push('O cliente ainda NÃO foi identificado. Use buscar_cliente com o CPF ou CNPJ dele.');
   }
+  // Só descreve a capacidade quando ela existe na lista de ferramentas:
+  // descrever uma ferramenta ausente é um jeito conhecido de o modelo afirmar
+  // que fez a coisa sem ter feito.
+  if (habilitadas.includes('desbloqueio_confianca')) {
+    linhas.push(
+      '',
+      'Desbloqueio em confiança (desbloqueio_confianca): só para contrato com status "suspenso", e só quando o cliente pedir. Nunca prometa prazo por conta própria — informe os dias que a ferramenta devolver, e que a fatura continua devida. Se ela devolver prazoDesconhecido, diga que o prazo será confirmado pelo atendente. Se devolver indeterminado, diga que não foi possível confirmar a liberação e encaminhe para um atendente. Se ela recusar, transmita o motivo com educação.'
+    );
+  }
   linhas.push(
-    '',
-    'Desbloqueio em confiança (se a ferramenta desbloqueio_confianca estiver disponível): só para contrato com status "suspenso", e só quando o cliente pedir. Nunca prometa prazo por conta própria — informe os dias que a ferramenta devolver, e que a fatura continua devida. Se ela recusar, transmita o motivo com educação.',
     '',
     'Formatação: a resposta vai para o WhatsApp. Negrito com *um asterisco*, itálico com _sublinhado_.',
     'Nunca use markdown: nada de **, ##, nem links no formato [texto](url).'
@@ -128,7 +137,7 @@ async function runAiTurn({ conversation, contact }) {
   // acabou de escrever.
   const historico = await listRecentMessagesByConversation(conversation.id, HISTORICO_MAX);
   const messages = [
-    { role: 'system', content: await montarContextoSistema(config, contact, contracts) },
+    { role: 'system', content: await montarContextoSistema(config, contact, contracts, habilitadas) },
     ...historico
       .map((m) => ({ role: papelDaMensagem(m), content: conteudoParaModelo(m) }))
       .filter((m) => m.content),

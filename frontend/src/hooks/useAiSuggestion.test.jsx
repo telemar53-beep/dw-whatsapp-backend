@@ -58,7 +58,23 @@ describe('useAiSuggestion', () => {
       });
     });
 
-    expect(result.current.suggestion).toEqual({ id: 's-2', content: 'Resposta sugerida' });
+    expect(result.current.suggestion).toEqual({ id: 's-2', content: 'Resposta sugerida', acoesExecutadas: [] });
+  });
+
+  test('ai:suggestion carrega as ações que a IA executou no turno', async () => {
+    api.getAiSuggestion.mockResolvedValue({ suggestion: null });
+    const { result } = renderHook(() => useAiSuggestion('conv-1'));
+    await waitFor(() => expect(api.getAiSuggestion).toHaveBeenCalled());
+
+    act(() => {
+      fakeSocket.trigger('ai:suggestion', {
+        conversationId: 'conv-1',
+        suggestion: { id: 's-3', content: 'Liberado por 3 dias.' },
+        acoesExecutadas: ['desbloqueio_confianca'],
+      });
+    });
+
+    expect(result.current.suggestion.acoesExecutadas).toEqual(['desbloqueio_confianca']);
   });
 
   test('ai:suggestion for a different conversation is ignored', async () => {

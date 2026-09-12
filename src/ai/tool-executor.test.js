@@ -177,3 +177,23 @@ describe('tool-executor', () => {
     consoleSpy.mockRestore();
   });
 });
+
+describe('tool-executor — orçamento de tempo declarado pela ferramenta', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const lento = () => new Promise((resolve) => setTimeout(() => resolve({ plano: '600MB' }), 60));
+
+  test('tool.timeoutMs vence o orçamento padrão passado ao executor', async () => {
+    isToolEnabled.mockResolvedValue(true);
+    findTool.mockReturnValue(toolFake({ timeoutMs: 5000, executar: jest.fn(lento) }));
+    const result = await executeTool('consultar_plano', { contratoId: 17402 }, CONTEXTO, { timeoutMs: 20 });
+    expect(result.ok).toBe(true);
+  });
+
+  test('uma ferramenta com orçamento curto declarado ainda estoura', async () => {
+    isToolEnabled.mockResolvedValue(true);
+    findTool.mockReturnValue(toolFake({ timeoutMs: 20, executar: jest.fn(lento) }));
+    const result = await executeTool('consultar_plano', { contratoId: 17402 }, CONTEXTO, { timeoutMs: 5000 });
+    expect(result.motivo).toBe('timeout');
+  });
+});

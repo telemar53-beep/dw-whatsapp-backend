@@ -28,3 +28,19 @@ describe('AiSuggestionCard', () => {
     expect(onDiscard).toHaveBeenCalledWith(suggestion);
   });
 });
+
+describe('AiSuggestionCard — ações executadas pela IA', () => {
+  const base = { id: 's-1', content: 'Sua internet foi liberada.' };
+
+  test('mostra o aviso de liberação em confiança executada', () => {
+    render(<AiSuggestionCard suggestion={{ ...base, acoesExecutadas: ['consultar_faturas', 'desbloqueio_confianca'] }} onSend={vi.fn()} onEdit={vi.fn()} onDiscard={vi.fn()} />);
+    expect(screen.getByText(/liberação em confiança executada/i)).toBeInTheDocument();
+    // Consultas são leitura: não viram aviso.
+    expect(screen.queryByText(/consultar_faturas/)).not.toBeInTheDocument();
+  });
+
+  test('sem ações sensíveis, nenhum aviso aparece', () => {
+    render(<AiSuggestionCard suggestion={{ ...base, acoesExecutadas: ['consultar_plano'] }} onSend={vi.fn()} onEdit={vi.fn()} onDiscard={vi.fn()} />);
+    expect(screen.queryByText(/⚠/)).not.toBeInTheDocument();
+  });
+});

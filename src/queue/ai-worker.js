@@ -41,12 +41,18 @@ async function handleAiJob({ conversationId, messageId }) {
 
   // Convertido aqui, e não no orquestrador: a auditoria (ai_interactions)
   // guarda o que o modelo escreveu; o cliente recebe o formato do WhatsApp.
-  const texto = paraWhatsApp((await runAiTurn({ conversation, contact })).texto);
+  const turno = await runAiTurn({ conversation, contact });
+  const texto = paraWhatsApp(turno.texto);
   if (!texto) return;
 
   if (config.mode === 'assistant') {
     const suggestion = await createSuggestion({ conversationId, messageId: null, content: texto });
-    emitToAgent(conversation.assignedAgentId, 'ai:suggestion', { conversationId, suggestion });
+    // As ações executadas vão junto: uma ferramenta sensível (liberação em
+    // confiança) age no serviço do cliente NO TURNO, antes de o atendente ver
+    // o texto — ele precisa saber que aconteceu, e não só o que a IA sugere
+    // dizer. Persistido em ai_interactions; aqui é o aviso imediato.
+    const acoesExecutadas = (turno.toolsExecutadas || []).map((t) => t.nome);
+    emitToAgent(conversation.assignedAgentId, 'ai:suggestion', { conversationId, suggestion, acoesExecutadas });
     return;
   }
 

@@ -68,7 +68,12 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       if (!pertence) return recusa('contract_not_owned', valor);
     }
 
-    const resultado = await comTimeout(tool.executar(argsValidados, contexto), timeoutMs);
+    // Uma ferramenta pode declarar o próprio orçamento (tool.timeoutMs): a
+    // de liberação em confiança faz duas leituras E uma escrita no SGP, cada
+    // uma com 15 s de HTTP. Com o orçamento padrão (igual ao HTTP), o race
+    // aqui podia vencer com "timeout" enquanto o SGP ainda liberava o serviço
+    // — ação real reportada ao modelo como falha.
+    const resultado = await comTimeout(tool.executar(argsValidados, contexto), tool.timeoutMs || timeoutMs);
     if (resultado === Symbol.for('timeout')) return recusa('timeout', nome);
     if (resultado && resultado.ok === false) return recusa('execution_error', resultado.erro);
     return { ok: true, resultado };

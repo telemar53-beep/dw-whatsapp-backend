@@ -392,3 +392,19 @@ describe("requestTrustUnlock (desbloqueio em confiança)", () => {
     expect(JSON.stringify(capturado.cause)).not.toContain("tok-123");
   });
 });
+
+describe("requestTrustUnlock — coerção de tipos da API form-encoded", () => {
+  const CONFIG = { baseUrl: "https://dwtelecom.sgp.tsmx.com.br", app: "chatmix", token: "tok-123", enabled: true };
+  beforeEach(() => { jest.clearAllMocks(); getSgpQueryConfig.mockResolvedValue(CONFIG); });
+
+  test('liberado "true" e liberado_dias "3" como texto contam como liberação de 3 dias', async () => {
+    // Ler estrito demais viraria uma liberação REAL em "não liberou", sem registro.
+    axios.post.mockResolvedValue({ data: { status: "1", liberado: "true", liberado_dias: "3", protocolo: 9999 } });
+    expect(await requestTrustUnlock(1)).toEqual({ liberado: true, liberadoDias: 3, protocolo: "9999", motivo: null });
+  });
+
+  test("liberado sem dias devolve liberadoDias nulo, nunca um chute", async () => {
+    axios.post.mockResolvedValue({ data: { status: 1, liberado: true, protocolo: "1" } });
+    expect((await requestTrustUnlock(1)).liberadoDias).toBeNull();
+  });
+});

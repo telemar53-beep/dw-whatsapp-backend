@@ -101,15 +101,37 @@ describe('ai-orchestrator', () => {
       expect(contexto).toContain('17405');
       expect(contexto).toContain('AV Y, 10 - BAIRRO Z');
       expect(contexto).toMatch(/nunca peça o número do contrato/i);
-      expect(contexto).toContain('consultar_faturas_todos_contratos');
+      expect(contexto).toMatch(/sem perguntar qual é/i);
     });
 
-    test('instrui o desbloqueio em confiança só para contrato suspenso e sem prometer prazo', async () => {
+    test('instrui o desbloqueio em confiança só quando a ferramenta está ligada', async () => {
+      listToolPermissions.mockResolvedValue([{ toolName: 'desbloqueio_confianca', enabled: true }]);
       sgpClient.lookupClientByCpf.mockResolvedValue({ contracts: [CONTRATO_A] });
       const contexto = await contextoDoSistema();
       expect(contexto).toContain('desbloqueio_confianca');
       expect(contexto).toMatch(/"suspenso"/);
       expect(contexto).toMatch(/nunca prometa prazo/i);
+      expect(contexto).toMatch(/indeterminado/i);
+    });
+
+    test('com a ferramenta de desbloqueio desligada, o contexto não a menciona', async () => {
+      // Descrever uma capacidade ausente leva o modelo a afirmar que fez.
+      sgpClient.lookupClientByCpf.mockResolvedValue({ contracts: [CONTRATO_A] });
+      const contexto = await contextoDoSistema();
+      expect(contexto).not.toContain('desbloqueio');
+    });
+
+    test('a instrução de faturas segue a ferramenta disponível', async () => {
+      sgpClient.lookupClientByCpf.mockResolvedValue({ contracts: [CONTRATO_A, CONTRATO_B] });
+      let contexto = await contextoDoSistema();
+      expect(contexto).not.toContain('consultar_faturas_todos_contratos');
+      expect(contexto).toMatch(/contrato a contrato/);
+
+      jest.clearAllMocks();
+      listToolPermissions.mockResolvedValue([{ toolName: 'consultar_faturas_todos_contratos', enabled: true }]);
+      sgpClient.lookupClientByCpf.mockResolvedValue({ contracts: [CONTRATO_A, CONTRATO_B] });
+      contexto = await contextoDoSistema();
+      expect(contexto).toContain('consultar_faturas_todos_contratos');
     });
 
     test('com um contrato só, diz para usá-lo sem perguntar', async () => {

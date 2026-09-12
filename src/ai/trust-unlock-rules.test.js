@@ -1,9 +1,12 @@
 const { avaliarElegibilidade, DIAS_ENTRE_LIBERACOES } = require('./trust-unlock-rules');
 
-const HOJE = new Date('2026-09-12T15:00:00');
+// Meio-dia UTC = 9h em São Paulo: o dia é o mesmo nos dois fusos, então os
+// testes de contagem não dependem do TZ da máquina. O teste de fuso, abaixo,
+// é o único que escolhe um horário de propósito.
+const HOJE = new Date('2026-09-12T12:00:00Z');
 
-function liberacao(createdAt) {
-  return { id: 'l-1', contractId: 17402, protocolo: '123', liberadoDias: 3, createdAt: new Date(createdAt) };
+function liberacao(createdAtIso) {
+  return { id: 'l-1', contractId: 17402, protocolo: '123', liberadoDias: 3, createdAt: new Date(createdAtIso) };
 }
 
 function fatura(vencimentoOriginal, dataPagamento, status = 'Gerado') {
@@ -23,7 +26,7 @@ describe('avaliarElegibilidade (desbloqueio em confiança)', () => {
 
   test('última liberação há menos de 30 dias bloqueia, mesmo com tudo pago', () => {
     const r = avaliarElegibilidade({
-      liberacoes: [liberacao('2026-09-01T08:00:00')],
+      liberacoes: [liberacao('2026-09-01T12:00:00Z')],
       faturas: [fatura('2026-08-20', '2026-09-02')],
       hoje: HOJE,
     });
@@ -32,8 +35,19 @@ describe('avaliarElegibilidade (desbloqueio em confiança)', () => {
 
   test('exatos 30 dias já permitem', () => {
     const r = avaliarElegibilidade({
-      liberacoes: [liberacao('2026-08-13T23:59:59')],
+      liberacoes: [liberacao('2026-08-13T12:00:00Z')],
       faturas: [fatura('2026-08-10', '2026-08-14')],
+      hoje: HOJE,
+    });
+    expect(r).toEqual({ ok: true });
+  });
+
+  test('conta os dias no calendário de São Paulo, não em UTC', () => {
+    // 01:30Z de 14/08 ainda é 22:30 de 13/08 em São Paulo. Em UTC seriam 29
+    // dias até 12/09 (bloqueia); no fuso da operação são 30 (libera).
+    const r = avaliarElegibilidade({
+      liberacoes: [liberacao('2026-08-14T01:30:00Z')],
+      faturas: [],
       hoje: HOJE,
     });
     expect(r).toEqual({ ok: true });
@@ -42,7 +56,7 @@ describe('avaliarElegibilidade (desbloqueio em confiança)', () => {
   test('mais de 30 dias e promessa cumprida (fatura de então paga) libera', () => {
     // O cenário do usuário: mês passado pediu, foi liberado e PAGOU.
     const r = avaliarElegibilidade({
-      liberacoes: [liberacao('2026-08-01T08:00:00')],
+      liberacoes: [liberacao('2026-08-01T12:00:00Z')],
       faturas: [fatura('2026-07-25', '2026-08-03'), fatura('2026-09-05', null)],
       hoje: HOJE,
     });
@@ -52,26 +66,59 @@ describe('avaliarElegibilidade (desbloqueio em confiança)', () => {
   test('mais de 30 dias mas promessa quebrada (fatura de então ainda aberta) bloqueia', () => {
     // O cenário da brecha: pediu, foi liberado, NÃO pagou, e volta a pedir.
     const r = avaliarElegibilidade({
-      liberacoes: [liberacao('2026-08-01T08:00:00')],
+      liberacoes: [liberacao('2026-08-01T12:00:00Z')],
       faturas: [fatura('2026-07-25', null), fatura('2026-09-05', null)],
       hoje: HOJE,
     });
     expect(r).toEqual({ ok: false, motivo: 'promessa_quebrada' });
   });
 
-  test('fatura cancelada da época da liberação não conta como quebra', () => {
+  test('título antigo, fora da janela de 60 dias antes da liberação, não conta como quebra', () => {
+    // Um título esquecido de 2023 não pode tornar o contrato inelegível para
+    // sempre com a acusação falsa de "não pagou a última liberação".
     const r = avaliarElegibilidade({
-      liberacoes: [liberacao('2026-08-01T08:00:00')],
-      faturas: [fatura('2026-07-25', null, 'Cancelado')],
+      liberacoes: [liberacao('2026-08-01T12:00:00Z')],
+      faturas: [fatura('2023-01-10', null), fatura('2026-07-20', '2026-08-03')],
       hoje: HOJE,
     });
     expect(r).toEqual({ ok: true });
   });
 
+  test('fatura cancelada, paga ou baixada da época da liberação não conta como quebra', () => {
+    for (const status of ['Cancelado', 'Pago', 'Baixado', 'Quitado']) {
+      const r = avaliarElegibilidade({
+        liberacoes: [liberacao('2026-08-01T12:00:00Z')],
+        faturas: [fatura('2026-07-25', null, status)],
+        hoje: HOJE,
+      });
+      expect(r).toEqual({ ok: true });
+    }
+  });
+
   test('fatura que só venceu DEPOIS da liberação não conta como quebra', () => {
     const r = avaliarElegibilidade({
-      liberacoes: [liberacao('2026-08-01T08:00:00')],
+      liberacoes: [liberacao('2026-08-01T12:00:00Z')],
       faturas: [fatura('2026-08-30', null)],
+      hoje: HOJE,
+    });
+    expect(r).toEqual({ ok: true });
+  });
+
+  test('lista truncada pelo SGP que não alcança a janela falha fechada', () => {
+    const r = avaliarElegibilidade({
+      liberacoes: [liberacao('2026-08-01T12:00:00Z')],
+      faturas: [fatura('2026-09-30', null), fatura('2026-08-30', null)],
+      totalFaturas: 80,
+      hoje: HOJE,
+    });
+    expect(r).toEqual({ ok: false, motivo: 'historico_incompleto' });
+  });
+
+  test('lista truncada mas que já cobre a janela é avaliada normalmente', () => {
+    const r = avaliarElegibilidade({
+      liberacoes: [liberacao('2026-08-01T12:00:00Z')],
+      faturas: [fatura('2026-09-30', null), fatura('2026-07-20', '2026-08-03'), fatura('2026-05-01', '2026-05-02')],
+      totalFaturas: 80,
       hoje: HOJE,
     });
     expect(r).toEqual({ ok: true });
@@ -79,7 +126,7 @@ describe('avaliarElegibilidade (desbloqueio em confiança)', () => {
 
   test('usa a liberação mais recente, não a primeira da lista', () => {
     const r = avaliarElegibilidade({
-      liberacoes: [liberacao('2026-05-01T08:00:00'), liberacao('2026-09-08T08:00:00')],
+      liberacoes: [liberacao('2026-05-01T12:00:00Z'), liberacao('2026-09-08T12:00:00Z')],
       faturas: [],
       hoje: HOJE,
     });

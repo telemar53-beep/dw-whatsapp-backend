@@ -159,10 +159,15 @@ async function findMessageById(id) {
  * última coisa que o cliente escreveu — filtra por direction porque a
  * mensagem cronologicamente mais nova pode muito bem ser uma resposta da
  * própria IA, o que faria todo job se achar "ultrapassado".
+ *
+ * Também filtra por message_type = 'text': uma foto enviada logo depois de um
+ * texto não agenda job nenhum (correto), mas sem este filtro ela ainda vira "a
+ * última inbound" — e o job do texto, ao comparar seu messageId contra ela, se
+ * acharia ultrapassado e sairia sem responder. Ninguém respondia ao cliente.
  */
 async function findLatestInboundMessageId(conversationId) {
   const result = await getPool().query(
-    `SELECT id FROM messages WHERE conversation_id = $1 AND direction = 'inbound'
+    `SELECT id FROM messages WHERE conversation_id = $1 AND direction = 'inbound' AND message_type = 'text'
      ORDER BY created_at DESC LIMIT 1`,
     [conversationId]
   );

@@ -338,6 +338,24 @@ describe('message repository', () => {
       expect(latestInboundId).toBe(newest.id);
     });
 
+    test('ignores an inbound photo that arrived after the text, so the text\'s job still proceeds', async () => {
+      // The customer writes "minha internet caiu" and two seconds later sends a
+      // photo of the router: the photo correctly schedules no AI job, but if it
+      // became "the latest inbound message" here, the text's own job would see a
+      // mismatch against this id and bail — nobody would answer.
+      const texto = await createMessage({
+        conversationId, direction: 'inbound', content: 'minha internet caiu', whatsappMessageId: 'wamid.TEXT1', status: 'received',
+      });
+      await createMessage({
+        conversationId, direction: 'inbound', whatsappMessageId: 'wamid.PHOTO1', status: 'received',
+        messageType: 'image', mediaPath: 'foto.jpg', mediaMimeType: 'image/jpeg',
+      });
+
+      const latestInboundId = await findLatestInboundMessageId(conversationId);
+
+      expect(latestInboundId).toBe(texto.id);
+    });
+
     test('returns null when the conversation has no inbound messages', async () => {
       await createMessage({
         conversationId, direction: 'outbound', content: 'oi', whatsappMessageId: null, status: 'sent',

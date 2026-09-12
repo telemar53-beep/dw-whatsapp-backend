@@ -122,12 +122,14 @@ if (require.main === module) {
   const { startOutboundWorker } = require('./queue/outbound-worker');
   const { startCampaignWorker } = require('./queue/campaign-worker');
   const { startAiWorker } = require('./queue/ai-worker');
+  const { startTranscriptionWorker } = require('./queue/transcription-worker');
   const { startAllBaileysConnections } = require('./whatsapp-adapters/baileys.manager');
   const httpServer = http.createServer(app);
   initSocketServer(httpServer);
   startOutboundWorker();
   startCampaignWorker();
   startAiWorker();
+  startTranscriptionWorker();
   startAllBaileysConnections().catch((err) => {
     console.error('Failed to start Baileys connections', err);
   });

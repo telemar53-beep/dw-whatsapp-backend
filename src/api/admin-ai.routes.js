@@ -31,6 +31,13 @@ router.put('/config', requireAuth, requireRole('admin'), async (req, res) => {
   if (!MODOS.includes(mode)) {
     return res.status(400).json({ error: 'mode must be disabled, assistant or automatic' });
   }
+  // Phase 1 does not include automatic mode: the worker would run the whole turn
+  // (OpenAI tokens, SGP calls, side-effecting tools) and then discard the text,
+  // sending nothing and creating no suggestion. Blocked here at the API boundary;
+  // the CHECK constraint and the worker's automatic branch stay as-is for Phase 2.
+  if (mode === 'automatic') {
+    return res.status(400).json({ error: 'Automatic mode is not available yet' });
+  }
   const existing = await getAiConfig();
   const hasKey = typeof apiKey === 'string' && apiKey.trim().length > 0;
   if (!existing.apiKey && !hasKey && mode !== 'disabled') {

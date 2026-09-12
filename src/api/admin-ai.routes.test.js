@@ -61,14 +61,29 @@ describe('admin ai routes', () => {
   });
 
   test('PUT /config saves and keeps the key when apiKey is omitted', async () => {
-    updateAiConfig.mockResolvedValue({ id: 1, apiKey: 'sk-1234567890abcd', model: 'gpt-y', mode: 'automatic', systemPrompt: 'p', maxToolsPerInteraction: 8 });
+    updateAiConfig.mockResolvedValue({ id: 1, apiKey: 'sk-1234567890abcd', model: 'gpt-y', mode: 'assistant', systemPrompt: 'p', maxToolsPerInteraction: 8 });
     const res = await request(buildApp()).put('/api/admin/ai/config')
       .set('Authorization', `Bearer ${tokenFor('admin')}`)
-      .send({ model: 'gpt-y', mode: 'automatic' })
+      .send({ model: 'gpt-y', mode: 'assistant' })
       .expect(200);
-    expect(updateAiConfig).toHaveBeenCalledWith(expect.objectContaining({ apiKey: null, model: 'gpt-y', mode: 'automatic' }));
+    expect(updateAiConfig).toHaveBeenCalledWith(expect.objectContaining({ apiKey: null, model: 'gpt-y', mode: 'assistant' }));
     expect(res.body.apiKeyLast4).toBe('abcd');
     expect(JSON.stringify(res.body)).not.toContain('sk-1234567890abcd');
+  });
+
+  // Phase 1 does not include automatic mode: the worker runs the whole turn (OpenAI
+  // tokens, SGP calls, side-effecting tools) and then discards the text, sending
+  // nothing and creating no suggestion — the customer gets nothing, the admin sees
+  // no error, and the bill grows. Blocked here at the API boundary; the CHECK
+  // constraint and the worker's automatic branch are left alone for Phase 2.
+  test('PUT /config rejects automatic mode with a clear, not-yet-available message', async () => {
+    updateAiConfig.mockResolvedValue({ id: 1, apiKey: 'sk-1234567890abcd', model: 'gpt-x', mode: 'automatic', systemPrompt: 'p', maxToolsPerInteraction: 8 });
+    const res = await request(buildApp()).put('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ model: 'gpt-x', mode: 'automatic' })
+      .expect(400);
+    expect(res.body.error).toMatch(/not available/i);
+    expect(updateAiConfig).not.toHaveBeenCalled();
   });
 
   test('PUT /config requires apiKey on first save when mode is not disabled', async () => {

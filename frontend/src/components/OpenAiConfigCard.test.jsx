@@ -25,6 +25,12 @@ describe('OpenAiConfigCard', () => {
     expect(await screen.findByText('Conectada')).toBeInTheDocument();
   });
 
+  test('does not offer automatic mode, which Phase 1 does not support', async () => {
+    render(<OpenAiConfigCard />);
+    await screen.findByText(/abcd/);
+    expect(screen.queryByRole('option', { name: 'Automático' })).not.toBeInTheDocument();
+  });
+
   test('shows Desativada when the mode is disabled', async () => {
     getAiConfig.mockResolvedValue({ configured: true, apiKeyLast4: 'abcd', model: 'gpt-x', mode: 'disabled' });
     render(<OpenAiConfigCard />);

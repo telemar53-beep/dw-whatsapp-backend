@@ -10,10 +10,12 @@ const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-sur
 
 // Rótulos no masculino ("o modo") — evita colidir, em getByText, com o selo de
 // status no feminino ("a integração"), que usa "Desativada"/"Conectada".
+// "Automático" fica de fora de propósito: a Fase 1 não o suporta (o worker
+// rodaria o turno inteiro e descartaria o texto no final) — a API rejeita esse
+// modo, e o select não pode nem oferecê-lo.
 const MODE_OPTIONS = [
   { value: 'disabled', label: 'Desativado' },
   { value: 'assistant', label: 'Assistente' },
-  { value: 'automatic', label: 'Automático' },
 ];
 
 const STATUS_BADGE_CLASS = {

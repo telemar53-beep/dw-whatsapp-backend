@@ -63,6 +63,12 @@ describe('MessageAttachment', () => {
     expect(screen.queryByText(/transcrição por ia/i)).not.toBeInTheDocument();
   });
 
+  test('mostra Transcrevendo enquanto pendente, mantendo o player', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm1', messageType: 'audio', mediaPath: 'a.ogg', transcriptionStatus: 'pending' }} />);
+    expect(screen.getByText(/transcrevendo/i)).toBeInTheDocument();
+    expect(container.querySelector('audio')).toBeInTheDocument();
+  });
+
   test('mostra Transcrevendo enquanto processa', () => {
     render(<MessageAttachment message={{ id: 'm1', messageType: 'audio', mediaPath: 'a.ogg', transcriptionStatus: 'processing' }} />);
     expect(screen.getByText(/transcrevendo/i)).toBeInTheDocument();

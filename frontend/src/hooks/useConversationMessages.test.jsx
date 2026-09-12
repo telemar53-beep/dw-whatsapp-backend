@@ -200,6 +200,33 @@ describe('useConversationMessages', () => {
     expect(result.current.messages[0].messageType).toBe('audio');
   });
 
+  test('message:transcription atualiza só a mensagem alvo, deixando as outras da mesma conversa intocadas', async () => {
+    api.getMessages.mockResolvedValue([
+      { id: 'm1', messageType: 'audio', transcriptionStatus: 'pending' },
+      { id: 'm2', messageType: 'audio', transcriptionStatus: 'pending' },
+    ]);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+
+    act(() => {
+      fakeSocket.trigger('message:transcription', {
+        conversationId: 'conv-1',
+        messageId: 'm2',
+        transcription: 'minha internet caiu',
+        transcriptionStatus: 'completed',
+        transcriptionDetail: null,
+      });
+    });
+
+    expect(result.current.messages).toHaveLength(2);
+    const m1 = result.current.messages.find((m) => m.id === 'm1');
+    const m2 = result.current.messages.find((m) => m.id === 'm2');
+    expect(m2.transcription).toBe('minha internet caiu');
+    expect(m2.transcriptionStatus).toBe('completed');
+    expect(m1.transcription).toBeUndefined();
+    expect(m1.transcriptionStatus).toBe('pending');
+  });
+
   test('message:transcription de outra conversa é ignorado', async () => {
     api.getMessages.mockResolvedValue([{ id: 'm1', messageType: 'audio', transcriptionStatus: 'pending' }]);
     const { result } = renderHook(() => useConversationMessages('conv-1'));
@@ -228,5 +255,7 @@ describe('useConversationMessages', () => {
     });
 
     expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0].id).toBe('m1');
+    expect(result.current.messages[0].transcription).toBeUndefined();
   });
 });

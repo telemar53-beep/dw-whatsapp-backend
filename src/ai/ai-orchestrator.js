@@ -61,6 +61,10 @@ function papelDaMensagem(message) {
 function conteudoParaModelo(m, perfil) {
   if (m.messageType === 'text') return m.content || null;
   if (m.messageType === 'audio' && m.transcriptionStatus === 'completed') return m.transcription || null;
+  // O content de uma mensagem 'pix' é o copia e cola: uma parede de caracteres
+  // sem sentido para o modelo, que ele ainda poderia repetir de volta ao
+  // cliente numa resposta gerada. O histórico registra só que o cartão saiu.
+  if (m.direction === 'outbound' && m.messageType === 'pix') return '[cartão Pix enviado ao cliente]';
   if (perfil === 'triagem' && m.direction === 'inbound') {
     // A legenda (m.content) acompanha o placeholder quando existir: o
     // cliente pode mandar uma foto do boleto E escrever "já paguei isso" na

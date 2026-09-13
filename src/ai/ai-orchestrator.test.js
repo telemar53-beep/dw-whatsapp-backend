@@ -603,6 +603,30 @@ describe('perfil de triagem', () => {
     expect(req.messages.map((m) => m.content)).not.toContain('[cliente enviou um documento]');
   });
 
+  // O código Pix é uma parede de ~200 caracteres sem sentido para o modelo, e
+  // devolvê-lo ao cliente numa resposta gerada seria pior ainda: o histórico
+  // registra só que o cartão foi enviado.
+  test('cartão de Pix outbound vira placeholder, sem o código', async () => {
+    const PIX = '00020126580014BR.GOV.BCB.PIX0136chave-pix5204000053039865802BR';
+    listRecentMessagesByConversation.mockResolvedValue([
+      { direction: 'outbound', content: PIX, messageType: 'pix' },
+      { direction: 'inbound', content: 'recebi', messageType: 'text' },
+    ]);
+    const req = await contexto();
+    const conteudos = req.messages.map((m) => m.content);
+    expect(conteudos).toContain('[cartão Pix enviado ao cliente]');
+    expect(JSON.stringify(req.messages)).not.toContain(PIX);
+  });
+
+  test('mensagem pix inbound não vira o placeholder de envio', async () => {
+    listRecentMessagesByConversation.mockResolvedValue([
+      { direction: 'inbound', content: '00020126580014BR.GOV.BCB.PIX', messageType: 'pix' },
+      { direction: 'inbound', content: 'oi', messageType: 'text' },
+    ]);
+    const req = await contexto();
+    expect(req.messages.map((m) => m.content)).not.toContain('[cartão Pix enviado ao cliente]');
+  });
+
   test('forcarConclusao envia tool_choice concluir_triagem na primeira chamada', async () => {
     await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
     expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('concluir_triagem');

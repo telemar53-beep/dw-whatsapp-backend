@@ -4,7 +4,7 @@ jest.mock('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { saveMediaFile } = require('../media/media-storage');
 const { enviarPix, enviarPixQr, enviarBoleto } = require('./payment-sender');
-const { cartaoPix, cartaoPixQr, cartaoBoleto } = require('./payment-card');
+const { cartaoPixQr, cartaoBoleto } = require('./payment-card');
 
 const FATURA = { value: 135, dueDate: '2026-09-15', pixCode: '000201-pix-emv', barCode: '836100000012' };
 
@@ -14,30 +14,31 @@ describe('enviarPix', () => {
     // um describe não podem vazar pro próximo — clearAllMocks só limpa
     // chamadas/resultados, não a implementação enfileirada.
     jest.resetAllMocks();
-    enqueueOutboundMessage.mockResolvedValueOnce({ id: 'm-cartao' }).mockResolvedValueOnce({ id: 'm-codigo' });
+    enqueueOutboundMessage.mockResolvedValueOnce({ id: 'm-pix' });
   });
 
-  test('enfileira o cartão e depois o código, nesta ordem', async () => {
-    const result = await enviarPix({ conversationId: 'c-1', channelId: 'ch-1', fatura: FATURA, sentBy: 'ai' });
+  test('enfileira UMA mensagem pix, com o código no content e o resto na metadata', async () => {
+    const result = await enviarPix({ conversationId: 'c-1', channelId: 'ch-1', fatura: { ...FATURA, id: 4321 }, sentBy: 'ai' });
 
-    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
+    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
     expect(enqueueOutboundMessage.mock.calls[0][0]).toEqual({
       conversationId: 'c-1', channelId: 'ch-1',
-      content: cartaoPix({ valor: FATURA.value, vencimento: FATURA.dueDate }),
-      messageType: 'text', sentBy: 'ai',
-    });
-    expect(enqueueOutboundMessage.mock.calls[1][0]).toEqual({
-      conversationId: 'c-1', channelId: 'ch-1',
       content: FATURA.pixCode,
-      messageType: 'text', sentBy: 'ai',
+      messageType: 'pix',
+      metadata: { value: FATURA.value, dueDate: FATURA.dueDate, faturaId: 4321 },
+      sentBy: 'ai',
     });
-    expect(result).toEqual([{ id: 'm-cartao' }, { id: 'm-codigo' }]);
+    expect(result).toEqual([{ id: 'm-pix' }]);
+  });
+
+  test('faturaId fica null quando a fatura não traz id', async () => {
+    await enviarPix({ conversationId: 'c-1', channelId: 'ch-1', fatura: FATURA, sentBy: 'ai' });
+    expect(enqueueOutboundMessage.mock.calls[0][0].metadata.faturaId).toBeNull();
   });
 
   test('propaga sentBy undefined (humano)', async () => {
     await enviarPix({ conversationId: 'c-1', channelId: 'ch-1', fatura: FATURA, sentBy: undefined });
     expect(enqueueOutboundMessage.mock.calls[0][0].sentBy).toBeUndefined();
-    expect(enqueueOutboundMessage.mock.calls[1][0].sentBy).toBeUndefined();
   });
 
   test('lança erro quando a fatura não tem código PIX', async () => {

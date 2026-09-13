@@ -114,8 +114,20 @@ router.post('/contratos/:contratoId/boleto-pdf', requireAuth, async (req, res) =
   }
 });
 
+/**
+ * O id da fatura no SGP, só para o cartão de Pix usá-lo como reference_id. É
+ * opcional de propósito: vindo estranho, viramos null em vez de recusar o
+ * envio — o cliente não pode ficar sem o Pix por causa de um identificador
+ * que serve apenas de referência.
+ */
+function normalizarFaturaId(valor) {
+  if (valor === undefined || valor === null || valor === '') return null;
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : null;
+}
+
 router.post('/contratos/:contratoId/pix', requireAuth, async (req, res) => {
-  const { conversationId, pixCode, value, dueDate } = req.body || {};
+  const { conversationId, pixCode, value, dueDate, faturaId } = req.body || {};
   if (!conversationId || typeof conversationId !== 'string') {
     return res.status(400).json({ error: 'conversationId is required' });
   }
@@ -133,7 +145,7 @@ router.post('/contratos/:contratoId/pix', requireAuth, async (req, res) => {
   const messages = await enviarPix({
     conversationId: conversation.id,
     channelId: conversation.channelId,
-    fatura: { value, dueDate, pixCode },
+    fatura: { value, dueDate, pixCode, id: normalizarFaturaId(faturaId) },
     sentBy: undefined,
   });
   res.status(201).json(messages);

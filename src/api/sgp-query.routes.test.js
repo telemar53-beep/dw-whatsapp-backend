@@ -301,7 +301,7 @@ describe('POST /api/sgp/contratos/:contratoId/pix', () => {
 
   test('calls enviarPix with the conversation, channel and fatura, and returns 201', async () => {
     getConversationWithContact.mockResolvedValue(CONVERSATION);
-    enviarPix.mockResolvedValue([{ id: 'm-1' }, { id: 'm-2' }]);
+    enviarPix.mockResolvedValue([{ id: 'm-1' }]);
     const res = await request(buildApp())
       .post('/api/sgp/contratos/17402/pix')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
@@ -309,11 +309,39 @@ describe('POST /api/sgp/contratos/:contratoId/pix', () => {
     expect(enviarPix).toHaveBeenCalledWith({
       conversationId: 'conv-1',
       channelId: 'channel-1',
-      fatura: { value: 135, dueDate: '2026-09-15', pixCode: '000201-pix-emv' },
+      fatura: { value: 135, dueDate: '2026-09-15', pixCode: '000201-pix-emv', id: null },
       sentBy: undefined,
     });
     expect(res.status).toBe(201);
-    expect(res.body).toEqual([{ id: 'm-1' }, { id: 'm-2' }]);
+    expect(res.body).toEqual([{ id: 'm-1' }]);
+  });
+
+  test('repassa o faturaId do corpo, aceitando número ou string numérica', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    enviarPix.mockResolvedValue([{ id: 'm-1' }]);
+
+    await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ ...BODY, faturaId: 4321 });
+    expect(enviarPix.mock.calls[0][0].fatura.id).toBe(4321);
+
+    await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ ...BODY, faturaId: '4321' });
+    expect(enviarPix.mock.calls[1][0].fatura.id).toBe(4321);
+  });
+
+  test('faturaId invalido e ignorado em vez de derrubar o envio', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    enviarPix.mockResolvedValue([{ id: 'm-1' }]);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ ...BODY, faturaId: 'nao-e-um-numero' });
+    expect(res.status).toBe(201);
+    expect(enviarPix.mock.calls[0][0].fatura.id).toBeNull();
   });
 
   test('forwards an error from enviarPix to the error middleware', async () => {

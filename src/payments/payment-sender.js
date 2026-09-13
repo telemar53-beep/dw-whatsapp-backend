@@ -1,28 +1,31 @@
-// Envia ao cliente o PIX/boleto de uma fatura em duas mensagens SEMPRE nesta
-// ordem: primeiro o "cartão" (valor + vencimento + instrução), depois o
-// código puro (PIX copia e cola ou linha digitável) sozinho, para o cliente
-// conseguir copiar a mensagem inteira no WhatsApp. A fila de saída processa
-// um job por vez em ordem (getOutboundQueue().process sem concorrência), e
-// aguardamos cada enqueueOutboundMessage antes do próximo, então a ordem de
-// chegada ao cliente é preservada.
+// Envia ao cliente o PIX/boleto de uma fatura. O QR e o boleto vão em duas
+// mensagens SEMPRE nesta ordem: primeiro o "cartão" (valor + vencimento +
+// instrução), depois o código puro (PIX copia e cola ou linha digitável)
+// sozinho, para o cliente conseguir copiar a mensagem inteira no WhatsApp. A
+// fila de saída processa um job por vez em ordem (getOutboundQueue().process
+// sem concorrência), e aguardamos cada enqueueOutboundMessage antes do
+// próximo, então a ordem de chegada ao cliente é preservada.
+//
+// O PIX simples (enviarPix) é a exceção: vira UMA mensagem do tipo 'pix', com
+// o copia e cola no content e valor/vencimento/fatura na metadata. Quem decide
+// entre o cartão nativo do WhatsApp e o par de textos de sempre é o worker de
+// saída, na hora do envio — só lá se sabe o canal e se há recebedor
+// cadastrado. Enfileirar duas mensagens aqui tiraria essa escolha dele.
 const QRCode = require('qrcode');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { saveMediaFile } = require('../media/media-storage');
-const { cartaoPix, cartaoPixQr, cartaoBoleto } = require('./payment-card');
+const { cartaoPixQr, cartaoBoleto } = require('./payment-card');
 
 async function enviarPix({ conversationId, channelId, fatura, sentBy }) {
   if (!fatura || !fatura.pixCode) throw new Error('Fatura sem código PIX');
-  const msgCartao = await enqueueOutboundMessage({
-    conversationId, channelId,
-    content: cartaoPix({ valor: fatura.value, vencimento: fatura.dueDate }),
-    messageType: 'text', sentBy,
-  });
-  const msgCodigo = await enqueueOutboundMessage({
+  const msg = await enqueueOutboundMessage({
     conversationId, channelId,
     content: fatura.pixCode,
-    messageType: 'text', sentBy,
+    messageType: 'pix',
+    metadata: { value: fatura.value, dueDate: fatura.dueDate, faturaId: fatura.id || null },
+    sentBy,
   });
-  return [msgCartao, msgCodigo];
+  return [msg];
 }
 
 async function enviarPixQr({ conversationId, channelId, fatura, sentBy }) {

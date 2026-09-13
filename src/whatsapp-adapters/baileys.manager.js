@@ -487,9 +487,12 @@ async function sendTextMessage(channel, toPhoneNumber, content, replyContext = {
  * formato que o Chat Mix usa. O cadastro, quando existe, só melhora o nome
  * mostrado.
  *
- * O wrapper `viewOnceMessage` não é sobre a mensagem sumir: é o envelope que os
- * clientes Android/iOS esperam em mensagens interativas — sem ele o cartão
- * chega e não renderiza.
+ * O conteúdo é o `interactiveMessage` cru. O que faz o cartão renderizar no
+ * celular NÃO está aqui, e sim em sendPixCardMessage: o envelope
+ * `documentWithCaptionMessage` (compatibilidade multi-device) e os nós
+ * binários `biz`/`bot` na retransmissão. Sem eles o servidor aceita e o
+ * celular descarta em silêncio — foi exatamente o que aconteceu no primeiro
+ * teste real (2026-09-13): a mensagem aparecia no chat e nunca chegava.
  */
 function buildPixNativeFlowContent(card, channel) {
   const centavos = Math.round(Number(card.value) * 100);
@@ -497,48 +500,52 @@ function buildPixNativeFlowContent(card, channel) {
   const titulo = `Fatura · vence ${formatarData(card.dueDate)}`;
   const valor = { value: centavos, offset: 100 };
   return {
-    viewOnceMessage: {
-      message: {
-        messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
-        interactiveMessage: {
-          nativeFlowMessage: {
-            messageVersion: 1,
-            buttons: [
-              {
-                name: 'payment_info',
-                buttonParamsJson: JSON.stringify({
-                  currency: 'BRL',
-                  total_amount: { ...valor },
-                  reference_id: referenceId,
-                  type: 'physical-goods',
-                  order: {
-                    status: 'pending',
-                    subtotal: { ...valor },
-                    order_type: 'ORDER',
-                    items: [{ name: titulo, amount: { ...valor }, quantity: 1, sale_amount: { ...valor } }],
-                  },
-                  payment_settings: [
-                    {
-                      type: 'pix_static_code',
-                      pix_static_code: {
-                        merchant_name: (card.merchant && card.merchant.name) || (channel && channel.name) || 'DW Telecom',
-                        key: card.pixCode,
-                        key_type: 'EVP',
-                      },
-                    },
-                  ],
-                  share_payment_status: false,
-                  is_soft_deleted: false,
-                  referral: 'chat_attachment',
-                }),
+    interactiveMessage: {
+      nativeFlowMessage: {
+        messageVersion: 1,
+        buttons: [
+          {
+            name: 'payment_info',
+            buttonParamsJson: JSON.stringify({
+              currency: 'BRL',
+              total_amount: { ...valor },
+              reference_id: referenceId,
+              type: 'physical-goods',
+              order: {
+                status: 'pending',
+                subtotal: { ...valor },
+                order_type: 'ORDER',
+                items: [{ name: titulo, amount: { ...valor }, quantity: 1, sale_amount: { ...valor } }],
               },
-            ],
+              payment_settings: [
+                {
+                  type: 'pix_static_code',
+                  pix_static_code: {
+                    merchant_name: (card.merchant && card.merchant.name) || (channel && channel.name) || 'DW Telecom',
+                    key: card.pixCode,
+                    key_type: 'EVP',
+                  },
+                },
+              ],
+              share_payment_status: false,
+              is_soft_deleted: false,
+              referral: 'chat_attachment',
+            }),
           },
-        },
+        ],
       },
     },
   };
 }
+
+// Nós binários que o cliente oficial emite junto de uma mensagem interativa de
+// pagamento, e sem os quais o celular do destinatário descarta o cartão sem
+// erro nenhum (o Baileys de fábrica não os adiciona — só os forks). O `bot`
+// com biz_bot só vale em conversa 1:1, que é o único caso deste sistema.
+const PIX_CARD_ADDITIONAL_NODES = [
+  { tag: 'biz', attrs: { native_flow_name: 'payment_info' } },
+  { tag: 'bot', attrs: { biz_bot: '1' } },
+];
 
 async function sendPixCardMessage(channel, toPhoneNumber, card) {
   const entry = connections.get(channel.id);
@@ -549,7 +556,10 @@ async function sendPixCardMessage(channel, toPhoneNumber, card) {
   const jid = `${toPhoneNumber}@s.whatsapp.net`;
   const content = buildPixNativeFlowContent(card, channel);
   const msg = generateWAMessageFromContent(jid, content, { userJid: entry.sock.user && entry.sock.user.id });
-  await entry.sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
+  // Envelope multi-device: é assim que o WhatsApp Web empacota botões e
+  // mensagens interativas para os outros aparelhos da conta aceitarem.
+  const patched = { documentWithCaptionMessage: { message: msg.message } };
+  await entry.sock.relayMessage(jid, patched, { messageId: msg.key.id, additionalNodes: PIX_CARD_ADDITIONAL_NODES });
   return { whatsappMessageId: msg.key.id };
 }
 

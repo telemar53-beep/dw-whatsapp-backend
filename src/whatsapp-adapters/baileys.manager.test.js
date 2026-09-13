@@ -958,7 +958,20 @@ describe('baileys.manager', () => {
         manager.buildPixNativeFlowContent(CARD, channel),
         { userJid: '5511999990000:1@s.whatsapp.net' }
       );
-      expect(sock.relayMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', { x: 1 }, { messageId: 'wa-1' });
+      // O que faz o cartão renderizar no celular: o envelope multi-device e os nós
+      // biz/bot na retransmissão. Sem eles (1º teste real) a mensagem aparecia no
+      // chat e nunca chegava ao cliente.
+      expect(sock.relayMessage).toHaveBeenCalledWith(
+        '5511999993333@s.whatsapp.net',
+        { documentWithCaptionMessage: { message: { x: 1 } } },
+        {
+          messageId: 'wa-1',
+          additionalNodes: [
+            { tag: 'biz', attrs: { native_flow_name: 'payment_info' } },
+            { tag: 'bot', attrs: { biz_bot: '1' } },
+          ],
+        }
+      );
       expect(result).toEqual({ whatsappMessageId: 'wa-1' });
     });
 
@@ -980,7 +993,7 @@ describe('baileys.manager', () => {
 
     test('a chave do bot\u00e3o payment_info \u00e9 o pr\u00f3prio copia e cola, com tipo EVP', () => {
       const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'DW Telecom' });
-      const botoes = content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons;
+      const botoes = content.interactiveMessage.nativeFlowMessage.buttons;
       expect(botoes).toHaveLength(1);
       expect(botoes[0].name).toBe('payment_info');
 
@@ -1008,16 +1021,19 @@ describe('baileys.manager', () => {
         { ...CARD, merchant: { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' } },
         { id: 'channel-pix', name: 'DW Telecom' }
       );
-      const params = JSON.parse(content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson);
+      const params = JSON.parse(content.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson);
       expect(params.payment_settings[0].pix_static_code.merchant_name).toBe('DW TELECOM LTDA');
       // A chave continua sendo o copia e cola: no Baileys o cadastro nao entra no lugar dela.
       expect(params.payment_settings[0].pix_static_code.key).toBe(CARD.pixCode);
     });
 
-    test('o wrapper viewOnceMessage e o messageContextInfo v\u00e3o junto', () => {
+    test('o conte\u00fado \u00e9 o interactiveMessage cru, sem envelope viewOnce', () => {
+      // O envelope multi-device e os n\u00f3s biz/bot entram s\u00f3 na retransmiss\u00e3o
+      // (sendPixCardMessage); embrulhar aqui em viewOnceMessage era o que fazia o
+      // celular descartar o cart\u00e3o no 1\u00ba teste real.
       const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'DW Telecom' });
-      expect(content.viewOnceMessage.message.messageContextInfo).toEqual({ deviceListMetadata: {}, deviceListMetadataVersion: 2 });
-      expect(content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.messageVersion).toBe(1);
+      expect(Object.keys(content)).toEqual(['interactiveMessage']);
+      expect(content.interactiveMessage.nativeFlowMessage.messageVersion).toBe(1);
     });
   });
 

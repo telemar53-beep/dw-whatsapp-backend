@@ -469,7 +469,10 @@ describe('perfil de triagem', () => {
     // aberto vazando de verdade para o texto do sistema.
     // Pega valor/vencimento INTERPOLADO no contexto, não a palavra dentro de
     // uma regra ("existe ou não fatura em aberto" é instrução, não dado).
-    expect(sys).not.toMatch(/R\$|\bvalor (da|de|em)\b|venc(e|imento) (em|dia) \d/i);
+    // Os preços de exemplo do roteiro COMERCIAL ("• 500 Mega por R$ 100/mês")
+    // são texto fixo do prompt, não dado de fatura: saem antes da checagem.
+    const semPlanosDeExemplo = sys.split('\n').filter((l) => !/Mega por R\$/.test(l)).join('\n');
+    expect(semPlanosDeExemplo).not.toMatch(/R\$|\bvalor (da|de|em)\b|venc(e|imento) (em|dia) \d/i);
   });
 
   // I1 (review): o endereço só pode ser dito de volta ao cliente quando a
@@ -709,6 +712,20 @@ describe('perfil de triagem', () => {
     expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
   });
 
+  test('o fluxo de Comercial traz os dois roteiros do dono e a regra de listar os planos das instruções', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/COMERCIAL \(cobertura, planos, contratar, mudar de plano\)/);
+    expect(sys).toMatch(/Que bom ter você por aqui 😊/);
+    expect(sys).toMatch(/• 500 Mega por R\$ 100\/mês/);
+    expect(sys).toMatch(/Me passa seu bairro e a rua onde deseja instalar\?/);
+    expect(sys).toMatch(/vou te ajudar a conhecer nossos planos 😊/);
+    expect(sys).toMatch(/encaminho para o Comercial verificar a alteração no seu contrato/);
+    expect(sys).toMatch(/Nunca peça CPF de cliente novo/);
+    expect(sys).toMatch(/Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma/);
+    // Emoji liberado no PIX e no Comercial; boleto e Suporte seguem sem.
+    expect(sys).toMatch(/SÓ nos fluxos do PIX e do COMERCIAL/);
+  });
+
   test('o fluxo de Suporte traz os três roteiros do dono e manda consultar o status antes de responder', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).toMatch(/ANTES de responder, chame consultar_status_todos_contratos \(UMA chamada, cobre todos os contratos\) e siga a instrução que ela devolver/);
@@ -912,7 +929,7 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/Tom: caloroso e direto/);
       // Emoji só no PIX; no boleto nenhum, nem na saudação; e uma mensagem só,
       // sem colar o modelo depois da própria frase (2º teste real do boleto).
-      expect(sys).toMatch(/SÓ no fluxo do PIX/);
+      expect(sys).toMatch(/SÓ nos fluxos do PIX e do COMERCIAL/);
       expect(sys).toMatch(/NENHUM emoji — nem na saudação/);
       expect(sys).toMatch(/Escreva UMA mensagem por resposta/);
       expect(sys).not.toMatch(/e depois conclua a triagem para o Financeiro/);

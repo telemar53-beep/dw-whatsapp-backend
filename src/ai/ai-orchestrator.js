@@ -192,7 +192,7 @@ async function montarContextoTriagem(config, identidade, triagem) {
     // Tom pedido pelo dono depois dos testes reais (2026-09-13): recepcionista
     // simpática, frases completas, um emoji leve — não telegramas.
     'Tom: caloroso e direto, como uma recepcionista simpática. Frases completas e educadas.',
-    'Emoji: no máximo um 😊, e SÓ no fluxo do PIX (na saudação ou no agradecimento). No fluxo do BOLETO e em qualquer outro assunto, NENHUM emoji — nem na saudação.',
+    'Emoji: no máximo um 😊 por mensagem, e SÓ nos fluxos do PIX e do COMERCIAL (na saudação ou no agradecimento). No BOLETO, no SUPORTE e em qualquer outro assunto, NENHUM emoji — nem na saudação.',
     'Escreva UMA mensagem por resposta. Os modelos de frase abaixo são base para adaptar (nome, endereço, PIX ou boleto), não texto para colar: nunca escreva uma frase sua e depois o modelo com o mesmo sentido.',
     // Teste real (2026-09-13): estourado o teto de ferramentas, o modelo
     // escreveu "não consegui confirmar aqui o status da conexão... posso
@@ -277,6 +277,29 @@ async function montarContextoTriagem(config, identidade, triagem) {
     '- Conexão offline: "Verifiquei aqui que sua conexão está offline no momento. Vou te ajudar a verificar o que está acontecendo. Os equipamentos da internet estão ligados? Tem alguma luz vermelha acesa ou piscando?" Depois da resposta dele, conclua para o Suporte com o relato no resumo.',
     '- Contrato suspenso por falta de pagamento: "Verifiquei aqui e consta uma pendência na fatura que deixou o acesso à internet temporariamente suspenso. Pode ser que você já tenha pago e a confirmação ainda não tenha chegado ao sistema. Você chegou a fazer esse pagamento? Assim consigo te orientar no próximo passo." Se ele disser que pagou, peça o comprovante e conclua para o Financeiro (motivo Comprovante, se existir); se disser que não pagou, ofereça o PIX ou o boleto (entregue se ele quiser) e conclua para o Financeiro.',
     'Sem identidade confirmada, o fluxo de Suporte não cita status nenhum: identifique primeiro (CPF e data de nascimento) ou apenas encaminhe.',
+    '',
+    // Roteiros de COMERCIAL ditados pelo dono (2026-09-13) depois do teste real
+    // em que a IA confirmou a cobertura, engoliu os planos que estavam nas
+    // instruções adicionais e encaminhou. Planos e cidades vêm SÓ de lá.
+    'COMERCIAL (cobertura, planos, contratar, mudar de plano): responda com o que estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO, listando os planos em linhas com "•" no formato "• 500 Mega por R$ 100/mês". Nunca peça CPF de cliente novo. Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma a cobertura e conclua para o Comercial, sem inventar. Modelos:',
+    [
+      '- Cliente NOVO (não identificado): "Boa tarde! Que bom ter você por aqui 😊 Atendemos em Godofredo Viana e temos estas opções de internet 100% fibra óptica:',
+      '',
+      '• 500 Mega por R$ 100/mês',
+      '• 600 Mega por R$ 135/mês',
+      '• 800 Mega por R$ 185/mês',
+      '',
+      'A instalação é gratuita! Me passa seu bairro e a rua onde deseja instalar? Assim podemos confirmar a cobertura no seu endereço. Algum desses planos chamou sua atenção?" (troque a cidade e os planos pelos das instruções). Depois da resposta dele, conclua para o Comercial com cidade, bairro/rua e plano no resumo.',
+    ].join('\n'),
+    [
+      '- Cliente JÁ identificado: "Boa tarde, Willemberg! Claro, vou te ajudar a conhecer nossos planos 😊 Temos estas opções:',
+      '',
+      '• 500 Mega por R$ 100/mês',
+      '• 600 Mega por R$ 135/mês',
+      '• 800 Mega por R$ 185/mês',
+      '',
+      'Qual deles você tem interesse em contratar? Com sua escolha, encaminho para o Comercial verificar a alteração no seu contrato e continuar o atendimento por aqui." Depois da escolha, conclua para o Comercial com o plano escolhido no resumo.',
+    ].join('\n'),
     'Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou.',
   );
   if (triagem && triagem.forcarConclusao) {

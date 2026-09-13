@@ -1,6 +1,11 @@
 const { getPool, closePool } = require('../db/pool');
 const { createChannel } = require('../channels/channel.repository');
-const { findOrCreateContactByPhoneNumber, setContactAvatarPath, updateContact } = require('./contact.repository');
+const {
+  findOrCreateContactByPhoneNumber,
+  setContactAvatarPath,
+  updateContact,
+  setContactSgpLink,
+} = require('./contact.repository');
 const { createAgent } = require('../agents/agent.repository');
 const { createSector } = require('../sectors/sector.repository');
 const { createCity } = require('../cities/city.repository');
@@ -436,6 +441,23 @@ describe('conversation repository', () => {
     expect(result.contactInternalNote).toBeNull();
   });
 
+  test('getConversationWithContact includes the contact sgp document', async () => {
+    await setContactSgpLink(contactId, { sgpClientId: 9, sgpContractId: 17402, sgpDocument: '11122233344' });
+    const conversation = await createConversation(contactId, channelId);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.contactSgpDocument).toBe('11122233344');
+  });
+
+  test('getConversationWithContact has a null contactSgpDocument when the contact has no sgp link', async () => {
+    const conversation = await createConversation(contactId, channelId);
+
+    const result = await getConversationWithContact(conversation.id);
+
+    expect(result.contactSgpDocument).toBeNull();
+  });
+
   test('getConversationWithContact includes the most recent message preview and time', async () => {
     const conversation = await createConversation(contactId, channelId);
     await createMessage({
@@ -613,6 +635,17 @@ describe('conversation repository', () => {
 
     expect(mine[0].contactCityId).toBe(city.id);
     expect(mine[0].contactCityName).toBe('Bahia');
+  });
+
+  test('listConversationsByAgent includes the contact sgp document', async () => {
+    await setContactSgpLink(contactId, { sgpClientId: 9, sgpContractId: 17402, sgpDocument: '11122233344' });
+    const conversation = await createConversation(contactId, channelId);
+    const agent = await createAgent({ email: 'listagent5b@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+
+    const mine = await listConversationsByAgent(agent.id);
+
+    expect(mine[0].contactSgpDocument).toBe('11122233344');
   });
 
   test('listConversationsByAgent includes the last message preview and time', async () => {

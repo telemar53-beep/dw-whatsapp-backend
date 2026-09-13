@@ -1534,6 +1534,36 @@ describe('tool-executor + enviar_boleto (composição real, I3 fix round 1)', ()
   });
 });
 
+// Promovido na revisão final do branch: desbloqueio_confianca é a ferramenta
+// mais perigosa do registro e a única que age no serviço do cliente à noite.
+// Os testes dela até aqui chamavam tool.executar direto — o gate de identidade
+// forte vive no executor, então uma troca de ordem lá (ou a marcação
+// exigeIdentidadeForte sumindo daqui) não quebrava nada. Este roda o registro
+// E o executor de verdade.
+describe('tool-executor + desbloqueio_confianca (composição real)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('à noite, identidade fraca é recusada antes de qualquer chamada ao SGP', async () => {
+    const contexto = {
+      conversationId: 'c-1', channelId: 'ch-1',
+      contracts: [{ id: 26515, statusCode: 4, status: 'Suspenso', plan: '100MB', address: 'RUA Z', paymentPromisesThisMonth: 0 }],
+      contact: { id: 'ct-1' },
+      // CPF digitado, data de nascimento não confirmada: sem o gate, quem
+      // digitasse o CPF de outra pessoa liberaria o contrato dela.
+      identidade: { nivel: 'fraca', primeiroNome: 'Willemberg' },
+      triagem: { noturno: { ativo: true, retornoAs: '08:00' } },
+      ferramentasPermitidas: ['desbloqueio_confianca'],
+    };
+    const resultado = await executeTool('desbloqueio_confianca', { contratoId: 26515 }, contexto);
+    expect(resultado.motivo).toBe('identity_not_confirmed');
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+    expect(sgpClient.listInvoices).not.toHaveBeenCalled();
+    expect(listTrustUnlocksByContract).not.toHaveBeenCalled();
+    // Nem o aviso "vou verificar a possibilidade" chega ao cliente.
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+});
+
 // Fix round 2: consultar_faturas_todos_contratos devolve valor em aberto,
 // vencimento e endereço — dado sensível demais para uma identidade fraca
 // (CPF ainda não confirmado) na triagem, onde o modelo repassa a resposta

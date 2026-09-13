@@ -365,6 +365,11 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   // texto final anuncia encaminhamento e a triagem não concluiu, o laço dá
   // UMA volta a mais, obrigando concluir_triagem antes de qualquer envio.
   let exigiuConclusaoPorAnuncio = false;
+  // Limite de ferramentas na triagem (teste real 2026-09-13): com vários
+  // contratos, 2N consultas estouram o teto e o caminho antigo fazia a IA
+  // dizer "não consegui confirmar o status da conexão". Em vez disso, o limite
+  // obriga concluir_triagem UMA vez; se o modelo ignorar, cai no caminho antigo.
+  let exigiuConclusaoPorLimite = false;
   let proximoToolChoice;
 
   try {
@@ -411,8 +416,27 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
         break;
       }
 
-      if (toolsRequested.length + chamadas.length > config.maxToolsPerInteraction) {
+      // A conclusão forçada abaixo não pode cair no limite que a provocou: na
+      // triagem, uma volta que só pede concluir_triagem passa sempre.
+      const soConclusao = perfil === 'triagem' && chamadas.length > 0
+        && chamadas.every((c) => c.function.name === 'concluir_triagem');
+      if (!soConclusao && toolsRequested.length + chamadas.length > config.maxToolsPerInteraction) {
         erro = 'tool_limit_reached';
+        // Na triagem que ainda não concluiu, o limite vira uma ordem de
+        // concluir — nunca um pedido de desculpas ao cliente. O resumo interno
+        // é onde entra o que não deu para consultar; o atendente lê, o cliente não.
+        if (
+          perfil === 'triagem' && !exigiuConclusaoPorLimite
+          && !contexto.triagemConcluida && !contexto.atendimentoEncerrado
+        ) {
+          exigiuConclusaoPorLimite = true;
+          messages.push({
+            role: 'system',
+            content: 'Limite de consultas deste turno. Chame concluir_triagem AGORA, com o setor adequado e o resumo do que apurou (inclua o que não pôde consultar no resumo, para o atendente). Ao cliente, diga apenas que está encaminhando para o setor — NUNCA que não conseguiu verificar algo.',
+          });
+          proximoToolChoice = 'concluir_triagem';
+          continue;
+        }
         // Uma última chamada SEM ferramentas: o modelo responde com o que já
         // apurou e diz o que faltou. Sair daqui com texto nulo deixava o
         // atendente sem sugestão nenhuma — e "consulte todos os contratos"

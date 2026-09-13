@@ -732,6 +732,99 @@ describe('perfil de triagem', () => {
     expect(sys).toMatch(/Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica/);
   });
 
+  // Teste real (2026-09-13): com vários contratos o Suporte estourou o teto de
+  // ferramentas e o caminho antigo de tool_limit_reached fez a IA dizer "não
+  // consegui confirmar o status da conexão, posso encaminhar para o suporte
+  // verificar". Na triagem, o limite agora obriga concluir_triagem.
+  describe('limite de ferramentas na triagem', () => {
+    const CONFIG_APERTADA = {
+      apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
+      maxToolsPerInteraction: 2, triageExtraInstructions: '', triageConfidenceThreshold: 0.8,
+      triageMaxQuestions: 2, triageResolvedReasonId: null,
+    };
+    const TRES_FERRAMENTAS = {
+      message: {
+        content: null,
+        tool_calls: [
+          { id: 't1', function: { name: 'consultar_status_todos_contratos', arguments: '{}' } },
+          { id: 't2', function: { name: 'consultar_status_contrato', arguments: '{"contratoId":17402}' } },
+          { id: 't3', function: { name: 'consultar_status_conexao', arguments: '{"contratoId":17402}' } },
+        ],
+      },
+      usage: {},
+    };
+    const CONCLUSAO = {
+      message: {
+        content: null,
+        tool_calls: [{ id: 't4', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"lentidão; conexão não consultada","confianca":0.9}' } }],
+      },
+      usage: {},
+    };
+
+    beforeEach(() => getAiConfig.mockResolvedValue(CONFIG_APERTADA));
+
+    test('em vez de se desculpar, obriga concluir_triagem e executa a conclusão apesar do limite', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce(TRES_FERRAMENTAS)
+        .mockResolvedValueOnce(CONCLUSAO)
+        .mockResolvedValueOnce({ message: { content: 'Já estou encaminhando para o Suporte, João.' }, usage: {} });
+      executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      const segunda = createChatCompletion.mock.calls[1][0];
+      expect(segunda.toolChoice).toBe('concluir_triagem');
+      // O array de mensagens é o mesmo objeto ao longo do turno (o mock guarda a
+      // referência), então checa-se a presença, não a posição final.
+      expect(segunda.messages).toEqual(expect.arrayContaining([
+        expect.objectContaining({ role: 'system', content: expect.stringMatching(/Limite de consultas deste turno\. Chame concluir_triagem AGORA/) }),
+        expect.objectContaining({ role: 'system', content: expect.stringMatching(/NUNCA que não conseguiu verificar algo/) }),
+      ]));
+      // A conclusão forçada não pode cair no mesmo limite que a provocou.
+      expect(executeTool).toHaveBeenCalledWith('concluir_triagem', expect.objectContaining({ resumo: expect.any(String) }), expect.anything());
+      expect(r.texto).toBe('Já estou encaminhando para o Suporte, João.');
+      expect(r.erro).toBe('tool_limit_reached');
+    });
+
+    test('se o modelo insistir em consultar, cai no caminho antigo uma única vez', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce(TRES_FERRAMENTAS)
+        .mockResolvedValueOnce(TRES_FERRAMENTAS)
+        .mockResolvedValueOnce({ message: { content: 'Vou encaminhar para o Suporte.' }, usage: {} });
+      executeTool.mockResolvedValue({ ok: true, resultado: {} });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(createChatCompletion).toHaveBeenCalledTimes(3);
+      const terceira = createChatCompletion.mock.calls[2][0];
+      expect(terceira.tools || []).toHaveLength(0);
+      expect(terceira.messages[terceira.messages.length - 1].content).toMatch(/Não é possível fazer mais consultas neste turno/);
+      expect(r.erro).toBe('tool_limit_reached');
+      expect(executeTool).not.toHaveBeenCalled();
+    });
+
+    test('com a triagem já concluída, o limite segue o caminho antigo', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({
+          message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"r","confianca":0.9}' } }] },
+          usage: {},
+        })
+        .mockResolvedValueOnce(TRES_FERRAMENTAS)
+        .mockResolvedValueOnce({ message: { content: 'Pronto, João.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, ctx) => {
+        if (nome === 'concluir_triagem') ctx.triagemConcluida = { setorId: 's-2' };
+        return { ok: true, resultado: { concluido: true } };
+      });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      const terceira = createChatCompletion.mock.calls[2][0];
+      expect(terceira.tools || []).toHaveLength(0);
+      expect(terceira.messages[terceira.messages.length - 1].content).toMatch(/Não é possível fazer mais consultas neste turno/);
+      expect(r.erro).toBe('tool_limit_reached');
+    });
+  });
+
   // Teste real do Suporte (2026-09-13): "vou encaminhar para o Suporte" sem
   // chamar concluir_triagem — o encaminhamento só veio no turno seguinte.
   describe('anúncio de encaminhamento sem concluir_triagem', () => {

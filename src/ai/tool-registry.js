@@ -722,10 +722,25 @@ const TOOLS = [
         };
       }
 
+      // Toda recusa da noite fica no contexto, não só o sucesso: é isso que o
+      // resumo da fila mostra ao atendente de manhã ("RECUSADO: motivo").
+      const registrarRecusa = (motivo) => { contexto.desbloqueioResultado = { liberado: false, motivo }; };
+
       const status = normalizeContract(contrato).status;
       // A DW não usa velocidade reduzida: só contrato suspenso é elegível.
       if (status !== 'suspenso') {
-        return { liberado: false, motivo: `O contrato não está suspenso (status: ${status}). A liberação em confiança só se aplica a contrato suspenso.` };
+        const resposta = { liberado: false, motivo: `O contrato não está suspenso (status: ${status}). A liberação em confiança só se aplica a contrato suspenso.` };
+        // À noite este desfecho também precisa de frase pronta: quem mandou
+        // comprovante de um contrato que já está ativo merece o agradecimento e
+        // a baixa na fila do Financeiro; quem só pediu liberação sem pagar nada
+        // provavelmente está com problema de conexão, e aí a conversa continua.
+        if (noturno) {
+          resposta.instrucao = comprovante && comprovante.valido === true
+            ? `Responda EXATAMENTE neste modelo: "Recebi seu comprovante, ${nome}! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das ${noturno.retornoAs}." — e chame concluir_triagem para o Financeiro NA MESMA resposta.`
+            : `Responda EXATAMENTE neste modelo: "${nome}, seu contrato está ativo, então não há bloqueio para liberar. Se a internet não estiver funcionando, me conta o que está acontecendo." — não conclua ainda.`;
+          registrarRecusa('contrato ativo, não há bloqueio para liberar');
+        }
+        return resposta;
       }
 
       // Uma tentativa por contrato por turno. Fecha três brechas de uma vez:
@@ -755,10 +770,6 @@ const TOOLS = [
         const paraOCliente = `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivoPontuado} Assim que o pagamento for confirmado, a liberação é automática.`;
         return `Responda EXATAMENTE neste modelo: "${paraOCliente}" — e chame concluir_triagem para o Financeiro NA MESMA resposta.`;
       };
-      // Toda recusa da noite fica no contexto, não só o sucesso: é isso que o
-      // resumo da fila mostra ao atendente de manhã ("RECUSADO: motivo").
-      const registrarRecusa = (motivo) => { contexto.desbloqueioResultado = { liberado: false, motivo }; };
-
       // Comprovante que a visão já reprovou (Task 3): não há o que avaliar nem
       // o que pedir ao SGP — a recusa sai daqui, sem nenhuma chamada externa.
       if (noturno && comprovante && comprovante.valido === false) {

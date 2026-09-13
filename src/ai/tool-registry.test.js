@@ -838,6 +838,35 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'não foi possível confirmar a liberação' });
   });
 
+  // Promovido na revisão final: "contrato ativo" era o único desfecho da noite
+  // sem frase pronta — o modelo improvisava a resposta a um cliente que acabou
+  // de mandar comprovante, e o pagamento não chegava ao resumo da fila.
+  describe('contrato ativo (não há bloqueio para liberar)', () => {
+    const ATIVO = { id: 26515, statusCode: 1, status: 'Ativo', plan: '100MB', address: 'RUA Z', paymentPromisesThisMonth: 0 };
+
+    test('com comprovante conferido: agradece, registra a baixa e manda concluir', async () => {
+      const ctx = noturno({ contracts: [ATIVO] });
+      const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+      expect(r.liberado).toBe(false);
+      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Recebi seu comprovante, Willemberg! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das 08:00." — e chame concluir_triagem para o Financeiro NA MESMA resposta.');
+      expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'contrato ativo, não há bloqueio para liberar' });
+      expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('sem comprovante: não conclui ainda e puxa o diagnóstico de conexão', async () => {
+      const ctx = noturno({ contracts: [ATIVO], comprovante: undefined });
+      const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Willemberg, seu contrato está ativo, então não há bloqueio para liberar. Se a internet não estiver funcionando, me conta o que está acontecendo." — não conclua ainda.');
+      expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'contrato ativo, não há bloqueio para liberar' });
+    });
+
+    test('de dia o caminho continua sem instrução nenhuma', async () => {
+      const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, { contracts: [ATIVO], contact: { id: 'ct-1' } });
+      expect(r).toEqual({ liberado: false, motivo: 'O contrato não está suspenso (status: ativo). A liberação em confiança só se aplica a contrato suspenso.' });
+    });
+  });
+
   test('(e) de dia nada muda: sem aviso ao cliente e sem instrucao', async () => {
     const r = await findTool('desbloqueio_confianca').executar(
       { contratoId: 26515 },

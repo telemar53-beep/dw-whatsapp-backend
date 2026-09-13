@@ -693,6 +693,10 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/Imagina, Willemberg! 😊/);
       expect(sys).toMatch(/Tenha um ótimo dia!/);
       expect(sys).toMatch(/Se responder só "ok"/);
+      // Boleto: mesma lógica, sem emoji, com PDF + linha digitável.
+      expect(sys).toMatch(/Enviei acima o boleto referente ao seu contrato do endereço/);
+      expect(sys).toMatch(/em PDF e com a linha digitável/);
+      expect(sys).toMatch(/No fluxo do BOLETO as mesmas despedidas valem, mas SEM emoji/);
       expect(sys).toMatch(/chame encerrar_atendimento/);
       expect(sys).toMatch(/Tom: caloroso e direto/);
       expect(sys).not.toMatch(/e depois conclua a triagem para o Financeiro/);
@@ -706,6 +710,7 @@ describe('perfil de triagem', () => {
       ] };
       const sys = (await contexto({ identidade: doisContratos })).messages[0].content;
       expect(sys).toMatch(/Vi que você tem mais de um contrato com a gente/);
+      expect(sys).toMatch(/Claro, vou te ajudar com o boleto\. Vi que você tem mais de um contrato/);
     });
 
     test('sem motivo, continua encaminhando ao Financeiro como hoje', async () => {

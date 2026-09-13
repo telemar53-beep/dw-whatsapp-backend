@@ -12,7 +12,7 @@ const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unloc
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
 const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
-const { enviarPix } = require('../payments/payment-sender');
+const { enviarPix, enviarBoleto } = require('../payments/payment-sender');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { primeiroNome } = require('./identity-resolver');
 const { mensagemSegura } = require('./safe-error-log');
@@ -784,13 +784,33 @@ const TOOLS = [
         content: null, messageType: 'document', mediaPath,
         mediaMimeType: 'application/pdf', mediaFilename: 'boleto.pdf', sentBy: 'ai',
       });
+      // Junto com o PDF vai a linha digitável sozinha numa mensagem (cartão em
+      // texto + número), igual ao botão "Cód Barras" da atendente: no celular
+      // o cliente copia a linha e cola no app do banco sem abrir o PDF.
+      // Melhor esforço: o PDF já saiu, uma falha aqui não desfaz a entrega.
+      let linhaDigitavelEnviada = false;
+      if (primeira.barCode) {
+        try {
+          await enviarBoleto({ conversationId: contexto.conversationId, channelId: contexto.channelId, fatura: primeira, sentBy: 'ai' });
+          linhaDigitavelEnviada = true;
+        } catch (err) {
+          console.error(`enviar_boleto: linha digitável não enviada na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+        }
+      }
       contexto.resolvidoPelaIa = true;
       // Mesma razão de gerar_pix: a flag persistida é o que autoriza
       // encerrar_atendimento num turno posterior à entrega.
       await markTriageResolvedByAi(contexto.conversationId);
       // contratoUsado só aparece quando a fatura veio de OUTRO contrato do
       // mesmo cliente — o modelo precisa dizer de qual endereço é o boleto.
-      return { enviado: true, valor: primeira.value, vencimento: primeira.dueDate, ...(contratoUsado ? { contratoUsado } : {}) };
+      return {
+        enviado: true,
+        valor: primeira.value,
+        vencimento: primeira.dueDate,
+        linhaDigitavelEnviada,
+        ...(contratoUsado ? { contratoUsado } : {}),
+        instrucao: `O boleto já foi enviado ao cliente nesta conversa em PDF${linhaDigitavelEnviada ? ' e com a linha digitável em mensagem separada' : ''}. Responda sem emoji dizendo que enviou acima o boleto${contratoUsado ? ' referente ao contrato do endereço ' + contratoUsado.endereco : ''}, que é só pagar pelo aplicativo do banco${linhaDigitavelEnviada ? ' copiando a linha digitável' : ''} ou em qualquer lotérica, e que se tiver dificuldade é só avisar. NÃO repita a linha digitável nem o valor.`,
+      };
     },
   },
   {

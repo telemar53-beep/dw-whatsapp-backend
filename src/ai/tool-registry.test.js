@@ -27,7 +27,7 @@ const { setContactSgpLink } = require('../conversations/contact.repository');
 const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
-const { enviarPix } = require('../payments/payment-sender');
+const { enviarPix, enviarBoleto } = require('../payments/payment-sender');
 const { isToolEnabled } = require('./ai-config.repository');
 const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
@@ -739,10 +739,11 @@ describe('enviar_boleto', () => {
   const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte' } });
   beforeEach(() => {
     jest.clearAllMocks();
-    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix' }] });
+    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix', barCode: '836100000012' }] });
     sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
     saveMediaFile.mockResolvedValue('abc.pdf');
     enqueueOutboundMessage.mockResolvedValue({ id: 'm-9' });
+    enviarBoleto.mockReset().mockResolvedValue([{ id: 'm-cartao' }, { id: 'm-linha' }]);
     // I1 (revisão final do branch inteiro): a conversa ainda em triagem, sem
     // dono, é o cenário padrão em que o envio deve seguir em frente.
     getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, status: 'waiting', triageState: 'pending' });
@@ -754,7 +755,31 @@ describe('enviar_boleto', () => {
       conversationId: 'c-1', channelId: 'ch-1', messageType: 'document', mediaPath: 'abc.pdf',
       mediaMimeType: 'application/pdf', mediaFilename: 'boleto.pdf', sentBy: 'ai',
     }));
-    expect(r).toEqual({ enviado: true, valor: 89.9, vencimento: '2026-09-20' });
+    expect(r).toMatchObject({ enviado: true, valor: 89.9, vencimento: '2026-09-20', linhaDigitavelEnviada: true });
+    expect(r.instrucao).toMatch(/linha digitável em mensagem separada/);
+    expect(r.instrucao).toMatch(/sem emoji/);
+    // A linha digitável vai junto, sozinha numa mensagem, pelo mesmo sender do
+    // botão "Cód Barras" da atendente.
+    expect(enviarBoleto).toHaveBeenCalledWith({
+      conversationId: 'c-1', channelId: 'ch-1', sentBy: 'ai',
+      fatura: expect.objectContaining({ barCode: '836100000012' }),
+    });
+    expect(c.resolvidoPelaIa).toBe(true);
+  });
+
+  test('sem linha digitável na fatura, manda só o PDF e avisa o modelo', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix', barCode: null }] });
+    const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+    expect(enviarBoleto).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ enviado: true, linhaDigitavelEnviada: false });
+    expect(r.instrucao).not.toMatch(/linha digitável em mensagem separada/);
+  });
+
+  test('falha ao mandar a linha digitável não desfaz a entrega do PDF', async () => {
+    enviarBoleto.mockRejectedValue(new Error('fila indisponível'));
+    const c = ctx();
+    const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, c);
+    expect(r).toMatchObject({ enviado: true, linhaDigitavelEnviada: false });
     expect(c.resolvidoPelaIa).toBe(true);
   });
   // A entrega tem de ficar GRAVADA, não só em contexto.resolvidoPelaIa: o
@@ -1021,7 +1046,8 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
     test('(b) contrato pedido já tem fatura: envia essa sem consultar o outro', async () => {
       sgpClient.getDuplicateInvoice.mockImplementation(async (id) => comFatura(id, id === 17402 ? 100 : 200));
       const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
-      expect(r).toEqual({ enviado: true, valor: 100, vencimento: '2026-09-20' });
+      expect(r).toMatchObject({ enviado: true, valor: 100, vencimento: '2026-09-20' });
+      expect(r.contratoUsado).toBeUndefined();
       expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
       expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/17402.pdf');
     });

@@ -393,10 +393,10 @@ export function sendSgpBoletoPdf(contratoId, conversationId, boletoLink, token) 
   });
 }
 
-export function sendSgpPix(contratoId, conversationId, { pixCode, value, dueDate }, token) {
+export function sendSgpPix(contratoId, conversationId, { pixCode, value, dueDate, faturaId }, token) {
   return apiFetch(`/api/sgp/contratos/${contratoId}/pix`, {
     method: 'POST',
-    body: { conversationId, pixCode, value, dueDate },
+    body: { conversationId, pixCode, value, dueDate, faturaId },
     token,
   });
 }

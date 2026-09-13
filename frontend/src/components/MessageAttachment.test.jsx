@@ -47,6 +47,21 @@ describe('MessageAttachment', () => {
     expect(link.href).toBe('http://localhost:3000/api/media/m6?token=tok-123');
   });
 
+  test('renders a native Pix card for a pix message, instead of the raw code', () => {
+    render(
+      <MessageAttachment
+        message={{
+          id: 'm8',
+          messageType: 'pix',
+          content: '000201ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+          metadata: { value: 135, dueDate: '2026-09-15' },
+        }}
+      />
+    );
+    expect(screen.getByText('Pix da fatura')).toBeInTheDocument();
+    expect(screen.queryByText(/0123456789/)).not.toBeInTheDocument();
+  });
+
   test('renders a Google Maps link for a location message', () => {
     render(
       <MessageAttachment

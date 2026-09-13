@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { mediaUrl } from '../services/api';
 import { IconPlay, IconPause, IconMic, IconDownload, IconPin } from './icons/WaIcons';
+import PixCardMessage from './PixCardMessage';
 
 const BAR_COUNT = 38;
 const SPEEDS = [1, 1.5, 2];
@@ -372,6 +373,10 @@ function TranscriptionBlock({ message, dark }) {
 function MessageAttachment({ message, avatar, dark = false }) {
   const { token } = useAuth();
   const outbound = message.direction === 'outbound';
+
+  if (message.messageType === 'pix') {
+    return <PixCardMessage message={message} />;
+  }
 
   if (message.messageType === 'location') {
     const mapsUrl = `https://www.google.com/maps?q=${message.locationLatitude},${message.locationLongitude}`;

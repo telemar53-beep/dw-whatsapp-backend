@@ -25,7 +25,7 @@ import {
 } from './icons/WaIcons';
 
 const OVERLAY_TYPES = ['image', 'video', 'sticker'];
-const BLOCK_TYPES = ['document', 'location'];
+const BLOCK_TYPES = ['document', 'location', 'pix'];
 
 function startOfDay(value) {
   const date = new Date(value);
@@ -173,7 +173,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     const messages = await sendSgpPix(
       contratoId,
       conversation.id,
-      { pixCode: fatura.pixCode, value: fatura.value, dueDate: fatura.dueDate },
+      { pixCode: fatura.pixCode, value: fatura.value, dueDate: fatura.dueDate, faturaId: fatura.id },
       token
     );
     messages.forEach((msg) => appendMessage(msg));
@@ -319,7 +319,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
 
           const message = row.message;
           const outbound = message.direction === 'outbound';
-          const hasText = Boolean(message.content);
+          // O código Pix vive em message.content, mas nunca pode aparecer como texto solto:
+          // o cartão nativo (PixCardMessage) é quem mostra a prévia truncada dele.
+          const hasText = message.messageType === 'pix' ? false : Boolean(message.content);
           const isSticker = message.messageType === 'sticker' && message.mediaPath;
           const metaMode = !hasText && OVERLAY_TYPES.includes(message.messageType) && message.mediaPath
             ? 'overlay'

@@ -117,6 +117,32 @@ describe('ConversationView', () => {
     expect(screen.getByRole('img')).toBeInTheDocument();
   });
 
+  test('renders an outbound Pix message as a native card, without showing the raw code as text', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [
+        {
+          id: 'm1',
+          direction: 'outbound',
+          messageType: 'pix',
+          content: '000201ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+          metadata: { value: 135, dueDate: '2026-09-15' },
+        },
+      ],
+      sendMessage: vi.fn(),
+    });
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+
+    // RTL normaliza espaços (inclusive o nbsp que o Intl usa entre "R$" e o valor)
+    // ao ler o texto do DOM, então a expectativa precisa passar pela mesma normalização.
+    const expectedValue = Number(135)
+      .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      .replace(/ /g, ' ');
+    expect(screen.getByText('Pix da fatura')).toBeInTheDocument();
+    expect(screen.getByText(expectedValue)).toBeInTheDocument();
+    expect(screen.getByText('15/09/2026')).toBeInTheDocument();
+    expect(screen.queryByText(/0123456789/)).not.toBeInTheDocument();
+  });
+
   test('renders a location message without a text bubble', () => {
     useConversationMessages.mockReturnValue({
       messages: [{ id: 'm2', direction: 'inbound', messageType: 'location', locationLatitude: -3.1, locationLongitude: -60.0, content: null }],
@@ -674,11 +700,12 @@ describe('SGP lookup panel', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
 
+    // faturaId acompanha o envio para virar o "Nº da cobrança" no cartão nativo de Pix.
     await waitFor(() =>
       expect(api.sendSgpPix).toHaveBeenCalledWith(
         555,
         'c1',
-        { pixCode: '000201...', value: 89.9, dueDate: '2026-09-20' },
+        { pixCode: '000201...', value: 89.9, dueDate: '2026-09-20', faturaId: '999' },
         'tok-123'
       )
     );

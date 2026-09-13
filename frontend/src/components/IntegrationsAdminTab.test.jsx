@@ -29,6 +29,9 @@ beforeEach(() => {
   useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
   api.getAiConfig.mockResolvedValue({ configured: false, mode: 'disabled', model: '' });
   api.listAiTools.mockResolvedValue([]);
+  // AiTriageConfigCard (renderizado por esta aba) lista os motivos para o
+  // select de encerramento pela IA; sem o mock, o hook recebe undefined.
+  api.listReasons.mockResolvedValue([]);
 });
 
 describe('IntegrationsAdminTab', () => {

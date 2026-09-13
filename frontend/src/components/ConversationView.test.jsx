@@ -636,6 +636,56 @@ describe('SGP lookup panel', () => {
     expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
   });
 
+  test('clicking "Cód Pix" no painel do SGP chama sendSgpPix e adiciona as duas mensagens na conversa', async () => {
+    const appendMessage = vi.fn();
+    useConversationMessages.mockReturnValue({
+      messages: [],
+      sendMessage: vi.fn(),
+      appendMessage,
+    });
+    useSgpLookup.mockReturnValue({
+      client: { id: 1, name: 'Cliente Exemplo', document: '036.668.113-37' },
+      contracts: [{ id: 555, status: 'Ativo', plan: '1GB' }],
+      loading: false,
+      error: null,
+      search: vi.fn(),
+      fetchDuplicate: vi.fn(),
+      duplicateState: {
+        555: {
+          loading: false,
+          error: null,
+          hasOpenInvoice: true,
+          duplicates: [
+            { id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '836...', pixCode: '000201...', boletoLink: 'https://x' },
+          ],
+        },
+      },
+    });
+    const messagesReturned = [{ id: 'msg1' }, { id: 'msg2' }];
+    api.sendSgpPix.mockResolvedValue(messagesReturned);
+
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null, contactSgpDocument: '11122233344' }}
+        onTransferClick={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
+
+    await waitFor(() =>
+      expect(api.sendSgpPix).toHaveBeenCalledWith(
+        555,
+        'c1',
+        { pixCode: '000201...', value: 89.9, dueDate: '2026-09-20' },
+        'tok-123'
+      )
+    );
+    expect(appendMessage).toHaveBeenCalledWith(messagesReturned[0]);
+    expect(appendMessage).toHaveBeenCalledWith(messagesReturned[1]);
+  });
+
   test('the close-reason popup closes when the conversation changes', async () => {
     const CONVERSATION_A = { id: 'c1', status: 'waiting', assignedAgentId: null };
     const CONVERSATION_B = { id: 'c2', status: 'waiting', assignedAgentId: null };

@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useAiSuggestion } from '../hooks/useAiSuggestion';
-import { claimConversation, closeConversation, sendSgpBoletoPdf } from '../services/api';
+import { claimConversation, closeConversation, sendSgpBoletoPdf, sendSgpPix, sendSgpPixQr, sendSgpBarcode } from '../services/api';
 import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
 import MessageStatusTicks from './MessageStatusTicks';
@@ -167,6 +167,39 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     const message = await sendSgpBoletoPdf(contratoId, conversation.id, boletoLink, token);
     appendMessage(message);
     return message;
+  }
+
+  async function handleSendSgpPix(contratoId, fatura) {
+    const messages = await sendSgpPix(
+      contratoId,
+      conversation.id,
+      { pixCode: fatura.pixCode, value: fatura.value, dueDate: fatura.dueDate },
+      token
+    );
+    messages.forEach((msg) => appendMessage(msg));
+    return messages;
+  }
+
+  async function handleSendSgpPixQr(contratoId, fatura) {
+    const messages = await sendSgpPixQr(
+      contratoId,
+      conversation.id,
+      { pixCode: fatura.pixCode, value: fatura.value, dueDate: fatura.dueDate },
+      token
+    );
+    messages.forEach((msg) => appendMessage(msg));
+    return messages;
+  }
+
+  async function handleSendSgpBarcode(contratoId, fatura) {
+    const messages = await sendSgpBarcode(
+      contratoId,
+      conversation.id,
+      { barCode: fatura.barCode, value: fatura.value, dueDate: fatura.dueDate },
+      token
+    );
+    messages.forEach((msg) => appendMessage(msg));
+    return messages;
   }
 
   async function handleClaim() {
@@ -440,6 +473,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         <SgpLookupPanel
           onSendMessage={(content) => sendMessage(content)}
           onSendPdf={handleSendSgpPdf}
+          onSendPix={handleSendSgpPix}
+          onSendPixQr={handleSendSgpPixQr}
+          onSendBarcode={handleSendSgpBarcode}
           onClose={() => setSgpPanelOpen(false)}
           initialCpf={conversation.contactSgpDocument || ''}
         />

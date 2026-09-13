@@ -393,6 +393,30 @@ export function sendSgpBoletoPdf(contratoId, conversationId, boletoLink, token) 
   });
 }
 
+export function sendSgpPix(contratoId, conversationId, { pixCode, value, dueDate }, token) {
+  return apiFetch(`/api/sgp/contratos/${contratoId}/pix`, {
+    method: 'POST',
+    body: { conversationId, pixCode, value, dueDate },
+    token,
+  });
+}
+
+export function sendSgpPixQr(contratoId, conversationId, { pixCode, value, dueDate }, token) {
+  return apiFetch(`/api/sgp/contratos/${contratoId}/pix-qr`, {
+    method: 'POST',
+    body: { conversationId, pixCode, value, dueDate },
+    token,
+  });
+}
+
+export function sendSgpBarcode(contratoId, conversationId, { barCode, value, dueDate }, token) {
+  return apiFetch(`/api/sgp/contratos/${contratoId}/barcode`, {
+    method: 'POST',
+    body: { conversationId, barCode, value, dueDate },
+    token,
+  });
+}
+
 export function getMyProfile(token) {
   return apiFetch('/api/agents/me', { token });
 }

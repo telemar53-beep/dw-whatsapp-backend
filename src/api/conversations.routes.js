@@ -373,6 +373,9 @@ router.put('/:id/sector', async (req, res) => {
     }
   }
   const updated = await setConversationSector(req.params.id, sectorId);
+  if (!updated) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
   const completa = await getConversationWithContact(updated.id);
   broadcast('queue:new', { conversation: completa, message: null });
   broadcastToDashboard('dashboard:conversation', { conversation: completa });

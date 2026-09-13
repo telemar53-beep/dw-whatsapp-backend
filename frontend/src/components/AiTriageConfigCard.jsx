@@ -13,7 +13,7 @@ function AiTriageConfigCard() {
   const { config, loading, refresh } = useAiConfig();
   const [confidencePercent, setConfidencePercent] = useState(80);
   const [maxQuestions, setMaxQuestions] = useState(2);
-  const [timeoutMinutes, setTimeoutMinutes] = useState(5);
+  const [timeoutMinutes, setTimeoutMinutes] = useState(3);
   const [extraInstructions, setExtraInstructions] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);

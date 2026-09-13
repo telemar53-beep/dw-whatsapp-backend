@@ -5,6 +5,7 @@ const { shouldRunAi } = require('../ai/ai.service');
 const { enqueueAiReply } = require('./ai-queue');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { findMessageById, markTranscriptionFailed } = require('../conversations/message.repository');
+const { findChannelById } = require('../channels/channel.repository');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { mensagemSegura } = require('../ai/safe-error-log');
 
@@ -29,6 +30,24 @@ async function handleTranscriptionJob({ conversationId, messageId }) {
   }
 
   if (!resultado.ok) return;
+
+  // I4 (revisão final do branch inteiro): transcriptionFeedAi governa só a
+  // ponte transcrição → sugestão do ASSISTENTE. Uma conversa ainda em
+  // triagem por IA (sem atendente, status waiting, triageState pending)
+  // precisa do turno de qualquer forma — sem isto, um cliente que respondeu
+  // por áudio travava a triagem em silêncio até o timeout de segurança,
+  // mesmo com o canal de IA + triagem ligados.
+  const emTriagemPorIa = conversation
+    && conversation.status === 'waiting'
+    && conversation.triageState === 'pending'
+    && !conversation.assignedAgentId;
+  if (emTriagemPorIa) {
+    const channel = await findChannelById(conversation.channelId);
+    if (channel && channel.aiEnabled && channel.aiTriageEnabled) {
+      await enqueueAiReply({ conversationId, messageId });
+      return;
+    }
+  }
 
   const config = await getAiConfig();
   if (!config || !config.transcriptionFeedAi) return;

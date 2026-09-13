@@ -1,5 +1,14 @@
 jest.mock('./ai-config.repository');
-jest.mock('./tool-registry');
+// Mock parcial: findTool é o que os testes controlam por caso; perfilTriagem
+// fica com a implementação de verdade (minor, revisão final do branch
+// inteiro — o executor agora importa perfilTriagem de tool-registry em vez
+// de duplicar a lógica). Mocká-la também devolveria undefined em todo teste
+// e derrubaria os testes de exigeIdentidadeForte, que dependem do
+// discriminador de verdade (ferramentasPermitidas OU identidade).
+jest.mock('./tool-registry', () => ({
+  ...jest.requireActual('./tool-registry'),
+  findTool: jest.fn(),
+}));
 jest.mock('../integrations/sgp-client');
 jest.mock('../conversations/contact.repository');
 const { isToolEnabled } = require('./ai-config.repository');

@@ -1714,6 +1714,24 @@ describe('PUT /api/conversations/:id/sector', () => {
     expect(res.status).toBe(404);
   });
 
+  // Minor (revisão final do branch inteiro): a conversa existia no início da
+  // rota (getConversationWithContact achou) mas pode ter sido fechada/mudado
+  // de dono entre essa leitura e o UPDATE — setConversationSector devolve
+  // null nesse caso, e a rota não podia seguir como se tivesse dado certo.
+  test('retorna 404 quando setConversationSector devolve null (conversa mudou no meio do caminho)', async () => {
+    getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, assignedAgentId: 'agent-1' });
+    listSectors.mockResolvedValue([{ id: 's-2', name: 'Suporte' }]);
+    setConversationSector.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ sectorId: 's-2' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Conversation not found');
+  });
+
   test('aceita sectorId null para limpar o setor', async () => {
     getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, assignedAgentId: 'agent-1' });
     setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, sectorId: null });

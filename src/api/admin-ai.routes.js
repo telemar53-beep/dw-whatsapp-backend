@@ -105,6 +105,13 @@ router.put('/transcription', requireAuth, requireRole('admin'), async (req, res)
 
 router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
   const { triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions } = req.body || {};
+  // I2 (revisão final do branch inteiro): Number(null) é 0, Number('') é 0 e
+  // Number(false) é 0 — os três passavam batidos pela checagem de faixa como
+  // se o admin tivesse digitado 0% de confiança mínima, em vez de recusar um
+  // valor que não veio como número nem como texto de número.
+  const tipoValido = typeof triageConfidenceThreshold === 'number'
+    || (typeof triageConfidenceThreshold === 'string' && triageConfidenceThreshold.trim() !== '');
+  if (!tipoValido) return res.status(400).json({ error: 'triageConfidenceThreshold must be a number between 0 and 1' });
   const t = Number(triageConfidenceThreshold);
   if (!Number.isFinite(t) || t < 0 || t > 1) return res.status(400).json({ error: 'triageConfidenceThreshold must be between 0 and 1' });
   if (!Number.isInteger(triageMaxQuestions) || triageMaxQuestions < 0 || triageMaxQuestions > 5) return res.status(400).json({ error: 'triageMaxQuestions must be an integer from 0 to 5' });

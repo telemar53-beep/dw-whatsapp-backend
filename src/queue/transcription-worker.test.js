@@ -5,6 +5,7 @@ jest.mock('../ai/ai.service');
 jest.mock('../queue/ai-queue');
 jest.mock('../conversations/conversation.repository');
 jest.mock('../conversations/message.repository');
+jest.mock('../channels/channel.repository');
 jest.mock('../realtime/socket-server');
 
 const { transcribeMessage } = require('../ai/transcription.service');
@@ -13,6 +14,7 @@ const { shouldRunAi } = require('../ai/ai.service');
 const { enqueueAiReply } = require('./ai-queue');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { findMessageById, markTranscriptionFailed } = require('../conversations/message.repository');
+const { findChannelById } = require('../channels/channel.repository');
 const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { processTranscriptionQueue } = require('./transcription-queue');
 const { handleTranscriptionJob, handleTranscriptionWorkerFailure, startTranscriptionWorker } = require('./transcription-worker');
@@ -73,6 +75,47 @@ describe('transcription-worker', () => {
     await handleTranscriptionJob({ conversationId: 'c-1', messageId: 'm-1' });
 
     expect(enqueueAiReply).not.toHaveBeenCalled();
+  });
+
+  describe('I4 (revisão final do branch inteiro): transcriptionFeedAi não pode silenciar a triagem por IA', () => {
+    test('conversa ainda em triagem por IA: aciona a IA mesmo com transcriptionFeedAi desligado', async () => {
+      transcribeMessage.mockResolvedValue({ ok: true, transcription: 'texto' });
+      getAiConfig.mockResolvedValue({ transcriptionFeedAi: false });
+      getConversationWithContact.mockResolvedValue({
+        id: 'c-1', channelId: 'ch-1', assignedAgentId: null, status: 'waiting', triageState: 'pending',
+      });
+      findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
+
+      await handleTranscriptionJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(enqueueAiReply).toHaveBeenCalledWith({ conversationId: 'c-1', messageId: 'm-1' });
+    });
+
+    test('conversa já atribuída a um atendente: continua sem acionar a IA com transcriptionFeedAi desligado (comportamento existente)', async () => {
+      transcribeMessage.mockResolvedValue({ ok: true, transcription: 'texto' });
+      getAiConfig.mockResolvedValue({ transcriptionFeedAi: false });
+      getConversationWithContact.mockResolvedValue({
+        id: 'c-1', channelId: 'ch-1', assignedAgentId: 'a-1', status: 'waiting', triageState: null,
+      });
+
+      await handleTranscriptionJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(findChannelById).not.toHaveBeenCalled();
+      expect(enqueueAiReply).not.toHaveBeenCalled();
+    });
+
+    test('conversa em triagem mas canal sem aiTriageEnabled: não aciona (transcriptionFeedAi desligado continua valendo)', async () => {
+      transcribeMessage.mockResolvedValue({ ok: true, transcription: 'texto' });
+      getAiConfig.mockResolvedValue({ transcriptionFeedAi: false });
+      getConversationWithContact.mockResolvedValue({
+        id: 'c-1', channelId: 'ch-1', assignedAgentId: null, status: 'waiting', triageState: 'pending',
+      });
+      findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: false });
+
+      await handleTranscriptionJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(enqueueAiReply).not.toHaveBeenCalled();
+    });
   });
 
   describe('Finding 5: rede de segurança para exceção fora do transcription.service', () => {

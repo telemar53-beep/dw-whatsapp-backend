@@ -613,6 +613,17 @@ describe('esquecer_identificacao', () => {
     expect(c.identidade.nivel).toBe('none');
     expect(setContactSgpLink).toHaveBeenCalled();
   });
+
+  // I6 (revisão final do branch inteiro): sem lista fixa e sem identidade no
+  // contexto, o turno é do assistente clássico — esquecer_identificacao só
+  // faz sentido na recepcionista da triagem.
+  test('fora do perfil de triagem (sem lista fixa e sem identidade), recusa sem tocar nada', async () => {
+    const c = { contact: { id: 'ct-1', sgpDocument: '1', sgpClientId: 9, sgpContractId: 5 }, conversationId: 'conv-1' };
+    const r = await findTool('esquecer_identificacao').executar({}, c);
+    expect(r).toEqual({ ok: false, erro: 'esquecer_identificacao is only available during AI triage' });
+    expect(setContactSgpLink).not.toHaveBeenCalled();
+    expect(markPhoneContested).not.toHaveBeenCalled();
+  });
 });
 
 describe('buscar_cliente no perfil de triagem', () => {
@@ -639,7 +650,10 @@ describe('buscar_cliente no perfil de triagem', () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
     const c = { contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
     const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(r).toEqual({ cliente: { nome: 'Maria' }, contratos: [{ id: 5, plano: '600MB', status: 'ativo' }] });
+    // I5 (revisão final do branch inteiro): a triagem não devolve mais o
+    // plano contratado ao modelo — só id e status, o suficiente para
+    // classificar sem entregar dado sensível a uma identidade ainda fraca.
+    expect(r).toEqual({ cliente: { nome: 'Maria' }, contratos: [{ id: 5, status: 'ativo' }] });
     expect(JSON.stringify(r)).not.toContain('SOUZA');
     expect(JSON.stringify(r)).not.toContain('joao123');
   });
@@ -700,7 +714,7 @@ describe('buscar_cliente no perfil de triagem', () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
     const c = { contact: { id: 'ct-1' }, ferramentasPermitidas: ['buscar_cliente'], identidade: null };
     const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(r).toEqual({ cliente: { nome: 'Maria' }, contratos: [{ id: 5, plano: 'p', status: 'ativo' }] });
+    expect(r).toEqual({ cliente: { nome: 'Maria' }, contratos: [{ id: 5, status: 'ativo' }] });
     expect(setContactSgpLink).not.toHaveBeenCalled();
     expect(c.contact.sgpDocument).toBeUndefined();
   });
@@ -714,6 +728,9 @@ describe('enviar_boleto', () => {
     sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
     saveMediaFile.mockResolvedValue('abc.pdf');
     enqueueOutboundMessage.mockResolvedValue({ id: 'm-9' });
+    // I1 (revisão final do branch inteiro): a conversa ainda em triagem, sem
+    // dono, é o cenário padrão em que o envio deve seguir em frente.
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, status: 'waiting', triageState: 'pending' });
   });
   test('baixa o PDF, manda como documento com sentBy ai e marca resolvido', async () => {
     const c = ctx();
@@ -731,6 +748,54 @@ describe('enviar_boleto', () => {
     expect(r).toEqual({ enviado: false, motivo: 'Nenhuma fatura em aberto' });
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
+
+  // I1 (revisão final do branch inteiro): entre o início do turno e este
+  // ponto (depois de já ter baixado o PDF), um atendente pode ter assumido a
+  // conversa, ou ela pode ter sido fechada/silenciada — reler antes de
+  // enviar o PDF de verdade é a última linha de defesa.
+  describe('I1: relê a conversa antes de enviar, e recusa se ela saiu da triagem', () => {
+    test('atendente já assumiu: recusa e não envia nada', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: 'ag-1', status: 'waiting', triageState: 'pending' });
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' });
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('conversa fechada: recusa e não envia nada', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, status: 'closed', triageState: 'pending' });
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r.enviado).toBe(false);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('conversa silenciada: recusa e não envia nada', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, status: 'silent', triageState: 'pending' });
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r.enviado).toBe(false);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('triagem já concluída (triageState não é mais pending): recusa e não envia nada', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, status: 'waiting', triageState: 'completed' });
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r.enviado).toBe(false);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('conversa não encontrada: recusa e não envia nada', async () => {
+      getConversationWithContact.mockResolvedValue(null);
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r.enviado).toBe(false);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('conversa ainda em triagem, pending, sem dono: envia normalmente', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, status: 'waiting', triageState: 'pending' });
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r.enviado).toBe(true);
+      expect(enqueueOutboundMessage).toHaveBeenCalled();
+    });
+  });
   test('declara exigeIdentidadeForte e dono por contratoId', () => {
     const t = findTool('enviar_boleto');
     expect(t.exigeIdentidadeForte).toBe(true);
@@ -744,6 +809,17 @@ describe('enviar_boleto', () => {
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ value: 1, dueDate: 'd', pixCode: 'p' }] });
     const c = ctx();
     await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+    expect(c.resolvidoPelaIa).toBe(true);
+  });
+
+  // Minor (revisão final do branch inteiro): gerar_segunda_via não marcava
+  // resolvidoPelaIa, ao contrário de gerar_pix — o resumo da triagem então
+  // nunca dizia "Resolvido pela IA" quando o cliente só tinha pedido o
+  // boleto (e não o PIX).
+  test('gerar_segunda_via no perfil de triagem também marca resolvidoPelaIa', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '1', dueDate: 'd', value: 1, barCode: 'b', boletoLink: 'l' }] });
+    const c = ctx();
+    await findTool('gerar_segunda_via').executar({ contratoId: 17402 }, c);
     expect(c.resolvidoPelaIa).toBe(true);
   });
 
@@ -903,5 +979,16 @@ describe('concluir_triagem', () => {
     const c = ctx({ identidade: { nivel: 'forte', origem: 'cpf_confirmed', primeiroNome: 'Ana', client: { id: 1 } } });
     await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, c);
     expect(concludeAiTriage.mock.calls[0][1].identifiedBy).toBe('cpf_confirmed');
+  });
+
+  // I6 (revisão final do branch inteiro): mesma guarda de
+  // esquecer_identificacao — sem ela, o cartão de permissões do assistente
+  // clássico bastaria para concluir uma "triagem" que nunca existiu.
+  test('fora do perfil de triagem (sem lista fixa e sem identidade), recusa sem concluir nada', async () => {
+    const c = { conversationId: 'c-1', contact: { id: 'ct-1' }, contracts: [], triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0 } };
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, c);
+    expect(r).toEqual({ ok: false, erro: 'concluir_triagem is only available during AI triage' });
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+    expect(broadcast).not.toHaveBeenCalled();
   });
 });

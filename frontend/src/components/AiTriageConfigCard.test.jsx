@@ -11,9 +11,9 @@ import { getAiConfig, updateAiTriageConfig } from '../services/api';
 describe('AiTriageConfigCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Valores diferentes dos defaults do useState (80% / 2 / 5 minutos) — se o
-    // useEffect de carregamento fosse removido, estes testes falhariam em vez
-    // de passar por coincidência com o default.
+    // Valores diferentes dos defaults do useState (80% / 2 / 3 minutos, o
+    // default do banco) — se o useEffect de carregamento fosse removido,
+    // estes testes falhariam em vez de passar por coincidência com o default.
     getAiConfig.mockResolvedValue({
       configured: true,
       triageConfidenceThreshold: 0.65,

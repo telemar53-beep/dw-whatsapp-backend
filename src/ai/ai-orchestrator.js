@@ -175,7 +175,11 @@ async function montarContextoTriagem(config, identidade) {
     linhas.push('Cliente NÃO identificado. Peça o CPF/CNPJ só se o setor exigir identificação (Financeiro, Suporte, Reativação): "Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Comercial de cliente novo nunca exige CPF. Depois de buscar_cliente, continue a triagem.');
     if (identidade.contestado) linhas.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');
   } else {
-    linhas.push(`Cliente identificado (${identidade.origem === 'memory' ? 'memória' : identidade.origem === 'phone' ? 'telefone' : 'CPF'}): primeiro nome ${identidade.primeiroNome}. Cumprimente-o pelo primeiro nome na primeira resposta. Se ele disser que não é ele ou que o nome está errado, chame esquecer_identificacao e peça o CPF.`);
+    // Minor (revisão final do branch inteiro): identidade.primeiroNome pode
+    // vir falsy (registro do SGP sem nome) mesmo com o cliente já
+    // identificado — sem o fallback, o contexto de sistema instruía "primeiro
+    // nome null", que o modelo podia repetir de volta ao cliente.
+    linhas.push(`Cliente identificado (${identidade.origem === 'memory' ? 'memória' : identidade.origem === 'phone' ? 'telefone' : 'CPF'}): primeiro nome ${identidade.primeiroNome || 'cliente'}. Cumprimente-o pelo primeiro nome na primeira resposta. Se ele disser que não é ele ou que o nome está errado, chame esquecer_identificacao e peça o CPF.`);
     if (contratos.length > 0) {
       linhas.push('Contratos dele:');
       for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);

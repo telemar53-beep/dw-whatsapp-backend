@@ -218,4 +218,15 @@ describe('admin ai routes', () => {
       .send({ triageConfidenceThreshold: 1.5, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: '' }).expect(400);
     await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('agent')}`).send({}).expect(403);
   });
+
+  // I2 (revisão final do branch inteiro): Number(null)/Number('')/Number(false)
+  // são todos 0 — sem checar o tipo antes, os três passavam a validação de
+  // faixa como se fosse 0% de confiança mínima escolhido de propósito.
+  test.each([null, '', false])('PUT /triage rejeita triageConfidenceThreshold = %p', async (valorInvalido) => {
+    const res = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ triageConfidenceThreshold: valorInvalido, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: '' })
+      .expect(400);
+    expect(res.body.error).toBe('triageConfidenceThreshold must be a number between 0 and 1');
+    expect(updateTriageConfig).not.toHaveBeenCalled();
+  });
 });

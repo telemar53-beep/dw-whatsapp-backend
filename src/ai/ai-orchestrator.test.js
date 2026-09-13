@@ -495,6 +495,15 @@ describe('perfil de triagem', () => {
     expect(sys).toMatch(/confirmar_nascimento/);
   });
 
+  // Minor (revisão final do branch inteiro): um cliente identificado (nível
+  // != none) mas sem primeiroNome no cadastro não pode virar "primeiro nome
+  // null" no contexto — o modelo repetiria isso de volta ao cliente.
+  test('identidade forte sem primeiroNome usa "cliente" em vez de null no contexto', async () => {
+    const sys = (await contexto({ identidade: { ...IDENT_FORTE, primeiroNome: null } })).messages[0].content;
+    expect(sys).toContain('primeiro nome cliente.');
+    expect(sys).not.toContain('primeiro nome null');
+  });
+
   // I3 (review): a fixture original (IDENT_FORTE) não tinha nenhum campo
   // perigoso — um teste de "não vaza nada" que não pode vazar nada não prova
   // nada. Agora o fixture carrega CPF, login PPPoE e sobrenome de verdade.

@@ -654,6 +654,34 @@ describe('PATCH /api/admin/channels/:id (aiEnabled)', () => {
     expect(res.status).toBe(403);
     expect(updateChannelAiEnabled).not.toHaveBeenCalled();
   });
+
+  // I3 (revisão final do branch inteiro): desligar aiEnabled precisa
+  // cascatear para aiTriageEnabled, senão religar aiEnabled no futuro
+  // reativaria a triagem por IA sozinha, sem ninguém ter escolhido isso.
+  test('turning aiEnabled off also turns aiTriageEnabled off and returns the cascaded channel', async () => {
+    updateChannelAiEnabled.mockResolvedValue({ id: 'ch-1', aiEnabled: false, aiTriageEnabled: true });
+    updateChannelAiTriageEnabled.mockResolvedValue({
+      id: 'ch-1',
+      type: 'baileys',
+      name: 'Suporte',
+      phoneNumber: '+5511999990001',
+      status: 'connected',
+      triageEnabled: false,
+      aiEnabled: false,
+      aiTriageEnabled: false,
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ aiEnabled: false });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelAiEnabled).toHaveBeenCalledWith('ch-1', false);
+    expect(updateChannelAiTriageEnabled).toHaveBeenCalledWith('ch-1', false);
+    expect(res.body.aiEnabled).toBe(false);
+    expect(res.body.aiTriageEnabled).toBe(false);
+  });
 });
 
 describe('PATCH /api/admin/channels/:id (aiTriageEnabled)', () => {

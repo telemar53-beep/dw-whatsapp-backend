@@ -14,6 +14,7 @@ const {
 } = require('../ai/ai.service');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { enqueueTriageTimeout } = require('../queue/ai-queue');
+const { mensagemSegura } = require('../ai/safe-error-log');
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -80,7 +81,7 @@ async function ingestInboundMessage({
       const cfg = await getAiConfig();
       await enqueueTriageTimeout({ conversationId: conversation.id, delayMs: (cfg.triageTimeoutMinutes || 3) * 60000 });
     } catch (err) {
-      console.error(`Failed to schedule triage timeout for conversation ${conversation.id}`, err);
+      console.error(`Failed to schedule triage timeout for conversation ${conversation.id}: ${mensagemSegura(err)}`);
     }
   }
   let message;

@@ -1,4 +1,4 @@
-const { findTool } = require('./tool-registry');
+const { findTool, perfilTriagem } = require('./tool-registry');
 const { isToolEnabled } = require('./ai-config.repository');
 const { mensagemSegura } = require('./safe-error-log');
 
@@ -75,13 +75,14 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     }
 
     // Entrega de dado (boleto, PIX) só com identidade forte — regra em código,
-    // não em prompt. A marcação vale sempre que o turno usa um perfil fixo
-    // (a triagem, via contexto.ferramentasPermitidas) OU já existe
-    // contexto.identidade; só fica inerte quando nenhum dos dois está
+    // não em prompt. A marcação vale sempre que o turno usa o perfil de
+    // triagem (perfilTriagem: contexto.ferramentasPermitidas fixo OU já existe
+    // contexto.identidade); só fica inerte quando nenhum dos dois está
     // presente (o assistente clássico, sem perfil de triagem e sem
-    // resolução de identidade — um humano acompanha ali).
-    const perfilFixo = Array.isArray(contexto.ferramentasPermitidas);
-    if (tool.exigeIdentidadeForte && (perfilFixo || contexto.identidade)
+    // resolução de identidade — um humano acompanha ali). Mesmo
+    // discriminador usado em tool-registry.js, importado em vez de duplicado
+    // aqui, para as duas checagens nunca divergirem.
+    if (tool.exigeIdentidadeForte && perfilTriagem(contexto)
         && !(contexto.identidade && contexto.identidade.nivel === 'forte')) return recusa('identity_not_confirmed', nome);
 
     // Uma ferramenta pode declarar o próprio orçamento (tool.timeoutMs): a

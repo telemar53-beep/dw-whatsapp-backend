@@ -130,7 +130,7 @@ const TOOLS = [
         return {
           cliente: { nome: primeiroNome(client.name) },
           contratos: contracts.map((c) => ({
-            id: c.id, plano: c.plan, status: normalizeContract(c).status,
+            id: c.id, status: normalizeContract(c).status,
           })),
         };
       }
@@ -358,16 +358,20 @@ const TOOLS = [
       required: ['contratoId'],
     },
     validar: validarContratoId,
-    async executar(args) {
+    async executar(args, contexto) {
       const result = await sgpClient.getDuplicateInvoice(args.contratoId);
       if (!result.hasOpenInvoice) return { temFaturaAberta: false, faturas: [] };
-      return {
+      const resposta = {
         temFaturaAberta: true,
         faturas: result.duplicates.map((d) => ({
           faturaId: d.id, vencimento: d.dueDate, valor: d.value,
           linhaDigitavel: d.barCode, linkBoleto: d.boletoLink,
         })),
       };
+      // Mesma marcação de gerar_pix: na triagem, gerar a segunda via já
+      // resolve o pedido do cliente sem precisar de um atendente humano.
+      if (contexto && contexto.identidade) contexto.resolvidoPelaIa = true;
+      return resposta;
     },
   },
   {
@@ -547,6 +551,10 @@ const TOOLS = [
     parametros: { type: 'object', properties: {} },
     validar() { return { ok: true, args: {} }; },
     async executar(args, contexto) {
+      // I6 (revisão final do branch inteiro): sem esta guarda, o cartão de
+      // permissões do assistente clássico bastaria para alcançar uma
+      // ferramenta pensada só para a recepcionista da triagem.
+      if (!perfilTriagem(contexto)) return erro('esquecer_identificacao is only available during AI triage');
       contexto.identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], client: null, dataNascimento: null, contestado: true, nascimentoTentado: false };
       contexto.contracts = [];
       if (contexto.contact) {
@@ -590,6 +598,20 @@ const TOOLS = [
       if (!primeira.boletoLink) return { enviado: false, motivo: 'Boleto sem link para download' };
       const buffer = await sgpClient.downloadBoletoPdf(primeira.boletoLink);
       const mediaPath = await saveMediaFile(buffer, '.pdf');
+
+      // I1 (revisão final do branch inteiro): entre o início deste turno (a
+      // OpenAI, o download do PDF) e este ponto, um atendente humano pode ter
+      // assumido a conversa, ou ela pode ter sido fechada/silenciada — sem
+      // reler agora, o PDF sairia mesmo com um humano já no comando.
+      const atual = await getConversationWithContact(contexto.conversationId);
+      if (
+        !atual || atual.assignedAgentId
+        || atual.status === 'closed' || atual.status === 'silent'
+        || atual.triageState !== 'pending'
+      ) {
+        return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+      }
+
       await enqueueOutboundMessage({
         conversationId: contexto.conversationId, channelId: contexto.channelId,
         content: null, messageType: 'document', mediaPath,
@@ -630,6 +652,10 @@ const TOOLS = [
       return { ok: true, args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca } };
     },
     async executar(args, contexto) {
+      // I6 (revisão final do branch inteiro): mesma guarda de
+      // esquecer_identificacao — concluir_triagem só existe para a
+      // recepcionista da triagem, nunca para o assistente clássico.
+      if (!perfilTriagem(contexto)) return erro('concluir_triagem is only available during AI triage');
       const setor = (await listSectors()).find((s) => s.id === args.setorId);
       if (!setor) return erro('Unknown setorId');
       let motivo = null;
@@ -687,4 +713,4 @@ function toOpenAiTools(nomesHabilitados) {
   }));
 }
 
-module.exports = { listTools, findTool, toOpenAiTools };
+module.exports = { listTools, findTool, toOpenAiTools, perfilTriagem };

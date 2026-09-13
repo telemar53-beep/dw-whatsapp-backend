@@ -186,6 +186,16 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     if (!channel) {
       return res.status(404).json({ error: 'Channel not found' });
     }
+    // I3 (revisão final do branch inteiro): desligar aiEnabled sem também
+    // desligar aiTriageEnabled deixava a coluna aiTriageEnabled=true órfã no
+    // banco — um religar futuro do aiEnabled reativaria a triagem por IA sem
+    // ninguém ter escolhido isso de novo.
+    if (aiEnabled === false) {
+      channel = await updateChannelAiTriageEnabled(req.params.id, false);
+      if (!channel) {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
+    }
   }
   if (aiTriageEnabled !== undefined) {
     const existing = await findChannelById(req.params.id);

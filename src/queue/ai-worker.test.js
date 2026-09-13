@@ -215,11 +215,26 @@ describe('ai-worker — triagem', () => {
     }));
   });
 
+  test('saudação do período errado é corrigida em qualquer turno ("Bom dia" às 14h)', async () => {
+    const { saudacaoDaHora } = jest.requireActual('../ai/saudacao');
+    const certa = saudacaoDaHora();
+    const errada = certa === 'Bom dia' ? 'Boa noite' : 'Bom dia';
+    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
+    getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 1 });
+    runAiTurn.mockResolvedValue({ texto: `${errada}, Willemberg! Verifiquei aqui que sua conexão está offline.`, toolsExecutadas: [], erro: null, triagemConcluida: null });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: `${certa}, Willemberg! Verifiquei aqui que sua conexão está offline.` }));
+  });
+
   test('a saudação não é duplicada nem aplicada fora do primeiro turno', async () => {
     resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
-    runAiTurn.mockResolvedValue({ texto: 'Bom dia, Willemberg! Me diz o endereço.', toolsExecutadas: [], erro: null, triagemConcluida: null });
+    // A saudação do período certo para a hora em que o teste roda: o worker
+    // agora corrige "Bom dia" às 14h, então o texto precisa já vir certo.
+    const { saudacaoDaHora } = jest.requireActual('../ai/saudacao');
+    const jaCumprimenta = `${saudacaoDaHora()}, Willemberg! Me diz o endereço.`;
+    runAiTurn.mockResolvedValue({ texto: jaCumprimenta, toolsExecutadas: [], erro: null, triagemConcluida: null });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
-    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'Bom dia, Willemberg! Me diz o endereço.' }));
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: jaCumprimenta }));
 
     enqueueOutboundMessage.mockClear();
     getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 1 });

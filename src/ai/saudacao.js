@@ -39,4 +39,21 @@ function garantirSaudacao(texto, primeiroNome, agora = new Date()) {
   return `${saudacaoDaHora(agora)}${nome}! ${texto}`;
 }
 
-module.exports = { saudacaoDaHora, comecaComSaudacao, garantirSaudacao };
+// "Bom dia" às 14:56 (teste real 2026-09-13): o modelo sabia a hora pelo
+// prompt e errou mesmo assim. Uma saudação de período no começo do texto é
+// trocada pela do período certo; "Olá"/"Oi" ficam como estão.
+const SAUDACAO_DE_PERIODO = /^([\s\p{Extended_Pictographic}*_~]*)(bom dia|boa tarde|boa noite)/iu;
+
+function corrigirPeriodoDaSaudacao(texto, agora = new Date()) {
+  if (!texto) return texto;
+  const certa = saudacaoDaHora(agora);
+  return String(texto).replace(SAUDACAO_DE_PERIODO, (tudo, prefixo, achada) => {
+    if (achada.toLowerCase() === certa.toLowerCase()) return tudo;
+    // Preserva caixa: "BOM DIA" → "BOA TARDE", "bom dia" → "boa tarde".
+    const ajustada = achada === achada.toUpperCase() ? certa.toUpperCase()
+      : achada === achada.toLowerCase() ? certa.toLowerCase() : certa;
+    return prefixo + ajustada;
+  });
+}
+
+module.exports = { saudacaoDaHora, comecaComSaudacao, garantirSaudacao, corrigirPeriodoDaSaudacao };

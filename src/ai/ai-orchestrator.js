@@ -43,10 +43,12 @@ const HISTORICO_MAX = 20;
 // chamada) e ainda assim corta bem antes do pior caso multi-minuto.
 const TURNO_MAX_MS = 120000;
 
-// "Vou encaminhar", "encaminhando seu atendimento", "um atendente continua
-// daqui", "vou transferir", "direcionado para o setor": o modelo anunciando
-// o encaminhamento ao cliente.
-const ANUNCIO_DE_ENCAMINHAMENTO = /vou (te )?(encaminhar|transferir|direcionar)|encaminh(ar|ando|ei) (o |a |seu |sua |este |esta )?(atendimento|solicita[çc][aã]o|pedido|caso|chamado)|(direcionad|encaminhad)[oa] para o setor|um atendente (continua|vai continuar|d[aá] continuidade|dar[aá] continuidade)/i;
+// "Vou encaminhar", "vou repassar isso para o setor", "encaminhando seu
+// atendimento", "um atendente continua daqui", "direcionado para o setor": o
+// modelo anunciando o encaminhamento ao cliente. Qualquer "vou … setor" na
+// mesma frase conta — o 2º teste real usou "repassar", que a lista de verbos
+// não tinha.
+const ANUNCIO_DE_ENCAMINHAMENTO = /\bvou (te )?(encaminhar|transferir|direcionar|repassar|passar|levar|acionar)\b|\bvou\b[^.!?\n]{0,80}\bsetor\b|encaminh(ar|ando|ei) (o |a |seu |sua |este |esta )?(atendimento|solicita[çc][aã]o|pedido|caso|chamado)|(direcionad|encaminhad|repassad)[oa] para o setor|um atendente (continua|vai continuar|d[aá] continuidade|dar[aá] continuidade)/i;
 
 function anunciaEncaminhamento(texto) {
   return ANUNCIO_DE_ENCAMINHAMENTO.test(String(texto || ''));

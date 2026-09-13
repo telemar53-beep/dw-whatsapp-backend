@@ -14,7 +14,7 @@ const { findChannelById } = require('../channels/channel.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { mensagemSegura } = require('../ai/safe-error-log');
 const { paraWhatsApp } = require('../ai/whatsapp-format');
-const { garantirSaudacao } = require('../ai/saudacao');
+const { garantirSaudacao, corrigirPeriodoDaSaudacao } = require('../ai/saudacao');
 const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
 
 async function handleAiJob(data) {
@@ -185,7 +185,9 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // === 0 identifica o primeiro turno: só depois de responder é que o worker
   // incrementa triage_attempts.
   const primeiroTurno = attempts === 0;
-  const textoDoModelo = paraWhatsApp(turno.texto);
+  // Em qualquer turno, "Bom dia" às 14h vira "Boa tarde" (o modelo erra mesmo
+  // sabendo a hora); no primeiro turno, além disso, a saudação é garantida.
+  const textoDoModelo = corrigirPeriodoDaSaudacao(paraWhatsApp(turno.texto));
   const texto = primeiroTurno ? garantirSaudacao(textoDoModelo, identidade && identidade.primeiroNome) : textoDoModelo;
   if (texto) {
     await enqueueOutboundMessage({ conversationId: conversation.id, channelId: conversation.channelId, content: texto, sentBy: 'ai' });

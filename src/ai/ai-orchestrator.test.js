@@ -863,6 +863,20 @@ describe('perfil de triagem', () => {
       expect(r.texto).toBe('Vou encaminhar seu atendimento para o Suporte.');
     });
 
+    test('"vou repassar isso para o setor" também conta como anúncio (2º teste real)', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Entendi. Vou repassar isso para o setor de Suporte verificando a conexão offline.' }, usage: {} })
+        .mockResolvedValueOnce({
+          message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"offline","confianca":0.9}' } }] },
+          usage: {},
+        })
+        .mockResolvedValueOnce({ message: { content: 'Willemberg, o Suporte continua daqui.' }, usage: {} });
+      executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      expect(createChatCompletion.mock.calls[1][0].toolChoice).toBe('concluir_triagem');
+      expect(r.texto).toBe('Willemberg, o Suporte continua daqui.');
+    });
+
     test('texto sem anúncio de encaminhamento não ganha volta extra', async () => {
       createChatCompletion.mockResolvedValueOnce({ message: { content: 'Me diz o endereço, por favor?' }, usage: {} });
       await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });

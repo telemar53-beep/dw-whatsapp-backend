@@ -1,4 +1,4 @@
-const { saudacaoDaHora, comecaComSaudacao, garantirSaudacao } = require('./saudacao');
+const { saudacaoDaHora, comecaComSaudacao, garantirSaudacao, corrigirPeriodoDaSaudacao } = require('./saudacao');
 
 // Instantes em UTC escolhidos para cair nas faixas certas em São Paulo (UTC-3).
 const MANHA = new Date('2026-09-13T11:30:00-03:00');
@@ -52,5 +52,22 @@ describe('garantirSaudacao', () => {
   test('texto vazio volta como veio', () => {
     expect(garantirSaudacao(null, 'Ana', MANHA)).toBeNull();
     expect(garantirSaudacao('', 'Ana', MANHA)).toBe('');
+  });
+});
+
+describe('corrigirPeriodoDaSaudacao', () => {
+  test('troca a saudação do período errado pela certa, preservando o resto', () => {
+    // Teste real: "Bom dia, Willemberg!" às 14:56.
+    expect(corrigirPeriodoDaSaudacao('Bom dia, Willemberg! Verifiquei aqui que sua conexão está offline.', TARDE))
+      .toBe('Boa tarde, Willemberg! Verifiquei aqui que sua conexão está offline.');
+    expect(corrigirPeriodoDaSaudacao('boa noite, tudo bem?', MANHA)).toBe('bom dia, tudo bem?');
+    expect(corrigirPeriodoDaSaudacao('👋 Boa tarde!', NOITE)).toBe('👋 Boa noite!');
+  });
+
+  test('não mexe quando o período está certo, nem em Olá/Oi, nem no meio do texto', () => {
+    expect(corrigirPeriodoDaSaudacao('Boa tarde, Ana!', TARDE)).toBe('Boa tarde, Ana!');
+    expect(corrigirPeriodoDaSaudacao('Olá! Bom dia para você também.', TARDE)).toBe('Olá! Bom dia para você também.');
+    expect(corrigirPeriodoDaSaudacao('Tenha um bom dia!', TARDE)).toBe('Tenha um bom dia!');
+    expect(corrigirPeriodoDaSaudacao(null, TARDE)).toBeNull();
   });
 });

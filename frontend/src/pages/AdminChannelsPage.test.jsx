@@ -22,6 +22,7 @@ import {
   deleteChannel,
   setChannelAiEnabled,
   setChannelAiTriageEnabled,
+  setChannelAiNightModeEnabled,
 } from '../services/api';
 
 vi.mock('../hooks/useChannels');
@@ -422,6 +423,62 @@ describe('AdminChannelsPage', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /triagem com ia/i }));
 
     expect(await screen.findByText('Canal não encontrado')).toBeInTheDocument();
+  });
+
+  test('o interruptor do atendimento noturno fica desabilitado sem a triagem com IA', () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', aiEnabled: true, aiTriageEnabled: false, aiNightModeEnabled: false }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+    const checkbox = screen.getByRole('checkbox', { name: /atendimento noturno com ia/i });
+    expect(checkbox).toBeDisabled();
+    expect(checkbox).not.toBeChecked();
+  });
+
+  test('liga o atendimento noturno num canal com triagem com IA ligada', async () => {
+    const refresh = vi.fn();
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', aiEnabled: true, aiTriageEnabled: true, aiNightModeEnabled: false }],
+      loading: false,
+      refresh,
+    });
+    setChannelAiNightModeEnabled.mockResolvedValue({});
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    const checkbox = screen.getByRole('checkbox', { name: /atendimento noturno com ia/i });
+    expect(checkbox).not.toBeDisabled();
+    await userEvent.click(checkbox);
+
+    await waitFor(() => expect(setChannelAiNightModeEnabled).toHaveBeenCalledWith('ch1', true, 'tok-123'));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('mostra o erro quando o atendimento noturno falha', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', aiEnabled: true, aiTriageEnabled: true, aiNightModeEnabled: false }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    setChannelAiNightModeEnabled.mockRejectedValue({ body: { error: 'aiNightModeEnabled requires aiTriageEnabled' } });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /atendimento noturno com ia/i }));
+
+    expect(await screen.findByText('aiNightModeEnabled requires aiTriageEnabled')).toBeInTheDocument();
   });
 
   test('lets an admin edit the WABA ID of a meta_cloud channel', async () => {

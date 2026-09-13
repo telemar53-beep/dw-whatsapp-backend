@@ -285,6 +285,10 @@ export function setChannelAiTriageEnabled(id, aiTriageEnabled, token) {
   return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { aiTriageEnabled }, token });
 }
 
+export function setChannelAiNightModeEnabled(id, aiNightModeEnabled, token) {
+  return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { aiNightModeEnabled }, token });
+}
+
 export function setChannelWabaId(id, wabaId, token) {
   return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { wabaId }, token });
 }

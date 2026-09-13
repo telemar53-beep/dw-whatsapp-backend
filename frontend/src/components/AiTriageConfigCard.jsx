@@ -18,6 +18,8 @@ function AiTriageConfigCard() {
   const [timeoutMinutes, setTimeoutMinutes] = useState(3);
   const [extraInstructions, setExtraInstructions] = useState('');
   const [resolvedReasonId, setResolvedReasonId] = useState('');
+  const [nightStart, setNightStart] = useState('');
+  const [nightEnd, setNightEnd] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -36,11 +38,19 @@ function AiTriageConfigCard() {
     }
     setExtraInstructions(config.triageExtraInstructions || '');
     setResolvedReasonId(config.triageResolvedReasonId || '');
+    setNightStart(config.nightStartTime || '');
+    setNightEnd(config.nightEndTime || '');
   }, [config]);
 
   async function handleSave(event) {
     event.preventDefault();
     setError(null);
+    // Meia janela (só início ou só fim) não é janela: o backend recusa, e
+    // avisar aqui poupa a viagem.
+    if (Boolean(nightStart) !== Boolean(nightEnd)) {
+      setError('Informe início e fim do atendimento noturno, ou deixe os dois vazios');
+      return;
+    }
     setSaving(true);
     try {
       await updateAiTriageConfig(
@@ -52,6 +62,8 @@ function AiTriageConfigCard() {
           // '' é "não encerrar": vai como null, que é o que desliga o
           // encerramento pela IA no backend.
           triageResolvedReasonId: resolvedReasonId || null,
+          nightStartTime: nightStart || null,
+          nightEndTime: nightEnd || null,
         },
         token
       );
@@ -128,6 +140,39 @@ function AiTriageConfigCard() {
         <p className="text-[12px] text-wa-muted">
           Com um motivo escolhido, a IA pergunta se o cliente precisa de mais algo e, se não,
           encerra o atendimento com esse motivo. Sem motivo, a conversa vai para a fila como hoje.
+        </p>
+      </div>
+
+      <div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="triage-night-start" className={labelClass}>
+              Atendimento noturno com IA — início
+            </label>
+            <input
+              id="triage-night-start"
+              type="time"
+              value={nightStart}
+              onChange={(e) => setNightStart(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="triage-night-end" className={labelClass}>
+              Atendimento noturno com IA — fim
+            </label>
+            <input
+              id="triage-night-end"
+              type="time"
+              value={nightEnd}
+              onChange={(e) => setNightEnd(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        </div>
+        <p className="text-[12px] text-wa-muted">
+          Todos os dias, feriados incluídos. Ex.: 20:00 a 08:00. Cada canal ainda precisa do
+          interruptor "Atendimento noturno com IA".
         </p>
       </div>
 

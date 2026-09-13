@@ -20,6 +20,7 @@ import {
   deleteChannel,
   setChannelAiEnabled,
   setChannelAiTriageEnabled,
+  setChannelAiNightModeEnabled,
 } from '../services/api';
 import { isOfficialChannelType, channelTypeLabel } from '../utils/channelTypes';
 
@@ -96,6 +97,7 @@ function ChannelCard({
   onToggleTriage,
   onToggleAi,
   onToggleAiTriage,
+  onToggleAiNightMode,
   onSaveWabaId,
   onRefresh,
   onReconnect,
@@ -144,6 +146,17 @@ function ChannelCard({
           className="h-4 w-4 accent-wa-green"
         />
         Triagem com IA
+      </label>
+
+      <label className="mt-2 flex items-center gap-2 text-[14px] text-wa-muted">
+        <input
+          type="checkbox"
+          checked={!!channel.aiNightModeEnabled}
+          disabled={!channel.aiTriageEnabled}
+          onChange={(e) => onToggleAiNightMode(channel.id, e.target.checked)}
+          className="h-4 w-4 accent-wa-green"
+        />
+        Atendimento noturno com IA
       </label>
 
       {isOfficialChannelType(channel.type) && (
@@ -202,6 +215,7 @@ function AdminChannelsPage() {
   const [triageToggleError, setTriageToggleError] = useState(null);
   const [aiToggleError, setAiToggleError] = useState(null);
   const [aiTriageToggleError, setAiTriageToggleError] = useState(null);
+  const [aiNightModeToggleError, setAiNightModeToggleError] = useState(null);
   const [wabaIdDrafts, setWabaIdDrafts] = useState({});
   const [wabaIdError, setWabaIdError] = useState(null);
   const [channelActionError, setChannelActionError] = useState(null);
@@ -298,6 +312,16 @@ function AdminChannelsPage() {
     }
   }
 
+  async function handleToggleAiNightMode(channelId, aiNightModeEnabled) {
+    setAiNightModeToggleError(null);
+    try {
+      await setChannelAiNightModeEnabled(channelId, aiNightModeEnabled, token);
+      refresh();
+    } catch (err) {
+      setAiNightModeToggleError((err.body && err.body.error) || 'Falha ao atualizar o atendimento noturno deste canal');
+    }
+  }
+
   async function handleSaveWabaId(channelId) {
     setWabaIdError(null);
     try {
@@ -383,6 +407,7 @@ function AdminChannelsPage() {
                   <ErrorNote>{triageToggleError}</ErrorNote>
                   <ErrorNote>{aiToggleError}</ErrorNote>
                   <ErrorNote>{aiTriageToggleError}</ErrorNote>
+                  <ErrorNote>{aiNightModeToggleError}</ErrorNote>
                   <ErrorNote>{wabaIdError}</ErrorNote>
                   <ErrorNote>{channelActionError}</ErrorNote>
 
@@ -406,6 +431,7 @@ function AdminChannelsPage() {
                         onToggleTriage={handleToggleTriage}
                         onToggleAi={handleToggleAi}
                         onToggleAiTriage={handleToggleAiTriage}
+                        onToggleAiNightMode={handleToggleAiNightMode}
                         onSaveWabaId={handleSaveWabaId}
                         onRefresh={refresh}
                         onReconnect={handleReconnect}

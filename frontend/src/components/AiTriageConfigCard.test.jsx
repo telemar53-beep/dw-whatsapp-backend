@@ -52,6 +52,8 @@ describe('AiTriageConfigCard', () => {
         triageTimeoutMinutes: 12,
         triageExtraInstructions: 'Pergunte o CPF antes de tudo',
         triageResolvedReasonId: null,
+        nightStartTime: null,
+        nightEndTime: null,
       },
       't'
     ));
@@ -93,5 +95,55 @@ describe('AiTriageConfigCard', () => {
     await waitFor(() => expect(updateAiTriageConfig).toHaveBeenLastCalledWith(
       expect.objectContaining({ triageResolvedReasonId: null }), 't'
     ));
+  });
+
+  describe('janela do atendimento noturno', () => {
+    test('carrega a janela salva e a manda de volta ao gravar', async () => {
+      getAiConfig.mockResolvedValue({
+        configured: true,
+        triageConfidenceThreshold: 0.65,
+        triageMaxQuestions: 4,
+        triageTimeoutMinutes: 12,
+        triageExtraInstructions: 'Pergunte o CPF antes de tudo',
+        triageResolvedReasonId: null,
+        nightStartTime: '20:00',
+        nightEndTime: '08:00',
+      });
+      updateAiTriageConfig.mockResolvedValue({});
+      render(<AiTriageConfigCard />);
+
+      expect(await screen.findByLabelText(/atendimento noturno com ia — início/i)).toHaveValue('20:00');
+      expect(screen.getByLabelText(/atendimento noturno com ia — fim/i)).toHaveValue('08:00');
+
+      await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+      await waitFor(() => expect(updateAiTriageConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ nightStartTime: '20:00', nightEndTime: '08:00' }), 't'
+      ));
+    });
+
+    test('salva a janela preenchida pelo admin', async () => {
+      updateAiTriageConfig.mockResolvedValue({});
+      render(<AiTriageConfigCard />);
+
+      const inicio = await screen.findByLabelText(/atendimento noturno com ia — início/i);
+      await userEvent.type(inicio, '19:30');
+      await userEvent.type(screen.getByLabelText(/atendimento noturno com ia — fim/i), '07:00');
+      await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+      await waitFor(() => expect(updateAiTriageConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ nightStartTime: '19:30', nightEndTime: '07:00' }), 't'
+      ));
+    });
+
+    test('recusa meia janela: só o início preenchido', async () => {
+      render(<AiTriageConfigCard />);
+
+      const inicio = await screen.findByLabelText(/atendimento noturno com ia — início/i);
+      await userEvent.type(inicio, '19:30');
+      await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+      expect(await screen.findByText('Informe início e fim do atendimento noturno, ou deixe os dois vazios')).toBeInTheDocument();
+      expect(updateAiTriageConfig).not.toHaveBeenCalled();
+    });
   });
 });

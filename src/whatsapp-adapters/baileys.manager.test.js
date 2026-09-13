@@ -966,10 +966,8 @@ describe('baileys.manager', () => {
         { documentWithCaptionMessage: { message: { x: 1 } } },
         {
           messageId: 'wa-1',
-          additionalNodes: [
-            { tag: 'biz', attrs: { native_flow_name: 'payment_info' } },
-            { tag: 'bot', attrs: { biz_bot: '1' } },
-          ],
+          // Só o biz: o nó bot (biz_bot) marcava o cartão como robô no celular.
+          additionalNodes: [{ tag: 'biz', attrs: { native_flow_name: 'payment_info' } }],
         }
       );
       expect(result).toEqual({ whatsappMessageId: 'wa-1' });
@@ -992,7 +990,8 @@ describe('baileys.manager', () => {
     };
 
     test('a chave do bot\u00e3o payment_info \u00e9 o pr\u00f3prio copia e cola, com tipo EVP', () => {
-      const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'DW Telecom' });
+      // O nome do canal ("automação") não pode virar o nome do recebedor no cartão.
+      const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'automação' });
       const botoes = content.interactiveMessage.nativeFlowMessage.buttons;
       expect(botoes).toHaveLength(1);
       expect(botoes[0].name).toBe('payment_info');

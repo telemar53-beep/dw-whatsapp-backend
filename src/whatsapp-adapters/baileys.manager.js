@@ -521,7 +521,9 @@ function buildPixNativeFlowContent(card, channel) {
                 {
                   type: 'pix_static_code',
                   pix_static_code: {
-                    merchant_name: (card.merchant && card.merchant.name) || (channel && channel.name) || 'DW Telecom',
+                    // O nome do canal ("automação", "principal"…) não é nome de
+                    // recebedor: no 2º teste real ele apareceu no cabeçalho do cartão.
+                    merchant_name: (card.merchant && card.merchant.name) || 'DW Telecom',
                     key: card.pixCode,
                     key_type: 'EVP',
                   },
@@ -538,13 +540,17 @@ function buildPixNativeFlowContent(card, channel) {
   };
 }
 
-// Nós binários que o cliente oficial emite junto de uma mensagem interativa de
-// pagamento, e sem os quais o celular do destinatário descarta o cartão sem
-// erro nenhum (o Baileys de fábrica não os adiciona — só os forks). O `bot`
-// com biz_bot só vale em conversa 1:1, que é o único caso deste sistema.
+// Nó binário que o cliente oficial emite junto de uma mensagem interativa de
+// pagamento, e sem o qual o celular do destinatário descarta o cartão sem
+// erro nenhum (o Baileys de fábrica não o adiciona — só os forks).
+//
+// Sem o nó `bot` (biz_bot=1) de propósito: no 2º teste real (2026-09-13) ele
+// fez o WhatsApp marcar o cartão como mensagem de robô — selo "IA", aviso
+// "A IA da Meta recebe as mensagens" e polegares de avaliação — e esconder o
+// título e o valor da fatura. Se sem ele o cartão deixar de chegar, é esta
+// lista que volta a ter `{ tag: 'bot', attrs: { biz_bot: '1' } }`.
 const PIX_CARD_ADDITIONAL_NODES = [
   { tag: 'biz', attrs: { native_flow_name: 'payment_info' } },
-  { tag: 'bot', attrs: { biz_bot: '1' } },
 ];
 
 async function sendPixCardMessage(channel, toPhoneNumber, card) {

@@ -14,6 +14,7 @@ const {
   updateChannelWelcomeMessage,
   updateChannelAiEnabled,
   updateChannelAiTriageEnabled,
+  updateChannelAiNightModeEnabled,
   countChannelDependents,
   deleteChannel,
 } = require('../channels/channel.repository');
@@ -55,6 +56,7 @@ function toChannelResponse(channel) {
     welcomeMessage: channel.welcomeMessage,
     aiEnabled: channel.aiEnabled,
     aiTriageEnabled: channel.aiTriageEnabled,
+    aiNightModeEnabled: channel.aiNightModeEnabled,
     wabaId: isOfficialChannelType(channel.type) ? channel.config.wabaId : undefined,
   };
 }
@@ -114,16 +116,17 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  const { triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled, aiTriageEnabled } = req.body || {};
+  const { triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled, aiTriageEnabled, aiNightModeEnabled } = req.body || {};
   if (
     triageEnabled === undefined &&
     wabaId === undefined &&
     hidden === undefined &&
     welcomeMessage === undefined &&
     aiEnabled === undefined &&
-    aiTriageEnabled === undefined
+    aiTriageEnabled === undefined &&
+    aiNightModeEnabled === undefined
   ) {
-    return res.status(400).json({ error: 'triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled or aiTriageEnabled is required' });
+    return res.status(400).json({ error: 'triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled, aiTriageEnabled or aiNightModeEnabled is required' });
   }
   if (hidden !== undefined && typeof hidden !== 'boolean') {
     return res.status(400).json({ error: 'hidden must be a boolean' });
@@ -133,6 +136,9 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   }
   if (aiTriageEnabled !== undefined && typeof aiTriageEnabled !== 'boolean') {
     return res.status(400).json({ error: 'aiTriageEnabled must be a boolean' });
+  }
+  if (aiNightModeEnabled !== undefined && typeof aiNightModeEnabled !== 'boolean') {
+    return res.status(400).json({ error: 'aiNightModeEnabled must be a boolean' });
   }
   if (welcomeMessage !== undefined && welcomeMessage !== null && typeof welcomeMessage !== 'string') {
     return res.status(400).json({ error: 'welcomeMessage must be a string' });
@@ -195,6 +201,12 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
       if (!channel) {
         return res.status(404).json({ error: 'Channel not found' });
       }
+      // Pela mesma razão: o modo noturno depende da triagem, então desligar a
+      // IA não pode deixar o interruptor do noturno ligado no banco.
+      channel = await updateChannelAiNightModeEnabled(req.params.id, false);
+      if (!channel) {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
     }
   }
   if (aiTriageEnabled !== undefined) {
@@ -206,6 +218,26 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
       return res.status(400).json({ error: 'aiTriageEnabled requires aiEnabled' });
     }
     channel = await updateChannelAiTriageEnabled(req.params.id, aiTriageEnabled);
+    if (!channel) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+    // Sem triagem não existe modo noturno: quem desliga uma desliga o outro.
+    if (aiTriageEnabled === false) {
+      channel = await updateChannelAiNightModeEnabled(req.params.id, false);
+      if (!channel) {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
+    }
+  }
+  if (aiNightModeEnabled !== undefined) {
+    const existing = await findChannelById(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+    if (aiNightModeEnabled === true && !(existing.aiEnabled && existing.aiTriageEnabled)) {
+      return res.status(400).json({ error: 'aiNightModeEnabled requires aiTriageEnabled' });
+    }
+    channel = await updateChannelAiNightModeEnabled(req.params.id, aiNightModeEnabled);
     if (!channel) {
       return res.status(404).json({ error: 'Channel not found' });
     }

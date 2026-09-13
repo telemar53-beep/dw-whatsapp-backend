@@ -16,6 +16,7 @@ const {
   updateChannelWelcomeMessage,
   updateChannelAiEnabled,
   updateChannelAiTriageEnabled,
+  updateChannelAiNightModeEnabled,
   countChannelDependents,
   deleteChannel,
 } = require('../channels/channel.repository');
@@ -670,6 +671,17 @@ describe('PATCH /api/admin/channels/:id (aiEnabled)', () => {
       aiEnabled: false,
       aiTriageEnabled: false,
     });
+    updateChannelAiNightModeEnabled.mockResolvedValue({
+      id: 'ch-1',
+      type: 'baileys',
+      name: 'Suporte',
+      phoneNumber: '+5511999990001',
+      status: 'connected',
+      triageEnabled: false,
+      aiEnabled: false,
+      aiTriageEnabled: false,
+      aiNightModeEnabled: false,
+    });
 
     const res = await request(buildApp())
       .patch('/api/admin/channels/ch-1')
@@ -681,6 +693,28 @@ describe('PATCH /api/admin/channels/:id (aiEnabled)', () => {
     expect(updateChannelAiTriageEnabled).toHaveBeenCalledWith('ch-1', false);
     expect(res.body.aiEnabled).toBe(false);
     expect(res.body.aiTriageEnabled).toBe(false);
+  });
+
+  // Desligar a IA precisa cascatear também para o modo noturno: ele depende
+  // da triagem, e um interruptor órfão ligaria o noturno sozinho depois.
+  test('turning aiEnabled off also turns aiNightModeEnabled off', async () => {
+    updateChannelAiEnabled.mockResolvedValue({ id: 'ch-1', aiEnabled: false, aiTriageEnabled: true });
+    updateChannelAiTriageEnabled.mockResolvedValue({ id: 'ch-1', aiEnabled: false, aiTriageEnabled: false });
+    updateChannelAiNightModeEnabled.mockResolvedValue({
+      id: 'ch-1',
+      aiEnabled: false,
+      aiTriageEnabled: false,
+      aiNightModeEnabled: false,
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ aiEnabled: false });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelAiNightModeEnabled).toHaveBeenCalledWith('ch-1', false);
+    expect(res.body.aiNightModeEnabled).toBe(false);
   });
 });
 
@@ -706,6 +740,105 @@ describe('PATCH /api/admin/channels/:id (aiTriageEnabled)', () => {
       .send({ aiTriageEnabled: 'sim' });
     expect(res.status).toBe(400);
     expect(updateChannelAiTriageEnabled).not.toHaveBeenCalled();
+  });
+
+  // Desligar a triagem desliga o modo noturno junto: o noturno é uma forma
+  // de triagem, não sobrevive sem ela.
+  test('turning aiTriageEnabled off also turns aiNightModeEnabled off', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
+    updateChannelAiTriageEnabled.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: false });
+    updateChannelAiNightModeEnabled.mockResolvedValue({
+      id: 'ch-1',
+      aiEnabled: true,
+      aiTriageEnabled: false,
+      aiNightModeEnabled: false,
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiTriageEnabled: false });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelAiNightModeEnabled).toHaveBeenCalledWith('ch-1', false);
+    expect(res.body.aiNightModeEnabled).toBe(false);
+  });
+});
+
+describe('PATCH /api/admin/channels/:id (aiNightModeEnabled)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const admin = { Authorization: `Bearer ${tokenFor('agent-1', 'admin')}` };
+
+  test('liga o modo noturno num canal com triagem ligada', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
+    updateChannelAiNightModeEnabled.mockResolvedValue({
+      id: 'ch-1',
+      aiEnabled: true,
+      aiTriageEnabled: true,
+      aiNightModeEnabled: true,
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiNightModeEnabled: true })
+      .expect(200);
+
+    expect(updateChannelAiNightModeEnabled).toHaveBeenCalledWith('ch-1', true);
+    expect(res.body.aiNightModeEnabled).toBe(true);
+  });
+
+  test('recusa ligar o modo noturno sem a triagem ligada', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: false });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiNightModeEnabled: true });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('aiNightModeEnabled requires aiTriageEnabled');
+    expect(updateChannelAiNightModeEnabled).not.toHaveBeenCalled();
+  });
+
+  test('recusa ligar o modo noturno sem a IA ligada', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: false, aiTriageEnabled: true });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiNightModeEnabled: true });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('aiNightModeEnabled requires aiTriageEnabled');
+  });
+
+  test('desligar o modo noturno não exige a triagem ligada', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: false });
+    updateChannelAiNightModeEnabled.mockResolvedValue({
+      id: 'ch-1',
+      aiEnabled: true,
+      aiTriageEnabled: false,
+      aiNightModeEnabled: false,
+    });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiNightModeEnabled: false })
+      .expect(200);
+
+    expect(res.body.aiNightModeEnabled).toBe(false);
+  });
+
+  test('returns 400 when aiNightModeEnabled is not a boolean', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiNightModeEnabled: 'sim' });
+    expect(res.status).toBe(400);
+    expect(updateChannelAiNightModeEnabled).not.toHaveBeenCalled();
   });
 });
 

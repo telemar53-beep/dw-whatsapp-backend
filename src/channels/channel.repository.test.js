@@ -15,6 +15,7 @@ const {
   updateChannelWelcomeMessage,
   updateChannelAiEnabled,
   updateChannelAiTriageEnabled,
+  updateChannelAiNightModeEnabled,
   countChannelDependents,
   deleteChannel,
 } = require('./channel.repository');
@@ -221,6 +222,20 @@ describe('channel repository', () => {
     expect(on.aiTriageEnabled).toBe(true);
     expect((await findChannelById(ch.id)).aiTriageEnabled).toBe(true);
     expect((await listChannels()).find((c) => c.id === ch.id).aiTriageEnabled).toBe(true);
+  });
+
+  test('aiNightModeEnabled nasce false, é alterável e volta por findChannelById e listChannels', async () => {
+    const ch = await createChannel({ type: 'baileys', name: 'N', phoneNumber: '+5511999990028', config: {} });
+    expect(ch.aiNightModeEnabled).toBe(false);
+    const on = await updateChannelAiNightModeEnabled(ch.id, true);
+    expect(on.aiNightModeEnabled).toBe(true);
+    expect((await findChannelById(ch.id)).aiNightModeEnabled).toBe(true);
+    expect((await listChannels()).find((c) => c.id === ch.id).aiNightModeEnabled).toBe(true);
+  });
+
+  test('updateChannelAiNightModeEnabled returns null when the channel does not exist', async () => {
+    const result = await updateChannelAiNightModeEnabled('00000000-0000-0000-0000-000000000000', true);
+    expect(result).toBeNull();
   });
 
   test('createChannel stores and returns a 360dialog channel', async () => {

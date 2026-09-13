@@ -193,6 +193,44 @@ describe('contact repository', () => {
     expect(updated.sgpContractId).toBe(18511);
   });
 
+  test('setContactSgpLink guarda o primeiro nome do cliente no contato', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('5598955556666', null);
+
+    const updated = await setContactSgpLink(contact.id, {
+      sgpClientId: 16957, sgpContractId: 17402, sgpDocument: '52998224725', sgpFirstName: 'João',
+    });
+
+    expect(updated.sgpFirstName).toBe('João');
+    const reread = await findContactById(contact.id);
+    expect(reread.sgpFirstName).toBe('João');
+  });
+
+  test('setContactSgpLink sem sgpFirstName (undefined) mantém o nome já gravado', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('5598966667777', null);
+    await setContactSgpLink(contact.id, { sgpClientId: 16957, sgpContractId: 17402, sgpDocument: '52998224725', sgpFirstName: 'João' });
+
+    const updated = await setContactSgpLink(contact.id, { sgpClientId: 16957, sgpContractId: 18511, sgpDocument: '52998224725' });
+
+    expect(updated.sgpFirstName).toBe('João');
+  });
+
+  test('setContactSgpLink com sgpFirstName null apaga o nome (esquecer_identificacao)', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('5598977778888', null);
+    await setContactSgpLink(contact.id, { sgpClientId: 16957, sgpContractId: 17402, sgpDocument: '52998224725', sgpFirstName: 'João' });
+
+    const updated = await setContactSgpLink(contact.id, {
+      sgpClientId: null, sgpContractId: null, sgpDocument: null, sgpFirstName: null,
+    });
+
+    expect(updated.sgpFirstName).toBeNull();
+    expect(updated.sgpDocument).toBeNull();
+  });
+
+  test('contato novo nasce sem primeiro nome do SGP', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('5598988889999', null);
+    expect(contact.sgpFirstName).toBeNull();
+  });
+
   describe('listContactsMissingAvatarForBaileysBackfill', () => {
     test('returns a contact with no avatar that has a Baileys conversation', async () => {
       const contact = await findOrCreateContactByPhoneNumber('+5511977776666', 'Joao');

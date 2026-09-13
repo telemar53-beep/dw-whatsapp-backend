@@ -486,6 +486,23 @@ describe('perfil de triagem', () => {
     expect(sys).not.toContain('Rua X ou');
   });
 
+  test('preço e cobertura vêm só das instruções adicionais, rotuladas como fonte única', async () => {
+    // O admin cadastra cidades e planos no campo livre; a regra fixa precisa
+    // apontar para ele em vez de mandar tudo para o Comercial.
+    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'p', maxToolsPerInteraction: 8, triageExtraInstructions: 'PLANOS:\n- 500 Mega — R$ 100,00 por mês', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2 });
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS/);
+    expect(sys).toContain('INSTRUÇÕES ADICIONAIS DA OPERAÇÃO (única fonte para preço, planos e cobertura):');
+    expect(sys).toContain('500 Mega — R$ 100,00 por mês');
+    expect(sys).not.toMatch(/preços ou cobertura são com o Comercial/);
+  });
+
+  test('sem instruções adicionais, preço e cobertura ficam com o Comercial', async () => {
+    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'p', maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2 });
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/Não há instruções adicionais da operação/);
+  });
+
   test('identidade forte proíbe pedir CPF ou data de nascimento e manda dizer quando não há fatura', async () => {
     // Observado em produção: cliente identificado pelo telefone foi cobrado da
     // data de nascimento e depois encaminhado sem saber que não havia boleto.

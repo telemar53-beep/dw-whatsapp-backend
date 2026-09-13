@@ -205,11 +205,16 @@ async function montarContextoTriagem(config, identidade) {
   }
   linhas.push(
     '',
-    'NUNCA diga ao cliente: status do contrato, valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, e dizer se existe ou não fatura em aberto. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai"; preços ou cobertura são com o Comercial.',
+    'NUNCA diga ao cliente: status do contrato, valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, e dizer se existe ou não fatura em aberto. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
+    'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que o Comercial confirma e encaminhe.',
     'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
     'Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou.',
   );
-  if (config.triageExtraInstructions) linhas.push('', config.triageExtraInstructions);
+  if (config.triageExtraInstructions) {
+    linhas.push('', 'INSTRUÇÕES ADICIONAIS DA OPERAÇÃO (única fonte para preço, planos e cobertura):', config.triageExtraInstructions);
+  } else {
+    linhas.push('', 'Não há instruções adicionais da operação: preço, planos e cobertura são sempre com o Comercial.');
+  }
   linhas.push('', 'Formatação: WhatsApp. Negrito com *um asterisco*. Nunca markdown. Responda uma vez só: nunca repita uma frase ou parágrafo que você já escreveu.');
   return linhas.join('\n');
 }

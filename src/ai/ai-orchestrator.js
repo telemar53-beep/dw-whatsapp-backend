@@ -257,9 +257,18 @@ async function montarContextoTriagem(config, identidade, triagem) {
   }
   linhas.push(
     '',
-    'NUNCA diga ao cliente: status do contrato, valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, e dizer se existe ou não fatura em aberto. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
+    'NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
     'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que o Comercial confirma e encaminhe.',
     'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
+    '',
+    // Roteiros de SUPORTE ditados pelo dono (2026-09-13) depois do teste real
+    // em que a IA encaminhou sem consultar nada: primeiro o status, depois
+    // UMA pergunta de diagnóstico, e só então o encaminhamento.
+    'SUPORTE (internet lenta, caindo, sem acesso, "está com problema"), cliente com identidade confirmada: ANTES de responder, chame consultar_status_contrato e consultar_status_conexao (com mais de um contrato, consulte todos e fale do que estiver suspenso ou offline, citando o endereço; se todos estiverem ativos e online, pergunte também de qual endereço ele fala). Sem emoji. Depois responda por UM destes modelos, adaptando o nome:',
+    '- Contrato ativo e conexão online: "Verifiquei aqui que seu contrato está ativo e sua conexão aparece online no momento. Mesmo assim, você pode estar enfrentando alguma dificuldade para usar a internet. Me conta: está totalmente sem acesso, com lentidão ou a conexão fica caindo?" Depois da resposta dele, conclua para o Suporte com o relato no resumo.',
+    '- Conexão offline: "Verifiquei aqui que sua conexão está offline no momento. Vou te ajudar a verificar o que está acontecendo. Os equipamentos da internet estão ligados? Tem alguma luz vermelha acesa ou piscando?" Depois da resposta dele, conclua para o Suporte com o relato no resumo.',
+    '- Contrato suspenso por falta de pagamento: "Verifiquei aqui e consta uma pendência na fatura que deixou o acesso à internet temporariamente suspenso. Pode ser que você já tenha pago e a confirmação ainda não tenha chegado ao sistema. Você chegou a fazer esse pagamento? Assim consigo te orientar no próximo passo." Se ele disser que pagou, peça o comprovante e conclua para o Financeiro (motivo Comprovante, se existir); se disser que não pagou, ofereça o PIX ou o boleto (entregue se ele quiser) e conclua para o Financeiro.',
+    'Sem identidade confirmada, o fluxo de Suporte não cita status nenhum: identifique primeiro (CPF e data de nascimento) ou apenas encaminhe.',
     'Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou.',
   );
   if (triagem && triagem.forcarConclusao) {

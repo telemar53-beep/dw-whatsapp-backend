@@ -709,6 +709,20 @@ describe('perfil de triagem', () => {
     expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
   });
 
+  test('o fluxo de Suporte traz os três roteiros do dono e manda consultar o status antes de responder', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/ANTES de responder, chame consultar_status_contrato e consultar_status_conexao/);
+    expect(sys).toMatch(/seu contrato está ativo e sua conexão aparece online no momento/);
+    expect(sys).toMatch(/está totalmente sem acesso, com lentidão ou a conexão fica caindo\?/);
+    expect(sys).toMatch(/sua conexão está offline no momento/);
+    expect(sys).toMatch(/Tem alguma luz vermelha acesa ou piscando\?/);
+    expect(sys).toMatch(/pendência na fatura que deixou o acesso à internet temporariamente suspenso/);
+    expect(sys).toMatch(/Você chegou a fazer esse pagamento\?/);
+    // A exceção de status vale só no Suporte com identidade confirmada.
+    expect(sys).toMatch(/dizer o status do contrato e da conexão no fluxo de SUPORTE/);
+    expect(sys).toMatch(/Sem identidade confirmada, o fluxo de Suporte não cita status nenhum/);
+  });
+
   // Teste real do Suporte (2026-09-13): "vou encaminhar para o Suporte" sem
   // chamar concluir_triagem — o encaminhamento só veio no turno seguinte.
   describe('anúncio de encaminhamento sem concluir_triagem', () => {

@@ -74,11 +74,15 @@ function buildTimeline(messages) {
   return rows;
 }
 
-function HeaderChip({ children }) {
+function HeaderChip({ children, strong = false }) {
   return (
     <span
       title={typeof children === 'string' ? children : undefined}
-      className="max-w-[150px] shrink-0 truncate rounded-full border border-white/[0.10] bg-white/[0.06] px-2.5 py-[2px] text-[12.5px] leading-[18px] text-chat-muted"
+      className={`max-w-[150px] shrink-0 truncate rounded-full border px-2.5 py-[2px] text-[12.5px] leading-[18px] ${
+        strong
+          ? 'border-white/[0.18] bg-white/[0.12] font-medium text-chat-text'
+          : 'border-white/[0.10] bg-white/[0.06] text-chat-muted'
+      }`}
     >
       {children}
     </span>
@@ -281,7 +285,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 <span className="shrink-0 text-[13.5px] leading-[18px] text-chat-muted">{phoneLine}</span>
               )}
               {cityName && <HeaderChip>{cityName}</HeaderChip>}
-              {conversation.sectorName && <HeaderChip>{conversation.sectorName}</HeaderChip>}
+              {conversation.sectorName && <HeaderChip strong>{conversation.sectorName}</HeaderChip>}
               {!hasContext && (
                 <span className="truncate text-[13.5px] leading-[18px] text-chat-faint">
                   clique aqui para ver os dados do contato

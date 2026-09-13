@@ -105,13 +105,13 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
             </span>
           </span>
           {conversation.aiTriageCompletedAt && (
-            <p className="mt-0.5 truncate text-[11px] text-wa-muted">
+            <p className="mt-0.5 truncate text-[11.5px] text-chat-muted">
               Triagem IA{conversation.aiTriageReasonName ? ` · ${conversation.aiTriageReasonName}` : ''}
               {conversation.aiTriageLowConfidence && (
-                <span className="ml-1 rounded bg-amber-400/20 px-1 text-amber-700">confiança baixa</span>
+                <span className="ml-1 rounded bg-wa-warn-bg px-1 text-wa-warn-text">confiança baixa</span>
               )}
               {conversation.aiTriageResolvedByAi && (
-                <span className="ml-1 rounded bg-wa-green/15 px-1 text-wa-green">resolvido pela IA</span>
+                <span className="ml-1 rounded bg-wa-chip px-1 text-wa-chip-text">resolvido pela IA</span>
               )}
             </p>
           )}
@@ -122,7 +122,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
             onClick={handleQuickClose}
             aria-label="Finalizar sem motivo"
             title="Finalizar sem motivo"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-chat-icon transition hover:bg-white/[0.08] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chat-orange/12 text-chat-orange transition hover:bg-chat-orange/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-orange"
           >
             <IconCheckCircle size={20} />
           </button>

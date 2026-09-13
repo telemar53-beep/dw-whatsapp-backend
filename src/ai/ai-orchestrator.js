@@ -416,10 +416,12 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
         break;
       }
 
-      // A conclusão forçada abaixo não pode cair no limite que a provocou: na
-      // triagem, uma volta que só pede concluir_triagem passa sempre.
-      const soConclusao = perfil === 'triagem' && chamadas.length > 0
-        && chamadas.every((c) => c.function.name === 'concluir_triagem');
+      // A conclusão forçada (por limite ou por anúncio sem conclusão) não pode
+      // cair no limite que a provocou: só ELA passa — uma volta espontânea
+      // que também só peça concluir_triagem continua sujeita ao teto, senão um
+      // modelo teimoso só seria barrado pelo TURNO_MAX_MS.
+      const soConclusao = perfil === 'triagem' && (exigiuConclusaoPorLimite || exigiuConclusaoPorAnuncio)
+        && chamadas.length > 0 && chamadas.every((c) => c.function.name === 'concluir_triagem');
       if (!soConclusao && toolsRequested.length + chamadas.length > config.maxToolsPerInteraction) {
         erro = 'tool_limit_reached';
         // Na triagem que ainda não concluiu, o limite vira uma ordem de

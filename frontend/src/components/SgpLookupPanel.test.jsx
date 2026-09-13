@@ -25,8 +25,22 @@ const CONTRACT_B = { id: 25439, status: 'Suspenso', plan: '600 Mega' };
 
 const DUPLICATE = { id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '836...', pixCode: '000201...', boletoLink: 'https://x' };
 
-function renderPanel(onSendMessage = vi.fn(), onSendPdf = vi.fn()) {
-  render(<SgpLookupPanel onSendMessage={onSendMessage} onSendPdf={onSendPdf} />);
+function renderPanel(
+  onSendMessage = vi.fn(),
+  onSendPdf = vi.fn(),
+  onSendPix = vi.fn().mockResolvedValue([]),
+  onSendPixQr = vi.fn().mockResolvedValue([]),
+  onSendBarcode = vi.fn().mockResolvedValue([])
+) {
+  render(
+    <SgpLookupPanel
+      onSendMessage={onSendMessage}
+      onSendPdf={onSendPdf}
+      onSendPix={onSendPix}
+      onSendPixQr={onSendPixQr}
+      onSendBarcode={onSendBarcode}
+    />
+  );
 }
 
 beforeEach(() => {
@@ -162,14 +176,14 @@ describe('SgpLookupPanel — card Financeiro', () => {
     expect(screen.getByText('Failed to reach SGP')).toBeInTheDocument();
   });
 
-  function renderWithDuplicate(onSendMessage, onSendPdf) {
+  function renderWithDuplicate(onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSendBarcode) {
     useSgpLookup.mockReturnValue({
       ...BASE_HOOK,
       client: CLIENT,
       contracts: [CONTRACT_A],
       duplicateState: { 17402: { loading: false, error: null, hasOpenInvoice: true, duplicates: [DUPLICATE] } },
     });
-    renderPanel(onSendMessage, onSendPdf);
+    renderPanel(onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSendBarcode);
   }
 
   test('shows vencimento, valor formatado e status da fatura', () => {
@@ -179,24 +193,54 @@ describe('SgpLookupPanel — card Financeiro', () => {
     expect(screen.getByText('Em aberto')).toBeInTheDocument();
   });
 
-  test('clicking "Cód Pix" sends the raw pix code via the same sendMessage the chat input uses', async () => {
+  test('clicking "Cód Pix" sends the card+code via onSendPix, not the raw sendMessage', async () => {
     const onSendMessage = vi.fn().mockResolvedValue({});
-    renderWithDuplicate(onSendMessage);
+    const onSendPix = vi.fn().mockResolvedValue([]);
+    renderWithDuplicate(onSendMessage, vi.fn(), onSendPix);
 
     await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
 
-    expect(onSendMessage).toHaveBeenCalledWith('000201...');
+    expect(onSendPix).toHaveBeenCalledWith(17402, expect.objectContaining({ pixCode: '000201...' }));
+    expect(onSendMessage).not.toHaveBeenCalled();
     expect(await screen.findByText(/enviado/i)).toBeInTheDocument();
   });
 
-  test('clicking "Cód Barras" sends the raw bar code via the same sendMessage the chat input uses', async () => {
+  test('clicking "Cód Barras" sends the card+code via onSendBarcode, not the raw sendMessage', async () => {
     const onSendMessage = vi.fn().mockResolvedValue({});
-    renderWithDuplicate(onSendMessage);
+    const onSendBarcode = vi.fn().mockResolvedValue([]);
+    renderWithDuplicate(onSendMessage, vi.fn(), vi.fn(), vi.fn(), onSendBarcode);
 
     await userEvent.click(screen.getByRole('button', { name: /cód barras/i }));
 
-    expect(onSendMessage).toHaveBeenCalledWith('836...');
+    expect(onSendBarcode).toHaveBeenCalledWith(17402, expect.objectContaining({ barCode: '836...' }));
+    expect(onSendMessage).not.toHaveBeenCalled();
     expect(await screen.findByText(/enviado/i)).toBeInTheDocument();
+  });
+
+  test('clicking "Enviar QR" sends the QR image with the card via onSendPixQr', async () => {
+    const onSendPixQr = vi.fn().mockResolvedValue([]);
+    renderWithDuplicate(vi.fn(), vi.fn(), vi.fn(), onSendPixQr);
+
+    await userEvent.click(screen.getByRole('button', { name: /enviar qr/i }));
+
+    expect(onSendPixQr).toHaveBeenCalledWith(17402, expect.objectContaining({ pixCode: '000201...' }));
+    expect(await screen.findByText(/qr pix enviado para o cliente/i)).toBeInTheDocument();
+  });
+
+  test('clicking "Ver QR" only shows the preview, without calling any sender', async () => {
+    const onSendMessage = vi.fn();
+    const onSendPix = vi.fn();
+    const onSendPixQr = vi.fn();
+    const onSendBarcode = vi.fn();
+    renderWithDuplicate(onSendMessage, vi.fn(), onSendPix, onSendPixQr, onSendBarcode);
+
+    await userEvent.click(screen.getByRole('button', { name: /^ver qr$/i }));
+
+    await waitFor(() => expect(screen.getByAltText(/qr code do pix/i)).toBeInTheDocument());
+    expect(onSendMessage).not.toHaveBeenCalled();
+    expect(onSendPix).not.toHaveBeenCalled();
+    expect(onSendPixQr).not.toHaveBeenCalled();
+    expect(onSendBarcode).not.toHaveBeenCalled();
   });
 
   test('clicking "Link Fatura" sends the boleto link via the same sendMessage the chat input uses', async () => {
@@ -229,24 +273,24 @@ describe('SgpLookupPanel — card Financeiro', () => {
     expect(await screen.findByText(/não foi possível enviar/i)).toBeInTheDocument();
   });
 
-  test('shows an error when sending the message fails', async () => {
-    const onSendMessage = vi.fn().mockRejectedValue(new Error('network error'));
-    renderWithDuplicate(onSendMessage);
+  test('shows an error when sending the pix code fails', async () => {
+    const onSendPix = vi.fn().mockRejectedValue(new Error('network error'));
+    renderWithDuplicate(vi.fn(), vi.fn(), onSendPix);
 
     await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
 
     expect(await screen.findByText(/não foi possível enviar/i)).toBeInTheDocument();
   });
 
-  test('clicking "QR Pix" generates and shows a QR code image from the pix code, clicking again hides it', async () => {
+  test('clicking "Ver QR" generates and shows a QR code image from the pix code, clicking again hides it', async () => {
     renderWithDuplicate();
 
-    await userEvent.click(screen.getByRole('button', { name: /qr pix/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^ver qr$/i }));
 
     expect(QRCode.toDataURL).toHaveBeenCalledWith('000201...');
     await waitFor(() => expect(screen.getByAltText(/qr code do pix/i)).toHaveAttribute('src', 'data:image/png;base64,FAKE'));
 
-    await userEvent.click(screen.getByRole('button', { name: /qr pix/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^ver qr$/i }));
     expect(screen.queryByAltText(/qr code do pix/i)).not.toBeInTheDocument();
   });
 
@@ -262,7 +306,7 @@ describe('SgpLookupPanel — card Financeiro', () => {
     });
     renderPanel();
 
-    await userEvent.click(screen.getByRole('button', { name: /qr pix/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^ver qr$/i }));
     await waitFor(() => expect(screen.getByAltText(/qr code do pix/i)).toBeInTheDocument());
 
     await userEvent.selectOptions(screen.getByLabelText(/^contrato$/i), String(CONTRACT_B.id));

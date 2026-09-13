@@ -123,7 +123,7 @@ function InvoiceTable({ duplicate }) {
   );
 }
 
-function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerate }) {
+function FinanceiroCard({ contractId, onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSendBarcode, state, onGenerate }) {
   const [qrDataUrl, setQrDataUrl] = useState(null);
   const [busyKey, setBusyKey] = useState(null);
   const [feedback, setFeedback] = useState(null);
@@ -206,7 +206,17 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
                 icon={<IconPix size={24} />}
                 busy={busyKey === 'pix'}
                 done={feedback && feedback.key === 'pix' && feedback.kind === 'sent'}
-                onClick={() => runAction('pix', 'Cód Pix', () => onSendMessage(duplicate.pixCode))}
+                onClick={() => runAction('pix', 'Cód Pix', () => onSendPix(contractId, duplicate))}
+              />
+            )}
+            {duplicate.pixCode && (
+              <ActionTile
+                label="Enviar QR"
+                color="#2fc8b6"
+                icon={<IconQrCode size={24} />}
+                busy={busyKey === 'pixqr'}
+                done={feedback && feedback.key === 'pixqr' && feedback.kind === 'sent'}
+                onClick={() => runAction('pixqr', 'QR Pix', () => onSendPixQr(contractId, duplicate))}
               />
             )}
             {duplicate.barCode && (
@@ -216,7 +226,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
                 icon={<IconBarcode size={24} />}
                 busy={busyKey === 'barcode'}
                 done={feedback && feedback.key === 'barcode' && feedback.kind === 'sent'}
-                onClick={() => runAction('barcode', 'Cód Barras', () => onSendMessage(duplicate.barCode))}
+                onClick={() => runAction('barcode', 'Cód Barras', () => onSendBarcode(contractId, duplicate))}
               />
             )}
             {duplicate.boletoLink && (
@@ -241,7 +251,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
             )}
             {duplicate.pixCode && (
               <ActionTile
-                label="QR Pix"
+                label="Ver QR"
                 color="var(--color-sgp-gray)"
                 icon={<IconQrCode size={24} />}
                 pressed={Boolean(qrDataUrl)}
@@ -265,7 +275,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
             <figure ref={qrRef} className="mt-3 flex flex-col items-center rounded-[12px] border border-wa-border bg-wa-surface p-3">
               <img src={qrDataUrl} alt="QR code do Pix" className="h-36 w-36 rounded-[4px] bg-white p-1.5" />
               <figcaption className="mt-2 text-center text-[12px] text-wa-muted">
-                Mostre este código para o cliente pagar pelo app do banco.
+                Prévia do QR. Use "Enviar QR" para mandar ao cliente.
               </figcaption>
             </figure>
           )}
@@ -275,7 +285,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
   );
 }
 
-function SgpLookupPanel({ onSendMessage, onSendPdf, onClose, initialCpf }) {
+function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSendBarcode, onClose, initialCpf }) {
   const [cpf, setCpf] = useState('');
   const [selectedContractId, setSelectedContractId] = useState(null);
   const { client, contracts, loading, error, errorMessage, search, fetchDuplicate, duplicateState } = useSgpLookup();
@@ -424,6 +434,9 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose, initialCpf }) {
                 contractId={selectedContract.id}
                 onSendMessage={onSendMessage}
                 onSendPdf={onSendPdf}
+                onSendPix={onSendPix}
+                onSendPixQr={onSendPixQr}
+                onSendBarcode={onSendBarcode}
                 state={duplicateState[selectedContract.id]}
                 onGenerate={() => fetchDuplicate(selectedContract.id)}
               />

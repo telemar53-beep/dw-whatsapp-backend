@@ -203,6 +203,18 @@ describe('ai-worker — triagem', () => {
     }));
   });
 
+  test('com o SGP fora, a saudação ainda sai com o nome guardado na memória', async () => {
+    // O identity-resolver devolve a memória (sgpIndisponivel) em vez de
+    // 'none': o worker não muda, mas é este caminho que impede o cliente
+    // vinculado de ouvir "me informe seu CPF" quando o SGP cai.
+    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'memory', primeiroNome: 'Willemberg', contracts: [], sgpIndisponivel: true });
+    runAiTurn.mockResolvedValue({ texto: 'Nosso sistema de consulta está instável agora. Já encaminhei ao Suporte.', toolsExecutadas: [], erro: null, triagemConcluida: null });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringMatching(/^(Bom dia|Boa tarde|Boa noite), Willemberg! Nosso sistema de consulta está instável agora\./),
+    }));
+  });
+
   test('a saudação não é duplicada nem aplicada fora do primeiro turno', async () => {
     resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
     runAiTurn.mockResolvedValue({ texto: 'Bom dia, Willemberg! Me diz o endereço.', toolsExecutadas: [], erro: null, triagemConcluida: null });

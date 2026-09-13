@@ -50,6 +50,38 @@ async function createChatCompletion({ apiKey, model, messages, tools, toolChoice
   };
 }
 
+// Leitura de imagem (comprovante de pagamento). A imagem viaja como data URL
+// em base64 dentro do próprio corpo: nada é hospedado nem exposto por URL
+// pública, e o caminho do arquivo em disco nunca sai daqui.
+const VISION_TIMEOUT_MS = 60000;
+
+async function analyzeImage({ apiKey, model, imageBuffer, mimeType, prompt }) {
+  const body = {
+    model,
+    response_format: { type: 'json_object' },
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBuffer.toString('base64')}` } },
+      ],
+    }],
+  };
+  let response;
+  try {
+    response = await axios.post(`${BASE_URL}/chat/completions`, body, { headers: headers(apiKey), timeout: VISION_TIMEOUT_MS });
+  } catch (err) {
+    throw traduzErro(err, '/chat/completions (vision)');
+  }
+  const content = (((response.data.choices || [])[0] || {}).message || {}).content || '';
+  try {
+    return JSON.parse(content);
+  } catch (err) {
+    // O texto bruto não vai para a mensagem de erro: pode conter dados do comprovante.
+    throw new OpenAiRequestError('Vision response was not valid JSON');
+  }
+}
+
 async function listModels(apiKey) {
   let response;
   try {
@@ -96,4 +128,4 @@ async function transcribeAudio({ apiKey, model, filePath, mimeType, prompt, file
   return { texto: (response.data && response.data.text) || '' };
 }
 
-module.exports = { createChatCompletion, listModels, transcribeAudio, OpenAiRequestError, OpenAiAuthError };
+module.exports = { createChatCompletion, listModels, transcribeAudio, analyzeImage, OpenAiRequestError, OpenAiAuthError };

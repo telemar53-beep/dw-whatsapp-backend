@@ -1,7 +1,7 @@
 jest.mock('axios');
 const axios = require('axios');
 const FormData = require('form-data');
-const { createChatCompletion, listModels, transcribeAudio, OpenAiRequestError, OpenAiAuthError } = require('./openai-client');
+const { createChatCompletion, listModels, transcribeAudio, analyzeImage, OpenAiRequestError, OpenAiAuthError } = require('./openai-client');
 
 describe('openai-client', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -218,6 +218,23 @@ describe('openai-client', () => {
       expect(serializado).not.toContain('sk-secreta');
       expect(serializado).not.toContain('Bearer');
       fs.createReadStream.mockRestore();
+    });
+  });
+
+  describe('analyzeImage', () => {
+    test('manda a imagem como data URL, pede JSON e devolve o objeto parseado', async () => {
+      axios.post.mockResolvedValue({ data: { choices: [{ message: { content: '{"ehComprovante":true,"valor":135}' } }], usage: {} } });
+      const r = await analyzeImage({ apiKey: 'sk', model: 'gpt-x', imageBuffer: Buffer.from('img'), mimeType: 'image/png', prompt: 'leia' });
+      expect(r).toEqual({ ehComprovante: true, valor: 135 });
+      const body = axios.post.mock.calls[0][1];
+      expect(body.response_format).toEqual({ type: 'json_object' });
+      expect(body.messages[0].content[1].image_url.url).toBe(`data:image/png;base64,${Buffer.from('img').toString('base64')}`);
+      expect(body.messages[0].content[0]).toEqual({ type: 'text', text: 'leia' });
+    });
+
+    test('resposta que não é JSON vira erro OpenAiRequestError, sem vazar o conteúdo', async () => {
+      axios.post.mockResolvedValue({ data: { choices: [{ message: { content: 'não sei' } }], usage: {} } });
+      await expect(analyzeImage({ apiKey: 'sk', model: 'gpt-x', imageBuffer: Buffer.from('x'), mimeType: 'image/png', prompt: 'p' })).rejects.toThrow(/JSON/);
     });
   });
 });

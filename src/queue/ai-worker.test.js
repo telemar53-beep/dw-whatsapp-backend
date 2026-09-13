@@ -9,6 +9,7 @@ jest.mock('../conversations/message.repository');
 jest.mock('../realtime/socket-server');
 jest.mock('../ai/identity-resolver');
 jest.mock('../channels/channel.repository');
+jest.mock('../ai/night-mode');
 jest.mock('../queue/outbound-queue');
 
 const { runAiTurn } = require('../ai/ai-orchestrator');
@@ -24,6 +25,7 @@ const { findLatestInboundMessageId, findMessageById } = require('../conversation
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { resolverIdentidade } = require('../ai/identity-resolver');
 const { findChannelById } = require('../channels/channel.repository');
+const { isNightModeActive } = require('../ai/night-mode');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { handleAiJob } = require('./ai-worker');
 
@@ -178,6 +180,10 @@ describe('ai-worker — triagem', () => {
     concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
     closeConversationByAi.mockReset().mockResolvedValue({ id: 'c-1', status: 'closed' });
     motivoDeEncerramentoAtivo.mockReset().mockResolvedValue(null);
+    // mockReset aqui também: clearAllMocks não apaga implementação, então um
+    // mockReturnValue(true) de um teste do modo noturno vazaria para todos os
+    // testes seguintes da triagem.
+    isNightModeActive.mockReset().mockReturnValue(false);
   });
 
   test('conversa pending sem atendente roda o perfil de triagem e responde ao cliente como IA', async () => {
@@ -427,6 +433,25 @@ describe('ai-worker — triagem', () => {
 
       expect(broadcastToDashboard).not.toHaveBeenCalled();
       expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('modo noturno', () => {
+    test('com o modo noturno ativo, passa noturno.ativo, retornoAs e limite +2 ao turno', async () => {
+      isNightModeActive.mockReturnValue(true);
+      getAiConfig.mockResolvedValue({ mode: 'assistant', apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3, transcriptionFeedAi: true, nightStartTime: '20:00', nightEndTime: '08:00' });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+        triagem: expect.objectContaining({ maxQuestions: 4, noturno: { ativo: true, retornoAs: '08:00' } }),
+      }));
+    });
+
+    test('sem modo noturno, noturno.ativo é false e o limite é o configurado', async () => {
+      isNightModeActive.mockReturnValue(false);
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+        triagem: expect.objectContaining({ maxQuestions: 2, noturno: { ativo: false, retornoAs: null } }),
+      }));
     });
   });
 

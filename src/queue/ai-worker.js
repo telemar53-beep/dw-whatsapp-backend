@@ -16,6 +16,7 @@ const { mensagemSegura } = require('../ai/safe-error-log');
 const { paraWhatsApp } = require('../ai/whatsapp-format');
 const { garantirSaudacao, corrigirPeriodoDaSaudacao } = require('../ai/saudacao');
 const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
+const { isNightModeActive } = require('../ai/night-mode');
 
 async function handleAiJob(data) {
   if (data.tipo === 'triage-timeout') return handleTriageTimeout(data.conversationId);
@@ -147,10 +148,16 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   const mensagem = await findMessageById(messageId);
   const origemMensagem = mensagem && mensagem.messageType === 'audio' ? 'áudio' : 'texto';
   const attempts = conversation.triageAttempts || 0;
+  // Modo noturno calculado POR TURNO (nunca por conversa): a conversa que
+  // começou 19:55 vira noturna no turno das 20:10.
+  const noturnoAtivo = isNightModeActive({ channel, config });
+  const noturno = { ativo: noturnoAtivo, retornoAs: noturnoAtivo ? config.nightEndTime : null };
   // config vem do banco (ai_config) — uma config incompleta/corrompida não
   // pode virar `attempts >= undefined` (sempre false) nem contaminar o que o
   // modelo recebe como maxQuestions.
-  const maxQuestions = Number.isInteger(config.triageMaxQuestions) ? config.triageMaxQuestions : 2;
+  // À noite o roteiro de conexão pede "uma etapa por vez": duas perguntas a
+  // mais cabem sem transformar a triagem em atendimento completo.
+  const maxQuestions = (Number.isInteger(config.triageMaxQuestions) ? config.triageMaxQuestions : 2) + (noturnoAtivo ? 2 : 0);
   const forcarConclusao = attempts >= maxQuestions;
 
   // O turno pode devolver identidade.dataNascimento e o CPF do cliente
@@ -158,7 +165,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // persistidos aqui; o worker só olha turno.texto e turno.triagemConcluida.
   const turno = await runAiTurn({
     conversation, contact, perfil: 'triagem', identidade, origemMensagem,
-    triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao },
+    triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 
   // Nunca IA e humano ao mesmo tempo: relê antes de enviar. Se o próprio turno

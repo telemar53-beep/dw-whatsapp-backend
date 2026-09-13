@@ -301,6 +301,57 @@ describe('consultar_faturas_todos_contratos executar', () => {
     expect(tool.isentoDeProprietario).toBe(true);
     expect(tool.validar({ contratoId: 999 })).toEqual({ ok: true, args: {} });
   });
+
+  // 3º teste real do boleto (2026-09-13): o modelo viu que só um contrato
+  // tinha fatura e ainda assim perguntou o endereço. A 2ª via de cada
+  // contrato diz o que está em aberto, e a ferramenta devolve a instrução.
+  describe('fatura em aberto por contrato, via 2ª via', () => {
+    const TRIAGEM = { contracts: [CONTRATO_A, CONTRATO_B], identidade: { nivel: 'forte' } };
+    const segundaVia = (aberta) => ({ hasOpenInvoice: aberta, duplicates: aberta ? [{ id: '9' }] : [] });
+
+    beforeEach(() => {
+      sgpClient.listInvoices.mockResolvedValue({ faturas: [FATURA] });
+    });
+
+    test('só um contrato com fatura: manda entregar dele agora, sem perguntar', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => segundaVia(id === 2));
+      const r = await findTool('consultar_faturas_todos_contratos').executar({}, TRIAGEM);
+      expect(r.contratosComFaturaEmAberto).toEqual([{ contratoId: 2, endereco: 'AV Y, 2', plano: '300MB' }]);
+      expect(r.contratos[0].temFaturaEmAberto).toBe(false);
+      expect(r.contratos[1].temFaturaEmAberto).toBe(true);
+      expect(r.instrucao).toMatch(/Só o contrato 2 \(AV Y, 2\) tem fatura em aberto/);
+      expect(r.instrucao).toMatch(/entregue dele AGORA .* sem perguntar nada/);
+    });
+
+    test('mais de um contrato com fatura: manda perguntar pelo endereço', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue(segundaVia(true));
+      const r = await findTool('consultar_faturas_todos_contratos').executar({}, TRIAGEM);
+      expect(r.contratosComFaturaEmAberto).toHaveLength(2);
+      expect(r.instrucao).toMatch(/pergunte de qual endereço/);
+    });
+
+    test('nenhum contrato com fatura: manda avisar e concluir para o Financeiro', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue(segundaVia(false));
+      const r = await findTool('consultar_faturas_todos_contratos').executar({}, TRIAGEM);
+      expect(r.contratosComFaturaEmAberto).toEqual([]);
+      expect(r.instrucao).toMatch(/Nenhum contrato tem fatura em aberto/);
+      expect(r.instrucao).toMatch(/concluir_triagem/);
+    });
+
+    test('falha da 2ª via num contrato vira null, sem esconder os outros', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation((id) => (id === 1 ? Promise.reject(new Error('SGP fora')) : Promise.resolve(segundaVia(true))));
+      const r = await findTool('consultar_faturas_todos_contratos').executar({}, TRIAGEM);
+      expect(r.contratos[0].temFaturaEmAberto).toBeNull();
+      expect(r.contratosComFaturaEmAberto).toEqual([{ contratoId: 2, endereco: 'AV Y, 2', plano: '300MB' }]);
+    });
+
+    test('fora da triagem (assistente), traz os dados mas não a instrução', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue(segundaVia(true));
+      const r = await findTool('consultar_faturas_todos_contratos').executar({}, { contracts: [CONTRATO_A, CONTRATO_B] });
+      expect(r.contratosComFaturaEmAberto).toHaveLength(2);
+      expect(r.instrucao).toBeUndefined();
+    });
+  });
 });
 
 describe('desbloqueio_confianca executar', () => {

@@ -329,6 +329,9 @@ const TOOLS = [
     // propósito: a triagem de Reativação/Suporte depende deles e nenhum dos
     // dois carrega valor ou endereço.
     exigeIdentidadeForte: true,
+    // Além da listagem, consulta a 2ª via de cada contrato (até 3 chamadas ao
+    // SGP por contrato, em paralelo): mesmo orçamento de gerar_pix.
+    timeoutMs: 40000,
     parametros: { type: 'object', properties: {} },
     validar() {
       return { ok: true, args: {} };
@@ -340,13 +343,45 @@ const TOOLS = [
       }
       // allSettled: um contrato com falha no SGP não pode esconder os outros —
       // a resposta parcial é o objetivo, não a exceção.
-      const resultados = await Promise.allSettled(
-        contratos.map((c) => sgpClient.listInvoices(c.id))
-      );
+      //
+      // A 2ª via (fatura2via) entra junto porque é o SGP quem sabe o que está
+      // "em aberto ou atrasado" — a listagem traz status em texto livre
+      // ("Gerado", "Pago"...) que não dá para interpretar com segurança. É
+      // dela que sai a instrução do fim: no 3º teste real do boleto o modelo
+      // viu que só um contrato tinha fatura e ainda assim perguntou o
+      // endereço; agora a própria ferramenta diz o que fazer.
+      const [resultados, segundasVias] = await Promise.all([
+        Promise.allSettled(contratos.map((c) => sgpClient.listInvoices(c.id))),
+        Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id))),
+      ]);
+      const temAberta = (i) => {
+        const r = segundasVias[i];
+        return r.status === 'fulfilled' ? Boolean(r.value && r.value.hasOpenInvoice) : null;
+      };
+      const contratosComFaturaEmAberto = contratos
+        .map((c, i) => ({ c, aberta: temAberta(i) }))
+        .filter(({ aberta }) => aberta === true)
+        .map(({ c }) => {
+          const n = normalizeContract(c);
+          return { contratoId: c.id, endereco: n.endereco, plano: n.plano };
+        });
+      let instrucao;
+      if (perfilTriagem(contexto)) {
+        if (contratosComFaturaEmAberto.length === 1) {
+          const unico = contratosComFaturaEmAberto[0];
+          instrucao = `Só o contrato ${unico.contratoId} (${unico.endereco}) tem fatura em aberto: se o cliente pediu boleto ou PIX, entregue dele AGORA com enviar_boleto ou gerar_pix (contratoId ${unico.contratoId}), sem perguntar nada.`;
+        } else if (contratosComFaturaEmAberto.length > 1) {
+          instrucao = 'Mais de um contrato tem fatura em aberto: pergunte de qual endereço ele quer, citando os endereços de contratosComFaturaEmAberto, e entregue na resposta seguinte.';
+        } else {
+          instrucao = 'Nenhum contrato tem fatura em aberto: diga isso em uma frase (sem valores) e chame concluir_triagem para o Financeiro.';
+        }
+      }
       return {
+        contratosComFaturaEmAberto,
+        ...(instrucao ? { instrucao } : {}),
         contratos: contratos.map((c, i) => {
           const n = normalizeContract(c);
-          const base = { contratoId: c.id, endereco: n.endereco, plano: n.plano, status: n.status };
+          const base = { contratoId: c.id, endereco: n.endereco, plano: n.plano, status: n.status, temFaturaEmAberto: temAberta(i) };
           const r = resultados[i];
           if (r.status !== 'fulfilled') {
             return { ...base, faturas: null, erro: 'Não foi possível consultar as faturas deste contrato agora.' };

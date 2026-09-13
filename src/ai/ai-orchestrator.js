@@ -220,7 +220,10 @@ async function montarContextoTriagem(config, identidade, triagem) {
         ...(contratos.length > 1
           ? ['Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, citando os endereços, e entregue na resposta seguinte.']
           : []),
-        'Se a ferramenta responder que não há fatura em aberto, diga isso a ele em uma frase (sem valores) e conclua para o Financeiro — nunca encaminhe em silêncio.'
+        // A ferramenta agora procura a fatura em TODOS os contratos do cliente
+        // antes de dizer que não há: quando ela diz "em nenhum contrato", é
+        // definitivo e não há o que perguntar — só avisar e encaminhar.
+        'Se a ferramenta responder que não há fatura em aberto em nenhum contrato, diga isso em uma frase (sem valores) e chame concluir_triagem para o Financeiro na mesma resposta — não pergunte se ele quer ser encaminhado. Se ela devolver contratosComFatura, pergunte pelo endereço e entregue na resposta seguinte.'
       );
     }
   }

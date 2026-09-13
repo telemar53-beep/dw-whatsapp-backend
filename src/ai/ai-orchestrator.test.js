@@ -508,7 +508,12 @@ describe('perfil de triagem', () => {
     // data de nascimento e depois encaminhado sem saber que não havia boleto.
     const sys = (await contexto()).messages[0].content;
     expect(sys).toMatch(/NÃO peça CPF nem data de nascimento/);
-    expect(sys).toMatch(/não há fatura em aberto, diga isso/i);
+    // Round 2026-09-13: a instrução passou a falar de "nenhum contrato" (a
+    // ferramenta agora procura em todos) e a exigir concluir_triagem na mesma
+    // resposta, em vez de perguntar se o cliente quer ser encaminhado.
+    expect(sys).toMatch(/não há fatura em aberto em nenhum contrato, diga isso/i);
+    expect(sys).toMatch(/chame concluir_triagem para o Financeiro na mesma resposta/i);
+    expect(sys).toMatch(/contratosComFatura/);
     expect(sys).toMatch(/nunca repita/i);
   });
 

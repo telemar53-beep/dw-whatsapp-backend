@@ -2,6 +2,7 @@ jest.mock('../integrations/sgp-client');
 jest.mock('../conversations/conversation.repository');
 jest.mock('../queue/outbound-queue');
 jest.mock('../media/media-storage');
+jest.mock('../payments/payment-sender');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -17,6 +18,7 @@ const {
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { saveMediaFile } = require('../media/media-storage');
+const { enviarPix, enviarPixQr, enviarBoleto } = require('../payments/payment-sender');
 const sgpQueryRoutes = require('./sgp-query.routes');
 
 function buildApp() {
@@ -220,5 +222,239 @@ describe('POST /api/sgp/contratos/:contratoId/boleto-pdf', () => {
       .send({ conversationId: 'conv-1', boletoLink: 'https://x/boleto.pdf' });
     expect(res.status).toBe(502);
     expect(saveMediaFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/sgp/contratos/:contratoId/pix', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const CONVERSATION = { id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' };
+  const BODY = { conversationId: 'conv-1', pixCode: '000201-pix-emv', value: 135, dueDate: '2026-09-15' };
+
+  test('returns 401 without a token', async () => {
+    const res = await request(buildApp()).post('/api/sgp/contratos/17402/pix').send(BODY);
+    expect(res.status).toBe(401);
+  });
+
+  test('returns 400 when conversationId is missing', async () => {
+    const { conversationId, ...rest } = BODY;
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(rest);
+    expect(res.status).toBe(400);
+    expect(getConversationWithContact).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when pixCode has a line break', async () => {
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ ...BODY, pixCode: '000201-pix\nemv' });
+    expect(res.status).toBe(400);
+    expect(getConversationWithContact).not.toHaveBeenCalled();
+  });
+
+  test('returns 400 when pixCode is empty', async () => {
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ ...BODY, pixCode: '' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when pixCode is longer than 600 characters', async () => {
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ ...BODY, pixCode: 'a'.repeat(601) });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when value is not numeric', async () => {
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ ...BODY, value: 'abc' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 when the conversation does not exist', async () => {
+    getConversationWithContact.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(BODY);
+    expect(res.status).toBe(404);
+    expect(enviarPix).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the caller is not the assigned agent', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-2', 'agent')}`)
+      .send(BODY);
+    expect(res.status).toBe(403);
+    expect(enviarPix).not.toHaveBeenCalled();
+  });
+
+  test('calls enviarPix with the conversation, channel and fatura, and returns 201', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    enviarPix.mockResolvedValue([{ id: 'm-1' }, { id: 'm-2' }]);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(BODY);
+    expect(enviarPix).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      channelId: 'channel-1',
+      fatura: { value: 135, dueDate: '2026-09-15', pixCode: '000201-pix-emv' },
+      sentBy: undefined,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual([{ id: 'm-1' }, { id: 'm-2' }]);
+  });
+
+  test('forwards an error from enviarPix to the error middleware', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    enviarPix.mockRejectedValue(new Error('Fatura sem código PIX'));
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(BODY);
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('POST /api/sgp/contratos/:contratoId/pix-qr', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const CONVERSATION = { id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' };
+  const BODY = { conversationId: 'conv-1', pixCode: '000201-pix-emv', value: 135, dueDate: '2026-09-15' };
+
+  test('returns 401 without a token', async () => {
+    const res = await request(buildApp()).post('/api/sgp/contratos/17402/pix-qr').send(BODY);
+    expect(res.status).toBe(401);
+  });
+
+  test('returns 400 when conversationId is missing', async () => {
+    const { conversationId, ...rest } = BODY;
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix-qr')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(rest);
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when pixCode has a line break', async () => {
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix-qr')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ ...BODY, pixCode: '000201-pix\nemv' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 when the conversation does not exist', async () => {
+    getConversationWithContact.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix-qr')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(BODY);
+    expect(res.status).toBe(404);
+    expect(enviarPixQr).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the caller is not the assigned agent', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix-qr')
+      .set('Authorization', `Bearer ${tokenFor('agent-2', 'agent')}`)
+      .send(BODY);
+    expect(res.status).toBe(403);
+    expect(enviarPixQr).not.toHaveBeenCalled();
+  });
+
+  test('calls enviarPixQr with the conversation, channel and fatura, and returns 201', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    enviarPixQr.mockResolvedValue([{ id: 'm-1' }, { id: 'm-2' }]);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/pix-qr')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(BODY);
+    expect(enviarPixQr).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      channelId: 'channel-1',
+      fatura: { value: 135, dueDate: '2026-09-15', pixCode: '000201-pix-emv' },
+      sentBy: undefined,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual([{ id: 'm-1' }, { id: 'm-2' }]);
+  });
+});
+
+describe('POST /api/sgp/contratos/:contratoId/barcode', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const CONVERSATION = { id: 'conv-1', channelId: 'channel-1', assignedAgentId: 'agent-1' };
+  const BODY = { conversationId: 'conv-1', barCode: '836100000012345678901234567890123456789012345', value: 135, dueDate: '2026-09-15' };
+
+  test('returns 401 without a token', async () => {
+    const res = await request(buildApp()).post('/api/sgp/contratos/17402/barcode').send(BODY);
+    expect(res.status).toBe(401);
+  });
+
+  test('returns 400 when conversationId is missing', async () => {
+    const { conversationId, ...rest } = BODY;
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/barcode')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(rest);
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when barCode has a line break', async () => {
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/barcode')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ ...BODY, barCode: 'abc\ndef' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 when the conversation does not exist', async () => {
+    getConversationWithContact.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/barcode')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(BODY);
+    expect(res.status).toBe(404);
+    expect(enviarBoleto).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 when the caller is not the assigned agent', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/barcode')
+      .set('Authorization', `Bearer ${tokenFor('agent-2', 'agent')}`)
+      .send(BODY);
+    expect(res.status).toBe(403);
+    expect(enviarBoleto).not.toHaveBeenCalled();
+  });
+
+  test('calls enviarBoleto with the conversation, channel and fatura, and returns 201', async () => {
+    getConversationWithContact.mockResolvedValue(CONVERSATION);
+    enviarBoleto.mockResolvedValue([{ id: 'm-1' }, { id: 'm-2' }]);
+    const res = await request(buildApp())
+      .post('/api/sgp/contratos/17402/barcode')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(BODY);
+    expect(enviarBoleto).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      channelId: 'channel-1',
+      fatura: { value: 135, dueDate: '2026-09-15', barCode: BODY.barCode },
+      sentBy: undefined,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual([{ id: 'm-1' }, { id: 'm-2' }]);
   });
 });

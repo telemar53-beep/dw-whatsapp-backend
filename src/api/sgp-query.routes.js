@@ -12,8 +12,44 @@ const {
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { saveMediaFile } = require('../media/media-storage');
+const { enviarPix, enviarPixQr, enviarBoleto } = require('../payments/payment-sender');
 
 const router = express.Router();
+
+// Mesmo limite/regra para pixCode e barCode: string não vazia, sem quebra de
+// linha (o código tem que ir sozinho, numa mensagem, e uma quebra de linha no
+// meio quebraria o "copia e cola" do cliente) e com um teto generoso (600
+// chars) só para barrar lixo grosseiro — a atendente já pode mandar qualquer
+// texto pela rota normal de mensagens, então aceitar isso aqui não abre
+// acesso novo.
+function validarCodigo(codigo) {
+  return typeof codigo === 'string' && codigo.trim().length > 0 && codigo.length <= 600 && !codigo.includes('\n');
+}
+
+function validarValor(value) {
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') return value.trim() !== '' && Number.isFinite(Number(value));
+  return false;
+}
+
+function validarVencimento(dueDate) {
+  return typeof dueDate === 'string' && dueDate.trim().length > 0;
+}
+
+// Carrega a conversa e confere posse (mesmas validações da boleto-pdf).
+// Devolve a conversa em caso de sucesso, ou já responde e devolve null.
+async function carregarConversaDoAgente(req, res, conversationId) {
+  const conversation = await getConversationWithContact(conversationId);
+  if (!conversation) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return null;
+  }
+  if (conversation.assignedAgentId !== req.agent.agentId) {
+    res.status(403).json({ error: 'Only the assigned agent can send messages on this conversation' });
+    return null;
+  }
+  return conversation;
+}
 
 function handleSgpError(err, res) {
   if (err instanceof SgpNotConfiguredError) return res.status(400).json({ error: 'SGP integration is not configured' });
@@ -76,6 +112,81 @@ router.post('/contratos/:contratoId/boleto-pdf', requireAuth, async (req, res) =
   } catch (err) {
     handleSgpError(err, res);
   }
+});
+
+router.post('/contratos/:contratoId/pix', requireAuth, async (req, res) => {
+  const { conversationId, pixCode, value, dueDate } = req.body || {};
+  if (!conversationId || typeof conversationId !== 'string') {
+    return res.status(400).json({ error: 'conversationId is required' });
+  }
+  if (!validarCodigo(pixCode)) {
+    return res.status(400).json({ error: 'pixCode is invalid' });
+  }
+  if (!validarValor(value)) {
+    return res.status(400).json({ error: 'value is invalid' });
+  }
+  if (!validarVencimento(dueDate)) {
+    return res.status(400).json({ error: 'dueDate is required' });
+  }
+  const conversation = await carregarConversaDoAgente(req, res, conversationId);
+  if (!conversation) return;
+  const messages = await enviarPix({
+    conversationId: conversation.id,
+    channelId: conversation.channelId,
+    fatura: { value, dueDate, pixCode },
+    sentBy: undefined,
+  });
+  res.status(201).json(messages);
+});
+
+router.post('/contratos/:contratoId/pix-qr', requireAuth, async (req, res) => {
+  const { conversationId, pixCode, value, dueDate } = req.body || {};
+  if (!conversationId || typeof conversationId !== 'string') {
+    return res.status(400).json({ error: 'conversationId is required' });
+  }
+  if (!validarCodigo(pixCode)) {
+    return res.status(400).json({ error: 'pixCode is invalid' });
+  }
+  if (!validarValor(value)) {
+    return res.status(400).json({ error: 'value is invalid' });
+  }
+  if (!validarVencimento(dueDate)) {
+    return res.status(400).json({ error: 'dueDate is required' });
+  }
+  const conversation = await carregarConversaDoAgente(req, res, conversationId);
+  if (!conversation) return;
+  const messages = await enviarPixQr({
+    conversationId: conversation.id,
+    channelId: conversation.channelId,
+    fatura: { value, dueDate, pixCode },
+    sentBy: undefined,
+  });
+  res.status(201).json(messages);
+});
+
+router.post('/contratos/:contratoId/barcode', requireAuth, async (req, res) => {
+  const { conversationId, barCode, value, dueDate } = req.body || {};
+  if (!conversationId || typeof conversationId !== 'string') {
+    return res.status(400).json({ error: 'conversationId is required' });
+  }
+  if (!validarCodigo(barCode)) {
+    return res.status(400).json({ error: 'barCode is invalid' });
+  }
+  if (!validarValor(value)) {
+    return res.status(400).json({ error: 'value is invalid' });
+  }
+  if (!validarVencimento(dueDate)) {
+    return res.status(400).json({ error: 'dueDate is required' });
+  }
+  const conversation = await carregarConversaDoAgente(req, res, conversationId);
+  if (!conversation) return;
+  const messages = await enviarBoleto({
+    conversationId: conversation.id,
+    channelId: conversation.channelId,
+    fatura: { value, dueDate, barCode },
+    sentBy: undefined,
+  });
+  res.status(201).json(messages);
 });
 
 module.exports = router;

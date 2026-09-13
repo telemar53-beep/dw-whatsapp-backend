@@ -179,7 +179,7 @@ async function concludeAiTriage(conversationId, { sectorId, reasonId, confidence
         SET triage_state = 'completed', sector_id = $2, suggested_reason_id = $3,
             ai_triage_sector_id = $2, ai_triage_reason_id = $3, ai_triage_confidence = $4,
             ai_triage_summary = $5, ai_triage_identified_by = $6, ai_triage_low_confidence = $7,
-            ai_triage_resolved_by_ai = $8, ai_triage_completed_at = now(), updated_at = now()
+            ai_triage_resolved_by_ai = (ai_triage_resolved_by_ai OR $8), ai_triage_completed_at = now(), updated_at = now()
       WHERE id = $1 AND triage_state = 'pending'
       RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts,
                 protocol_number, business_hours_notice_sent_at, suggested_reason_id, created_at, updated_at,
@@ -190,6 +190,49 @@ async function concludeAiTriage(conversationId, { sectorId, reasonId, confidence
   );
   if (result.rowCount === 0) return null;
   return toConversation(result.rows[0]);
+}
+
+/**
+ * Marca que a IA já ENTREGOU algo de valor nesta conversa (boleto ou PIX).
+ * Persistida de propósito, e não só em contexto.resolvidoPelaIa: a entrega
+ * pode ter sido num turno anterior, e é esta flag que autoriza a IA (e o job
+ * de tempo limite) a encerrar o atendimento sozinha depois.
+ */
+async function markTriageResolvedByAi(conversationId) {
+  const result = await getPool().query(
+    `UPDATE conversations SET ai_triage_resolved_by_ai = true, updated_at = now()
+      WHERE id = $1 AND triage_state = 'pending' RETURNING id`,
+    [conversationId]
+  );
+  return result.rowCount > 0;
+}
+
+/**
+ * Encerramento feito pela própria IA, sem atendente nenhum: a conversa nunca
+ * chegou a aparecer na fila. As condições do WHERE são a trava de segurança —
+ * só uma conversa ainda em triagem, em espera e sem atendente pode ser
+ * fechada por aqui; qualquer outra devolve null e nada acontece.
+ * O evento de fechamento fica com from_agent_id NULL (a coluna aceita):
+ * inventar um atendente poluiria o relatório de produtividade.
+ */
+async function closeConversationByAi(conversationId, { reasonId, summary }) {
+  return withTransaction(async (client) => {
+    const result = await client.query(
+      `UPDATE conversations
+          SET status = 'closed', triage_state = 'completed', ai_triage_completed_at = now(),
+              ai_triage_resolved_by_ai = true, ai_triage_summary = $2,
+              ai_triage_identified_by = COALESCE(ai_triage_identified_by, 'none'), updated_at = now()
+        WHERE id = $1 AND status = 'waiting' AND assigned_agent_id IS NULL AND triage_state = 'pending'
+        RETURNING id, contact_id, channel_id, status, assigned_agent_id, sector_id, triage_state, triage_attempts, protocol_number, suggested_reason_id, ai_triage_sector_id, ai_triage_reason_id, ai_triage_confidence, ai_triage_summary, ai_triage_identified_by, ai_triage_low_confidence, ai_triage_resolved_by_ai, ai_triage_completed_at, created_at, updated_at`,
+      [conversationId, summary]
+    );
+    if (result.rowCount === 0) return null;
+    await client.query(
+      `INSERT INTO conversation_events (conversation_id, event_type, from_agent_id, reason_id) VALUES ($1, 'closed', NULL, $2)`,
+      [conversationId, reasonId || null]
+    );
+    return toConversation(result.rows[0]);
+  });
 }
 
 async function incrementTriageAttempts(conversationId) {
@@ -632,6 +675,8 @@ module.exports = {
   adminCloseConversation,
   completeTriage,
   concludeAiTriage,
+  markTriageResolvedByAi,
+  closeConversationByAi,
   incrementTriageAttempts,
   incrementBirthdateAttempts,
   activateConversation,

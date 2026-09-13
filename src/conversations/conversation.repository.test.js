@@ -39,6 +39,8 @@ const {
   setSuggestedReason,
   setConversationSector,
   concludeAiTriage,
+  markTriageResolvedByAi,
+  closeConversationByAi,
   markPhoneContested,
   isPhoneContested,
 } = require('./conversation.repository');
@@ -1131,6 +1133,75 @@ describe('conversation repository', () => {
     expect(closedByAgent.aiTriageReasonName).toBe('Mudança de endereço');
     const closedSince = (await listClosedSince(new Date(Date.now() - 60000), { limit: 10, offset: 0 })).find((c) => c.id === conv.id);
     expect(closedSince.aiTriageReasonName).toBe('Mudança de endereço');
+  });
+
+  describe('encerramento do atendimento pela própria IA', () => {
+    test('markTriageResolvedByAi marca a flag só enquanto a triagem está pendente', async () => {
+      const conv = await createConversation(contactId, channelId, 'pending');
+      expect(await markTriageResolvedByAi(conv.id)).toBe(true);
+      expect((await getConversationWithContact(conv.id)).aiTriageResolvedByAi).toBe(true);
+
+      await concludeAiTriage(conv.id, { sectorId: null, reasonId: null, confidence: null, summary: 'x', identifiedBy: 'none', lowConfidence: false, resolvedByAi: false });
+      expect(await markTriageResolvedByAi(conv.id)).toBe(false);
+    });
+
+    test('concludeAiTriage não zera a flag gravada num turno anterior', async () => {
+      // A entrega do boleto/PIX pode ter sido há dois turnos: se a conclusão
+      // sobrescrevesse com o resolvidoPelaIa (em memória) deste turno, o
+      // "Resolvido pela IA" sumia do resumo e o timeout deixaria de encerrar.
+      const conv = await createConversation(contactId, channelId, 'pending');
+      await markTriageResolvedByAi(conv.id);
+
+      const done = await concludeAiTriage(conv.id, {
+        sectorId: null, reasonId: null, confidence: null, summary: 'resumo',
+        identifiedBy: 'none', lowConfidence: false, resolvedByAi: false,
+      });
+
+      expect(done.aiTriageResolvedByAi).toBe(true);
+    });
+
+    test('closeConversationByAi fecha a conversa, grava o evento sem atendente e é idempotente', async () => {
+      const conv = await createConversation(contactId, channelId, 'pending');
+      const motivo = (await getPool().query("INSERT INTO contact_reasons (name) VALUES ('Resolvido pela IA') RETURNING id")).rows[0].id;
+
+      const fechada = await closeConversationByAi(conv.id, { reasonId: motivo, summary: 'Resolvido pela IA e encerrado sem atendente.' });
+      expect(fechada.status).toBe('closed');
+      expect(fechada.triageState).toBe('completed');
+      expect(fechada.assignedAgentId).toBeNull();
+      expect(fechada.aiTriageResolvedByAi).toBe(true);
+      expect(fechada.aiTriageSummary).toBe('Resolvido pela IA e encerrado sem atendente.');
+      expect(fechada.aiTriageIdentifiedBy).toBe('none');
+      expect(fechada.aiTriageCompletedAt).toBeInstanceOf(Date);
+
+      const eventos = await getPool().query(
+        `SELECT from_agent_id, reason_id FROM conversation_events WHERE conversation_id = $1 AND event_type = 'closed'`,
+        [conv.id]
+      );
+      expect(eventos.rowCount).toBe(1);
+      expect(eventos.rows[0].from_agent_id).toBeNull();
+      expect(eventos.rows[0].reason_id).toBe(motivo);
+
+      expect(await closeConversationByAi(conv.id, { reasonId: motivo, summary: 'de novo' })).toBeNull();
+      expect((await getPool().query(`SELECT 1 FROM conversation_events WHERE conversation_id = $1 AND event_type = 'closed'`, [conv.id])).rowCount).toBe(1);
+    });
+
+    test('closeConversationByAi não toca conversa com atendente, já concluída ou fora de espera', async () => {
+      const agent = await createAgent({ email: 'ai-close@dw.com', password: 'secret123', role: 'agent' });
+
+      const comAtendente = await createConversation(contactId, channelId, 'pending');
+      await getPool().query("UPDATE conversations SET assigned_agent_id = $2, status = 'assigned' WHERE id = $1", [comAtendente.id, agent.id]);
+      expect(await closeConversationByAi(comAtendente.id, { reasonId: null, summary: 's' })).toBeNull();
+      // Só existe uma conversa aberta por contato+canal: libera para a próxima.
+      await getPool().query("UPDATE conversations SET status = 'closed' WHERE id = $1", [comAtendente.id]);
+
+      const conversaConcluida = await createConversation(contactId, channelId, 'pending');
+      await getPool().query("UPDATE conversations SET triage_state = 'completed' WHERE id = $1", [conversaConcluida.id]);
+      expect(await closeConversationByAi(conversaConcluida.id, { reasonId: null, summary: 's' })).toBeNull();
+      await getPool().query("UPDATE conversations SET status = 'closed' WHERE id = $1", [conversaConcluida.id]);
+
+      const silenciosa = await createConversation(contactId, channelId, 'pending', 'silent');
+      expect(await closeConversationByAi(silenciosa.id, { reasonId: null, summary: 's' })).toBeNull();
+    });
   });
 
   describe('ai_triage_phone_contested', () => {

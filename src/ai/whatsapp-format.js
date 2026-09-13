@@ -38,7 +38,26 @@ function paraWhatsApp(texto) {
     .replace(/^\*\s+/gm, '- ')
     .replace(LINK_COM_PLACEHOLDER, '$1 ($2)');
 
-  return convertido.replace(PLACEHOLDER, (_, i) => urls[Number(i)]);
+  return semLinhasRepetidas(convertido.replace(PLACEHOLDER, (_, i) => urls[Number(i)]));
+}
+
+/**
+ * O modelo às vezes repete a própria saída (observado em produção: saudação e
+ * pergunta duas vezes num único balão, depois de uma chamada de ferramenta,
+ * com a repetição colada na linha anterior). Uma linha idêntica a outra já
+ * escrita na mesma mensagem nunca é intencional numa resposta de atendimento
+ * — cai. Linhas em branco não contam e são recolhidas a no máximo uma.
+ */
+function semLinhasRepetidas(texto) {
+  const vistas = new Set();
+  const saida = [];
+  for (const linha of texto.split('\n')) {
+    const chave = linha.trim();
+    if (chave && vistas.has(chave)) continue;
+    if (chave) vistas.add(chave);
+    saida.push(linha);
+  }
+  return saida.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 module.exports = { paraWhatsApp };

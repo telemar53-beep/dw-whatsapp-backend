@@ -960,6 +960,12 @@ describe('concluir_triagem', () => {
     expect(c.triagemConcluida).toEqual({ setor: 'Financeiro' });
   });
 
+  test('o resumo lista as ferramentas usadas e o que devolveram', async () => {
+    const c = ctx({ registroFerramentas: [{ nome: 'enviar_boleto', resultado: '{"enviado":false,"motivo":"Nenhuma fatura em aberto"}' }] });
+    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'Pediu boleto.', confianca: 0.9 }, c);
+    expect(concludeAiTriage.mock.calls[0][1].summary).toContain('Ferramentas: enviar_boleto → {"enviado":false,"motivo":"Nenhuma fatura em aberto"}');
+  });
+
   test('setor desconhecido ou motivo inativo são recusados', async () => {
     listSectors.mockResolvedValue([]);
     expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx())).ok).toBe(false);

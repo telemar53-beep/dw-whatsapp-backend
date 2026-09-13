@@ -498,7 +498,7 @@ const TOOLS = [
   {
     nome: 'confirmar_nascimento',
     categoria: 'CONSULTA',
-    descricao: 'Confirma a identidade do cliente identificado por CPF comparando a data de nascimento que ele informou. Use antes de entregar boleto ou PIX quando a identificação for por CPF. No máximo duas tentativas por atendimento.',
+    descricao: 'Confirma a identidade de um cliente identificado por CPF digitado, comparando a data de nascimento que ele informou. Use SÓ quando o contexto disser que a identificação por CPF ainda não foi confirmada; se o contexto disser que a identidade já está confirmada (telefone ou memória), NÃO use e não peça a data. No máximo duas tentativas por atendimento.',
     isentoDeProprietario: true,
     parametros: { type: 'object', properties: { data: { type: 'string', description: 'Data informada pelo cliente, ex.: 20/05/1990' } }, required: ['data'] },
     validar(args) {
@@ -681,6 +681,9 @@ const TOOLS = [
         `Confiança: ${Math.round(args.confianca * 100)}%${baixa ? ' (BAIXA)' : ''}`,
       ];
       if (contexto.resolvidoPelaIa) linhas.push('Resolvido pela IA: boleto/PIX enviado — só confirmar.');
+      if (Array.isArray(contexto.registroFerramentas) && contexto.registroFerramentas.length > 0) {
+        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
+      }
       linhas.push('', args.resumo);
       const conversa = await concludeAiTriage(contexto.conversationId, {
         sectorId: setor.id, reasonId: motivo ? motivo.id : null, confidence: args.confianca,

@@ -44,6 +44,19 @@ describe('paraWhatsApp', () => {
     expect(paraWhatsApp(`Seu código:\n${pix}`)).toBe(`Seu código:\n${pix}`);
   });
 
+  test('remove linhas repetidas, mantendo a primeira ocorrência e a ordem', () => {
+    // Observado em produção: saudação + pergunta duplicadas num único balão,
+    // com a repetição colada na linha anterior (sem linha em branco).
+    const duplicado = 'Boa noite, Simeão! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?\nBoa noite, Simeão! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?';
+    expect(paraWhatsApp(duplicado)).toBe('Boa noite, Simeão! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?');
+    expect(paraWhatsApp('A\n\nB\n\nA\n\nB')).toBe('A\n\nB');
+  });
+
+  test('parágrafos diferentes e listas de uma linha ficam intactos', () => {
+    const texto = 'Olá!\n\n- Pix\n- Boleto\n\nQual prefere?';
+    expect(paraWhatsApp(texto)).toBe(texto);
+  });
+
   test('devolve nulo e vazio sem quebrar', () => {
     expect(paraWhatsApp(null)).toBeNull();
     expect(paraWhatsApp('')).toBe('');

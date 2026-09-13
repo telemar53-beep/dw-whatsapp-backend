@@ -197,17 +197,20 @@ async function montarContextoTriagem(config, identidade) {
     if (identidade.nivel === 'fraca') {
       linhas.push('Identificação por CPF ainda NÃO confirmada: para entregar boleto ou PIX, pergunte a data de nascimento e chame confirmar_nascimento. Se não confirmar, apenas encaminhe.');
     } else {
-      linhas.push('Identidade confirmada: se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.');
+      linhas.push(
+        'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.',
+        'Se a ferramenta responder que não há fatura em aberto, diga isso a ele em uma frase (sem valores) e conclua para o Financeiro — nunca encaminhe em silêncio.'
+      );
     }
   }
   linhas.push(
     '',
-    'NUNCA diga ao cliente: status do contrato, faturas, valores, plano contratado ou endereço (exceto, com identidade confirmada, para perguntar de qual ponto ele fala) (isso vai só para o resumo); "pagamento confirmado"; prazos ou "um técnico vai"; preços ou cobertura (diga que o Comercial informa).',
+    'NUNCA diga ao cliente: status do contrato, valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, e dizer se existe ou não fatura em aberto. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai"; preços ou cobertura são com o Comercial.',
     'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
     'Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou.',
   );
   if (config.triageExtraInstructions) linhas.push('', config.triageExtraInstructions);
-  linhas.push('', 'Formatação: WhatsApp. Negrito com *um asterisco*. Nunca markdown.');
+  linhas.push('', 'Formatação: WhatsApp. Negrito com *um asterisco*. Nunca markdown. Responda uma vez só: nunca repita uma frase ou parágrafo que você já escreveu.');
   return linhas.join('\n');
 }
 
@@ -231,7 +234,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // propriedade (chaveProprietario).
     contexto = {
       conversationId: conversation.id, contact, contracts: identidadeEfetiva.contracts || [], sgpCache: {},
-      identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+      identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: FERRAMENTAS_TRIAGEM, registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
     };
     systemContent = await montarContextoTriagem(config, identidadeEfetiva);
@@ -347,6 +350,12 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
         const nome = chamada.function.name;
         if (resposta.ok) {
           toolsExecuted.push({ nome });
+          // Registro compacto para o resumo da triagem: o atendente precisa ver
+          // o que a IA consultou e o que veio ("enviar_boleto → nenhuma fatura
+          // em aberto"), senão um encaminhamento parece vazio.
+          if (Array.isArray(contexto.registroFerramentas)) {
+            contexto.registroFerramentas.push({ nome, resultado: JSON.stringify(resposta.resultado).slice(0, 200) });
+          }
           messages.push({ role: 'tool', tool_call_id: chamada.id, content: JSON.stringify(resposta.resultado) });
         } else {
           // detalhe fica só na auditoria (toolsRefused): numa recusa inesperada

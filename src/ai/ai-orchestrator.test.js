@@ -465,7 +465,9 @@ describe('perfil de triagem', () => {
     // Não é a PALAVRA "valor" que é proibida (ela aparece dentro da própria
     // regra "nunca diga... valores") — é um valor em R$ ou uma fatura em
     // aberto vazando de verdade para o texto do sistema.
-    expect(sys).not.toMatch(/fatura(s)? em aberto|R\$|\bvalor (da|de|em)\b/i);
+    // Pega valor/vencimento INTERPOLADO no contexto, não a palavra dentro de
+    // uma regra ("existe ou não fatura em aberto" é instrução, não dado).
+    expect(sys).not.toMatch(/R\$|\bvalor (da|de|em)\b|venc(e|imento) (em|dia) \d/i);
   });
 
   // I1 (review): o endereço só pode ser dito de volta ao cliente quando a
@@ -482,6 +484,25 @@ describe('perfil de triagem', () => {
     const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
     expect(sys).toContain('NUNCA cite endereço');
     expect(sys).not.toContain('Rua X ou');
+  });
+
+  test('identidade forte proíbe pedir CPF ou data de nascimento e manda dizer quando não há fatura', async () => {
+    // Observado em produção: cliente identificado pelo telefone foi cobrado da
+    // data de nascimento e depois encaminhado sem saber que não havia boleto.
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/NÃO peça CPF nem data de nascimento/);
+    expect(sys).toMatch(/não há fatura em aberto, diga isso/i);
+    expect(sys).toMatch(/nunca repita/i);
+  });
+
+  test('o registro de ferramentas do contexto recebe nome e resultado compactos', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Não encontrei boleto em aberto.' }, usage: {} });
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: { enviado: false, motivo: 'Nenhuma fatura em aberto' } }; });
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    expect(ctxVisto.registroFerramentas).toEqual([{ nome: 'enviar_boleto', resultado: '{"enviado":false,"motivo":"Nenhuma fatura em aberto"}' }]);
   });
 
   test('identidade none instrui a pedir CPF só se o setor exigir', async () => {

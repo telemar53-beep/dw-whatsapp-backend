@@ -74,6 +74,17 @@ function buildTimeline(messages) {
   return rows;
 }
 
+function HeaderChip({ children }) {
+  return (
+    <span
+      title={typeof children === 'string' ? children : undefined}
+      className="max-w-[150px] shrink-0 truncate rounded-full border border-white/[0.10] bg-white/[0.06] px-2.5 py-[2px] text-[12.5px] leading-[18px] text-chat-muted"
+    >
+      {children}
+    </span>
+  );
+}
+
 function HeaderIconButton({ label, onClick, children }) {
   return (
     <button
@@ -132,10 +143,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;
   const nameLabel = displayName || conversation.contactPhoneNumber || 'Conversa';
   const headerLabel = cityName ? `${nameLabel} - ${cityName}` : nameLabel;
-  const subtitle =
-    displayName && conversation.contactPhoneNumber
-      ? conversation.contactPhoneNumber
-      : conversation.sectorName || 'clique aqui para ver os dados do contato';
+  // Só vale repetir o telefone embaixo quando o título é o nome do contato.
+  const phoneLine = displayName && conversation.contactPhoneNumber ? conversation.contactPhoneNumber : null;
+  const hasContext = Boolean(phoneLine || cityName || conversation.sectorName);
 
   async function handleSend(content, file, repliedToMessageId, isVoiceNote) {
     const pending = editedSuggestion;
@@ -241,7 +251,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   return (
     <div className="flex h-full">
       <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
-      <div className="z-10 flex shrink-0 items-center gap-2 px-2 py-3 md:gap-4 md:px-6 md:py-3.5">
+      <div className="z-10 flex shrink-0 items-center gap-3 px-2 py-3 md:px-6 md:py-3.5">
         <button
           onClick={onBack}
           className="flex h-10 w-10 items-center justify-center rounded-full text-chat-icon hover:bg-white/10 md:hidden"
@@ -251,7 +261,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         </button>
         <button
           onClick={() => setEditingContact(true)}
-          className="flex min-w-0 flex-1 items-center gap-4 rounded-2xl px-1 py-1 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+          className="flex min-w-0 flex-1 items-center gap-3.5 rounded-2xl p-1.5 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
           aria-label={`Editar cliente: ${headerLabel}`}
         >
           <ContactAvatar
@@ -259,15 +269,28 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             avatarPath={conversation.contactAvatarPath}
             displayName={displayName}
             phoneNumber={conversation.contactPhoneNumber}
-            size={56}
+            size={52}
             dark
           />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[20px] leading-[27px] text-chat-text">{headerLabel}</span>
-            <span className="block truncate text-[14.5px] leading-[20px] text-chat-muted">{subtitle}</span>
+            <span title={nameLabel} className="block truncate text-[19px] leading-[25px] text-chat-text">
+              {nameLabel}
+            </span>
+            <span className="mt-1 flex min-w-0 items-center gap-1.5">
+              {phoneLine && (
+                <span className="shrink-0 text-[13.5px] leading-[18px] text-chat-muted">{phoneLine}</span>
+              )}
+              {cityName && <HeaderChip>{cityName}</HeaderChip>}
+              {conversation.sectorName && <HeaderChip>{conversation.sectorName}</HeaderChip>}
+              {!hasContext && (
+                <span className="truncate text-[13.5px] leading-[18px] text-chat-faint">
+                  clique aqui para ver os dados do contato
+                </span>
+              )}
+            </span>
           </span>
         </button>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-3">
           {isUnassigned && (
             <button
               onClick={handleClaim}

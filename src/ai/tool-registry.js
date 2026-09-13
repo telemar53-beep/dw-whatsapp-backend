@@ -681,6 +681,12 @@ const TOOLS = [
     categoria: 'ACAO_SENSIVEL',
     descricao: 'Libera em confiança (promessa de pagamento) um contrato SUSPENSO por inadimplência, devolvendo a internet por alguns dias até o pagamento. Use só quando o cliente pedir a liberação e o contrato estiver suspenso. Regras da casa: uma liberação a cada 30 dias, e nunca se a liberação anterior não foi paga. Ao responder, informe o prazo devolvido pela ferramenta e que a fatura continua devida.',
     chaveProprietario: 'contratoId',
+    // À noite esta ferramenta entra na lista da triagem, e a identidade 'fraca'
+    // (CPF digitado, sem data de nascimento confirmada) também carrega
+    // contratos: sem este gate, quem digitasse o CPF de outra pessoa liberaria
+    // o contrato dela. O gate do tool-executor só vale no perfil de triagem,
+    // então o assistente clássico (humano no comando) não muda.
+    exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
       properties: { contratoId: { type: 'integer' } },
@@ -702,6 +708,24 @@ const TOOLS = [
       // A DW não usa velocidade reduzida: só contrato suspenso é elegível.
       if (status !== 'suspenso') {
         return { liberado: false, motivo: `O contrato não está suspenso (status: ${status}). A liberação em confiança só se aplica a contrato suspenso.` };
+      }
+
+      const noturno = noturnoDoContexto(contexto);
+      const nome = (contexto.identidade && contexto.identidade.primeiroNome) || 'cliente';
+      const comprovante = contexto.comprovante || null;
+      // Frases do dono para as recusas da noite: acolhem, dizem que o registro
+      // já existe e NUNCA afirmam liberação. Uma função só para as três saídas
+      // (regra da casa, recusa do SGP e resultado indeterminado) não divergirem.
+      const instrucaoDeRecusa = (frase, motivo) => `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivo} Assim que o pagamento for confirmado, a liberação é automática. Depois disso chame concluir_triagem para o Financeiro.`;
+
+      // Comprovante que a visão já reprovou (Task 3): não há o que avaliar nem
+      // o que pedir ao SGP — a recusa sai daqui, sem nenhuma chamada externa.
+      if (noturno && comprovante && comprovante.valido === false) {
+        return {
+          liberado: false,
+          motivo: `O comprovante não conferiu: ${comprovante.motivos.join('; ')}.`,
+          instrucao: instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', 'o comprovante não conferiu com a fatura em aberto.'),
+        };
       }
 
       // Uma tentativa por contrato por turno. Fecha duas brechas de uma vez:
@@ -732,7 +756,19 @@ const TOOLS = [
           motivo: MENSAGENS_DESBLOQUEIO[avaliacao.motivo] || 'Liberação em confiança não permitida para este contrato.',
         };
         if (avaliacao.diasRestantes) resposta.diasRestantes = avaliacao.diasRestantes;
+        if (noturno) resposta.instrucao = instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', resposta.motivo);
         return resposta;
+      }
+
+      if (noturno) {
+        // A frase de aviso sai pelo código, antes da escrita no SGP: assim ela
+        // sempre precede a execução, independente do que o modelo faria. E só
+        // depois de a regra da casa aprovar — quem foi recusado nunca lê que
+        // vamos "verificar a possibilidade".
+        const aviso = comprovante
+          ? `Recebi seu comprovante, ${nome}! Como nossa equipe retorna a partir das ${noturno.retornoAs}, vou verificar a possibilidade de liberar seu acesso em confiança enquanto o pagamento aguarda conferência.`
+          : `${nome}, como nossa equipe retorna a partir das ${noturno.retornoAs}, vou verificar a possibilidade de liberar seu acesso em confiança enquanto o pagamento aguarda conferência.`;
+        await enqueueOutboundMessage({ conversationId: contexto.conversationId, channelId: contexto.channelId, content: aviso, sentBy: 'ai' });
       }
 
       let resultado;
@@ -744,15 +780,21 @@ const TOOLS = [
         // dizer que não conseguiu confirmar e encaminhar.
         if (/timeout|timed out/i.test(String((err && err.cause && err.cause.message) || (err && err.message) || ''))) {
           console.error(`Trust unlock for contract ${args.contratoId} timed out: outcome unknown`);
-          return {
+          const indeterminado = {
             liberado: null,
             indeterminado: true,
             motivo: 'Não foi possível confirmar se a liberação foi realizada. Diga ao cliente que a solicitação será verificada por um atendente e encaminhe.',
           };
+          if (noturno) indeterminado.instrucao = instrucaoDeRecusa('Não consegui confirmar a liberação agora', indeterminado.motivo);
+          return indeterminado;
         }
         throw err;
       }
-      if (!resultado.liberado) return { liberado: false, motivo: resultado.motivo };
+      if (!resultado.liberado) {
+        const recusa = { liberado: false, motivo: resultado.motivo };
+        if (noturno) recusa.instrucao = instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', recusa.motivo);
+        return recusa;
+      }
 
       // A liberação já aconteceu no SGP. Falhar em registrá-la não pode virar
       // "não liberou" para o modelo — o registro falho vai para o log, e a
@@ -771,6 +813,14 @@ const TOOLS = [
       if (resultado.dataPromessa) resposta.pagarAte = resultado.dataPromessa;
       // Sem prazo devolvido, o modelo não pode inventar um "uns 3 dias".
       if (resposta.dias == null && !resposta.pagarAte) resposta.prazoDesconhecido = true;
+      if (noturno) {
+        // A marca é o que autoriza o modelo a dizer "desbloqueio realizado": o
+        // verificador do orquestrador lê contexto.desbloqueioRealizado antes de
+        // deixar a frase passar. E o resultado vai para o resumo da fila.
+        contexto.desbloqueioRealizado = true;
+        contexto.desbloqueioResultado = { liberado: true, dias: resposta.dias || null };
+        resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?" — e chame concluir_triagem para o Financeiro NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
+      }
       return resposta;
     },
   },

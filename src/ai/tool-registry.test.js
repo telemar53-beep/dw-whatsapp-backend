@@ -630,6 +630,90 @@ describe('desbloqueio_confianca — data-limite da promessa', () => {
   });
 });
 
+// Task 4: à noite, a ferramenta é quem avisa o cliente antes de escrever no
+// SGP e quem devolve as frases do dono — o modelo só repete o que ela mandar.
+describe('desbloqueio_confianca — modo noturno', () => {
+  const SUSPENSO = { id: 26515, statusCode: 4, status: 'Suspenso', plan: '100MB', address: 'RUA Z', paymentPromisesThisMonth: 0 };
+  const FATURA_VENCIDA = { id: 1, status: 'Gerado', statusid: 1, valor: 100, vencimento: '2026-08-30', data_pagamento: null };
+  const COMPROVANTE = { valido: true, contratoId: 26515, faturaId: '4321', valor: 135, data: '2026-09-13', tipo: 'pix', motivos: [] };
+  const noturno = (extra = {}) => ({
+    contracts: [SUSPENSO], contact: { id: 'ct-1' },
+    conversationId: 'c-1', channelId: 'ch-1',
+    identidade: { nivel: 'forte', primeiroNome: 'Willemberg' },
+    triagem: { noturno: { ativo: true, retornoAs: '08:00' } },
+    comprovante: COMPROVANTE, ...extra,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listTrustUnlocksByContract.mockResolvedValue([]);
+    sgpClient.listInvoices.mockResolvedValue({ faturas: [FATURA_VENCIDA], paginacao: { total: 1 } });
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: true, liberadoDias: 3, protocolo: '9999', motivo: null });
+    recordTrustUnlock.mockResolvedValue({ id: 'l-1' });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-1' });
+  });
+
+  test('(a) avisa o cliente ANTES de escrever no SGP e devolve as frases do dono', async () => {
+    const ctx = noturno();
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+      conversationId: 'c-1', channelId: 'ch-1', sentBy: 'ai',
+      content: 'Recebi seu comprovante, Willemberg! Como nossa equipe retorna a partir das 08:00, vou verificar a possibilidade de liberar seu acesso em confiança enquanto o pagamento aguarda conferência.',
+    });
+    // A ordem é a garantia que interessa: o cliente lê o aviso antes de a
+    // liberação existir no SGP, e não depois — nem "em vez de".
+    expect(enqueueOutboundMessage.mock.invocationCallOrder[0])
+      .toBeLessThan(sgpClient.requestTrustUnlock.mock.invocationCallOrder[0]);
+    expect(r.liberado).toBe(true);
+    expect(r.instrucao).toContain('Prontinho, Willemberg! O desbloqueio em confiança foi realizado');
+    expect(r.instrucao).toContain('a partir das 08:00');
+    expect(r.instrucao).toContain('Já deixei seu atendimento na fila');
+    expect(ctx.desbloqueioRealizado).toBe(true);
+    expect(ctx.desbloqueioResultado).toEqual({ liberado: true, dias: 3 });
+  });
+
+  test('(b) sem comprovante no contexto o aviso não diz "Recebi seu comprovante"', async () => {
+    await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno({ comprovante: undefined }));
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
+      content: 'Willemberg, como nossa equipe retorna a partir das 08:00, vou verificar a possibilidade de liberar seu acesso em confiança enquanto o pagamento aguarda conferência.',
+    }));
+  });
+
+  test('(c) recusa da regra da casa não avisa nada ao cliente e devolve acolhimento com o motivo', async () => {
+    listTrustUnlocksByContract.mockResolvedValue([{ createdAt: new Date(Date.now() - 10 * 86400000) }]);
+    const ctx = noturno();
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+    expect(r.liberado).toBe(false);
+    expect(r.instrucao).toContain('recebi seu comprovante e ele já está registrado');
+    expect(r.instrucao).toContain('Não consegui liberar o acesso em confiança agora');
+    expect(r.instrucao).toContain(r.motivo);
+    expect(ctx.desbloqueioRealizado).toBeFalsy();
+  });
+
+  test('(d) comprovante que não conferiu recusa sem tocar no SGP', async () => {
+    const ctx = noturno({ comprovante: { ...COMPROVANTE, valido: false, motivos: ['valor diferente', 'favorecido não confere'] } });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+    expect(sgpClient.listInvoices).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ liberado: false, motivo: 'O comprovante não conferiu: valor diferente; favorecido não confere.' });
+    expect(r.instrucao).toContain('a partir das 08:00');
+    expect(ctx.desbloqueioRealizado).toBeFalsy();
+  });
+
+  test('(e) de dia nada muda: sem aviso ao cliente e sem instrucao', async () => {
+    const r = await findTool('desbloqueio_confianca').executar(
+      { contratoId: 26515 },
+      { contracts: [SUSPENSO], contact: { id: 'ct-1' }, conversationId: 'c-1', channelId: 'ch-1' }
+    );
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    expect(r).toEqual({ liberado: true, dias: 3, protocolo: '9999' });
+  });
+});
+
 describe('confirmar_nascimento', () => {
   // client/contracts/document presentes: precisos para o setContactSgpLink
   // que a confirmação bem-sucedida agora dispara (fix round 1, C1).
@@ -1008,6 +1092,14 @@ describe('enviar_boleto', () => {
   test('gerar_pix e gerar_segunda_via também exigem identidade forte', () => {
     expect(findTool('gerar_pix').exigeIdentidadeForte).toBe(true);
     expect(findTool('gerar_segunda_via').exigeIdentidadeForte).toBe(true);
+  });
+  // Task 4: à noite desbloqueio_confianca entra na lista da triagem, e a
+  // identidade 'fraca' (CPF digitado, sem data de nascimento) também carrega
+  // contratos. Sem este gate, quem digitasse o CPF de outra pessoa liberaria o
+  // contrato dela. Fora da triagem (assistente, humano no comando) o gate é
+  // inerte, então nada muda para o atendente.
+  test('desbloqueio_confianca também exige identidade forte', () => {
+    expect(findTool('desbloqueio_confianca').exigeIdentidadeForte).toBe(true);
   });
   // gerar_pix mudou de "sugere pro modelo escrever" pra "envia de verdade"
   // quando o turno está na triagem (mesma virada de enviar_boleto): o cartão

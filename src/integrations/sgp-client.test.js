@@ -156,7 +156,7 @@ describe('sgp-client', () => {
       expect(result).toEqual({ hasOpenInvoice: false, duplicates: [] });
     });
 
-    test('chains titulos -> fatura2via -> pagamento/pix and normalizes duplicates', async () => {
+    test('uses the codigopix from fatura2via and skips pagamento/pix when it is present', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post
         .mockResolvedValueOnce({ data: { faturas: [{ status: 'aberto' }] } }) // titulos
@@ -170,7 +170,48 @@ describe('sgp-client', () => {
                 vencimento: '2026-09-20',
                 valor: 89.9,
                 linhadigitavel: '836100000012',
-                codigopix: 'stale-pix-from-fatura2via',
+                codigopix: '000201-financeiro-pix',
+                link: 'https://dwtelecom.sgp.tsmx.com.br/boleto/999',
+              },
+            ],
+          },
+        }); // fatura2via
+
+      const result = await getDuplicateInvoice(17402);
+
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      const calledUrls = axios.post.mock.calls.map((call) => call[0]);
+      expect(calledUrls.some((url) => url.includes('pagamento/pix'))).toBe(false);
+      expect(result).toEqual({
+        hasOpenInvoice: true,
+        duplicates: [
+          {
+            id: '999',
+            dueDate: '2026-09-20',
+            value: 89.9,
+            barCode: '836100000012',
+            pixCode: '000201-financeiro-pix',
+            boletoLink: 'https://dwtelecom.sgp.tsmx.com.br/boleto/999',
+          },
+        ],
+      });
+    });
+
+    test('calls pagamento/pix only when fatura2via has no codigopix', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post
+        .mockResolvedValueOnce({ data: { faturas: [{ status: 'aberto' }] } }) // titulos
+        .mockResolvedValueOnce({
+          data: {
+            status: 1,
+            links: [
+              {
+                id: '999',
+                fatura: '1',
+                vencimento: '2026-09-20',
+                valor: 89.9,
+                linhadigitavel: '836100000012',
+                codigopix: '',
                 link: 'https://dwtelecom.sgp.tsmx.com.br/boleto/999',
               },
             ],
@@ -186,19 +227,7 @@ describe('sgp-client', () => {
         expect.stringContaining('contrato=17402'),
         expect.any(Object)
       );
-      expect(result).toEqual({
-        hasOpenInvoice: true,
-        duplicates: [
-          {
-            id: '999',
-            dueDate: '2026-09-20',
-            value: 89.9,
-            barCode: '836100000012',
-            pixCode: '000201-fresh-pix-emv',
-            boletoLink: 'https://dwtelecom.sgp.tsmx.com.br/boleto/999',
-          },
-        ],
-      });
+      expect(result.duplicates[0].pixCode).toBe('000201-fresh-pix-emv');
     });
 
     test('does not abort when the titulos pre-call fails', async () => {
@@ -212,18 +241,18 @@ describe('sgp-client', () => {
       expect(result).toEqual({ hasOpenInvoice: false, duplicates: [] });
     });
 
-    test('falls back to fatura2via\'s own codigopix when the dedicated pix call fails', async () => {
+    test('returns a null pixCode when there is no codigopix and pagamento/pix fails', async () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post
         .mockResolvedValueOnce({ data: { faturas: [] } })
         .mockResolvedValueOnce({
-          data: { status: 1, links: [{ id: '999', vencimento: '2026-09-20', valor: 89.9, linhadigitavel: '836...', codigopix: 'fallback-pix', link: 'https://x' }] },
+          data: { status: 1, links: [{ id: '999', vencimento: '2026-09-20', valor: 89.9, linhadigitavel: '836...', codigopix: '', link: 'https://x' }] },
         })
         .mockRejectedValueOnce(new Error('timeout'));
 
       const result = await getDuplicateInvoice(17402);
 
-      expect(result.duplicates[0].pixCode).toBe('fallback-pix');
+      expect(result.duplicates[0].pixCode).toBeNull();
     });
   });
 

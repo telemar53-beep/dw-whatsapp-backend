@@ -107,13 +107,15 @@ async function getDuplicateInvoice(contratoId)
 // Encadeia, na mesma ordem confirmada pelos testes reais do Chat Mix:
 //   1. POST {baseUrl}/api/central/titulos      { token, app, contrato: contratoId, nao_gerar_os: 1 }
 //   2. POST {baseUrl}/api/ura/fatura2via        { token, app, contrato: contratoId, nao_gerar_os: 1 }
-//   3. Para cada item de `links[]` retornado no passo 2 (campo `id`):
+//   3. Para cada item de `links[]` retornado no passo 2 (campo `id`), só quando
+//      `codigopix` vier vazio/ausente:
 //        POST {baseUrl}/api/ura/pagamento/pix/<id>  { token, app, contrato: contratoId }
 // O passo 1 existe só para espelhar o fluxo real observado — o resultado
-// usado é o do passo 2 e 3. O `pix` do passo 3 é usado como fonte de
-// verdade do código PIX (pode ser mais atualizado que o `codigopix` que já
-// vem no passo 2); se o passo 3 falhar para um item específico, cai para o
-// `codigopix` do passo 2 em vez de derrubar a ação inteira.
+// usado é o do passo 2 e 3. Regra do Financeiro: o `codigopix` que já vem no
+// passo 2 é o código PIX correto (é o mesmo que o Financeiro do cliente usa) —
+// o passo 3 só é chamado para gerar um código quando a fatura não tiver
+// nenhum ainda; se o passo 3 falhar nesse caso, o código fica `null` em vez
+// de derrubar a ação inteira.
 // Retorna { hasOpenInvoice: false } quando `fatura2via` volta com
 // `status: 0` / `links: []` (sem fatura em aberto para gerar 2ª via).
 ```

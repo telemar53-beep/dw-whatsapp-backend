@@ -108,12 +108,18 @@ async function getDuplicateInvoice(contratoId) {
 
   const duplicates = await Promise.all(
     links.map(async (link) => {
-      let pixCode = link.codigopix || null;
-      try {
-        const pixResponse = await postSgp(config, `/api/ura/pagamento/pix/${link.id}`, { contrato: contratoId });
-        if (pixResponse.data.pix) pixCode = pixResponse.data.pix;
-      } catch (err) {
-        // Keep fatura2via's own codigopix as a fallback rather than failing the whole action.
+      // Regra do Financeiro: o código PIX correto é o que o SGP já devolve em
+      // codigopix na 2ª via (o mesmo que o Financeiro usa). Só chamamos
+      // pagamento/pix quando a fatura não trouxer nenhum código pronto.
+      let pixCode = typeof link.codigopix === 'string' && link.codigopix.trim() ? link.codigopix : null;
+      if (!pixCode) {
+        try {
+          const pixResponse = await postSgp(config, `/api/ura/pagamento/pix/${link.id}`, { contrato: contratoId });
+          if (pixResponse.data.pix) pixCode = pixResponse.data.pix;
+        } catch (err) {
+          // Sem codigopix no Financeiro e sem sucesso ao gerar: pixCode fica null
+          // em vez de falhar a ação inteira.
+        }
       }
       return {
         id: link.id,

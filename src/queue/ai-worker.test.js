@@ -183,9 +183,37 @@ describe('ai-worker — triagem', () => {
   test('conversa pending sem atendente roda o perfil de triagem e responde ao cliente como IA', async () => {
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ perfil: 'triagem', triagem: expect.objectContaining({ threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false }) }));
-    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'c-1', channelId: 'ch-1', content: 'Para localizar seu cadastro, me informe seu CPF.', sentBy: 'ai' }));
+    // Primeiro turno: a saudação da hora entra por código na frente do texto.
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'c-1', channelId: 'ch-1', sentBy: 'ai',
+      content: expect.stringMatching(/^(Bom dia|Boa tarde|Boa noite)! Para localizar seu cadastro, me informe seu CPF\.$/),
+    }));
     expect(incrementTriageAttempts).toHaveBeenCalledWith('c-1');
     expect(createSuggestion).not.toHaveBeenCalled();
+  });
+
+  test('primeira resposta ganha saudação com o primeiro nome quando o cliente foi reconhecido', async () => {
+    // Teste real 2026-09-13: o modelo entregou o PIX por ferramenta e
+    // respondeu sem cumprimentar. A saudação é garantida em código.
+    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
+    runAiTurn.mockResolvedValue({ texto: 'Enviei o PIX da sua fatura. Precisa de mais alguma coisa?', toolsExecutadas: [], erro: null, triagemConcluida: null });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringMatching(/^(Bom dia|Boa tarde|Boa noite), Willemberg! Enviei o PIX da sua fatura\./),
+    }));
+  });
+
+  test('a saudação não é duplicada nem aplicada fora do primeiro turno', async () => {
+    resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
+    runAiTurn.mockResolvedValue({ texto: 'Bom dia, Willemberg! Me diz o endereço.', toolsExecutadas: [], erro: null, triagemConcluida: null });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'Bom dia, Willemberg! Me diz o endereço.' }));
+
+    enqueueOutboundMessage.mockClear();
+    getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 1 });
+    runAiTurn.mockResolvedValue({ texto: 'Perfeito. Enviei o PIX.', toolsExecutadas: [], erro: null, triagemConcluida: null });
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'Perfeito. Enviei o PIX.' }));
   });
 
   test('turno que concluiu a triagem envia a frase final e não conta pergunta', async () => {
@@ -304,7 +332,11 @@ describe('ai-worker — triagem', () => {
     // o PRÓPRIO turno que fechou, a despedida ainda TEM de sair.
     test('turno que encerrou o atendimento ainda envia a despedida e não conta pergunta', async () => {
       runAiTurn.mockResolvedValue({ texto: 'Qualquer coisa é só chamar, João!', toolsExecutadas: [], erro: null, triagemConcluida: null, atendimentoEncerrado: true });
-      getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, status: 'closed', triageState: 'completed' });
+      // triageAttempts 1: o encerramento só existe depois de uma entrega em turno
+      // anterior, então nunca é o primeiro turno (que ganharia a saudação em código).
+      getConversationWithContact
+        .mockResolvedValueOnce({ ...PENDING, triageAttempts: 1 })
+        .mockResolvedValueOnce({ ...PENDING, triageAttempts: 1, status: 'closed', triageState: 'completed' });
 
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 

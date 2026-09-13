@@ -192,7 +192,7 @@ async function montarContextoTriagem(config, identidade, triagem) {
     // vir falsy (registro do SGP sem nome) mesmo com o cliente já
     // identificado — sem o fallback, o contexto de sistema instruía "primeiro
     // nome null", que o modelo podia repetir de volta ao cliente.
-    linhas.push(`Cliente identificado (${identidade.origem === 'memory' ? 'memória' : identidade.origem === 'phone' ? 'telefone' : 'CPF'}): primeiro nome ${identidade.primeiroNome || 'cliente'}. Cumprimente-o pelo primeiro nome na primeira resposta. Se ele disser que não é ele ou que o nome está errado, chame esquecer_identificacao e peça o CPF.`);
+    linhas.push(`Cliente identificado (${identidade.origem === 'memory' ? 'memória' : identidade.origem === 'phone' ? 'telefone' : 'CPF'}): primeiro nome ${identidade.primeiroNome || 'cliente'}. A PRIMEIRA resposta desta conversa começa SEMPRE com a saudação da hora e o primeiro nome ("Bom dia, ${identidade.primeiroNome || 'cliente'}!"), mesmo quando você já entregou algo por ferramenta. Se ele disser que não é ele ou que o nome está errado, chame esquecer_identificacao e peça o CPF.`);
     if (contratos.length > 0) {
       linhas.push('Contratos dele:');
       for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);

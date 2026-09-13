@@ -962,12 +962,13 @@ describe('perfil de triagem', () => {
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} })
         .mockResolvedValueOnce({ message: { content: 'João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.' }, usage: {} });
-      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
-      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      // A correção em si: regenerada SEM ferramentas e com a ordem explícita.
       const segunda = createChatCompletion.mock.calls[1][0];
       expect(segunda.tools).toEqual([]);
       expect(segunda.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'system', content: expect.stringMatching(/afirmou uma liberação que NÃO aconteceu/) })]));
-      expect(r.texto).toBe('João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.');
+      // O que acontece DEPOIS da correção (conclusão forçada, texto final) é o
+      // teste seguinte: desde o fix round 1, o turno não termina na correção.
     });
     // O erro que este ramo evita é o oposto do anterior e igualmente grave: a
     // liberação ACONTECEU num turno anterior (o cliente volta e pergunta "foi
@@ -990,6 +991,46 @@ describe('perfil de triagem', () => {
       executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
       await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
       expect(hasRecentTrustUnlockByContact).toHaveBeenCalledTimes(1);
+    });
+
+    // Achado 2 do fix round 1: o texto corrigido diz ao cliente que o
+    // comprovante "fica registrado para a equipe conferir". Se a triagem não
+    // concluir, isso é falso — a conversa fica na automação, não na fila.
+    test('depois de corrigir, força concluir_triagem e o texto final vem da última chamada', async () => {
+      hasRecentTrustUnlockByContact.mockResolvedValue(false);
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"comprovante","confianca":0.9}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Registrado, João. A equipe dá continuidade a partir das 08:00.' }, usage: {} });
+      executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+
+      expect(createChatCompletion).toHaveBeenCalledTimes(4);
+      // A correção continua saindo sem ferramentas...
+      expect(createChatCompletion.mock.calls[1][0].tools).toEqual([]);
+      // ...mas o turno não termina nela: a conclusão é exigida em seguida.
+      expect(createChatCompletion.mock.calls[2][0].toolChoice).toBe('concluir_triagem');
+      expect(executeTool).toHaveBeenCalledWith('concluir_triagem', expect.objectContaining({ resumo: 'comprovante' }), expect.anything());
+      expect(r.texto).toBe('Registrado, João. A equipe dá continuidade a partir das 08:00.');
+    });
+
+    test('com a triagem já concluída, o texto corrigido sai direto', async () => {
+      hasRecentTrustUnlockByContact.mockResolvedValue(false);
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"r","confianca":0.9}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'O desbloqueio em confiança foi realizado.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, contexto) => {
+        contexto.triagemConcluida = { setor: 'Financeiro' };
+        return { ok: true, resultado: { concluido: true } };
+      });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+
+      expect(createChatCompletion).toHaveBeenCalledTimes(3);
+      expect(r.texto).toBe('João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.');
     });
 
     test('"já deixei na fila" sem conclusão força concluir_triagem', async () => {

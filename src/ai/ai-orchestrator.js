@@ -487,7 +487,28 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
             promptTokens += final.usage.promptTokens || 0;
             completionTokens += final.usage.completionTokens || 0;
             texto = final.message.content || null;
-            if (!texto) erro = 'empty_model_response';
+            if (!texto) {
+              erro = 'empty_model_response';
+              break;
+            }
+            // O texto corrigido promete ao cliente que o pedido "fica
+            // registrado para a equipe conferir". Sem concluir_triagem isso é
+            // falso: a conversa fica na automação, não na fila. Então a
+            // correção não encerra o turno — ela exige a conclusão em seguida,
+            // e o texto final ao cliente sai do caminho de conclusão que já
+            // existe. exigiuConclusaoPorAnuncio isenta essa volta do teto de
+            // ferramentas (como as outras conclusões forçadas) e impede que a
+            // guarda de fila/anúncio exija a conclusão uma segunda vez.
+            if (!contexto.triagemConcluida && !contexto.atendimentoEncerrado) {
+              exigiuConclusaoPorAnuncio = true;
+              messages.push({ role: 'assistant', content: texto });
+              messages.push({
+                role: 'system',
+                content: 'Agora chame concluir_triagem para o Financeiro com o resumo (comprovante/desbloqueio recusado) e responda ao cliente em uma frase.',
+              });
+              proximoToolChoice = 'concluir_triagem';
+              continue;
+            }
             break;
           }
         }

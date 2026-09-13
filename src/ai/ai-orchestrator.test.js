@@ -699,6 +699,11 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/No fluxo do BOLETO as mesmas despedidas valem, mas SEM emoji/);
       expect(sys).toMatch(/chame encerrar_atendimento/);
       expect(sys).toMatch(/Tom: caloroso e direto/);
+      // Emoji só no PIX; no boleto nenhum, nem na saudação; e uma mensagem só,
+      // sem colar o modelo depois da própria frase (2º teste real do boleto).
+      expect(sys).toMatch(/SÓ no fluxo do PIX/);
+      expect(sys).toMatch(/NENHUM emoji — nem na saudação/);
+      expect(sys).toMatch(/Escreva UMA mensagem por resposta/);
       expect(sys).not.toMatch(/e depois conclua a triagem para o Financeiro/);
     });
 

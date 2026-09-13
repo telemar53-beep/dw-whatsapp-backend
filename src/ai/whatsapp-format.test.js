@@ -71,4 +71,30 @@ describe('paraWhatsApp', () => {
     expect(paraWhatsApp(null)).toBeNull();
     expect(paraWhatsApp('')).toBe('');
   });
+
+  describe('parágrafo quase repetido', () => {
+    test('descarta a frase colada do modelo quando ela repete a frase do próprio texto', () => {
+      // Observado em produção (2026-09-13): o modelo escreveu com as palavras
+      // dele e, na linha seguinte, colou o modelo de frase do prompt.
+      const texto = 'Bom dia, Willemberg! 😊 Vou te ajudar com o boleto. Como você tem mais de um contrato com a gente, pode me confirmar de qual endereço você precisa?\n'
+        + 'Claro, vou te ajudar com o boleto. Como você tem mais de um contrato com a gente, pode me confirmar de qual endereço você precisa?';
+      expect(paraWhatsApp(texto)).toBe('Bom dia, Willemberg! 😊 Vou te ajudar com o boleto. Como você tem mais de um contrato com a gente, pode me confirmar de qual endereço você precisa?');
+    });
+
+    test('também com linha em branco entre as duas versões', () => {
+      const texto = 'Enviei acima o PIX referente ao seu contrato do endereço Agenor Costa. É só copiar o código e colar no app do seu banco.\n\n'
+        + 'Pronto! Enviei acima o PIX referente ao seu contrato do endereço Agenor Costa, é só copiar o código e colar no aplicativo do seu banco.';
+      expect(paraWhatsApp(texto)).toBe('Enviei acima o PIX referente ao seu contrato do endereço Agenor Costa. É só copiar o código e colar no app do seu banco.');
+    });
+
+    test('frases diferentes com algumas palavras em comum ficam intactas', () => {
+      const texto = 'Sua conexão está offline no momento, e o contrato segue ativo no sistema.\n\nSe quiser, posso abrir um chamado para o técnico verificar a conexão na sua casa.';
+      expect(paraWhatsApp(texto)).toBe(texto);
+    });
+
+    test('linhas curtas iguais (status por contrato, itens de lista) nunca são tocadas', () => {
+      const texto = 'Contrato 111 — Rua X\nStatus: Ativo\nPlano: 600 Mega\n\nContrato 222 — Rua Y\nStatus: Ativo\nPlano: 600 Mega';
+      expect(paraWhatsApp(texto)).toBe(texto);
+    });
+  });
 });

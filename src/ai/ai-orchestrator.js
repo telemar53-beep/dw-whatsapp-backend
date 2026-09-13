@@ -175,7 +175,9 @@ async function montarContextoTriagem(config, identidade, triagem) {
     'Uma pergunta por vez. Faça só perguntas indispensáveis. A mensagem mais recente manda quando o cliente muda de assunto.',
     // Tom pedido pelo dono depois dos testes reais (2026-09-13): recepcionista
     // simpática, frases completas, um emoji leve — não telegramas.
-    'Tom: caloroso e direto, como uma recepcionista simpática. Frases completas e educadas; um emoji leve (😊) cai bem na saudação e no agradecimento, nunca mais de um por mensagem.',
+    'Tom: caloroso e direto, como uma recepcionista simpática. Frases completas e educadas.',
+    'Emoji: no máximo um 😊, e SÓ no fluxo do PIX (na saudação ou no agradecimento). No fluxo do BOLETO e em qualquer outro assunto, NENHUM emoji — nem na saudação.',
+    'Escreva UMA mensagem por resposta. Os modelos de frase abaixo são base para adaptar (nome, endereço, PIX ou boleto), não texto para colar: nunca escreva uma frase sua e depois o modelo com o mesmo sentido.',
     // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
     // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
     `Agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois.`,

@@ -38,7 +38,55 @@ function paraWhatsApp(texto) {
     .replace(/^\*\s+/gm, '- ')
     .replace(LINK_COM_PLACEHOLDER, '$1 ($2)');
 
-  return semRepeticaoIntegral(convertido.replace(PLACEHOLDER, (_, i) => urls[Number(i)]));
+  return semParagrafoQuaseRepetido(semRepeticaoIntegral(convertido.replace(PLACEHOLDER, (_, i) => urls[Number(i)])));
+}
+
+function tokensNormalizados(linha) {
+  return linha
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function jaccard(a, b) {
+  const sa = new Set(a);
+  const sb = new Set(b);
+  let intersecao = 0;
+  for (const x of sa) if (sb.has(x)) intersecao += 1;
+  const uniao = sa.size + sb.size - intersecao;
+  return uniao === 0 ? 0 : intersecao / uniao;
+}
+
+// Uma linha só conta como "quase repetida" quando tem corpo de frase: linhas
+// curtas e legitimamente iguais ("Status: Ativo" em dois contratos, "- 600
+// Mega") ficam abaixo deste piso e nunca são tocadas.
+const MINIMO_DE_PALAVRAS = 8;
+const SIMILARIDADE_MINIMA = 0.7;
+
+/**
+ * O modelo, instruído a responder "no modelo: ...", às vezes escreve a frase
+ * com as palavras dele E cola o modelo em seguida (observado em produção:
+ * "Bom dia, Willemberg! Vou te ajudar com o boleto. Como você tem mais de um
+ * contrato..." seguido de "Claro, vou te ajudar com o boleto. Como você tem
+ * mais de um contrato..."). Não é repetição idêntica, então
+ * semRepeticaoIntegral não pega. Aqui uma linha com corpo de frase cujas
+ * palavras coincidem em 70% ou mais com uma linha anterior é descartada.
+ */
+function semParagrafoQuaseRepetido(texto) {
+  if (!texto || !texto.includes('\n')) return texto;
+  const mantidas = [];
+  const vistas = [];
+  for (const linha of texto.split('\n')) {
+    const t = tokensNormalizados(linha);
+    const repetida = t.length >= MINIMO_DE_PALAVRAS && vistas.some((v) => jaccard(t, v) >= SIMILARIDADE_MINIMA);
+    if (repetida) continue;
+    mantidas.push(linha);
+    if (t.length >= MINIMO_DE_PALAVRAS) vistas.push(t);
+  }
+  return mantidas.join('\n').trim();
 }
 
 /**
@@ -59,4 +107,4 @@ function semRepeticaoIntegral(texto) {
   return t;
 }
 
-module.exports = { paraWhatsApp };
+module.exports = { paraWhatsApp, semParagrafoQuaseRepetido };

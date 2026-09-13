@@ -427,7 +427,7 @@ describe('perfil de triagem', () => {
   const TRIAGEM = { threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false };
 
   beforeEach(() => {
-    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2 });
+    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null });
     listSectors.mockResolvedValue([{ id: 's-1', name: 'Financeiro', aiHint: 'Boleto, PIX, cobrança.' }, { id: 's-2', name: 'Suporte', aiHint: '' }]);
     listActiveReasons.mockResolvedValue([{ id: 'r-1', name: 'Segunda via' }]);
     listToolPermissions.mockResolvedValue([{ toolName: 'desbloqueio_confianca', enabled: true }]);
@@ -672,6 +672,46 @@ describe('perfil de triagem', () => {
     await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
     expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('required');
     expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
+  });
+
+  // Com o motivo de encerramento configurado, a triagem deixa de encaminhar o
+  // cliente que só queria o boleto/PIX: ela mesma fecha o atendimento.
+  describe('encerramento pela própria IA (triageResolvedReasonId configurado)', () => {
+    const COM_MOTIVO = { apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: 'rr-1' };
+
+    test('com motivo, manda perguntar se precisa de mais algo e chamar encerrar_atendimento', async () => {
+      getAiConfig.mockResolvedValue(COM_MOTIVO);
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/pergunte se precisa de mais alguma coisa/);
+      expect(sys).toMatch(/chame encerrar_atendimento/);
+      expect(sys).not.toMatch(/e depois conclua a triagem para o Financeiro/);
+    });
+
+    test('sem motivo, continua encaminhando ao Financeiro como hoje', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/e depois conclua a triagem para o Financeiro/);
+      expect(sys).not.toMatch(/chame encerrar_atendimento/);
+    });
+
+    test('no limite de perguntas com motivo, entrega e encerra em vez de concluir', async () => {
+      getAiConfig.mockResolvedValue(COM_MOTIVO);
+      const sys = (await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } })).messages[0].content;
+      expect(sys).toMatch(/LIMITE DE PERGUNTAS ATINGIDO/);
+      expect(sys).toMatch(/entregue AGORA e chame encerrar_atendimento/);
+    });
+  });
+
+  // A IA cumprimentava sem saudação ("vou encaminhar...") porque nada no
+  // contexto dizia que horas são — o modelo não tem relógio.
+  test('o contexto informa a hora de Brasília e a regra de saudação', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-13T13:05:00-03:00'));
+    try {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toContain('Agora são 13:05');
+      expect(sys).toMatch(/Boa tarde/);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('encerrar_atendimento entra na lista fixa da triagem', async () => {

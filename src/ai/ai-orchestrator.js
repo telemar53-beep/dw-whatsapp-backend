@@ -152,6 +152,12 @@ const FERRAMENTAS_TRIAGEM = [
   'gerar_pix', 'gerar_segunda_via', 'enviar_boleto', 'concluir_triagem', 'encerrar_atendimento',
 ];
 
+function horaDeBrasilia() {
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date());
+}
+
 // O contexto de sistema da triagem é deliberadamente separado de
 // montarContextoSistema (o do assistente): a recepcionista tem outro
 // objetivo (classificar e encaminhar, não resolver), outra postura (uma
@@ -167,6 +173,9 @@ async function montarContextoTriagem(config, identidade, triagem) {
     config.systemPrompt, '',
     'Você está na TRIAGEM: é a recepcionista. Objetivo: entender → identificar (se preciso) → classificar setor e motivo → coletar o mínimo → resumir → encaminhar com concluir_triagem. Não tente resolver o atendimento inteiro.',
     'Uma pergunta por vez. Faça só perguntas indispensáveis. A mensagem mais recente manda quando o cliente muda de assunto.',
+    // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
+    // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
+    `Agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois.`,
     '',
     'Setores (use o id exato em concluir_triagem):',
   ];
@@ -202,7 +211,12 @@ async function montarContextoTriagem(config, identidade, triagem) {
       linhas.push('Identificação por CPF ainda NÃO confirmada: para entregar boleto ou PIX, pergunte a data de nascimento e chame confirmar_nascimento. Se não confirmar, apenas encaminhe.');
     } else {
       linhas.push(
-        'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.',
+        // Com um motivo de encerramento configurado, o atendimento que começou
+        // e terminou em "quero o boleto" não vai mais para a fila: a própria
+        // IA fecha. Sem motivo, tudo continua como antes.
+        config.triageResolvedReasonId
+          ? 'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. Na resposta: cumprimente pelo primeiro nome com a saudação da hora, diga em uma frase o que enviou e pergunte se precisa de mais alguma coisa. NÃO conclua a triagem nesse momento. Se ele responder que não precisa de mais nada (ou só agradecer), chame encerrar_atendimento e despeça-se. Se pedir outra coisa, siga a triagem normalmente.'
+          : 'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.',
         ...(contratos.length > 1
           ? ['Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, citando os endereços, e entregue na resposta seguinte.']
           : []),
@@ -224,7 +238,9 @@ async function montarContextoTriagem(config, identidade, triagem) {
     // que já podia mandar.
     linhas.push(
       '',
-      'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA (enviar_boleto ou gerar_pix) e em seguida chame concluir_triagem. Se não tem, chame concluir_triagem com o que apurou.'
+      config.triageResolvedReasonId
+        ? 'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA e chame encerrar_atendimento, dizendo que qualquer outra coisa é só chamar de novo. Se não tem, chame concluir_triagem com o que apurou.'
+        : 'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA (enviar_boleto ou gerar_pix) e em seguida chame concluir_triagem. Se não tem, chame concluir_triagem com o que apurou.'
     );
   }
   if (config.triageExtraInstructions) {

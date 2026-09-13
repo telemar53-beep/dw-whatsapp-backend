@@ -724,7 +724,7 @@ const TOOLS = [
       if (noturno && comprovante && comprovante.valido === false) {
         return {
           liberado: false,
-          motivo: `O comprovante não conferiu: ${comprovante.motivos.join('; ')}.`,
+          motivo: `O comprovante não conferiu: ${(comprovante.motivos || []).join('; ')}.`,
           instrucao: instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', 'o comprovante não conferiu com a fatura em aberto.'),
         };
       }
@@ -793,7 +793,9 @@ const TOOLS = [
       }
       if (!resultado.liberado) {
         const recusa = { liberado: false, motivo: resultado.motivo };
-        if (noturno) recusa.instrucao = instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', recusa.motivo);
+        // O SGP pode recusar sem dizer por quê: a frase que o modelo vai
+        // repetir ao cliente não pode terminar em "agora: null".
+        if (noturno) recusa.instrucao = instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', recusa.motivo || 'o sistema não autorizou a liberação neste momento.');
         return recusa;
       }
 

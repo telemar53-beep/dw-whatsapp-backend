@@ -704,6 +704,20 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(ctx.desbloqueioRealizado).toBeFalsy();
   });
 
+  test('a recusa do SGP à noite também vem com acolhimento, mesmo sem motivo do SGP', async () => {
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: false, liberadoDias: null, protocolo: null, motivo: null });
+    const ctx = noturno();
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    // O aviso já saiu (a regra da casa aprovou); quem recusou foi o SGP.
+    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+    expect(r.liberado).toBe(false);
+    expect(r.instrucao).toContain('Não consegui liberar o acesso em confiança agora');
+    // Um motivo nulo do SGP não pode virar "undefined" numa frase que o
+    // modelo foi mandado repetir ao cliente.
+    expect(r.instrucao).not.toMatch(/undefined|null/);
+    expect(ctx.desbloqueioRealizado).toBeFalsy();
+  });
+
   test('(e) de dia nada muda: sem aviso ao cliente e sem instrucao', async () => {
     const r = await findTool('desbloqueio_confianca').executar(
       { contratoId: 26515 },

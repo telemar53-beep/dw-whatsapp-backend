@@ -189,7 +189,13 @@ async function montarContextoTriagem(config, identidade, triagem) {
   for (const m of motivos) linhas.push(`- ${m.id} = ${m.name}`);
   linhas.push('');
   const contratos = (identidade.contracts || []).map(normalizeContract);
-  if (identidade.nivel === 'none') {
+  if (identidade.sgpIndisponivel) {
+    // Vínculo gravado + SGP fora do ar (identity-resolver). O cliente continua
+    // identificado — pedir CPF de novo a quem já foi chamado pelo nome é o
+    // pior desfecho —, mas não há contratos nem consultas possíveis, então o
+    // único caminho é cumprimentar, avisar e encaminhar.
+    linhas.push(`Cliente identificado pela memória (primeiro nome ${identidade.primeiroNome || 'cliente'}), mas o sistema do SGP NÃO respondeu agora. NÃO peça CPF nem data de nascimento e NÃO tente boleto, PIX nem status de conexão. Cumprimente pelo primeiro nome, diga em uma frase que o sistema de consulta está instável neste momento, e chame concluir_triagem para o setor adequado ao que ele pediu, com o resumo começando por "SGP indisponível na triagem".`);
+  } else if (identidade.nivel === 'none') {
     linhas.push('Cliente NÃO identificado. Peça o CPF/CNPJ só se o setor exigir identificação (Financeiro, Suporte, Reativação): "Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Comercial de cliente novo nunca exige CPF. Depois de buscar_cliente, continue a triagem.');
     if (identidade.contestado) linhas.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');
   } else {

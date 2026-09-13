@@ -533,6 +533,34 @@ describe('perfil de triagem', () => {
     expect(sys).toMatch(/Comercial/);
   });
 
+  // Teste real de 2026-09-13: cliente ja vinculado ouviu "me informe seu CPF"
+  // porque o SGP nao respondeu. Com sgpIndisponivel a identidade continua
+  // valendo — o que cai sao as consultas que dependem do SGP.
+  test('SGP indisponível: cumprimenta pelo nome da memória, sem pedir CPF e sem prometer consulta', async () => {
+    const sys = (await contexto({
+      identidade: {
+        nivel: 'forte', origem: 'memory', primeiroNome: 'Willemberg', contracts: [],
+        client: { id: 9, document: '11122233344' }, dataNascimento: null,
+        contestado: false, nascimentoTentado: false, sgpIndisponivel: true,
+      },
+    })).messages[0].content;
+    expect(sys).toContain('NÃO peça CPF');
+    expect(sys).toContain('SGP indisponível na triagem');
+    expect(sys).toContain('Willemberg');
+    expect(sys).not.toContain('me informe seu CPF');
+    // O ramo de identidade para por aqui: nada de contratos nem de entregar
+    // boleto/PIX, que precisariam do SGP que acabou de falhar.
+    expect(sys).not.toMatch(/Identidade JÁ confirmada/);
+  });
+
+  test('SGP indisponível sem nome guardado não escreve "null" no contexto', async () => {
+    const sys = (await contexto({
+      identidade: { nivel: 'forte', origem: 'memory', primeiroNome: null, contracts: [], sgpIndisponivel: true },
+    })).messages[0].content;
+    expect(sys).toContain('primeiro nome cliente');
+    expect(sys).not.toContain('primeiro nome null');
+  });
+
   test('identidade fraca instrui a confirmar nascimento antes de entregar', async () => {
     const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
     expect(sys).toMatch(/confirmar_nascimento/);

@@ -275,7 +275,7 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, state, onGenerat
   );
 }
 
-function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
+function SgpLookupPanel({ onSendMessage, onSendPdf, onClose, initialCpf }) {
   const [cpf, setCpf] = useState('');
   const [selectedContractId, setSelectedContractId] = useState(null);
   const { client, contracts, loading, error, errorMessage, search, fetchDuplicate, duplicateState } = useSgpLookup();
@@ -283,6 +283,15 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onClose }) {
   useEffect(() => {
     setSelectedContractId(contracts.length > 0 ? contracts[0].id : null);
   }, [contracts]);
+
+  useEffect(() => {
+    const digits = (initialCpf || '').replace(/\D/g, '');
+    if (digits) {
+      setCpf(digits);
+      search(digits);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCpf]);
 
   function handleSubmit(event) {
     event.preventDefault();

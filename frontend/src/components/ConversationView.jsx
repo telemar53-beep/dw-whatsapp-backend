@@ -115,7 +115,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     setContactOverride(null);
     setEditingContact(false);
     setReplyingTo(null);
-    setSgpPanelOpen(false);
+    setSgpPanelOpen(Boolean(conversation.contactSgpDocument));
     setClosingReason(false);
     setEditedSuggestion(null);
   }, [conversation.id]);
@@ -441,6 +441,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           onSendMessage={(content) => sendMessage(content)}
           onSendPdf={handleSendSgpPdf}
           onClose={() => setSgpPanelOpen(false)}
+          initialCpf={conversation.contactSgpDocument || ''}
         />
       )}
     </div>

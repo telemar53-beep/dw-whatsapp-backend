@@ -59,6 +59,17 @@ describe('SgpLookupPanel — busca por CPF', () => {
   });
 });
 
+describe('SgpLookupPanel — busca automática', () => {
+  test('busca sozinho quando recebe initialCpf', () => {
+    const search = vi.fn();
+    useSgpLookup.mockReturnValue({ ...BASE_HOOK, search });
+    render(<SgpLookupPanel onSendMessage={vi.fn()} onSendPdf={vi.fn()} initialCpf="11122233344" />);
+
+    expect(search).toHaveBeenCalledWith('11122233344');
+    expect(screen.getByLabelText(/cpf do cliente/i)).toHaveValue('11122233344');
+  });
+});
+
 describe('SgpLookupPanel — seletor de contrato', () => {
   test('shows a dropdown with every contract and defaults to the first one\'s details', () => {
     useSgpLookup.mockReturnValue({ ...BASE_HOOK, client: CLIENT, contracts: [CONTRACT_A, CONTRACT_B] });

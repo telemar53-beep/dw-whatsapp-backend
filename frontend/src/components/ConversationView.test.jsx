@@ -611,6 +611,31 @@ describe('SGP lookup panel', () => {
     expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
   });
 
+  test('abre o painel do SGP sozinho quando o contato tem CPF vinculado', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null, contactSgpDocument: '11122233344' }}
+        onTransferClick={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Consultar SGP')).toBeInTheDocument();
+    expect(screen.getByLabelText(/cpf do cliente/i)).toHaveValue('11122233344');
+  });
+
+  test('não abre o painel do SGP quando o contato não tem CPF vinculado', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null, contactSgpDocument: null }}
+        onTransferClick={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
+  });
+
   test('the close-reason popup closes when the conversation changes', async () => {
     const CONVERSATION_A = { id: 'c1', status: 'waiting', assignedAgentId: null };
     const CONVERSATION_B = { id: 'c2', status: 'waiting', assignedAgentId: null };

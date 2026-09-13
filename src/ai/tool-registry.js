@@ -15,6 +15,7 @@ const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./tr
 const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { enviarPix, enviarBoleto } = require('../payments/payment-sender');
+const { formatarData } = require('../payments/payment-card');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { primeiroNome } = require('./identity-resolver');
 const { mensagemSegura } = require('./safe-error-log');
@@ -1142,7 +1143,29 @@ const TOOLS = [
       // Quem pega a conversa de manhã precisa ver, na PRIMEIRA linha, que ela
       // foi atendida sozinha de madrugada e a que horas.
       const noturno = noturnoDoContexto(contexto);
-      if (noturno) linhas.unshift(`Modo noturno · ${horaDeSaoPaulo()}`);
+      if (noturno) {
+        // O que a IA leu do comprovante e o que ela fez com o contrato sobem
+        // para o topo do resumo, junto da marca do turno noturno: é disso que
+        // depende a baixa do pagamento de manhã.
+        const extras = [];
+        const comp = contexto.comprovante;
+        if (comp) {
+          // Valor e data podem vir nulos da visão (Task 3). Nada de toFixed em
+          // null: "R$ 0,00" faria o atendente dar baixa num valor inventado.
+          const valor = comp.valor == null ? 'valor não lido' : `R$ ${Number(comp.valor).toFixed(2).replace('.', ',')}`;
+          const data = comp.data ? formatarData(comp.data) : 'data não lida';
+          const conferencia = comp.valido ? 'conferido' : `NÃO conferiu: ${(comp.motivos || []).join('; ')}`;
+          extras.push(`Comprovante (visão): ${comp.tipo || 'outro'} ${valor} em ${data} — ${conferencia}${comp.faturaId ? `, fatura ${comp.faturaId}` : ''}${comp.contratoId ? ` do contrato ${comp.contratoId}` : ''}`);
+        }
+        const desbloqueio = contexto.desbloqueioResultado;
+        if (desbloqueio) {
+          extras.push(`Desbloqueio em confiança: ${desbloqueio.liberado
+            ? (desbloqueio.dias ? `REALIZADO (${desbloqueio.dias} dias)` : 'REALIZADO (prazo não informado)')
+            : `RECUSADO: ${desbloqueio.motivo}`}`);
+        }
+        if (comp || desbloqueio) extras.push('Pendente: conferir pagamento e dar baixa');
+        linhas.unshift(`Modo noturno · ${horaDeSaoPaulo()}`, ...extras);
+      }
       const conversa = await concludeAiTriage(contexto.conversationId, {
         sectorId: setor.id, reasonId: motivo ? motivo.id : null, confidence: args.confianca,
         summary: linhas.join('\n'), identifiedBy, lowConfidence: baixa, resolvedByAi: resolvidoPelaIa,

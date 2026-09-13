@@ -1538,6 +1538,57 @@ describe('concluir_triagem', () => {
       expect(concludeAiTriage.mock.calls[0][1].summary).toMatch(/^Modo noturno · \d{2}:\d{2}\n/);
     });
 
+    // Quem pega a conversa de manhã precisa ver, no resumo, o que a IA leu do
+    // comprovante e o que ela fez com o contrato — senão a baixa do pagamento
+    // depende de alguém reabrir a conversa inteira.
+    test('o resumo noturno leva o comprovante, o desbloqueio e a pendência', async () => {
+      const c = ctx({
+        triagem: NOTURNO,
+        comprovante: { valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '4321', contratoId: 17402, motivos: [] },
+        desbloqueioResultado: { liberado: true, dias: 3 },
+      });
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95 }, c);
+      const summary = concludeAiTriage.mock.calls[0][1].summary;
+      expect(summary).toContain('Comprovante (visão): pix R$ 135,00 em 13/09/2026 — conferido, fatura 4321 do contrato 17402');
+      expect(summary).toContain('Desbloqueio em confiança: REALIZADO (3 dias)');
+      expect(summary).toContain('Pendente: conferir pagamento e dar baixa');
+    });
+
+    test('comprovante reprovado e desbloqueio recusado aparecem com o motivo', async () => {
+      const c = ctx({
+        triagem: NOTURNO,
+        comprovante: { valido: false, tipo: 'outro', valor: 90, data: '2026-09-13', faturaId: null, contratoId: null, motivos: ['valor não corresponde a nenhuma fatura em aberto'] },
+        desbloqueioResultado: { liberado: false, motivo: 'Só é possível uma liberação em confiança a cada 30 dias.' },
+      });
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      const summary = concludeAiTriage.mock.calls[0][1].summary;
+      expect(summary).toContain('NÃO conferiu: valor não corresponde a nenhuma fatura em aberto');
+      expect(summary).not.toContain('fatura null');
+      expect(summary).toContain('Desbloqueio em confiança: RECUSADO: Só é possível uma liberação em confiança a cada 30 dias.');
+    });
+
+    // Mesma armadilha do fix de round 1 da Task 3: valor nulo não pode virar
+    // "R$ 0,00" no resumo — o atendente daria baixa num valor inventado.
+    test('valor e data não lidos não viram zero nem "null" no resumo', async () => {
+      const c = ctx({
+        triagem: NOTURNO,
+        comprovante: { valido: false, tipo: 'outro', valor: null, data: null, faturaId: null, contratoId: null, motivos: ['não parece um comprovante'] },
+      });
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      const summary = concludeAiTriage.mock.calls[0][1].summary;
+      expect(summary).not.toMatch(/R\$ 0,00/);
+      expect(summary).not.toMatch(/em null/);
+      expect(summary).toContain('Pendente: conferir pagamento e dar baixa');
+    });
+
+    test('sem comprovante e sem desbloqueio, o resumo noturno não ganha linhas novas', async () => {
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, ctx({ triagem: NOTURNO }));
+      const summary = concludeAiTriage.mock.calls[0][1].summary;
+      expect(summary).not.toContain('Comprovante (visão)');
+      expect(summary).not.toContain('Desbloqueio em confiança');
+      expect(summary).not.toContain('Pendente:');
+    });
+
     test('de dia, a frase final e o resumo seguem como hoje', async () => {
       const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, ctx());
       expect(r.instrucao).toMatch(/um atendente continua daqui/);

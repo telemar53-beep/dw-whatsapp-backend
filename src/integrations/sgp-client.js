@@ -240,6 +240,20 @@ async function findClientRecord(filtro) {
   };
 }
 
+/**
+ * O recebedor Pix da empresa (nome, chave e tipo), ou null se qualquer um dos
+ * três faltar. Não passa por requireConfig de propósito: é leitura pura da
+ * configuração, sem chamada ao SGP, e o cartão de Pix precisa dela mesmo com a
+ * integração de consulta desligada ou sem token.
+ */
+async function getPixMerchant() {
+  const config = await getSgpQueryConfig();
+  if (!config) return null;
+  const { pixMerchantName, pixMerchantKey, pixMerchantKeyType } = config;
+  if (!pixMerchantName || !pixMerchantKey || !pixMerchantKeyType) return null;
+  return { name: pixMerchantName, key: pixMerchantKey, keyType: pixMerchantKeyType };
+}
+
 module.exports = {
   lookupClientByCpf,
   getDuplicateInvoice,
@@ -248,6 +262,7 @@ module.exports = {
   listInvoices,
   requestTrustUnlock,
   findClientRecord,
+  getPixMerchant,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,

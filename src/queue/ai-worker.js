@@ -14,6 +14,7 @@ const { findChannelById } = require('../channels/channel.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { mensagemSegura } = require('../ai/safe-error-log');
 const { paraWhatsApp } = require('../ai/whatsapp-format');
+const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
 
 async function handleAiJob(data) {
   if (data.tipo === 'triage-timeout') return handleTriageTimeout(data.conversationId);
@@ -95,12 +96,12 @@ async function handleTriageTimeout(conversationId) {
   const c = await getConversationWithContact(conversationId);
   if (!c || c.triageState !== 'pending' || c.status !== 'waiting') return;
   // A IA já entregou o boleto/PIX e o cliente simplesmente não respondeu:
-  // mandar para a fila alguém que já foi atendido só cria trabalho. Com
-  // motivo configurado, encerra; sem motivo, tudo segue como antes.
-  const config = await getAiConfig();
-  if (c.aiTriageResolvedByAi && config && config.triageResolvedReasonId) {
+  // mandar para a fila alguém que já foi atendido só cria trabalho. Com motivo
+  // configurado E ativo, encerra; sem isso, tudo segue como antes.
+  const reasonId = c.aiTriageResolvedByAi ? await motivoDeEncerramentoAtivo() : null;
+  if (reasonId) {
     const conversa = await closeConversationByAi(conversationId, {
-      reasonId: config.triageResolvedReasonId,
+      reasonId,
       summary: 'Resolvido pela IA (boleto/PIX entregue); cliente não respondeu e o atendimento foi encerrado sem atendente.',
     });
     if (!conversa) return;

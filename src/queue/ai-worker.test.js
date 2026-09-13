@@ -2,6 +2,7 @@ jest.mock('./ai-queue');
 jest.mock('../ai/ai-orchestrator');
 jest.mock('../ai/ai-suggestion.repository');
 jest.mock('../ai/ai-config.repository');
+jest.mock('../ai/triage-close-reason');
 jest.mock('../conversations/conversation.repository');
 jest.mock('../conversations/contact.repository');
 jest.mock('../conversations/message.repository');
@@ -13,6 +14,7 @@ jest.mock('../queue/outbound-queue');
 const { runAiTurn } = require('../ai/ai-orchestrator');
 const { createSuggestion } = require('../ai/ai-suggestion.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
+const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
 const {
   getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
   closeConversationByAi,
@@ -175,6 +177,7 @@ describe('ai-worker — triagem', () => {
     // própria, mesmo sem corrida nenhuma acontecendo no cenário.
     concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
     closeConversationByAi.mockReset().mockResolvedValue({ id: 'c-1', status: 'closed' });
+    motivoDeEncerramentoAtivo.mockReset().mockResolvedValue(null);
   });
 
   test('conversa pending sem atendente roda o perfil de triagem e responde ao cliente como IA', async () => {
@@ -296,7 +299,6 @@ describe('ai-worker — triagem', () => {
   });
 
   describe('encerramento pela própria IA', () => {
-    const COM_MOTIVO = { mode: 'assistant', apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3, transcriptionFeedAi: true, triageResolvedReasonId: 'rr-1' };
 
     // A releitura antes de enviar descarta conversa 'closed' — mas quando foi
     // o PRÓPRIO turno que fechou, a despedida ainda TEM de sair.
@@ -312,7 +314,7 @@ describe('ai-worker — triagem', () => {
     });
 
     test('timeout com entrega feita e motivo configurado encerra em vez de mandar para a fila', async () => {
-      getAiConfig.mockResolvedValue(COM_MOTIVO);
+      motivoDeEncerramentoAtivo.mockResolvedValue('rr-1');
       getConversationWithContact.mockResolvedValue({ ...PENDING, aiTriageResolvedByAi: true });
 
       await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
@@ -327,7 +329,7 @@ describe('ai-worker — triagem', () => {
     });
 
     test('timeout sem nada entregue conclui para a fila como hoje', async () => {
-      getAiConfig.mockResolvedValue(COM_MOTIVO);
+      motivoDeEncerramentoAtivo.mockResolvedValue('rr-1');
 
       await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
 
@@ -344,8 +346,21 @@ describe('ai-worker — triagem', () => {
       expect(concludeAiTriage).toHaveBeenCalled();
     });
 
+    // motivoDeEncerramentoAtivo devolve null também quando o motivo existe
+    // mas foi DESATIVADO: para o worker os dois casos são o mesmo, e o
+    // atendimento volta para a fila em vez de ser fechado com um motivo morto.
+    test('timeout com o motivo desativado conclui para a fila, sem fechar', async () => {
+      motivoDeEncerramentoAtivo.mockResolvedValue(null);
+      getConversationWithContact.mockResolvedValue({ ...PENDING, aiTriageResolvedByAi: true });
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      expect(closeConversationByAi).not.toHaveBeenCalled();
+      expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ summary: expect.stringMatching(/IA indisponível/) }));
+    });
+
     test('timeout que perde a corrida do fechamento não avisa ninguém', async () => {
-      getAiConfig.mockResolvedValue(COM_MOTIVO);
+      motivoDeEncerramentoAtivo.mockResolvedValue('rr-1');
       getConversationWithContact.mockResolvedValue({ ...PENDING, aiTriageResolvedByAi: true });
       closeConversationByAi.mockResolvedValue(null);
 

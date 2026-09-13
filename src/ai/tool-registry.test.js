@@ -12,6 +12,7 @@ jest.mock('../payments/payment-sender');
 // o executor de verdade chamaria isToolEnabled contra o banco de verdade
 // (ai_tool_permissions), que pode nem ter linha para a ferramenta.
 jest.mock('./ai-config.repository');
+jest.mock('./triage-close-reason');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
@@ -27,7 +28,8 @@ const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { enviarPix } = require('../payments/payment-sender');
-const { isToolEnabled, getAiConfig } = require('./ai-config.repository');
+const { isToolEnabled } = require('./ai-config.repository');
+const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
 const { executeTool } = require('./tool-executor');
@@ -1100,7 +1102,7 @@ describe('encerrar_atendimento', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    getAiConfig.mockResolvedValue({ triageResolvedReasonId: MOTIVO_RESOLVIDO });
+    motivoDeEncerramentoAtivo.mockResolvedValue(MOTIVO_RESOLVIDO);
     getConversationWithContact.mockResolvedValue(emTriagemComEntrega);
     closeConversationByAi.mockResolvedValue({ id: 'c-1', status: 'closed' });
   });
@@ -1120,11 +1122,22 @@ describe('encerrar_atendimento', () => {
   });
 
   test('sem motivo configurado pelo admin, não encerra e manda concluir a triagem', async () => {
-    getAiConfig.mockResolvedValue({ triageResolvedReasonId: null });
+    motivoDeEncerramentoAtivo.mockResolvedValue(null);
     const r = await findTool('encerrar_atendimento').executar({}, ctx());
     expect(r.encerrado).toBe(false);
-    expect(r.motivo).toMatch(/não está configurado/i);
+    expect(r.motivo).toBe('Encerramento pela IA não está configurado ou o motivo foi desativado. Conclua a triagem com concluir_triagem.');
     expect(closeConversationByAi).not.toHaveBeenCalled();
+  });
+
+  // O admin desativar o motivo é o caso que acontece de verdade (apagar o
+  // app nem oferece), e é exatamente o que motivoDeEncerramentoAtivo cobre.
+  test('motivo desativado depois de configurado não encerra', async () => {
+    motivoDeEncerramentoAtivo.mockResolvedValue(null);
+    const c = ctx();
+    const r = await findTool('encerrar_atendimento').executar({}, c);
+    expect(r.encerrado).toBe(false);
+    expect(closeConversationByAi).not.toHaveBeenCalled();
+    expect(c.atendimentoEncerrado).toBeUndefined();
   });
 
   test('sem nada entregue nesta conversa, nunca encerra', async () => {

@@ -7,7 +7,7 @@ const {
   setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
   incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
 } = require('../conversations/conversation.repository');
-const { getAiConfig } = require('./ai-config.repository');
+const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
 const { saveMediaFile } = require('../media/media-storage');
@@ -764,11 +764,12 @@ const TOOLS = [
     },
     async executar(args, contexto) {
       if (!perfilTriagem(contexto)) return erro('encerrar_atendimento is only available during AI triage');
-      // Sem motivo escolhido pelo admin, o encerramento pela IA simplesmente
-      // não existe: tudo segue como hoje (encaminha ao setor).
-      const config = await getAiConfig();
-      if (!config || !config.triageResolvedReasonId) {
-        return { encerrado: false, motivo: 'Encerramento pela IA não está configurado. Conclua a triagem com concluir_triagem.' };
+      // Sem motivo escolhido pelo admin — ou com o motivo desativado depois de
+      // escolhido — o encerramento pela IA simplesmente não existe: tudo
+      // segue como hoje (encaminha ao setor).
+      const reasonId = await motivoDeEncerramentoAtivo();
+      if (!reasonId) {
+        return { encerrado: false, motivo: 'Encerramento pela IA não está configurado ou o motivo foi desativado. Conclua a triagem com concluir_triagem.' };
       }
       // Relê: o dono da conversa pode ter mudado durante o turno.
       const atual = await getConversationWithContact(contexto.conversationId);
@@ -785,7 +786,7 @@ const TOOLS = [
         linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
       }
       const conversa = await closeConversationByAi(contexto.conversationId, {
-        reasonId: config.triageResolvedReasonId, summary: linhas.join('\n'),
+        reasonId, summary: linhas.join('\n'),
       });
       if (!conversa) return { encerrado: false, motivo: 'A conversa já saiu da triagem.' };
       // Só o painel: a conversa nunca apareceu na fila (nasceu 'pending' e

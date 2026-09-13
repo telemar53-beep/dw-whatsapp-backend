@@ -511,6 +511,15 @@ describe('confirmar_nascimento', () => {
     expect(c.identidade.nivel).toBe('fraca');
     expect(setContactSgpLink).not.toHaveBeenCalled();
   });
+  test('identidade já forte: confirma sem comparar, sem contar tentativa e sem mudar a origem', async () => {
+    const c = { conversationId: 'c-1', identidade: { nivel: 'forte', origem: 'phone', dataNascimento: '1990-05-20' } };
+    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
+    expect(r.confirmado).toBe(true);
+    expect(r.jaConfirmada).toBe(true);
+    expect(c.identidade.origem).toBe('phone');
+    expect(incrementBirthdateAttempts).not.toHaveBeenCalled();
+  });
+
   test('sem data de nascimento no cadastro, não confirma, explica e não conta tentativa', async () => {
     const c = { identidade: { nivel: 'fraca', dataNascimento: null, nascimentoTentado: false } };
     expect((await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c)).confirmado).toBe(false);

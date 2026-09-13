@@ -507,6 +507,11 @@ const TOOLS = [
     },
     async executar(args, contexto) {
       const id = contexto.identidade;
+      // Identidade já forte (telefone, memória ou já confirmada): não há o que
+      // confirmar. Em código, e não só no prompt — foi o modelo desobedecer o
+      // prompt que fez um cliente identificado pelo telefone ser cobrado da
+      // data. Não conta tentativa nem sobrescreve a origem.
+      if (id && id.nivel === 'forte') return { confirmado: true, jaConfirmada: true, instrucao: 'A identidade já estava confirmada; não pergunte a data de nascimento. Siga o atendimento.' };
       if (!id || !id.dataNascimento) return { confirmado: false, motivo: 'Não há data de nascimento no cadastro para confirmar. Encaminhe sem entregar dados.' };
       // O limite de tentativas é por conversa, gravado no banco — não no
       // objeto de identidade em memória, que zera a cada turno e também com

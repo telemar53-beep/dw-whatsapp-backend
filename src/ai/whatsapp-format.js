@@ -38,26 +38,25 @@ function paraWhatsApp(texto) {
     .replace(/^\*\s+/gm, '- ')
     .replace(LINK_COM_PLACEHOLDER, '$1 ($2)');
 
-  return semLinhasRepetidas(convertido.replace(PLACEHOLDER, (_, i) => urls[Number(i)]));
+  return semRepeticaoIntegral(convertido.replace(PLACEHOLDER, (_, i) => urls[Number(i)]));
 }
 
 /**
- * O modelo às vezes repete a própria saída (observado em produção: saudação e
- * pergunta duas vezes num único balão, depois de uma chamada de ferramenta,
- * com a repetição colada na linha anterior). Uma linha idêntica a outra já
- * escrita na mesma mensagem nunca é intencional numa resposta de atendimento
- * — cai. Linhas em branco não contam e são recolhidas a no máximo uma.
+ * O modelo às vezes repete a própria saída inteira (observado em produção:
+ * saudação e pergunta duas vezes num único balão, depois de uma chamada de
+ * ferramenta, com a repetição colada na linha anterior). Só esse padrão é
+ * tratado: a mensagem é "A, quebra de linha, A" — devolve A. Deduplicar
+ * linhas soltas seria mais amplo e apagaria linhas legítimas repetidas, como
+ * "Status: Ativo" em dois contratos diferentes.
  */
-function semLinhasRepetidas(texto) {
-  const vistas = new Set();
-  const saida = [];
-  for (const linha of texto.split('\n')) {
-    const chave = linha.trim();
-    if (chave && vistas.has(chave)) continue;
-    if (chave) vistas.add(chave);
-    saida.push(linha);
+function semRepeticaoIntegral(texto) {
+  const t = texto.trim();
+  for (let i = t.indexOf('\n'); i !== -1; i = t.indexOf('\n', i + 1)) {
+    const cabeca = t.slice(0, i).trim();
+    const cauda = t.slice(i).trim();
+    if (cabeca && cabeca === cauda) return semRepeticaoIntegral(cabeca);
   }
-  return saida.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return t;
 }
 
 module.exports = { paraWhatsApp };

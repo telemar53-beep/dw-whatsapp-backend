@@ -44,12 +44,22 @@ describe('paraWhatsApp', () => {
     expect(paraWhatsApp(`Seu código:\n${pix}`)).toBe(`Seu código:\n${pix}`);
   });
 
-  test('remove linhas repetidas, mantendo a primeira ocorrência e a ordem', () => {
+  test('remove a mensagem inteira repetida, mesmo colada na linha anterior', () => {
     // Observado em produção: saudação + pergunta duplicadas num único balão,
     // com a repetição colada na linha anterior (sem linha em branco).
     const duplicado = 'Boa noite, Simeão! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?\nBoa noite, Simeão! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?';
     expect(paraWhatsApp(duplicado)).toBe('Boa noite, Simeão! Posso te ajudar.\n\nAntes de enviar, me confirma sua data?');
     expect(paraWhatsApp('A\n\nB\n\nA\n\nB')).toBe('A\n\nB');
+    // Só o padrão "A + A" é tratado; uma repetição tripla não tem metade igual
+    // e passa intacta — é raro e o custo de generalizar é falso positivo.
+    expect(paraWhatsApp('Oi\nOi\nOi')).toBe('Oi\nOi\nOi');
+  });
+
+  test('linhas legitimamente repetidas em contratos diferentes ficam intactas', () => {
+    // O deduplicador é da mensagem inteira, não de linhas: "Status: Ativo"
+    // aparece uma vez por contrato e as duas precisam sobreviver.
+    const texto = 'Contrato 111 — Rua X\nStatus: Ativo\n\nContrato 222 — Rua Y\nStatus: Ativo';
+    expect(paraWhatsApp(texto)).toBe(texto);
   });
 
   test('parágrafos diferentes e listas de uma linha ficam intactos', () => {

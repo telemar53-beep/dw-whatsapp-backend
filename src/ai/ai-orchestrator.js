@@ -354,7 +354,11 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           // o que a IA consultou e o que veio ("enviar_boleto → nenhuma fatura
           // em aberto"), senão um encaminhamento parece vazio.
           if (Array.isArray(contexto.registroFerramentas)) {
-            contexto.registroFerramentas.push({ nome, resultado: JSON.stringify(resposta.resultado).slice(0, 200) });
+            const serializado = JSON.stringify(resposta.resultado);
+            contexto.registroFerramentas.push({
+              nome,
+              resultado: serializado.length > 200 ? `${serializado.slice(0, 200)}…(truncado)` : serializado,
+            });
           }
           messages.push({ role: 'tool', tool_call_id: chamada.id, content: JSON.stringify(resposta.resultado) });
         } else {

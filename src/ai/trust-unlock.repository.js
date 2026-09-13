@@ -35,4 +35,20 @@ async function listTrustUnlocksByContract(contractId) {
   return result.rows.map(toTrustUnlock);
 }
 
-module.exports = { recordTrustUnlock, listTrustUnlocksByContract };
+// Houve liberação para ESTE contato na janela pedida? O verificador de
+// afirmações (ai-orchestrator.js) usa isto para não desmentir uma liberação
+// feita num turno anterior: contexto.desbloqueioRealizado só conhece o turno
+// atual. Sem contactId não há o que procurar — uma liberação gravada com
+// contact_id nulo não pertence a ninguém e nunca pode casar com "qualquer um".
+async function hasRecentTrustUnlockByContact(contactId, withinMs) {
+  if (!contactId) return false;
+  const result = await getPool().query(
+    `SELECT 1 FROM ai_trust_unlocks
+     WHERE contact_id = $1 AND created_at > now() - ($2::bigint * interval '1 millisecond')
+     LIMIT 1`,
+    [contactId, Math.trunc(withinMs)]
+  );
+  return result.rowCount > 0;
+}
+
+module.exports = { recordTrustUnlock, listTrustUnlocksByContract, hasRecentTrustUnlockByContact };

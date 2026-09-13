@@ -6,6 +6,7 @@ jest.mock('../conversations/message.repository');
 jest.mock('../reasons/reason.repository');
 jest.mock('../sectors/sector.repository');
 jest.mock('../integrations/sgp-client');
+jest.mock('./trust-unlock.repository');
 
 const { createChatCompletion } = require('./openai-client');
 const { executeTool } = require('./tool-executor');
@@ -15,6 +16,7 @@ const { listRecentMessagesByConversation } = require('../conversations/message.r
 const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
+const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
 const { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO } = require('./ai-orchestrator');
 
 const CONVERSATION = { id: 'c-1', channelId: 'ch-1' };
@@ -33,6 +35,8 @@ beforeEach(() => {
   listActiveReasons.mockResolvedValue([{ id: 'r-1', name: 'Lentidão' }]);
   listSectors.mockResolvedValue([{ id: 's-1', name: 'Suporte' }]);
   recordAiInteraction.mockResolvedValue({ id: 'i-1' });
+  // Padrão: nenhuma liberação em confiança recente para o contato.
+  hasRecentTrustUnlockByContact.mockResolvedValue(false);
 });
 
 describe('ai-orchestrator', () => {
@@ -954,6 +958,7 @@ describe('perfil de triagem', () => {
   describe('afirmações que precisam de fato', () => {
     const NOTURNO = { ...TRIAGEM, noturno: { ativo: true, retornoAs: '08:00' } };
     test('"desbloqueio realizado" sem liberação neste turno: regenera sem ferramentas com a correção', async () => {
+      hasRecentTrustUnlockByContact.mockResolvedValue(false);
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} })
         .mockResolvedValueOnce({ message: { content: 'João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.' }, usage: {} });
@@ -964,6 +969,29 @@ describe('perfil de triagem', () => {
       expect(segunda.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'system', content: expect.stringMatching(/afirmou uma liberação que NÃO aconteceu/) })]));
       expect(r.texto).toBe('João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.');
     });
+    // O erro que este ramo evita é o oposto do anterior e igualmente grave: a
+    // liberação ACONTECEU num turno anterior (o cliente volta e pergunta "foi
+    // liberado?") e o verificador obrigaria a IA a desmentir um fato.
+    test('liberação recente no banco: a afirmação passa sem correção nenhuma', async () => {
+      hasRecentTrustUnlockByContact.mockResolvedValue(true);
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(createChatCompletion).toHaveBeenCalledTimes(1);
+      expect(hasRecentTrustUnlockByContact).toHaveBeenCalledWith('ct-1', 24 * 60 * 60 * 1000);
+      expect(r.texto).toBe('Prontinho, João! O desbloqueio em confiança foi realizado.');
+    });
+
+    test('o banco é consultado uma vez só, mesmo com o laço dando outra volta', async () => {
+      hasRecentTrustUnlockByContact.mockResolvedValue(true);
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'O desbloqueio em confiança foi realizado. Já deixei seu atendimento na fila.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"r","confianca":0.9}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'O desbloqueio em confiança foi realizado, João.' }, usage: {} });
+      executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(hasRecentTrustUnlockByContact).toHaveBeenCalledTimes(1);
+    });
+
     test('"já deixei na fila" sem conclusão força concluir_triagem', async () => {
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: 'Já deixei seu atendimento na fila com o comprovante.' }, usage: {} })

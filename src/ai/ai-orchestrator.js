@@ -6,6 +6,7 @@ const { recordAiInteraction } = require('./ai-interaction.repository');
 const { listRecentMessagesByConversation } = require('../conversations/message.repository');
 const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
+const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { mensagemSegura } = require('./safe-error-log');
 const { maskDocument, normalizeContract } = require('./sgp-normalizer');
@@ -60,6 +61,9 @@ function anunciaEncaminhamento(texto) {
 // concluir_triagem pode dizer).
 const AFIRMA_LIBERACAO = /desbloqueio (em confian[çc]a )?(foi |está )?(realizado|feito|conclu[íi]do)|acesso (foi |está )?liberado|liberei (seu|o) acesso|internet (foi |está )?liberada/i;
 const AFIRMA_FILA = /deixei (seu |o )?(atendimento|caso|pedido) (na|em) fila|registr(ei|ado) (seu |o )?(atendimento|caso|pedido) para a equipe|já está na fila/i;
+// Janela em que uma liberação já feita ainda explica um "foi liberado?" do
+// cliente: ele volta na mesma madrugada, ou de manhã, para dizer se voltou.
+const LIBERACAO_RECENTE_MS = 24 * 60 * 60 * 1000;
 function afirmaLiberacao(texto) { return AFIRMA_LIBERACAO.test(String(texto || '')); }
 function afirmaFila(texto) { return AFIRMA_FILA.test(String(texto || '')); }
 
@@ -461,18 +465,31 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           perfil === 'triagem' && conteudo && !corrigiuLiberacao
           && !contexto.desbloqueioRealizado && afirmaLiberacao(conteudo)
         ) {
-          corrigiuLiberacao = true;
-          messages.push({ role: 'assistant', content: conteudo });
-          messages.push({
-            role: 'system',
-            content: 'Você afirmou uma liberação que NÃO aconteceu neste atendimento. Responda de novo, sem afirmar liberação: diga que não conseguiu liberar o acesso agora, que o pedido/comprovante fica registrado para a equipe conferir no horário de retorno, e que a liberação é automática quando o pagamento for confirmado.',
-          });
-          const final = await createChatCompletion({ apiKey: config.apiKey, model: config.model, messages, tools: [] });
-          promptTokens += final.usage.promptTokens || 0;
-          completionTokens += final.usage.completionTokens || 0;
-          texto = final.message.content || null;
-          if (!texto) erro = 'empty_model_response';
-          break;
+          // contexto.desbloqueioRealizado só conhece ESTE turno. A liberação
+          // pode ter acontecido no turno anterior — o cliente volta e pergunta
+          // "foi liberado?" —, e aí a afirmação é VERDADEIRA: corrigi-la seria
+          // mentir ao cliente sobre algo que aconteceu de verdade. Por isso o
+          // banco é a segunda fonte, e a resposta fica guardada na marca do
+          // turno para não consultar duas vezes no mesmo turno.
+          const jaLiberado = await hasRecentTrustUnlockByContact(
+            contexto.contact && contexto.contact.id, LIBERACAO_RECENTE_MS
+          );
+          if (jaLiberado) {
+            contexto.desbloqueioRealizado = true;
+          } else {
+            corrigiuLiberacao = true;
+            messages.push({ role: 'assistant', content: conteudo });
+            messages.push({
+              role: 'system',
+              content: 'Você afirmou uma liberação que NÃO aconteceu neste atendimento. Responda de novo, sem afirmar liberação: diga que não conseguiu liberar o acesso agora, que o pedido/comprovante fica registrado para a equipe conferir no horário de retorno, e que a liberação é automática quando o pagamento for confirmado.',
+            });
+            const final = await createChatCompletion({ apiKey: config.apiKey, model: config.model, messages, tools: [] });
+            promptTokens += final.usage.promptTokens || 0;
+            completionTokens += final.usage.completionTokens || 0;
+            texto = final.message.content || null;
+            if (!texto) erro = 'empty_model_response';
+            break;
+          }
         }
         if (
           perfil === 'triagem' && conteudo && !exigiuConclusaoPorAnuncio

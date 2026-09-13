@@ -533,7 +533,7 @@ describe('confirmar_nascimento', () => {
   const ctx = (extra = {}) => ({
     conversationId: 'conv-1', contact: { id: 'ct-1' },
     identidade: {
-      nivel: 'fraca', origem: 'cpf', dataNascimento: '1990-05-20', nascimentoTentado: false,
+      nivel: 'fraca', origem: 'cpf', primeiroNome: 'Maria', dataNascimento: '1990-05-20', nascimentoTentado: false,
       client: { id: 9, document: '11122233344' }, contracts: [{ id: 5 }],
     },
     ...extra,
@@ -552,7 +552,7 @@ describe('confirmar_nascimento', () => {
     // C1 (fix round 1): antes da confirmação o vínculo não existe; só agora,
     // com a data batida, é seguro persistir (senão o próximo turno leria
     // memory/forte de um CPF que nunca foi confirmado).
-    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: 9, sgpContractId: 5, sgpDocument: '11122233344' });
+    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: 9, sgpContractId: 5, sgpDocument: '11122233344', sgpFirstName: 'Maria' });
     expect(c.contact.sgpDocument).toBe('11122233344');
   });
   test('aceita AAAA-MM-DD e D/M/AA', async () => {
@@ -639,7 +639,7 @@ describe('esquecer_identificacao', () => {
     const c = {
       identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', dataNascimento: 'x' },
       contracts: [{ id: 1 }],
-      contact: { id: 'ct-1', sgpDocument: '1', sgpClientId: 9, sgpContractId: 5 },
+      contact: { id: 'ct-1', sgpDocument: '1', sgpClientId: 9, sgpContractId: 5, sgpFirstName: 'João' },
       conversationId: 'conv-1',
     };
     const r = await findTool('esquecer_identificacao').executar({}, c);
@@ -652,7 +652,10 @@ describe('esquecer_identificacao', () => {
     // objeto contact do turno mesmo com o vínculo já apagado no banco.
     expect(c.contact.sgpClientId).toBeNull();
     expect(c.contact.sgpContractId).toBeNull();
-    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: null, sgpContractId: null, sgpDocument: null });
+    // Mesmo motivo para o nome: um resquício em memória faria o backfill da
+    // resolução seguinte achar que o contato já tem nome guardado.
+    expect(c.contact.sgpFirstName).toBeNull();
+    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: null, sgpContractId: null, sgpDocument: null, sgpFirstName: null });
   });
 
   test('marca o telefone contestado na conversa, para o próximo turno não repetir o mesmo telefone no SGP', async () => {
@@ -730,7 +733,7 @@ describe('buscar_cliente no perfil de triagem', () => {
     const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
     expect(c.identidade).toBeUndefined();
     expect(sgpClient.findClientRecord).not.toHaveBeenCalled();
-    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: 9, sgpContractId: 5, sgpDocument: '11122233344' });
+    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: 9, sgpContractId: 5, sgpDocument: '11122233344', sgpFirstName: 'X' });
     expect(c.contact.sgpDocument).toBe('11122233344');
     expect(r.cliente.nome).toBe('X SOBRENOME');
   });

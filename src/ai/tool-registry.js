@@ -222,6 +222,7 @@ const TOOLS = [
         sgpClientId: client.id,
         sgpContractId: contracts.length === 1 ? contracts[0].id : null,
         sgpDocument: args.cpf,
+        sgpFirstName: primeiroNome(client.name),
       });
       contexto.contact.sgpDocument = args.cpf;
       return {
@@ -725,6 +726,9 @@ const TOOLS = [
           sgpClientId: id.client.id,
           sgpContractId: id.contracts.length === 1 ? id.contracts[0].id : null,
           sgpDocument: id.client.document,
+          // O nome guardado no contato é o que salva o cumprimento quando o
+          // SGP não responder no próximo atendimento.
+          sgpFirstName: primeiroNome(id.primeiroNome),
         });
         contexto.contact.sgpDocument = id.client.document;
         return { confirmado: true };
@@ -750,7 +754,8 @@ const TOOLS = [
         contexto.contact.sgpDocument = null;
         contexto.contact.sgpClientId = null;
         contexto.contact.sgpContractId = null;
-        await setContactSgpLink(contexto.contact.id, { sgpClientId: null, sgpContractId: null, sgpDocument: null });
+        contexto.contact.sgpFirstName = null;
+        await setContactSgpLink(contexto.contact.id, { sgpClientId: null, sgpContractId: null, sgpDocument: null, sgpFirstName: null });
       }
       // Persiste a contestação na conversa: sem isso, o turno seguinte
       // (resolverIdentidade) buscaria de novo pelo MESMO telefone no SGP e

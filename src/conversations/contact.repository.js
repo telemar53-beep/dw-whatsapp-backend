@@ -103,8 +103,8 @@ async function listContactsMissingAvatarForBaileysBackfill() {
 // sgpFirstName tem três estados de propósito: um nome grava, `null` apaga (é o
 // que esquecer_identificacao faz, limpando o vínculo inteiro) e `undefined`
 // MANTÉM o que já estava — quem só troca de contrato não precisa reenviar o
-// nome. Daí o COALESCE, que só enxerga o undefined depois de virar null no
-// driver; por isso o parâmetro distingue os dois antes de chegar ao SQL.
+// nome. Um COALESCE não serviria: o driver manda undefined como NULL e os dois
+// casos ficariam iguais no SQL — daí a flag que decide manter ou gravar.
 async function setContactSgpLink(contactId, { sgpClientId, sgpContractId, sgpDocument, sgpFirstName }) {
   const manterNome = sgpFirstName === undefined;
   const result = await getPool().query(

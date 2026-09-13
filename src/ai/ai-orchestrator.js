@@ -149,7 +149,7 @@ async function carregarContratos(contact) {
 const FERRAMENTAS_TRIAGEM = [
   'buscar_cliente', 'confirmar_nascimento', 'esquecer_identificacao',
   'consultar_status_contrato', 'consultar_status_conexao', 'consultar_faturas_todos_contratos',
-  'gerar_pix', 'gerar_segunda_via', 'enviar_boleto', 'concluir_triagem',
+  'gerar_pix', 'gerar_segunda_via', 'enviar_boleto', 'concluir_triagem', 'encerrar_atendimento',
 ];
 
 // O contexto de sistema da triagem é deliberadamente separado de
@@ -418,6 +418,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   return {
     texto, toolsExecutadas: toolsExecuted, erro,
     triagemConcluida: contexto.triagemConcluida || null,
+    atendimentoEncerrado: Boolean(contexto.atendimentoEncerrado),
     identidade: contexto.identidade || null,
   };
 }

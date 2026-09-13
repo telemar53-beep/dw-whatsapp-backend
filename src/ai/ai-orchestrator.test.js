@@ -445,7 +445,7 @@ describe('perfil de triagem', () => {
     expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM].sort());
     expect(nomes).not.toContain('desbloqueio_confianca');
     // Nominal: nenhuma ferramenta do assistente clássico (fora da lista fixa
-    // de dez) pode vazar para a triagem por engano.
+    // de onze) pode vazar para a triagem por engano.
     expect(FERRAMENTAS_TRIAGEM).not.toEqual(expect.arrayContaining([
       'consultar_plano', 'transferir_atendimento', 'definir_motivo_atendimento',
       'desbloqueio_confianca', 'consultar_financeiro', 'consultar_faturas',
@@ -672,6 +672,25 @@ describe('perfil de triagem', () => {
     await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
     expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('required');
     expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
+  });
+
+  test('encerrar_atendimento entra na lista fixa da triagem', async () => {
+    expect(FERRAMENTAS_TRIAGEM).toContain('encerrar_atendimento');
+    expect(FERRAMENTAS_TRIAGEM).toHaveLength(11);
+  });
+
+  test('devolve atendimentoEncerrado quando o turno encerrou o atendimento', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'encerrar_atendimento', arguments: '{}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Até logo, João!' }, usage: {} });
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctx.atendimentoEncerrado = true; return { ok: true, resultado: { encerrado: true } }; });
+    const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    expect(r.atendimentoEncerrado).toBe(true);
+  });
+
+  test('turno comum devolve atendimentoEncerrado false', async () => {
+    const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    expect(r.atendimentoEncerrado).toBe(false);
   });
 
   test('devolve triagemConcluida e a identidade final, e grava mode triage na auditoria', async () => {

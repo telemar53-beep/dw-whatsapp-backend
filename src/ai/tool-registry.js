@@ -5,8 +5,9 @@ const { findReasonById } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const {
   setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
-  incrementBirthdateAttempts, markPhoneContested,
+  incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
 } = require('../conversations/conversation.repository');
+const { getAiConfig } = require('./ai-config.repository');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
 const { saveMediaFile } = require('../media/media-storage');
@@ -431,6 +432,9 @@ const TOOLS = [
 
       await enviarPix({ conversationId: contexto.conversationId, channelId: contexto.channelId, fatura: primeira, sentBy: 'ai' });
       contexto.resolvidoPelaIa = true;
+      // Grava a entrega: contexto.resolvidoPelaIa nasce false a cada turno, e o
+      // "nao preciso de mais nada" do cliente costuma vir no turno SEGUINTE.
+      await markTriageResolvedByAi(contexto.conversationId);
       return {
         enviado: true,
         valor: primeira.value,
@@ -660,6 +664,9 @@ const TOOLS = [
         mediaMimeType: 'application/pdf', mediaFilename: 'boleto.pdf', sentBy: 'ai',
       });
       contexto.resolvidoPelaIa = true;
+      // Mesma razão de gerar_pix: a flag persistida é o que autoriza
+      // encerrar_atendimento num turno posterior à entrega.
+      await markTriageResolvedByAi(contexto.conversationId);
       return { enviado: true, valor: primeira.value, vencimento: primeira.dueDate };
     },
   },
@@ -698,6 +705,12 @@ const TOOLS = [
       // esquecer_identificacao — concluir_triagem só existe para a
       // recepcionista da triagem, nunca para o assistente clássico.
       if (!perfilTriagem(contexto)) return erro('concluir_triagem is only available during AI triage');
+      // A entrega (boleto/PIX) pode ter sido num turno ANTERIOR, e
+      // contexto.resolvidoPelaIa só conhece este turno. Leitura extra de
+      // propósito: a releitura que já existe aqui embaixo acontece DEPOIS do
+      // UPDATE, tarde demais para entrar no resumo que vai junto com ele.
+      const antes = await getConversationWithContact(contexto.conversationId);
+      const resolvidoPelaIa = Boolean(contexto.resolvidoPelaIa) || Boolean(antes && antes.aiTriageResolvedByAi);
       const setor = (await listSectors()).find((s) => s.id === args.setorId);
       if (!setor) return erro('Unknown setorId');
       let motivo = null;
@@ -722,14 +735,14 @@ const TOOLS = [
         `Origem: ${contexto.origemMensagem || 'texto'}`,
         `Confiança: ${Math.round(args.confianca * 100)}%${baixa ? ' (BAIXA)' : ''}`,
       ];
-      if (contexto.resolvidoPelaIa) linhas.push('Resolvido pela IA: boleto/PIX enviado — só confirmar.');
+      if (resolvidoPelaIa) linhas.push('Resolvido pela IA: boleto/PIX enviado — só confirmar.');
       if (Array.isArray(contexto.registroFerramentas) && contexto.registroFerramentas.length > 0) {
         linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
       }
       linhas.push('', args.resumo);
       const conversa = await concludeAiTriage(contexto.conversationId, {
         sectorId: setor.id, reasonId: motivo ? motivo.id : null, confidence: args.confianca,
-        summary: linhas.join('\n'), identifiedBy, lowConfidence: baixa, resolvedByAi: Boolean(contexto.resolvidoPelaIa),
+        summary: linhas.join('\n'), identifiedBy, lowConfidence: baixa, resolvedByAi: resolvidoPelaIa,
       });
       if (!conversa) return { concluido: false, motivo: 'A conversa já saiu da triagem (um atendente assumiu ou ela já foi concluída).' };
       const completa = await getConversationWithContact(contexto.conversationId);
@@ -737,6 +750,52 @@ const TOOLS = [
       broadcastToDashboard('dashboard:conversation', { conversation: completa });
       contexto.triagemConcluida = { setor: setor.name };
       return { concluido: true, setor: setor.name, instrucao: `Responda ao cliente em uma frase: use o primeiro nome se souber, diga que o atendimento vai para o setor ${setor.name} e que um atendente continua daqui. Não faça mais perguntas.` };
+    },
+  },
+  {
+    nome: 'encerrar_atendimento',
+    categoria: 'ACAO',
+    // Sem contrato nenhum nos argumentos: age só sobre contexto.conversationId.
+    isentoDeProprietario: true,
+    descricao: 'Encerra o atendimento quando a IA já entregou o boleto/PIX e o cliente disse que não precisa de mais nada. Só na triagem.',
+    parametros: { type: 'object', properties: {} },
+    validar() {
+      return { ok: true, args: {} };
+    },
+    async executar(args, contexto) {
+      if (!perfilTriagem(contexto)) return erro('encerrar_atendimento is only available during AI triage');
+      // Sem motivo escolhido pelo admin, o encerramento pela IA simplesmente
+      // não existe: tudo segue como hoje (encaminha ao setor).
+      const config = await getAiConfig();
+      if (!config || !config.triageResolvedReasonId) {
+        return { encerrado: false, motivo: 'Encerramento pela IA não está configurado. Conclua a triagem com concluir_triagem.' };
+      }
+      // Relê: o dono da conversa pode ter mudado durante o turno.
+      const atual = await getConversationWithContact(contexto.conversationId);
+      if (!atual || atual.status !== 'waiting' || atual.assignedAgentId || atual.triageState !== 'pending') {
+        return { encerrado: false, motivo: 'A conversa saiu da triagem; não faça nada.' };
+      }
+      // Trava dura: a IA nunca encerra um atendimento em que não resolveu
+      // nada. A flag é persistida porque a entrega pode ter sido em outro turno.
+      if (!atual.aiTriageResolvedByAi) {
+        return { encerrado: false, motivo: 'Nada foi entregue neste atendimento. Conclua a triagem com concluir_triagem.' };
+      }
+      const linhas = ['Resolvido pela IA e encerrado sem atendente.'];
+      if (Array.isArray(contexto.registroFerramentas) && contexto.registroFerramentas.length > 0) {
+        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
+      }
+      const conversa = await closeConversationByAi(contexto.conversationId, {
+        reasonId: config.triageResolvedReasonId, summary: linhas.join('\n'),
+      });
+      if (!conversa) return { encerrado: false, motivo: 'A conversa já saiu da triagem.' };
+      // Só o painel: a conversa nunca apareceu na fila (nasceu 'pending' e
+      // morreu 'closed'), então não há queue:removed a emitir.
+      broadcastToDashboard('dashboard:conversation', {
+        conversation: await getConversationWithContact(contexto.conversationId),
+        closedAt: new Date().toISOString(),
+      });
+      contexto.atendimentoEncerrado = true;
+      return { encerrado: true, instrucao: 'Despeça-se em UMA frase curta, dizendo que qualquer outra coisa é só chamar.' };
     },
   },
 ];

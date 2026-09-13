@@ -20,14 +20,14 @@ const { listSectors } = require('../sectors/sector.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const {
   setConversationSector, setSuggestedReason, concludeAiTriage, getConversationWithContact,
-  incrementBirthdateAttempts, markPhoneContested,
+  incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
 } = require('../conversations/conversation.repository');
 const { setContactSgpLink } = require('../conversations/contact.repository');
 const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { enviarPix } = require('../payments/payment-sender');
-const { isToolEnabled } = require('./ai-config.repository');
+const { isToolEnabled, getAiConfig } = require('./ai-config.repository');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
 const { executeTool } = require('./tool-executor');
@@ -39,8 +39,8 @@ describe('tool-registry', () => {
       'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas',
       'consultar_faturas_todos_contratos', 'consultar_financeiro',
       'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
-      'definir_motivo_atendimento', 'desbloqueio_confianca', 'enviar_boleto', 'esquecer_identificacao',
-      'gerar_pix', 'gerar_segunda_via', 'transferir_atendimento',
+      'definir_motivo_atendimento', 'desbloqueio_confianca', 'encerrar_atendimento', 'enviar_boleto',
+      'esquecer_identificacao', 'gerar_pix', 'gerar_segunda_via', 'transferir_atendimento',
     ]);
   });
 
@@ -78,7 +78,7 @@ describe('tool-registry', () => {
     }
   });
 
-  test('the ownership exemption list is exactly these seven tools, by name', () => {
+  test('the ownership exemption list is exactly these eight tools, by name', () => {
     // Adicionar uma isenção exige editar esta lista — a decisão passa por um
     // revisor em vez de escapar dentro da definição de uma ferramenta.
     // consultar_faturas_todos_contratos entrou porque não recebe id nenhum do
@@ -89,10 +89,12 @@ describe('tool-registry', () => {
     // de posse) do modelo — atuam sobre contexto.identidade/conversationId,
     // que o servidor já resolveu, não sobre algo que precise ser conferido
     // contra os contratos do cliente.
+    // encerrar_atendimento entrou pelo mesmo motivo: nao recebe argumento
+    // nenhum do modelo e so age sobre contexto.conversationId.
     const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
     expect(isentas).toEqual([
       'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas_todos_contratos',
-      'definir_motivo_atendimento', 'esquecer_identificacao', 'transferir_atendimento',
+      'definir_motivo_atendimento', 'encerrar_atendimento', 'esquecer_identificacao', 'transferir_atendimento',
     ]);
   });
 
@@ -753,6 +755,13 @@ describe('enviar_boleto', () => {
     expect(r).toEqual({ enviado: true, valor: 89.9, vencimento: '2026-09-20' });
     expect(c.resolvidoPelaIa).toBe(true);
   });
+  // A entrega tem de ficar GRAVADA, não só em contexto.resolvidoPelaIa: o
+  // cliente pode responder "só isso, obrigado" no turno seguinte, e é a flag
+  // persistida que autoriza encerrar_atendimento ali.
+  test('marca a entrega no banco (markTriageResolvedByAi), além do contexto do turno', async () => {
+    await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+    expect(markTriageResolvedByAi).toHaveBeenCalledWith('c-1');
+  });
   test('sem fatura em aberto, não envia nada', async () => {
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
     const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
@@ -842,6 +851,7 @@ describe('enviar_boleto', () => {
       expect(r.vencimento).toBe('2026-09-15');
       expect(r).not.toHaveProperty('pixCopiaCola');
       expect(c.resolvidoPelaIa).toBe(true);
+      expect(markTriageResolvedByAi).toHaveBeenCalledWith('c-1');
     });
 
     // I1b (fix round 1) também vale aqui: fora da triagem não há guarda nem
@@ -1056,6 +1066,16 @@ describe('concluir_triagem', () => {
     expect(concludeAiTriage.mock.calls[0][1].identifiedBy).toBe('cpf_confirmed');
   });
 
+  // A entrega pode ter acontecido num turno ANTERIOR: contexto.resolvidoPelaIa
+  // nasce false a cada turno, então só a flag persistida sabe disso.
+  test('resumo diz "Resolvido pela IA" quando a entrega foi num turno anterior', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, aiTriageResolvedByAi: true });
+    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx({ resolvidoPelaIa: false }));
+    const args = concludeAiTriage.mock.calls[0][1];
+    expect(args.resolvedByAi).toBe(true);
+    expect(args.summary).toContain('Resolvido pela IA');
+  });
+
   // I6 (revisão final do branch inteiro): mesma guarda de
   // esquecer_identificacao — sem ela, o cartão de permissões do assistente
   // clássico bastaria para concluir uma "triagem" que nunca existiu.
@@ -1065,5 +1085,92 @@ describe('concluir_triagem', () => {
     expect(r).toEqual({ ok: false, erro: 'concluir_triagem is only available during AI triage' });
     expect(concludeAiTriage).not.toHaveBeenCalled();
     expect(broadcast).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('encerrar_atendimento', () => {
+  const MOTIVO_RESOLVIDO = '33333333-3333-3333-3333-333333333333';
+  const ctx = (extra = {}) => ({
+    conversationId: 'c-1', channelId: 'ch-1', contact: { id: 'ct-1' },
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João' },
+    ferramentasPermitidas: ['encerrar_atendimento'], contracts: [], ...extra,
+  });
+  const emTriagemComEntrega = { id: 'c-1', status: 'waiting', assignedAgentId: null, triageState: 'pending', aiTriageResolvedByAi: true };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getAiConfig.mockResolvedValue({ triageResolvedReasonId: MOTIVO_RESOLVIDO });
+    getConversationWithContact.mockResolvedValue(emTriagemComEntrega);
+    closeConversationByAi.mockResolvedValue({ id: 'c-1', status: 'closed' });
+  });
+
+  test('não tem parâmetros obrigatórios e é isenta da checagem de dono', () => {
+    const t = findTool('encerrar_atendimento');
+    expect(t.categoria).toBe('ACAO');
+    expect(t.isentoDeProprietario).toBe(true);
+    expect(t.parametros).toEqual({ type: 'object', properties: {} });
+    expect(t.validar({})).toEqual({ ok: true, args: {} });
+  });
+
+  test('fora do perfil de triagem, recusa sem tocar em nada', async () => {
+    const r = await findTool('encerrar_atendimento').executar({}, { conversationId: 'c-1', contracts: [] });
+    expect(r).toEqual({ ok: false, erro: 'encerrar_atendimento is only available during AI triage' });
+    expect(closeConversationByAi).not.toHaveBeenCalled();
+  });
+
+  test('sem motivo configurado pelo admin, não encerra e manda concluir a triagem', async () => {
+    getAiConfig.mockResolvedValue({ triageResolvedReasonId: null });
+    const r = await findTool('encerrar_atendimento').executar({}, ctx());
+    expect(r.encerrado).toBe(false);
+    expect(r.motivo).toMatch(/não está configurado/i);
+    expect(closeConversationByAi).not.toHaveBeenCalled();
+  });
+
+  test('sem nada entregue nesta conversa, nunca encerra', async () => {
+    getConversationWithContact.mockResolvedValue({ ...emTriagemComEntrega, aiTriageResolvedByAi: false });
+    const r = await findTool('encerrar_atendimento').executar({}, ctx());
+    expect(r.encerrado).toBe(false);
+    expect(r.motivo).toMatch(/Nada foi entregue/i);
+    expect(closeConversationByAi).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['atendente assumiu', { ...emTriagemComEntrega, assignedAgentId: 'ag-1' }],
+    ['conversa fechada', { ...emTriagemComEntrega, status: 'closed' }],
+    ['triagem já concluída', { ...emTriagemComEntrega, triageState: 'completed' }],
+    ['conversa não encontrada', null],
+  ])('%s: não encerra', async (_nome, conversa) => {
+    getConversationWithContact.mockResolvedValue(conversa);
+    const r = await findTool('encerrar_atendimento').executar({}, ctx());
+    expect(r.encerrado).toBe(false);
+    expect(closeConversationByAi).not.toHaveBeenCalled();
+  });
+
+  test('caminho feliz: fecha com o motivo configurado, resume, avisa o painel e marca o turno', async () => {
+    const c = ctx({ registroFerramentas: [{ nome: 'gerar_pix', resultado: '{"enviado":true}' }] });
+    const r = await findTool('encerrar_atendimento').executar({}, c);
+
+    expect(closeConversationByAi).toHaveBeenCalledWith('c-1', {
+      reasonId: MOTIVO_RESOLVIDO,
+      summary: 'Resolvido pela IA e encerrado sem atendente.\nFerramentas: gerar_pix → {"enviado":true}',
+    });
+    expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', expect.objectContaining({
+      conversation: expect.any(Object), closedAt: expect.any(String),
+    }));
+    // A conversa nunca esteve visível na fila: não há nada para remover dela.
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(c.atendimentoEncerrado).toBe(true);
+    expect(r.encerrado).toBe(true);
+    expect(r.instrucao).toMatch(/uma frase/i);
+  });
+
+  test('corrida: se o fechamento não pegar a conversa, não avisa nem marca o turno', async () => {
+    closeConversationByAi.mockResolvedValue(null);
+    const c = ctx();
+    const r = await findTool('encerrar_atendimento').executar({}, c);
+    expect(r).toEqual({ encerrado: false, motivo: 'A conversa já saiu da triagem.' });
+    expect(broadcastToDashboard).not.toHaveBeenCalled();
+    expect(c.atendimentoEncerrado).toBeUndefined();
   });
 });

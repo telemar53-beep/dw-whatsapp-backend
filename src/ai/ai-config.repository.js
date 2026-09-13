@@ -18,6 +18,7 @@ function toConfig(row) {
     triageMaxQuestions: row.triage_max_questions,
     triageTimeoutMinutes: row.triage_timeout_minutes,
     triageExtraInstructions: row.triage_extra_instructions,
+    triageResolvedReasonId: row.triage_resolved_reason_id || null,
   };
 }
 
@@ -62,12 +63,16 @@ async function updateTranscriptionConfig({
   return toConfig(result.rows[0]);
 }
 
-async function updateTriageConfig({ triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions }) {
+// triageResolvedReasonId não usa COALESCE de propósito: null aqui é o admin
+// DESLIGANDO o encerramento pela IA, não "mantenha o que estava".
+async function updateTriageConfig({ triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId }) {
   const result = await getPool().query(
     `UPDATE ai_config SET triage_confidence_threshold = $1, triage_max_questions = $2,
-            triage_timeout_minutes = $3, triage_extra_instructions = $4, updated_at = now()
+            triage_timeout_minutes = $3, triage_extra_instructions = $4,
+            triage_resolved_reason_id = $5, updated_at = now()
       WHERE id = 1 RETURNING *`,
-    [triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions]
+    [triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions,
+     triageResolvedReasonId || null]
   );
   return toConfig(result.rows[0]);
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAiConfig } from '../hooks/useAiConfig';
+import { useReasons } from '../hooks/useReasons';
 import { updateAiTriageConfig } from '../services/api';
 
 const inputClass =
@@ -11,10 +12,12 @@ const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-sur
 function AiTriageConfigCard() {
   const { token } = useAuth();
   const { config, loading, refresh } = useAiConfig();
+  const { reasons } = useReasons();
   const [confidencePercent, setConfidencePercent] = useState(80);
   const [maxQuestions, setMaxQuestions] = useState(2);
   const [timeoutMinutes, setTimeoutMinutes] = useState(3);
   const [extraInstructions, setExtraInstructions] = useState('');
+  const [resolvedReasonId, setResolvedReasonId] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -32,6 +35,7 @@ function AiTriageConfigCard() {
       setTimeoutMinutes(config.triageTimeoutMinutes);
     }
     setExtraInstructions(config.triageExtraInstructions || '');
+    setResolvedReasonId(config.triageResolvedReasonId || '');
   }, [config]);
 
   async function handleSave(event) {
@@ -45,6 +49,9 @@ function AiTriageConfigCard() {
           triageMaxQuestions: Number(maxQuestions),
           triageTimeoutMinutes: Number(timeoutMinutes),
           triageExtraInstructions: extraInstructions,
+          // '' é "não encerrar": vai como null, que é o que desliga o
+          // encerramento pela IA no backend.
+          triageResolvedReasonId: resolvedReasonId || null,
         },
         token
       );
@@ -101,6 +108,27 @@ function AiTriageConfigCard() {
             className={inputClass}
           />
         </div>
+      </div>
+
+      <div>
+        <label htmlFor="triage-resolved-reason" className={labelClass}>
+          Encerrar sozinha depois de entregar boleto/PIX
+        </label>
+        <select
+          id="triage-resolved-reason"
+          value={resolvedReasonId}
+          onChange={(e) => setResolvedReasonId(e.target.value)}
+          className={inputClass}
+        >
+          <option value="">Não encerrar: encaminhar ao setor (padrão)</option>
+          {reasons.map((reason) => (
+            <option key={reason.id} value={reason.id}>{reason.name}</option>
+          ))}
+        </select>
+        <p className="text-[12px] text-wa-muted">
+          Com um motivo escolhido, a IA pergunta se o cliente precisa de mais algo e, se não,
+          encerra o atendimento com esse motivo. Sem motivo, a conversa vai para a fila como hoje.
+        </p>
       </div>
 
       <div>

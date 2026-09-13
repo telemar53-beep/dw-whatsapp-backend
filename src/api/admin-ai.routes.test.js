@@ -1,11 +1,13 @@
 jest.mock('../ai/ai-config.repository');
 jest.mock('../ai/openai-client');
+jest.mock('../reasons/reason.repository');
 
 const express = require('express');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listModels, OpenAiAuthError } = require('../ai/openai-client');
+const { findReasonById } = require('../reasons/reason.repository');
 const adminAiRoutes = require('./admin-ai.routes');
 
 function buildApp() {
@@ -25,7 +27,10 @@ beforeEach(() => {
     systemPrompt: 'p', maxToolsPerInteraction: 8,
   });
   listToolPermissions.mockResolvedValue([{ toolName: 'consultar_plano', enabled: true }]);
+  findReasonById.mockResolvedValue({ id: MOTIVO_ID, name: 'Resolvido pela IA', active: true });
 });
+
+const MOTIVO_ID = '11111111-2222-3333-4444-555555555555';
 
 describe('admin ai routes', () => {
   test('GET /config requires a token', async () => {
@@ -227,6 +232,50 @@ describe('admin ai routes', () => {
       .send({ triageConfidenceThreshold: valorInvalido, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: '' })
       .expect(400);
     expect(res.body.error).toBe('triageConfidenceThreshold must be a number between 0 and 1');
+    expect(updateTriageConfig).not.toHaveBeenCalled();
+  });
+
+  test('GET /config devolve o motivo de encerramento pela IA', async () => {
+    getAiConfig.mockResolvedValue({
+      id: 1, apiKey: 'sk-1234567890abcd', model: 'gpt-x', mode: 'assistant',
+      systemPrompt: 'p', maxToolsPerInteraction: 8, triageResolvedReasonId: MOTIVO_ID,
+    });
+    const res = await request(buildApp()).get('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`).expect(200);
+    expect(res.body.triageResolvedReasonId).toBe(MOTIVO_ID);
+  });
+
+  test('PUT /triage aceita null e um motivo ativo em triageResolvedReasonId', async () => {
+    updateTriageConfig.mockResolvedValue({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x', triageResolvedReasonId: null });
+    await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x' }).expect(200);
+    expect(updateTriageConfig).toHaveBeenCalledWith(expect.objectContaining({ triageResolvedReasonId: null }));
+
+    updateTriageConfig.mockResolvedValue({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x', triageResolvedReasonId: MOTIVO_ID });
+    const res = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x', triageResolvedReasonId: MOTIVO_ID }).expect(200);
+    expect(updateTriageConfig).toHaveBeenCalledWith(expect.objectContaining({ triageResolvedReasonId: MOTIVO_ID }));
+    expect(res.body.triageResolvedReasonId).toBe(MOTIVO_ID);
+  });
+
+  test('PUT /triage recusa motivo inexistente, inativo ou que não é UUID', async () => {
+    const corpo = (triageResolvedReasonId) => ({
+      triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+      triageExtraInstructions: 'x', triageResolvedReasonId,
+    });
+
+    const r1 = await request(buildApp()).put('/api/admin/ai/triage')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`).send(corpo('nao-e-uuid')).expect(400);
+    expect(r1.body.error).toBe('triageResolvedReasonId must be null or an active reason id');
+
+    findReasonById.mockResolvedValue(null);
+    await request(buildApp()).put('/api/admin/ai/triage')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`).send(corpo(MOTIVO_ID)).expect(400);
+
+    findReasonById.mockResolvedValue({ id: MOTIVO_ID, name: 'Antigo', active: false });
+    await request(buildApp()).put('/api/admin/ai/triage')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`).send(corpo(MOTIVO_ID)).expect(400);
+
     expect(updateTriageConfig).not.toHaveBeenCalled();
   });
 });

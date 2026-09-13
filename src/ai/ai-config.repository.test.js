@@ -14,7 +14,7 @@ describe('ai config repository', () => {
     );
     await getPool().query(
       "UPDATE ai_config SET triage_confidence_threshold = 0.800, triage_max_questions = 2, " +
-      "triage_timeout_minutes = 3, triage_extra_instructions = '' WHERE id = 1"
+      "triage_timeout_minutes = 3, triage_extra_instructions = '', triage_resolved_reason_id = NULL WHERE id = 1"
     );
   });
 
@@ -106,5 +106,28 @@ describe('ai config repository', () => {
     expect(up.triageConfidenceThreshold).toBeCloseTo(0.9, 3);
     expect(up.triageMaxQuestions).toBe(3);
     expect((await getAiConfig()).apiKey).toBe('sk-x');
+  });
+
+  test('updateTriageConfig grava e apaga o motivo de encerramento pela IA', async () => {
+    expect((await getAiConfig()).triageResolvedReasonId).toBeNull();
+    const motivo = await getPool().query(
+      "INSERT INTO contact_reasons (name) VALUES ('Resolvido pela IA') RETURNING id"
+    );
+    const motivoId = motivo.rows[0].id;
+
+    const comMotivo = await updateTriageConfig({
+      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3,
+      triageExtraInstructions: '', triageResolvedReasonId: motivoId,
+    });
+    expect(comMotivo.triageResolvedReasonId).toBe(motivoId);
+    expect((await getAiConfig()).triageResolvedReasonId).toBe(motivoId);
+
+    // null é um valor legítimo (o admin desliga o encerramento pela IA), não
+    // um "não mexa": tem de apagar o que estava gravado.
+    const semMotivo = await updateTriageConfig({
+      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3,
+      triageExtraInstructions: '', triageResolvedReasonId: null,
+    });
+    expect(semMotivo.triageResolvedReasonId).toBeNull();
   });
 });

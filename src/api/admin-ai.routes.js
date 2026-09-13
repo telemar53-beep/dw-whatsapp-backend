@@ -3,9 +3,13 @@ const { requireAuth, requireRole } = require('../auth/auth.middleware');
 const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listTools, findTool } = require('../ai/tool-registry');
 const { listModels } = require('../ai/openai-client');
+const { findReasonById } = require('../reasons/reason.repository');
 
 const router = express.Router();
 const MODOS = ['disabled', 'assistant', 'automatic'];
+// Mesmo formato exigido em conversations.routes.js: sem os hifens nas posições
+// certas o valor chega ao Postgres e vira erro de cast (22P02), não uma recusa.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function toConfigResponse(config) {
   return {
@@ -25,6 +29,7 @@ function toConfigResponse(config) {
     triageMaxQuestions: config.triageMaxQuestions,
     triageTimeoutMinutes: config.triageTimeoutMinutes,
     triageExtraInstructions: config.triageExtraInstructions,
+    triageResolvedReasonId: config.triageResolvedReasonId || null,
   };
 }
 
@@ -117,7 +122,21 @@ router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
   if (!Number.isInteger(triageMaxQuestions) || triageMaxQuestions < 0 || triageMaxQuestions > 5) return res.status(400).json({ error: 'triageMaxQuestions must be an integer from 0 to 5' });
   if (!Number.isInteger(triageTimeoutMinutes) || triageTimeoutMinutes < 1 || triageTimeoutMinutes > 60) return res.status(400).json({ error: 'triageTimeoutMinutes must be an integer from 1 to 60' });
   if (typeof triageExtraInstructions !== 'string') return res.status(400).json({ error: 'triageExtraInstructions must be a string' });
-  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions });
+  // O motivo é o que autoriza a IA a ENCERRAR sozinha: um id qualquer (ou de
+  // um motivo desativado) deixaria o encerramento gravando um motivo que o
+  // Relatório não sabe explicar. Vazio/ausente = desligado, e é legítimo.
+  const { triageResolvedReasonId } = req.body || {};
+  let motivoResolvido = null;
+  if (triageResolvedReasonId !== undefined && triageResolvedReasonId !== null && triageResolvedReasonId !== '') {
+    const erroMotivo = { error: 'triageResolvedReasonId must be null or an active reason id' };
+    if (typeof triageResolvedReasonId !== 'string' || !UUID_PATTERN.test(triageResolvedReasonId)) {
+      return res.status(400).json(erroMotivo);
+    }
+    const motivo = await findReasonById(triageResolvedReasonId);
+    if (!motivo || !motivo.active) return res.status(400).json(erroMotivo);
+    motivoResolvido = motivo.id;
+  }
+  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido });
   res.json(toConfigResponse(config));
 });
 

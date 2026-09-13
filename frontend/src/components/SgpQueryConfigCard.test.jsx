@@ -76,7 +76,15 @@ describe('SgpQueryConfigCard', () => {
 
     await waitFor(() =>
       expect(api.updateSgpQueryConfig).toHaveBeenCalledWith(
-        { baseUrl: 'https://x.example', app: 'chatmix', token: undefined, enabled: true },
+        {
+          baseUrl: 'https://x.example',
+          app: 'chatmix',
+          token: undefined,
+          enabled: true,
+          pixMerchantName: '',
+          pixMerchantKey: '',
+          pixMerchantKeyType: '',
+        },
         'tok-123'
       )
     );
@@ -124,5 +132,110 @@ describe('SgpQueryConfigCard', () => {
     await userEvent.click(screen.getByRole('button', { name: /criar integração/i }));
 
     expect(screen.getByLabelText(/url de acesso ao sgp/i)).toHaveValue('');
+  });
+});
+
+describe('SgpQueryConfigCard — recebedor Pix', () => {
+  test('shows "não cadastrado" for the Pix receiver when none of the three fields are set', () => {
+    useSgpQueryConfig.mockReturnValue({
+      config: {
+        configured: true,
+        baseUrl: 'https://x.example',
+        app: 'chatmix',
+        tokenLast4: '5c7a',
+        enabled: true,
+        pixMerchantName: null,
+        pixMerchantKey: null,
+        pixMerchantKeyType: null,
+      },
+      refresh: vi.fn(),
+    });
+    render(<SgpQueryConfigCard />);
+
+    expect(screen.getByText(/recebedor pix: não cadastrado/i)).toBeInTheDocument();
+  });
+
+  test('shows the Pix receiver summary when it comes filled in the config', () => {
+    useSgpQueryConfig.mockReturnValue({
+      config: {
+        configured: true,
+        baseUrl: 'https://x.example',
+        app: 'chatmix',
+        tokenLast4: '5c7a',
+        enabled: true,
+        pixMerchantName: 'DW Telecom',
+        pixMerchantKey: '12345678000199',
+        pixMerchantKeyType: 'CNPJ',
+      },
+      refresh: vi.fn(),
+    });
+    render(<SgpQueryConfigCard />);
+
+    expect(screen.getByText(/recebedor pix: dw telecom · cnpj · 12345678000199/i)).toBeInTheDocument();
+  });
+
+  test('saving with only the merchant name filled shows the error and does not call the API', async () => {
+    useSgpQueryConfig.mockReturnValue({
+      config: {
+        configured: true,
+        baseUrl: 'https://x.example',
+        app: 'chatmix',
+        tokenLast4: '5c7a',
+        enabled: true,
+        pixMerchantName: null,
+        pixMerchantKey: null,
+        pixMerchantKeyType: null,
+      },
+      refresh: vi.fn(),
+    });
+    render(<SgpQueryConfigCard />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    await userEvent.type(screen.getByLabelText(/nome do recebedor/i), 'DW Telecom');
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+
+    expect(screen.getByText('Preencha nome, chave e tipo da chave Pix, ou deixe os três vazios')).toBeInTheDocument();
+    expect(api.updateSgpQueryConfig).not.toHaveBeenCalled();
+  });
+
+  test('saving with all three Pix fields filled sends them to the API', async () => {
+    const refresh = vi.fn();
+    useSgpQueryConfig.mockReturnValue({
+      config: {
+        configured: true,
+        baseUrl: 'https://x.example',
+        app: 'chatmix',
+        tokenLast4: '5c7a',
+        enabled: true,
+        pixMerchantName: null,
+        pixMerchantKey: null,
+        pixMerchantKeyType: null,
+      },
+      refresh,
+    });
+    api.updateSgpQueryConfig.mockResolvedValue({});
+    render(<SgpQueryConfigCard />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    await userEvent.type(screen.getByLabelText(/nome do recebedor/i), 'DW Telecom');
+    await userEvent.type(screen.getByLabelText(/chave pix da empresa/i), '12345678000199');
+    await userEvent.selectOptions(screen.getByLabelText(/tipo da chave/i), 'CNPJ');
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+
+    await waitFor(() =>
+      expect(api.updateSgpQueryConfig).toHaveBeenCalledWith(
+        {
+          baseUrl: 'https://x.example',
+          app: 'chatmix',
+          token: undefined,
+          enabled: true,
+          pixMerchantName: 'DW Telecom',
+          pixMerchantKey: '12345678000199',
+          pixMerchantKeyType: 'CNPJ',
+        },
+        'tok-123'
+      )
+    );
+    expect(refresh).toHaveBeenCalled();
   });
 });

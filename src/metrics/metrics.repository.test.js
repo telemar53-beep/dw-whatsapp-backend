@@ -49,9 +49,29 @@ async function seedClosedConversation({ channelId, contactId, agentId, startedAt
   return conversationId;
 }
 
+
+// A coluna nova ai_config.triage_resolved_reason_id referencia contact_reasons,
+// e TRUNCATE ... CASCADE leva junto TODA tabela que referencia a truncada —
+// inclusive a linha singleton de ai_config, semeada pela migração e esperada
+// de pé por outras suítes (o banco de teste é um só, compartilhado). Guarda e
+// repõe; o motivo de encerramento volta nulo, que é o default da coluna.
+async function truncarPreservandoAiConfig(sql) {
+  const { rows } = await getPool().query('SELECT * FROM ai_config WHERE id = 1');
+  await getPool().query(sql);
+  if (rows.length === 0) return;
+  const linha = { ...rows[0], triage_resolved_reason_id: null };
+  const colunas = Object.keys(linha);
+  await getPool().query(
+    `INSERT INTO ai_config (${colunas.join(', ')})
+     VALUES (${colunas.map((_, i) => `$${i + 1}`).join(', ')})
+     ON CONFLICT (id) DO NOTHING`,
+    colunas.map((c) => linha[c])
+  );
+}
+
 describe('metrics repository', () => {
   beforeEach(async () => {
-    await getPool().query(
+    await truncarPreservandoAiConfig(
       'TRUNCATE messages, conversation_events, conversations, contacts, channels, agent_sectors, sectors, contact_reasons, agents CASCADE'
     );
     contactCounter = 0;

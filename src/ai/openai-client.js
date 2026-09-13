@@ -53,7 +53,11 @@ async function createChatCompletion({ apiKey, model, messages, tools, toolChoice
 // Leitura de imagem (comprovante de pagamento). A imagem viaja como data URL
 // em base64 dentro do próprio corpo: nada é hospedado nem exposto por URL
 // pública, e o caminho do arquivo em disco nunca sai daqui.
-const VISION_TIMEOUT_MS = 60000;
+// 45 s, não 60: o turno da IA inteiro tem 120 s (TURNO_MAX_MS no
+// ai-orchestrator) e à noite a leitura do comprovante ainda é seguida do
+// desbloqueio (40 s) e da resposta final. Com 60 s aqui, o turno estourava
+// DEPOIS da liberação — cliente com a internet de volta e sem resposta.
+const VISION_TIMEOUT_MS = 45000;
 
 async function analyzeImage({ apiKey, model, imageBuffer, mimeType, prompt }) {
   const body = {

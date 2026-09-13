@@ -653,6 +653,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     texto, toolsExecutadas: toolsExecuted, erro,
     triagemConcluida: contexto.triagemConcluida || null,
     atendimentoEncerrado: Boolean(contexto.atendimentoEncerrado),
+    // O worker usa isto para saber se pode mandar a frase de sucesso por
+    // código quando o turno estoura o tempo antes da resposta final.
+    desbloqueioRealizado: Boolean(contexto.desbloqueioRealizado),
     identidade: contexto.identidade || null,
   };
 }

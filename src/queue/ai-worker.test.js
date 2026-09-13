@@ -446,6 +446,68 @@ describe('ai-worker — triagem', () => {
       }));
     });
 
+    // Revisão final do branch: o turno pode estourar o tempo (TURNO_MAX_MS)
+    // DEPOIS de a liberação acontecer no SGP e ANTES de o modelo escrever o
+    // "prontinho". O cliente ficava sem resposta nenhuma, com a internet
+    // liberada, e a conversa sem ir para a fila da manhã.
+    describe('turno estourou o tempo depois da liberação', () => {
+      const NOTURNO = { mode: 'assistant', apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3, transcriptionFeedAi: true, nightStartTime: '20:00', nightEndTime: '08:00' };
+
+      beforeEach(() => {
+        isNightModeActive.mockReturnValue(true);
+        getAiConfig.mockResolvedValue(NOTURNO);
+        resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
+      });
+
+      test('sem texto mas com liberação feita: o código manda a frase do dono e conclui na fila', async () => {
+        runAiTurn.mockResolvedValue({ texto: null, toolsExecutadas: [], erro: 'turn_timeout', triagemConcluida: null, desbloqueioRealizado: true });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+          conversationId: 'c-1', channelId: 'ch-1', sentBy: 'ai',
+          content: 'Prontinho, Willemberg! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das 08:00. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?',
+        });
+        expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({
+          summary: expect.stringMatching(/desbloqueio em confiança realizado/i),
+        }));
+        expect(broadcast).toHaveBeenCalledWith('queue:new', expect.any(Object));
+        // A frase já é o desfecho: não conta como mais uma pergunta da triagem.
+        expect(incrementTriageAttempts).not.toHaveBeenCalled();
+      });
+
+      test('sem texto e sem liberação: nada é enviado e nada é concluído (comportamento de hoje)', async () => {
+        runAiTurn.mockResolvedValue({ texto: null, toolsExecutadas: [], erro: 'turn_timeout', triagemConcluida: null, desbloqueioRealizado: false });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+        expect(concludeAiTriage).not.toHaveBeenCalled();
+      });
+
+      test('com texto do modelo, a frase do código não entra: quem fala é o turno', async () => {
+        runAiTurn.mockResolvedValue({ texto: 'Prontinho, Willemberg! Testa a internet aí.', toolsExecutadas: [], erro: null, triagemConcluida: null, desbloqueioRealizado: true });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+        expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
+          content: expect.stringContaining('Testa a internet aí.'),
+        }));
+        expect(concludeAiTriage).not.toHaveBeenCalled();
+      });
+
+      test('atendente assumiu durante o turno: nem a frase do código sai', async () => {
+        runAiTurn.mockResolvedValue({ texto: null, toolsExecutadas: [], erro: 'turn_timeout', triagemConcluida: null, desbloqueioRealizado: true });
+        getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, status: 'assigned', assignedAgentId: 'a-1' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+        expect(concludeAiTriage).not.toHaveBeenCalled();
+      });
+    });
+
     test('sem modo noturno, noturno.ativo é false e o limite é o configurado', async () => {
       isNightModeActive.mockReturnValue(false);
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });

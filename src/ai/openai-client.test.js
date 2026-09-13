@@ -232,6 +232,16 @@ describe('openai-client', () => {
       expect(body.messages[0].content[0]).toEqual({ type: 'text', text: 'leia' });
     });
 
+    // O turno inteiro tem 120 s (TURNO_MAX_MS). Com 60 s aqui, uma visão lenta
+    // mais o desbloqueio (40 s) não deixavam tempo para o modelo escrever o
+    // "prontinho": o turno estourava DEPOIS da liberação, com o cliente sem
+    // resposta nenhuma. 45 s ainda cobre folgado uma leitura de comprovante.
+    test('a leitura de imagem tem orçamento de 45 s, menor que o do turno', async () => {
+      axios.post.mockResolvedValue({ data: { choices: [{ message: { content: '{"ehComprovante":true}' } }], usage: {} } });
+      await analyzeImage({ apiKey: 'sk', model: 'gpt-x', imageBuffer: Buffer.from('img'), mimeType: 'image/png', prompt: 'leia' });
+      expect(axios.post.mock.calls[0][2].timeout).toBe(45000);
+    });
+
     test('resposta que não é JSON vira erro OpenAiRequestError, sem vazar o conteúdo', async () => {
       axios.post.mockResolvedValue({ data: { choices: [{ message: { content: 'não sei' } }], usage: {} } });
       await expect(analyzeImage({ apiKey: 'sk', model: 'gpt-x', imageBuffer: Buffer.from('x'), mimeType: 'image/png', prompt: 'p' })).rejects.toThrow(/JSON/);

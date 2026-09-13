@@ -1042,6 +1042,27 @@ describe('perfil de triagem', () => {
       expect(r.texto).toBe('João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.');
     });
 
+    // O worker precisa saber que a liberação aconteceu DE VERDADE neste turno:
+    // é o que o autoriza a mandar a frase de sucesso por código quando o turno
+    // estoura o tempo antes de o modelo escrever qualquer coisa.
+    test('o turno devolve desbloqueioRealizado quando a ferramenta marcou o contexto', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'desbloqueio_confianca', arguments: '{"contratoId":26515}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, contexto) => {
+        contexto.desbloqueioRealizado = true;
+        return { ok: true, resultado: { liberado: true, dias: 3 } };
+      });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(r.desbloqueioRealizado).toBe(true);
+    });
+
+    test('sem liberação no turno, desbloqueioRealizado sai false (nunca undefined)', async () => {
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'Me manda o comprovante, João.' }, usage: {} });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(r.desbloqueioRealizado).toBe(false);
+    });
+
     test('"já deixei na fila" sem conclusão força concluir_triagem', async () => {
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: 'Já deixei seu atendimento na fila com o comprovante.' }, usage: {} })

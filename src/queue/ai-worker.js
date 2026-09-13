@@ -198,6 +198,21 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   const texto = primeiroTurno ? garantirSaudacao(textoDoModelo, identidade && identidade.primeiroNome) : textoDoModelo;
   if (texto) {
     await enqueueOutboundMessage({ conversationId: conversation.id, channelId: conversation.channelId, content: texto, sentBy: 'ai' });
+  } else if (noturnoAtivo && turno.desbloqueioRealizado && !concluiuAqui && !encerrouAqui) {
+    // O turno estourou o tempo (TURNO_MAX_MS) DEPOIS de a liberação acontecer
+    // no SGP e ANTES de o modelo escrever a resposta: a internet do cliente
+    // voltou e ele não recebeu uma palavra. A frase de sucesso é a do dono, sai
+    // por código, e o atendimento vai para a fila da manhã com o que falta —
+    // conferir o pagamento. (O guard de releitura acima já garante que a
+    // conversa continua em triagem, sem atendente e sem ter sido fechada.)
+    const nome = (turno.identidade && turno.identidade.primeiroNome)
+      || (identidade && identidade.primeiroNome) || 'cliente';
+    await enqueueOutboundMessage({
+      conversationId: conversation.id, channelId: conversation.channelId, sentBy: 'ai',
+      content: `Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?`,
+    });
+    await concluirEmCodigo(conversation.id, 'Modo noturno: desbloqueio em confiança realizado; o turno da IA estourou o tempo antes da resposta final. Conferir pagamento e dar baixa.');
+    return;
   }
   if (concluiuAqui || encerrouAqui) return;
   await incrementTriageAttempts(conversation.id);

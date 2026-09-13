@@ -232,6 +232,25 @@ describe('ConversationListItem', () => {
     expect(screen.getByText('📍 Localização')).toBeInTheDocument();
   });
 
+  test('shows the Pix emblem as the preview for a Pix message, not the raw code', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c1',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+5511999990000',
+            lastMessageType: 'pix',
+            lastMessageContent: '000201ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+    expect(screen.getByText('💠 Pix')).toBeInTheDocument();
+    expect(screen.queryByText(/000201/)).not.toBeInTheDocument();
+  });
+
   test('falls back to the phone number as the preview when there is no last message yet', () => {
     render(
       <ul>

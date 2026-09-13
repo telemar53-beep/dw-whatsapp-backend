@@ -9,9 +9,13 @@ const MEDIA_TYPE_LABELS = {
   document: '📄 Documento',
   sticker: '😀 Figurinha',
   location: '📍 Localização',
+  pix: '💠 Pix',
 };
 
 function getPreviewText(conversation) {
+  // O conteúdo de uma mensagem 'pix' é o código copia e cola — nunca deve aparecer
+  // na prévia da lista, então esse tipo é checado antes do lastMessageContent.
+  if (conversation.lastMessageType === 'pix') return MEDIA_TYPE_LABELS.pix;
   if (conversation.lastMessageContent) return conversation.lastMessageContent;
   if (conversation.lastMessageType) return MEDIA_TYPE_LABELS[conversation.lastMessageType] || conversation.contactPhoneNumber;
   return conversation.contactPhoneNumber;

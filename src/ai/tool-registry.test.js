@@ -651,6 +651,11 @@ describe('desbloqueio_confianca — modo noturno', () => {
     sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: true, liberadoDias: 3, protocolo: '9999', motivo: null });
     recordTrustUnlock.mockResolvedValue({ id: 'l-1' });
     enqueueOutboundMessage.mockResolvedValue({ id: 'm-1' });
+    // A releitura da conversa (mesma guarda de gerar_pix/enviar_boleto) agora
+    // roda antes do aviso: por padrão a conversa segue em triagem.
+    // mockReset porque clearAllMocks NÃO apaga implementação — sem isto, o
+    // valor de outro describe deste arquivo vazaria para cá.
+    getConversationWithContact.mockReset().mockResolvedValue({ id: 'c-1', assignedAgentId: null, status: 'waiting', triageState: 'pending' });
   });
 
   test('(a) avisa o cliente ANTES de escrever no SGP e devolve as frases do dono', async () => {
@@ -671,6 +676,21 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(r.instrucao).toContain('Já deixei seu atendimento na fila');
     expect(ctx.desbloqueioRealizado).toBe(true);
     expect(ctx.desbloqueioResultado).toEqual({ liberado: true, dias: 3 });
+  });
+
+  // Revisão final do branch: entre o início do turno (a OpenAI, a visão do
+  // comprovante, as consultas ao SGP) e o aviso, um atendente pode ter assumido
+  // a conversa — ou ela pode ter sido fechada/silenciada/concluída. Sem a
+  // releitura, o aviso sairia com um humano já no comando E a liberação
+  // aconteceria de verdade no SGP.
+  test('conversa que saiu da triagem: nem aviso ao cliente, nem escrita no SGP', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: 'ag-1', status: 'waiting', triageState: 'pending' });
+    const ctx = noturno();
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+    expect(r).toEqual({ liberado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' });
+    expect(ctx.desbloqueioRealizado).toBeFalsy();
   });
 
   test('(b) sem comprovante no contexto o aviso não diz "Recebi seu comprovante"', async () => {

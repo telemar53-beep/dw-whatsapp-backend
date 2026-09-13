@@ -771,6 +771,15 @@ const TOOLS = [
       }
 
       if (noturno) {
+        // Mesma guarda de gerar_pix/enviar_boleto (revisão final do branch):
+        // entre o início do turno (a OpenAI, a visão do comprovante, as
+        // consultas ao SGP acima) e este ponto, um atendente pode ter assumido
+        // a conversa, ou ela pode ter sido fechada/silenciada/concluída. Sem
+        // reler agora, o aviso sairia com um humano já no comando — e, pior, a
+        // liberação aconteceria de verdade no SGP logo abaixo.
+        if (await saiuDaTriagem(contexto.conversationId)) {
+          return { liberado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+        }
         // A frase de aviso sai pelo código, antes da escrita no SGP: assim ela
         // sempre precede a execução, independente do que o modelo faria. E só
         // depois de a regra da casa aprovar — quem foi recusado nunca lê que

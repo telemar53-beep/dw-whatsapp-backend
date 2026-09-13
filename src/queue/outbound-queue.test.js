@@ -180,6 +180,40 @@ describe('outbound queue', () => {
     });
   });
 
+  test('passes pix metadata through to the created message and the queued job', (done) => {
+    processOutboundQueue((data) => {
+      try {
+        expect(data.messageType).toBe('pix');
+        expect(data.metadata).toEqual({ value: 135, dueDate: '2026-09-15', faturaId: 999 });
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    enqueueOutboundMessage({
+      conversationId,
+      channelId,
+      content: '00020126580014BR.GOV.BCB.PIX0136chave-pix',
+      messageType: 'pix',
+      metadata: { value: 135, dueDate: '2026-09-15', faturaId: 999 },
+    }).then((message) => {
+      expect(message.messageType).toBe('pix');
+      expect(message.metadata).toEqual({ value: 135, dueDate: '2026-09-15', faturaId: 999 });
+    });
+  });
+
+  test('defaults metadata to null when not provided', (done) => {
+    processOutboundQueue((data) => {
+      try {
+        expect(data.metadata).toBeNull();
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    enqueueOutboundMessage({ conversationId, channelId, content: 'Mensagem normal' });
+  });
+
   test('defaults repliedToMessageId to null when not provided', (done) => {
     processOutboundQueue((data) => {
       try {

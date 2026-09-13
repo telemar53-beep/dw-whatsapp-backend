@@ -182,6 +182,48 @@ describe('message repository', () => {
     expect(found.mediaFilename).toBe('comprovante.pdf');
   });
 
+  describe('mensagem de Pix com metadata', () => {
+    test('createMessage grava messageType pix com metadata e findMessageById devolve de volta', async () => {
+      const created = await createMessage({
+        conversationId,
+        direction: 'outbound',
+        content: '00020126580014BR.GOV.BCB.PIX0136chave-pix',
+        status: 'sent',
+        messageType: 'pix',
+        metadata: { value: 135, dueDate: '2026-09-15', faturaId: 999 },
+      });
+      expect(created.messageType).toBe('pix');
+      expect(created.metadata).toEqual({ value: 135, dueDate: '2026-09-15', faturaId: 999 });
+      const found = await findMessageById(created.id);
+      expect(found.metadata).toEqual({ value: 135, dueDate: '2026-09-15', faturaId: 999 });
+    });
+
+    test('a metadata chega pela listagem da conversa, não só pelo RETURNING', async () => {
+      await createMessage({
+        conversationId,
+        direction: 'outbound',
+        content: '00020126580014BR.GOV.BCB.PIX0136chave-pix',
+        status: 'sent',
+        messageType: 'pix',
+        metadata: { value: 135, dueDate: '2026-09-15', faturaId: 999 },
+      });
+      const lista = await listMessagesByConversation(conversationId);
+      expect(lista[0].metadata).toEqual({ value: 135, dueDate: '2026-09-15', faturaId: 999 });
+      const recentes = await listRecentMessagesByConversation(conversationId, 10);
+      expect(recentes[0].metadata).toEqual({ value: 135, dueDate: '2026-09-15', faturaId: 999 });
+    });
+
+    test('metadata é null quando a mensagem não tem nenhuma', async () => {
+      const created = await createMessage({
+        conversationId,
+        direction: 'inbound',
+        content: 'Oi',
+        status: 'received',
+      });
+      expect(created.metadata).toBeNull();
+    });
+  });
+
   test('findMessageById returns null when not found', async () => {
     const found = await findMessageById('00000000-0000-0000-0000-000000000000');
     expect(found).toBeNull();

@@ -22,6 +22,7 @@ function toMessage(row) {
     transcriptionModel: row.transcription_model,
     transcriptionMs: row.transcription_ms,
     audioDurationSeconds: row.audio_duration_seconds,
+    metadata: row.metadata || null,
     createdAt: row.created_at,
   };
 }
@@ -39,7 +40,7 @@ const MESSAGE_COLUMNS = `id, conversation_id, direction, content, whatsapp_messa
        message_type, media_path, media_mime_type, media_filename,
        location_latitude, location_longitude, replied_to_message_id, sent_by, created_at,
        transcription, transcription_status, transcription_detail,
-       transcription_model, transcription_ms, audio_duration_seconds`;
+       transcription_model, transcription_ms, audio_duration_seconds, metadata`;
 
 async function createMessage({
   conversationId,
@@ -55,14 +56,15 @@ async function createMessage({
   locationLongitude,
   repliedToMessageId,
   sentBy,
+  metadata,
 }) {
   const result = await getPool().query(
     `INSERT INTO messages (
        conversation_id, direction, content, whatsapp_message_id, status,
        message_type, media_path, media_mime_type, media_filename,
-       location_latitude, location_longitude, replied_to_message_id, sent_by
+       location_latitude, location_longitude, replied_to_message_id, sent_by, metadata
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING ${MESSAGE_COLUMNS}`,
     [
       conversationId,
@@ -78,6 +80,9 @@ async function createMessage({
       locationLongitude != null ? locationLongitude : null,
       repliedToMessageId || null,
       sentBy || 'human',
+      // JSONB: serializamos aqui em vez de entregar o objeto ao pg, para não
+      // depender do palpite do driver sobre o tipo do parâmetro.
+      metadata ? JSON.stringify(metadata) : null,
     ]
   );
   return toMessage(result.rows[0]);
@@ -121,7 +126,7 @@ async function listMessagesByConversation(conversationId) {
             m.message_type, m.media_path, m.media_mime_type, m.media_filename,
             m.location_latitude, m.location_longitude, m.replied_to_message_id, m.sent_by, m.created_at,
             m.transcription, m.transcription_status, m.transcription_detail,
-            m.transcription_model, m.transcription_ms, m.audio_duration_seconds,
+            m.transcription_model, m.transcription_ms, m.audio_duration_seconds, m.metadata,
             rm.content AS replied_to_content, rm.direction AS replied_to_direction
      FROM messages m
      LEFT JOIN messages rm ON rm.id = m.replied_to_message_id
@@ -147,7 +152,7 @@ async function listRecentMessagesByConversation(conversationId, limit) {
             m.message_type, m.media_path, m.media_mime_type, m.media_filename,
             m.location_latitude, m.location_longitude, m.replied_to_message_id, m.sent_by, m.created_at,
             m.transcription, m.transcription_status, m.transcription_detail,
-            m.transcription_model, m.transcription_ms, m.audio_duration_seconds,
+            m.transcription_model, m.transcription_ms, m.audio_duration_seconds, m.metadata,
             rm.content AS replied_to_content, rm.direction AS replied_to_direction
      FROM messages m
      LEFT JOIN messages rm ON rm.id = m.replied_to_message_id

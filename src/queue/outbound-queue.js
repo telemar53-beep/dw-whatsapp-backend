@@ -12,7 +12,7 @@ function getOutboundQueue() {
   return queue;
 }
 
-async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId, sentBy }) {
+async function enqueueOutboundMessage({ conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId, sentBy, metadata }) {
   const message = await createMessage({
     conversationId,
     direction: 'outbound',
@@ -27,6 +27,7 @@ async function enqueueOutboundMessage({ conversationId, channelId, content, mess
     // createMessage owns the 'human' default — sentBy is passed through as-is so
     // there is exactly one place that decides what an absent sentBy means.
     sentBy,
+    metadata,
   });
   await getOutboundQueue().add(
     {
@@ -38,6 +39,9 @@ async function enqueueOutboundMessage({ conversationId, channelId, content, mess
       mediaPath: message.mediaPath,
       mediaMimeType: message.mediaMimeType,
       mediaFilename: message.mediaFilename,
+      // Dados do cartão de Pix (valor/vencimento/fatura): quem monta o cartão
+      // é o worker de saída, na hora do envio, e é daqui que ele os recebe.
+      metadata: message.metadata,
       // Not a column on messages: nothing reads it back, only the send needs it.
       isVoiceNote: Boolean(isVoiceNote),
       templateName: templateName || null,

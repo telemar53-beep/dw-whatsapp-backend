@@ -476,6 +476,18 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/nossa equipe dá continuidade a partir das 08:00/);
     });
 
+    test('o roteiro do comprovante só existe à noite', async () => {
+      const sys = (await contexto({ triagem: NOTURNO })).messages[0].content;
+      expect(sys).toMatch(/COMPROVANTE À NOITE/);
+      expect(sys).toMatch(/chame analisar_comprovante/);
+      expect(sys).toMatch(/NUNCA diga "pagamento confirmado" nem "acesso liberado"/);
+      jest.clearAllMocks();
+      createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
+      const dia = (await contexto()).messages[0].content;
+      expect(dia).not.toMatch(/COMPROVANTE À NOITE/);
+      expect(dia).not.toMatch(/chame analisar_comprovante/);
+    });
+
     test('de dia o prompt não tem o bloco noturno', async () => {
       const sys = (await contexto()).messages[0].content;
       expect(sys).not.toMatch(/MODO NOTURNO/);
@@ -934,6 +946,32 @@ describe('perfil de triagem', () => {
       createChatCompletion.mockResolvedValueOnce({ message: { content: 'Vou encaminhar seu atendimento para o Suporte.' }, usage: {} });
       await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
       expect(createChatCompletion).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // À noite a IA age sozinha: se ela ANUNCIAR uma liberação ou um
+  // encaminhamento que não aconteceram, ninguém corrige antes do cliente ler.
+  describe('afirmações que precisam de fato', () => {
+    const NOTURNO = { ...TRIAGEM, noturno: { ativo: true, retornoAs: '08:00' } };
+    test('"desbloqueio realizado" sem liberação neste turno: regenera sem ferramentas com a correção', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.' }, usage: {} });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+      const segunda = createChatCompletion.mock.calls[1][0];
+      expect(segunda.tools).toEqual([]);
+      expect(segunda.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'system', content: expect.stringMatching(/afirmou uma liberação que NÃO aconteceu/) })]));
+      expect(r.texto).toBe('João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.');
+    });
+    test('"já deixei na fila" sem conclusão força concluir_triagem', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Já deixei seu atendimento na fila com o comprovante.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"r","confianca":0.9}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Registrado, João.' }, usage: {} });
+      executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
+      expect(createChatCompletion.mock.calls[1][0].toolChoice).toBe('concluir_triagem');
     });
   });
 

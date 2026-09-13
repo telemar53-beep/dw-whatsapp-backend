@@ -54,6 +54,15 @@ function anunciaEncaminhamento(texto) {
   return ANUNCIO_DE_ENCAMINHAMENTO.test(String(texto || ''));
 }
 
+// À noite a IA responde sozinha: duas afirmações dela precisam de um fato do
+// lado de cá antes de chegarem ao cliente — que o acesso foi liberado (só a
+// ferramenta pode dizer) e que o atendimento já está na fila (só
+// concluir_triagem pode dizer).
+const AFIRMA_LIBERACAO = /desbloqueio (em confian[çc]a )?(foi |está )?(realizado|feito|conclu[íi]do)|acesso (foi |está )?liberado|liberei (seu|o) acesso|internet (foi |está )?liberada/i;
+const AFIRMA_FILA = /deixei (seu |o )?(atendimento|caso|pedido) (na|em) fila|registr(ei|ado) (seu |o )?(atendimento|caso|pedido) para a equipe|já está na fila/i;
+function afirmaLiberacao(texto) { return AFIRMA_LIBERACAO.test(String(texto || '')); }
+function afirmaFila(texto) { return AFIRMA_FILA.test(String(texto || '')); }
+
 function papelDaMensagem(message) {
   return message.direction === 'inbound' ? 'user' : 'assistant';
 }
@@ -222,6 +231,10 @@ async function montarContextoTriagem(config, identidade, triagem) {
       '',
       `MODO NOTURNO: estamos fora do horário comercial e NÃO há atendente agora. Você atende sozinha o que as ferramentas permitem e deixa na fila, com resumo, o que precisa de gente. A equipe volta às ${triagem.noturno.retornoAs}. Nunca prometa solução imediata, técnico ou prazo.`,
       `Ao concluir para um setor à noite, diga que "nossa equipe dá continuidade a partir das ${triagem.noturno.retornoAs}" — nunca "um atendente continua daqui".`,
+      // O roteiro do comprovante só existe à noite porque as duas ferramentas
+      // que ele usa (analisar_comprovante e desbloqueio_confianca) também só
+      // entram na lista da triagem à noite.
+      'COMPROVANTE À NOITE: se o cliente enviar uma imagem e disser (ou parecer) que é o pagamento, chame analisar_comprovante (sem perguntar nada antes). Se conferir e o contrato estiver SUSPENSO, chame desbloqueio_confianca do contrato indicado — a ferramenta já avisa o cliente antes de executar; depois responda EXATAMENTE com a frase que ela devolver e conclua para o Financeiro na mesma resposta. Se o comprovante não conferir, ou o contrato estiver ativo, não desbloqueie: agradeça, diga que a equipe confere a partir do horário de retorno e conclua para o Financeiro (motivo "Comprovante" se existir). Se ele pedir liberação SEM comprovante ("paguei, libera"), chame desbloqueio_confianca direto: a regra da casa decide. NUNCA diga "pagamento confirmado" nem "acesso liberado" sem a ferramenta ter devolvido liberado: true.',
     );
   }
   linhas.push('', 'Setores (use o id exato em concluir_triagem):');
@@ -415,6 +428,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   // dizer "não consegui confirmar o status da conexão". Em vez disso, o limite
   // obriga concluir_triagem UMA vez; se o modelo ignorar, cai no caminho antigo.
   let exigiuConclusaoPorLimite = false;
+  // Uma única correção por turno: se o modelo insistir na afirmação falsa
+  // depois de corrigido, o texto sai como está em vez de o laço girar sem fim.
+  let corrigiuLiberacao = false;
   let proximoToolChoice;
 
   try {
@@ -438,10 +454,30 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       const chamadas = message.tool_calls || [];
       if (chamadas.length === 0) {
         const conteudo = message.content || null;
+        // Antes da guarda de anúncio: uma liberação afirmada sem ter
+        // acontecido é o erro mais caro da noite — o cliente vai testar a
+        // internet e ela continua fora.
+        if (
+          perfil === 'triagem' && conteudo && !corrigiuLiberacao
+          && !contexto.desbloqueioRealizado && afirmaLiberacao(conteudo)
+        ) {
+          corrigiuLiberacao = true;
+          messages.push({ role: 'assistant', content: conteudo });
+          messages.push({
+            role: 'system',
+            content: 'Você afirmou uma liberação que NÃO aconteceu neste atendimento. Responda de novo, sem afirmar liberação: diga que não conseguiu liberar o acesso agora, que o pedido/comprovante fica registrado para a equipe conferir no horário de retorno, e que a liberação é automática quando o pagamento for confirmado.',
+          });
+          const final = await createChatCompletion({ apiKey: config.apiKey, model: config.model, messages, tools: [] });
+          promptTokens += final.usage.promptTokens || 0;
+          completionTokens += final.usage.completionTokens || 0;
+          texto = final.message.content || null;
+          if (!texto) erro = 'empty_model_response';
+          break;
+        }
         if (
           perfil === 'triagem' && conteudo && !exigiuConclusaoPorAnuncio
           && !contexto.triagemConcluida && !contexto.atendimentoEncerrado
-          && anunciaEncaminhamento(conteudo)
+          && (anunciaEncaminhamento(conteudo) || afirmaFila(conteudo))
         ) {
           exigiuConclusaoPorAnuncio = true;
           messages.push({ role: 'assistant', content: conteudo });
@@ -579,4 +615,4 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   };
 }
 
-module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, ferramentasDaTriagem };
+module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, ferramentasDaTriagem, afirmaLiberacao, afirmaFila };

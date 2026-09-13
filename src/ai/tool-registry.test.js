@@ -911,7 +911,7 @@ describe('concluir_triagem', () => {
   const MOTIVO = '22222222-2222-2222-2222-222222222222';
   const ctx = (extra = {}) => ({
     conversationId: 'c-1', contact: { id: 'ct-1' },
-    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', client: { id: 9 } },
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', nome: 'João Da Silva Pereira', client: { id: 9 } },
     contracts: [{ id: 17402, address: 'RUA X', plan: '600MB', statusCode: 1 }],
     triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0 },
     origemMensagem: 'texto', resolvidoPelaIa: false, ...extra,
@@ -960,7 +960,7 @@ describe('concluir_triagem', () => {
     expect(args).toMatchObject({ sectorId: SETOR, reasonId: MOTIVO, confidence: 0.95, identifiedBy: 'phone', lowConfidence: false, resolvedByAi: true });
     expect(args.summary).toContain('Setor: Financeiro');
     expect(args.summary).toContain('Motivo: Segunda via');
-    expect(args.summary).toContain('Cliente: João');
+    expect(args.summary).toContain('Cliente: João Da Silva Pereira (SGP 9)');
     expect(args.summary).toContain('Identificação: telefone');
     expect(args.summary).toContain('Origem: áudio');
     expect(args.summary).toContain('Resolvido pela IA');

@@ -679,7 +679,7 @@ const TOOLS = [
       const linhas = [
         `Setor: ${setor.name}`,
         `Motivo: ${motivo ? motivo.name : 'não definido'}`,
-        `Cliente: ${id.primeiroNome || 'não identificado'}${id.client ? ` (SGP ${id.client.id})` : ''}`,
+        `Cliente: ${id.nome || id.primeiroNome || 'não identificado'}${id.client ? ` (SGP ${id.client.id})` : ''}`,
         `Contratos: ${(contexto.contracts || []).map((c) => `${c.id} — ${c.address || 'sem endereço'}`).join('; ') || 'nenhum'}`,
         `Identificação: ${rotuloId}`,
         `Origem: ${contexto.origemMensagem || 'texto'}`,

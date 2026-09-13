@@ -218,6 +218,26 @@ async function findLatestInboundMessageId(conversationId, { incluirAudioTranscri
   return result.rows[0].id;
 }
 
+/**
+ * Última imagem que o CLIENTE enviou nesta conversa dentro da janela pedida.
+ * Quem escolhe a imagem é o servidor, nunca o modelo: a leitura de comprovante
+ * não recebe parâmetro nenhum, só o que o cliente acabou de mandar. Imagem de
+ * saída e texto ficam de fora, e o recorte por tempo evita ler a foto antiga
+ * de outro assunto.
+ */
+async function findLatestInboundImage(conversationId, { withinMs }) {
+  const result = await getPool().query(
+    `SELECT id, media_path, media_mime_type, created_at FROM messages
+      WHERE conversation_id = $1 AND direction = 'inbound' AND message_type = 'image'
+        AND created_at > now() - ($2::bigint * interval '1 millisecond')
+      ORDER BY created_at DESC LIMIT 1`,
+    [conversationId, Math.max(0, Math.floor(withinMs))]
+  );
+  if (result.rowCount === 0) return null;
+  const row = result.rows[0];
+  return { id: row.id, mediaPath: row.media_path, mediaMimeType: row.media_mime_type, createdAt: row.created_at };
+}
+
 async function markTranscriptionPending(messageId, audioDurationSeconds) {
   const result = await getPool().query(
     `UPDATE messages SET transcription_status = 'pending', audio_duration_seconds = $2
@@ -270,6 +290,7 @@ module.exports = {
   listRecentMessagesByConversation,
   findMessageById,
   findLatestInboundMessageId,
+  findLatestInboundImage,
   markTranscriptionPending,
   markTranscriptionProcessing,
   saveTranscription,

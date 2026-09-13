@@ -11,6 +11,7 @@ const {
   findMessageById,
   advanceMessageStatus,
   findLatestInboundMessageId,
+  findLatestInboundImage,
   markTranscriptionPending,
   markTranscriptionProcessing,
   saveTranscription,
@@ -488,6 +489,64 @@ describe('message repository', () => {
         status: 'received', messageType: 'sticker', mediaPath: 'a.webp', mediaMimeType: 'image/webp' });
 
       expect(await findLatestInboundMessageId(conversationId, { tiposTriagem: true })).toBe(texto.id);
+    });
+  });
+
+  describe('findLatestInboundImage', () => {
+    test('devolve a última imagem do CLIENTE, ignorando o texto posterior e a imagem de saída', async () => {
+      const foto = await createMessage({
+        conversationId, direction: 'inbound', content: null, whatsappMessageId: 'wimg1',
+        status: 'received', messageType: 'image', mediaPath: 'a.png', mediaMimeType: 'image/png',
+      });
+      await createMessage({
+        conversationId, direction: 'inbound', content: 'mandei o comprovante', whatsappMessageId: 'wimg2',
+        status: 'received', messageType: 'text',
+      });
+      await createMessage({
+        conversationId, direction: 'outbound', content: null, whatsappMessageId: 'wimg3',
+        status: 'sent', messageType: 'image', mediaPath: 'saida.png', mediaMimeType: 'image/png',
+      });
+
+      const imagem = await findLatestInboundImage(conversationId, { withinMs: 24 * 3600 * 1000 });
+
+      expect(imagem).toMatchObject({ id: foto.id, mediaPath: 'a.png', mediaMimeType: 'image/png' });
+      expect(imagem.createdAt).toBeInstanceOf(Date);
+    });
+
+    test('entre duas imagens do cliente, devolve a mais nova', async () => {
+      await createMessage({
+        conversationId, direction: 'inbound', content: null, whatsappMessageId: 'wimg4',
+        status: 'received', messageType: 'image', mediaPath: 'velha.jpg', mediaMimeType: 'image/jpeg',
+      });
+      const nova = await createMessage({
+        conversationId, direction: 'inbound', content: null, whatsappMessageId: 'wimg5',
+        status: 'received', messageType: 'image', mediaPath: 'nova.jpg', mediaMimeType: 'image/jpeg',
+      });
+
+      const imagem = await findLatestInboundImage(conversationId, { withinMs: 24 * 3600 * 1000 });
+
+      expect(imagem.id).toBe(nova.id);
+      expect(imagem.mediaPath).toBe('nova.jpg');
+    });
+
+    test('imagem fora da janela não conta: a leitura de comprovante não pode pegar a foto de antiontem', async () => {
+      const foto = await createMessage({
+        conversationId, direction: 'inbound', content: null, whatsappMessageId: 'wimg6',
+        status: 'received', messageType: 'image', mediaPath: 'antiga.png', mediaMimeType: 'image/png',
+      });
+      await getPool().query("UPDATE messages SET created_at = now() - interval '2 days' WHERE id = $1", [foto.id]);
+
+      expect(await findLatestInboundImage(conversationId, { withinMs: 24 * 3600 * 1000 })).toBeNull();
+      expect((await findLatestInboundImage(conversationId, { withinMs: 72 * 3600 * 1000 })).id).toBe(foto.id);
+    });
+
+    test('conversa sem imagem do cliente devolve null', async () => {
+      await createMessage({
+        conversationId, direction: 'inbound', content: 'só texto', whatsappMessageId: 'wimg7',
+        status: 'received', messageType: 'text',
+      });
+
+      expect(await findLatestInboundImage(conversationId, { withinMs: 24 * 3600 * 1000 })).toBeNull();
     });
   });
 

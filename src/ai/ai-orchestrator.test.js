@@ -435,6 +435,11 @@ describe('perfil de triagem', () => {
     listSectors.mockResolvedValue([{ id: 's-1', name: 'Financeiro', aiHint: 'Boleto, PIX, cobrança.' }, { id: 's-2', name: 'Suporte', aiHint: '' }]);
     listActiveReasons.mockResolvedValue([{ id: 'r-1', name: 'Segunda via' }]);
     listToolPermissions.mockResolvedValue([{ toolName: 'desbloqueio_confianca', enabled: true }]);
+    // mockReset (e não só o clear do beforeEach de topo): sem isto um
+    // mockResolvedValue persistente de outro describe atende as chamadas que
+    // sobram de uma fila de mockResolvedValueOnce curta, e um teste passa por
+    // acidente em vez de falhar por chamada não prevista.
+    createChatCompletion.mockReset();
     createChatCompletion.mockResolvedValue({ message: { content: 'Oi, João!' }, usage: {} });
   });
 
@@ -957,19 +962,6 @@ describe('perfil de triagem', () => {
   // encaminhamento que não aconteceram, ninguém corrige antes do cliente ler.
   describe('afirmações que precisam de fato', () => {
     const NOTURNO = { ...TRIAGEM, noturno: { ativo: true, retornoAs: '08:00' } };
-    test('"desbloqueio realizado" sem liberação neste turno: regenera sem ferramentas com a correção', async () => {
-      hasRecentTrustUnlockByContact.mockResolvedValue(false);
-      createChatCompletion
-        .mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} })
-        .mockResolvedValueOnce({ message: { content: 'João, não consegui liberar o acesso agora; a equipe confere a partir das 08:00.' }, usage: {} });
-      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
-      // A correção em si: regenerada SEM ferramentas e com a ordem explícita.
-      const segunda = createChatCompletion.mock.calls[1][0];
-      expect(segunda.tools).toEqual([]);
-      expect(segunda.messages).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'system', content: expect.stringMatching(/afirmou uma liberação que NÃO aconteceu/) })]));
-      // O que acontece DEPOIS da correção (conclusão forçada, texto final) é o
-      // teste seguinte: desde o fix round 1, o turno não termina na correção.
-    });
     // O erro que este ramo evita é o oposto do anterior e igualmente grave: a
     // liberação ACONTECEU num turno anterior (o cliente volta e pergunta "foi
     // liberado?") e o verificador obrigaria a IA a desmentir um fato.
@@ -996,7 +988,11 @@ describe('perfil de triagem', () => {
     // Achado 2 do fix round 1: o texto corrigido diz ao cliente que o
     // comprovante "fica registrado para a equipe conferir". Se a triagem não
     // concluir, isso é falso — a conversa fica na automação, não na fila.
-    test('depois de corrigir, força concluir_triagem e o texto final vem da última chamada', async () => {
+    // Teste único do caminho de correção (a versão anterior, que só checava a
+    // regeneração, passava por acidente: a fila de mocks acabava antes da volta
+    // de conclusão e a chamada caía num mockResolvedValue persistente de outro
+    // describe). Este fornece TODAS as chamadas que o caminho exige.
+    test('"desbloqueio realizado" sem fato: corrige sem ferramentas, força concluir_triagem e responde do caminho de conclusão', async () => {
       hasRecentTrustUnlockByContact.mockResolvedValue(false);
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: 'Prontinho, João! O desbloqueio em confiança foi realizado.' }, usage: {} })
@@ -1007,13 +1003,19 @@ describe('perfil de triagem', () => {
 
       const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: NOTURNO, origemMensagem: 'texto' });
 
+      // Exatamente quatro: afirmação → correção → conclusão → texto final.
       expect(createChatCompletion).toHaveBeenCalledTimes(4);
-      // A correção continua saindo sem ferramentas...
-      expect(createChatCompletion.mock.calls[1][0].tools).toEqual([]);
-      // ...mas o turno não termina nela: a conclusão é exigida em seguida.
+      // A correção sai sem ferramentas e com a ordem explícita.
+      const correcao = createChatCompletion.mock.calls[1][0];
+      expect(correcao.tools).toEqual([]);
+      expect(correcao.messages).toEqual(expect.arrayContaining([
+        expect.objectContaining({ role: 'system', content: expect.stringMatching(/afirmou uma liberação que NÃO aconteceu/) }),
+      ]));
+      // O turno não termina nela: a conclusão é exigida em seguida.
       expect(createChatCompletion.mock.calls[2][0].toolChoice).toBe('concluir_triagem');
       expect(executeTool).toHaveBeenCalledWith('concluir_triagem', expect.objectContaining({ resumo: 'comprovante' }), expect.anything());
       expect(r.texto).toBe('Registrado, João. A equipe dá continuidade a partir das 08:00.');
+      expect(r.erro).toBeFalsy();
     });
 
     test('com a triagem já concluída, o texto corrigido sai direto', async () => {

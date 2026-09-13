@@ -724,6 +724,33 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(ctx.desbloqueioRealizado).toBeFalsy();
   });
 
+  // Revisão final do branch: a instrução de recusa vinha num formato diferente
+  // da de sucesso — texto corrido, com a ordem "Depois disso chame
+  // concluir_triagem" grudada na frase do cliente. Nada impedia o modelo de
+  // repetir a ordem ao cliente. Agora os dois caminhos usam o mesmo modelo: a
+  // frase do dono entre aspas, a ordem para a IA fora delas.
+  test('a instrução de recusa usa o modelo do sucesso: frase do cliente entre aspas, ordem fora', async () => {
+    listTrustUnlocksByContract.mockResolvedValue([{ createdAt: new Date(Date.now() - 10 * 86400000) }]);
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
+    const abertura = 'Responda EXATAMENTE neste modelo: "';
+    expect(r.instrucao.startsWith(abertura)).toBe(true);
+    const fecho = '" — e chame concluir_triagem para o Financeiro NA MESMA resposta.';
+    expect(r.instrucao.endsWith(fecho)).toBe(true);
+    const paraOCliente = r.instrucao.slice(abertura.length, r.instrucao.length - fecho.length);
+    expect(paraOCliente).toBe(
+      `Willemberg, recebi seu comprovante e ele já está registrado para a equipe conferir a partir das 08:00. `
+      + `Não consegui liberar o acesso em confiança agora: ${r.motivo} Assim que o pagamento for confirmado, a liberação é automática.`
+    );
+    // O que o cliente lê não pode conter o nome de uma ferramenta.
+    expect(paraOCliente).not.toContain('concluir_triagem');
+  });
+
+  test('motivo sem ponto final não emenda na frase seguinte', async () => {
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: false, liberadoDias: null, protocolo: null, motivo: 'contrato com bloqueio judicial' });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
+    expect(r.instrucao).toContain('contrato com bloqueio judicial. Assim que o pagamento for confirmado');
+  });
+
   test('a recusa do SGP à noite também vem com acolhimento, mesmo sem motivo do SGP', async () => {
     sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: false, liberadoDias: null, protocolo: null, motivo: null });
     const ctx = noturno();

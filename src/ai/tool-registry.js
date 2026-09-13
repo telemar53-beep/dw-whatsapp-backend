@@ -730,7 +730,17 @@ const TOOLS = [
       // Frases do dono para as recusas da noite: acolhem, dizem que o registro
       // já existe e NUNCA afirmam liberação. Uma função só para as três saídas
       // (regra da casa, recusa do SGP e resultado indeterminado) não divergirem.
-      const instrucaoDeRecusa = (frase, motivo) => `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivo} Assim que o pagamento for confirmado, a liberação é automática. Depois disso chame concluir_triagem para o Financeiro.`;
+      // Mesmo formato da instrução de sucesso: a frase do cliente entre aspas,
+      // a ordem para a IA FORA delas. No formato antigo (texto corrido, com
+      // "Depois disso chame concluir_triagem" grudado na frase) nada impedia o
+      // modelo de repassar a ordem ao cliente.
+      const instrucaoDeRecusa = (frase, motivo) => {
+        // O motivo vem de três fontes (regra da casa, SGP, comprovante) e nem
+        // sempre termina em ponto: sem normalizar, "…judicial Assim que…".
+        const motivoPontuado = String(motivo).replace(/[.\s]*$/, '.');
+        const paraOCliente = `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivoPontuado} Assim que o pagamento for confirmado, a liberação é automática.`;
+        return `Responda EXATAMENTE neste modelo: "${paraOCliente}" — e chame concluir_triagem para o Financeiro NA MESMA resposta.`;
+      };
       // Toda recusa da noite fica no contexto, não só o sucesso: é isso que o
       // resumo da fila mostra ao atendente de manhã ("RECUSADO: motivo").
       const registrarRecusa = (motivo) => { contexto.desbloqueioResultado = { liberado: false, motivo }; };

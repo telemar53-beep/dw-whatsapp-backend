@@ -711,6 +711,19 @@ const TOOLS = [
         return { liberado: false, motivo: `O contrato não está suspenso (status: ${status}). A liberação em confiança só se aplica a contrato suspenso.` };
       }
 
+      // Uma tentativa por contrato por turno. Fecha três brechas de uma vez:
+      // o modelo pedir duas liberações na mesma rodada (as duas leriam o
+      // histórico antes de qualquer registro), o modelo insistir depois de
+      // um resultado indeterminado, e o modelo insistir com um comprovante já
+      // reprovado. Síncrono até aqui de propósito — o segundo executar só roda
+      // depois que o primeiro já marcou. Entre conversas não há corrida: o
+      // worker da IA roda com concorrência 1.
+      if (!contexto.desbloqueiosTentados) contexto.desbloqueiosTentados = new Set();
+      if (contexto.desbloqueiosTentados.has(args.contratoId)) {
+        return { liberado: false, motivo: 'A liberação deste contrato já foi tentada neste atendimento. Encaminhe para um atendente se precisar de nova verificação.' };
+      }
+      contexto.desbloqueiosTentados.add(args.contratoId);
+
       const noturno = noturnoDoContexto(contexto);
       const nome = (contexto.identidade && contexto.identidade.primeiroNome) || 'cliente';
       const comprovante = contexto.comprovante || null;
@@ -718,28 +731,21 @@ const TOOLS = [
       // já existe e NUNCA afirmam liberação. Uma função só para as três saídas
       // (regra da casa, recusa do SGP e resultado indeterminado) não divergirem.
       const instrucaoDeRecusa = (frase, motivo) => `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivo} Assim que o pagamento for confirmado, a liberação é automática. Depois disso chame concluir_triagem para o Financeiro.`;
+      // Toda recusa da noite fica no contexto, não só o sucesso: é isso que o
+      // resumo da fila mostra ao atendente de manhã ("RECUSADO: motivo").
+      const registrarRecusa = (motivo) => { contexto.desbloqueioResultado = { liberado: false, motivo }; };
 
       // Comprovante que a visão já reprovou (Task 3): não há o que avaliar nem
       // o que pedir ao SGP — a recusa sai daqui, sem nenhuma chamada externa.
       if (noturno && comprovante && comprovante.valido === false) {
+        const motivo = `O comprovante não conferiu: ${(comprovante.motivos || []).join('; ')}.`;
+        registrarRecusa(motivo);
         return {
           liberado: false,
-          motivo: `O comprovante não conferiu: ${(comprovante.motivos || []).join('; ')}.`,
+          motivo,
           instrucao: instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', 'o comprovante não conferiu com a fatura em aberto.'),
         };
       }
-
-      // Uma tentativa por contrato por turno. Fecha duas brechas de uma vez:
-      // o modelo pedir duas liberações na mesma rodada (as duas leriam o
-      // histórico antes de qualquer registro), e o modelo insistir depois de
-      // um resultado indeterminado. Síncrono até aqui de propósito — o
-      // segundo executar só roda depois que o primeiro já marcou. Entre
-      // conversas não há corrida: o worker da IA roda com concorrência 1.
-      if (!contexto.desbloqueiosTentados) contexto.desbloqueiosTentados = new Set();
-      if (contexto.desbloqueiosTentados.has(args.contratoId)) {
-        return { liberado: false, motivo: 'A liberação deste contrato já foi tentada neste atendimento. Encaminhe para um atendente se precisar de nova verificação.' };
-      }
-      contexto.desbloqueiosTentados.add(args.contratoId);
 
       const [liberacoes, invoices] = await Promise.all([
         listTrustUnlocksByContract(args.contratoId),
@@ -757,7 +763,10 @@ const TOOLS = [
           motivo: MENSAGENS_DESBLOQUEIO[avaliacao.motivo] || 'Liberação em confiança não permitida para este contrato.',
         };
         if (avaliacao.diasRestantes) resposta.diasRestantes = avaliacao.diasRestantes;
-        if (noturno) resposta.instrucao = instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', resposta.motivo);
+        if (noturno) {
+          resposta.instrucao = instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', resposta.motivo);
+          registrarRecusa(resposta.motivo);
+        }
         return resposta;
       }
 
@@ -786,7 +795,13 @@ const TOOLS = [
             indeterminado: true,
             motivo: 'Não foi possível confirmar se a liberação foi realizada. Diga ao cliente que a solicitação será verificada por um atendente e encaminhe.',
           };
-          if (noturno) indeterminado.instrucao = instrucaoDeRecusa('Não consegui confirmar a liberação agora', indeterminado.motivo);
+          if (noturno) {
+            indeterminado.instrucao = instrucaoDeRecusa('Não consegui confirmar a liberação agora', indeterminado.motivo);
+            // O resumo não pode dizer "RECUSADO: não foi possível confirmar se
+            // a liberação foi realizada" e sugerir que nada aconteceu: o texto
+            // curto diz exatamente o que se sabe — nada foi confirmado.
+            registrarRecusa('não foi possível confirmar a liberação');
+          }
           return indeterminado;
         }
         throw err;
@@ -795,7 +810,10 @@ const TOOLS = [
         const recusa = { liberado: false, motivo: resultado.motivo };
         // O SGP pode recusar sem dizer por quê: a frase que o modelo vai
         // repetir ao cliente não pode terminar em "agora: null".
-        if (noturno) recusa.instrucao = instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', recusa.motivo || 'o sistema não autorizou a liberação neste momento.');
+        if (noturno) {
+          recusa.instrucao = instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', recusa.motivo || 'o sistema não autorizou a liberação neste momento.');
+          registrarRecusa(recusa.motivo || 'o sistema não autorizou a liberação');
+        }
         return recusa;
       }
 

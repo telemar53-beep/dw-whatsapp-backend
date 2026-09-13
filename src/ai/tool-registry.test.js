@@ -718,6 +718,51 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(ctx.desbloqueioRealizado).toBeFalsy();
   });
 
+  // Ruling do fix round 1: a recusa local também gasta a tentativa única, senão
+  // o modelo pode insistir com o mesmo comprovante reprovado a rodada inteira.
+  test('a recusa por comprovante inválido consome a tentativa única do turno', async () => {
+    const ctx = noturno({ comprovante: { ...COMPROVANTE, valido: false, motivos: ['valor diferente'] } });
+    const tool = findTool('desbloqueio_confianca');
+    const primeira = await tool.executar({ contratoId: 26515 }, ctx);
+    expect(primeira.motivo).toMatch(/comprovante não conferiu/);
+    const segunda = await tool.executar({ contratoId: 26515 }, ctx);
+    expect(segunda.motivo).toMatch(/já foi tentada/);
+  });
+
+  // Achado 1 do fix round 1: o resumo da fila só mostrava a recusa se alguém
+  // montasse contexto.desbloqueioResultado na mão. Este teste usa as DUAS
+  // ferramentas de verdade, no mesmo contexto, como acontece num turno real.
+  test('a recusa grava o resultado no contexto e o resumo da fila a mostra', async () => {
+    const SETOR_FIN = '11111111-1111-1111-1111-111111111111';
+    const MOTIVO_COMP = '22222222-2222-2222-2222-222222222222';
+    listTrustUnlocksByContract.mockResolvedValue([{ createdAt: new Date(Date.now() - 10 * 86400000) }]);
+    listSectors.mockResolvedValue([{ id: SETOR_FIN, name: 'Financeiro' }]);
+    findReasonById.mockResolvedValue({ id: MOTIVO_COMP, name: 'Comprovante', active: true });
+    concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null });
+
+    const ctx = noturno();
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(r.liberado).toBe(false);
+    await findTool('concluir_triagem').executar({ setorId: SETOR_FIN, motivoId: MOTIVO_COMP, resumo: 'Cliente mandou comprovante.', confianca: 0.95 }, ctx);
+    const summary = concludeAiTriage.mock.calls[0][1].summary;
+    expect(summary).toContain(`Desbloqueio em confiança: RECUSADO: ${r.motivo}`);
+    expect(summary).toContain('Pendente: conferir pagamento e dar baixa');
+  });
+
+  test('a recusa por comprovante inválido também chega ao resumo da fila', async () => {
+    const ctx = noturno({ comprovante: { ...COMPROVANTE, valido: false, motivos: ['valor diferente'] } });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: r.motivo });
+  });
+
+  test('o resultado indeterminado vira uma recusa explícita no resumo', async () => {
+    sgpClient.requestTrustUnlock.mockRejectedValue(Object.assign(new Error('Failed to reach SGP'), { cause: { message: 'timeout of 15000ms exceeded' } }));
+    const ctx = noturno();
+    await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'não foi possível confirmar a liberação' });
+  });
+
   test('(e) de dia nada muda: sem aviso ao cliente e sem instrucao', async () => {
     const r = await findTool('desbloqueio_confianca').executar(
       { contratoId: 26515 },

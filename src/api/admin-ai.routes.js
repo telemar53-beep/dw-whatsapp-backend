@@ -30,6 +30,8 @@ function toConfigResponse(config) {
     triageTimeoutMinutes: config.triageTimeoutMinutes,
     triageExtraInstructions: config.triageExtraInstructions,
     triageResolvedReasonId: config.triageResolvedReasonId || null,
+    nightStartTime: config.nightStartTime || null,
+    nightEndTime: config.nightEndTime || null,
   };
 }
 
@@ -136,7 +138,21 @@ router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
     if (!motivo || !motivo.active) return res.status(400).json(erroMotivo);
     motivoResolvido = motivo.id;
   }
-  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido });
+  // Janela do atendimento noturno: os dois vazios = noturno nunca ativa. Um
+  // preenchido sem o outro seria uma janela sem fim (ou sem começo), então é
+  // recusado em vez de virar meia janela gravada no banco.
+  const { nightStartTime, nightEndTime } = req.body || {};
+  const horaValida = (v) => v === undefined || v === null || v === ''
+    || (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v));
+  if (!horaValida(nightStartTime) || !horaValida(nightEndTime)) {
+    return res.status(400).json({ error: 'nightStartTime and nightEndTime must be HH:MM or empty' });
+  }
+  const inicioNoturno = nightStartTime || null;
+  const fimNoturno = nightEndTime || null;
+  if (Boolean(inicioNoturno) !== Boolean(fimNoturno)) {
+    return res.status(400).json({ error: 'nightStartTime and nightEndTime must be provided together' });
+  }
+  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido, nightStartTime: inicioNoturno, nightEndTime: fimNoturno });
   res.json(toConfigResponse(config));
 });
 

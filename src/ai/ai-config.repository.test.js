@@ -14,7 +14,8 @@ describe('ai config repository', () => {
     );
     await getPool().query(
       "UPDATE ai_config SET triage_confidence_threshold = 0.800, triage_max_questions = 2, " +
-      "triage_timeout_minutes = 3, triage_extra_instructions = '', triage_resolved_reason_id = NULL WHERE id = 1"
+      "triage_timeout_minutes = 3, triage_extra_instructions = '', triage_resolved_reason_id = NULL, " +
+      'night_start_time = NULL, night_end_time = NULL WHERE id = 1'
     );
   });
 
@@ -106,6 +107,31 @@ describe('ai config repository', () => {
     expect(up.triageConfidenceThreshold).toBeCloseTo(0.9, 3);
     expect(up.triageMaxQuestions).toBe(3);
     expect((await getAiConfig()).apiKey).toBe('sk-x');
+  });
+
+  test('updateTriageConfig grava e apaga a janela do atendimento noturno', async () => {
+    const inicial = await getAiConfig();
+    expect(inicial.nightStartTime).toBeNull();
+    expect(inicial.nightEndTime).toBeNull();
+
+    const comJanela = await updateTriageConfig({
+      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3,
+      triageExtraInstructions: '', nightStartTime: '20:00', nightEndTime: '08:00',
+    });
+    // TIME volta do banco como 'HH:MM:SS'; a janela só entende HH:MM.
+    expect(comJanela.nightStartTime).toBe('20:00');
+    expect(comJanela.nightEndTime).toBe('08:00');
+    const relido = await getAiConfig();
+    expect(relido.nightStartTime).toBe('20:00');
+    expect(relido.nightEndTime).toBe('08:00');
+
+    const semJanela = await updateTriageConfig({
+      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3,
+      triageExtraInstructions: '', nightStartTime: null, nightEndTime: null,
+    });
+    expect(semJanela.nightStartTime).toBeNull();
+    expect(semJanela.nightEndTime).toBeNull();
+    expect((await getAiConfig()).nightStartTime).toBeNull();
   });
 
   test('updateTriageConfig grava e apaga o motivo de encerramento pela IA', async () => {

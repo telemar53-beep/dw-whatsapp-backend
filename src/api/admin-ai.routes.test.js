@@ -278,4 +278,65 @@ describe('admin ai routes', () => {
 
     expect(updateTriageConfig).not.toHaveBeenCalled();
   });
+
+  describe('janela do atendimento noturno', () => {
+    const corpo = (extra) => ({
+      triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+      triageExtraInstructions: 'x', ...extra,
+    });
+
+    test('salva a janela e devolve os dois campos', async () => {
+      updateTriageConfig.mockResolvedValue({
+        triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+        triageExtraInstructions: 'x', nightStartTime: '20:00', nightEndTime: '08:00',
+      });
+
+      const res = await request(buildApp()).put('/api/admin/ai/triage')
+        .set('Authorization', `Bearer ${tokenFor('admin')}`)
+        .send(corpo({ nightStartTime: '20:00', nightEndTime: '08:00' })).expect(200);
+
+      expect(updateTriageConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ nightStartTime: '20:00', nightEndTime: '08:00' })
+      );
+      expect(res.body.nightStartTime).toBe('20:00');
+      expect(res.body.nightEndTime).toBe('08:00');
+    });
+
+    test('sem a janela grava nulos nos dois', async () => {
+      updateTriageConfig.mockResolvedValue({
+        triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+        triageExtraInstructions: 'x', nightStartTime: null, nightEndTime: null,
+      });
+
+      const res = await request(buildApp()).put('/api/admin/ai/triage')
+        .set('Authorization', `Bearer ${tokenFor('admin')}`).send(corpo({})).expect(200);
+
+      expect(updateTriageConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ nightStartTime: null, nightEndTime: null })
+      );
+      expect(res.body.nightStartTime).toBeNull();
+      expect(res.body.nightEndTime).toBeNull();
+    });
+
+    test('recusa hora fora do formato HH:MM', async () => {
+      const res = await request(buildApp()).put('/api/admin/ai/triage')
+        .set('Authorization', `Bearer ${tokenFor('admin')}`)
+        .send(corpo({ nightStartTime: '8h', nightEndTime: '08:00' })).expect(400);
+      expect(res.body.error).toBe('nightStartTime and nightEndTime must be HH:MM or empty');
+      expect(updateTriageConfig).not.toHaveBeenCalled();
+    });
+
+    test('recusa meia janela: só o início ou só o fim', async () => {
+      const r1 = await request(buildApp()).put('/api/admin/ai/triage')
+        .set('Authorization', `Bearer ${tokenFor('admin')}`)
+        .send(corpo({ nightStartTime: '20:00' })).expect(400);
+      expect(r1.body.error).toBe('nightStartTime and nightEndTime must be provided together');
+
+      await request(buildApp()).put('/api/admin/ai/triage')
+        .set('Authorization', `Bearer ${tokenFor('admin')}`)
+        .send(corpo({ nightEndTime: '08:00' })).expect(400);
+
+      expect(updateTriageConfig).not.toHaveBeenCalled();
+    });
+  });
 });

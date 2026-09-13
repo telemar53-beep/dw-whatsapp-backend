@@ -13,8 +13,8 @@ Não é um motor novo. É a **triagem de hoje com um perfil noturno**: as mesmas
 | # | Decisão |
 |---|---------|
 | 1 | Comprovante é **lido com visão** (OpenAI): valor, data, favorecido, tipo. Não vale a palavra do cliente. |
-| 2 | Janela noturna = **fora do horário comercial já configurado** no admin (mesma configuração da auto-resposta). Sábado e domingo contam como fora. |
-| 3 | Com o modo noturno ligado no canal, a **auto-resposta fora do horário não é enviada**: a IA é a primeira a falar. |
+| 2 | Janela noturna com **campos próprios**: "Atendimento noturno com IA: das HH:MM às HH:MM", no cartão de triagem. Vale **todos os dias**, feriados e fins de semana incluídos, atravessando a meia-noite (ex.: 20:00 → 08:00). Não depende do cartão "Horário comercial". (Mudado em 2026-09-13: a operação atende todos os dias.) |
+| 3 | Com o modo noturno ativo no canal, a **auto-resposta fora do horário não é enviada**: a IA é a primeira a falar. |
 | 4 | À noite, depois de entregar boleto ou PIX, a IA **encerra sozinha** como de dia (mesmo motivo configurado no cartão de triagem). |
 | 5 | **Desbloqueio em confiança só no modo noturno.** De dia a triagem continua sem ele. |
 
@@ -26,16 +26,18 @@ Por turno da IA (não por conversa), para o canal da conversa:
 noturno = channel.aiEnabled
        && channel.aiTriageEnabled
        && channel.aiNightModeEnabled          (coluna nova, sai false)
-       && businessHours.enabled
-       && isOutsideBusinessHours(businessHours)
+       && aiConfig.nightStartTime && aiConfig.nightEndTime
+       && dentroDaJanela(agora, nightStartTime, nightEndTime)   (fuso de São Paulo, todos os dias)
 ```
 
-Uma conversa que começa 19:55 e continua 20:10 vira noturna no turno das 20:10. Uma que começa 07:50 e continua 08:05 volta a ser diurna. O horário de retorno citado ao cliente é `businessHours.startTime` ("a partir das 08:00"), nunca um número fixo no prompt. Se o horário comercial estiver desligado no admin, o modo noturno nunca ativa (não há "fora do horário").
+`dentroDaJanela`: se início < fim (ex.: 12:00–14:00), `inicio <= agora < fim`; se início > fim (ex.: 20:00–08:00), `agora >= inicio || agora < fim`; se iguais, nunca ativa. Sem dia da semana: vale sábado, domingo e feriado.
+
+Uma conversa que começa 19:55 e continua 20:10 vira noturna no turno das 20:10. Uma que começa 07:50 e continua 08:05 volta a ser diurna. O horário de retorno citado ao cliente é `nightEndTime` ("a partir das 08:00"), nunca um número fixo no prompt.
 
 ## 4. Ativação e configuração
 
 - **Canal:** interruptor "Atendimento noturno com IA" em Admin → Canais, ao lado de "Triagem com IA". Só habilitável com a triagem ligada; desligar a triagem desliga o noturno junto (mesma cascata que hoje desliga a triagem quando "Usar IA" desliga). Coluna `channels.ai_night_mode_enabled BOOLEAN NOT NULL DEFAULT false`.
-- **Nenhum campo novo de horário.** Vale o cartão "Horário comercial" existente.
+- **Janela:** dois campos no cartão "Triagem com IA": "Atendimento noturno com IA — início" e "fim" (`ai_config.night_start_time TIME NULL`, `night_end_time TIME NULL`; padrão 20:00 e 08:00 ao ligar pela primeira vez; vazios = noturno nunca ativa). Rota `PUT /api/admin/ai/triage` valida `HH:MM`.
 - **Motivos:** o admin cadastra "Comprovante" e "Desbloqueio em confiança" em Motivos de contato; o prompt manda usar esses nomes se existirem, senão `null`.
 - **Sem cartão novo na tela de IA.** O que muda de comportamento à noite está no prompt e no código, não em configuração.
 
@@ -125,16 +127,16 @@ Em `inbound-message.service`: o aviso de fora do horário só é enviado se o ca
 - Nenhum novo dado vai para a OpenAI além do que já ia: a imagem (decisão do dono) e os campos numéricos do retorno.
 - Desbloqueio: mesma regra da casa, mesma exigência de identidade forte, mesmo registro em `ai_trust_unlocks`.
 - Nada de novo em log: `mensagemSegura` nos erros, sem CPF, sem valor de fatura nem texto da visão.
-- Se a IA estiver desligada (canal ou global), o modo noturno não existe e a auto-resposta volta a ser enviada.
+- Se a IA estiver desligada (canal ou global), ou a janela estiver vazia, o modo noturno não existe e a auto-resposta fora do horário comercial volta a ser enviada como hoje.
 
 ## 11. Testes
 
-- Unitários por peça: gate `isNightModeActive` (fuso, fim de semana, flags), lista de ferramentas noturna, limite +2, frases com `retornoAs`, `analisar_comprovante` (validação de arquivo, conferência de valor/data/favorecido, modelo recusando imagem, vários contratos), guardas de afirmação (liberação sem sucesso, fila sem conclusão), auto-resposta suprimida.
-- Manual (dono): mudar o fim do horário comercial para a hora atual, ligar o noturno no canal, e rodar: boleto → encerra; comprovante válido em contrato suspenso (26515) → aviso, desbloqueio, prontinho, fila do Financeiro com resumo; comprovante com valor errado → recusa e fila; "paguei, libera" sem comprovante → regra da casa; internet offline → duas etapas e fila do Suporte com "a partir das 08:00". Voltar o horário comercial ao normal.
+- Unitários por peça: gate `isNightModeActive` (fuso, janela que atravessa a meia-noite, janela vazia, flags), lista de ferramentas noturna, limite +2, frases com `retornoAs`, `analisar_comprovante` (validação de arquivo, conferência de valor/data/favorecido, modelo recusando imagem, vários contratos), guardas de afirmação (liberação sem sucesso, fila sem conclusão), auto-resposta suprimida.
+- Manual (dono): pôr a janela noturna cobrindo a hora atual (ex.: início = agora, fim = agora + 2 h), ligar o noturno no canal, e rodar: boleto → encerra; comprovante válido em contrato suspenso (26515) → aviso, desbloqueio, prontinho, fila do Financeiro com resumo; comprovante com valor errado → recusa e fila; "paguei, libera" sem comprovante → regra da casa; internet offline → duas etapas e fila do Suporte com "a partir das <fim da janela>". Voltar a janela para 20:00–08:00.
 
 ## 12. Ordem de entrega
 
-1. Flag do canal, migração, toggle no admin, gate `isNightModeActive`, supressão da auto-resposta.
+1. Flag do canal, campos de início/fim no `ai_config` e no cartão de triagem, migração, toggle no admin, gate `isNightModeActive`, supressão da auto-resposta.
 2. Perfil noturno no worker/prompt: ferramentas, limite, frases com `retornoAs`, resumo "Modo noturno · HH:MM".
 3. Visão: `analyzeImage` no cliente OpenAI + ferramenta `analisar_comprovante` com as conferências.
 4. Fluxo do desbloqueio à noite: aviso enviado pela ferramenta, `desbloqueioRealizado`, verificador de afirmações, frases de sucesso/falha, motivo e resumo.

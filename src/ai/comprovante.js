@@ -12,9 +12,38 @@ const PROMPT_VISAO = [
 const TOLERANCIA_VALOR = 0.05;
 const JANELA_DIAS = 7;
 const CONFIANCA_MINIMA = 0.6;
+const TAMANHO_NOME_CURTO = 3;
 
 function semAcento(s) {
-  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function escaparRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Nome curto casa por PALAVRA INTEIRA: 'DW' como substring aceitava
+// 'EDWARD SILVA ME' como favorecido. Nome maior (o recebedor PIX cadastrado,
+// tipo 'DW Telecom Ltda') segue por substring, porque o banco costuma cercar
+// o nome de prefixos e sufixos ('PAGAMENTO A ... ME').
+function nomeCasa(favorecido, nome) {
+  const n = semAcento(nome);
+  if (!n) return false;
+  if (n.length > TAMANHO_NOME_CURTO) return favorecido.includes(n);
+  return new RegExp(`\\b${escaparRegex(n)}\\b`).test(favorecido);
+}
+
+// Valor lido pela visão. Campo ausente, nulo ou vazio é AUSÊNCIA de leitura,
+// não zero: `Number('')` devolve 0, que é finito e casaria com uma fatura de
+// value null/0 — um comprovante sem valor nenhum saía "válido".
+function valorLido(bruto) {
+  if (typeof bruto === 'number') return bruto;
+  const texto = String(bruto == null ? '' : bruto).trim().replace(',', '.');
+  return texto ? Number(texto) : NaN;
+}
+
+function valorUtil(v) {
+  return Number.isFinite(v) && v > 0;
 }
 
 // A data do pagamento é comparada com o dia de São Paulo, não com o UTC: às
@@ -43,7 +72,7 @@ function conferirComprovante({ leitura, faturas, nomesAceitos, hoje = new Date()
   else if (!(confianca >= CONFIANCA_MINIMA)) motivos.push('leitura do comprovante com confiança baixa');
 
   const favorecido = semAcento(l.favorecido);
-  const favorecidoConfere = Boolean(favorecido) && (nomesAceitos || []).some((n) => semAcento(n) && favorecido.includes(semAcento(n)));
+  const favorecidoConfere = Boolean(favorecido) && (nomesAceitos || []).some((n) => nomeCasa(favorecido, n));
   if (!favorecidoConfere) motivos.push('favorecido não é a DW');
 
   const dataOk = typeof l.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.data);
@@ -51,15 +80,18 @@ function conferirComprovante({ leitura, faturas, nomesAceitos, hoje = new Date()
   const dataConfere = dataOk && dias >= 0 && dias <= JANELA_DIAS;
   if (!dataConfere) motivos.push('data do pagamento fora dos últimos 7 dias');
 
-  const valor = typeof l.valor === 'number' ? l.valor : Number(String(l.valor || '').replace(',', '.'));
-  const fatura = Number.isFinite(valor) ? (faturas || []).find((f) => Math.abs(Number(f.value) - valor) <= TOLERANCIA_VALOR) : null;
+  const valor = valorLido(l.valor);
+  // Fatura sem valor utilizável no SGP não serve de referência para nada.
+  const fatura = valorUtil(valor)
+    ? (faturas || []).find((f) => valorUtil(Number(f.value)) && Math.abs(Number(f.value) - valor) <= TOLERANCIA_VALOR)
+    : null;
   const valorConfere = Boolean(fatura);
   if (!valorConfere) motivos.push('valor não corresponde a nenhuma fatura em aberto');
 
   return {
     valido: motivos.length === 0,
     tipo: typeof l.tipo === 'string' ? l.tipo : 'outro',
-    valor: Number.isFinite(valor) ? valor : null,
+    valor: valorUtil(valor) ? valor : null,
     data: dataOk ? l.data : null,
     favorecidoConfere,
     dataConfere,

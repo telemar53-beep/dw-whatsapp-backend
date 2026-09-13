@@ -1746,4 +1746,22 @@ describe('analisar_comprovante', () => {
     const r = await findTool('analisar_comprovante').executar({}, ctx());
     expect(r.favorecidoConfere).toBe(true);
   });
+
+  // Fix round 1, achado 2: getPixMerchant ficava fora de qualquer proteção,
+  // depois do allSettled. Uma rejeição derrubava executar e jogava fora a
+  // chamada de visão que já tinha sido paga à OpenAI.
+  test('recebedor PIX indisponível no SGP não joga fora a leitura já paga', async () => {
+    sgpClient.getPixMerchant.mockRejectedValue(new Error('SGP fora do ar'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = ctx();
+
+    const r = await findTool('analisar_comprovante').executar({}, c);
+
+    expect(r.analisado).toBe(true);
+    expect(r.faturaId).toBe('4321');
+    // Sem o nome cadastrado, sobra o 'DW' — que ainda confere este favorecido.
+    expect(r.favorecidoConfere).toBe(true);
+    expect(c.comprovante).toBeDefined();
+    erroSpy.mockRestore();
+  });
 });

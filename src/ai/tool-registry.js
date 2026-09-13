@@ -827,7 +827,15 @@ const TOOLS = [
           for (const d of r.value.duplicates) faturas.push({ id: d.id, value: d.value, dueDate: d.dueDate, contratoId: contratos[i].id });
         }
       });
-      const merchant = await sgpClient.getPixMerchant();
+      // O SGP fora do ar aqui não pode derrubar a ferramenta: a chamada de
+      // visão já foi paga, e sem o nome cadastrado a conferência ainda
+      // funciona com 'DW' — só fica mais estrita.
+      let merchant = null;
+      try {
+        merchant = await sgpClient.getPixMerchant();
+      } catch (err) {
+        console.error(`analisar_comprovante: recebedor PIX indisponível na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+      }
       const nomesAceitos = ['DW', ...(merchant && merchant.name ? [merchant.name] : [])];
       const conferencia = conferirComprovante({ leitura, faturas, nomesAceitos });
       const fatura = conferencia.faturaId ? faturas.find((f) => f.id === conferencia.faturaId) : null;

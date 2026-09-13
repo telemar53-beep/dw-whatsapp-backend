@@ -56,6 +56,29 @@ async function findOpenConversation(contactId, channelId) {
   return toConversation(result.rows[0]);
 }
 
+/**
+ * A conversa mais recente deste contato/canal que a PRÓPRIA IA encerrou há
+ * menos de `withinMs` — ou null. "Encerrada pela IA" é o evento 'closed' sem
+ * atendente (from_agent_id nulo), que só closeConversationByAi grava. Serve à
+ * janela de cortesia: um "obrigado" ou "ótimo dia pra você também" que chega
+ * logo depois do encerramento não pode virar atendimento novo.
+ */
+async function findRecentAiClosedConversation(contactId, channelId, withinMs) {
+  const result = await getPool().query(
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.business_hours_notice_sent_at, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at
+       FROM conversations c
+       JOIN conversation_events e
+         ON e.conversation_id = c.id AND e.event_type = 'closed' AND e.from_agent_id IS NULL
+      WHERE c.contact_id = $1 AND c.channel_id = $2 AND c.status = 'closed'
+        AND e.created_at > now() - ($3::bigint * interval '1 millisecond')
+      ORDER BY e.created_at DESC
+      LIMIT 1`,
+    [contactId, channelId, Math.max(0, Math.floor(withinMs))]
+  );
+  if (result.rowCount === 0) return null;
+  return toConversation(result.rows[0]);
+}
+
 async function createConversation(contactId, channelId, triageState = null, status = 'waiting') {
   const result = await getPool().query(
     `INSERT INTO conversations (contact_id, channel_id, triage_state, status) VALUES ($1, $2, $3, $4)
@@ -677,6 +700,7 @@ module.exports = {
   concludeAiTriage,
   markTriageResolvedByAi,
   closeConversationByAi,
+  findRecentAiClosedConversation,
   incrementTriageAttempts,
   incrementBirthdateAttempts,
   activateConversation,

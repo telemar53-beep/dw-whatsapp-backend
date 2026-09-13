@@ -12,7 +12,10 @@ jest.mock('../ai/ai.service');
 jest.mock('../ai/ai-config.repository');
 jest.mock('../queue/ai-queue');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
-const { findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent } = require('./conversation.repository');
+const {
+  findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent,
+  findRecentAiClosedConversation,
+} = require('./conversation.repository');
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
@@ -169,6 +172,74 @@ describe('ingestInboundMessage', () => {
       message: { id: 'msg-1b' },
     });
     expect(broadcast).not.toHaveBeenCalled();
+  });
+
+  describe('janela de cortesia depois do encerramento pela IA', () => {
+    const ENCERRADA = { id: 'conv-ia', status: 'closed', assignedAgentId: null };
+
+    beforeEach(() => {
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-9' });
+      findOpenConversation.mockResolvedValue(null);
+      createMessage.mockResolvedValue({ id: 'msg-9' });
+    });
+
+    test('"obrigado" logo depois do encerramento vai para o histórico da conversa encerrada, sem abrir atendimento', async () => {
+      // Teste real 2026-09-13: "ótimo dia para você também" virou uma triagem
+      // nova que encaminhou para o Suporte.
+      findRecentAiClosedConversation.mockResolvedValue(ENCERRADA);
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C1',
+        content: 'Ótimo dia para você também!', messageType: 'text',
+      });
+
+      expect(findRecentAiClosedConversation).toHaveBeenCalledWith('contact-9', 'channel-1', 30 * 60 * 1000);
+      expect(createConversation).not.toHaveBeenCalled();
+      expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'conv-ia', content: 'Ótimo dia para você também!' }));
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      expect(broadcast).not.toHaveBeenCalled();
+      expect(scheduleAiTriage).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ conversation: ENCERRADA, message: { id: 'msg-9' }, cortesia: true });
+    });
+
+    test('mensagem que não é cortesia abre atendimento novo normalmente, sem nem consultar a janela', async () => {
+      createConversation.mockResolvedValue({ id: 'conv-10', assignedAgentId: null });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-10', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C2',
+        content: 'Obrigado, e minha internet?', messageType: 'text',
+      });
+
+      expect(findRecentAiClosedConversation).not.toHaveBeenCalled();
+      expect(createConversation).toHaveBeenCalled();
+    });
+
+    test('cortesia sem encerramento recente pela IA abre atendimento normalmente', async () => {
+      findRecentAiClosedConversation.mockResolvedValue(null);
+      createConversation.mockResolvedValue({ id: 'conv-11', assignedAgentId: null });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-11', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C3',
+        content: 'obrigado', messageType: 'text',
+      });
+
+      expect(createConversation).toHaveBeenCalled();
+    });
+
+    test('reentrega do mesmo webhook na janela de cortesia devolve message nula sem quebrar', async () => {
+      findRecentAiClosedConversation.mockResolvedValue(ENCERRADA);
+      createMessage.mockRejectedValue(Object.assign(new Error('dup'), { code: '23505' }));
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C1',
+        content: 'obrigado', messageType: 'text',
+      });
+
+      expect(result.message).toBeNull();
+      expect(result.cortesia).toBe(true);
+    });
   });
 
   test('creates a new conversation when none is open', async () => {

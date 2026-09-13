@@ -1,5 +1,17 @@
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
-const { findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent } = require('./conversation.repository');
+const {
+  findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent,
+  findRecentAiClosedConversation,
+} = require('./conversation.repository');
+const { ehMensagemDeCortesia } = require('./courtesy-message');
+
+// Janela de cortesia depois de um encerramento pela IA: um "obrigado" ou
+// "ótimo dia pra você também" que chega neste intervalo fica no histórico da
+// conversa encerrada, sem abrir atendimento novo (teste real 2026-09-13: a
+// resposta educada do cliente virou uma triagem nova que encaminhou para o
+// Suporte). Fixa de propósito — 30 min cobre a troca de gentilezas e não
+// segura um pedido de verdade, que de qualquer jeito não passa no filtro.
+const JANELA_DE_CORTESIA_MS = 30 * 60 * 1000;
 const { createMessage } = require('./message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
@@ -53,6 +65,30 @@ async function ingestInboundMessage({
   // (triagemIa) para não chamar shouldStartAiTriage duas vezes quando a
   // conversa acabou de nascer.
   let aiTriage = false;
+  if (!conversation && ehMensagemDeCortesia({ content, messageType })) {
+    const encerradaPelaIa = await findRecentAiClosedConversation(contact.id, channelId, JANELA_DE_CORTESIA_MS);
+    if (encerradaPelaIa) {
+      // Só o histórico: a conversa continua encerrada, ninguém é avisado e
+      // nada responde — para "pra você também", silêncio é a resposta certa.
+      let message = null;
+      try {
+        message = await createMessage({
+          conversationId: encerradaPelaIa.id,
+          direction: 'inbound',
+          content,
+          whatsappMessageId,
+          status: 'received',
+          messageType,
+          mediaPath,
+          mediaMimeType,
+          mediaFilename,
+        });
+      } catch (err) {
+        if (err.code !== UNIQUE_VIOLATION) throw err;
+      }
+      return { contact, conversation: encerradaPelaIa, message, contactJustCreated, cortesia: true };
+    }
+  }
   if (!conversation) {
     // Triagem por IA tem prioridade sobre a triagem numérica: um canal nunca
     // roda as duas ao mesmo tempo (shouldStartAiTriage já confere aiEnabled +

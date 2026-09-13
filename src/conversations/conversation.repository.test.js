@@ -41,6 +41,7 @@ const {
   concludeAiTriage,
   markTriageResolvedByAi,
   closeConversationByAi,
+  findRecentAiClosedConversation,
   markPhoneContested,
   isPhoneContested,
 } = require('./conversation.repository');
@@ -1183,6 +1184,30 @@ describe('conversation repository', () => {
 
       expect(await closeConversationByAi(conv.id, { reasonId: motivo, summary: 'de novo' })).toBeNull();
       expect((await getPool().query(`SELECT 1 FROM conversation_events WHERE conversation_id = $1 AND event_type = 'closed'`, [conv.id])).rowCount).toBe(1);
+    });
+
+    test('findRecentAiClosedConversation acha só o encerramento pela IA dentro da janela', async () => {
+      const motivo = (await getPool().query("INSERT INTO contact_reasons (name) VALUES ('Resolvido pela IA') RETURNING id")).rows[0].id;
+      const conv = await createConversation(contactId, channelId, 'pending');
+      await closeConversationByAi(conv.id, { reasonId: motivo, summary: 'ok' });
+
+      const achada = await findRecentAiClosedConversation(contactId, channelId, 30 * 60 * 1000);
+      expect(achada).not.toBeNull();
+      expect(achada.id).toBe(conv.id);
+      expect(achada.status).toBe('closed');
+
+      // Fora da janela: o evento é "velho" demais.
+      await getPool().query(`UPDATE conversation_events SET created_at = now() - interval '31 minutes' WHERE conversation_id = $1`, [conv.id]);
+      expect(await findRecentAiClosedConversation(contactId, channelId, 30 * 60 * 1000)).toBeNull();
+    });
+
+    test('findRecentAiClosedConversation ignora encerramento feito por atendente', async () => {
+      const agent = await createAgent({ email: 'ai-close-human@dw.com', password: 'secret123', role: 'agent' });
+      const conv = await createConversation(contactId, channelId);
+      await claimConversation(conv.id, agent.id);
+      await closeConversation(conv.id, agent.id, null);
+
+      expect(await findRecentAiClosedConversation(contactId, channelId, 30 * 60 * 1000)).toBeNull();
     });
 
     test('closeConversationByAi não toca conversa com atendente, já concluída ou fora de espera', async () => {

@@ -157,7 +157,8 @@ async function carregarContratos(contact) {
 
 const FERRAMENTAS_TRIAGEM = [
   'buscar_cliente', 'confirmar_nascimento', 'esquecer_identificacao',
-  'consultar_status_contrato', 'consultar_status_conexao', 'consultar_faturas_todos_contratos',
+  'consultar_status_contrato', 'consultar_status_conexao',
+  'consultar_status_todos_contratos', 'consultar_faturas_todos_contratos',
   'gerar_pix', 'gerar_segunda_via', 'enviar_boleto', 'concluir_triagem', 'encerrar_atendimento',
 ];
 

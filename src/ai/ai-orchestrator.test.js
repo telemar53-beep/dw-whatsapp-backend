@@ -842,7 +842,14 @@ describe('perfil de triagem', () => {
 
   test('encerrar_atendimento entra na lista fixa da triagem', async () => {
     expect(FERRAMENTAS_TRIAGEM).toContain('encerrar_atendimento');
-    expect(FERRAMENTAS_TRIAGEM).toHaveLength(11);
+    expect(FERRAMENTAS_TRIAGEM).toHaveLength(12);
+  });
+
+  // 2N chamadas (status do contrato + da conexão de cada contrato) estouravam
+  // o teto do turno no cliente com vários contratos: o Suporte precisa da
+  // versão de uma chamada só.
+  test('consultar_status_todos_contratos entra na lista fixa da triagem', async () => {
+    expect(FERRAMENTAS_TRIAGEM).toContain('consultar_status_todos_contratos');
   });
 
   test('devolve atendimentoEncerrado quando o turno encerrou o atendimento', async () => {

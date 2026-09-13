@@ -41,6 +41,7 @@ describe('tool-registry', () => {
       'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas',
       'consultar_faturas_todos_contratos', 'consultar_financeiro',
       'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
+      'consultar_status_todos_contratos',
       'definir_motivo_atendimento', 'desbloqueio_confianca', 'encerrar_atendimento', 'enviar_boleto',
       'esquecer_identificacao', 'gerar_pix', 'gerar_segunda_via', 'transferir_atendimento',
     ]);
@@ -80,7 +81,7 @@ describe('tool-registry', () => {
     }
   });
 
-  test('the ownership exemption list is exactly these eight tools, by name', () => {
+  test('the ownership exemption list is exactly these nine tools, by name', () => {
     // Adicionar uma isenção exige editar esta lista — a decisão passa por um
     // revisor em vez de escapar dentro da definição de uma ferramenta.
     // consultar_faturas_todos_contratos entrou porque não recebe id nenhum do
@@ -93,10 +94,14 @@ describe('tool-registry', () => {
     // contra os contratos do cliente.
     // encerrar_atendimento entrou pelo mesmo motivo: nao recebe argumento
     // nenhum do modelo e so age sobre contexto.conversationId.
+    // consultar_status_todos_contratos entrou pela mesma razao de
+    // consultar_faturas_todos_contratos: percorre contexto.contracts e nao
+    // recebe id nenhum do modelo.
     const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
     expect(isentas).toEqual([
       'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas_todos_contratos',
-      'definir_motivo_atendimento', 'encerrar_atendimento', 'esquecer_identificacao', 'transferir_atendimento',
+      'consultar_status_todos_contratos', 'definir_motivo_atendimento', 'encerrar_atendimento',
+      'esquecer_identificacao', 'transferir_atendimento',
     ]);
   });
 
@@ -351,6 +356,94 @@ describe('consultar_faturas_todos_contratos executar', () => {
       expect(r.contratosComFaturaEmAberto).toHaveLength(2);
       expect(r.instrucao).toBeUndefined();
     });
+  });
+});
+
+// Teste real (2026-09-13): cliente com vários contratos disse "a internet tá
+// com problema". O roteiro de Suporte mandava consultar status do contrato E
+// da conexão de cada um — 2N chamadas, acima do teto do turno. Esta ferramenta
+// cobre todos os contratos numa chamada só.
+describe('consultar_status_todos_contratos executar', () => {
+  const CONTRATO_A = { id: 1, statusCode: 1, status: 'Ativo', plan: '600MB', address: 'RUA X, 1', login: 'a' };
+  const CONTRATO_B = { id: 2, statusCode: 1, status: 'Ativo', plan: '300MB', address: 'AV Y, 2', login: 'b' };
+  const SUSPENSO = { id: 3, statusCode: 4, status: 'Suspenso', plan: '100MB', address: 'RUA Z, 3', login: 'c' };
+  const TRIAGEM = (contracts) => ({ contracts, identidade: { nivel: 'forte' } });
+  const conexao = (status) => ({ status });
+
+  beforeEach(() => jest.clearAllMocks());
+
+  test('declara as marcações da ferramenta sem parâmetros e isenta de dono', () => {
+    const tool = findTool('consultar_status_todos_contratos');
+    expect(tool.categoria).toBe('CONSULTA');
+    expect(tool.isentoDeProprietario).toBe(true);
+    expect(tool.exigeIdentidadeForte).toBe(true);
+    expect(tool.parametros).toEqual({ type: 'object', properties: {} });
+    expect(tool.validar({ contratoId: 999 })).toEqual({ ok: true, args: {} });
+  });
+
+  test('sem cliente identificado, responde que precisa de buscar_cliente', async () => {
+    const r = await findTool('consultar_status_todos_contratos').executar({}, { contracts: [] });
+    expect(r.sucesso).toBe(false);
+    expect(r.motivo).toMatch(/buscar_cliente/);
+    expect(sgpClient.checkConnection).not.toHaveBeenCalled();
+  });
+
+  test('todos ativos e online: uma chamada de conexão por contrato e instrução de perguntar o endereço', async () => {
+    sgpClient.checkConnection.mockResolvedValue(conexao(1));
+    const r = await findTool('consultar_status_todos_contratos').executar({}, TRIAGEM([CONTRATO_A, CONTRATO_B]));
+    expect(sgpClient.checkConnection).toHaveBeenCalledTimes(2);
+    expect(r.contratos).toEqual([
+      { contratoId: 1, endereco: 'RUA X, 1', plano: '600MB', status: 'ativo', statusLabel: 'Ativo', conexao: 'online' },
+      { contratoId: 2, endereco: 'AV Y, 2', plano: '300MB', status: 'ativo', statusLabel: 'Ativo', conexao: 'online' },
+    ]);
+    expect(r.suspensos).toEqual([]);
+    expect(r.offline).toEqual([]);
+    expect(r.instrucao).toMatch(/Todos os contratos estão ativos e online/);
+    expect(r.instrucao).toMatch(/pergunte também de qual endereço/);
+    // O login PPPoE nunca sai daqui: as palavras do modelo vão direto ao cliente.
+    expect(JSON.stringify(r)).not.toContain('"login"');
+  });
+
+  test('um offline: lista o offline e manda usar o modelo da conexão offline', async () => {
+    sgpClient.checkConnection.mockImplementation(async (id) => conexao(id === 2 ? 2 : 1));
+    const r = await findTool('consultar_status_todos_contratos').executar({}, TRIAGEM([CONTRATO_A, CONTRATO_B]));
+    expect(r.contratos[1].conexao).toBe('offline');
+    expect(r.offline).toEqual([{ contratoId: 2, endereco: 'AV Y, 2', plano: '300MB', status: 'ativo', statusLabel: 'Ativo', conexao: 'offline' }]);
+    expect(r.instrucao).toMatch(/Conexão offline em: .*2.*AV Y, 2/);
+    expect(r.instrucao).toMatch(/modelo da conexão offline/);
+  });
+
+  test('um suspenso tem precedência sobre o offline e manda usar o modelo do suspenso', async () => {
+    sgpClient.checkConnection.mockResolvedValue(conexao(2));
+    const r = await findTool('consultar_status_todos_contratos').executar({}, TRIAGEM([CONTRATO_A, SUSPENSO]));
+    expect(r.suspensos).toHaveLength(1);
+    expect(r.suspensos[0]).toMatchObject({ contratoId: 3, endereco: 'RUA Z, 3', status: 'suspenso' });
+    expect(r.instrucao).toMatch(/Contrato\(s\) suspenso\(s\): .*3.*RUA Z, 3/);
+    expect(r.instrucao).toMatch(/modelo do contrato suspenso por falta de pagamento/);
+  });
+
+  // O dono: a DW Telecom É o suporte. "Não consegui verificar" é inaceitável.
+  test('consulta rejeitada num contrato vira conexao null e proíbe dizer isso ao cliente', async () => {
+    sgpClient.checkConnection.mockImplementation((id) => (id === 2 ? Promise.reject(new Error('SGP fora')) : Promise.resolve(conexao(1))));
+    const r = await findTool('consultar_status_todos_contratos').executar({}, TRIAGEM([CONTRATO_A, CONTRATO_B]));
+    expect(r.contratos[0].conexao).toBe('online');
+    expect(r.contratos[1].conexao).toBeNull();
+    expect(r.instrucao).toMatch(/não respondeu: NÃO diga isso ao cliente/);
+    expect(r.instrucao).toMatch(/Trate como ativo e online/);
+  });
+
+  test('conexão desconhecida cai na mesma instrução de não dizer', async () => {
+    sgpClient.checkConnection.mockResolvedValue(conexao(99));
+    const r = await findTool('consultar_status_todos_contratos').executar({}, TRIAGEM([CONTRATO_A]));
+    expect(r.contratos[0].conexao).toBe('desconhecido');
+    expect(r.instrucao).toMatch(/NÃO diga isso ao cliente/);
+  });
+
+  test('fora da triagem (assistente), traz os dados mas não a instrução', async () => {
+    sgpClient.checkConnection.mockResolvedValue(conexao(1));
+    const r = await findTool('consultar_status_todos_contratos').executar({}, { contracts: [CONTRATO_A] });
+    expect(r.contratos).toHaveLength(1);
+    expect(r.instrucao).toBeUndefined();
   });
 });
 

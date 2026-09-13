@@ -173,6 +173,9 @@ async function montarContextoTriagem(config, identidade, triagem) {
     config.systemPrompt, '',
     'Você está na TRIAGEM: é a recepcionista. Objetivo: entender → identificar (se preciso) → classificar setor e motivo → coletar o mínimo → resumir → encaminhar com concluir_triagem. Não tente resolver o atendimento inteiro.',
     'Uma pergunta por vez. Faça só perguntas indispensáveis. A mensagem mais recente manda quando o cliente muda de assunto.',
+    // Tom pedido pelo dono depois dos testes reais (2026-09-13): recepcionista
+    // simpática, frases completas, um emoji leve — não telegramas.
+    'Tom: caloroso e direto, como uma recepcionista simpática. Frases completas e educadas; um emoji leve (😊) cai bem na saudação e no agradecimento, nunca mais de um por mensagem.',
     // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
     // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
     `Agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois.`,
@@ -215,10 +218,14 @@ async function montarContextoTriagem(config, identidade, triagem) {
         // e terminou em "quero o boleto" não vai mais para a fila: a própria
         // IA fecha. Sem motivo, tudo continua como antes.
         config.triageResolvedReasonId
-          ? 'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. Na resposta: cumprimente pelo primeiro nome com a saudação da hora, diga em uma frase o que enviou e pergunte se precisa de mais alguma coisa. NÃO conclua a triagem nesse momento. Se ele responder que não precisa de mais nada (ou só agradecer), chame encerrar_atendimento e despeça-se. Se pedir outra coisa, siga a triagem normalmente.'
+          ? [
+            'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. NÃO conclua a triagem nesse momento.',
+            'Depois de entregar, responda no modelo (adapte nome, endereço e PIX/boleto): "Enviei acima o PIX referente ao seu contrato do endereço Agenor Costa. É só copiar o código e colar na opção \"PIX Copia e Cola\" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!" Cite o endereço só quando ele tiver mais de um contrato. Para boleto: "É só abrir o PDF acima ou usar a linha digitável no aplicativo do seu banco."',
+            'Se depois disso ele agradecer ("obrigado", "valeu"): chame encerrar_atendimento e responda no modelo: "Imagina, Willemberg! 😊 Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" (à noite, "Tenha uma boa noite!"). Se responder só "ok", "certo" ou um joinha: chame encerrar_atendimento e responda: "Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" Se pedir outra coisa, siga a triagem normalmente e encerre só quando ele agradecer ou confirmar que está tudo certo.',
+          ].join('\n')
           : 'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.',
         ...(contratos.length > 1
-          ? ['Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, citando os endereços, e entregue na resposta seguinte.']
+          ? ['Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, no modelo: "Claro, vou te ajudar com o PIX 😊 Vi que você tem mais de um contrato com a gente. Para eu te enviar os dados do pagamento certinho, pode me confirmar de qual endereço você precisa?" (cite os endereços se ajudar) e entregue na resposta seguinte.']
           : []),
         // A ferramenta agora procura a fatura em TODOS os contratos do cliente
         // antes de dizer que não há: quando ela diz "em nenhum contrato", é

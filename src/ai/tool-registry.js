@@ -542,7 +542,7 @@ const TOOLS = [
         valor: primeira.value,
         vencimento: primeira.dueDate,
         ...(contratoUsado ? { contratoUsado } : {}),
-        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão e código copia e cola). Confirme em UMA frase curta. NÃO repita o código nem o valor.${contratoUsado ? ' Diga ao cliente de qual endereço é a fatura.' : ''}`,
+        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão com botão de copiar). Responda dizendo que enviou acima o PIX${contratoUsado ? ' referente ao contrato do endereço ' + contratoUsado.endereco : ''}, que é só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do banco, e que se tiver dificuldade é só avisar. NÃO repita o código nem o valor.${contratoUsado ? ' Diga ao cliente de qual endereço é a fatura.' : ''}`,
       };
     },
   },
@@ -919,7 +919,7 @@ const TOOLS = [
         closedAt: new Date().toISOString(),
       });
       contexto.atendimentoEncerrado = true;
-      return { encerrado: true, instrucao: 'Despeça-se em UMA frase curta, dizendo que qualquer outra coisa é só chamar.' };
+      return { encerrado: true, instrucao: 'Despeça-se: se ele agradeceu, comece com "Imagina, {nome}! 😊"; diga que qualquer dúvida sobre o pagamento ou ajuda com a internet é só chamar por aqui, e deseje um ótimo dia (ou boa noite).' };
     },
   },
 ];

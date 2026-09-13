@@ -684,12 +684,28 @@ describe('perfil de triagem', () => {
   describe('encerramento pela própria IA (triageResolvedReasonId configurado)', () => {
     const COM_MOTIVO = { apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: 'rr-1' };
 
-    test('com motivo, manda perguntar se precisa de mais algo e chamar encerrar_atendimento', async () => {
+    test('com motivo, traz os modelos de frase da entrega e da despedida, e manda chamar encerrar_atendimento', async () => {
       getAiConfig.mockResolvedValue(COM_MOTIVO);
       const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/pergunte se precisa de mais alguma coisa/);
+      // Modelos de frase pedidos pelo dono (2026-09-13).
+      expect(sys).toMatch(/Enviei acima o PIX referente ao seu contrato do endereço/);
+      expect(sys).toMatch(/PIX Copia e Cola/);
+      expect(sys).toMatch(/Imagina, Willemberg! 😊/);
+      expect(sys).toMatch(/Tenha um ótimo dia!/);
+      expect(sys).toMatch(/Se responder só "ok"/);
       expect(sys).toMatch(/chame encerrar_atendimento/);
+      expect(sys).toMatch(/Tom: caloroso e direto/);
       expect(sys).not.toMatch(/e depois conclua a triagem para o Financeiro/);
+    });
+
+    test('com mais de um contrato, o pedido de endereço segue o modelo de frase', async () => {
+      getAiConfig.mockResolvedValue(COM_MOTIVO);
+      const doisContratos = { ...IDENT_FORTE, contracts: [
+        { id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X', login: 'a' },
+        { id: 17405, statusCode: 1, plan: '300MB', address: 'AV Y', login: 'b' },
+      ] };
+      const sys = (await contexto({ identidade: doisContratos })).messages[0].content;
+      expect(sys).toMatch(/Vi que você tem mais de um contrato com a gente/);
     });
 
     test('sem motivo, continua encaminhando ao Financeiro como hoje', async () => {

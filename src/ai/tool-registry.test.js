@@ -1335,7 +1335,9 @@ describe('encerrar_atendimento', () => {
     expect(broadcast).not.toHaveBeenCalled();
     expect(c.atendimentoEncerrado).toBe(true);
     expect(r.encerrado).toBe(true);
-    expect(r.instrucao).toMatch(/uma frase/i);
+    // Despedida no modelo pedido pelo dono: "Imagina, {nome}! 😊 … Tenha um ótimo dia!"
+    expect(r.instrucao).toMatch(/Imagina, \{nome\}/);
+    expect(r.instrucao).toMatch(/ótimo dia/);
   });
 
   test('corrida: se o fechamento não pegar a conversa, não avisa nem marca o turno', async () => {

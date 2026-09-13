@@ -195,6 +195,39 @@ describe('AttendanceDashboardPage', () => {
     expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
   });
 
+  test('o filtro de Atendentes tem a opção IA, que mostra o que a IA encerrou ou está triando', async () => {
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [{ id: 'c1', contactDisplayName: 'Carlos', channelId: 'chan-1', assignedAgentId: 'agent-1', sectorId: 'sector-1' }],
+      waiting: [{ id: 'c2', contactDisplayName: 'Maria', channelId: 'chan-1', assignedAgentId: null, sectorId: null, aiTriageCompletedAt: '2026-09-13T15:00:00Z' }],
+      inAutomation: [{ id: 'c3', contactDisplayName: 'Joao', channelId: 'chan-1', assignedAgentId: null, sectorId: null, triageState: 'pending' }],
+      closedTodayCount: 2,
+    });
+    getDashboardClosedToday.mockResolvedValue({
+      items: [
+        { id: 'c4', contactDisplayName: 'Pedro', channelId: 'chan-1', assignedAgentId: null, sectorId: null, status: 'closed', aiTriageResolvedByAi: true, aiTriageCompletedAt: '2026-09-13T15:10:00Z' },
+        { id: 'c5', contactDisplayName: 'Lucia', channelId: 'chan-1', assignedAgentId: 'agent-1', sectorId: null, status: 'closed', aiTriageResolvedByAi: true },
+      ],
+      hasMore: false,
+    });
+    renderPage();
+    expect(await screen.findByText('Carlos')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /atendentes/i }));
+    await userEvent.click(screen.getByLabelText('IA'));
+
+    // Ativas: Carlos é da Ana (some); Maria (concluída pela IA para a fila) e
+    // Joao (em triagem) ficam.
+    expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
+    expect(screen.getByText('Maria')).toBeInTheDocument();
+    expect(screen.getByText('Joao')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: /encerrad/i }));
+    // Encerrados: Pedro foi encerrado pela IA (fica); Lucia foi encerrada pela
+    // Ana depois de a IA entregar o boleto (some).
+    expect(await screen.findByText('Pedro')).toBeInTheDocument();
+    expect(screen.queryByText('Lucia')).not.toBeInTheDocument();
+  });
+
   test('opening a filter dropdown closes any other one that was already open', async () => {
     renderPage();
     expect(screen.getByText('Carlos')).toBeInTheDocument();

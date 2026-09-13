@@ -18,9 +18,27 @@ import TransferModal from '../components/TransferModal';
 
 const CLOSED_PAGE_SIZE = 20;
 
+// Valor sintético no filtro de Atendentes: a IA não é um agente, mas o admin
+// precisa ver o que ela atendeu — encerrou sozinha (boleto/PIX entregue e
+// cliente satisfeito), concluiu para uma fila, ou ainda está triando.
+export const AI_AGENT_FILTER = 'ai';
+
+export function isHandledByAi(conversation) {
+  if (conversation.assignedAgentId) return false;
+  return Boolean(
+    conversation.aiTriageResolvedByAi
+    || conversation.aiTriageCompletedAt
+    || conversation.triageState === 'pending'
+  );
+}
+
 function matchesFilters(conversation, { channelIds, agentIds, sectorIds }) {
   if (channelIds.length > 0 && !channelIds.includes(conversation.channelId)) return false;
-  if (agentIds.length > 0 && !agentIds.includes(conversation.assignedAgentId)) return false;
+  if (agentIds.length > 0) {
+    const porAgente = agentIds.includes(conversation.assignedAgentId);
+    const porIa = agentIds.includes(AI_AGENT_FILTER) && isHandledByAi(conversation);
+    if (!porAgente && !porIa) return false;
+  }
   if (sectorIds.length > 0 && !sectorIds.includes(conversation.sectorId)) return false;
   return true;
 }
@@ -170,7 +188,10 @@ function AttendanceDashboardPage() {
 
   function withAgentName(conversation) {
     const agentName = conversation.assignedAgentId ? agentNameById[conversation.assignedAgentId] : null;
-    return agentName ? { ...conversation, assignedAgentName: agentName } : conversation;
+    if (agentName) return { ...conversation, assignedAgentName: agentName };
+    // Encerrado pela própria IA: aparece como "IA" onde o atendente apareceria.
+    if (conversation.status === 'closed' && isHandledByAi(conversation)) return { ...conversation, assignedAgentName: 'IA' };
+    return conversation;
   }
 
   const displayInProgress = filteredInProgress.map(withAgentName);
@@ -312,7 +333,7 @@ function AttendanceDashboardPage() {
         />
         <FilterDropdown
           label="Atendentes"
-          options={agents.map((a) => ({ value: a.id, label: a.name || a.email }))}
+          options={[{ value: AI_AGENT_FILTER, label: 'IA' }, ...agents.map((a) => ({ value: a.id, label: a.name || a.email }))]}
           selected={agentFilter}
           onToggle={(value) => toggleFilterValue(setAgentFilter, value)}
           open={openFilterMenu === 'agents'}

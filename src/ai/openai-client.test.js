@@ -42,6 +42,8 @@ describe('openai-client', () => {
     expect(axios.post.mock.calls[0][1].tool_choice).toEqual({ type: 'function', function: { name: 'concluir_triagem' } });
     await createChatCompletion({ apiKey: 'sk', model: 'm', messages: [], tools: [] });
     expect(axios.post.mock.calls[1][1]).not.toHaveProperty('tool_choice');
+    await createChatCompletion({ apiKey: 'sk', model: 'm', messages: [], tools: [{ type: 'function', function: { name: 'gerar_pix' } }], toolChoice: 'required' });
+    expect(axios.post.mock.calls[2][1].tool_choice).toBe('required');
   });
 
   test('throws OpenAiAuthError on 401', async () => {

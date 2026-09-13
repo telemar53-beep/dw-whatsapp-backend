@@ -26,7 +26,11 @@ function traduzErro(err, contexto) {
 async function createChatCompletion({ apiKey, model, messages, tools, toolChoice }) {
   const body = { model, messages };
   if (Array.isArray(tools) && tools.length > 0) body.tools = tools;
-  if (toolChoice && body.tools) body.tool_choice = { type: 'function', function: { name: toolChoice } };
+  // 'required' = qualquer ferramenta, mas alguma (usado no limite de perguntas
+  // da triagem); qualquer outro valor é o nome de uma função específica.
+  if (toolChoice && body.tools) {
+    body.tool_choice = toolChoice === 'required' ? 'required' : { type: 'function', function: { name: toolChoice } };
+  }
 
   let response;
   try {

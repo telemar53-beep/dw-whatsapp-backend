@@ -627,9 +627,35 @@ describe('perfil de triagem', () => {
     expect(req.messages.map((m) => m.content)).not.toContain('[cartão Pix enviado ao cliente]');
   });
 
-  test('forcarConclusao envia tool_choice concluir_triagem na primeira chamada', async () => {
-    await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
-    expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('concluir_triagem');
+  test('forcarConclusao exige alguma ferramenta na primeira chamada e avisa o limite no contexto', async () => {
+    // 'required', e não concluir_triagem: no 1º teste real com dois contratos,
+    // forçar a conclusão impediu o modelo de entregar o PIX que já podia.
+    const req = await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
+    expect(req.toolChoice).toBe('required');
+    expect(req.messages[0].content).toMatch(/LIMITE DE PERGUNTAS ATINGIDO/);
+    expect(req.messages[0].content).toMatch(/entregue AGORA \(enviar_boleto ou gerar_pix\) e em seguida chame concluir_triagem/);
+  });
+
+  test('sem forcarConclusao, o contexto não fala em limite atingido', async () => {
+    const req = await contexto();
+    expect(req.toolChoice).toBeUndefined();
+    expect(req.messages[0].content).not.toMatch(/LIMITE DE PERGUNTAS ATINGIDO/);
+  });
+
+  test('com mais de um contrato, manda consultar as faturas de todos antes de perguntar', async () => {
+    const doisContratos = { ...IDENT_FORTE, contracts: [
+      { id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X', login: 'a' },
+      { id: 17405, statusCode: 1, plan: '300MB', address: 'AV Y', login: 'b' },
+    ] };
+    const sys = (await contexto({ identidade: doisContratos })).messages[0].content;
+    expect(sys).toMatch(/chame consultar_faturas_todos_contratos ANTES de perguntar/);
+    expect(sys).toMatch(/Se só um contrato tiver fatura em aberto, entregue dele sem perguntar/);
+    expect(sys).toMatch(/nem pergunte "qual contrato"/);
+  });
+
+  test('com um contrato só, não fala em consultar as faturas de todos', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).not.toMatch(/consultar_faturas_todos_contratos ANTES/);
   });
 
   // I4c (review): o toolChoice forçado não pode "grudar" nas chamadas
@@ -644,7 +670,7 @@ describe('perfil de triagem', () => {
       .mockResolvedValueOnce({ message: { content: 'ok' }, usage: {} });
     executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
     await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
-    expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('concluir_triagem');
+    expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('required');
     expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
   });
 

@@ -158,7 +158,7 @@ const FERRAMENTAS_TRIAGEM = [
 // pergunta por vez) e proibições próprias (nunca revelar fatura, valor,
 // endereço ou "pagamento confirmado" — isso vai só no resumo interno para o
 // atendente humano).
-async function montarContextoTriagem(config, identidade) {
+async function montarContextoTriagem(config, identidade, triagem) {
   // Guarda defensiva: um identidade null/undefined não pode derrubar a
   // montagem do contexto — cai no mesmo tratamento de "não identificado".
   identidade = identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
@@ -194,7 +194,7 @@ async function montarContextoTriagem(config, identidade) {
       // não ser quem está no WhatsApp, então nada do cadastro pode ser dito.
       linhas.push(
         identidade.nivel === 'forte'
-          ? 'Nunca peça o número do contrato. Se precisar saber de qual ponto ele fala, pergunte pelo endereço ("é o da Rua X ou o da Av. Y?") ou pelo plano. Pergunte SÓ quando a resposta depender do ponto.'
+          ? 'Nunca peça o número do contrato nem pergunte "qual contrato": o cliente não sabe. Se precisar saber de qual ponto ele fala, pergunte de uma vez pelo endereço, citando os endereços ("é o da Rua X ou o da Av. Y?"). Pergunte SÓ quando a resposta depender do ponto.'
           : 'Nunca peça o número do contrato e NUNCA cite endereço, plano ou qualquer dado do cadastro ao cliente: a identificação ainda não foi confirmada. Se precisar desambiguar, peça que ELE descreva o local, sem você citar nada.'
       );
     }
@@ -203,6 +203,9 @@ async function montarContextoTriagem(config, identidade) {
     } else {
       linhas.push(
         'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.',
+        ...(contratos.length > 1
+          ? ['Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, citando os endereços, e entregue na resposta seguinte.']
+          : []),
         'Se a ferramenta responder que não há fatura em aberto, diga isso a ele em uma frase (sem valores) e conclua para o Financeiro — nunca encaminhe em silêncio.'
       );
     }
@@ -214,6 +217,16 @@ async function montarContextoTriagem(config, identidade) {
     'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
     'Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou.',
   );
+  if (triagem && triagem.forcarConclusao) {
+    // O limite barra PERGUNTAS, não entregas: no 1º teste real com dois
+    // contratos, o modelo gastou as duas perguntas ("qual contrato", "qual
+    // endereço") e, forçado a concluir_triagem, encaminhou sem mandar o PIX
+    // que já podia mandar.
+    linhas.push(
+      '',
+      'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA (enviar_boleto ou gerar_pix) e em seguida chame concluir_triagem. Se não tem, chame concluir_triagem com o que apurou.'
+    );
+  }
   if (config.triageExtraInstructions) {
     linhas.push('', 'INSTRUÇÕES ADICIONAIS DA OPERAÇÃO (única fonte para preço, planos e cobertura):', config.triageExtraInstructions);
   } else {
@@ -246,7 +259,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: FERRAMENTAS_TRIAGEM, registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
     };
-    systemContent = await montarContextoTriagem(config, identidadeEfetiva);
+    systemContent = await montarContextoTriagem(config, identidadeEfetiva, triagem);
   } else {
     const permissoes = await listToolPermissions();
     const habilitadas = permissoes.filter((p) => p.enabled).map((p) => p.toolName);
@@ -277,10 +290,12 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   let erro = null;
   let promptTokens = 0;
   let completionTokens = 0;
-  // toolChoice forçado (concluir_triagem) só vale na PRIMEIRA chamada do
-  // turno: depois disso o modelo já viu a exigência e as chamadas seguintes
-  // (após tool results) voltam a ser livres, senão o modelo nunca conseguiria
-  // fazer a pergunta de esclarecimento que a própria concluir_triagem pede.
+  // toolChoice forçado só vale na PRIMEIRA chamada do turno: depois disso o
+  // modelo já viu a exigência e as chamadas seguintes (após tool results)
+  // voltam a ser livres. É 'required' (alguma ferramenta), e não
+  // concluir_triagem: forçar a conclusão impedia o modelo de entregar o
+  // boleto/PIX que ele já tinha como entregar (1º teste real com dois
+  // contratos). A conclusão em código no worker continua como rede.
   let primeiraChamada = true;
 
   try {
@@ -291,7 +306,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       }
 
       const toolChoice = perfil === 'triagem' && primeiraChamada && triagem && triagem.forcarConclusao
-        ? 'concluir_triagem' : undefined;
+        ? 'required' : undefined;
       primeiraChamada = false;
 
       const { message, usage } = await createChatCompletion({

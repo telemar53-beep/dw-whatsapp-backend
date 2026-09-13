@@ -6,6 +6,7 @@ jest.mock('../whatsapp-adapters/meta-cloud.adapter');
 jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
 jest.mock('../realtime/socket-server');
+jest.mock('../integrations/sgp-client');
 
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
@@ -15,6 +16,8 @@ const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { emitToAgent } = require('../realtime/socket-server');
+const { getPixMerchant } = require('../integrations/sgp-client');
+const { cartaoPix } = require('../payments/payment-card');
 const { startOutboundWorker } = require('./outbound-worker');
 
 describe('startOutboundWorker', () => {
@@ -322,6 +325,122 @@ describe('startOutboundWorker', () => {
         repliedToWhatsappMessageId: 'wamid.ORIG1', repliedToDirection: 'outbound', repliedToContent: 'Segue o boleto',
       }
     );
+  });
+
+  describe('mensagem de Pix: cart\u00e3o nativo, com queda para texto', () => {
+    const METADATA = { value: 135, dueDate: '2026-09-15', faturaId: 4321 };
+    const PIX_CODE = '00020126580014BR.GOV.BCB.PIX0136chave-pix';
+    const MERCHANT = { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' };
+
+    function jobPix(channelId) {
+      return {
+        messageId: 'msg-pix', conversationId: 'conv-1', channelId,
+        content: PIX_CODE, messageType: 'pix', metadata: METADATA,
+      };
+    }
+
+    beforeEach(() => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+      getPixMerchant.mockResolvedValue(null);
+    });
+
+    test('no Baileys manda o cart\u00e3o sem precisar de recebedor cadastrado', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
+      baileysManager.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'BAILEYS_PIX_1' });
+
+      await handler(jobPix('channel-2'));
+
+      expect(baileysManager.sendPixCardMessage).toHaveBeenCalledWith(
+        { id: 'channel-2', type: 'baileys', config: {} },
+        '5511999998888',
+        { pixCode: PIX_CODE, value: 135, dueDate: '2026-09-15', faturaId: 4321, merchant: null }
+      );
+      expect(baileysManager.sendTextMessage).not.toHaveBeenCalled();
+      expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'BAILEYS_PIX_1');
+    });
+
+    test('no meta_cloud com recebedor cadastrado manda o cart\u00e3o', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      getPixMerchant.mockResolvedValue(MERCHANT);
+      metaCloudAdapter.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'wamid.PIX1' });
+
+      await handler(jobPix('channel-1'));
+
+      expect(metaCloudAdapter.sendPixCardMessage).toHaveBeenCalledWith(
+        { id: 'channel-1', type: 'meta_cloud', config: {} },
+        '5511999998888',
+        { pixCode: PIX_CODE, value: 135, dueDate: '2026-09-15', faturaId: 4321, merchant: MERCHANT }
+      );
+      expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();
+      expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'wamid.PIX1');
+    });
+
+    test('no meta_cloud SEM recebedor cadastrado cai no texto: cart\u00e3o e depois o c\u00f3digo', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      metaCloudAdapter.sendTextMessage
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CODIGO' });
+
+      await handler(jobPix('channel-1'));
+
+      expect(metaCloudAdapter.sendPixCardMessage).not.toHaveBeenCalled();
+      expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalledTimes(2);
+      expect(metaCloudAdapter.sendTextMessage.mock.calls[0][2]).toBe(cartaoPix({ valor: 135, vencimento: '2026-09-15' }));
+      expect(metaCloudAdapter.sendTextMessage.mock.calls[1][2]).toBe(PIX_CODE);
+      // O id gravado \u00e9 o da mensagem do c\u00f3digo, n\u00e3o o do cart\u00e3o de texto.
+      expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'wamid.TXT_CODIGO');
+    });
+
+    test('cart\u00e3o recusado pela API cai no texto, sem derrubar o envio', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      getPixMerchant.mockResolvedValue(MERCHANT);
+      metaCloudAdapter.sendPixCardMessage.mockRejectedValue(new Error('400 order_details not supported'));
+      metaCloudAdapter.sendTextMessage
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CODIGO' });
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await handler(jobPix('channel-1'));
+
+      expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalledTimes(2);
+      expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'wamid.TXT_CODIGO');
+      expect(updateMessageStatus).not.toHaveBeenCalled();
+      // O c\u00f3digo Pix nunca pode aparecer no log.
+      const logado = erro.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(logado).toContain('falling back to text');
+      expect(logado).not.toContain(PIX_CODE);
+      erro.mockRestore();
+    });
+
+    test('um adaptador sem sendPixCardMessage simplesmente usa o texto', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-3', type: '360dialog', config: {} });
+      getPixMerchant.mockResolvedValue(MERCHANT);
+      // Restaurado no fim: apagar a função do módulo mockado vazaria para os
+      // testes seguintes, que nunca mais veriam o adaptador saber mandar cartão.
+      const original = threeSixtyDialogAdapter.sendPixCardMessage;
+      threeSixtyDialogAdapter.sendPixCardMessage = undefined;
+      threeSixtyDialogAdapter.sendTextMessage
+        .mockResolvedValueOnce({ whatsappMessageId: 'D360_TXT_CARTAO' })
+        .mockResolvedValueOnce({ whatsappMessageId: 'D360_TXT_CODIGO' });
+
+      try {
+        await handler(jobPix('channel-3'));
+      } finally {
+        threeSixtyDialogAdapter.sendPixCardMessage = original;
+      }
+
+      expect(threeSixtyDialogAdapter.sendTextMessage).toHaveBeenCalledTimes(2);
+      expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'D360_TXT_CODIGO');
+    });
+
+    test('a mensagem de Pix n\u00e3o passa pelo caminho de m\u00eddia', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
+      baileysManager.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'BAILEYS_PIX_1' });
+
+      await handler(jobPix('channel-2'));
+
+      expect(baileysManager.sendMediaMessage).not.toHaveBeenCalled();
+    });
   });
 
   describe('automatic audio delivery check (Baileys only)', () => {

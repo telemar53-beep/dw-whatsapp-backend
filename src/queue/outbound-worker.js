@@ -6,6 +6,9 @@ const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { emitToAgent } = require('../realtime/socket-server');
+const { getPixMerchant } = require('../integrations/sgp-client');
+const { cartaoPix } = require('../payments/payment-card');
+const { mensagemSegura } = require('../ai/safe-error-log');
 
 const ADAPTERS_BY_CHANNEL_TYPE = {
   meta_cloud: metaCloudAdapter,
@@ -49,8 +52,48 @@ function scheduleAudioDeliveryCheck(ctx) {
   }, AUDIO_DELIVERY_CHECK_DELAY_MS);
 }
 
+/**
+ * Manda o Pix da melhor forma que o canal aceitar, sem nunca deixar o cliente
+ * sem o código.
+ *
+ * A preferência é o cartão nativo do WhatsApp, com botão "Copiar código Pix".
+ * Nos canais oficiais ele exige o recebedor cadastrado (nome, chave e tipo);
+ * no Baileys não, porque lá a "chave" declarada é o próprio copia e cola.
+ *
+ * A decisão fica aqui, na hora do envio, e não em quem enfileirou: só agora se
+ * sabe por qual canal a mensagem vai sair e se há recebedor cadastrado. E
+ * quando o cartão falha — recebedor faltando, API recusando, adaptador que nem
+ * sabe mandar cartão — a queda é para o formato de sempre (cartão de texto +
+ * código sozinho), nunca para uma mensagem não entregue.
+ *
+ * O id gravado na mensagem é o do envio do código: é essa a bolha que o cliente
+ * copia, e é por ela que os recibos de entrega/leitura devem ser casados.
+ */
+async function sendPixOrFallback({ adapter, channel, to, pixCode, metadata }) {
+  const merchant = await getPixMerchant();
+  const precisaMerchant = channel.type !== 'baileys';
+  if (typeof adapter.sendPixCardMessage === 'function' && (!precisaMerchant || merchant)) {
+    try {
+      return await adapter.sendPixCardMessage(channel, to, {
+        pixCode,
+        value: metadata.value,
+        dueDate: metadata.dueDate,
+        faturaId: metadata.faturaId,
+        merchant,
+      });
+    } catch (err) {
+      // mensagemSegura, e nunca o erro cru nem o pixCode: o código Pix não entra
+      // em log nenhum.
+      console.error(`Pix card send failed on channel ${channel.id}, falling back to text: ${mensagemSegura(err)}`);
+    }
+  }
+  await adapter.sendTextMessage(channel, to, cartaoPix({ valor: metadata.value, vencimento: metadata.dueDate }));
+  const { whatsappMessageId } = await adapter.sendTextMessage(channel, to, pixCode);
+  return { whatsappMessageId };
+}
+
 function startOutboundWorker() {
-  processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) => {
+  processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, metadata, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) => {
     const existingMessage = await findMessageById(messageId);
     if (existingMessage && existingMessage.whatsappMessageId) return;
     const conversation = await getConversationWithContact(conversationId);
@@ -78,19 +121,27 @@ function startOutboundWorker() {
             headerType,
             headerLink,
           })
-        : messageType && messageType !== 'text'
-          ? await adapter.sendMediaMessage(channel, conversation.contactPhoneNumber, {
-              messageType,
-              mediaPath,
-              mediaMimeType,
-              mediaFilename,
-              caption: content,
-              ...(isVoiceNote ? { isVoiceNote: true } : {}),
-              ...(replyOptions || {}),
+        : messageType === 'pix'
+          ? await sendPixOrFallback({
+              adapter,
+              channel,
+              to: conversation.contactPhoneNumber,
+              pixCode: content,
+              metadata: metadata || {},
             })
-          : replyOptions
-            ? await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content, replyOptions)
-            : await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content);
+          : messageType && messageType !== 'text'
+            ? await adapter.sendMediaMessage(channel, conversation.contactPhoneNumber, {
+                messageType,
+                mediaPath,
+                mediaMimeType,
+                mediaFilename,
+                caption: content,
+                ...(isVoiceNote ? { isVoiceNote: true } : {}),
+                ...(replyOptions || {}),
+              })
+            : replyOptions
+              ? await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content, replyOptions)
+              : await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content);
       const message = await recordMessageSent(messageId, whatsappMessageId);
       if (conversation.assignedAgentId) {
         emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
@@ -108,4 +159,4 @@ function startOutboundWorker() {
   });
 }
 
-module.exports = { startOutboundWorker };
+module.exports = { startOutboundWorker, sendPixOrFallback };

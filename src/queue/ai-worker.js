@@ -4,6 +4,7 @@ const { createSuggestion } = require('../ai/ai-suggestion.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const {
   getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
+  closeConversationByAi,
 } = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
 const { findLatestInboundMessageId, findMessageById } = require('../conversations/message.repository');
@@ -93,6 +94,22 @@ async function concluirEmCodigo(conversationId, summary) {
 async function handleTriageTimeout(conversationId) {
   const c = await getConversationWithContact(conversationId);
   if (!c || c.triageState !== 'pending' || c.status !== 'waiting') return;
+  // A IA já entregou o boleto/PIX e o cliente simplesmente não respondeu:
+  // mandar para a fila alguém que já foi atendido só cria trabalho. Com
+  // motivo configurado, encerra; sem motivo, tudo segue como antes.
+  const config = await getAiConfig();
+  if (c.aiTriageResolvedByAi && config && config.triageResolvedReasonId) {
+    const conversa = await closeConversationByAi(conversationId, {
+      reasonId: config.triageResolvedReasonId,
+      summary: 'Resolvido pela IA (boleto/PIX entregue); cliente não respondeu e o atendimento foi encerrado sem atendente.',
+    });
+    if (!conversa) return;
+    broadcastToDashboard('dashboard:conversation', {
+      conversation: await getConversationWithContact(conversationId),
+      closedAt: new Date().toISOString(),
+    });
+    return;
+  }
   await concluirEmCodigo(conversationId, 'Triagem não concluída: IA indisponível. Atender normalmente.');
 }
 
@@ -148,19 +165,23 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // silenciou a conversa sem nem assumi-la — I4 fix round 1), descarta.
   const agora = await getConversationWithContact(conversation.id);
   const concluiuAqui = Boolean(turno.triagemConcluida);
+  // O turno pode ter fechado a conversa ele mesmo (encerrar_atendimento): a
+  // despedida ainda precisa sair, então 'closed' só descarta quando o
+  // fechamento veio de FORA (atendente, admin, timeout).
+  const encerrouAqui = Boolean(turno.atendimentoEncerrado);
   if (
     !agora
-    || agora.status === 'closed'
+    || (agora.status === 'closed' && !encerrouAqui)
     || agora.status === 'silent'
     || agora.assignedAgentId
-    || (agora.triageState !== 'pending' && !concluiuAqui)
+    || (agora.triageState !== 'pending' && !concluiuAqui && !encerrouAqui)
   ) return;
 
   const texto = paraWhatsApp(turno.texto);
   if (texto) {
     await enqueueOutboundMessage({ conversationId: conversation.id, channelId: conversation.channelId, content: texto, sentBy: 'ai' });
   }
-  if (concluiuAqui) return;
+  if (concluiuAqui || encerrouAqui) return;
   await incrementTriageAttempts(conversation.id);
   if (forcarConclusao) {
     await concluirEmCodigo(conversation.id, `Triagem inconclusiva após ${attempts} perguntas.`);

@@ -15,6 +15,7 @@ const { createSuggestion } = require('../ai/ai-suggestion.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const {
   getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
+  closeConversationByAi,
 } = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
 const { findLatestInboundMessageId, findMessageById } = require('../conversations/message.repository');
@@ -173,6 +174,7 @@ describe('ai-worker — triagem', () => {
     // descartaria o broadcast em qualquer teste que não mocke isto por conta
     // própria, mesmo sem corrida nenhuma acontecendo no cenário.
     concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+    closeConversationByAi.mockReset().mockResolvedValue({ id: 'c-1', status: 'closed' });
   });
 
   test('conversa pending sem atendente roda o perfil de triagem e responde ao cliente como IA', async () => {
@@ -291,6 +293,67 @@ describe('ai-worker — triagem', () => {
     getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, status: 'silent' });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  describe('encerramento pela própria IA', () => {
+    const COM_MOTIVO = { mode: 'assistant', apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3, transcriptionFeedAi: true, triageResolvedReasonId: 'rr-1' };
+
+    // A releitura antes de enviar descarta conversa 'closed' — mas quando foi
+    // o PRÓPRIO turno que fechou, a despedida ainda TEM de sair.
+    test('turno que encerrou o atendimento ainda envia a despedida e não conta pergunta', async () => {
+      runAiTurn.mockResolvedValue({ texto: 'Qualquer coisa é só chamar, João!', toolsExecutadas: [], erro: null, triagemConcluida: null, atendimentoEncerrado: true });
+      getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, status: 'closed', triageState: 'completed' });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'Qualquer coisa é só chamar, João!' }));
+      expect(incrementTriageAttempts).not.toHaveBeenCalled();
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+
+    test('timeout com entrega feita e motivo configurado encerra em vez de mandar para a fila', async () => {
+      getAiConfig.mockResolvedValue(COM_MOTIVO);
+      getConversationWithContact.mockResolvedValue({ ...PENDING, aiTriageResolvedByAi: true });
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      expect(closeConversationByAi).toHaveBeenCalledWith('c-1', {
+        reasonId: 'rr-1',
+        summary: 'Resolvido pela IA (boleto/PIX entregue); cliente não respondeu e o atendimento foi encerrado sem atendente.',
+      });
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+      expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', expect.objectContaining({ closedAt: expect.any(String) }));
+      expect(broadcast).not.toHaveBeenCalledWith('queue:new', expect.any(Object));
+    });
+
+    test('timeout sem nada entregue conclui para a fila como hoje', async () => {
+      getAiConfig.mockResolvedValue(COM_MOTIVO);
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      expect(closeConversationByAi).not.toHaveBeenCalled();
+      expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ summary: expect.stringMatching(/IA indisponível/) }));
+    });
+
+    test('timeout com entrega feita mas sem motivo configurado conclui para a fila como hoje', async () => {
+      getConversationWithContact.mockResolvedValue({ ...PENDING, aiTriageResolvedByAi: true });
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      expect(closeConversationByAi).not.toHaveBeenCalled();
+      expect(concludeAiTriage).toHaveBeenCalled();
+    });
+
+    test('timeout que perde a corrida do fechamento não avisa ninguém', async () => {
+      getAiConfig.mockResolvedValue(COM_MOTIVO);
+      getConversationWithContact.mockResolvedValue({ ...PENDING, aiTriageResolvedByAi: true });
+      closeConversationByAi.mockResolvedValue(null);
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      expect(broadcastToDashboard).not.toHaveBeenCalled();
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
   });
 
   describe('corridas (I5, fix round 1)', () => {

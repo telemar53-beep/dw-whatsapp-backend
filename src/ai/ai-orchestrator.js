@@ -43,6 +43,15 @@ const HISTORICO_MAX = 20;
 // chamada) e ainda assim corta bem antes do pior caso multi-minuto.
 const TURNO_MAX_MS = 120000;
 
+// "Vou encaminhar", "encaminhando seu atendimento", "um atendente continua
+// daqui", "vou transferir", "direcionado para o setor": o modelo anunciando
+// o encaminhamento ao cliente.
+const ANUNCIO_DE_ENCAMINHAMENTO = /vou (te )?(encaminhar|transferir|direcionar)|encaminh(ar|ando|ei) (o |a |seu |sua |este |esta )?(atendimento|solicita[çc][aã]o|pedido|caso|chamado)|(direcionad|encaminhad)[oa] para o setor|um atendente (continua|vai continuar|d[aá] continuidade|dar[aá] continuidade)/i;
+
+function anunciaEncaminhamento(texto) {
+  return ANUNCIO_DE_ENCAMINHAMENTO.test(String(texto || ''));
+}
+
 function papelDaMensagem(message) {
   return message.direction === 'inbound' ? 'user' : 'assistant';
 }
@@ -173,6 +182,10 @@ async function montarContextoTriagem(config, identidade, triagem) {
     config.systemPrompt, '',
     'Você está na TRIAGEM: é a recepcionista. Objetivo: entender → identificar (se preciso) → classificar setor e motivo → coletar o mínimo → resumir → encaminhar com concluir_triagem. Não tente resolver o atendimento inteiro.',
     'Uma pergunta por vez. Faça só perguntas indispensáveis. A mensagem mais recente manda quando o cliente muda de assunto.',
+    // Teste real (2026-09-13, Suporte): o modelo escreveu "vou encaminhar para
+    // o Suporte" sem chamar concluir_triagem, e só encaminhou no turno
+    // seguinte, depois de um "OK" do cliente — um turno inteiro perdido.
+    'Quando decidir encaminhar, chame concluir_triagem NA MESMA resposta em que avisa o cliente. Nunca escreva "vou encaminhar" sem concluir; nunca espere um "ok" para encaminhar.',
     // Tom pedido pelo dono depois dos testes reais (2026-09-13): recepcionista
     // simpática, frases completas, um emoji leve — não telegramas.
     'Tom: caloroso e direto, como uma recepcionista simpática. Frases completas e educadas.',
@@ -331,6 +344,13 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   // boleto/PIX que ele já tinha como entregar (1º teste real com dois
   // contratos). A conclusão em código no worker continua como rede.
   let primeiraChamada = true;
+  // Anúncio sem conclusão (teste real do Suporte, 2026-09-13): o modelo
+  // escreveu "vou encaminhar para o Suporte" e não chamou concluir_triagem —
+  // só encaminhou no turno seguinte, depois de um "OK" do cliente. Quando o
+  // texto final anuncia encaminhamento e a triagem não concluiu, o laço dá
+  // UMA volta a mais, obrigando concluir_triagem antes de qualquer envio.
+  let exigiuConclusaoPorAnuncio = false;
+  let proximoToolChoice;
 
   try {
     while (true) {
@@ -339,8 +359,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
         break;
       }
 
-      const toolChoice = perfil === 'triagem' && primeiraChamada && triagem && triagem.forcarConclusao
-        ? 'required' : undefined;
+      const toolChoice = proximoToolChoice
+        || (perfil === 'triagem' && primeiraChamada && triagem && triagem.forcarConclusao ? 'required' : undefined);
+      proximoToolChoice = undefined;
       primeiraChamada = false;
 
       const { message, usage } = await createChatCompletion({
@@ -351,7 +372,22 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
 
       const chamadas = message.tool_calls || [];
       if (chamadas.length === 0) {
-        texto = message.content || null;
+        const conteudo = message.content || null;
+        if (
+          perfil === 'triagem' && conteudo && !exigiuConclusaoPorAnuncio
+          && !contexto.triagemConcluida && !contexto.atendimentoEncerrado
+          && anunciaEncaminhamento(conteudo)
+        ) {
+          exigiuConclusaoPorAnuncio = true;
+          messages.push({ role: 'assistant', content: conteudo });
+          messages.push({
+            role: 'system',
+            content: 'Você anunciou o encaminhamento mas NÃO chamou concluir_triagem. Chame concluir_triagem AGORA, com o setor e o resumo do que apurou. Depois responda ao cliente em uma frase.',
+          });
+          proximoToolChoice = 'concluir_triagem';
+          continue;
+        }
+        texto = conteudo;
         // Sem tool_calls e sem texto utilizável (corte por content_filter,
         // turno vazio etc.) não é sucesso silencioso: sem isto, quem consome
         // o retorno não teria como distinguir "respondeu" de "falhou", e a

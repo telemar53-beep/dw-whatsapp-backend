@@ -460,6 +460,8 @@ describe('perfil de triagem', () => {
     expect(sys).toContain('João');
     expect(sys).toContain('RUA X');
     expect(sys).toMatch(/primeiro nome/i);
+    // Teste real do Suporte: "vou encaminhar" sem concluir gastou um turno.
+    expect(sys).toMatch(/chame concluir_triagem NA MESMA resposta em que avisa o cliente/);
     expect(sys).toContain('Seja breve.');
     expect(sys).not.toContain('1990');
     // Não é a PALAVRA "valor" que é proibida (ela aparece dentro da própria
@@ -705,6 +707,57 @@ describe('perfil de triagem', () => {
     await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
     expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('required');
     expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
+  });
+
+  // Teste real do Suporte (2026-09-13): "vou encaminhar para o Suporte" sem
+  // chamar concluir_triagem — o encaminhamento só veio no turno seguinte.
+  describe('anúncio de encaminhamento sem concluir_triagem', () => {
+    test('obriga concluir_triagem na mesma resposta e manda o texto final ao cliente', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Entendi. Vou encaminhar sua solicitação para o setor de Suporte.' }, usage: {} })
+        .mockResolvedValueOnce({
+          message: { content: null, tool_calls: [{ id: 't1', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"lentidão","confianca":0.9}' } }] },
+          usage: {},
+        })
+        .mockResolvedValueOnce({ message: { content: 'Perfeito, João — o Suporte continua daqui.' }, usage: {} });
+      executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(createChatCompletion).toHaveBeenCalledTimes(3);
+      const segunda = createChatCompletion.mock.calls[1][0];
+      expect(segunda.toolChoice).toBe('concluir_triagem');
+      // O array de mensagens é o mesmo objeto ao longo do turno (o mock guarda a
+      // referência), então checa-se a presença, não a posição final.
+      expect(segunda.messages).toEqual(expect.arrayContaining([
+        expect.objectContaining({ role: 'assistant', content: 'Entendi. Vou encaminhar sua solicitação para o setor de Suporte.' }),
+        expect.objectContaining({ role: 'system', content: expect.stringMatching(/Chame concluir_triagem AGORA/) }),
+      ]));
+      expect(createChatCompletion.mock.calls[2][0].toolChoice).toBeUndefined();
+      expect(executeTool).toHaveBeenCalledWith('concluir_triagem', expect.objectContaining({ resumo: 'lentidão' }), expect.anything());
+      expect(r.texto).toBe('Perfeito, João — o Suporte continua daqui.');
+    });
+
+    test('só uma volta a mais: se o modelo insistir em só anunciar, o texto sai e o worker conclui em código', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Vou encaminhar seu atendimento para o Suporte.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Vou encaminhar seu atendimento para o Suporte.' }, usage: {} });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+      expect(r.texto).toBe('Vou encaminhar seu atendimento para o Suporte.');
+    });
+
+    test('texto sem anúncio de encaminhamento não ganha volta extra', async () => {
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'Me diz o endereço, por favor?' }, usage: {} });
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+      expect(createChatCompletion).toHaveBeenCalledTimes(1);
+    });
+
+    test('no assistente (humano no comando) o anúncio não força nada', async () => {
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'Vou encaminhar seu atendimento para o Suporte.' }, usage: {} });
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+      expect(createChatCompletion).toHaveBeenCalledTimes(1);
+    });
   });
 
   // Com o motivo de encerramento configurado, a triagem deixa de encaminhar o

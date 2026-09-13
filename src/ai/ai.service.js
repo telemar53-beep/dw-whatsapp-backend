@@ -3,6 +3,7 @@ const { getAiConfig } = require('./ai-config.repository');
 const { enqueueAiReply } = require('../queue/ai-queue');
 const { enqueueTranscription } = require('../queue/transcription-queue');
 const { markTranscriptionPending } = require('../conversations/message.repository');
+const { isNightModeActive } = require('./night-mode');
 
 async function shouldRunAi(channelId) {
   const channel = await findChannelById(channelId);
@@ -68,7 +69,17 @@ async function enqueueTranscriptionJob(conversation, message) {
   await enqueueTranscription({ conversationId: conversation.id, messageId: message.id });
 }
 
+// Modo noturno ativo agora, para este canal. Uma consulta ao canal e uma à
+// config — quem já tem os dois em mãos deve chamar isNightModeActive direto.
+async function isNightModeActiveForChannel(channelId, agora = new Date()) {
+  const channel = await findChannelById(channelId);
+  if (!channel || !channel.aiEnabled || !channel.aiTriageEnabled || !channel.aiNightModeEnabled) return false;
+  if (!(await shouldRunAi(channelId))) return false;
+  const config = await getAiConfig();
+  return isNightModeActive({ channel, config, agora });
+}
+
 module.exports = {
   shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
-  shouldStartAiTriage, scheduleAiTriage,
+  shouldStartAiTriage, scheduleAiTriage, isNightModeActiveForChannel,
 };

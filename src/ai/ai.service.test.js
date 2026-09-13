@@ -11,8 +11,13 @@ const { enqueueTranscription } = require('../queue/transcription-queue');
 const { markTranscriptionPending } = require('../conversations/message.repository');
 const {
   shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
-  shouldStartAiTriage, scheduleAiTriage,
+  shouldStartAiTriage, scheduleAiTriage, isNightModeActiveForChannel,
 } = require('./ai.service');
+
+// Instantes em horário de São Paulo (UTC-3).
+const as = (hhmm) => new Date(`2026-09-13T${hhmm}:00-03:00`);
+const CANAL_NOTURNO = { id: 'ch-1', aiEnabled: true, aiTriageEnabled: true, aiNightModeEnabled: true };
+const CONFIG_NOTURNA = { mode: 'assistant', apiKey: 'k', model: 'm', nightStartTime: '20:00', nightEndTime: '08:00' };
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -125,5 +130,48 @@ describe('ai.service', () => {
     await scheduleAiTriage({ id: 'c-1' }, { id: 'm5', messageType: 'audio', transcriptionStatus: 'pending' });
     await scheduleAiTriage({ id: 'c-1' }, { id: 'm6', messageType: 'location' });
     expect(enqueueAiReply).not.toHaveBeenCalled();
+  });
+
+  describe('isNightModeActiveForChannel', () => {
+    test('ativo com as três flags do canal, a IA utilizável e a hora dentro da janela', async () => {
+      findChannelById.mockResolvedValue(CANAL_NOTURNO);
+      getAiConfig.mockResolvedValue(CONFIG_NOTURNA);
+      expect(await isNightModeActiveForChannel('ch-1', as('22:00'))).toBe(true);
+    });
+
+    test('inativo fora da janela e sem janela configurada', async () => {
+      findChannelById.mockResolvedValue(CANAL_NOTURNO);
+      getAiConfig.mockResolvedValue(CONFIG_NOTURNA);
+      expect(await isNightModeActiveForChannel('ch-1', as('10:00'))).toBe(false);
+
+      getAiConfig.mockResolvedValue({ mode: 'assistant', apiKey: 'k', model: 'm', nightStartTime: null, nightEndTime: null });
+      expect(await isNightModeActiveForChannel('ch-1', as('22:00'))).toBe(false);
+    });
+
+    test('inativo sem o interruptor do canal, sem triagem, sem IA ou com canal inexistente', async () => {
+      getAiConfig.mockResolvedValue(CONFIG_NOTURNA);
+
+      findChannelById.mockResolvedValue({ ...CANAL_NOTURNO, aiNightModeEnabled: false });
+      expect(await isNightModeActiveForChannel('ch-1', as('22:00'))).toBe(false);
+
+      findChannelById.mockResolvedValue({ ...CANAL_NOTURNO, aiTriageEnabled: false });
+      expect(await isNightModeActiveForChannel('ch-1', as('22:00'))).toBe(false);
+
+      findChannelById.mockResolvedValue({ ...CANAL_NOTURNO, aiEnabled: false });
+      expect(await isNightModeActiveForChannel('ch-1', as('22:00'))).toBe(false);
+
+      findChannelById.mockResolvedValue(null);
+      expect(await isNightModeActiveForChannel('ch-1', as('22:00'))).toBe(false);
+    });
+
+    test('inativo quando a IA está inutilizável: modo desligado ou sem chave', async () => {
+      findChannelById.mockResolvedValue(CANAL_NOTURNO);
+
+      getAiConfig.mockResolvedValue({ ...CONFIG_NOTURNA, mode: 'disabled' });
+      expect(await isNightModeActiveForChannel('ch-1', as('22:00'))).toBe(false);
+
+      getAiConfig.mockResolvedValue({ ...CONFIG_NOTURNA, apiKey: null });
+      expect(await isNightModeActiveForChannel('ch-1', as('22:00'))).toBe(false);
+    });
   });
 });

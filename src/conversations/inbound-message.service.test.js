@@ -30,7 +30,7 @@ const { getBusinessHoursConfig } = require('../business-hours/business-hours.rep
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
 const {
   shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
-  shouldStartAiTriage, scheduleAiTriage,
+  shouldStartAiTriage, scheduleAiTriage, isNightModeActiveForChannel,
 } = require('../ai/ai.service');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { enqueueTriageTimeout } = require('../queue/ai-queue');
@@ -47,6 +47,7 @@ describe('ingestInboundMessage', () => {
     shouldRunAi.mockResolvedValue(false);
     shouldTranscribe.mockResolvedValue(false);
     shouldStartAiTriage.mockResolvedValue(false);
+    isNightModeActiveForChannel.mockResolvedValue(false);
     getAiConfig.mockResolvedValue({ triageTimeoutMinutes: 3 });
   });
 
@@ -914,6 +915,54 @@ describe('ingestInboundMessage', () => {
       });
       expect(markBusinessHoursNoticeSent).toHaveBeenCalledWith('conv-1');
       expect(sendTriageQuestion).not.toHaveBeenCalled();
+    });
+
+    // Com o modo noturno ligado no canal, a IA responde: mandar junto o aviso
+    // de "estamos fora do horário" contradiria a resposta que vem em seguida.
+    test('não envia o aviso de fora do horário quando o modo noturno está ativo no canal', async () => {
+      getBusinessHoursConfig.mockResolvedValue({
+        enabled: true, startTime: '08:00', endTime: '18:00', message: 'Fora do horário.',
+      });
+      isOutsideBusinessHours.mockReturnValue(true);
+      isNightModeActiveForChannel.mockResolvedValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '+5511999998888' });
+      findOpenConversation.mockResolvedValue(null);
+      createConversation.mockResolvedValue({ id: 'conv-noturno', assignedAgentId: null, triageState: null, businessHoursNoticeSentAt: null });
+      createMessage.mockResolvedValue({ id: 'msg-1' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-noturno', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wamid.N',
+        content: 'Oi',
+      });
+
+      expect(isNightModeActiveForChannel).toHaveBeenCalledWith('channel-1');
+      expect(enqueueOutboundMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ content: 'Fora do horário.' })
+      );
+      expect(markBusinessHoursNoticeSent).not.toHaveBeenCalled();
+    });
+
+    test('dentro do horário comercial nem consulta o modo noturno', async () => {
+      getBusinessHoursConfig.mockResolvedValue({ enabled: true, startTime: '08:00', endTime: '18:00', message: 'aviso' });
+      isOutsideBusinessHours.mockReturnValue(false);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '+5511999998888' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: null, triageState: null, businessHoursNoticeSentAt: null });
+      createMessage.mockResolvedValue({ id: 'msg-1' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1',
+        fromPhoneNumber: '+5511999998888',
+        contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wamid.D',
+        content: 'Oi',
+      });
+
+      expect(isNightModeActiveForChannel).not.toHaveBeenCalled();
     });
 
     test('starts triage normally for a new conversation inside business hours (regression)', async () => {

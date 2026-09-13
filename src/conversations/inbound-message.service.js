@@ -22,7 +22,7 @@ const { getBusinessHoursConfig } = require('../business-hours/business-hours.rep
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
 const {
   shouldRunAi, scheduleAiReply, shouldTranscribe, markTranscriptionScheduled, enqueueTranscriptionJob,
-  shouldStartAiTriage, scheduleAiTriage,
+  shouldStartAiTriage, scheduleAiTriage, isNightModeActiveForChannel,
 } = require('../ai/ai.service');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { enqueueTriageTimeout } = require('../queue/ai-queue');
@@ -159,7 +159,10 @@ async function ingestInboundMessage({
     console.error(`Failed to send city notice for conversation ${conversation.id}`, err);
   }
 
-  if (outsideBusinessHours && !conversation.businessHoursNoticeSentAt && !conversation.assignedAgentId) {
+  // Com o modo noturno ativo no canal, quem fala primeiro é a IA — o aviso
+  // de "estamos fora do horário" contradiria a resposta que vem em seguida.
+  const noturnoAtivo = outsideBusinessHours ? await isNightModeActiveForChannel(channelId) : false;
+  if (outsideBusinessHours && !noturnoAtivo && !conversation.businessHoursNoticeSentAt && !conversation.assignedAgentId) {
     try {
       await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: businessHoursConfig.message });
       conversation = await markBusinessHoursNoticeSent(conversation.id);

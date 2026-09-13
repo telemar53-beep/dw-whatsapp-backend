@@ -51,9 +51,48 @@ async function porCpf(cpf, origem) {
   };
 }
 
+/**
+ * O vínculo já está gravado e o SGP respondeu, mas o contato é antigo (foi
+ * vinculado antes de existir sgp_first_name): grava o nome agora, uma vez só.
+ * Nunca derruba a resolução — a identidade já está pronta, o UPDATE é bônus.
+ */
+async function backfillPrimeiroNome(contact, identidade) {
+  if (contact.sgpFirstName || !identidade.primeiroNome) return;
+  try {
+    await setContactSgpLink(contact.id, {
+      sgpClientId: contact.sgpClientId,
+      sgpContractId: contact.sgpContractId,
+      sgpDocument: contact.sgpDocument,
+      sgpFirstName: identidade.primeiroNome,
+    });
+    contact.sgpFirstName = identidade.primeiroNome;
+  } catch (err) {
+    console.error(`First name backfill failed for contact ${contact.id}: ${mensagemSegura(err)}`);
+  }
+}
+
+/**
+ * Vínculo gravado + SGP fora do ar. O cliente JÁ foi identificado antes; pedir
+ * o CPF de novo (o que o nivel 'none' manda o modelo fazer) é o pior desfecho
+ * possível. Devolve a memória como identidade forte, sem contratos e sem data
+ * de nascimento — o prompt da triagem vê sgpIndisponivel e proíbe boleto, PIX
+ * e status, que dependeriam do SGP de qualquer jeito.
+ */
+function porMemoriaSemSgp(contact) {
+  return {
+    nivel: 'forte', origem: 'memory', primeiroNome: contact.sgpFirstName || null,
+    contracts: [], client: { id: contact.sgpClientId || null, document: contact.sgpDocument },
+    dataNascimento: null, contestado: false, nascimentoTentado: false, sgpIndisponivel: true,
+  };
+}
+
 async function resolverIdentidade({ contact, ignorarTelefone = false }) {
   try {
-    if (contact.sgpDocument) return await porCpf(contact.sgpDocument, 'memory');
+    if (contact.sgpDocument) {
+      const identidade = await porCpf(contact.sgpDocument, 'memory');
+      await backfillPrimeiroNome(contact, identidade);
+      return identidade;
+    }
     // ignorarTelefone: true depois de esquecer_identificacao (contestação do
     // nome) — buscar de novo pelo MESMO telefone cumprimentaria a mesma
     // pessoa errada outra vez. A memória (acima) continua valendo.
@@ -67,11 +106,16 @@ async function resolverIdentidade({ contact, ignorarTelefone = false }) {
         sgpClientId: rec.cliente.id,
         sgpContractId: identidade.contracts.length === 1 ? identidade.contracts[0].id : null,
         sgpDocument: rec.cliente.cpfcnpj,
+        sgpFirstName: identidade.primeiroNome,
       });
       return identidade;
     }
     return vazio();
   } catch (err) {
+    if (contact.sgpDocument) {
+      console.error(`Identity resolved from memory only (SGP unavailable) for contact ${contact.id}: ${mensagemSegura(err)}`);
+      return porMemoriaSemSgp(contact);
+    }
     console.error(`Identity resolution failed for contact ${contact.id}: ${mensagemSegura(err)}`);
     return vazio();
   }

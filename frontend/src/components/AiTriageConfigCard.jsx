@@ -8,6 +8,11 @@ const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+// Padrão da spec do modo noturno. Com a config vazia (banco sem janela) os
+// campos nascem preenchidos: dois campos em branco faziam o admin ligar o
+// interruptor do canal achando que bastava, e o noturno nunca ativava.
+const NOTURNO_INICIO_PADRAO = '20:00';
+const NOTURNO_FIM_PADRAO = '08:00';
 
 function AiTriageConfigCard() {
   const { token } = useAuth();
@@ -18,8 +23,8 @@ function AiTriageConfigCard() {
   const [timeoutMinutes, setTimeoutMinutes] = useState(3);
   const [extraInstructions, setExtraInstructions] = useState('');
   const [resolvedReasonId, setResolvedReasonId] = useState('');
-  const [nightStart, setNightStart] = useState('');
-  const [nightEnd, setNightEnd] = useState('');
+  const [nightStart, setNightStart] = useState(NOTURNO_INICIO_PADRAO);
+  const [nightEnd, setNightEnd] = useState(NOTURNO_FIM_PADRAO);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -38,8 +43,8 @@ function AiTriageConfigCard() {
     }
     setExtraInstructions(config.triageExtraInstructions || '');
     setResolvedReasonId(config.triageResolvedReasonId || '');
-    setNightStart(config.nightStartTime || '');
-    setNightEnd(config.nightEndTime || '');
+    setNightStart(config.nightStartTime || NOTURNO_INICIO_PADRAO);
+    setNightEnd(config.nightEndTime || NOTURNO_FIM_PADRAO);
   }, [config]);
 
   async function handleSave(event) {
@@ -171,8 +176,8 @@ function AiTriageConfigCard() {
           </div>
         </div>
         <p className="text-[12px] text-wa-muted">
-          Todos os dias, feriados incluídos. Ex.: 20:00 a 08:00. Cada canal ainda precisa do
-          interruptor "Atendimento noturno com IA".
+          Todos os dias, feriados incluídos. Ex.: 20:00 a 08:00. Salve a janela antes de ligar o
+          interruptor "Atendimento noturno com IA" no canal: sem ela o canal recusa ligar.
         </p>
       </div>
 

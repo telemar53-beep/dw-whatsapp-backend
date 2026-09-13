@@ -1,4 +1,5 @@
 jest.mock('../channels/channel.repository');
+jest.mock('../ai/ai-config.repository');
 jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
 jest.mock('qrcode');
@@ -22,6 +23,7 @@ const {
 } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
+const { getAiConfig } = require('../ai/ai-config.repository');
 const adminChannelsRoutes = require('./admin-channels.routes');
 
 function buildApp() {
@@ -766,7 +768,12 @@ describe('PATCH /api/admin/channels/:id (aiTriageEnabled)', () => {
 });
 
 describe('PATCH /api/admin/channels/:id (aiNightModeEnabled)', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Janela noturna configurada: o caso normal. Sem ela o interruptor não
+    // liga (o modo noturno nunca ativaria, e o canal ficaria "ligado" mentindo).
+    getAiConfig.mockResolvedValue({ nightStartTime: '20:00', nightEndTime: '08:00' });
+  });
 
   const admin = { Authorization: `Bearer ${tokenFor('agent-1', 'admin')}` };
 
@@ -787,6 +794,50 @@ describe('PATCH /api/admin/channels/:id (aiNightModeEnabled)', () => {
 
     expect(updateChannelAiNightModeEnabled).toHaveBeenCalledWith('ch-1', true);
     expect(res.body.aiNightModeEnabled).toBe(true);
+  });
+
+  // Revisão final do branch: sem janela (os dois campos vazios no cartão de
+  // triagem) o modo noturno NUNCA ativa. O interruptor ligado no canal seria um
+  // "está ligado" que não atende ninguém — e o admin só descobriria de manhã.
+  test('recusa ligar o modo noturno sem a janela configurada', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
+    getAiConfig.mockResolvedValue({ nightStartTime: null, nightEndTime: null });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiNightModeEnabled: true });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('aiNightModeEnabled requires the night window (nightStartTime/nightEndTime) in the AI triage config');
+    expect(updateChannelAiNightModeEnabled).not.toHaveBeenCalled();
+  });
+
+  test('recusa ligar com meia janela (só o início)', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
+    getAiConfig.mockResolvedValue({ nightStartTime: '20:00', nightEndTime: null });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiNightModeEnabled: true });
+
+    expect(res.status).toBe(400);
+    expect(updateChannelAiNightModeEnabled).not.toHaveBeenCalled();
+  });
+
+  test('desligar não exige janela nenhuma', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
+    getAiConfig.mockResolvedValue({ nightStartTime: null, nightEndTime: null });
+    updateChannelAiNightModeEnabled.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true, aiNightModeEnabled: false });
+
+    await request(buildApp())
+      .patch('/api/admin/channels/ch-1')
+      .set(admin)
+      .send({ aiNightModeEnabled: false })
+      .expect(200);
+
+    expect(updateChannelAiNightModeEnabled).toHaveBeenCalledWith('ch-1', false);
   });
 
   test('recusa ligar o modo noturno sem a triagem ligada', async () => {

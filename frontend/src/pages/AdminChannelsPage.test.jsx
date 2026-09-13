@@ -481,6 +481,29 @@ describe('AdminChannelsPage', () => {
     expect(await screen.findByText('aiNightModeEnabled requires aiTriageEnabled')).toBeInTheDocument();
   });
 
+  // Revisão final do branch: a recusa por janela vazia é o erro que o admin
+  // mais vai ver (a config sai do banco sem janela). Ele precisa ler o motivo
+  // na tela, não descobrir de manhã que o noturno nunca ativou.
+  test('mostra a recusa por janela noturna não configurada', async () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', aiEnabled: true, aiTriageEnabled: true, aiNightModeEnabled: false }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    setChannelAiNightModeEnabled.mockRejectedValue({
+      body: { error: 'aiNightModeEnabled requires the night window (nightStartTime/nightEndTime) in the AI triage config' },
+    });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /atendimento noturno com ia/i }));
+
+    expect(await screen.findByText(/requires the night window/i)).toBeInTheDocument();
+  });
+
   test('lets an admin edit the WABA ID of a meta_cloud channel', async () => {
     useChannels.mockReturnValue({
       channels: [{ id: 'ch1', type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000', status: 'disconnected', triageEnabled: false, wabaId: 'old-waba' }],

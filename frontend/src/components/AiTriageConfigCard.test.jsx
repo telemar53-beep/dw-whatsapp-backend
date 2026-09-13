@@ -52,8 +52,10 @@ describe('AiTriageConfigCard', () => {
         triageTimeoutMinutes: 12,
         triageExtraInstructions: 'Pergunte o CPF antes de tudo',
         triageResolvedReasonId: null,
-        nightStartTime: null,
-        nightEndTime: null,
+        // Config sem janela: os campos nascem com o padrão da spec, e é ele
+        // que vai para o banco quando o admin salva sem mexer neles.
+        nightStartTime: '20:00',
+        nightEndTime: '08:00',
       },
       't'
     ));
@@ -126,8 +128,11 @@ describe('AiTriageConfigCard', () => {
       render(<AiTriageConfigCard />);
 
       const inicio = await screen.findByLabelText(/atendimento noturno com ia — início/i);
+      await userEvent.clear(inicio);
       await userEvent.type(inicio, '19:30');
-      await userEvent.type(screen.getByLabelText(/atendimento noturno com ia — fim/i), '07:00');
+      const fim = screen.getByLabelText(/atendimento noturno com ia — fim/i);
+      await userEvent.clear(fim);
+      await userEvent.type(fim, '07:00');
       await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
 
       await waitFor(() => expect(updateAiTriageConfig).toHaveBeenCalledWith(
@@ -138,12 +143,26 @@ describe('AiTriageConfigCard', () => {
     test('recusa meia janela: só o início preenchido', async () => {
       render(<AiTriageConfigCard />);
 
-      const inicio = await screen.findByLabelText(/atendimento noturno com ia — início/i);
-      await userEvent.type(inicio, '19:30');
+      await screen.findByLabelText(/atendimento noturno com ia — início/i);
+      await userEvent.clear(screen.getByLabelText(/atendimento noturno com ia — fim/i));
       await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
 
       expect(await screen.findByText('Informe início e fim do atendimento noturno, ou deixe os dois vazios')).toBeInTheDocument();
       expect(updateAiTriageConfig).not.toHaveBeenCalled();
+    });
+
+    // Revisão final do branch: a config saía do banco sem janela (os dois
+    // campos NULL) e o cartão mostrava dois campos vazios — o admin ligava o
+    // interruptor no canal achando que bastava, e o modo noturno nunca ativava.
+    test('config sem janela: os campos nascem no padrão da spec (20:00 / 08:00)', async () => {
+      render(<AiTriageConfigCard />);
+      expect(await screen.findByLabelText(/atendimento noturno com ia — início/i)).toHaveValue('20:00');
+      expect(screen.getByLabelText(/atendimento noturno com ia — fim/i)).toHaveValue('08:00');
+    });
+
+    test('o texto de ajuda avisa que a janela precisa ser salva antes de ligar o canal', async () => {
+      render(<AiTriageConfigCard />);
+      expect(await screen.findByText(/salve a janela antes de ligar/i)).toBeInTheDocument();
     });
   });
 });

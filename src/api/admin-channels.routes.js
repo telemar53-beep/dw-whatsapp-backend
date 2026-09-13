@@ -18,6 +18,7 @@ const {
   countChannelDependents,
   deleteChannel,
 } = require('../channels/channel.repository');
+const { getAiConfig } = require('../ai/ai-config.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { isOfficialChannelType } = require('../channels/channel-types');
@@ -236,6 +237,16 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     }
     if (aiNightModeEnabled === true && !(existing.aiEnabled && existing.aiTriageEnabled)) {
       return res.status(400).json({ error: 'aiNightModeEnabled requires aiTriageEnabled' });
+    }
+    // Sem janela (os dois campos vazios no cartão "Triagem com IA") o modo
+    // noturno nunca ativa: isNightModeActive exige início E fim. Ligar o
+    // interruptor assim deixaria o canal dizendo "ligado" sem atender ninguém,
+    // e o admin só descobriria de manhã. Desligar continua livre.
+    if (aiNightModeEnabled === true) {
+      const aiConfig = await getAiConfig();
+      if (!aiConfig || !aiConfig.nightStartTime || !aiConfig.nightEndTime) {
+        return res.status(400).json({ error: 'aiNightModeEnabled requires the night window (nightStartTime/nightEndTime) in the AI triage config' });
+      }
     }
     channel = await updateChannelAiNightModeEnabled(req.params.id, aiNightModeEnabled);
     if (!channel) {

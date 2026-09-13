@@ -767,7 +767,7 @@ describe('enviar_boleto', () => {
   test('sem fatura em aberto, não envia nada', async () => {
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
     const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
-    expect(r).toEqual({ enviado: false, motivo: 'Nenhuma fatura em aberto' });
+    expect(r).toEqual({ enviado: false, motivo: 'Nenhuma fatura em aberto em nenhum contrato do cliente.' });
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 
@@ -888,7 +888,7 @@ describe('enviar_boleto', () => {
     test('sem fatura em aberto: sucesso false', async () => {
       sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
       const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
-      expect(r).toEqual({ sucesso: false, motivo: 'Nenhuma fatura em aberto' });
+      expect(r).toEqual({ sucesso: false, motivo: 'Nenhuma fatura em aberto em nenhum contrato do cliente.' });
       expect(enviarPix).not.toHaveBeenCalled();
     });
   });
@@ -912,6 +912,166 @@ describe('enviar_boleto', () => {
     expect(r).toEqual({ ok: false, erro: 'enviar_boleto is only available during AI triage' });
     expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+});
+
+// Teste real 2026-09-13: cliente com dois contratos, fatura em aberto só num
+// deles. O modelo chamou gerar_pix no contrato ERRADO e respondeu "não
+// encontrei fatura em aberto" — apesar de o prompt mandar consultar todos os
+// contratos antes. A garantia passa a estar no código: a ferramenta procura
+// nos demais contratos DO PRÓPRIO CONTATO antes de dizer que não há nada.
+describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / gerar_segunda_via)', () => {
+  const CONTRATOS = [{ id: 17402, address: 'RUA J.K., 544' }, { id: 17405, address: 'AGENOR COSTA, 523' }];
+  const ctx = (contracts = CONTRATOS) => ({
+    conversationId: 'c-1', channelId: 'ch-1', contracts, identidade: { nivel: 'forte' },
+  });
+  const comFatura = (id, valor) => ({
+    hasOpenInvoice: true,
+    duplicates: [{ id: `f-${id}`, value: valor, dueDate: '2026-09-20', pixCode: `pix-${id}`, barCode: `b-${id}`, boletoLink: `https://x/${id}.pdf` }],
+  });
+  const semFatura = { hasOpenInvoice: false, duplicates: [] };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+    saveMediaFile.mockResolvedValue('abc.pdf');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-9' });
+    enviarPix.mockResolvedValue([{ id: 'm-cartao' }, { id: 'm-codigo' }]);
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, status: 'waiting', triageState: 'pending' });
+  });
+
+  describe('gerar_pix', () => {
+    test('(a) contrato pedido sem fatura e o outro com: entrega a do outro e diz qual', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (id === 17405 ? comFatura(17405, 135) : semFatura));
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+      expect(r.enviado).toBe(true);
+      expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' });
+      expect(r.valor).toBe(135);
+      expect(enviarPix).toHaveBeenCalledWith(expect.objectContaining({
+        fatura: expect.objectContaining({ id: 'f-17405', pixCode: 'pix-17405' }), sentBy: 'ai',
+      }));
+      expect(r.instrucao).toMatch(/de qual endereço é a fatura/i);
+    });
+
+    test('(b) contrato pedido já tem fatura: entrega essa sem consultar o outro', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => comFatura(id, id === 17402 ? 100 : 200));
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+      expect(r.enviado).toBe(true);
+      expect(r.valor).toBe(100);
+      expect(r).not.toHaveProperty('contratoUsado');
+      expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
+      expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(17402);
+    });
+
+    test('(c) nenhum contrato com fatura: diz que não há em nenhum e não envia nada', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue(semFatura);
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ sucesso: false, motivo: 'Nenhuma fatura em aberto em nenhum contrato do cliente.' });
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    test('(d) mais de um outro contrato com fatura: devolve os endereços e não envia nada', async () => {
+      const contratos = [...CONTRATOS, { id: 17410, address: 'AV. BRASIL, 10' }];
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (id === 17402 ? semFatura : comFatura(id, 50)));
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx(contratos));
+      expect(r.sucesso).toBe(false);
+      expect(r.motivo).toBe('Este contrato não tem fatura em aberto, mas outros têm.');
+      expect(r.contratosComFatura).toEqual([
+        expect.objectContaining({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' }),
+        expect.objectContaining({ contratoId: 17410, endereco: 'AV. BRASIL, 10' }),
+      ]);
+      expect(r.instrucao).toMatch(/gerar_pix/);
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    test('(e) a consulta do outro contrato falha: diz que a consulta foi incompleta e não envia nada', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => {
+        if (id === 17402) return semFatura;
+        throw new Error('SGP fora do ar');
+      });
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ sucesso: false, motivo: 'Nenhuma fatura em aberto encontrada; a consulta de um dos contratos falhou.' });
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    // O assistente clássico (humano no comando) também se beneficia da busca,
+    // mas continua só sugerindo o código — sem enviar nada ao cliente.
+    test('fora da triagem, acha no outro contrato e devolve contratoUsado sem enviar', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (id === 17405 ? comFatura(17405, 135) : semFatura));
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, { conversationId: 'c-1', channelId: 'ch-1', contracts: CONTRATOS });
+      expect(r).toEqual({
+        sucesso: true, valor: 135, vencimento: '2026-09-20', pixCopiaCola: 'pix-17405',
+        contratoUsado: { contratoId: 17405, endereco: 'AGENOR COSTA, 523' },
+      });
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('enviar_boleto', () => {
+    test('(a) contrato pedido sem fatura e o outro com: envia o boleto do outro', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (id === 17405 ? comFatura(17405, 135) : semFatura));
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r.enviado).toBe(true);
+      expect(r.valor).toBe(135);
+      expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' });
+      expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/17405.pdf');
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ messageType: 'document', sentBy: 'ai' }));
+    });
+
+    test('(b) contrato pedido já tem fatura: envia essa sem consultar o outro', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => comFatura(id, id === 17402 ? 100 : 200));
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ enviado: true, valor: 100, vencimento: '2026-09-20' });
+      expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
+      expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/17402.pdf');
+    });
+
+    test('(c) nenhum contrato com fatura: diz que não há em nenhum e não envia nada', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue(semFatura);
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ enviado: false, motivo: 'Nenhuma fatura em aberto em nenhum contrato do cliente.' });
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('(d) mais de um outro contrato com fatura: devolve os endereços e não envia nada', async () => {
+      const contratos = [...CONTRATOS, { id: 17410, address: 'AV. BRASIL, 10' }];
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (id === 17402 ? semFatura : comFatura(id, 50)));
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx(contratos));
+      expect(r.enviado).toBe(false);
+      expect(r.motivo).toBe('Este contrato não tem fatura em aberto, mas outros têm.');
+      expect(r.contratosComFatura).toEqual([
+        expect.objectContaining({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' }),
+        expect.objectContaining({ contratoId: 17410, endereco: 'AV. BRASIL, 10' }),
+      ]);
+      expect(r.instrucao).toMatch(/enviar_boleto/);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('(e) a consulta do outro contrato falha: diz que a consulta foi incompleta e não envia nada', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => {
+        if (id === 17402) return semFatura;
+        throw new Error('SGP fora do ar');
+      });
+      const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ enviado: false, motivo: 'Nenhuma fatura em aberto encontrada; a consulta de um dos contratos falhou.' });
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('gerar_segunda_via', () => {
+    test('(a) contrato pedido sem fatura e o outro com: devolve a do outro e diz qual', async () => {
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (id === 17405 ? comFatura(17405, 135) : semFatura));
+      const r = await findTool('gerar_segunda_via').executar({ contratoId: 17402 }, ctx());
+      expect(r.temFaturaAberta).toBe(true);
+      expect(r.faturas).toEqual([{ faturaId: 'f-17405', vencimento: '2026-09-20', valor: 135, linhaDigitavel: 'b-17405', linkBoleto: 'https://x/17405.pdf' }]);
+      expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' });
+    });
+
+    test('(c) nenhum contrato com fatura: diz que não há em nenhum', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue(semFatura);
+      const r = await findTool('gerar_segunda_via').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ temFaturaAberta: false, faturas: [], motivo: 'Nenhuma fatura em aberto em nenhum contrato do cliente.' });
+    });
   });
 });
 

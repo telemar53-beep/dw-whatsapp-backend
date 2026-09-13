@@ -82,6 +82,66 @@ async function saiuDaTriagem(conversationId) {
   );
 }
 
+/**
+ * Procura a fatura em aberto no contrato pedido e, se não houver, nos DEMAIS
+ * contratos do cliente. Teste real 2026-09-13: cliente com dois contratos, o
+ * modelo chamou gerar_pix no contrato sem fatura e respondeu "não encontrei
+ * fatura em aberto" — mesmo com o prompt mandando consultar todos antes. A
+ * garantia tem que estar no código, não na obediência do modelo.
+ *
+ * Propriedade: os contratos alternativos saem de contexto.contracts, que o
+ * servidor carregou a partir do CPF do PRÓPRIO contato — a troca de contrato
+ * nunca sai do dono, não há id vindo do modelo aqui.
+ *
+ * Devolve uma de quatro formas:
+ * - fatura achada: { resultado, contratoId, trocouContrato, endereco? }
+ * - nenhuma em lugar nenhum: { semFaturaEmNenhum: true, consultaIncompleta? }
+ * - mais de um outro contrato com fatura: { varios: [{ contratoId, endereco, plano }] }
+ */
+async function faturaEmAlgumContrato(contratoPedido, contexto) {
+  const principal = await sgpClient.getDuplicateInvoice(contratoPedido);
+  // O caminho feliz continua sendo UMA chamada só ao SGP: só quem não tem
+  // fatura no contrato pedido paga a consulta dos outros.
+  if (principal.hasOpenInvoice) {
+    return { resultado: principal, contratoId: contratoPedido, trocouContrato: false };
+  }
+
+  const outros = ((contexto && contexto.contracts) || []).filter((c) => c.id !== contratoPedido);
+  if (outros.length === 0) {
+    return { resultado: principal, contratoId: contratoPedido, trocouContrato: false, semFaturaEmNenhum: true };
+  }
+
+  // allSettled: um contrato com falha no SGP não pode esconder os outros —
+  // mesma escolha de consultar_faturas_todos_contratos. Em paralelo cabe no
+  // timeoutMs de 40 s que estas ferramentas já declaram.
+  const resultados = await Promise.allSettled(outros.map((c) => sgpClient.getDuplicateInvoice(c.id)));
+  let consultaIncompleta = false;
+  const comFatura = [];
+  resultados.forEach((r, i) => {
+    if (r.status !== 'fulfilled') {
+      consultaIncompleta = true;
+      return;
+    }
+    if (r.value && r.value.hasOpenInvoice) comFatura.push({ contrato: outros[i], resultado: r.value });
+  });
+
+  if (comFatura.length === 1) {
+    const { contrato, resultado } = comFatura[0];
+    return { resultado, contratoId: contrato.id, trocouContrato: true, endereco: normalizeContract(contrato).endereco };
+  }
+  if (comFatura.length === 0) {
+    // consultaIncompleta muda a frase: "não há fatura" e "não consegui olhar
+    // um dos contratos" não são a mesma resposta para o cliente.
+    return { semFaturaEmNenhum: true, ...(consultaIncompleta ? { consultaIncompleta: true } : {}) };
+  }
+  return {
+    varios: comFatura.map(({ contrato }) => {
+      const n = normalizeContract(contrato);
+      return { contratoId: contrato.id, endereco: n.endereco, plano: n.plano };
+    }),
+  };
+}
+
 /** Busca no cache do turno; só chama o SGP se ainda não houver nada. */
 async function contratoDoCache(contexto, contratoId) {
   const achado = (contexto.contracts || []).find((c) => c.id === contratoId);
@@ -378,14 +438,35 @@ const TOOLS = [
     },
     validar: validarContratoId,
     async executar(args, contexto) {
-      const result = await sgpClient.getDuplicateInvoice(args.contratoId);
-      if (!result.hasOpenInvoice) return { temFaturaAberta: false, faturas: [] };
+      const busca = await faturaEmAlgumContrato(args.contratoId, contexto);
+      if (busca.varios) {
+        return {
+          temFaturaAberta: false,
+          faturas: [],
+          motivo: 'Este contrato não tem fatura em aberto, mas outros têm.',
+          contratosComFatura: busca.varios,
+          instrucao: 'Pergunte de qual endereço ele quer a segunda via, citando os endereços, e chame gerar_segunda_via de novo com o contratoId escolhido.',
+        };
+      }
+      if (busca.semFaturaEmNenhum) {
+        return {
+          temFaturaAberta: false,
+          faturas: [],
+          motivo: busca.consultaIncompleta
+            ? 'Nenhuma fatura em aberto encontrada; a consulta de um dos contratos falhou.'
+            : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
+        };
+      }
+      const result = busca.resultado;
       const resposta = {
         temFaturaAberta: true,
         faturas: result.duplicates.map((d) => ({
           faturaId: d.id, vencimento: d.dueDate, valor: d.value,
           linhaDigitavel: d.barCode, linkBoleto: d.boletoLink,
         })),
+        // A fatura pode ter vindo de OUTRO contrato do mesmo cliente: o modelo
+        // precisa disso para dizer de qual endereço é o boleto.
+        ...(busca.trocouContrato ? { contratoUsado: { contratoId: busca.contratoId, endereco: busca.endereco } } : {}),
       };
       // Mesma marcação de gerar_pix: na triagem, gerar a segunda via já
       // resolve o pedido do cliente sem precisar de um atendente humano.
@@ -408,14 +489,35 @@ const TOOLS = [
     },
     validar: validarContratoId,
     async executar(args, contexto) {
-      const result = await sgpClient.getDuplicateInvoice(args.contratoId);
-      if (!result.hasOpenInvoice) return { sucesso: false, motivo: 'Nenhuma fatura em aberto' };
-      const primeira = result.duplicates[0];
+      // Vale para os DOIS ramos (triagem e assistente): o atendente humano
+      // também pedia o PIX do contrato errado e ouvia "não há fatura".
+      const busca = await faturaEmAlgumContrato(args.contratoId, contexto);
+      if (busca.varios) {
+        return {
+          sucesso: false,
+          motivo: 'Este contrato não tem fatura em aberto, mas outros têm.',
+          contratosComFatura: busca.varios,
+          instrucao: 'Pergunte de qual endereço ele quer o PIX, citando os endereços, e chame gerar_pix de novo com o contratoId escolhido.',
+        };
+      }
+      if (busca.semFaturaEmNenhum) {
+        return {
+          sucesso: false,
+          motivo: busca.consultaIncompleta
+            ? 'Nenhuma fatura em aberto encontrada; a consulta de um dos contratos falhou.'
+            : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
+        };
+      }
+      const primeira = busca.resultado.duplicates[0];
+      const contratoUsado = busca.trocouContrato
+        ? { contratoId: busca.contratoId, endereco: busca.endereco }
+        : null;
 
       // Fora da triagem (assistente clássico, humano no comando): mantém o
       // comportamento antigo — só sugere o código para o atendente decidir.
       if (!perfilTriagem(contexto)) {
         const resposta = { sucesso: true, valor: primeira.value, vencimento: primeira.dueDate, pixCopiaCola: primeira.pixCode };
+        if (contratoUsado) resposta.contratoUsado = contratoUsado;
         if (contexto && contexto.identidade) contexto.resolvidoPelaIa = true;
         return resposta;
       }
@@ -439,7 +541,8 @@ const TOOLS = [
         enviado: true,
         valor: primeira.value,
         vencimento: primeira.dueDate,
-        instrucao: 'O PIX já foi enviado ao cliente nesta conversa (cartão e código copia e cola). Confirme em UMA frase curta. NÃO repita o código nem o valor.',
+        ...(contratoUsado ? { contratoUsado } : {}),
+        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão e código copia e cola). Confirme em UMA frase curta. NÃO repita o código nem o valor.${contratoUsado ? ' Diga ao cliente de qual endereço é a fatura.' : ''}`,
       };
     },
   },
@@ -643,9 +746,27 @@ const TOOLS = [
       // ferramenta de assistente/humano-no-comando. perfilTriagem (não só
       // contexto.identidade) para não reabrir com um identidade: null bugado.
       if (!perfilTriagem(contexto)) return erro('enviar_boleto is only available during AI triage');
-      const result = await sgpClient.getDuplicateInvoice(args.contratoId);
-      if (!result.hasOpenInvoice) return { enviado: false, motivo: 'Nenhuma fatura em aberto' };
-      const primeira = result.duplicates[0];
+      const busca = await faturaEmAlgumContrato(args.contratoId, contexto);
+      if (busca.varios) {
+        return {
+          enviado: false,
+          motivo: 'Este contrato não tem fatura em aberto, mas outros têm.',
+          contratosComFatura: busca.varios,
+          instrucao: 'Pergunte de qual endereço ele quer o boleto, citando os endereços, e chame enviar_boleto de novo com o contratoId escolhido.',
+        };
+      }
+      if (busca.semFaturaEmNenhum) {
+        return {
+          enviado: false,
+          motivo: busca.consultaIncompleta
+            ? 'Nenhuma fatura em aberto encontrada; a consulta de um dos contratos falhou.'
+            : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
+        };
+      }
+      const primeira = busca.resultado.duplicates[0];
+      const contratoUsado = busca.trocouContrato
+        ? { contratoId: busca.contratoId, endereco: busca.endereco }
+        : null;
       if (!primeira.boletoLink) return { enviado: false, motivo: 'Boleto sem link para download' };
       const buffer = await sgpClient.downloadBoletoPdf(primeira.boletoLink);
       const mediaPath = await saveMediaFile(buffer, '.pdf');
@@ -667,7 +788,9 @@ const TOOLS = [
       // Mesma razão de gerar_pix: a flag persistida é o que autoriza
       // encerrar_atendimento num turno posterior à entrega.
       await markTriageResolvedByAi(contexto.conversationId);
-      return { enviado: true, valor: primeira.value, vencimento: primeira.dueDate };
+      // contratoUsado só aparece quando a fatura veio de OUTRO contrato do
+      // mesmo cliente — o modelo precisa dizer de qual endereço é o boleto.
+      return { enviado: true, valor: primeira.value, vencimento: primeira.dueDate, ...(contratoUsado ? { contratoUsado } : {}) };
     },
   },
   {

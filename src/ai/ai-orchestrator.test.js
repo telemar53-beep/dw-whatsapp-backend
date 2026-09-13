@@ -15,7 +15,7 @@ const { listRecentMessagesByConversation } = require('../conversations/message.r
 const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
-const { runAiTurn, FERRAMENTAS_TRIAGEM } = require('./ai-orchestrator');
+const { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO } = require('./ai-orchestrator');
 
 const CONVERSATION = { id: 'c-1', channelId: 'ch-1' };
 const CONTACT = { id: 'ct-1', sgpClientId: null, sgpContractId: null, sgpDocument: null };
@@ -450,6 +450,37 @@ describe('perfil de triagem', () => {
       'consultar_plano', 'transferir_atendimento', 'definir_motivo_atendimento',
       'desbloqueio_confianca', 'consultar_financeiro', 'consultar_faturas',
     ]));
+  });
+
+  describe('perfil noturno', () => {
+    const NOTURNO = { ...TRIAGEM, maxQuestions: 4, noturno: { ativo: true, retornoAs: '08:00' } };
+
+    test('à noite a lista fixa ganha desbloqueio_confianca; de dia não', async () => {
+      const req = await contexto({ triagem: NOTURNO });
+      const nomes = req.tools.map((t) => t.function.name);
+      expect(nomes).toEqual(expect.arrayContaining(['desbloqueio_confianca']));
+      // analisar_comprovante já está na lista noturna, mas a ferramenta em si
+      // só nasce na Task 3: toOpenAiTools filtra por nome registrado, então um
+      // nome sem ferramenta é ignorado em silêncio e ainda não vai à OpenAI.
+      expect(FERRAMENTAS_TRIAGEM_NOTURNO).toContain('analisar_comprovante');
+      jest.clearAllMocks();
+      createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
+      const dia = await contexto();
+      expect(dia.tools.map((t) => t.function.name)).not.toEqual(expect.arrayContaining(['desbloqueio_confianca', 'analisar_comprovante']));
+    });
+
+    test('o bloco noturno do prompt cita a hora de retorno e proíbe prometer solução imediata', async () => {
+      const sys = (await contexto({ triagem: NOTURNO })).messages[0].content;
+      expect(sys).toMatch(/MODO NOTURNO/);
+      expect(sys).toMatch(/A equipe volta às 08:00/);
+      expect(sys).toMatch(/Nunca prometa solução imediata/);
+      expect(sys).toMatch(/nossa equipe dá continuidade a partir das 08:00/);
+    });
+
+    test('de dia o prompt não tem o bloco noturno', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).not.toMatch(/MODO NOTURNO/);
+    });
   });
 
   test('o contexto traz setores com orientação, motivos, e identidade só com primeiro nome', async () => {

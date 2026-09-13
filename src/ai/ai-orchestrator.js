@@ -164,6 +164,18 @@ const FERRAMENTAS_TRIAGEM = [
   'gerar_pix', 'gerar_segunda_via', 'enviar_boleto', 'concluir_triagem', 'encerrar_atendimento',
 ];
 
+// À noite não há atendente: a triagem precisa das ferramentas que resolvem
+// sozinha o que sobra (desbloqueio em confiança, leitura de comprovante).
+// 'analisar_comprovante' ainda não existe no registro — toOpenAiTools filtra
+// por nome registrado, então ela só chega à OpenAI quando a ferramenta nascer.
+const FERRAMENTAS_TRIAGEM_NOTURNO = [...FERRAMENTAS_TRIAGEM, 'desbloqueio_confianca', 'analisar_comprovante'];
+
+// A lista fixa da triagem só cresce à noite: descrever ao modelo uma
+// capacidade que ele não tem de dia é o jeito conhecido de ele afirmar que fez.
+function ferramentasDaTriagem(triagem) {
+  return triagem && triagem.noturno && triagem.noturno.ativo ? FERRAMENTAS_TRIAGEM_NOTURNO : FERRAMENTAS_TRIAGEM;
+}
+
 function horaDeBrasilia() {
   return new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false,
@@ -202,9 +214,17 @@ async function montarContextoTriagem(config, identidade, triagem) {
     // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
     // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
     `Agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois.`,
-    '',
-    'Setores (use o id exato em concluir_triagem):',
   ];
+  // Fora do horário comercial não há ninguém para "continuar daqui": o modelo
+  // precisa saber disso ANTES de escrever qualquer promessa ao cliente.
+  if (triagem && triagem.noturno && triagem.noturno.ativo) {
+    linhas.push(
+      '',
+      `MODO NOTURNO: estamos fora do horário comercial e NÃO há atendente agora. Você atende sozinha o que as ferramentas permitem e deixa na fila, com resumo, o que precisa de gente. A equipe volta às ${triagem.noturno.retornoAs}. Nunca prometa solução imediata, técnico ou prazo.`,
+      `Ao concluir para um setor à noite, diga que "nossa equipe dá continuidade a partir das ${triagem.noturno.retornoAs}" — nunca "um atendente continua daqui".`,
+    );
+  }
+  linhas.push('', 'Setores (use o id exato em concluir_triagem):');
   for (const s of setores) linhas.push(`- ${s.id} = ${s.name}${s.aiHint ? ` — ${s.aiHint}` : ''}`);
   linhas.push('', 'Motivos (use o id exato, ou null se nenhum se aplica):');
   for (const m of motivos) linhas.push(`- ${m.id} = ${m.name}`);
@@ -332,7 +352,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   let systemContent;
 
   if (perfil === 'triagem') {
-    tools = toOpenAiTools(FERRAMENTAS_TRIAGEM);
+    tools = toOpenAiTools(ferramentasDaTriagem(triagem));
     // Guarda defensiva: mesmo fallback usado em montarContextoTriagem — um
     // identidade null/undefined não pode derrubar o turno nem deixar
     // contexto.contracts inconsistente com o que o contexto de sistema viu.
@@ -343,7 +363,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // propriedade (chaveProprietario).
     contexto = {
       conversationId: conversation.id, contact, contracts: identidadeEfetiva.contracts || [], sgpCache: {},
-      identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: FERRAMENTAS_TRIAGEM, registroFerramentas: [],
+      identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem), registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
     };
     systemContent = await montarContextoTriagem(config, identidadeEfetiva, triagem);
@@ -559,4 +579,4 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   };
 }
 
-module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM };
+module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, ferramentasDaTriagem };

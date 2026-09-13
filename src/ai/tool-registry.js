@@ -21,6 +21,18 @@ function erro(mensagem) {
   return { ok: false, erro: mensagem };
 }
 
+// Perfil noturno do turno (calculado no worker): null de dia.
+function noturnoDoContexto(contexto) {
+  const t = contexto && contexto.triagem;
+  return t && t.noturno && t.noturno.ativo ? t.noturno : null;
+}
+
+function horaDeSaoPaulo() {
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date());
+}
+
 // Mesmo formato usado em conversations.routes.js: exige os hifens nas posições
 // certas. /^[0-9a-f-]{36}$/i (a versão antiga aqui) aceitava 36 caracteres hex
 // sem hífen nenhum — isso chega ao Postgres e vira erro de cast (22P02) em vez
@@ -994,6 +1006,10 @@ const TOOLS = [
         linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
       }
       linhas.push('', args.resumo);
+      // Quem pega a conversa de manhã precisa ver, na PRIMEIRA linha, que ela
+      // foi atendida sozinha de madrugada e a que horas.
+      const noturno = noturnoDoContexto(contexto);
+      if (noturno) linhas.unshift(`Modo noturno · ${horaDeSaoPaulo()}`);
       const conversa = await concludeAiTriage(contexto.conversationId, {
         sectorId: setor.id, reasonId: motivo ? motivo.id : null, confidence: args.confianca,
         summary: linhas.join('\n'), identifiedBy, lowConfidence: baixa, resolvedByAi: resolvidoPelaIa,
@@ -1003,7 +1019,12 @@ const TOOLS = [
       broadcast('queue:new', { conversation: completa, message: null });
       broadcastToDashboard('dashboard:conversation', { conversation: completa });
       contexto.triagemConcluida = { setor: setor.name };
-      return { concluido: true, setor: setor.name, instrucao: `Responda ao cliente em uma frase: use o primeiro nome se souber, diga que o atendimento vai para o setor ${setor.name} e que um atendente continua daqui. Não faça mais perguntas.` };
+      // À noite não há ninguém para "continuar daqui": a frase de desfecho diz
+      // a hora em que a equipe volta, sem prometer atendimento imediato.
+      const instrucao = noturno
+        ? `Responda ao cliente em uma frase: use o primeiro nome se souber, diga que o atendimento ficou registrado para o setor ${setor.name} e que nossa equipe dá continuidade a partir das ${noturno.retornoAs}. Não faça mais perguntas.`
+        : `Responda ao cliente em uma frase: use o primeiro nome se souber, diga que o atendimento vai para o setor ${setor.name} e que um atendente continua daqui. Não faça mais perguntas.`;
+      return { concluido: true, setor: setor.name, instrucao };
     },
   },
   {
@@ -1050,7 +1071,13 @@ const TOOLS = [
         closedAt: new Date().toISOString(),
       });
       contexto.atendimentoEncerrado = true;
-      return { encerrado: true, instrucao: 'Despeça-se: se ele agradeceu, comece com "Imagina, {nome}! 😊"; diga que qualquer dúvida sobre o pagamento ou ajuda com a internet é só chamar por aqui, e deseje um ótimo dia (ou boa noite).' };
+      const noturno = noturnoDoContexto(contexto);
+      return {
+        encerrado: true,
+        instrucao: noturno
+          ? `Despeça-se: se ele agradeceu, comece com "Imagina, {nome}! 😊"; diga que qualquer dúvida sobre o pagamento ou ajuda com a internet é só chamar por aqui, deseje uma boa noite e, se ele precisar de algo mais, a equipe volta às ${noturno.retornoAs}.`
+          : 'Despeça-se: se ele agradeceu, comece com "Imagina, {nome}! 😊"; diga que qualquer dúvida sobre o pagamento ou ajuda com a internet é só chamar por aqui, e deseje um ótimo dia (ou boa noite).',
+      };
     },
   },
 ];

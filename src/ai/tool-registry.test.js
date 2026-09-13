@@ -1421,6 +1421,29 @@ describe('concluir_triagem', () => {
     expect(concludeAiTriage).not.toHaveBeenCalled();
     expect(broadcast).not.toHaveBeenCalled();
   });
+
+  describe('modo noturno', () => {
+    const NOTURNO = { threshold: 0.8, maxQuestions: 4, attempts: 0, noturno: { ativo: true, retornoAs: '08:00' } };
+
+    test('à noite a frase final promete a equipe a partir da hora de retorno e o resumo abre com o turno noturno', async () => {
+      const c = ctx({ triagem: NOTURNO });
+      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, c);
+      expect(r.concluido).toBe(true);
+      expect(r.instrucao).toMatch(/a partir das 08:00/);
+      expect(r.instrucao).not.toMatch(/um atendente continua daqui/);
+      // O atendente que pega a conversa de manhã precisa ver, na primeira
+      // linha, que ela foi atendida sozinha de madrugada.
+      expect(concludeAiTriage.mock.calls[0][1].summary).toMatch(/^Modo noturno · \d{2}:\d{2}\n/);
+    });
+
+    test('de dia, a frase final e o resumo seguem como hoje', async () => {
+      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, ctx());
+      expect(r.instrucao).toMatch(/um atendente continua daqui/);
+      const summary = concludeAiTriage.mock.calls[0][1].summary;
+      expect(summary.startsWith('Setor: Financeiro')).toBe(true);
+      expect(summary).not.toMatch(/Modo noturno/);
+    });
+  });
 });
 
 
@@ -1520,5 +1543,19 @@ describe('encerrar_atendimento', () => {
     expect(r).toEqual({ encerrado: false, motivo: 'A conversa já saiu da triagem.' });
     expect(broadcastToDashboard).not.toHaveBeenCalled();
     expect(c.atendimentoEncerrado).toBeUndefined();
+  });
+
+  describe('modo noturno', () => {
+    test('à noite a despedida avisa que a equipe volta na hora de retorno', async () => {
+      const c = ctx({ triagem: { threshold: 0.8, maxQuestions: 4, attempts: 0, noturno: { ativo: true, retornoAs: '08:00' } } });
+      const r = await findTool('encerrar_atendimento').executar({}, c);
+      expect(r.encerrado).toBe(true);
+      expect(r.instrucao).toMatch(/a equipe volta às 08:00/);
+    });
+
+    test('de dia a despedida segue como hoje', async () => {
+      const r = await findTool('encerrar_atendimento').executar({}, ctx());
+      expect(r.instrucao).not.toMatch(/a equipe volta às/);
+    });
   });
 });

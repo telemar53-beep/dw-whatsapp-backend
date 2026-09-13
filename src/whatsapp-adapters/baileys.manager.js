@@ -8,7 +8,7 @@ const { setContactAvatarPath, claimContactAvatarRefresh, findContactByPhoneNumbe
 const { applyParsedMessageStatusUpdates } = require('../conversations/message-status.service');
 const { saveMediaFile, deleteMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
 const { broadcast } = require('../realtime/socket-server');
-const { formatarData } = require('../payments/payment-card');
+const { formatarData, formatarValor } = require('../payments/payment-card');
 
 function loadBaileysLib() {
   return require('@whiskeysockets/baileys');
@@ -501,6 +501,12 @@ function buildPixNativeFlowContent(card, channel) {
   const valor = { value: centavos, offset: 100 };
   return {
     interactiveMessage: {
+      // O que o celular mostra como texto do cartão (3º teste real): título em
+      // negrito, corpo e rodapé. O valor em total_amount do botão NÃO aparece
+      // sozinho — sem estas três partes o cartão vinha só com a chave e o botão.
+      header: { title: titulo, hasMediaAttachment: false },
+      body: { text: formatarValor(card.value) },
+      footer: { text: 'Pix para pagamento' },
       nativeFlowMessage: {
         messageVersion: 1,
         buttons: [

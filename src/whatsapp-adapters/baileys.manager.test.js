@@ -1033,6 +1033,10 @@ describe('baileys.manager', () => {
       const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'DW Telecom' });
       expect(Object.keys(content)).toEqual(['interactiveMessage']);
       expect(content.interactiveMessage.nativeFlowMessage.messageVersion).toBe(1);
+      // Título, corpo e rodapé são o texto visível do cartão no celular.
+      expect(content.interactiveMessage.header).toEqual({ title: 'Fatura · vence 15/09/2026', hasMediaAttachment: false });
+      expect(content.interactiveMessage.body.text.replace(/ /g, ' ')).toBe('R$ 135,00');
+      expect(content.interactiveMessage.footer).toEqual({ text: 'Pix para pagamento' });
     });
   });
 

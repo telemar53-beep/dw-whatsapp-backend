@@ -239,6 +239,10 @@ async function montarContextoTriagem(config, identidade, triagem) {
       // que ele usa (analisar_comprovante e desbloqueio_confianca) também só
       // entram na lista da triagem à noite.
       'COMPROVANTE À NOITE: se o cliente enviar uma imagem e disser (ou parecer) que é o pagamento, chame analisar_comprovante (sem perguntar nada antes). Se conferir e o contrato estiver SUSPENSO, chame desbloqueio_confianca do contrato indicado — a ferramenta já avisa o cliente antes de executar; depois responda EXATAMENTE com a frase que ela devolver e conclua para o Financeiro na mesma resposta. Se o comprovante não conferir, ou o contrato estiver ativo, não desbloqueie: agradeça, diga que a equipe confere a partir do horário de retorno e conclua para o Financeiro (motivo "Comprovante" se existir). Se ele pedir liberação SEM comprovante ("paguei, libera"), chame desbloqueio_confianca direto: a regra da casa decide. NUNCA diga "pagamento confirmado" nem "acesso liberado" sem a ferramenta ter devolvido liberado: true.',
+      // O roteiro de conexão só existe à noite e usa as duas ferramentas
+      // básicas de diagnóstico (consultar_status_todos_contratos) e, quando
+      // aplicável, desbloqueio em confiança.
+      `CONEXÃO À NOITE: os mesmos roteiros de Suporte (consulte consultar_status_todos_contratos antes). Depois da pergunta de diagnóstico, faça ATÉ DUAS etapas simples, uma por mensagem: "Pode desligar o equipamento da tomada, esperar 30 segundos e ligar de novo?" e depois "A luz voltou a ficar verde?". Se resolver, conclua para o Suporte dizendo que ficou registrado que a conexão voltou. Se não resolver, conclua para o Suporte respondendo no modelo: "Vou deixar seu atendimento na fila do Suporte com tudo o que verificamos. Nossa equipe dá continuidade a partir das ${triagem.noturno.retornoAs}." Sem prometer técnico nem prazo. Contrato suspenso por pendência: roteiro do suspenso e, se vier comprovante, o roteiro do comprovante.`,
     );
   }
   linhas.push('', 'Setores (use o id exato em concluir_triagem):');

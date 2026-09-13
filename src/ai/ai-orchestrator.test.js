@@ -497,6 +497,13 @@ describe('perfil de triagem', () => {
       expect(dia).not.toMatch(/chame analisar_comprovante/);
     });
 
+    test('à noite o roteiro de conexão tem até duas etapas e o desfecho com a hora de retorno', async () => {
+      const sys = (await contexto({ triagem: NOTURNO })).messages[0].content;
+      expect(sys).toMatch(/CONEXÃO À NOITE/);
+      expect(sys).toMatch(/desligar o equipamento da tomada, esperar 30 segundos e ligar de novo/);
+      expect(sys).toMatch(/Vou deixar seu atendimento na fila do Suporte com tudo o que verificamos\. Nossa equipe dá continuidade a partir das 08:00/);
+    });
+
     test('de dia o prompt não tem o bloco noturno', async () => {
       const sys = (await contexto()).messages[0].content;
       expect(sys).not.toMatch(/MODO NOTURNO/);

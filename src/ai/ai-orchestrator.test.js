@@ -711,7 +711,7 @@ describe('perfil de triagem', () => {
 
   test('o fluxo de Suporte traz os três roteiros do dono e manda consultar o status antes de responder', async () => {
     const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/ANTES de responder, chame consultar_status_contrato e consultar_status_conexao/);
+    expect(sys).toMatch(/ANTES de responder, chame consultar_status_todos_contratos \(UMA chamada, cobre todos os contratos\) e siga a instrução que ela devolver/);
     expect(sys).toMatch(/seu contrato está ativo e sua conexão aparece online no momento/);
     expect(sys).toMatch(/está totalmente sem acesso, com lentidão ou a conexão fica caindo\?/);
     expect(sys).toMatch(/sua conexão está offline no momento/);
@@ -721,6 +721,15 @@ describe('perfil de triagem', () => {
     // A exceção de status vale só no Suporte com identidade confirmada.
     expect(sys).toMatch(/dizer o status do contrato e da conexão no fluxo de SUPORTE/);
     expect(sys).toMatch(/Sem identidade confirmada, o fluxo de Suporte não cita status nenhum/);
+  });
+
+  // Para o dono, "não consegui confirmar aqui o status da conexão... posso
+  // encaminhar para o suporte verificar" é inaceitável: a empresa É o suporte.
+  test('proíbe dizer ao cliente que não conseguiu verificar algo', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo/);
+    expect(sys).toMatch(/a DW Telecom é o suporte/);
+    expect(sys).toMatch(/Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica/);
   });
 
   // Teste real do Suporte (2026-09-13): "vou encaminhar para o Suporte" sem

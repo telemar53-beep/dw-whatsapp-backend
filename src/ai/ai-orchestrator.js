@@ -192,6 +192,11 @@ async function montarContextoTriagem(config, identidade, triagem) {
     'Tom: caloroso e direto, como uma recepcionista simpática. Frases completas e educadas.',
     'Emoji: no máximo um 😊, e SÓ no fluxo do PIX (na saudação ou no agradecimento). No fluxo do BOLETO e em qualquer outro assunto, NENHUM emoji — nem na saudação.',
     'Escreva UMA mensagem por resposta. Os modelos de frase abaixo são base para adaptar (nome, endereço, PIX ou boleto), não texto para colar: nunca escreva uma frase sua e depois o modelo com o mesmo sentido.',
+    // Teste real (2026-09-13): estourado o teto de ferramentas, o modelo
+    // escreveu "não consegui confirmar aqui o status da conexão... posso
+    // encaminhar para o suporte verificar". Para o dono, inaceitável: a
+    // empresa É o suporte, não há para quem encaminhar "a verificação".
+    'NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo: a DW Telecom é o suporte. Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica.',
     // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
     // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
     `Agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois.`,
@@ -265,7 +270,7 @@ async function montarContextoTriagem(config, identidade, triagem) {
     // Roteiros de SUPORTE ditados pelo dono (2026-09-13) depois do teste real
     // em que a IA encaminhou sem consultar nada: primeiro o status, depois
     // UMA pergunta de diagnóstico, e só então o encaminhamento.
-    'SUPORTE (internet lenta, caindo, sem acesso, "está com problema"), cliente com identidade confirmada: ANTES de responder, chame consultar_status_contrato e consultar_status_conexao (com mais de um contrato, consulte todos e fale do que estiver suspenso ou offline, citando o endereço; se todos estiverem ativos e online, pergunte também de qual endereço ele fala). Sem emoji. Depois responda por UM destes modelos, adaptando o nome:',
+    'SUPORTE (internet lenta, caindo, sem acesso, "está com problema"), cliente com identidade confirmada: ANTES de responder, chame consultar_status_todos_contratos (UMA chamada, cobre todos os contratos) e siga a instrução que ela devolver. Sem emoji. Depois responda por UM destes modelos, adaptando o nome:',
     '- Contrato ativo e conexão online: "Verifiquei aqui que seu contrato está ativo e sua conexão aparece online no momento. Mesmo assim, você pode estar enfrentando alguma dificuldade para usar a internet. Me conta: está totalmente sem acesso, com lentidão ou a conexão fica caindo?" Depois da resposta dele, conclua para o Suporte com o relato no resumo.',
     '- Conexão offline: "Verifiquei aqui que sua conexão está offline no momento. Vou te ajudar a verificar o que está acontecendo. Os equipamentos da internet estão ligados? Tem alguma luz vermelha acesa ou piscando?" Depois da resposta dele, conclua para o Suporte com o relato no resumo.',
     '- Contrato suspenso por falta de pagamento: "Verifiquei aqui e consta uma pendência na fatura que deixou o acesso à internet temporariamente suspenso. Pode ser que você já tenha pago e a confirmação ainda não tenha chegado ao sistema. Você chegou a fazer esse pagamento? Assim consigo te orientar no próximo passo." Se ele disser que pagou, peça o comprovante e conclua para o Financeiro (motivo Comprovante, se existir); se disser que não pagou, ofereça o PIX ou o boleto (entregue se ele quiser) e conclua para o Financeiro.',

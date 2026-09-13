@@ -705,6 +705,23 @@ const TOOLS = [
       // arquivo para não explodir.
       if (!contrato) return { liberado: false, motivo: 'Contrato não encontrado entre os contratos do cliente.' };
 
+      const noturno = noturnoDoContexto(contexto);
+      const nome = (contexto.identidade && contexto.identidade.primeiroNome) || 'cliente';
+      const comprovante = contexto.comprovante || null;
+
+      // Com dois contratos, analisar_comprovante devolve o contrato da fatura
+      // que bateu — e o modelo podia pedir a liberação do OUTRO. Seria uma
+      // liberação no contrato errado, com um comprovante que não é dele. Não
+      // é recusa do atendimento: é erro de alvo, então não gasta a tentativa
+      // única nem entra no resumo da fila; a instrução diz qual é o certo.
+      if (comprovante && comprovante.valido === true && comprovante.contratoId && comprovante.contratoId !== args.contratoId) {
+        return {
+          liberado: false,
+          motivo: `O comprovante conferido é da fatura do contrato ${comprovante.contratoId}, não do contrato ${args.contratoId}.`,
+          instrucao: `Chame desbloqueio_confianca de novo com contratoId ${comprovante.contratoId}.`,
+        };
+      }
+
       const status = normalizeContract(contrato).status;
       // A DW não usa velocidade reduzida: só contrato suspenso é elegível.
       if (status !== 'suspenso') {
@@ -724,9 +741,6 @@ const TOOLS = [
       }
       contexto.desbloqueiosTentados.add(args.contratoId);
 
-      const noturno = noturnoDoContexto(contexto);
-      const nome = (contexto.identidade && contexto.identidade.primeiroNome) || 'cliente';
-      const comprovante = contexto.comprovante || null;
       // Frases do dono para as recusas da noite: acolhem, dizem que o registro
       // já existe e NUNCA afirmam liberação. Uma função só para as três saídas
       // (regra da casa, recusa do SGP e resultado indeterminado) não divergirem.

@@ -713,6 +713,34 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(ctx.desbloqueioRealizado).toBeFalsy();
   });
 
+  // Revisão final do branch: com dois contratos, o modelo podia conferir o
+  // comprovante do contrato A (analisar_comprovante devolve o contrato da
+  // fatura que bateu) e pedir a liberação do contrato B. A liberação sairia
+  // no contrato errado, com um comprovante que não é dele.
+  test('comprovante de outro contrato: recusa apontando o contrato certo, sem gastar a tentativa', async () => {
+    const ctx = noturno({
+      contracts: [{ ...SUSPENSO, id: 17402 }, { ...SUSPENSO, id: 17405 }],
+      comprovante: { ...COMPROVANTE, valido: true, contratoId: 17402 },
+    });
+    const tool = findTool('desbloqueio_confianca');
+    const errado = await tool.executar({ contratoId: 17405 }, ctx);
+    expect(errado).toEqual({
+      liberado: false,
+      motivo: 'O comprovante conferido é da fatura do contrato 17402, não do contrato 17405.',
+      instrucao: 'Chame desbloqueio_confianca de novo com contratoId 17402.',
+    });
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    // Não é recusa do atendimento: nada vai para o resumo da fila.
+    expect(ctx.desbloqueioResultado).toBeUndefined();
+
+    // E a tentativa única não foi gasta: a chamada com o contrato certo, no
+    // MESMO contexto, segue o fluxo normal até a liberação.
+    const certo = await tool.executar({ contratoId: 17402 }, ctx);
+    expect(certo.liberado).toBe(true);
+    expect(sgpClient.requestTrustUnlock).toHaveBeenCalledWith(17402);
+  });
+
   test('(d) comprovante que não conferiu recusa sem tocar no SGP', async () => {
     const ctx = noturno({ comprovante: { ...COMPROVANTE, valido: false, motivos: ['valor diferente', 'favorecido não confere'] } });
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);

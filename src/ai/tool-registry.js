@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 const sgpClient = require('../integrations/sgp-client');
 const { normalizeContract, normalizeConnection, normalizeInvoices } = require('./sgp-normalizer');
 const { setContactSgpLink } = require('../conversations/contact.repository');
@@ -10,12 +12,21 @@ const {
 const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
-const { saveMediaFile } = require('../media/media-storage');
+const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { enviarPix, enviarBoleto } = require('../payments/payment-sender');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { primeiroNome } = require('./identity-resolver');
 const { mensagemSegura } = require('./safe-error-log');
+const { findLatestInboundImage } = require('../conversations/message.repository');
+const { analyzeImage } = require('./openai-client');
+const { getAiConfig } = require('./ai-config.repository');
+const { conferirComprovante, PROMPT_VISAO } = require('./comprovante');
+
+// A imagem só sai do servidor depois de passar por estes dois filtros: o
+// que a OpenAI consegue ler de verdade, e um teto de bytes.
+const MIMES_COMPROVANTE = ['image/jpeg', 'image/png', 'image/webp'];
+const TAMANHO_MAXIMO_COMPROVANTE = 5 * 1024 * 1024;
 
 function erro(mensagem) {
   return { ok: false, erro: mensagem };
@@ -761,6 +772,70 @@ const TOOLS = [
       // Sem prazo devolvido, o modelo não pode inventar um "uns 3 dias".
       if (resposta.dias == null && !resposta.pagarAte) resposta.prazoDesconhecido = true;
       return resposta;
+    },
+  },
+  {
+    nome: 'analisar_comprovante',
+    categoria: 'CONSULTA',
+    // Sem parâmetros de propósito: o modelo NUNCA escolhe qual arquivo ler.
+    isentoDeProprietario: true,
+    exigeIdentidadeForte: true,
+    // Orçamento próprio: leitura do disco + visão da OpenAI (60 s) + as
+    // consultas de fatura no SGP. O padrão do executor (15 s) venceria antes.
+    timeoutMs: 90000,
+    descricao: 'Lê o último comprovante de pagamento (imagem) que o cliente enviou nesta conversa e confere valor, data e favorecido contra as faturas em aberto. Só no modo noturno. Use antes de qualquer desbloqueio em confiança motivado por comprovante.',
+    parametros: { type: 'object', properties: {} },
+    validar() { return { ok: true, args: {} }; },
+    async executar(args, contexto) {
+      if (!perfilTriagem(contexto)) return erro('analisar_comprovante is only available during AI triage');
+      if (!noturnoDoContexto(contexto)) return { analisado: false, motivo: 'Leitura de comprovante só no modo noturno.' };
+
+      const imagem = await findLatestInboundImage(contexto.conversationId, { withinMs: 24 * 60 * 60 * 1000 });
+      if (!imagem) return { analisado: false, motivo: 'Nenhuma imagem recebida do cliente nas últimas 24 horas.' };
+      // MIME e tamanho são conferidos ANTES de qualquer leitura do disco: o que
+      // sai daqui para a OpenAI é só imagem, e só imagem pequena.
+      if (!MIMES_COMPROVANTE.includes(imagem.mediaMimeType)) {
+        return { analisado: false, motivo: 'A última imagem não está num formato que dá para ler (use JPG, PNG ou WEBP).' };
+      }
+      let buffer;
+      try {
+        const caminho = getMediaFilePath(imagem.mediaPath);
+        const info = await fs.promises.stat(caminho);
+        if (info.size > TAMANHO_MAXIMO_COMPROVANTE) return { analisado: false, motivo: 'A imagem é grande demais para ler (limite 5 MB).' };
+        buffer = await fs.promises.readFile(caminho);
+      } catch (err) {
+        // O caminho do arquivo não entra no log nem na resposta.
+        console.error(`analisar_comprovante: arquivo indisponível na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+        return { analisado: false, motivo: 'Não foi possível abrir a imagem.' };
+      }
+
+      const config = await getAiConfig();
+      let leitura;
+      try {
+        leitura = await analyzeImage({ apiKey: config.apiKey, model: config.model, imageBuffer: buffer, mimeType: imagem.mediaMimeType, prompt: PROMPT_VISAO });
+      } catch (err) {
+        console.error(`analisar_comprovante: visão falhou na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+        return { analisado: false, motivo: 'Não foi possível ler a imagem agora.' };
+      }
+
+      // Faturas em aberto de TODOS os contratos: o comprovante pode ser do outro ponto.
+      const contratos = contexto.contracts || [];
+      const segundasVias = await Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id)));
+      const faturas = [];
+      segundasVias.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value && r.value.hasOpenInvoice) {
+          for (const d of r.value.duplicates) faturas.push({ id: d.id, value: d.value, dueDate: d.dueDate, contratoId: contratos[i].id });
+        }
+      });
+      const merchant = await sgpClient.getPixMerchant();
+      const nomesAceitos = ['DW', ...(merchant && merchant.name ? [merchant.name] : [])];
+      const conferencia = conferirComprovante({ leitura, faturas, nomesAceitos });
+      const fatura = conferencia.faturaId ? faturas.find((f) => f.id === conferencia.faturaId) : null;
+      const resultado = { analisado: true, ...conferencia, contratoId: fatura ? fatura.contratoId : null };
+      // O veredito fica no contexto do turno para o desbloqueio em confiança
+      // poder consultá-lo sem reler a imagem.
+      contexto.comprovante = { valido: conferencia.valido, contratoId: resultado.contratoId, faturaId: conferencia.faturaId, valor: conferencia.valor, data: conferencia.data, tipo: conferencia.tipo, motivos: conferencia.motivos };
+      return resultado;
     },
   },
   {

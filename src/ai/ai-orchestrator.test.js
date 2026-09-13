@@ -455,14 +455,13 @@ describe('perfil de triagem', () => {
   describe('perfil noturno', () => {
     const NOTURNO = { ...TRIAGEM, maxQuestions: 4, noturno: { ativo: true, retornoAs: '08:00' } };
 
-    test('à noite a lista fixa ganha desbloqueio_confianca; de dia não', async () => {
+    test('à noite a lista fixa ganha desbloqueio_confianca e analisar_comprovante; de dia não', async () => {
       const req = await contexto({ triagem: NOTURNO });
       const nomes = req.tools.map((t) => t.function.name);
-      expect(nomes).toEqual(expect.arrayContaining(['desbloqueio_confianca']));
-      // analisar_comprovante já está na lista noturna, mas a ferramenta em si
-      // só nasce na Task 3: toOpenAiTools filtra por nome registrado, então um
-      // nome sem ferramenta é ignorado em silêncio e ainda não vai à OpenAI.
-      expect(FERRAMENTAS_TRIAGEM_NOTURNO).toContain('analisar_comprovante');
+      // As duas já chegam à OpenAI: com a ferramenta registrada, toOpenAiTools
+      // não filtra mais o nome em silêncio.
+      expect(nomes).toEqual(expect.arrayContaining(['desbloqueio_confianca', 'analisar_comprovante']));
+      expect(FERRAMENTAS_TRIAGEM_NOTURNO).toEqual(expect.arrayContaining(['desbloqueio_confianca', 'analisar_comprovante']));
       jest.clearAllMocks();
       createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
       const dia = await contexto();

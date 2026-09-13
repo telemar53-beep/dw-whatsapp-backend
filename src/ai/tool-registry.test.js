@@ -13,6 +13,8 @@ jest.mock('../payments/payment-sender');
 // (ai_tool_permissions), que pode nem ter linha para a ferramenta.
 jest.mock('./ai-config.repository');
 jest.mock('./triage-close-reason');
+jest.mock('../conversations/message.repository');
+jest.mock('./openai-client');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
@@ -24,12 +26,16 @@ const {
   incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
 } = require('../conversations/conversation.repository');
 const { setContactSgpLink } = require('../conversations/contact.repository');
-const { saveMediaFile } = require('../media/media-storage');
+const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { enviarPix, enviarBoleto } = require('../payments/payment-sender');
-const { isToolEnabled } = require('./ai-config.repository');
+const { isToolEnabled, getAiConfig } = require('./ai-config.repository');
 const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
+const { findLatestInboundImage } = require('../conversations/message.repository');
+const { analyzeImage } = require('./openai-client');
+const { PROMPT_VISAO } = require('./comprovante');
+const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
 const { executeTool } = require('./tool-executor');
@@ -38,7 +44,7 @@ describe('tool-registry', () => {
   test('registers exactly the known tools, sensitive ones included', () => {
     const nomes = listTools().map((t) => t.nome).sort();
     expect(nomes).toEqual([
-      'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas',
+      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas',
       'consultar_faturas_todos_contratos', 'consultar_financeiro',
       'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
       'consultar_status_todos_contratos',
@@ -97,9 +103,13 @@ describe('tool-registry', () => {
     // consultar_status_todos_contratos entrou pela mesma razao de
     // consultar_faturas_todos_contratos: percorre contexto.contracts e nao
     // recebe id nenhum do modelo.
+    // analisar_comprovante entrou pela mesma razão levada ao extremo: ela não
+    // tem parâmetro nenhum. A imagem que ela lê é a última que o cliente
+    // mandou NESTA conversa, escolhida pelo servidor.
     const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
     expect(isentas).toEqual([
-      'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas_todos_contratos',
+      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento',
+      'consultar_faturas_todos_contratos',
       'consultar_status_todos_contratos', 'definir_motivo_atendimento', 'encerrar_atendimento',
       'esquecer_identificacao', 'transferir_atendimento',
     ]);
@@ -1557,5 +1567,183 @@ describe('encerrar_atendimento', () => {
       const r = await findTool('encerrar_atendimento').executar({}, ctx());
       expect(r.instrucao).not.toMatch(/a equipe volta às/);
     });
+  });
+});
+
+// A leitura de comprovante é a única ferramenta que manda um arquivo do
+// servidor para fora. Quem escolhe a imagem é o servidor (a última que o
+// cliente mandou nas 24 h), o modelo não recebe parâmetro nenhum, e o caminho
+// do arquivo nunca volta no resultado nem no contexto.
+describe('analisar_comprovante', () => {
+  const JANELA_24H = 24 * 60 * 60 * 1000;
+  const IMAGEM = { id: 'm-9', mediaPath: 'abc123.png', mediaMimeType: 'image/png', createdAt: new Date() };
+  // A conferência de data usa o dia de hoje em São Paulo: fixar uma data no
+  // teste faria ele apodrecer em uma semana.
+  const hojeEmSaoPaulo = () => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  const LEITURA = { ehComprovante: true, tipo: 'pix', valor: 135, data: hojeEmSaoPaulo(), favorecido: 'DW TELECOM LTDA', banco: 'Nubank', confianca: 0.95 };
+  const ctx = (extra = {}) => ({
+    conversationId: 'c-1',
+    contracts: [{ id: 17402, address: 'RUA X' }],
+    identidade: { nivel: 'forte', primeiroNome: 'Ana' },
+    triagem: { noturno: { ativo: true, retornoAs: '08:00' } },
+    ...extra,
+  });
+  let stat;
+  let readFile;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findLatestInboundImage.mockResolvedValue(IMAGEM);
+    getMediaFilePath.mockReturnValue('/var/midia/abc123.png');
+    stat = jest.spyOn(fs.promises, 'stat').mockResolvedValue({ size: 300 * 1024 });
+    readFile = jest.spyOn(fs.promises, 'readFile').mockResolvedValue(Buffer.from('IMG'));
+    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x' });
+    analyzeImage.mockResolvedValue({ ...LEITURA });
+    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '4321', value: 135, dueDate: '2026-09-16' }] });
+    sgpClient.getPixMerchant.mockResolvedValue({ name: 'DW TELECOM LTDA', key: '12345', keyType: 'cnpj' });
+  });
+
+  afterEach(() => {
+    stat.mockRestore();
+    readFile.mockRestore();
+  });
+
+  test('está registrada sem parâmetros, isenta de dono e exigindo identidade forte', () => {
+    const t = findTool('analisar_comprovante');
+    expect(t.categoria).toBe('CONSULTA');
+    expect(t.parametros).toEqual({ type: 'object', properties: {} });
+    expect(t.isentoDeProprietario).toBe(true);
+    expect(t.exigeIdentidadeForte).toBe(true);
+    // Argumento inventado pelo modelo não vira caminho de arquivo nenhum.
+    expect(t.validar({ mediaPath: '../../etc/passwd' })).toEqual({ ok: true, args: {} });
+  });
+
+  test('(a) fora da triagem: recusa sem tocar em arquivo nenhum', async () => {
+    const r = await findTool('analisar_comprovante').executar({}, { conversationId: 'c-1' });
+    expect(r.ok).toBe(false);
+    expect(findLatestInboundImage).not.toHaveBeenCalled();
+  });
+
+  test('(b) de dia: leitura de comprovante não roda', async () => {
+    const r = await findTool('analisar_comprovante').executar({}, ctx({ triagem: { noturno: { ativo: false, retornoAs: null } } }));
+    expect(r).toEqual({ analisado: false, motivo: 'Leitura de comprovante só no modo noturno.' });
+    expect(findLatestInboundImage).not.toHaveBeenCalled();
+  });
+
+  test('(c) sem imagem do cliente nas últimas 24 horas', async () => {
+    findLatestInboundImage.mockResolvedValue(null);
+    const r = await findTool('analisar_comprovante').executar({}, ctx());
+    expect(findLatestInboundImage).toHaveBeenCalledWith('c-1', { withinMs: JANELA_24H });
+    expect(r).toEqual({ analisado: false, motivo: 'Nenhuma imagem recebida do cliente nas últimas 24 horas.' });
+    expect(analyzeImage).not.toHaveBeenCalled();
+  });
+
+  test('(d) MIME fora da lista (PDF) não vai para a OpenAI', async () => {
+    findLatestInboundImage.mockResolvedValue({ ...IMAGEM, mediaMimeType: 'application/pdf' });
+    const r = await findTool('analisar_comprovante').executar({}, ctx());
+    expect(r.analisado).toBe(false);
+    expect(analyzeImage).not.toHaveBeenCalled();
+    expect(readFile).not.toHaveBeenCalled();
+  });
+
+  test('(e) imagem acima de 5 MB não é lida do disco nem enviada', async () => {
+    stat.mockResolvedValue({ size: 6 * 1024 * 1024 });
+    const r = await findTool('analisar_comprovante').executar({}, ctx());
+    expect(r.analisado).toBe(false);
+    expect(r.motivo).toMatch(/5 MB/);
+    expect(readFile).not.toHaveBeenCalled();
+    expect(analyzeImage).not.toHaveBeenCalled();
+  });
+
+  test('(f) caminho feliz: manda o buffer com o prompt de visão e devolve o veredito conferido', async () => {
+    const c = ctx();
+    const r = await findTool('analisar_comprovante').executar({}, c);
+
+    expect(analyzeImage).toHaveBeenCalledWith({
+      apiKey: 'sk', model: 'gpt-x', imageBuffer: Buffer.from('IMG'),
+      mimeType: 'image/png', prompt: PROMPT_VISAO,
+    });
+    expect(r).toMatchObject({
+      analisado: true, valido: true, tipo: 'pix', valor: 135, data: LEITURA.data,
+      favorecidoConfere: true, dataConfere: true, valorConfere: true,
+      contratoId: 17402, faturaId: '4321', motivos: [],
+    });
+    expect(c.comprovante).toEqual({
+      valido: true, contratoId: 17402, faturaId: '4321', valor: 135,
+      data: LEITURA.data, tipo: 'pix', motivos: [],
+    });
+  });
+
+  test('(f) consulta as faturas de TODOS os contratos: o comprovante pode ser do outro ponto', async () => {
+    sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (id === 17403
+      ? { hasOpenInvoice: true, duplicates: [{ id: '9999', value: 135, dueDate: '2026-09-18' }] }
+      : { hasOpenInvoice: false, duplicates: [] }));
+    const c = ctx({ contracts: [{ id: 17402, address: 'RUA X' }, { id: 17403, address: 'RUA Y' }] });
+
+    const r = await findTool('analisar_comprovante').executar({}, c);
+
+    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(17402);
+    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(17403);
+    expect(r.faturaId).toBe('9999');
+    expect(r.contratoId).toBe(17403);
+  });
+
+  test('um contrato que falha no SGP não derruba a conferência dos outros', async () => {
+    sgpClient.getDuplicateInvoice.mockImplementation(async (id) => {
+      if (id === 17402) throw new Error('SGP fora do ar');
+      return { hasOpenInvoice: true, duplicates: [{ id: '9999', value: 135, dueDate: '2026-09-18' }] };
+    });
+    const r = await findTool('analisar_comprovante').executar({}, ctx({ contracts: [{ id: 17402 }, { id: 17403 }] }));
+    expect(r.analisado).toBe(true);
+    expect(r.faturaId).toBe('9999');
+  });
+
+  test('o caminho do arquivo nunca aparece no resultado nem no contexto', async () => {
+    const c = ctx();
+    const r = await findTool('analisar_comprovante').executar({}, c);
+    const serializado = JSON.stringify(r) + JSON.stringify(c.comprovante);
+    expect(r).not.toHaveProperty('mediaPath');
+    expect(serializado).not.toContain('abc123.png');
+    expect(serializado).not.toContain('/var/midia');
+  });
+
+  test('(g) visão falhou: não inventa veredito e não marca nada no contexto', async () => {
+    analyzeImage.mockRejectedValue(new Error('timeout'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = ctx();
+    const r = await findTool('analisar_comprovante').executar({}, c);
+    expect(r).toEqual({ analisado: false, motivo: 'Não foi possível ler a imagem agora.' });
+    expect(c.comprovante).toBeUndefined();
+    erroSpy.mockRestore();
+  });
+
+  test('arquivo sumiu do disco: recusa limpa, sem o caminho no resultado', async () => {
+    readFile.mockRejectedValue(new Error('ENOENT: no such file /var/midia/abc123.png'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await findTool('analisar_comprovante').executar({}, ctx());
+    expect(r).toEqual({ analisado: false, motivo: 'Não foi possível abrir a imagem.' });
+    expect(analyzeImage).not.toHaveBeenCalled();
+    erroSpy.mockRestore();
+  });
+
+  test('comprovante que não confere volta inválido com os motivos, e o contexto registra', async () => {
+    analyzeImage.mockResolvedValue({ ...LEITURA, valor: 500, favorecido: 'Loja do Joao' });
+    const c = ctx();
+    const r = await findTool('analisar_comprovante').executar({}, c);
+    expect(r.analisado).toBe(true);
+    expect(r.valido).toBe(false);
+    expect(r.motivos).toEqual(expect.arrayContaining([
+      'favorecido não é a DW', 'valor não corresponde a nenhuma fatura em aberto',
+    ]));
+    expect(r.contratoId).toBeNull();
+    expect(c.comprovante.valido).toBe(false);
+  });
+
+  test('sem recebedor PIX cadastrado em Integrações, o nome DW ainda é aceito', async () => {
+    sgpClient.getPixMerchant.mockResolvedValue(null);
+    const r = await findTool('analisar_comprovante').executar({}, ctx());
+    expect(r.favorecidoConfere).toBe(true);
   });
 });

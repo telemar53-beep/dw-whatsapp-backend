@@ -166,8 +166,8 @@ const FERRAMENTAS_TRIAGEM = [
 
 // À noite não há atendente: a triagem precisa das ferramentas que resolvem
 // sozinha o que sobra (desbloqueio em confiança, leitura de comprovante).
-// 'analisar_comprovante' ainda não existe no registro — toOpenAiTools filtra
-// por nome registrado, então ela só chega à OpenAI quando a ferramenta nascer.
+// A leitura de comprovante fecha a porta que o desbloqueio em confiança abre:
+// o cliente que já pagou manda a foto e a própria triagem confere.
 const FERRAMENTAS_TRIAGEM_NOTURNO = [...FERRAMENTAS_TRIAGEM, 'desbloqueio_confianca', 'analisar_comprovante'];
 
 // A lista fixa da triagem só cresce à noite: descrever ao modelo uma

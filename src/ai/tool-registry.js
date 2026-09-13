@@ -11,6 +11,7 @@ const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unloc
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
 const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { enviarPix } = require('../payments/payment-sender');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { primeiroNome } = require('./identity-resolver');
 const { mensagemSegura } = require('./safe-error-log');
@@ -61,6 +62,23 @@ function normalizarDataNascimento(texto) {
  */
 function perfilTriagem(contexto) {
   return Array.isArray(contexto.ferramentasPermitidas) || Boolean(contexto.identidade);
+}
+
+/**
+ * Relê a conversa (não confia no contexto do início do turno) e diz se ela
+ * saiu da triagem: um atendente já assumiu, foi fechada/silenciada, ou a
+ * triagem já concluiu. Usada por toda ferramenta que EXECUTA de verdade
+ * (enviar_boleto, gerar_pix) como última checagem antes de mandar algo real
+ * ao cliente — entre o início do turno (a chamada à OpenAI, downloads/consultas
+ * ao SGP) e este ponto, o dono da conversa pode ter mudado.
+ */
+async function saiuDaTriagem(conversationId) {
+  const atual = await getConversationWithContact(conversationId);
+  return (
+    !atual || atual.assignedAgentId
+    || atual.status === 'closed' || atual.status === 'silent'
+    || atual.triageState !== 'pending'
+  );
 }
 
 /** Busca no cache do turno; só chama o SGP se ainda não houver nada. */
@@ -379,7 +397,7 @@ const TOOLS = [
     categoria: 'ACAO_SENSIVEL',
     // Mesma cadeia de até três chamadas ao SGP de gerar_segunda_via.
     timeoutMs: 40000,
-    descricao: 'Gera o código PIX copia e cola da fatura em aberto do contrato.',
+    descricao: 'Gera o código PIX copia e cola da fatura em aberto do contrato. Na triagem, já envia ao cliente o cartão com valor e vencimento e o código em mensagem separada.',
     chaveProprietario: 'contratoId',
     exigeIdentidadeForte: true,
     parametros: {
@@ -392,9 +410,33 @@ const TOOLS = [
       const result = await sgpClient.getDuplicateInvoice(args.contratoId);
       if (!result.hasOpenInvoice) return { sucesso: false, motivo: 'Nenhuma fatura em aberto' };
       const primeira = result.duplicates[0];
-      const resposta = { sucesso: true, valor: primeira.value, vencimento: primeira.dueDate, pixCopiaCola: primeira.pixCode };
-      if (contexto && contexto.identidade) contexto.resolvidoPelaIa = true;
-      return resposta;
+
+      // Fora da triagem (assistente clássico, humano no comando): mantém o
+      // comportamento antigo — só sugere o código para o atendente decidir.
+      if (!perfilTriagem(contexto)) {
+        const resposta = { sucesso: true, valor: primeira.value, vencimento: primeira.dueDate, pixCopiaCola: primeira.pixCode };
+        if (contexto && contexto.identidade) contexto.resolvidoPelaIa = true;
+        return resposta;
+      }
+
+      // Regra do Financeiro: sem código PIX no SGP, não há o que enviar.
+      if (!primeira.pixCode) return { sucesso: false, motivo: 'Fatura sem código PIX no SGP' };
+
+      // Mesma guarda de enviar_boleto: entre a consulta ao SGP e este ponto,
+      // um atendente pode ter assumido a conversa, ou ela pode ter sido
+      // fechada/silenciada/concluída.
+      if (await saiuDaTriagem(contexto.conversationId)) {
+        return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+      }
+
+      await enviarPix({ conversationId: contexto.conversationId, channelId: contexto.channelId, fatura: primeira, sentBy: 'ai' });
+      contexto.resolvidoPelaIa = true;
+      return {
+        enviado: true,
+        valor: primeira.value,
+        vencimento: primeira.dueDate,
+        instrucao: 'O PIX já foi enviado ao cliente nesta conversa (cartão e código copia e cola). Confirme em UMA frase curta. NÃO repita o código nem o valor.',
+      };
     },
   },
   {
@@ -608,12 +650,7 @@ const TOOLS = [
       // OpenAI, o download do PDF) e este ponto, um atendente humano pode ter
       // assumido a conversa, ou ela pode ter sido fechada/silenciada — sem
       // reler agora, o PDF sairia mesmo com um humano já no comando.
-      const atual = await getConversationWithContact(contexto.conversationId);
-      if (
-        !atual || atual.assignedAgentId
-        || atual.status === 'closed' || atual.status === 'silent'
-        || atual.triageState !== 'pending'
-      ) {
+      if (await saiuDaTriagem(contexto.conversationId)) {
         return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
       }
 

@@ -7,6 +7,7 @@ jest.mock('./trust-unlock.repository');
 jest.mock('../media/media-storage');
 jest.mock('../queue/outbound-queue');
 jest.mock('../realtime/socket-server');
+jest.mock('../payments/payment-sender');
 // Só para o teste de composição do perfil assistente (fix round 2): sem isto,
 // o executor de verdade chamaria isToolEnabled contra o banco de verdade
 // (ai_tool_permissions), que pode nem ter linha para a ferramenta.
@@ -25,6 +26,7 @@ const { setContactSgpLink } = require('../conversations/contact.repository');
 const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
+const { enviarPix } = require('../payments/payment-sender');
 const { isToolEnabled } = require('./ai-config.repository');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
@@ -814,11 +816,69 @@ describe('enviar_boleto', () => {
     expect(findTool('gerar_pix').exigeIdentidadeForte).toBe(true);
     expect(findTool('gerar_segunda_via').exigeIdentidadeForte).toBe(true);
   });
-  test('gerar_pix no perfil de triagem marca resolvidoPelaIa', async () => {
-    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ value: 1, dueDate: 'd', pixCode: 'p' }] });
-    const c = ctx();
-    await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
-    expect(c.resolvidoPelaIa).toBe(true);
+  // gerar_pix mudou de "sugere pro modelo escrever" pra "envia de verdade"
+  // quando o turno está na triagem (mesma virada de enviar_boleto): o cartão
+  // (valor + vencimento) e o código PIX copia e cola vão em mensagens
+  // separadas, na ordem certa, direto ao cliente.
+  describe('gerar_pix', () => {
+    beforeEach(() => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({
+        hasOpenInvoice: true,
+        duplicates: [{ id: '9', value: 135, dueDate: '2026-09-15', pixCode: '000201-pix-emv', barCode: 'b' }],
+      });
+      enviarPix.mockResolvedValue([{ id: 'm-cartao' }, { id: 'm-codigo' }]);
+    });
+
+    test('(a) na triagem, envia via enviarPix com sentBy ai e devolve enviado sem pixCopiaCola', async () => {
+      const c = ctx();
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, c);
+      expect(enviarPix).toHaveBeenCalledWith({
+        conversationId: 'c-1', channelId: 'ch-1',
+        fatura: { id: '9', value: 135, dueDate: '2026-09-15', pixCode: '000201-pix-emv', barCode: 'b' },
+        sentBy: 'ai',
+      });
+      expect(r.enviado).toBe(true);
+      expect(r.valor).toBe(135);
+      expect(r.vencimento).toBe('2026-09-15');
+      expect(r).not.toHaveProperty('pixCopiaCola');
+      expect(c.resolvidoPelaIa).toBe(true);
+    });
+
+    // I1b (fix round 1) também vale aqui: fora da triagem não há guarda nem
+    // instrução pro modelo saber quando é seguro entregar — então continua
+    // no modo assistente/humano-no-comando, sem tocar o sender.
+    test('(b) fora da triagem, continua devolvendo pixCopiaCola e não chama o sender', async () => {
+      const r = await findTool('gerar_pix').executar(
+        { contratoId: 17402 },
+        { conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }] }
+      );
+      expect(r).toEqual({ sucesso: true, valor: 135, vencimento: '2026-09-15', pixCopiaCola: '000201-pix-emv' });
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    test('(c) conversa saiu da triagem: não envia nada', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: 'ag-1', status: 'waiting', triageState: 'pending' });
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' });
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    test('(d) fatura sem código PIX no SGP: sucesso false, sem chamar o sender', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({
+        hasOpenInvoice: true,
+        duplicates: [{ id: '9', value: 135, dueDate: '2026-09-15', pixCode: null }],
+      });
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ sucesso: false, motivo: 'Fatura sem código PIX no SGP' });
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    test('sem fatura em aberto: sucesso false', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
+      const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+      expect(r).toEqual({ sucesso: false, motivo: 'Nenhuma fatura em aberto' });
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
   });
 
   // Minor (revisão final do branch inteiro): gerar_segunda_via não marcava

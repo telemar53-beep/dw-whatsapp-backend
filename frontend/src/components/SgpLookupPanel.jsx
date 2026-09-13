@@ -9,7 +9,6 @@ import {
   IconPdfFile,
   IconInvoiceLink,
   IconIdCard,
-  IconInvoice,
   IconClose,
   IconSpinner,
   IconCheck,
@@ -27,103 +26,68 @@ function formatCurrency(value) {
   return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function Card({ icon, title, children }) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-wa-surface-line bg-wa-surface shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center gap-2 border-b border-wa-surface-line px-3.5 py-2.5">
-        <span className="text-wa-green">{icon}</span>
-        <span className="text-[14.5px] font-medium text-wa-text">{title}</span>
-      </div>
-      <div className="p-3.5">{children}</div>
-    </section>
-  );
+// Um bloco de conteúdo do painel: moldura fina, sem barra de título própria —
+// o painel é estreito e cada cabeçalho custava uma linha inteira.
+function Block({ children }) {
+  return <section className="rounded-[16px] border border-wa-border bg-wa-surface p-3">{children}</section>;
 }
 
-function Field({ label, value }) {
+function SectionLabel({ children }) {
   return (
-    <div>
-      <p className="text-[12px] leading-[16px] text-wa-muted">{label}</p>
-      <p className="mt-0.5 text-[14.5px] leading-[20px] text-wa-text">{value}</p>
+    <div className="flex items-center gap-2 px-0.5 pt-0.5">
+      <span className="text-[12px] font-medium text-wa-muted">{children}</span>
+      <span className="h-px flex-1 bg-wa-border" />
     </div>
   );
 }
 
-function InlineField({ label, children }) {
+function Chip({ children, tone = 'neutral' }) {
+  const tones = {
+    neutral: 'bg-wa-active text-wa-muted',
+    good: 'bg-wa-chip text-wa-chip-text',
+    warn: 'bg-wa-warn-bg text-wa-warn-text',
+  };
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="shrink-0 text-[12px] text-wa-muted">{label}</span>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[12px] font-medium ${tones[tone]}`}>
       {children}
-    </div>
-  );
-}
-
-function StatusPill({ status }) {
-  const active = status === 'Ativo';
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[12px] font-medium ${
-        active ? 'bg-wa-chip text-wa-chip-text' : 'bg-wa-active text-wa-icon'
-      }`}
-    >
-      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-wa-badge' : 'bg-wa-border-strong'}`} />
-      {status}
     </span>
   );
 }
 
-function ActionTile({ label, color, icon, onClick, busy, done, pressed }) {
+function StatusChip({ status }) {
+  const active = status === 'Ativo';
+  return (
+    <Chip tone={active ? 'good' : 'neutral'}>
+      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-wa-chip-text' : 'bg-wa-border-strong'}`} />
+      {status}
+    </Chip>
+  );
+}
+
+// Ação de envio: ícone e rótulo na mesma linha, em vez do ladrilho alto.
+function SendAction({ label, color, icon, onClick, busy, done, pressed }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={busy}
       aria-pressed={pressed}
-      className={`flex flex-col items-center justify-start gap-1.5 rounded-[10px] border bg-wa-surface px-1 py-2.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green disabled:opacity-60 ${
-        pressed || done ? 'border-wa-chip-text bg-wa-chip' : 'border-wa-border hover:border-wa-green/50 hover:bg-wa-hover'
+      className={`flex h-9 items-center gap-2 rounded-[10px] border px-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green disabled:opacity-60 ${
+        pressed || done ? 'border-wa-chip-text bg-wa-chip' : 'border-wa-border bg-wa-surface hover:border-wa-green/50 hover:bg-wa-hover'
       }`}
     >
       <span
-        className="flex h-7 items-center justify-center"
+        className="flex h-4 w-4 shrink-0 items-center justify-center"
         style={{ color: done ? 'var(--color-wa-chip-text)' : color }}
       >
-        {busy ? <IconSpinner size={22} /> : done ? <IconCheck size={24} /> : icon}
+        {busy ? <IconSpinner size={16} /> : done ? <IconCheck size={16} /> : icon}
       </span>
-      <span className="text-center text-[11.5px] font-medium leading-[14px] text-wa-text">{label}</span>
+      <span className="truncate text-[12.5px] font-medium text-wa-text">{label}</span>
     </button>
   );
 }
 
-function InvoiceTable({ duplicate }) {
-  const cells = [
-    { label: 'Vencimento', value: formatDueDate(duplicate.dueDate) },
-    { label: 'Valor', value: formatCurrency(duplicate.value) },
-    { label: 'Status', value: <span className="rounded-full bg-wa-warn-bg px-2 py-[2px] text-[12px] font-medium text-wa-warn-text">Em aberto</span> },
-  ];
-
-  return (
-    <div className="mt-2 overflow-hidden rounded-[8px] border border-wa-border">
-      <div className="grid grid-cols-3 divide-x divide-wa-border bg-wa-surface-soft">
-        {cells.map((cell) => (
-          <span key={cell.label} className="px-2 py-1.5 text-center text-[11.5px] text-wa-muted">
-            {cell.label}
-          </span>
-        ))}
-      </div>
-      <div className="grid grid-cols-3 divide-x divide-wa-border border-t border-wa-border">
-        {cells.map((cell) => (
-          <span
-            key={cell.label}
-            className="flex items-center justify-center px-2 py-2 text-center text-[13px] font-medium text-wa-text"
-          >
-            {cell.value}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FinanceiroCard({ contractId, onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSendBarcode, state, onGenerate }) {
+function FinanceiroSection({ contractId, onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSendBarcode, state, onGenerate }) {
   const [qrDataUrl, setQrDataUrl] = useState(null);
   const [busyKey, setBusyKey] = useState(null);
   const [feedback, setFeedback] = useState(null);
@@ -160,128 +124,134 @@ function FinanceiroCard({ contractId, onSendMessage, onSendPdf, onSendPix, onSen
   const duplicate = state && !state.loading && !state.error && state.hasOpenInvoice && state.duplicates && state.duplicates[0];
 
   return (
-    <Card icon={<IconInvoice size={19} />} title="Financeiro">
+    <>
+      <SectionLabel>Financeiro</SectionLabel>
+
       {!state && (
         <button
           type="button"
           onClick={onGenerate}
-          className="w-full rounded-[12px] bg-wa-green px-3 py-2.5 text-[14px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
+          className="w-full rounded-[12px] bg-wa-green px-3 py-2.5 text-[13.5px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
         >
           Consultar fatura em aberto
         </button>
       )}
 
       {state && state.loading && (
-        <p className="flex items-center gap-2 text-[14px] text-wa-muted">
-          <IconSpinner size={17} />
+        <p className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
+          <IconSpinner size={16} />
           Consultando o SGP...
         </p>
       )}
 
       {state && !state.loading && state.error && (
-        <p className="rounded-[10px] bg-wa-error-bg px-3 py-2 text-[13.5px] text-wa-error-text">
+        <p className="rounded-[12px] bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">
           {state.errorMessage || 'Não foi possível consultar o SGP agora.'}
         </p>
       )}
 
       {state && !state.loading && !state.error && state.hasOpenInvoice === false && (
-        <p className="text-[14px] text-wa-muted">Nenhuma fatura em aberto para este contrato.</p>
+        <p className="px-0.5 text-[13.5px] text-wa-muted">Nenhuma fatura em aberto para este contrato.</p>
       )}
 
       {duplicate && (
         <>
-          <p className="text-[13px] font-medium text-wa-text">Última fatura em aberto</p>
-          <InvoiceTable duplicate={duplicate} />
+          <Block>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-display text-[20px] font-semibold leading-tight text-wa-text">
+                  {formatCurrency(duplicate.value)}
+                </p>
+                <p className="mt-1 text-[12.5px] text-wa-muted">vence {formatDueDate(duplicate.dueDate)}</p>
+              </div>
+              <Chip tone="warn">Em aberto</Chip>
+            </div>
 
-          <div className="mt-4 flex items-center gap-2">
-            <span className="text-[12px] text-wa-muted">Enviar para o cliente</span>
-            <span className="h-px flex-1 bg-wa-border" />
-          </div>
+            <div className="mt-3 grid grid-cols-2 gap-1.5 border-t border-wa-border pt-3">
+              {duplicate.pixCode && (
+                <SendAction
+                  label="Cód Pix"
+                  color="#2fc8b6"
+                  icon={<IconPix size={16} />}
+                  busy={busyKey === 'pix'}
+                  done={feedback && feedback.key === 'pix' && feedback.kind === 'sent'}
+                  onClick={() => runAction('pix', 'Cód Pix', () => onSendPix(contractId, duplicate))}
+                />
+              )}
+              {duplicate.pixCode && (
+                <SendAction
+                  label="Enviar QR"
+                  color="#2fc8b6"
+                  icon={<IconQrCode size={16} />}
+                  busy={busyKey === 'pixqr'}
+                  done={feedback && feedback.key === 'pixqr' && feedback.kind === 'sent'}
+                  onClick={() => runAction('pixqr', 'QR Pix', () => onSendPixQr(contractId, duplicate))}
+                />
+              )}
+              {duplicate.barCode && (
+                <SendAction
+                  label="Cód Barras"
+                  color="var(--color-wa-text)"
+                  icon={<IconBarcode size={16} />}
+                  busy={busyKey === 'barcode'}
+                  done={feedback && feedback.key === 'barcode' && feedback.kind === 'sent'}
+                  onClick={() => runAction('barcode', 'Cód Barras', () => onSendBarcode(contractId, duplicate))}
+                />
+              )}
+              {duplicate.boletoLink && (
+                <SendAction
+                  label="Link Fatura"
+                  color="var(--color-sgp-blue)"
+                  icon={<IconInvoiceLink size={16} />}
+                  busy={busyKey === 'link'}
+                  done={feedback && feedback.key === 'link' && feedback.kind === 'sent'}
+                  onClick={() => runAction('link', 'Link Fatura', () => onSendMessage(duplicate.boletoLink))}
+                />
+              )}
+              {duplicate.boletoLink && (
+                <SendAction
+                  label="PDF Fatura"
+                  color="var(--color-sgp-red)"
+                  icon={<IconPdfFile size={16} />}
+                  busy={busyKey === 'pdf'}
+                  done={feedback && feedback.key === 'pdf' && feedback.kind === 'sent'}
+                  onClick={() => runAction('pdf', 'PDF Fatura', () => onSendPdf(contractId, duplicate.boletoLink))}
+                />
+              )}
+              {duplicate.pixCode && (
+                <SendAction
+                  label="Ver QR"
+                  color="var(--color-sgp-gray)"
+                  icon={<IconQrCode size={16} />}
+                  pressed={Boolean(qrDataUrl)}
+                  onClick={() => handleToggleQr(duplicate.pixCode)}
+                />
+              )}
+            </div>
 
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {duplicate.pixCode && (
-              <ActionTile
-                label="Cód Pix"
-                color="#2fc8b6"
-                icon={<IconPix size={24} />}
-                busy={busyKey === 'pix'}
-                done={feedback && feedback.key === 'pix' && feedback.kind === 'sent'}
-                onClick={() => runAction('pix', 'Cód Pix', () => onSendPix(contractId, duplicate))}
-              />
+            {feedback && (
+              <p
+                className={`mt-2.5 flex items-center gap-1.5 text-[12px] ${
+                  feedback.kind === 'sent' ? 'text-wa-chip-text' : 'text-wa-error-text'
+                }`}
+              >
+                {feedback.kind === 'sent' && <IconCheck size={14} />}
+                {feedback.text}
+              </p>
             )}
-            {duplicate.pixCode && (
-              <ActionTile
-                label="Enviar QR"
-                color="#2fc8b6"
-                icon={<IconQrCode size={24} />}
-                busy={busyKey === 'pixqr'}
-                done={feedback && feedback.key === 'pixqr' && feedback.kind === 'sent'}
-                onClick={() => runAction('pixqr', 'QR Pix', () => onSendPixQr(contractId, duplicate))}
-              />
-            )}
-            {duplicate.barCode && (
-              <ActionTile
-                label="Cód Barras"
-                color="var(--color-wa-text)"
-                icon={<IconBarcode size={24} />}
-                busy={busyKey === 'barcode'}
-                done={feedback && feedback.key === 'barcode' && feedback.kind === 'sent'}
-                onClick={() => runAction('barcode', 'Cód Barras', () => onSendBarcode(contractId, duplicate))}
-              />
-            )}
-            {duplicate.boletoLink && (
-              <ActionTile
-                label="Link Fatura"
-                color="var(--color-sgp-blue)"
-                icon={<IconInvoiceLink size={24} />}
-                busy={busyKey === 'link'}
-                done={feedback && feedback.key === 'link' && feedback.kind === 'sent'}
-                onClick={() => runAction('link', 'Link Fatura', () => onSendMessage(duplicate.boletoLink))}
-              />
-            )}
-            {duplicate.boletoLink && (
-              <ActionTile
-                label="PDF Fatura"
-                color="var(--color-sgp-red)"
-                icon={<IconPdfFile size={24} />}
-                busy={busyKey === 'pdf'}
-                done={feedback && feedback.key === 'pdf' && feedback.kind === 'sent'}
-                onClick={() => runAction('pdf', 'PDF Fatura', () => onSendPdf(contractId, duplicate.boletoLink))}
-              />
-            )}
-            {duplicate.pixCode && (
-              <ActionTile
-                label="Ver QR"
-                color="var(--color-sgp-gray)"
-                icon={<IconQrCode size={24} />}
-                pressed={Boolean(qrDataUrl)}
-                onClick={() => handleToggleQr(duplicate.pixCode)}
-              />
-            )}
-          </div>
 
-          {feedback && (
-            <p
-              className={`mt-2.5 flex items-center gap-1.5 text-[12.5px] ${
-                feedback.kind === 'sent' ? 'text-wa-chip-text' : 'text-wa-error-text'
-              }`}
-            >
-              {feedback.kind === 'sent' && <IconCheck size={15} />}
-              {feedback.text}
-            </p>
-          )}
-
-          {qrDataUrl && (
-            <figure ref={qrRef} className="mt-3 flex flex-col items-center rounded-[12px] border border-wa-border bg-wa-surface p-3">
-              <img src={qrDataUrl} alt="QR code do Pix" className="h-36 w-36 rounded-[4px] bg-white p-1.5" />
-              <figcaption className="mt-2 text-center text-[12px] text-wa-muted">
-                Prévia do QR. Use "Enviar QR" para mandar ao cliente.
-              </figcaption>
-            </figure>
-          )}
+            {qrDataUrl && (
+              <figure ref={qrRef} className="mt-3 flex flex-col items-center border-t border-wa-border pt-3">
+                <img src={qrDataUrl} alt="QR code do Pix" className="h-28 w-28 rounded-[6px] bg-white p-1.5" />
+                <figcaption className="mt-2 text-center text-[11.5px] leading-[15px] text-wa-muted">
+                  Prévia. Use "Enviar QR" para mandar ao cliente.
+                </figcaption>
+              </figure>
+            )}
+          </Block>
         </>
       )}
-    </Card>
+    </>
   );
 }
 
@@ -310,75 +280,81 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
   }
 
   const selectedContract = contracts.find((contract) => String(contract.id) === String(selectedContractId)) || null;
+  const contact = selectedContract
+    ? [...(selectedContract.phones || []), ...(selectedContract.emails || [])]
+    : [];
 
   return (
-    <aside className="fixed inset-0 z-30 flex flex-col bg-wa-surface-soft font-wa backdrop-blur-2xl md:static md:z-auto md:h-full md:w-[360px] md:shrink-0 md:border-l md:border-wa-surface-line">
-      <div className="flex h-[70px] shrink-0 items-center gap-2 border-b border-wa-surface-line bg-wa-surface-soft px-4 backdrop-blur-2xl">
+    <aside className="fixed inset-0 z-30 flex flex-col bg-wa-surface-soft font-wa backdrop-blur-2xl lg:static lg:z-auto lg:my-2.5 lg:mr-2.5 lg:h-auto lg:w-[300px] lg:shrink-0 lg:rounded-[20px] lg:border lg:border-wa-surface-line lg:bg-wa-surface lg:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.85)]">
+      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-wa-surface-line px-3">
         <span className="text-wa-icon">
-          <IconIdCard size={21} />
+          <IconIdCard size={18} />
         </span>
-        <span className="flex-1 truncate text-[16px] leading-[21px] text-wa-text">Consultar SGP</span>
+        <span className="flex-1 truncate text-[15px] font-medium leading-[20px] text-wa-text">Consultar SGP</span>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar consulta SGP"
             title="Fechar"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-wa-hover"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-wa-hover"
           >
-            <IconClose size={19} />
+            <IconClose size={17} />
           </button>
         )}
       </div>
 
-      <div className="chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      <div className="chat-scroll min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             value={cpf}
             onChange={(e) => setCpf(e.target.value)}
-            placeholder="CPF ou CNPJ do cliente"
+            placeholder="CPF ou CNPJ"
             aria-label="CPF do cliente"
             inputMode="numeric"
-            className="h-11 min-w-0 flex-1 rounded-[12px] border border-wa-border bg-wa-field px-3.5 text-[14.5px] text-wa-text outline-none placeholder:text-wa-muted focus:border-wa-green focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-wa-green/40"
+            className="h-10 min-w-0 flex-1 rounded-[12px] border border-wa-border bg-wa-field px-3 text-[14px] text-wa-text outline-none placeholder:text-wa-muted focus:border-wa-green focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-wa-green/40"
           />
           <button
             type="submit"
             aria-label="Buscar"
             title="Buscar"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-wa-green text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-wa-green text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
           >
-            <IconSearch size={19} />
+            <IconSearch size={18} />
           </button>
         </form>
 
         {loading && (
-          <p className="flex items-center gap-2 px-1 text-[14px] text-wa-muted">
-            <IconSpinner size={17} />
+          <p className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
+            <IconSpinner size={16} />
             Buscando no SGP...
           </p>
         )}
         {error === 'not_found' && (
-          <p className="rounded-[12px] border border-wa-border bg-wa-field px-3 py-2.5 text-[14px] text-wa-muted">
+          <p className="rounded-[12px] border border-wa-border bg-wa-field px-3 py-2.5 text-[13.5px] leading-[19px] text-wa-muted">
             Cliente não encontrado. Confira o documento e busque de novo.
           </p>
         )}
         {error === 'error' && (
-          <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text">
+          <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13px] text-wa-error-text">
             {errorMessage || 'Não foi possível consultar o SGP agora.'}
           </p>
         )}
 
         {!client && !loading && !error && (
-          <p className="px-1 pt-2 text-[13.5px] leading-[19px] text-wa-muted">
-            Busque pelo documento do cliente para ver o contrato e enviar a fatura em aberto direto na conversa.
+          <p className="px-0.5 pt-1 text-[13px] leading-[18px] text-wa-muted">
+            Busque pelo documento para ver o contrato e enviar a fatura direto na conversa.
           </p>
         )}
 
         {client && (
           <>
-            <Card icon={<IconIdCard size={19} />} title="Cliente identificado">
+            <Block>
+              <p className="text-[14.5px] font-medium leading-[19px] text-wa-text">{client.name}</p>
+              <p className="mt-0.5 text-[12.5px] text-wa-muted">{client.document}</p>
+
               {contracts.length > 0 && (
-                <div className="relative mb-3">
+                <div className="relative mt-3">
                   <label htmlFor="sgp-contract-select" className="sr-only">
                     Contrato
                   </label>
@@ -386,7 +362,7 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
                     id="sgp-contract-select"
                     value={selectedContractId || ''}
                     onChange={(e) => setSelectedContractId(e.target.value)}
-                    className="h-11 w-full appearance-none rounded-[12px] border border-wa-border bg-wa-field pl-3.5 pr-9 text-[14.5px] text-wa-text outline-none focus:border-wa-green"
+                    className="h-9 w-full appearance-none rounded-[10px] border border-wa-border bg-wa-field pl-3 pr-8 text-[13.5px] text-wa-text outline-none focus:border-wa-green"
                   >
                     {contracts.map((contract) => (
                       <option key={contract.id} value={contract.id}>
@@ -394,42 +370,34 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
                       </option>
                     ))}
                   </select>
-                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-wa-icon">
-                    <IconChevronDown size={18} />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-wa-icon">
+                    <IconChevronDown size={16} />
                   </span>
                 </div>
               )}
 
               {selectedContract && (
-                <div className="space-y-3">
-                  <Field label="Titular" value={client.name} />
-                  <Field label="Plano" value={selectedContract.plan} />
-                  <div className="space-y-2.5 border-t border-wa-border pt-3">
-                    <InlineField label="Documento">
-                      <span className="truncate text-[13.5px] text-wa-text">{client.document}</span>
-                    </InlineField>
-                    <InlineField label="Status do contrato">
-                      <StatusPill status={selectedContract.status} />
-                    </InlineField>
+                <>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    {selectedContract.plan && <Chip>{selectedContract.plan}</Chip>}
+                    <StatusChip status={selectedContract.status} />
                   </div>
 
-                  {((selectedContract.phones && selectedContract.phones.length > 0) ||
-                    (selectedContract.emails && selectedContract.emails.length > 0)) && (
-                    <div className="space-y-1 border-t border-wa-border pt-3">
-                      {selectedContract.phones && selectedContract.phones.length > 0 && (
-                        <p className="truncate text-[13px] text-wa-muted">{selectedContract.phones.join(', ')}</p>
-                      )}
-                      {selectedContract.emails && selectedContract.emails.length > 0 && (
-                        <p className="truncate text-[13px] text-wa-muted">{selectedContract.emails.join(', ')}</p>
-                      )}
+                  {contact.length > 0 && (
+                    <div className="mt-2.5 space-y-0.5 border-t border-wa-border pt-2.5">
+                      {contact.map((item) => (
+                        <p key={item} className="truncate text-[12.5px] leading-[17px] text-wa-muted">
+                          {item}
+                        </p>
+                      ))}
                     </div>
                   )}
-                </div>
+                </>
               )}
-            </Card>
+            </Block>
 
             {selectedContract && (
-              <FinanceiroCard
+              <FinanceiroSection
                 key={selectedContract.id}
                 contractId={selectedContract.id}
                 onSendMessage={onSendMessage}

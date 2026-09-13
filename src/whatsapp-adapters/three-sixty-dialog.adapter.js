@@ -6,6 +6,7 @@ const {
   parseInboundMessages,
   parseStatusUpdates,
   parseTemplateStatusUpdates,
+  buildPixOrderDetailsBody,
 } = require('./meta-cloud.adapter');
 
 const BASE_URL = 'https://waba-v2.360dialog.io';
@@ -68,6 +69,14 @@ async function sendTemplateMessage(channel, toPhoneNumber, { name, language, var
   return { whatsappMessageId: response.data.messages[0].id };
 }
 
+// O 360dialog é um BSP em cima da mesma API da Meta: o corpo do cartão de Pix
+// é literalmente o mesmo do meta-cloud, só muda o endpoint e a autenticação.
+async function sendPixCardMessage(channel, toPhoneNumber, card) {
+  const body = buildPixOrderDetailsBody(toPhoneNumber, card);
+  const response = await axios.post(`${BASE_URL}/messages`, body, { headers: authHeaders(channel) });
+  return { whatsappMessageId: response.data.messages[0].id };
+}
+
 async function downloadMedia(mediaId, channel) {
   const metaResponse = await axios.get(`${BASE_URL}/${mediaId}`, { headers: authHeaders(channel) });
   const fileResponse = await axios.get(metaResponse.data.url, {
@@ -109,6 +118,7 @@ module.exports = {
   sendTextMessage,
   sendMediaMessage,
   sendTemplateMessage,
+  sendPixCardMessage,
   downloadMedia,
   createMetaTemplate,
   listMetaTemplates,

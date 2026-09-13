@@ -9,6 +9,7 @@ const {
   deleteMetaTemplate,
   registerWebhook,
   parseInboundMessages,
+  sendPixCardMessage,
 } = require('./three-sixty-dialog.adapter');
 
 jest.mock('axios');
@@ -192,5 +193,35 @@ describe('re-exported webhook parsers', () => {
   test('parseInboundMessages is the same function as meta-cloud.adapter exports', () => {
     const metaCloudAdapter = require('./meta-cloud.adapter');
     expect(parseInboundMessages).toBe(metaCloudAdapter.parseInboundMessages);
+  });
+});
+
+describe('sendPixCardMessage (360dialog)', () => {
+  test('posta o mesmo corpo order_details do meta-cloud no endpoint do 360', async () => {
+    axios.post.mockResolvedValue({ data: { messages: [{ id: 'wamid.PIX360' }] } });
+    const { buildPixOrderDetailsBody } = require('./meta-cloud.adapter');
+    const card = {
+      pixCode: '00020126580014BR.GOV.BCB.PIX0136chave-pix',
+      value: 135,
+      dueDate: '2026-09-15',
+      faturaId: 4321,
+      merchant: { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' },
+    };
+
+    const result = await sendPixCardMessage(CHANNEL, '5511999998888', card);
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://waba-v2.360dialog.io/messages',
+      buildPixOrderDetailsBody('5511999998888', card),
+      { headers: { 'D360-API-KEY': 'd360-key-abc' } }
+    );
+    expect(result).toEqual({ whatsappMessageId: 'wamid.PIX360' });
+  });
+
+  test('propaga o erro de recebedor n\u00e3o cadastrado sem chamar a API', async () => {
+    await expect(
+      sendPixCardMessage(CHANNEL, '5511999998888', { pixCode: 'x', value: 10, dueDate: '2026-09-15', faturaId: 1, merchant: null })
+    ).rejects.toThrow('Pix merchant is not configured');
+    expect(axios.post).not.toHaveBeenCalled();
   });
 });

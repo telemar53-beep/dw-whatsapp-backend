@@ -3,6 +3,7 @@ jest.mock('@whiskeysockets/baileys', () => ({
   useMultiFileAuthState: jest.fn(),
   DisconnectReason: { loggedOut: 401 },
   downloadMediaMessage: jest.fn(),
+  generateWAMessageFromContent: jest.fn(() => ({ key: { id: 'wa-1' }, message: { x: 1 } })),
 }));
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/inbound-message.service');
@@ -46,6 +47,7 @@ function createMockSock() {
       }),
     },
     sendMessage: jest.fn().mockResolvedValue({ key: { id: 'wamid.SENT1' } }),
+    relayMessage: jest.fn().mockResolvedValue(undefined),
     onWhatsApp: jest.fn(),
     profilePictureUrl: jest.fn(),
     handlers,
@@ -930,6 +932,92 @@ describe('baileys.manager', () => {
       await expect(
         sock.handlers['contacts.update']([{ id: '5511999990005@s.whatsapp.net', imgUrl: 'changed' }])
       ).resolves.not.toThrow();
+    });
+  });
+
+  describe('sendPixCardMessage', () => {
+    const CARD = {
+      pixCode: '00020126580014BR.GOV.BCB.PIX0136chave-pix5204000053039865802BR',
+      value: 135,
+      dueDate: '2026-09-15',
+      faturaId: 4321,
+      merchant: null,
+    };
+
+    test('monta o cart\u00e3o nativo e o entrega por relayMessage, sem exigir recebedor cadastrado', async () => {
+      const sock = createMockSock();
+      sock.user = { id: '5511999990000:1@s.whatsapp.net' };
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-pix', type: 'baileys', name: 'DW Telecom' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.sendPixCardMessage(channel, '5511999993333', CARD);
+
+      expect(baileysLib.generateWAMessageFromContent).toHaveBeenCalledWith(
+        '5511999993333@s.whatsapp.net',
+        manager.buildPixNativeFlowContent(CARD, channel),
+        { userJid: '5511999990000:1@s.whatsapp.net' }
+      );
+      expect(sock.relayMessage).toHaveBeenCalledWith('5511999993333@s.whatsapp.net', { x: 1 }, { messageId: 'wa-1' });
+      expect(result).toEqual({ whatsappMessageId: 'wa-1' });
+    });
+
+    test('lan\u00e7a quando o canal n\u00e3o tem conex\u00e3o ativa', async () => {
+      await expect(
+        manager.sendPixCardMessage({ id: 'channel-sem-conexao', type: 'baileys' }, '5511999993333', CARD)
+      ).rejects.toThrow('No active Baileys connection for channel channel-sem-conexao');
+    });
+  });
+
+  describe('buildPixNativeFlowContent', () => {
+    const CARD = {
+      pixCode: '00020126580014BR.GOV.BCB.PIX0136chave-pix5204000053039865802BR',
+      value: 135,
+      dueDate: '2026-09-15',
+      faturaId: 4321,
+      merchant: null,
+    };
+
+    test('a chave do bot\u00e3o payment_info \u00e9 o pr\u00f3prio copia e cola, com tipo EVP', () => {
+      const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'DW Telecom' });
+      const botoes = content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons;
+      expect(botoes).toHaveLength(1);
+      expect(botoes[0].name).toBe('payment_info');
+
+      const params = JSON.parse(botoes[0].buttonParamsJson);
+      expect(params.payment_settings[0].type).toBe('pix_static_code');
+      expect(params.payment_settings[0].pix_static_code.key).toBe(CARD.pixCode);
+      expect(params.payment_settings[0].pix_static_code.key_type).toBe('EVP');
+      expect(params.payment_settings[0].pix_static_code.merchant_name).toBe('DW Telecom');
+      expect(params.total_amount).toEqual({ value: 13500, offset: 100 });
+      expect(params.reference_id).toBe('4321');
+      expect(params.currency).toBe('BRL');
+      expect(params.order.subtotal).toEqual({ value: 13500, offset: 100 });
+      expect(params.order.items).toEqual([
+        {
+          name: 'Fatura \u00b7 vence 15/09/2026',
+          amount: { value: 13500, offset: 100 },
+          quantity: 1,
+          sale_amount: { value: 13500, offset: 100 },
+        },
+      ]);
+    });
+
+    test('o recebedor cadastrado, quando existe, aparece como merchant_name', () => {
+      const content = manager.buildPixNativeFlowContent(
+        { ...CARD, merchant: { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' } },
+        { id: 'channel-pix', name: 'DW Telecom' }
+      );
+      const params = JSON.parse(content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson);
+      expect(params.payment_settings[0].pix_static_code.merchant_name).toBe('DW TELECOM LTDA');
+      // A chave continua sendo o copia e cola: no Baileys o cadastro nao entra no lugar dela.
+      expect(params.payment_settings[0].pix_static_code.key).toBe(CARD.pixCode);
+    });
+
+    test('o wrapper viewOnceMessage e o messageContextInfo v\u00e3o junto', () => {
+      const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'DW Telecom' });
+      expect(content.viewOnceMessage.message.messageContextInfo).toEqual({ deviceListMetadata: {}, deviceListMetadataVersion: 2 });
+      expect(content.viewOnceMessage.message.interactiveMessage.nativeFlowMessage.messageVersion).toBe(1);
     });
   });
 

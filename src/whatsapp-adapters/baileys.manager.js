@@ -8,6 +8,7 @@ const { setContactAvatarPath, claimContactAvatarRefresh, findContactByPhoneNumbe
 const { applyParsedMessageStatusUpdates } = require('../conversations/message-status.service');
 const { saveMediaFile, deleteMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
 const { broadcast } = require('../realtime/socket-server');
+const { formatarData } = require('../payments/payment-card');
 
 function loadBaileysLib() {
   return require('@whiskeysockets/baileys');
@@ -476,6 +477,82 @@ async function sendTextMessage(channel, toPhoneNumber, content, replyContext = {
   return { whatsappMessageId: sent.key.id };
 }
 
+/**
+ * O cartão nativo de Pix do WhatsApp comum: uma `interactiveMessage` com um
+ * botão `payment_info`, que o cliente vê com "Copiar código Pix".
+ *
+ * Aqui a "chave" declarada no `pix_static_code` é o próprio código copia e cola
+ * — não a chave Pix cadastrada da empresa. Por isso o Baileys não precisa de
+ * recebedor cadastrado para mandar o cartão, e o tipo é sempre EVP: é o mesmo
+ * formato que o Chat Mix usa. O cadastro, quando existe, só melhora o nome
+ * mostrado.
+ *
+ * O wrapper `viewOnceMessage` não é sobre a mensagem sumir: é o envelope que os
+ * clientes Android/iOS esperam em mensagens interativas — sem ele o cartão
+ * chega e não renderiza.
+ */
+function buildPixNativeFlowContent(card, channel) {
+  const centavos = Math.round(Number(card.value) * 100);
+  const referenceId = String(card.faturaId || `PIX${Date.now()}`);
+  const titulo = `Fatura · vence ${formatarData(card.dueDate)}`;
+  const valor = { value: centavos, offset: 100 };
+  return {
+    viewOnceMessage: {
+      message: {
+        messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
+        interactiveMessage: {
+          nativeFlowMessage: {
+            messageVersion: 1,
+            buttons: [
+              {
+                name: 'payment_info',
+                buttonParamsJson: JSON.stringify({
+                  currency: 'BRL',
+                  total_amount: { ...valor },
+                  reference_id: referenceId,
+                  type: 'physical-goods',
+                  order: {
+                    status: 'pending',
+                    subtotal: { ...valor },
+                    order_type: 'ORDER',
+                    items: [{ name: titulo, amount: { ...valor }, quantity: 1, sale_amount: { ...valor } }],
+                  },
+                  payment_settings: [
+                    {
+                      type: 'pix_static_code',
+                      pix_static_code: {
+                        merchant_name: (card.merchant && card.merchant.name) || (channel && channel.name) || 'DW Telecom',
+                        key: card.pixCode,
+                        key_type: 'EVP',
+                      },
+                    },
+                  ],
+                  share_payment_status: false,
+                  is_soft_deleted: false,
+                  referral: 'chat_attachment',
+                }),
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+}
+
+async function sendPixCardMessage(channel, toPhoneNumber, card) {
+  const entry = connections.get(channel.id);
+  if (!entry) {
+    throw new Error(`No active Baileys connection for channel ${channel.id}`);
+  }
+  const { generateWAMessageFromContent } = loadBaileysLib();
+  const jid = `${toPhoneNumber}@s.whatsapp.net`;
+  const content = buildPixNativeFlowContent(card, channel);
+  const msg = generateWAMessageFromContent(jid, content, { userJid: entry.sock.user && entry.sock.user.id });
+  await entry.sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
+  return { whatsappMessageId: msg.key.id };
+}
+
 async function sendMediaMessage(channel, toPhoneNumber, { messageType, mediaPath, mediaMimeType, mediaFilename, caption, isVoiceNote, ...replyContext }) {
   const entry = connections.get(channel.id);
   if (!entry) {
@@ -581,6 +658,8 @@ module.exports = {
   addBaileysChannel,
   sendTextMessage,
   sendMediaMessage,
+  sendPixCardMessage,
+  buildPixNativeFlowContent,
   verifyMediaDelivery,
   resolveWhatsAppJid,
   getQrForChannel,

@@ -335,7 +335,7 @@ describe('downloadMetaMedia', () => {
 
 jest.mock('axios');
 const axios = require('axios');
-const { sendTextMessage, downloadMetaMedia, sendMediaMessage, createMetaTemplate, listMetaTemplates, deleteMetaTemplate, sendTemplateMessage, parseTemplateStatusUpdates } = require('./meta-cloud.adapter');
+const { sendTextMessage, downloadMetaMedia, sendMediaMessage, createMetaTemplate, listMetaTemplates, deleteMetaTemplate, sendTemplateMessage, parseTemplateStatusUpdates, sendPixCardMessage, buildPixOrderDetailsBody } = require('./meta-cloud.adapter');
 
 describe('sendTextMessage', () => {
   test('posts to the Graph API and returns the WhatsApp message id', async () => {
@@ -669,5 +669,109 @@ describe('parseTemplateStatusUpdates', () => {
 
   test('returns an empty array when there are no entries', () => {
     expect(parseTemplateStatusUpdates({})).toEqual([]);
+  });
+});
+
+describe('buildPixOrderDetailsBody', () => {
+  const MERCHANT = { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' };
+  const CARD = {
+    pixCode: '00020126580014BR.GOV.BCB.PIX0136chave-pix5204000053039865802BR',
+    value: 135,
+    dueDate: '2026-09-15',
+    faturaId: 4321,
+    merchant: MERCHANT,
+  };
+
+  test('monta o corpo order_details com pix_dynamic_code e os valores em centavos', () => {
+    expect(buildPixOrderDetailsBody('5511999998888', CARD)).toEqual({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: '5511999998888',
+      type: 'interactive',
+      interactive: {
+        type: 'order_details',
+        body: { text: 'Pix da fatura \u00b7 vence 15/09/2026' },
+        action: {
+          name: 'review_and_pay',
+          parameters: {
+            reference_id: '4321',
+            type: 'digital-goods',
+            payment_type: 'br',
+            payment_settings: [
+              {
+                type: 'pix_dynamic_code',
+                pix_dynamic_code: {
+                  code: CARD.pixCode,
+                  merchant_name: 'DW TELECOM LTDA',
+                  key: '12345678000199',
+                  key_type: 'CNPJ',
+                },
+              },
+            ],
+            currency: 'BRL',
+            total_amount: { value: 13500, offset: 100 },
+            order: {
+              status: 'pending',
+              items: [
+                {
+                  retailer_id: '4321',
+                  name: 'Fatura \u00b7 vence 15/09/2026',
+                  amount: { value: 13500, offset: 100 },
+                  quantity: 1,
+                },
+              ],
+              subtotal: { value: 13500, offset: 100 },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  test('arredonda centavos em vez de truncar', () => {
+    const body = buildPixOrderDetailsBody('5511999998888', { ...CARD, value: '89.9' });
+    expect(body.interactive.action.parameters.total_amount).toEqual({ value: 8990, offset: 100 });
+  });
+
+  test('sem fatura, o reference_id cai num valor gerado em vez de ficar vazio', () => {
+    const body = buildPixOrderDetailsBody('5511999998888', { ...CARD, faturaId: null });
+    expect(body.interactive.action.parameters.reference_id).toMatch(/^PIX\d+$/);
+  });
+
+  test('lan\u00e7a quando o recebedor Pix n\u00e3o est\u00e1 cadastrado', () => {
+    expect(() => buildPixOrderDetailsBody('5511999998888', { ...CARD, merchant: null })).toThrow('Pix merchant is not configured');
+  });
+});
+
+describe('sendPixCardMessage (meta cloud)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('posta o cart\u00e3o na Graph API e devolve o id da mensagem', async () => {
+    axios.post.mockResolvedValue({ data: { messages: [{ id: 'wamid.PIX1' }] } });
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+    const card = {
+      pixCode: '00020126580014BR.GOV.BCB.PIX0136chave-pix',
+      value: 135,
+      dueDate: '2026-09-15',
+      faturaId: 4321,
+      merchant: { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' },
+    };
+
+    const result = await sendPixCardMessage(channel, '5511999998888', card);
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      buildPixOrderDetailsBody('5511999998888', card),
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+    expect(result).toEqual({ whatsappMessageId: 'wamid.PIX1' });
+  });
+
+  test('n\u00e3o chama a API quando o recebedor Pix n\u00e3o est\u00e1 cadastrado', async () => {
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+    await expect(
+      sendPixCardMessage(channel, '5511999998888', { pixCode: 'x', value: 10, dueDate: '2026-09-15', faturaId: 1, merchant: null })
+    ).rejects.toThrow('Pix merchant is not configured');
+    expect(axios.post).not.toHaveBeenCalled();
   });
 });

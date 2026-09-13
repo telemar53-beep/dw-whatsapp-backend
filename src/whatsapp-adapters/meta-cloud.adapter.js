@@ -3,6 +3,7 @@ const axios = require('axios');
 const fs = require('fs');
 const FormData = require('form-data');
 const { getMediaFilePath } = require('../media/media-storage');
+const { formatarData } = require('../payments/payment-card');
 
 function verifyWebhookChallenge(query, verifyToken) {
   if (query['hub.mode'] === 'subscribe' && query['hub.verify_token'] === verifyToken) {
@@ -211,6 +212,73 @@ function parseTemplateStatusUpdates(webhookBody) {
   return updates;
 }
 
+/**
+ * O cartão nativo de Pix dos canais oficiais: uma mensagem interativa
+ * `order_details` com um `pix_dynamic_code`, que o WhatsApp mostra com o botão
+ * "Copiar código Pix". Puro de propósito — o 360dialog manda exatamente o mesmo
+ * corpo, só muda o endpoint e o cabeçalho de autenticação.
+ *
+ * A Meta cobra os valores em centavos inteiros (`offset: 100`), por isso o
+ * Math.round: 89.9 tem de virar 8990, e um truncamento perderia um centavo.
+ * O recebedor é obrigatório aqui (diferente do Baileys, onde a "chave" é o
+ * próprio copia e cola): sem ele a Meta recusa a mensagem, então falhamos
+ * antes da chamada e quem envia cai no texto.
+ */
+function buildPixOrderDetailsBody(to, card) {
+  if (!card.merchant) throw new Error('Pix merchant is not configured');
+  const centavos = Math.round(Number(card.value) * 100);
+  const referenceId = String(card.faturaId || `PIX${Date.now()}`);
+  const titulo = `Fatura · vence ${formatarData(card.dueDate)}`;
+  const valor = { value: centavos, offset: 100 };
+  return {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'order_details',
+      body: { text: `Pix da fatura · vence ${formatarData(card.dueDate)}` },
+      action: {
+        name: 'review_and_pay',
+        parameters: {
+          reference_id: referenceId,
+          type: 'digital-goods',
+          payment_type: 'br',
+          payment_settings: [
+            {
+              type: 'pix_dynamic_code',
+              pix_dynamic_code: {
+                code: card.pixCode,
+                merchant_name: card.merchant.name,
+                key: card.merchant.key,
+                key_type: card.merchant.keyType,
+              },
+            },
+          ],
+          currency: 'BRL',
+          total_amount: { ...valor },
+          order: {
+            status: 'pending',
+            items: [{ retailer_id: referenceId, name: titulo, amount: { ...valor }, quantity: 1 }],
+            subtotal: { ...valor },
+          },
+        },
+      },
+    },
+  };
+}
+
+async function sendPixCardMessage(channel, toPhoneNumber, card) {
+  const { phoneNumberId, accessToken } = channel.config;
+  const body = buildPixOrderDetailsBody(toPhoneNumber, card);
+  const response = await axios.post(
+    `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+    body,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  return { whatsappMessageId: response.data.messages[0].id };
+}
+
 module.exports = {
   verifyWebhookChallenge,
   verifySignature,
@@ -224,4 +292,6 @@ module.exports = {
   deleteMetaTemplate,
   sendTemplateMessage,
   parseTemplateStatusUpdates,
+  sendPixCardMessage,
+  buildPixOrderDetailsBody,
 };

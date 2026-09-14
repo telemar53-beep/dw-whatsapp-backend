@@ -41,7 +41,7 @@ async function login({ email, password }) {
     throw accountDisabledError();
   }
   const token = jwt.sign(
-    { agentId: agent.id, role: agent.role },
+    { agentId: agent.id, role: agent.role, canManageIntegrations: agent.canManageIntegrations || false },
     process.env.JWT_SECRET,
     { expiresIn: TOKEN_EXPIRY }
   );
@@ -52,6 +52,7 @@ async function login({ email, password }) {
       name: agent.name,
       email: agent.email,
       role: agent.role,
+      canManageIntegrations: agent.canManageIntegrations || false,
       avatarPath: agent.avatarPath || null,
     },
   };

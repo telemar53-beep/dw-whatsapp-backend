@@ -22,6 +22,30 @@ describe('auth service', () => {
     expect(decoded.role).toBe('agent');
   });
 
+  test('login embeds canManageIntegrations in the token and the returned agent', async () => {
+    const passwordHash = await bcrypt.hash('secret123', 10);
+    findAgentByEmail.mockResolvedValue({
+      id: 'agent-1', email: 'a@dw.com', role: 'manager', canManageIntegrations: true, passwordHash,
+    });
+
+    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+
+    const decoded = jwt.verify(result.token, 'test-secret');
+    expect(decoded.canManageIntegrations).toBe(true);
+    expect(result.agent.canManageIntegrations).toBe(true);
+  });
+
+  test('login defaults canManageIntegrations to false when the repository omits it', async () => {
+    const passwordHash = await bcrypt.hash('secret123', 10);
+    findAgentByEmail.mockResolvedValue({ id: 'agent-1', email: 'a@dw.com', role: 'agent', passwordHash });
+
+    const result = await login({ email: 'a@dw.com', password: 'secret123' });
+
+    const decoded = jwt.verify(result.token, 'test-secret');
+    expect(decoded.canManageIntegrations).toBe(false);
+    expect(result.agent.canManageIntegrations).toBe(false);
+  });
+
   test('login throws when agent does not exist', async () => {
     findAgentByEmail.mockResolvedValue(null);
     await expect(login({ email: 'missing@dw.com', password: 'x' })).rejects.toThrow('Invalid credentials');

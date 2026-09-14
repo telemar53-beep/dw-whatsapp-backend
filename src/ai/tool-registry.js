@@ -27,6 +27,7 @@ const { analyzeImage } = require('./openai-client');
 const { getAiConfig } = require('./ai-config.repository');
 const { conferirComprovante, PROMPT_VISAO } = require('./comprovante');
 const { getCompanyConfig } = require('../company/company-config.repository');
+const { claimReceipt } = require('./receipt-usage.repository');
 // Mesmo normalizador que sgp-client.js usa no que vem do cadastro: os dois
 // lados da conferência da data precisam concordar sobre o que é uma data.
 const { normalizarDataNascimento } = require('./data-nascimento');
@@ -883,6 +884,28 @@ const TOOLS = [
         if (await saiuDaTriagem(contexto.conversationId)) {
           return { liberado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
         }
+        // Um comprovante desbloqueia UMA vez: emprestado a outra pessoa, ele
+        // não pode liberar de novo. A reserva vem ANTES do aviso ao cliente —
+        // avisar "vou verificar a possibilidade" para depois recusar por
+        // comprovante repetido seria prometer o que não existe. Sem
+        // comprovante ("paguei, libera") não há o que reservar.
+        if (comprovante) {
+          if (!comprovante.idTransacao) {
+            const motivo = 'O comprovante não tem um identificador de transação legível.';
+            registrarRecusa(motivo);
+            return { liberado: false, motivo, instrucao: instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', motivo) };
+          }
+          const reservado = await claimReceipt({
+            transactionId: comprovante.idTransacao,
+            contactId: (contexto.contact && contexto.contact.id) || null,
+            contractId: args.contratoId,
+          });
+          if (!reservado) {
+            const motivo = 'Este comprovante já foi utilizado.';
+            registrarRecusa(motivo);
+            return { liberado: false, motivo, instrucao: instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', motivo) };
+          }
+        }
         // A frase de aviso sai pelo código, antes da escrita no SGP: assim ela
         // sempre precede a execução, independente do que o modelo faria. E só
         // depois de a regra da casa aprovar — quem foi recusado nunca lê que
@@ -1036,7 +1059,7 @@ const TOOLS = [
       const resultado = { analisado: true, ...conferencia, contratoId: fatura ? fatura.contratoId : null };
       // O veredito fica no contexto do turno para o desbloqueio em confiança
       // poder consultá-lo sem reler a imagem.
-      contexto.comprovante = { valido: conferencia.valido, contratoId: resultado.contratoId, faturaId: conferencia.faturaId, valor: conferencia.valor, data: conferencia.data, tipo: conferencia.tipo, motivos: conferencia.motivos };
+      contexto.comprovante = { valido: conferencia.valido, contratoId: resultado.contratoId, faturaId: conferencia.faturaId, valor: conferencia.valor, data: conferencia.data, tipo: conferencia.tipo, idTransacao: conferencia.idTransacao, motivos: conferencia.motivos };
       return resultado;
     },
   },

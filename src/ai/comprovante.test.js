@@ -1,4 +1,4 @@
-const { conferirComprovante, PROMPT_VISAO } = require('./comprovante');
+const { conferirComprovante, PROMPT_VISAO, JANELA_DIAS } = require('./comprovante');
 
 // Fuso fixo no teste: a janela de dias é contada em São Paulo, não em UTC.
 const HOJE = new Date('2026-09-13T22:00:00-03:00');
@@ -22,10 +22,42 @@ test('favorecido sem DW nem o nome do recebedor não confere (sem acento/caixa)'
   expect(conferirComprovante({ leitura: { ...LEITURA, favorecido: 'dw telecom ltda' }, faturas: FATURAS, nomesAceitos: ['DW Telecom'], hoje: HOJE }).favorecidoConfere).toBe(true);
 });
 
-test('data velha (8 dias) ou futura não confere; 7 dias atrás confere', () => {
-  expect(conferirComprovante({ leitura: { ...LEITURA, data: '2026-09-05' }, faturas: FATURAS, nomesAceitos: ['DW'], hoje: HOJE }).dataConfere).toBe(false);
-  expect(conferirComprovante({ leitura: { ...LEITURA, data: '2026-09-06' }, faturas: FATURAS, nomesAceitos: ['DW'], hoje: HOJE }).dataConfere).toBe(true);
+// A janela subiu de 7 para 15 dias: o desbloqueio noturno atende quem já
+// passou dos 10 dias de atraso, e o comprovante dele é mais velho que uma semana.
+test('data velha (16 dias) ou futura não confere; 15 dias atrás confere', () => {
+  expect(JANELA_DIAS).toBe(15);
+  expect(conferirComprovante({ leitura: { ...LEITURA, data: '2026-08-28' }, faturas: FATURAS, nomesAceitos: ['DW'], hoje: HOJE }).dataConfere).toBe(false);
+  expect(conferirComprovante({ leitura: { ...LEITURA, data: '2026-08-29' }, faturas: FATURAS, nomesAceitos: ['DW'], hoje: HOJE }).dataConfere).toBe(true);
   expect(conferirComprovante({ leitura: { ...LEITURA, data: '2026-09-14' }, faturas: FATURAS, nomesAceitos: ['DW'], hoje: HOJE }).dataConfere).toBe(false);
+});
+
+// O ID da transação é o que impede um comprovante emprestado de desbloquear
+// duas vezes: sem ele lido, não há como marcar o comprovante como usado.
+describe('id da transação', () => {
+  const comId = (idTransacao) => conferirComprovante({
+    leitura: { ...LEITURA, idTransacao }, faturas: FATURAS, nomesAceitos: ['DW'], hoje: HOJE,
+  }).idTransacao;
+
+  test('o prompt de visão pede o identificador da transação', () => {
+    expect(PROMPT_VISAO).toContain('idTransacao');
+  });
+
+  test('devolve o id lido, limpo de espaços', () => {
+    expect(comId('E18236120202609131200abcdef123456')).toBe('E18236120202609131200abcdef123456');
+    expect(comId('  E1823612 0202609131200 abcdef  ')).toBe('E18236120202609131200abcdef');
+  });
+
+  test('sem id legível devolve null, e o comprovante continua podendo ser válido', () => {
+    expect(comId(null)).toBeNull();
+    expect(comId('   ')).toBeNull();
+    expect(comId(undefined)).toBeNull();
+    expect(conferirComprovante({ leitura: LEITURA, faturas: FATURAS, nomesAceitos: ['DW'], hoje: HOJE }).valido).toBe(true);
+  });
+
+  test('id que não é texto, ou longo demais, não passa inteiro adiante', () => {
+    expect(comId(12345)).toBeNull();
+    expect(comId('E'.repeat(200))).toHaveLength(80);
+  });
 });
 
 test('não é comprovante ou confiança baixa: inválido com motivo', () => {

@@ -1,0 +1,44 @@
+const { getPool, closePool } = require('../db/pool');
+const { claimReceipt } = require('./receipt-usage.repository');
+
+describe('receipt usage repository', () => {
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE ai_receipts_used');
+    await getPool().query("DELETE FROM contacts WHERE phone_number = '5511999990001'");
+  });
+
+  afterAll(async () => {
+    await closePool();
+  });
+
+  test('o primeiro uso do comprovante é aceito', async () => {
+    expect(await claimReceipt({ transactionId: 'E123', contactId: null, contractId: 26515 })).toBe(true);
+    const linhas = await getPool().query('SELECT transaction_id, contract_id FROM ai_receipts_used');
+    expect(linhas.rowCount).toBe(1);
+    expect(linhas.rows[0]).toEqual({ transaction_id: 'E123', contract_id: 26515 });
+  });
+
+  // O ponto da tabela: o mesmo comprovante emprestado a outra pessoa não
+  // libera duas vezes.
+  test('o segundo uso do MESMO id é recusado, mesmo em outro contrato', async () => {
+    expect(await claimReceipt({ transactionId: 'E123', contactId: null, contractId: 26515 })).toBe(true);
+    expect(await claimReceipt({ transactionId: 'E123', contactId: null, contractId: 17402 })).toBe(false);
+    const linhas = await getPool().query('SELECT id FROM ai_receipts_used');
+    expect(linhas.rowCount).toBe(1);
+  });
+
+  test('ids diferentes passam', async () => {
+    expect(await claimReceipt({ transactionId: 'E123', contactId: null, contractId: 26515 })).toBe(true);
+    expect(await claimReceipt({ transactionId: 'E456', contactId: null, contractId: 26515 })).toBe(true);
+  });
+
+  test('grava o contato quando ele existe', async () => {
+    const contato = await getPool().query(
+      "INSERT INTO contacts (phone_number, display_name) VALUES ('5511999990001', 'Fulano') RETURNING id"
+    );
+    expect(await claimReceipt({ transactionId: 'E789', contactId: contato.rows[0].id, contractId: null })).toBe(true);
+    const linha = await getPool().query('SELECT contact_id, contract_id FROM ai_receipts_used WHERE transaction_id = $1', ['E789']);
+    expect(linha.rows[0].contact_id).toBe(contato.rows[0].id);
+    expect(linha.rows[0].contract_id).toBeNull();
+  });
+});

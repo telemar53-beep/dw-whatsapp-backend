@@ -4,15 +4,19 @@
 const PROMPT_VISAO = [
   'Esta imagem deve ser um comprovante de pagamento brasileiro (PIX, boleto ou transferência).',
   'Extraia: ehComprovante (true/false), tipo ("pix" | "boleto" | "transferencia" | "outro"), valor (número em reais, ponto decimal, ex.: 135.00), data (do pagamento, formato AAAA-MM-DD), favorecido (nome de quem recebeu), banco (do pagador, se aparecer), confianca (0 a 1).',
+  'Extraia também idTransacao: o identificador da transação do Pix (geralmente começa com "E" seguido de 32 caracteres), ou o "ID", "Identificador" ou "Autenticação" do comprovante. Copie a string exata, sem inventar; se não aparecer, use null.',
   'Se um campo não estiver legível, use null. Responda SOMENTE com JSON, sem texto fora dele.',
 ].join(' ');
 
 // Centavos de diferença acontecem em arredondamento de juros/desconto; acima
 // disso não é a mesma fatura.
 const TOLERANCIA_VALOR = 0.05;
-const JANELA_DIAS = 7;
+// 15 dias, e não 7: o desbloqueio noturno atende quem já passou dos 10 dias
+// de atraso, e o comprovante que ele manda costuma ser mais velho que uma semana.
+const JANELA_DIAS = 15;
 const CONFIANCA_MINIMA = 0.6;
 const TAMANHO_NOME_CURTO = 3;
+const TAMANHO_MAXIMO_ID = 80;
 
 function semAcento(s) {
   return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -41,6 +45,16 @@ function valorLido(bruto) {
   if (typeof bruto === 'number') return bruto;
   const texto = String(bruto == null ? '' : bruto).trim().replace(',', '.');
   return texto ? Number(texto) : NaN;
+}
+
+// O id da transação é o que marca um comprovante como usado: ele vai para uma
+// coluna UNIQUE, então chega aqui sem espaços (o banco quebra a linha do
+// comprovante em qualquer lugar) e com tamanho limitado. Só texto: um número
+// ou um objeto vindo da visão não é identificador confiável.
+function idTransacaoLido(bruto) {
+  if (typeof bruto !== 'string') return null;
+  const limpo = bruto.replace(/\s+/g, '');
+  return limpo ? limpo.slice(0, TAMANHO_MAXIMO_ID) : null;
 }
 
 function valorUtil(v) {
@@ -79,7 +93,7 @@ function conferirComprovante({ leitura, faturas, nomesAceitos, hoje = new Date()
   const dataOk = typeof l.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.data);
   const dias = dataOk ? diasEntre(l.data, hoje) : null;
   const dataConfere = dataOk && dias >= 0 && dias <= JANELA_DIAS;
-  if (!dataConfere) motivos.push('data do pagamento fora dos últimos 7 dias');
+  if (!dataConfere) motivos.push(`data do pagamento fora dos últimos ${JANELA_DIAS} dias`);
 
   const valor = valorLido(l.valor);
   // Fatura sem valor utilizável no SGP não serve de referência para nada.
@@ -98,6 +112,7 @@ function conferirComprovante({ leitura, faturas, nomesAceitos, hoje = new Date()
     dataConfere,
     valorConfere,
     faturaId: fatura ? fatura.id : null,
+    idTransacao: idTransacaoLido(l.idTransacao),
     motivos,
   };
 }

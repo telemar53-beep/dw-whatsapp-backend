@@ -17,6 +17,7 @@ jest.mock('../conversations/message.repository');
 jest.mock('./openai-client');
 jest.mock('../cities/contact-city.service');
 jest.mock('../company/company-config.repository');
+jest.mock('./receipt-usage.repository');
 jest.mock('../city-notices/city-notice.service');
 
 const sgpClient = require('../integrations/sgp-client');
@@ -41,6 +42,7 @@ const { analyzeImage } = require('./openai-client');
 const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { getCompanyConfig } = require('../company/company-config.repository');
+const { claimReceipt } = require('./receipt-usage.repository');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
@@ -642,7 +644,8 @@ describe('desbloqueio_confianca — data-limite da promessa', () => {
 describe('desbloqueio_confianca — modo noturno', () => {
   const SUSPENSO = { id: 26515, statusCode: 4, status: 'Suspenso', plan: '100MB', address: 'RUA Z', paymentPromisesThisMonth: 0 };
   const FATURA_VENCIDA = { id: 1, status: 'Gerado', statusid: 1, valor: 100, vencimento: '2026-08-30', data_pagamento: null };
-  const COMPROVANTE = { valido: true, contratoId: 26515, faturaId: '4321', valor: 135, data: '2026-09-13', tipo: 'pix', motivos: [] };
+  const ID_TRANSACAO = 'E18236120202609131200abcdef123456';
+  const COMPROVANTE = { valido: true, contratoId: 26515, faturaId: '4321', valor: 135, data: '2026-09-13', tipo: 'pix', idTransacao: ID_TRANSACAO, motivos: [] };
   const noturno = (extra = {}) => ({
     contracts: [SUSPENSO], contact: { id: 'ct-1' },
     conversationId: 'c-1', channelId: 'ch-1',
@@ -658,6 +661,8 @@ describe('desbloqueio_confianca — modo noturno', () => {
     sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: true, liberadoDias: 3, protocolo: '9999', motivo: null });
     recordTrustUnlock.mockResolvedValue({ id: 'l-1' });
     enqueueOutboundMessage.mockResolvedValue({ id: 'm-1' });
+    // Padrão: o comprovante ainda não tinha sido usado.
+    claimReceipt.mockResolvedValue(true);
     // A releitura da conversa (mesma guarda de gerar_pix/enviar_boleto) agora
     // roda antes do aviso: por padrão a conversa segue em triagem.
     // mockReset porque clearAllMocks NÃO apaga implementação — sem isto, o
@@ -690,6 +695,51 @@ describe('desbloqueio_confianca — modo noturno', () => {
   // a conversa — ou ela pode ter sido fechada/silenciada/concluída. Sem a
   // releitura, o aviso sairia com um humano já no comando E a liberação
   // aconteceria de verdade no SGP.
+  // Um comprovante desbloqueia UMA vez: emprestado a outra pessoa, ele não
+  // pode liberar de novo. A reserva acontece ANTES do aviso ao cliente.
+  test('reserva o comprovante antes de avisar o cliente e antes de escrever no SGP', async () => {
+    const ctx = noturno();
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(claimReceipt).toHaveBeenCalledWith({ transactionId: ID_TRANSACAO, contactId: 'ct-1', contractId: 26515 });
+    expect(claimReceipt.mock.invocationCallOrder[0])
+      .toBeLessThan(enqueueOutboundMessage.mock.invocationCallOrder[0]);
+    expect(r.liberado).toBe(true);
+  });
+
+  test('comprovante já utilizado: recusa acolhendo, sem aviso e sem escrita no SGP', async () => {
+    claimReceipt.mockResolvedValue(false);
+    const ctx = noturno();
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+    expect(r.liberado).toBe(false);
+    expect(r.motivo).toBe('Este comprovante já foi utilizado.');
+    expect(r.instrucao).toContain('a partir das 08:00');
+    expect(r.instrucao).toContain('Responda EXATAMENTE neste modelo:');
+    expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'Este comprovante já foi utilizado.' });
+    expect(ctx.desbloqueioRealizado).toBeFalsy();
+  });
+
+  test('comprovante sem id de transação legível: recusa sem reservar nada', async () => {
+    const ctx = noturno({ comprovante: { ...COMPROVANTE, idTransacao: null } });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+    expect(claimReceipt).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+    expect(r.liberado).toBe(false);
+    expect(r.motivo).toBe('O comprovante não tem um identificador de transação legível.');
+    expect(r.instrucao).toContain('a partir das 08:00');
+    expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'O comprovante não tem um identificador de transação legível.' });
+  });
+
+  // "Paguei, libera" sem imagem nenhuma não tem comprovante para reservar: a
+  // regra da casa decide sozinha, como antes.
+  test('pedido sem comprovante não exige id de transação', async () => {
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno({ comprovante: undefined }));
+    expect(claimReceipt).not.toHaveBeenCalled();
+    expect(r.liberado).toBe(true);
+  });
+
   test('conversa que saiu da triagem: nem aviso ao cliente, nem escrita no SGP', async () => {
     getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: 'ag-1', status: 'waiting', triageState: 'pending' });
     const ctx = noturno();
@@ -2203,7 +2253,8 @@ describe('analisar_comprovante', () => {
   const hojeEmSaoPaulo = () => new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date());
-  const LEITURA = { ehComprovante: true, tipo: 'pix', valor: 135, data: hojeEmSaoPaulo(), favorecido: 'PROVEDOR X LTDA', banco: 'Nubank', confianca: 0.95 };
+  const ID_TRANSACAO = 'E18236120202609131200abcdef123456';
+  const LEITURA = { ehComprovante: true, tipo: 'pix', valor: 135, data: hojeEmSaoPaulo(), favorecido: 'PROVEDOR X LTDA', banco: 'Nubank', confianca: 0.95, idTransacao: ID_TRANSACAO };
   const ctx = (extra = {}) => ({
     conversationId: 'c-1',
     contracts: [{ id: 17402, address: 'RUA X' }],
@@ -2292,9 +2343,10 @@ describe('analisar_comprovante', () => {
       favorecidoConfere: true, dataConfere: true, valorConfere: true,
       contratoId: 17402, faturaId: '4321', motivos: [],
     });
+    expect(r.idTransacao).toBe(ID_TRANSACAO);
     expect(c.comprovante).toEqual({
       valido: true, contratoId: 17402, faturaId: '4321', valor: 135,
-      data: LEITURA.data, tipo: 'pix', motivos: [],
+      data: LEITURA.data, tipo: 'pix', idTransacao: ID_TRANSACAO, motivos: [],
     });
   });
 
@@ -2348,6 +2400,16 @@ describe('analisar_comprovante', () => {
     expect(r).toEqual({ analisado: false, motivo: 'Não foi possível abrir a imagem.' });
     expect(analyzeImage).not.toHaveBeenCalled();
     erroSpy.mockRestore();
+  });
+
+  // O id é o que permite marcar o comprovante como usado depois: sem ele no
+  // contexto, o desbloqueio não teria o que reservar.
+  test('comprovante sem id legível chega ao contexto com idTransacao nulo', async () => {
+    analyzeImage.mockResolvedValue({ ...LEITURA, idTransacao: null });
+    const c = ctx();
+    const r = await findTool('analisar_comprovante').executar({}, c);
+    expect(r.idTransacao).toBeNull();
+    expect(c.comprovante.idTransacao).toBeNull();
   });
 
   test('comprovante que não confere volta inválido com os motivos, e o contexto registra', async () => {

@@ -42,6 +42,30 @@ describe('channel repository', () => {
     expect(channel.config).toEqual({ phoneNumberId: '1234567890', accessToken: 'token-abc' });
   });
 
+  test('createChannel aceita um status inicial explicito', async () => {
+    // Canal oficial (meta_cloud/360dialog) nao tem handshake para nos avisar:
+    // ele ja nasce conectado, senao ficaria "Desconectado" para sempre.
+    const channel = await createChannel({
+      type: 'meta_cloud',
+      name: 'Oficial Conectado',
+      phoneNumber: '+5511999990030',
+      config: { phoneNumberId: '111', accessToken: 'tok' },
+      status: 'connected',
+    });
+    expect(channel.status).toBe('connected');
+    expect((await findChannelById(channel.id)).status).toBe('connected');
+  });
+
+  test('createChannel sem status usa o DEFAULT do banco', async () => {
+    const channel = await createChannel({
+      type: 'baileys',
+      name: 'Sem Status',
+      phoneNumber: '+5511999990031',
+      config: {},
+    });
+    expect(channel.status).toBe('disconnected');
+  });
+
   test('findChannelById returns null when not found', async () => {
     const channel = await findChannelById('00000000-0000-0000-0000-000000000000');
     expect(channel).toBeNull();

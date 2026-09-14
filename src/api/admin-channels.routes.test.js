@@ -125,6 +125,7 @@ describe('POST /api/admin/channels', () => {
       name: 'Financeiro',
       phoneNumber: '+5511999990002',
       config: { phoneNumberId: '999', accessToken: 'tok', wabaId: 'waba-1' },
+      status: 'connected',
     });
   });
 
@@ -159,6 +160,24 @@ describe('POST /api/admin/channels', () => {
       phoneNumber: '+5511988887777',
     });
     expect(res.body.id).toBe('channel-3');
+  });
+
+  test('nao marca um canal baileys como conectado: quem diz isso e o handshake do QR', async () => {
+    baileysManager.addBaileysChannel.mockResolvedValue({
+      id: 'channel-3', type: 'baileys', name: 'WhatsApp Vendas', phoneNumber: '+5511988887777',
+      config: {}, status: 'disconnected',
+    });
+
+    await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ type: 'baileys', name: 'WhatsApp Vendas', phoneNumber: '+5511988887777' });
+
+    expect(baileysManager.addBaileysChannel).toHaveBeenCalledWith({
+      name: 'WhatsApp Vendas',
+      phoneNumber: '+5511988887777',
+    });
+    expect(createChannel).not.toHaveBeenCalled();
   });
 
   test('returns 409 when the phone number is already in use', async () => {
@@ -237,6 +256,7 @@ describe('POST /api/admin/channels', () => {
     expect(createChannel).toHaveBeenCalledWith(expect.objectContaining({
       type: '360dialog', name: 'Via BSP', phoneNumber: '+5511999990009',
       config: expect.objectContaining({ apiKey: 'd360-key', wabaId: 'waba-9' }),
+      status: 'connected',
     }));
   });
 
@@ -547,6 +567,7 @@ describe('POST /api/admin/channels (meta_cloud, wabaId required)', () => {
     expect(createChannel).toHaveBeenCalledWith({
       type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999990000',
       config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' },
+      status: 'connected',
     });
   });
 });

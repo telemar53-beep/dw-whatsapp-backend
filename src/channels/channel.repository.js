@@ -18,12 +18,21 @@ function toChannel(row) {
   };
 }
 
-async function createChannel({ type, name, phoneNumber, config }) {
+async function createChannel({ type, name, phoneNumber, config, status }) {
+  // `status` e opcional de proposito: quando ninguem informa, o INSERT nem
+  // toca a coluna e quem decide e o DEFAULT do banco ('disconnected').
+  const columns = ['type', 'name', 'phone_number', 'config'];
+  const values = [type, name, phoneNumber, JSON.stringify(config)];
+  if (status !== undefined) {
+    columns.push('status');
+    values.push(status);
+  }
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
   const result = await getPool().query(
-    `INSERT INTO channels (type, name, phone_number, config)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO channels (${columns.join(', ')})
+     VALUES (${placeholders})
      RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, ai_triage_enabled, ai_night_mode_enabled, created_at`,
-    [type, name, phoneNumber, JSON.stringify(config)]
+    values
   );
   return toChannel(result.rows[0]);
 }

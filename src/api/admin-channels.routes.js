@@ -27,6 +27,15 @@ const router = express.Router();
 
 const UNIQUE_VIOLATION = '23505';
 
+// Canal oficial (meta_cloud/360dialog) nao tem handshake para avisar que
+// conectou: o vinculo e a propria credencial, conferida aqui na criacao. Como
+// so o baileys.manager chama updateChannelStatus, um canal oficial que
+// nascesse com o DEFAULT 'disconnected' ficaria "Desconectado" para sempre no
+// cartao de Canais, na faixa do topo do chat e no envio pela integracao SGP.
+function initialStatusFor(type) {
+  return isOfficialChannelType(type) ? 'connected' : undefined;
+}
+
 function authenticateQrRoute(req, res, next) {
   const header = req.headers.authorization;
   const headerToken = header && header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
@@ -79,7 +88,13 @@ router.post('/', requireAuth, requireIntegrationsAccess, async (req, res) => {
       if (!phoneNumberId || !accessToken || !wabaId) {
         return res.status(400).json({ error: 'phoneNumberId, accessToken and wabaId are required for meta_cloud channels' });
       }
-      const channel = await createChannel({ type, name, phoneNumber, config: { phoneNumberId, accessToken, wabaId } });
+      const channel = await createChannel({
+        type,
+        name,
+        phoneNumber,
+        config: { phoneNumberId, accessToken, wabaId },
+        status: initialStatusFor(type),
+      });
       return res.status(201).json(channel);
     }
 
@@ -90,7 +105,7 @@ router.post('/', requireAuth, requireIntegrationsAccess, async (req, res) => {
       }
       const webhookToken = crypto.randomBytes(24).toString('hex');
       const config = { apiKey, wabaId, webhookToken };
-      const channel = await createChannel({ type, name, phoneNumber, config });
+      const channel = await createChannel({ type, name, phoneNumber, config, status: initialStatusFor(type) });
       const webhookUrl = `${loadConfig().publicBaseUrl}/webhooks/360dialog/${webhookToken}`;
       try {
         await threeSixtyDialogAdapter.registerWebhook(channel, webhookUrl);

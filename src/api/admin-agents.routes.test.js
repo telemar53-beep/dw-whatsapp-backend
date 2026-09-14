@@ -91,7 +91,7 @@ describe('POST /api/admin/agents', () => {
       .send({ name: 'Carla', email: 'carla@dw.com', password: 'temporaria123', role: 'agent' });
 
     expect(res.status).toBe(201);
-    expect(createAgent).toHaveBeenCalledWith({ name: 'Carla', email: 'carla@dw.com', password: 'temporaria123', role: 'agent' });
+    expect(createAgent).toHaveBeenCalledWith({ name: 'Carla', email: 'carla@dw.com', password: 'temporaria123', role: 'agent', canManageIntegrations: false });
     expect(res.body).toEqual({ id: 'agent-3', name: 'Carla', email: 'carla@dw.com', role: 'agent', active: true, sectors: [] });
   });
 
@@ -112,6 +112,71 @@ describe('POST /api/admin/agents', () => {
       .send({ name: 'Carla', email: 'carla@dw.com', password: 'temporaria123', role: 'superadmin' });
 
     expect(res.status).toBe(400);
+    expect(createAgent).not.toHaveBeenCalled();
+  });
+
+  test('creates a manager with canManageIntegrations', async () => {
+    createAgent.mockResolvedValue({
+      id: 'agent-5', name: 'Marcia', email: 'marcia@dw.com', role: 'manager', canManageIntegrations: true, active: true, createdAt: new Date(),
+    });
+
+    const res = await request(buildApp())
+      .post('/api/admin/agents')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ name: 'Marcia', email: 'marcia@dw.com', password: 'temporaria123', role: 'manager', canManageIntegrations: true });
+
+    expect(res.status).toBe(201);
+    expect(createAgent).toHaveBeenCalledWith({
+      name: 'Marcia', email: 'marcia@dw.com', password: 'temporaria123', role: 'manager', canManageIntegrations: true,
+    });
+    expect(res.body.canManageIntegrations).toBe(true);
+  });
+
+  test('forces canManageIntegrations to false for a role other than manager', async () => {
+    createAgent.mockResolvedValue({
+      id: 'agent-6', name: 'Nilo', email: 'nilo@dw.com', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
+    });
+
+    await request(buildApp())
+      .post('/api/admin/agents')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ name: 'Nilo', email: 'nilo@dw.com', password: 'temporaria123', role: 'agent', canManageIntegrations: true });
+
+    expect(createAgent).toHaveBeenCalledWith({
+      name: 'Nilo', email: 'nilo@dw.com', password: 'temporaria123', role: 'agent', canManageIntegrations: false,
+    });
+  });
+
+  test('a manager can create an agent', async () => {
+    createAgent.mockResolvedValue({
+      id: 'agent-7', name: 'Otavio', email: 'otavio@dw.com', role: 'agent', canManageIntegrations: false, active: true, createdAt: new Date(),
+    });
+
+    const res = await request(buildApp())
+      .post('/api/admin/agents')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ name: 'Otavio', email: 'otavio@dw.com', password: 'temporaria123', role: 'agent' });
+
+    expect(res.status).toBe(201);
+  });
+
+  test('a manager cannot create another manager', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/agents')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ name: 'Paula', email: 'paula@dw.com', password: 'temporaria123', role: 'manager' });
+
+    expect(res.status).toBe(403);
+    expect(createAgent).not.toHaveBeenCalled();
+  });
+
+  test('a manager cannot create an admin', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/agents')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ name: 'Quenia', email: 'quenia@dw.com', password: 'temporaria123', role: 'admin' });
+
+    expect(res.status).toBe(403);
     expect(createAgent).not.toHaveBeenCalled();
   });
 
@@ -215,6 +280,43 @@ describe('PATCH /api/admin/agents/:id', () => {
     expect(res.status).toBe(403);
     expect(setAgentActive).not.toHaveBeenCalled();
   });
+
+  test('a manager can deactivate an agent', async () => {
+    findAgentById.mockResolvedValue({ id: 'agent-4', role: 'agent' });
+    setAgentActive.mockResolvedValue({ id: 'agent-4', name: 'Duda', email: 'duda@dw.com', role: 'agent', active: false, createdAt: new Date() });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/agents/agent-4')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ active: false });
+
+    expect(res.status).toBe(200);
+    expect(setAgentActive).toHaveBeenCalledWith('agent-4', false);
+  });
+
+  test('a manager cannot deactivate another manager', async () => {
+    findAgentById.mockResolvedValue({ id: 'manager-2', role: 'manager' });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/agents/manager-2')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ active: false });
+
+    expect(res.status).toBe(403);
+    expect(setAgentActive).not.toHaveBeenCalled();
+  });
+
+  test('a manager cannot act on an admin account', async () => {
+    findAgentById.mockResolvedValue({ id: 'admin-2', role: 'admin' });
+
+    const res = await request(buildApp())
+      .patch('/api/admin/agents/admin-2')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ active: false });
+
+    expect(res.status).toBe(403);
+    expect(setAgentActive).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/admin/agents/:id/password', () => {
@@ -254,6 +356,29 @@ describe('PUT /api/admin/agents/:id/password', () => {
     const res = await request(buildApp())
       .put('/api/admin/agents/agent-4/password')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+    expect(resetAgentPassword).not.toHaveBeenCalled();
+  });
+
+  test('a manager can reset an agent\'s password', async () => {
+    findAgentById.mockResolvedValue({ id: 'agent-4', role: 'agent' });
+    resetAgentPassword.mockResolvedValue('Xy9kFpQr2z');
+
+    const res = await request(buildApp())
+      .put('/api/admin/agents/agent-4/password')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
+
+    expect(res.status).toBe(200);
+    expect(resetAgentPassword).toHaveBeenCalledWith('agent-4');
+  });
+
+  test('a manager cannot reset an admin\'s password', async () => {
+    findAgentById.mockResolvedValue({ id: 'admin-2', role: 'admin' });
+
+    const res = await request(buildApp())
+      .put('/api/admin/agents/admin-2/password')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
+
     expect(res.status).toBe(403);
     expect(resetAgentPassword).not.toHaveBeenCalled();
   });
@@ -301,6 +426,31 @@ describe('PUT /api/admin/agents/:id/sectors', () => {
     const res = await request(buildApp())
       .put('/api/admin/agents/agent-4/sectors')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ sectorIds: [] });
+
+    expect(res.status).toBe(403);
+    expect(setAgentSectors).not.toHaveBeenCalled();
+  });
+
+  test('a manager can set an agent\'s sectors', async () => {
+    findAgentById.mockResolvedValue({ id: 'agent-4', role: 'agent' });
+    setAgentSectors.mockResolvedValue(undefined);
+
+    const res = await request(buildApp())
+      .put('/api/admin/agents/agent-4/sectors')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ sectorIds: ['sector-1'] });
+
+    expect(res.status).toBe(200);
+    expect(setAgentSectors).toHaveBeenCalledWith('agent-4', ['sector-1']);
+  });
+
+  test('a manager cannot set another manager\'s sectors', async () => {
+    findAgentById.mockResolvedValue({ id: 'manager-2', role: 'manager' });
+
+    const res = await request(buildApp())
+      .put('/api/admin/agents/manager-2/sectors')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
       .send({ sectorIds: [] });
 
     expect(res.status).toBe(403);

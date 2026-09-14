@@ -731,4 +731,46 @@ describe('AdminChannelsPage', () => {
     confirmSpy.mockRestore();
   });
 
+  test('hides Canais and Integrações for a manager without canManageIntegrations', () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'manager-1', role: 'manager', canManageIntegrations: false } });
+    useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+    expect(screen.queryByRole('button', { name: /^canais$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /integrações/i })).not.toBeInTheDocument();
+    // Anchored (not the plain /triagem/i from the brief): with no Integrações
+    // access the page defaults to the Triagem tab, so TriageAdminTab's own
+    // "O que é isso: Triagem" help button (SectionHelp) is also on screen and
+    // matches an unanchored /triagem/i, making getByRole ambiguous. The exact
+    // match targets only the nav item, same precision the Canais assertion
+    // above already uses with /^canais$/i.
+    expect(screen.getByRole('button', { name: /^triagem$/i })).toBeInTheDocument();
+  });
+
+  test('shows Canais and Integrações for a manager with canManageIntegrations', () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'manager-1', role: 'manager', canManageIntegrations: true } });
+    useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole('button', { name: /^canais$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /integrações/i })).toBeInTheDocument();
+  });
+
+  test('defaults to the Triagem tab for a manager without canManageIntegrations, not the hidden Canais tab', () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'manager-1', role: 'manager', canManageIntegrations: false } });
+    useChannels.mockReturnValue({ channels: [], loading: false, refresh: vi.fn() });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('O menu que o cliente recebe antes de falar com um atendente.')).toBeInTheDocument();
+  });
+
 });

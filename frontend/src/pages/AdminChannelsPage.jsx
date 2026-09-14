@@ -208,10 +208,16 @@ function ErrorNote({ children }) {
 }
 
 function AdminChannelsPage() {
-  const { token } = useAuth();
+  const { token, agent } = useAuth();
+  const hasIntegrationsAccess = agent?.role === 'admin' || (agent?.role === 'manager' && agent?.canManageIntegrations === true);
+  const visibleSectionGroups = hasIntegrationsAccess
+    ? SECTION_GROUPS
+    : SECTION_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => item.value !== 'channels') }))
+        .filter((group) => group.group !== 'Integrações');
+  const visibleSections = visibleSectionGroups.flatMap((group) => group.items);
   const [showHidden, setShowHidden] = useState(false);
   const { channels, refresh } = useChannels(true, showHidden);
-  const [activeTab, setActiveTab] = useState('channels');
+  const [activeTab, setActiveTab] = useState(hasIntegrationsAccess ? 'channels' : 'triage');
   const [triageToggleError, setTriageToggleError] = useState(null);
   const [aiToggleError, setAiToggleError] = useState(null);
   const [aiTriageToggleError, setAiTriageToggleError] = useState(null);
@@ -332,7 +338,7 @@ function AdminChannelsPage() {
     }
   }
 
-  const section = SECTIONS.find((item) => item.value === activeTab) || SECTIONS[0];
+  const section = visibleSections.find((item) => item.value === activeTab) || visibleSections[0];
 
   function sectionButtonClass(value) {
     return `relative flex w-auto shrink-0 items-center whitespace-nowrap rounded-[12px] px-2.5 py-[7px] text-left text-[14px] transition md:w-full ${
@@ -365,7 +371,7 @@ function AdminChannelsPage() {
             </h1>
           </div>
           <nav className="chat-scroll flex min-h-0 gap-1 overflow-x-auto px-2 pb-3 md:flex-1 md:flex-col md:gap-0 md:overflow-x-hidden md:overflow-y-auto md:px-1.5 md:pb-4">
-            {SECTION_GROUPS.map((group) => (
+            {visibleSectionGroups.map((group) => (
               <div key={group.group} className="flex gap-1 md:block">
                 <p className="hidden px-2.5 pb-1 pt-3.5 text-[11.5px] font-medium text-chat-faint md:block">{group.group}</p>
                 {group.items.map((item) => (

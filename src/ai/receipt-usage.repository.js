@@ -26,4 +26,17 @@ async function releaseReceipt(transactionId) {
   await getPool().query('DELETE FROM ai_receipts_used WHERE transaction_id = $1', [transactionId]);
 }
 
-module.exports = { claimReceipt, releaseReceipt };
+// Quem usou o comprovante antes. Só para o resumo interno: o contrato que sai
+// daqui é de OUTRO cliente e nunca pode ser repetido a quem mandou a imagem.
+async function findReceiptUsage(transactionId) {
+  if (!transactionId) return null;
+  const result = await getPool().query(
+    'SELECT contact_id, contract_id, used_at FROM ai_receipts_used WHERE transaction_id = $1',
+    [transactionId]
+  );
+  if (result.rowCount === 0) return null;
+  const linha = result.rows[0];
+  return { contactId: linha.contact_id, contractId: linha.contract_id, usedAt: linha.used_at };
+}
+
+module.exports = { claimReceipt, releaseReceipt, findReceiptUsage };

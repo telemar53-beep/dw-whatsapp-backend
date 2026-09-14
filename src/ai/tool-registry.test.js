@@ -42,7 +42,7 @@ const { analyzeImage } = require('./openai-client');
 const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { getCompanyConfig } = require('../company/company-config.repository');
-const { claimReceipt, releaseReceipt } = require('./receipt-usage.repository');
+const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
@@ -770,8 +770,67 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(r.motivo).toBe('Este comprovante já foi utilizado.');
     expect(r.instrucao).toContain('a partir das 08:00');
     expect(r.instrucao).toContain('Responda EXATAMENTE neste modelo:');
-    expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'Este comprovante já foi utilizado.' });
     expect(ctx.desbloqueioRealizado).toBeFalsy();
+  });
+
+  // O resumo da fila diz ONDE o comprovante já tinha sido usado; a frase do
+  // cliente, não. O contrato é de outra pessoa.
+  describe('comprovante já utilizado: onde a descrição pode aparecer', () => {
+    const USADO_EM = new Date('2026-09-14T02:12:00.000Z');
+    const DESCRICAO = 'já utilizado no contrato 26515 em 13/09 às 23:12';
+
+    beforeEach(() => {
+      claimReceipt.mockResolvedValue(false);
+      findReceiptUsage.mockResolvedValue({ contactId: 'ct-9', contractId: 26515, usedAt: USADO_EM });
+    });
+
+    test('o resumo interno recebe o motivo com contrato e hora', async () => {
+      const ctx = noturno();
+      await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+      expect(findReceiptUsage).toHaveBeenCalledWith(ID_TRANSACAO);
+      expect(ctx.desbloqueioResultado).toEqual({
+        liberado: false, motivo: `Este comprovante já foi utilizado (${DESCRICAO}).`,
+      });
+    });
+
+    // A garantia que importa: nada do uso anterior pode chegar ao WhatsApp de
+    // quem mandou a imagem — nem pela frase pronta, nem pelo motivo que o
+    // modelo lê e pode repetir.
+    test('a frase do cliente e o motivo devolvido ao modelo ficam sem contrato e sem hora', async () => {
+      const ctx = noturno();
+      const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+      expect(r.motivo).toBe('Este comprovante já foi utilizado.');
+      expect(r.instrucao).toContain('Este comprovante já foi utilizado.');
+      for (const texto of [r.instrucao, r.motivo]) {
+        expect(texto).not.toContain('26515');
+        expect(texto).not.toContain('23:12');
+        expect(texto).not.toContain('13/09');
+      }
+    });
+
+    // O uso existe (o claim falhou), mas a linha sumiu entre uma coisa e
+    // outra: a recusa continua de pé, só sem a descrição.
+    test('sem uso encontrado, a recusa continua e o resumo fica sem descrição', async () => {
+      findReceiptUsage.mockResolvedValue(null);
+      const ctx = noturno();
+      const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+      expect(r.liberado).toBe(false);
+      expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'Este comprovante já foi utilizado.' });
+    });
+
+    // Banco fora do ar na consulta do uso não pode virar liberação nem erro:
+    // a recusa é a mesma, só sem a descrição.
+    test('falha ao consultar o uso não derruba a recusa', async () => {
+      findReceiptUsage.mockRejectedValue(new Error('banco fora do ar'));
+      const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const ctx = noturno();
+      const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+      expect(r.liberado).toBe(false);
+      expect(r.motivo).toBe('Este comprovante já foi utilizado.');
+      expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
+      expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'Este comprovante já foi utilizado.' });
+      erroSpy.mockRestore();
+    });
   });
 
   test('comprovante sem id de transação legível: recusa sem reservar nada', async () => {
@@ -2198,6 +2257,28 @@ describe('concluir_triagem', () => {
       expect(summary).toContain('Setor: Financeiro');
     });
 
+    test('comprovante já usado antes: a linha ganha o aviso com contrato e hora', async () => {
+      const c = ctx({
+        comprovante: {
+          valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '98765', contratoId: 26515, motivos: [],
+          usoAnterior: { contractId: 26515, usedAt: new Date('2026-09-14T02:12:00.000Z'), descricao: 'já utilizado no contrato 26515 em 13/09 às 23:12' },
+        },
+      });
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      const summary = concludeAiTriage.mock.calls[0][1].summary;
+      expect(summary.split(String.fromCharCode(10))[0]).toBe(
+        'Comprovante (visão): pix R$ 135,00 em 13/09/2026 — conferido, fatura 98765 do contrato 26515 — ⚠ já utilizado no contrato 26515 em 13/09 às 23:12'
+      );
+    });
+
+    test('sem uso anterior, a linha não ganha aviso nenhum', async () => {
+      const c = ctx({
+        comprovante: { valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '4321', contratoId: 17402, motivos: [], usoAnterior: null },
+      });
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      expect(concludeAiTriage.mock.calls[0][1].summary).not.toContain('⚠');
+    });
+
     test('sem comprovante, o resumo de dia não ganha linha nenhuma', async () => {
       await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, ctx());
       const summary = concludeAiTriage.mock.calls[0][1].summary;
@@ -2356,6 +2437,8 @@ describe('analisar_comprovante', () => {
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '4321', value: 135, dueDate: '2026-09-16' }] });
     sgpClient.getPixMerchant.mockResolvedValue({ name: 'PROVEDOR X LTDA', key: '12345', keyType: 'cnpj' });
     getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: ['Provedor X Ltda'] });
+    // Padrão: o comprovante nunca tinha sido usado antes.
+    findReceiptUsage.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -2447,6 +2530,7 @@ describe('analisar_comprovante', () => {
     expect(c.comprovante).toEqual({
       valido: true, contratoId: 17402, faturaId: '4321', valor: 135,
       data: LEITURA.data, tipo: 'pix', idTransacao: ID_TRANSACAO, motivos: [],
+      usoAnterior: null,
     });
   });
 
@@ -2472,6 +2556,60 @@ describe('analisar_comprovante', () => {
     const r = await findTool('analisar_comprovante').executar({}, ctx({ contracts: [{ id: 17402 }, { id: 17403 }] }));
     expect(r.analisado).toBe(true);
     expect(r.faturaId).toBe('9999');
+  });
+
+  // "Talvez eu esteja sendo roubado e não saiba": toda leitura, dia ou noite,
+  // diz se aquele id de transação já foi usado — e em qual contrato.
+  describe('uso anterior do mesmo id de transação', () => {
+    const USADO_EM = new Date('2026-09-14T02:12:00.000Z');
+
+    test('comprovante já usado: o resultado avisa, com contrato e hora', async () => {
+      findReceiptUsage.mockResolvedValue({ contactId: 'ct-9', contractId: 26515, usedAt: USADO_EM });
+      const c = ctx();
+      const r = await findTool('analisar_comprovante').executar({}, c);
+
+      expect(findReceiptUsage).toHaveBeenCalledWith(ID_TRANSACAO);
+      expect(r.jaUtilizado).toBe(true);
+      expect(r.descricao).toBe('já utilizado no contrato 26515 em 13/09 às 23:12');
+      expect(r.usoAnterior).toEqual({
+        contractId: 26515, usedAt: USADO_EM,
+        descricao: 'já utilizado no contrato 26515 em 13/09 às 23:12',
+      });
+      expect(c.comprovante.usoAnterior).toEqual(r.usoAnterior);
+      // O contato do outro cliente não interessa a ninguém aqui: só contrato
+      // e hora vão para o resumo.
+      expect(r.usoAnterior).not.toHaveProperty('contactId');
+    });
+
+    test('comprovante inédito: usoAnterior nulo e sem jaUtilizado', async () => {
+      const c = ctx();
+      const r = await findTool('analisar_comprovante').executar({}, c);
+      expect(findReceiptUsage).toHaveBeenCalledWith(ID_TRANSACAO);
+      expect(r.usoAnterior).toBeNull();
+      expect(r.jaUtilizado).toBeFalsy();
+      expect(r).not.toHaveProperty('descricao');
+      expect(c.comprovante.usoAnterior).toBeNull();
+    });
+
+    // Sem id não há o que procurar: a consulta nem acontece.
+    test('comprovante sem id de transação: nem consulta o uso anterior', async () => {
+      analyzeImage.mockResolvedValue({ ...LEITURA, idTransacao: null });
+      const c = ctx();
+      const r = await findTool('analisar_comprovante').executar({}, c);
+      expect(findReceiptUsage).not.toHaveBeenCalled();
+      expect(r.usoAnterior).toBeNull();
+      expect(c.comprovante.usoAnterior).toBeNull();
+    });
+
+    // Vale de dia também: é justamente de dia que o comprovante reenviado por
+    // outra pessoa passava despercebido.
+    test('de dia, com a leitura ligada, o aviso sai igual', async () => {
+      getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', triageReadReceiptsDaytime: true });
+      findReceiptUsage.mockResolvedValue({ contactId: 'ct-9', contractId: 26515, usedAt: USADO_EM });
+      const r = await findTool('analisar_comprovante').executar({}, ctx({ triagem: { noturno: { ativo: false, retornoAs: null } } }));
+      expect(r.jaUtilizado).toBe(true);
+      expect(r.descricao).toBe('já utilizado no contrato 26515 em 13/09 às 23:12');
+    });
   });
 
   test('o caminho do arquivo nunca aparece no resultado nem no contexto', async () => {

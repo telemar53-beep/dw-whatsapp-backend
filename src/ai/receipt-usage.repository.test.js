@@ -1,5 +1,5 @@
 const { getPool, closePool } = require('../db/pool');
-const { claimReceipt, releaseReceipt } = require('./receipt-usage.repository');
+const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 
 describe('receipt usage repository', () => {
   beforeEach(async () => {
@@ -44,6 +44,41 @@ describe('receipt usage repository', () => {
 
   test('releaseReceipt de um id que não está reservado não quebra', async () => {
     await expect(releaseReceipt('E-que-nunca-existiu')).resolves.not.toThrow();
+  });
+
+  // Quem já usou o comprovante, em qual contrato e quando: é o que a triagem
+  // conta à atendente no resumo (e nunca ao cliente).
+  describe('findReceiptUsage', () => {
+    test('devolve o contato, o contrato e a hora do uso anterior', async () => {
+      const contato = await getPool().query(
+        "INSERT INTO contacts (phone_number, display_name) VALUES ('5511999990001', 'Fulano') RETURNING id"
+      );
+      const antes = new Date();
+      await claimReceipt({ transactionId: 'E123', contactId: contato.rows[0].id, contractId: 26515 });
+
+      const uso = await findReceiptUsage('E123');
+      expect(uso.contactId).toBe(contato.rows[0].id);
+      expect(uso.contractId).toBe(26515);
+      expect(uso.usedAt).toBeInstanceOf(Date);
+      expect(uso.usedAt.getTime()).toBeGreaterThanOrEqual(antes.getTime() - 1000);
+    });
+
+    test('um id que nunca foi usado devolve null', async () => {
+      expect(await findReceiptUsage('E-que-nunca-existiu')).toBeNull();
+    });
+
+    test('id vazio ou ausente não vai ao banco', async () => {
+      expect(await findReceiptUsage(null)).toBeNull();
+      expect(await findReceiptUsage('')).toBeNull();
+    });
+
+    // O uso é devolvido junto com o comprovante quando a liberação não vinga:
+    // depois disso não há mais uso anterior nenhum a contar.
+    test('depois do releaseReceipt não há mais uso anterior', async () => {
+      await claimReceipt({ transactionId: 'E123', contactId: null, contractId: 26515 });
+      await releaseReceipt('E123');
+      expect(await findReceiptUsage('E123')).toBeNull();
+    });
   });
 
   test('grava o contato quando ele existe', async () => {

@@ -27,7 +27,8 @@ const { analyzeImage } = require('./openai-client');
 const { getAiConfig } = require('./ai-config.repository');
 const { conferirComprovante, PROMPT_VISAO } = require('./comprovante');
 const { getCompanyConfig } = require('../company/company-config.repository');
-const { claimReceipt, releaseReceipt } = require('./receipt-usage.repository');
+const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
+const { descreverUsoAnterior } = require('./receipt-usage-text');
 // Mesmo normalizador que sgp-client.js usa no que vem do cadastro: os dois
 // lados da conferência da data precisam concordar sobre o que é uma data.
 const { normalizarDataNascimento } = require('./data-nascimento');
@@ -920,7 +921,18 @@ const TOOLS = [
           reservaFeita = reservado === true;
           if (!reservado) {
             const motivo = 'Este comprovante já foi utilizado.';
-            registrarRecusa(motivo);
+            // Onde ele foi usado antes é informação do resumo, para o
+            // atendente entender o que aconteceu. O cliente lê a mesma frase
+            // de sempre: o contrato e a hora são de OUTRA pessoa, e o `motivo`
+            // devolvido aqui é lido pelo modelo, que pode repeti-lo.
+            let descricao = null;
+            try {
+              const uso = await findReceiptUsage(comprovante.idTransacao);
+              if (uso) descricao = descreverUsoAnterior(uso);
+            } catch (err) {
+              console.error(`Failed to look up previous receipt usage for contract ${args.contratoId}: ${mensagemSegura(err)}`);
+            }
+            registrarRecusa(descricao ? `Este comprovante já foi utilizado (${descricao}).` : motivo);
             return { liberado: false, motivo, instrucao: instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', motivo) };
           }
         }
@@ -1086,9 +1098,32 @@ const TOOLS = [
       const conferencia = conferirComprovante({ leitura, faturas, nomesAceitos });
       const fatura = conferencia.faturaId ? faturas.find((f) => f.id === conferencia.faturaId) : null;
       const resultado = { analisado: true, ...conferencia, contratoId: fatura ? fatura.contratoId : null };
+
+      // Toda leitura, de dia ou de noite, diz se este id de transação já foi
+      // usado antes: é a única forma de o mesmo comprovante, emprestado ou
+      // reenviado, não passar duas vezes. Sem id não há o que procurar. O
+      // banco fora do ar aqui não pode derrubar a leitura inteira — sem a
+      // consulta, a conferência ainda vale, só fica sem o aviso.
+      let usoAnterior = null;
+      if (conferencia.idTransacao) {
+        try {
+          const uso = await findReceiptUsage(conferencia.idTransacao);
+          if (uso) usoAnterior = { contractId: uso.contractId, usedAt: uso.usedAt, descricao: descreverUsoAnterior(uso) };
+        } catch (err) {
+          console.error(`analisar_comprovante: uso anterior indisponível na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+        }
+      }
+      resultado.usoAnterior = usoAnterior;
+      // jaUtilizado é o que o modelo lê. A descrição vai junto porque o
+      // roteiro manda NÃO contá-la ao cliente: ela existe para o resumo.
+      if (usoAnterior) {
+        resultado.jaUtilizado = true;
+        resultado.descricao = usoAnterior.descricao;
+      }
+
       // O veredito fica no contexto do turno para o desbloqueio em confiança
       // poder consultá-lo sem reler a imagem.
-      contexto.comprovante = { valido: conferencia.valido, contratoId: resultado.contratoId, faturaId: conferencia.faturaId, valor: conferencia.valor, data: conferencia.data, tipo: conferencia.tipo, idTransacao: conferencia.idTransacao, motivos: conferencia.motivos };
+      contexto.comprovante = { valido: conferencia.valido, contratoId: resultado.contratoId, faturaId: conferencia.faturaId, valor: conferencia.valor, data: conferencia.data, tipo: conferencia.tipo, idTransacao: conferencia.idTransacao, motivos: conferencia.motivos, usoAnterior };
       return resultado;
     },
   },
@@ -1419,7 +1454,10 @@ const TOOLS = [
         const valor = comp.valor == null ? 'valor não lido' : `R$ ${Number(comp.valor).toFixed(2).replace('.', ',')}`;
         const data = comp.data ? formatarData(comp.data) : 'data não lida';
         const conferencia = comp.valido ? 'conferido' : `NÃO conferiu: ${(comp.motivos || []).join('; ')}`;
-        extras.push(`Comprovante (visão): ${comp.tipo || 'outro'} ${valor} em ${data} — ${conferencia}${comp.faturaId ? `, fatura ${comp.faturaId}` : ''}${comp.contratoId ? ` do contrato ${comp.contratoId}` : ''}`);
+        // O aviso de uso anterior cita o contrato de OUTRO cliente: ele existe
+        // só aqui, no resumo interno, e nunca em nada que vá ao WhatsApp.
+        const jaUsado = comp.usoAnterior && comp.usoAnterior.descricao ? ` — ⚠ ${comp.usoAnterior.descricao}` : '';
+        extras.push(`Comprovante (visão): ${comp.tipo || 'outro'} ${valor} em ${data} — ${conferencia}${comp.faturaId ? `, fatura ${comp.faturaId}` : ''}${comp.contratoId ? ` do contrato ${comp.contratoId}` : ''}${jaUsado}`);
       }
       const desbloqueio = noturno ? contexto.desbloqueioResultado : null;
       if (desbloqueio) {

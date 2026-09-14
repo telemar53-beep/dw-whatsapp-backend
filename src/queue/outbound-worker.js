@@ -1,7 +1,7 @@
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
-const { findMessageById, updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
+const { findMessageById, updateMessageStatus, recordMessageSent, markPixFallbackSent } = require('../conversations/message.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -17,6 +17,7 @@ const ADAPTERS_BY_CHANNEL_TYPE = {
 };
 
 const AUDIO_DELIVERY_CHECK_DELAY_MS = 5000;
+const PIX_DELIVERY_CHECK_DELAY_MS = 60000;
 
 // Baileys can mark an audio message delivered even when WhatsApp never lets the recipient
 // download it - the customer just sees a broken bubble with no signal back to us (see
@@ -52,6 +53,52 @@ function scheduleAudioDeliveryCheck(ctx) {
   }, AUDIO_DELIVERY_CHECK_DELAY_MS);
 }
 
+// O cartao nativo de Pix e uma mensagem interativa, e nem todo aparelho a
+// reconhece: no teste de 2026-09-14 o cartao ficou com um tique so (o servidor
+// aceitou) enquanto o texto seguinte chegou com dois. Como o relayMessage nao
+// falha nesse caso, a unica pista que temos e a ausencia do recibo de entrega.
+// Um minuto depois do envio, se a mensagem continua em 'sent', mandamos o de
+// sempre - cartao de texto + codigo sozinho - para o cliente nao ficar sem o
+// Pix por causa do aparelho dele.
+async function checkPixDelivery({ messageId, conversation, channel, pixCode, metadata }) {
+  const msg = await findMessageById(messageId);
+  if (!msg || msg.status === 'delivered' || msg.status === 'read') {
+    console.log(`Pix card ${msg ? msg.whatsappMessageId : messageId} delivered`);
+    return;
+  }
+  // O caminho de falha do envio ja cuidou desta mensagem; nao duplicar.
+  if (msg.status === 'failed') return;
+
+  // A marca vive na metadata da mensagem, no banco: um restart do worker ou um
+  // retry da fila nao pode mandar o codigo duas vezes.
+  const marcou = await markPixFallbackSent(messageId);
+  if (!marcou) return;
+
+  console.warn(`Pix card ${messageId} got no delivery receipt after 60s; sending the text fallback`);
+  const textos = [cartaoPix({ valor: (metadata || {}).value, vencimento: (metadata || {}).dueDate }), pixCode];
+  for (const content of textos) {
+    const enviada = await enqueueOutboundMessage({
+      conversationId: conversation.id,
+      channelId: channel.id,
+      content,
+      messageType: 'text',
+      sentBy: msg.sentBy,
+    });
+    if (conversation.assignedAgentId) {
+      emitToAgent(conversation.assignedAgentId, 'message:new', { conversation, message: enviada });
+    }
+  }
+}
+
+function schedulePixDeliveryCheck(ctx) {
+  setTimeout(() => {
+    checkPixDelivery(ctx).catch((err) => {
+      // mensagemSegura: o codigo Pix nao entra em log nenhum, nem pelo erro.
+      console.error(`Pix delivery check crashed for ${ctx.messageId}: ${mensagemSegura(err)}`);
+    });
+  }, PIX_DELIVERY_CHECK_DELAY_MS);
+}
+
 /**
  * Manda o Pix da melhor forma que o canal aceitar, sem nunca deixar o cliente
  * sem o código.
@@ -74,13 +121,14 @@ async function sendPixOrFallback({ adapter, channel, to, pixCode, metadata }) {
   const precisaMerchant = channel.type !== 'baileys';
   if (typeof adapter.sendPixCardMessage === 'function' && (!precisaMerchant || merchant)) {
     try {
-      return await adapter.sendPixCardMessage(channel, to, {
+      const { whatsappMessageId } = await adapter.sendPixCardMessage(channel, to, {
         pixCode,
         value: metadata.value,
         dueDate: metadata.dueDate,
         faturaId: metadata.faturaId,
         merchant,
       });
+      return { whatsappMessageId, viaCartao: true };
     } catch (err) {
       // mensagemSegura, e nunca o erro cru nem o pixCode: o código Pix não entra
       // em log nenhum.
@@ -89,7 +137,7 @@ async function sendPixOrFallback({ adapter, channel, to, pixCode, metadata }) {
   }
   await adapter.sendTextMessage(channel, to, cartaoPix({ valor: metadata.value, vencimento: metadata.dueDate }));
   const { whatsappMessageId } = await adapter.sendTextMessage(channel, to, pixCode);
-  return { whatsappMessageId };
+  return { whatsappMessageId, viaCartao: false };
 }
 
 function startOutboundWorker() {
@@ -113,7 +161,7 @@ function startOutboundWorker() {
         }
       }
 
-      const { whatsappMessageId } = templateName
+      const { whatsappMessageId, viaCartao } = templateName
         ? await adapter.sendTemplateMessage(channel, conversation.contactPhoneNumber, {
             name: templateName,
             language: templateLanguage,
@@ -148,6 +196,11 @@ function startOutboundWorker() {
       }
       if (channel.type === 'baileys' && messageType === 'audio' && whatsappMessageId) {
         scheduleAudioDeliveryCheck({ channel, whatsappMessageId, conversation, mediaPath, mediaMimeType, mediaFilename, isVoiceNote });
+      }
+      // So faz sentido conferir o que saiu como cartao: o que ja caiu para texto
+      // nao tem para onde cair.
+      if (channel.type === 'baileys' && messageType === 'pix' && viaCartao) {
+        schedulePixDeliveryCheck({ messageId, conversation, channel, pixCode: content, metadata });
       }
     } catch (err) {
       const message = await updateMessageStatus(messageId, 'failed');

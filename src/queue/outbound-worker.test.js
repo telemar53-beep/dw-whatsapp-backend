@@ -11,7 +11,7 @@ jest.mock('../integrations/sgp-client');
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
-const { findMessageById, updateMessageStatus, recordMessageSent } = require('../conversations/message.repository');
+const { findMessageById, updateMessageStatus, recordMessageSent, markPixFallbackSent } = require('../conversations/message.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -340,8 +340,15 @@ describe('startOutboundWorker', () => {
     }
 
     beforeEach(() => {
+      // O cartao no Baileys agenda a conferencia de entrega; sem relogio falso
+      // esses testes deixariam um setTimeout de 60s solto para tras.
+      jest.useFakeTimers();
       getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
       getPixMerchant.mockResolvedValue(null);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
     });
 
     test('no Baileys manda o cart\u00e3o sem precisar de recebedor cadastrado', async () => {
@@ -440,6 +447,133 @@ describe('startOutboundWorker', () => {
       await handler(jobPix('channel-2'));
 
       expect(baileysManager.sendMediaMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('queda para texto quando o cartão de Pix não recebe recibo', () => {
+    const METADATA = { value: 135, dueDate: '2026-09-15', faturaId: 4321 };
+    const PIX_CODE = '00020126580014BR.GOV.BCB.PIX0136chave-pix';
+    const MERCHANT = { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' };
+    const CONVERSA = { id: 'conv-1', contactPhoneNumber: '5511999998888', assignedAgentId: 'agent-1' };
+
+    function jobPix(channelId) {
+      return {
+        messageId: 'msg-pix', conversationId: 'conv-1', channelId,
+        content: PIX_CODE, messageType: 'pix', metadata: METADATA,
+      };
+    }
+
+    // O primeiro findMessageById é o do worker (checa reenvio); o segundo é o da
+    // conferência de entrega, um minuto depois.
+    function mensagemGravadaCom(status) {
+      findMessageById
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ id: 'msg-pix', status, whatsappMessageId: 'BAILEYS_PIX_1', sentBy: 'ai' });
+    }
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      getConversationWithContact.mockResolvedValue(CONVERSA);
+      getPixMerchant.mockResolvedValue(null);
+      markPixFallbackSent.mockResolvedValue(true);
+      enqueueOutboundMessage.mockResolvedValue({ id: 'msg-texto' });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    test('cartão com recibo de entrega não gera nenhum texto', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
+      baileysManager.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'BAILEYS_PIX_1' });
+      mensagemGravadaCom('delivered');
+
+      await handler(jobPix('channel-2'));
+      await jest.advanceTimersByTimeAsync(60000);
+
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      expect(markPixFallbackSent).not.toHaveBeenCalled();
+    });
+
+    test('cartão ainda em sent depois de 60s cai para o texto: cartão e depois o código', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
+      baileysManager.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'BAILEYS_PIX_1' });
+      mensagemGravadaCom('sent');
+      const aviso = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      await handler(jobPix('channel-2'));
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+
+      await jest.advanceTimersByTimeAsync(60000);
+
+      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix');
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
+      expect(enqueueOutboundMessage).toHaveBeenNthCalledWith(1, {
+        conversationId: 'conv-1',
+        channelId: 'channel-2',
+        content: cartaoPix({ valor: 135, vencimento: '2026-09-15' }),
+        messageType: 'text',
+        sentBy: 'ai',
+      });
+      expect(enqueueOutboundMessage).toHaveBeenNthCalledWith(2, {
+        conversationId: 'conv-1',
+        channelId: 'channel-2',
+        content: PIX_CODE,
+        messageType: 'text',
+        sentBy: 'ai',
+      });
+      expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:new', {
+        conversation: CONVERSA,
+        message: { id: 'msg-texto' },
+      });
+      // O código Pix nunca pode aparecer no log.
+      const avisado = aviso.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(avisado).toContain('no delivery receipt');
+      expect(avisado).not.toContain(PIX_CODE);
+      aviso.mockRestore();
+    });
+
+    test('não repete a queda quando outro processo já marcou a mensagem', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
+      baileysManager.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'BAILEYS_PIX_1' });
+      mensagemGravadaCom('sent');
+      markPixFallbackSent.mockResolvedValue(false);
+
+      await handler(jobPix('channel-2'));
+      await jest.advanceTimersByTimeAsync(60000);
+
+      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix');
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('canal oficial não agenda conferência nenhuma', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      getPixMerchant.mockResolvedValue(MERCHANT);
+      metaCloudAdapter.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'wamid.PIX1' });
+      mensagemGravadaCom('sent');
+
+      await handler(jobPix('channel-1'));
+      await jest.advanceTimersByTimeAsync(60000);
+
+      expect(markPixFallbackSent).not.toHaveBeenCalled();
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('envio que já saiu como texto não agenda conferência', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
+      baileysManager.sendPixCardMessage.mockRejectedValue(new Error('400 interactive not supported'));
+      baileysManager.sendTextMessage
+        .mockResolvedValueOnce({ whatsappMessageId: 'BAILEYS_TXT_CARTAO' })
+        .mockResolvedValueOnce({ whatsappMessageId: 'BAILEYS_TXT_CODIGO' });
+      mensagemGravadaCom('sent');
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await handler(jobPix('channel-2'));
+      await jest.advanceTimersByTimeAsync(60000);
+
+      expect(markPixFallbackSent).not.toHaveBeenCalled();
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      erro.mockRestore();
     });
   });
 

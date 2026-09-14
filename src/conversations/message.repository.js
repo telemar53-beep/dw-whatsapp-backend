@@ -281,6 +281,29 @@ async function markTranscriptionFailed(messageId, { status, detail, ms }) {
   return toMessage(result.rows[0]);
 }
 
+/**
+ * Marca que a queda para texto do cartão de Pix já foi feita nesta mensagem.
+ *
+ * A marca vive na própria metadata da mensagem porque precisa sobreviver a um
+ * restart do worker e a um retry da fila: sem ela, o cliente receberia o código
+ * duas vezes. O UPDATE só pega quem ainda não está marcado, então a corrida
+ * entre dois processos é resolvida pelo banco e não por quem chega antes.
+ *
+ * Devolve true quando esta chamada foi a que marcou (pode enfileirar o texto),
+ * false quando alguém já tinha marcado antes.
+ */
+async function markPixFallbackSent(messageId) {
+  const result = await getPool().query(
+    `UPDATE messages
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"fallbackTextoEnviado": true}'::jsonb
+      WHERE id = $1
+        AND (metadata->>'fallbackTextoEnviado') IS DISTINCT FROM 'true'
+      RETURNING id`,
+    [messageId]
+  );
+  return result.rowCount > 0;
+}
+
 module.exports = {
   createMessage,
   updateMessageStatus,
@@ -295,4 +318,5 @@ module.exports = {
   markTranscriptionProcessing,
   saveTranscription,
   markTranscriptionFailed,
+  markPixFallbackSent,
 };

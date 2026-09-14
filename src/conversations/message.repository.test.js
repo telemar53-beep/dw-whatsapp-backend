@@ -16,6 +16,7 @@ const {
   markTranscriptionProcessing,
   saveTranscription,
   markTranscriptionFailed,
+  markPixFallbackSent,
 } = require('./message.repository');
 
 describe('message repository', () => {
@@ -212,6 +213,39 @@ describe('message repository', () => {
       expect(lista[0].metadata).toEqual({ value: 135, dueDate: '2026-09-15', faturaId: 999 });
       const recentes = await listRecentMessagesByConversation(conversationId, 10);
       expect(recentes[0].metadata).toEqual({ value: 135, dueDate: '2026-09-15', faturaId: 999 });
+    });
+
+    test('markPixFallbackSent marca a queda uma vez só e preserva a metadata', async () => {
+      const created = await createMessage({
+        conversationId,
+        direction: 'outbound',
+        content: '00020126580014BR.GOV.BCB.PIX0136chave-pix',
+        status: 'sent',
+        messageType: 'pix',
+        metadata: { value: 135, dueDate: '2026-09-15', faturaId: 999 },
+      });
+
+      await expect(markPixFallbackSent(created.id)).resolves.toBe(true);
+      // Uma segunda passada (retry da fila, restart do worker) não pode
+      // duplicar as mensagens de texto.
+      await expect(markPixFallbackSent(created.id)).resolves.toBe(false);
+
+      const found = await findMessageById(created.id);
+      expect(found.metadata).toEqual({
+        value: 135, dueDate: '2026-09-15', faturaId: 999, fallbackTextoEnviado: true,
+      });
+    });
+
+    test('markPixFallbackSent funciona em mensagem sem metadata nenhuma', async () => {
+      const created = await createMessage({
+        conversationId,
+        direction: 'outbound',
+        content: 'Oi',
+        status: 'sent',
+      });
+      await expect(markPixFallbackSent(created.id)).resolves.toBe(true);
+      const found = await findMessageById(created.id);
+      expect(found.metadata).toEqual({ fallbackTextoEnviado: true });
     });
 
     test('metadata é null quando a mensagem não tem nenhuma', async () => {

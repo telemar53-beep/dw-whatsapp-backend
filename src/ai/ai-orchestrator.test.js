@@ -778,6 +778,64 @@ describe('perfil de triagem', () => {
       expect(createChatCompletion).toHaveBeenCalledTimes(2);
     });
 
+    // Fix round 1: a volta forcada de entrega nascia sujeita ao teto de
+    // ferramentas, entao no turno que ja gastou o limite ela era barrada por
+    // ele mesmo — o cliente ficava com a promessa e sem o Pix, que e
+    // exatamente o defeito que a guarda existe para fechar. As conclusoes
+    // forcadas ja tinham essa isencao.
+    test('a entrega forcada passa mesmo com o teto de ferramentas ja estourado', async () => {
+      getAiConfig.mockResolvedValue({
+        apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
+        maxToolsPerInteraction: 2, triageExtraInstructions: 'Seja breve.',
+        triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
+        triageRequireBirthdate: true,
+      });
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [
+          { id: 't1', function: { name: 'consultar_status_todos_contratos', arguments: '{}' } },
+          { id: 't2', function: { name: 'consultar_faturas_todos_contratos', arguments: '{}' } },
+        ] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Perfeito. Vou seguir com o Pix do contrato em aberto.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't3', function: { name: 'gerar_pix', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Enviei acima o PIX, João.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, ctx) => {
+        if (nome === 'gerar_pix') ctx.resolvidoPelaIa = true;
+        return { ok: true, resultado: { enviado: true } };
+      });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(createChatCompletion.mock.calls[2][0].toolChoice).toBe('required');
+      expect(executeTool).toHaveBeenCalledWith('gerar_pix', { contratoId: 17402 }, expect.any(Object));
+      expect(r.erro).toBeNull();
+      expect(r.texto).toBe('Enviei acima o PIX, João.');
+    });
+
+    // A isencao e so da volta forcada: uma chamada espontanea de gerar_pix
+    // depois do teto continua barrada, senao o limite nao limitaria nada.
+    test('sem a volta forcada, gerar_pix depois do teto continua barrado', async () => {
+      getAiConfig.mockResolvedValue({
+        apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
+        maxToolsPerInteraction: 2, triageExtraInstructions: 'Seja breve.',
+        triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
+        triageRequireBirthdate: true,
+      });
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [
+          { id: 't1', function: { name: 'consultar_status_todos_contratos', arguments: '{}' } },
+          { id: 't2', function: { name: 'consultar_faturas_todos_contratos', arguments: '{}' } },
+        ] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't3', function: { name: 'gerar_pix', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't4', function: { name: 'concluir_triagem', arguments: '{"setorId":"11111111-1111-1111-1111-111111111111","resumo":"r","confianca":0.9}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Estou encaminhando, João.' }, usage: {} });
+      executeTool.mockResolvedValue({ ok: true, resultado: { concluido: true } });
+
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(executeTool).not.toHaveBeenCalledWith('gerar_pix', expect.anything(), expect.anything());
+      expect(createChatCompletion.mock.calls[2][0].toolChoice).toBe('concluir_triagem');
+    });
+
     test('a exigência acontece uma vez só por turno', async () => {
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: 'Vou gerar o PIX para você.' }, usage: {} })

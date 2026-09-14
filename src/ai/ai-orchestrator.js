@@ -74,6 +74,10 @@ function afirmaFila(texto) { return AFIRMA_FILA.test(String(texto || '')); }
 const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|emitir)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo)\b/i;
 function afirmaEnvio(texto) { return AFIRMA_ENVIO.test(String(texto || '')); }
 
+// As três que de fato põem o pagamento na mão do cliente. É o que a volta
+// forçada por anúncio de envio aceita como cumprimento da promessa.
+const FERRAMENTAS_DE_ENTREGA = ['gerar_pix', 'enviar_boleto', 'gerar_segunda_via'];
+
 function papelDaMensagem(message) {
   return message.direction === 'inbound' ? 'user' : 'assistant';
 }
@@ -602,7 +606,14 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       // modelo teimoso só seria barrado pelo TURNO_MAX_MS.
       const soConclusao = perfil === 'triagem' && (exigiuConclusaoPorLimite || exigiuConclusaoPorAnuncio)
         && chamadas.length > 0 && chamadas.every((c) => c.function.name === 'concluir_triagem');
-      if (!soConclusao && toolsRequested.length + chamadas.length > config.maxToolsPerInteraction) {
+      // Irmã da isenção acima, pelo mesmo motivo: a volta que exige a entrega
+      // anunciada não pode morrer no teto que o próprio turno já gastou — seria
+      // devolver ao cliente exatamente a promessa sem o Pix que a guarda existe
+      // para fechar. Só ELA passa, e só com ferramentas de entrega: uma chamada
+      // espontânea de gerar_pix depois do teto continua barrada.
+      const soEntrega = perfil === 'triagem' && exigiuEntregaPorAnuncio
+        && chamadas.length > 0 && chamadas.every((c) => FERRAMENTAS_DE_ENTREGA.includes(c.function.name));
+      if (!soConclusao && !soEntrega && toolsRequested.length + chamadas.length > config.maxToolsPerInteraction) {
         erro = 'tool_limit_reached';
         // Na triagem que ainda não concluiu, o limite vira uma ordem de
         // concluir — nunca um pedido de desculpas ao cliente. O resumo interno

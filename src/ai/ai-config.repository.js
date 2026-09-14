@@ -19,6 +19,8 @@ function toConfig(row) {
     triageTimeoutMinutes: row.triage_timeout_minutes,
     triageExtraInstructions: row.triage_extra_instructions,
     triageResolvedReasonId: row.triage_resolved_reason_id || null,
+    // Desligada (padrao): o CPF digitado ja identifica o cliente.
+    triageRequireBirthdate: Boolean(row.triage_require_birthdate),
     // O driver devolve TIME como 'HH:MM:SS'; a janela só trabalha com HH:MM.
     nightStartTime: row.night_start_time ? String(row.night_start_time).slice(0, 5) : null,
     nightEndTime: row.night_end_time ? String(row.night_end_time).slice(0, 5) : null,
@@ -68,15 +70,16 @@ async function updateTranscriptionConfig({
 
 // triageResolvedReasonId não usa COALESCE de propósito: null aqui é o admin
 // DESLIGANDO o encerramento pela IA, não "mantenha o que estava".
-async function updateTriageConfig({ triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId, nightStartTime, nightEndTime }) {
+async function updateTriageConfig({ triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId, nightStartTime, nightEndTime, triageRequireBirthdate }) {
   const result = await getPool().query(
     `UPDATE ai_config SET triage_confidence_threshold = $1, triage_max_questions = $2,
             triage_timeout_minutes = $3, triage_extra_instructions = $4,
             triage_resolved_reason_id = $5, night_start_time = $6, night_end_time = $7,
-            updated_at = now()
+            triage_require_birthdate = $8, updated_at = now()
       WHERE id = 1 RETURNING *`,
     [triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions,
-     triageResolvedReasonId || null, nightStartTime || null, nightEndTime || null]
+     triageResolvedReasonId || null, nightStartTime || null, nightEndTime || null,
+     Boolean(triageRequireBirthdate)]
   );
   return toConfig(result.rows[0]);
 }

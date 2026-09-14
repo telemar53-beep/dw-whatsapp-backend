@@ -896,6 +896,9 @@ describe('confirmar_nascimento', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     incrementBirthdateAttempts.mockResolvedValue(1);
+    // confirmar_nascimento só existe com a exigência LIGADA: desligada (o
+    // padrão) o próprio buscar_cliente já deixa a identidade forte.
+    getAiConfig.mockResolvedValue({ triageRequireBirthdate: true });
   });
 
   test('data certa em DD/MM/AAAA eleva para forte e persiste o vínculo do contato', async () => {
@@ -1178,7 +1181,13 @@ describe('esquecer_identificacao', () => {
 });
 
 describe('buscar_cliente no perfil de triagem', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Este bloco cobre o comportamento com a EXIGENCIA LIGADA: CPF digitado
+    // vale como identidade fraca ate a data de nascimento bater. Com a flag
+    // desligada (o padrao) o ramo e outro, no bloco logo abaixo.
+    getAiConfig.mockResolvedValue({ triageRequireBirthdate: true });
+  });
 
   test('atualiza a identidade para fraca com primeiro nome e data de nascimento no servidor, sem persistir vínculo', async () => {
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, login: 'l', plan: 'p', statusCode: 1 }] });
@@ -1319,6 +1328,97 @@ describe('buscar_cliente no perfil de triagem', () => {
     expect(r).toEqual({ cliente: { nome: 'Maria' }, quantidadeContratos: 1, proximoPasso: expect.stringContaining('confirmar_nascimento') });
     expect(setContactSgpLink).not.toHaveBeenCalled();
     expect(c.contact.sgpDocument).toBeUndefined();
+  });
+});
+
+describe('buscar_cliente na triagem com a data de nascimento dispensada (padrao)', () => {
+  // Decisao do dono (2026-09-14): "o dado mais importante e o CPF; no site do
+  // SGP o cliente loga so com ele". Com triageRequireBirthdate desligado, o CPF
+  // digitado ja identifica e libera boleto/PIX.
+  const CLIENTE = { client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1, address: 'RUA X, 10' }] };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getAiConfig.mockResolvedValue({ triageRequireBirthdate: false });
+    sgpClient.lookupClientByCpf.mockResolvedValue(CLIENTE);
+  });
+
+  function ctx() {
+    return { conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
+  }
+
+  test('o CPF digitado ja deixa a identidade FORTE, sem consultar data de nascimento', async () => {
+    const c = ctx();
+    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(c.identidade).toMatchObject({ nivel: 'forte', origem: 'cpf', primeiroNome: 'Maria' });
+    // Sem exigencia, a data de nascimento nem e buscada no SGP.
+    expect(sgpClient.findClientRecord).not.toHaveBeenCalled();
+  });
+
+  test('persiste o vinculo do contato na hora, com o primeiro nome', async () => {
+    const c = ctx();
+    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', {
+      sgpClientId: 9, sgpContractId: 5, sgpDocument: '11122233344', sgpFirstName: 'Maria',
+    });
+    expect(c.contact.sgpDocument).toBe('11122233344');
+  });
+
+  test('preenche a cidade e manda o aviso da cidade, como a confirmacao fazia', async () => {
+    const c = ctx();
+    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(preencherCidadePeloSgp).toHaveBeenCalledWith(c.contact, CLIENTE.contracts);
+    expect(enviarAvisoDeCidadeSePreciso).toHaveBeenCalledWith({
+      contact: c.contact, conversationId: 'conv-1', channelId: 'ch-1',
+    });
+  });
+
+  test('limpa qualquer CPF pendente: nao ha mais o que confirmar', async () => {
+    const c = ctx();
+    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
+  });
+
+  test('devolve os contratos com endereco e a instrucao de seguir', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 9, name: 'MARIA SOUZA', document: '1' },
+      contracts: [{ id: 5, statusCode: 1, address: 'RUA X, 10', login: 'joao123', plan: '600MB' }, { id: 6, statusCode: 4, address: 'AV Y, 20' }],
+    });
+    const c = ctx();
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(r).toEqual({
+      cliente: { nome: 'Maria' },
+      contratos: [
+        { id: 5, status: 'ativo', endereco: 'RUA X, 10' },
+        { id: 6, status: 'suspenso', endereco: 'AV Y, 20' },
+      ],
+      instrucao: 'Cliente identificado. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
+    });
+    // Na triagem as palavras do modelo vao direto ao cliente: sobrenome e
+    // login PPPoE continuam fora.
+    expect(JSON.stringify(r)).not.toContain('SOUZA');
+    expect(JSON.stringify(r)).not.toContain('joao123');
+  });
+
+  test('falha ao preencher a cidade nao derruba a identificacao ja persistida', async () => {
+    preencherCidadePeloSgp.mockRejectedValueOnce(new Error('db fora'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = ctx();
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(c.identidade.nivel).toBe('forte');
+    expect(r.cliente).toEqual({ nome: 'Maria' });
+    expect(erroSpy.mock.calls.map((a) => JSON.stringify(a)).join(' ')).not.toContain('11122233344');
+    erroSpy.mockRestore();
+  });
+
+  test('falha ao limpar o CPF pendente nao derruba a identificacao', async () => {
+    setTriagePendingDocument.mockRejectedValueOnce(new Error('db fora'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = ctx();
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(c.identidade.nivel).toBe('forte');
+    expect(r.cliente).toEqual({ nome: 'Maria' });
+    erroSpy.mockRestore();
   });
 });
 

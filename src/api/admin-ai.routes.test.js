@@ -301,6 +301,40 @@ describe('admin ai routes', () => {
     expect(res.body.triageResolvedReasonId).toBe(MOTIVO_ID);
   });
 
+  test('PUT /triage grava triageRequireBirthdate e trata ausente como desligado', async () => {
+    updateTriageConfig.mockResolvedValue({
+      triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+      triageExtraInstructions: 'x', triageRequireBirthdate: true,
+    });
+    const res = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({
+        triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+        triageExtraInstructions: 'x', triageRequireBirthdate: true,
+      }).expect(200);
+    expect(updateTriageConfig).toHaveBeenCalledWith(expect.objectContaining({ triageRequireBirthdate: true }));
+    expect(res.body.triageRequireBirthdate).toBe(true);
+
+    // Ausente e' desligado: a tela antiga (ou um payload sem o campo) nao pode
+    // ligar a exigencia sem querer.
+    updateTriageConfig.mockResolvedValue({
+      triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+      triageExtraInstructions: 'x', triageRequireBirthdate: false,
+    });
+    const semCampo = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x' }).expect(200);
+    expect(updateTriageConfig).toHaveBeenLastCalledWith(expect.objectContaining({ triageRequireBirthdate: false }));
+    expect(semCampo.body.triageRequireBirthdate).toBe(false);
+  });
+
+  test('PUT /triage recusa triageRequireBirthdate que nao e booleano', async () => {
+    const res = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({
+        triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+        triageExtraInstructions: 'x', triageRequireBirthdate: 'sim',
+      }).expect(400);
+    expect(res.body.error).toBe('triageRequireBirthdate must be a boolean');
+  });
+
   test('PUT /triage aceita null e um motivo ativo em triageResolvedReasonId', async () => {
     updateTriageConfig.mockResolvedValue({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x', triageResolvedReasonId: null });
     await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)

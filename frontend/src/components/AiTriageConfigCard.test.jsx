@@ -56,6 +56,8 @@ describe('AiTriageConfigCard', () => {
         // que vai para o banco quando o admin salva sem mexer neles.
         nightStartTime: '20:00',
         nightEndTime: '08:00',
+        // Desmarcado é o padrão: o CPF digitado já identifica o cliente.
+        triageRequireBirthdate: false,
       },
       't'
     ));
@@ -97,6 +99,48 @@ describe('AiTriageConfigCard', () => {
     await waitFor(() => expect(updateAiTriageConfig).toHaveBeenLastCalledWith(
       expect.objectContaining({ triageResolvedReasonId: null }), 't'
     ));
+  });
+
+  describe('exigir data de nascimento depois do CPF', () => {
+    test('nasce desmarcado e vai como false ao salvar', async () => {
+      updateAiTriageConfig.mockResolvedValue({});
+      render(<AiTriageConfigCard />);
+
+      const caixa = await screen.findByLabelText(/exigir data de nascimento depois do CPF/i);
+      expect(caixa).not.toBeChecked();
+      expect(screen.getByText(/o CPF digitado já identifica o cliente e libera boleto\/PIX/i)).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+      await waitFor(() => expect(updateAiTriageConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ triageRequireBirthdate: false }), 't'
+      ));
+    });
+
+    test('marcar manda true', async () => {
+      updateAiTriageConfig.mockResolvedValue({});
+      render(<AiTriageConfigCard />);
+
+      await userEvent.click(await screen.findByLabelText(/exigir data de nascimento depois do CPF/i));
+      await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+      await waitFor(() => expect(updateAiTriageConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ triageRequireBirthdate: true }), 't'
+      ));
+    });
+
+    test('carrega marcado quando a config já exige a data', async () => {
+      getAiConfig.mockResolvedValue({
+        configured: true,
+        triageConfidenceThreshold: 0.65,
+        triageMaxQuestions: 4,
+        triageTimeoutMinutes: 12,
+        triageExtraInstructions: 'Pergunte o CPF antes de tudo',
+        triageResolvedReasonId: null,
+        triageRequireBirthdate: true,
+      });
+      render(<AiTriageConfigCard />);
+      expect(await screen.findByLabelText(/exigir data de nascimento depois do CPF/i)).toBeChecked();
+    });
   });
 
   describe('janela do atendimento noturno', () => {

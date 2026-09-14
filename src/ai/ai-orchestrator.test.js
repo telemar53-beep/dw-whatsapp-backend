@@ -456,7 +456,10 @@ describe('perfil de triagem', () => {
   const TRIAGEM = { threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false };
 
   beforeEach(() => {
-    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null });
+    // triageRequireBirthdate: true em quase todo este bloco — ele descreve a
+    // triagem COM a confirmação por data de nascimento. O padrão de produção
+    // (desligada) tem bloco próprio mais abaixo.
+    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null, triageRequireBirthdate: true });
     listSectors.mockResolvedValue([{ id: 's-1', name: 'Financeiro', aiHint: 'Boleto, PIX, cobrança.' }, { id: 's-2', name: 'Suporte', aiHint: '' }]);
     listActiveReasons.mockResolvedValue([{ id: 'r-1', name: 'Segunda via' }]);
     listToolPermissions.mockResolvedValue([{ toolName: 'desbloqueio_confianca', enabled: true }]);
@@ -722,6 +725,44 @@ describe('perfil de triagem', () => {
   // I3 (review): a fixture original (IDENT_FORTE) não tinha nenhum campo
   // perigoso — um teste de "não vaza nada" que não pode vazar nada não prova
   // nada. Agora o fixture carrega CPF, login PPPoE e sobrenome de verdade.
+  describe('com a data de nascimento dispensada (padrão)', () => {
+    beforeEach(() => {
+      getAiConfig.mockResolvedValue({
+        apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
+        maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.',
+        triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
+        triageRequireBirthdate: false,
+      });
+    });
+
+    // Descrever ao modelo uma ferramenta que não serve para nada é o jeito
+    // conhecido de ele afirmar que a usou.
+    test('confirmar_nascimento sai da lista de ferramentas da triagem', async () => {
+      const nomes = (await contexto()).tools.map((t) => t.function.name).sort();
+      expect(nomes).not.toContain('confirmar_nascimento');
+      expect(nomes).toEqual(FERRAMENTAS_TRIAGEM.filter((n) => n !== 'confirmar_nascimento').sort());
+    });
+
+    test('o prompt não fala em data de nascimento em lugar nenhum', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).not.toMatch(/data de nascimento/i);
+      // A linha do cliente ainda não identificado continua: o CPF segue sendo
+      // o que identifica.
+      const semIdentidade = (await (async () => {
+        createChatCompletion.mockClear();
+        return contexto({ identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] } });
+      })()).messages[0].content;
+      expect(semIdentidade).toContain('Cliente NÃO identificado.');
+      expect(semIdentidade).not.toMatch(/data de nascimento/i);
+    });
+  });
+
+  test('com a exigência ligada, confirmar_nascimento continua na lista', async () => {
+    const nomes = (await contexto()).tools.map((t) => t.function.name).sort();
+    expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM].sort());
+    expect(nomes).toContain('confirmar_nascimento');
+  });
+
   test('não vaza cpf, login pppoe, sobrenome nem data de nascimento no contexto de sistema', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).not.toContain('11122233344');

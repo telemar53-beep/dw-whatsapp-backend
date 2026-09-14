@@ -185,8 +185,13 @@ const FERRAMENTAS_TRIAGEM_NOTURNO = [...FERRAMENTAS_TRIAGEM, 'desbloqueio_confia
 
 // A lista fixa da triagem só cresce à noite: descrever ao modelo uma
 // capacidade que ele não tem de dia é o jeito conhecido de ele afirmar que fez.
-function ferramentasDaTriagem(triagem) {
-  return triagem && triagem.noturno && triagem.noturno.ativo ? FERRAMENTAS_TRIAGEM_NOTURNO : FERRAMENTAS_TRIAGEM;
+function ferramentasDaTriagem(triagem, config) {
+  const lista = triagem && triagem.noturno && triagem.noturno.ativo ? FERRAMENTAS_TRIAGEM_NOTURNO : FERRAMENTAS_TRIAGEM;
+  // Sem exigência de data de nascimento (o padrão) não há o que confirmar: o
+  // próprio buscar_cliente já deixa a identidade forte. Deixar a ferramenta
+  // descrita seria convidar o modelo a pedir a data — ou a afirmar que a usou.
+  if (config && config.triageRequireBirthdate) return lista;
+  return lista.filter((n) => n !== 'confirmar_nascimento');
 }
 
 function horaDeBrasilia() {
@@ -202,6 +207,11 @@ function horaDeBrasilia() {
 // endereço ou "pagamento confirmado" — isso vai só no resumo interno para o
 // atendente humano).
 async function montarContextoTriagem(config, identidade, triagem, avisoCidade) {
+  // Com a confirmação por data de nascimento desligada (o padrão), a data
+  // não é citada em lugar nenhum do prompt: o CPF sozinho identifica.
+  const exigeNascimento = Boolean(config && config.triageRequireBirthdate);
+  const eDataDeNascimento = exigeNascimento ? ' e data de nascimento' : '';
+  const nemDataDeNascimento = exigeNascimento ? ' nem data de nascimento' : '';
   // Guarda defensiva: um identidade null/undefined não pode derrubar a
   // montagem do contexto — cai no mesmo tratamento de "não identificado".
   identidade = identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
@@ -265,7 +275,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade) {
     // identificado — pedir CPF de novo a quem já foi chamado pelo nome é o
     // pior desfecho —, mas não há contratos nem consultas possíveis, então o
     // único caminho é cumprimentar, avisar e encaminhar.
-    linhas.push(`Cliente identificado pela memória (primeiro nome ${identidade.primeiroNome || 'cliente'}), mas o sistema do SGP NÃO respondeu agora. NÃO peça CPF nem data de nascimento e NÃO tente boleto, PIX nem status de conexão. Cumprimente pelo primeiro nome, diga em uma frase que o sistema de consulta está instável neste momento, e chame concluir_triagem para o setor adequado ao que ele pediu, com o resumo começando por "SGP indisponível na triagem".`);
+    linhas.push(`Cliente identificado pela memória (primeiro nome ${identidade.primeiroNome || 'cliente'}), mas o sistema do SGP NÃO respondeu agora. NÃO peça CPF${nemDataDeNascimento} e NÃO tente boleto, PIX nem status de conexão. Cumprimente pelo primeiro nome, diga em uma frase que o sistema de consulta está instável neste momento, e chame concluir_triagem para o setor adequado ao que ele pediu, com o resumo começando por "SGP indisponível na triagem".`);
   } else if (identidade.nivel === 'none') {
     linhas.push('Cliente NÃO identificado. Peça o CPF/CNPJ só se o setor exigir identificação (Financeiro, Suporte, Reativação): "Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Comercial de cliente novo nunca exige CPF. Depois de buscar_cliente, continue a triagem.');
     if (identidade.contestado) linhas.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');
@@ -305,11 +315,11 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade) {
         // IA fecha. Sem motivo, tudo continua como antes.
         config.triageResolvedReasonId
           ? [
-            'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. NÃO conclua a triagem nesse momento.',
+            `Identidade JÁ confirmada: NÃO peça CPF${nemDataDeNascimento}. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. NÃO conclua a triagem nesse momento.`,
             'Depois de entregar, responda no modelo (adapte nome, endereço e PIX/boleto): "Enviei acima o PIX referente ao seu contrato do endereço Agenor Costa. É só copiar o código e colar na opção \"PIX Copia e Cola\" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!" Cite o endereço só quando ele tiver mais de um contrato. Para BOLETO, mesma lógica e SEM emoji: "Enviei acima o boleto referente ao seu contrato do endereço Agenor Costa, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!"',
             'Se depois disso ele agradecer ("obrigado", "valeu"): chame encerrar_atendimento e responda no modelo: "Imagina, Willemberg! 😊 Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" (à noite, "Tenha uma boa noite!"). Se responder só "ok", "certo" ou um joinha: chame encerrar_atendimento e responda: "Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" Se pedir outra coisa, siga a triagem normalmente e encerre só quando ele agradecer ou confirmar que está tudo certo. No fluxo do BOLETO as mesmas despedidas valem, mas SEM emoji ("Imagina, Willemberg! Qualquer dúvida…").',
           ].join('\n')
-          : 'Identidade JÁ confirmada: NÃO peça CPF nem data de nascimento. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.',
+          : `Identidade JÁ confirmada: NÃO peça CPF${nemDataDeNascimento}. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.`,
         ...(contratos.length > 1
           ? ['Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, no modelo: "Claro, vou te ajudar com o PIX 😊 Vi que você tem mais de um contrato com a gente. Para eu te enviar os dados do pagamento certinho, pode me confirmar de qual endereço você precisa?" (cite os endereços se ajudar) e entregue na resposta seguinte. Para BOLETO, o mesmo pedido sem emoji: "Claro, vou te ajudar com o boleto. Vi que você tem mais de um contrato com a gente. Para eu te enviar o boleto certinho, pode me confirmar de qual endereço você precisa?"']
           : []),
@@ -333,7 +343,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade) {
     '- Contrato ativo e conexão online: "Verifiquei aqui que seu contrato está ativo e sua conexão aparece online no momento. Mesmo assim, você pode estar enfrentando alguma dificuldade para usar a internet. Me conta: está totalmente sem acesso, com lentidão ou a conexão fica caindo?" Depois da resposta dele, conclua para o Suporte com o relato no resumo.',
     '- Conexão offline: "Verifiquei aqui que sua conexão está offline no momento. Vou te ajudar a verificar o que está acontecendo. Os equipamentos da internet estão ligados? Tem alguma luz vermelha acesa ou piscando?" Depois da resposta dele, conclua para o Suporte com o relato no resumo.',
     '- Contrato suspenso por falta de pagamento: "Verifiquei aqui e consta uma pendência na fatura que deixou o acesso à internet temporariamente suspenso. Pode ser que você já tenha pago e a confirmação ainda não tenha chegado ao sistema. Você chegou a fazer esse pagamento? Assim consigo te orientar no próximo passo." Se ele disser que pagou, peça o comprovante e conclua para o Financeiro (motivo Comprovante, se existir); se disser que não pagou, ofereça o PIX ou o boleto (entregue se ele quiser) e conclua para o Financeiro.',
-    'Sem identidade confirmada, o fluxo de Suporte não cita status nenhum: identifique primeiro (CPF e data de nascimento) ou apenas encaminhe.',
+    `Sem identidade confirmada, o fluxo de Suporte não cita status nenhum: identifique primeiro (CPF${eDataDeNascimento}) ou apenas encaminhe.`,
     '',
     // Roteiros de COMERCIAL ditados pelo dono (2026-09-13) depois do teste real
     // em que a IA confirmou a cobertura, engoliu os planos que estavam nas
@@ -342,7 +352,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade) {
     // Print 1 (teste real 2026-09-14): quem já é cliente e queria outro ponto
     // caía no roteiro de cliente novo, e a IA despejava a lista inteira de
     // cidades atendidas em vez de confirmar a dele.
-    'Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF e data de nascimento) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.',
+    `Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF${eDataDeNascimento}) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.`,
     [
       '- Cliente NOVO (não identificado): "Boa tarde! Que bom ter você por aqui 😊 Atendemos em Godofredo Viana e temos estas opções de internet 100% fibra óptica:',
       '',
@@ -393,7 +403,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   let systemContent;
 
   if (perfil === 'triagem') {
-    tools = toOpenAiTools(ferramentasDaTriagem(triagem));
+    tools = toOpenAiTools(ferramentasDaTriagem(triagem, config));
     // Guarda defensiva: mesmo fallback usado em montarContextoTriagem — um
     // identidade null/undefined não pode derrubar o turno nem deixar
     // contexto.contracts inconsistente com o que o contexto de sistema viu.
@@ -404,7 +414,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // propriedade (chaveProprietario).
     contexto = {
       conversationId: conversation.id, contact, contracts: identidadeEfetiva.contracts || [], sgpCache: {},
-      identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem), registroFerramentas: [],
+      identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem, config), registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
     };
     systemContent = await montarContextoTriagem(config, identidadeEfetiva, triagem, avisoCidade);

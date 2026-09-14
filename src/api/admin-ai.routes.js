@@ -30,6 +30,7 @@ function toConfigResponse(config) {
     triageTimeoutMinutes: config.triageTimeoutMinutes,
     triageExtraInstructions: config.triageExtraInstructions,
     triageResolvedReasonId: config.triageResolvedReasonId || null,
+    triageRequireBirthdate: Boolean(config.triageRequireBirthdate),
     nightStartTime: config.nightStartTime || null,
     nightEndTime: config.nightEndTime || null,
   };
@@ -152,7 +153,13 @@ router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
   if (Boolean(inicioNoturno) !== Boolean(fimNoturno)) {
     return res.status(400).json({ error: 'nightStartTime and nightEndTime must be provided together' });
   }
-  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido, nightStartTime: inicioNoturno, nightEndTime: fimNoturno });
+  // A confirmacao por data de nascimento e OPCIONAL: ausente = desligada, que
+  // e o padrao. Um payload antigo nunca liga a exigencia sem querer.
+  const { triageRequireBirthdate } = req.body || {};
+  if (triageRequireBirthdate !== undefined && typeof triageRequireBirthdate !== 'boolean') {
+    return res.status(400).json({ error: 'triageRequireBirthdate must be a boolean' });
+  }
+  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido, nightStartTime: inicioNoturno, nightEndTime: fimNoturno, triageRequireBirthdate: triageRequireBirthdate === true });
   res.json(toConfigResponse(config));
 });
 

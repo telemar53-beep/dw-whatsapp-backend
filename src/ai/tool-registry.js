@@ -210,6 +210,59 @@ const TOOLS = [
       // isso, um CPF errado (ou de outra pessoa) vazaria para o próximo turno
       // como identidade forte via memória (contact.sgpDocument já setado).
       if (perfilTriagem(contexto)) {
+        const configIa = await getAiConfig();
+        // Decisão do dono (2026-09-14): "o dado mais importante é o CPF; no
+        // site do SGP o cliente loga só com ele". Por padrão a confirmação por
+        // data de nascimento está DESLIGADA e o CPF digitado já identifica —
+        // mesmo caminho do ramo assistente, mais a cidade e o aviso que
+        // confirmar_nascimento fazia. Com a flag ligada, o comportamento
+        // antigo (identidade fraca até a data bater) volta inteiro.
+        if (!(configIa && configIa.triageRequireBirthdate)) {
+          const nome = primeiroNome(client.name);
+          contexto.identidade = {
+            nivel: 'forte', origem: 'cpf', primeiroNome: nome, contracts,
+            client: { id: client.id, document: args.cpf }, dataNascimento: null,
+            contestado: false, nascimentoTentado: false,
+          };
+          await setContactSgpLink(contexto.contact.id, {
+            sgpClientId: client.id,
+            sgpContractId: contracts.length === 1 ? contracts[0].id : null,
+            sgpDocument: args.cpf,
+            // O nome guardado no contato salva o cumprimento quando o SGP não
+            // responder no próximo atendimento.
+            sgpFirstName: nome,
+          });
+          contexto.contact.sgpDocument = args.cpf;
+          // Try/catch: a identificação já está persistida e não pode virar
+          // recusa por causa de um campo acessório. O CPF nunca vai a log.
+          try {
+            await preencherCidadePeloSgp(contexto.contact, contracts);
+            await enviarAvisoDeCidadeSePreciso({
+              contact: contexto.contact,
+              conversationId: contexto.conversationId,
+              channelId: contexto.channelId,
+            });
+          } catch (err) {
+            console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
+          }
+          // Sem confirmação pendente não há CPF pendente: um resto na coluna
+          // faria o próximo turno reconstruir uma identidade fraca por cima de
+          // uma forte já gravada.
+          try {
+            await setTriagePendingDocument(contexto.conversationId, null);
+          } catch (err) {
+            console.error(`Failed to clear the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+          }
+          return {
+            cliente: { nome },
+            contratos: contracts.map((c) => {
+              const n = normalizeContract(c);
+              return { id: c.id, status: n.status, endereco: n.endereco };
+            }),
+            instrucao: 'Cliente identificado. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
+          };
+        }
+
         let dataNascimento = null;
         try {
           const rec = await sgpClient.findClientRecord({ cpfcnpj: args.cpf });

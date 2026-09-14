@@ -195,10 +195,19 @@ const FERRAMENTAS_TRIAGEM = [
 // o cliente que já pagou manda a foto e a própria triagem confere.
 const FERRAMENTAS_TRIAGEM_NOTURNO = [...FERRAMENTAS_TRIAGEM, 'desbloqueio_confianca', 'analisar_comprovante'];
 
+// De dia, com a leitura de comprovante ligada, entra a LEITURA e só ela: o
+// desbloqueio em confiança continua sendo da noite, quando não há atendente.
+// Ler de dia é conferência e aviso à atendente, nunca liberação.
+const FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA = [...FERRAMENTAS_TRIAGEM, 'analisar_comprovante'];
+
 // A lista fixa da triagem só cresce à noite: descrever ao modelo uma
 // capacidade que ele não tem de dia é o jeito conhecido de ele afirmar que fez.
 function ferramentasDaTriagem(triagem, config) {
-  const lista = triagem && triagem.noturno && triagem.noturno.ativo ? FERRAMENTAS_TRIAGEM_NOTURNO : FERRAMENTAS_TRIAGEM;
+  const noturno = Boolean(triagem && triagem.noturno && triagem.noturno.ativo);
+  const leDeDia = Boolean(config && config.triageReadReceiptsDaytime);
+  const lista = noturno
+    ? FERRAMENTAS_TRIAGEM_NOTURNO
+    : (leDeDia ? FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA : FERRAMENTAS_TRIAGEM);
   // Sem exigência de data de nascimento (o padrão) não há o que confirmar: o
   // próprio buscar_cliente já deixa a identidade forte. Deixar a ferramenta
   // descrita seria convidar o modelo a pedir a data — ou a afirmar que a usou.
@@ -350,7 +359,13 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     '',
     'NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
     'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que o Comercial confirma e encaminhe.',
-    'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
+    // Com a leitura de dia ligada, perguntar antes de ler é exatamente o que
+    // a flag elimina: a ferramenta abre a imagem e a conferência vai para o
+    // resumo. O que a ferramenta apurar NUNCA vira promessa ao cliente — de
+    // dia não existe liberação nenhuma.
+    config.triageReadReceiptsDaytime && !(triagem && triagem.noturno && triagem.noturno.ativo)
+      ? 'COMPROVANTE: se o cliente enviar uma imagem e disser (ou parecer) que é o pagamento, chame analisar_comprovante (sem perguntar nada antes). Qualquer que seja o resultado, NÃO confirme pagamento nem prometa liberação: agradeça, diga que a equipe confere e dá baixa, e conclua para o Financeiro (motivo "Comprovante" se existir). Se a ferramenta disser que o comprovante já foi utilizado, NÃO diga isso ao cliente: responda o mesmo acolhimento e conclua — a equipe trata.'
+      : 'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
     '',
     // Roteiros de SUPORTE ditados pelo dono (2026-09-13) depois do teste real
     // em que a IA encaminhou sem consultar nada: primeiro o status, depois
@@ -741,4 +756,4 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   };
 }
 
-module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, ferramentasDaTriagem, afirmaLiberacao, afirmaFila, afirmaEnvio };
+module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA, ferramentasDaTriagem, afirmaLiberacao, afirmaFila, afirmaEnvio };

@@ -19,7 +19,7 @@ const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
 const { getCompanyConfig } = require('../company/company-config.repository');
-const { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO } = require('./ai-orchestrator');
+const { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA } = require('./ai-orchestrator');
 
 const CONVERSATION = { id: 'c-1', channelId: 'ch-1' };
 const CONTACT = { id: 'ct-1', sgpClientId: null, sgpContractId: null, sgpDocument: null };
@@ -538,6 +538,64 @@ describe('perfil de triagem', () => {
     test('de dia o prompt não tem o bloco noturno', async () => {
       const sys = (await contexto()).messages[0].content;
       expect(sys).not.toMatch(/MODO NOTURNO/);
+    });
+  });
+
+  // Leitura de comprovante TAMBÉM de dia: conferência e aviso à atendente, sem
+  // desbloqueio nenhum. É a única ferramenta que a flag acrescenta.
+  describe('leitura de comprovante de dia (triageReadReceiptsDaytime)', () => {
+    const NOTURNO = { ...TRIAGEM, maxQuestions: 4, noturno: { ativo: true, retornoAs: '08:00' } };
+    const configLendoDeDia = {
+      apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
+      maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.',
+      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
+      triageRequireBirthdate: true, triageReadReceiptsDaytime: true,
+    };
+
+    test('com a flag desligada, de dia a lista fixa não muda', async () => {
+      const nomes = (await contexto()).tools.map((t) => t.function.name).sort();
+      expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM].sort());
+      expect(nomes).not.toContain('analisar_comprovante');
+    });
+
+    // O desbloqueio continua sendo só da noite: de dia há atendente, e a
+    // liberação em confiança é decisão de gente.
+    test('com a flag ligada, de dia entra analisar_comprovante e SÓ ela', async () => {
+      getAiConfig.mockResolvedValue(configLendoDeDia);
+      const nomes = (await contexto()).tools.map((t) => t.function.name).sort();
+      expect(nomes).toContain('analisar_comprovante');
+      expect(nomes).not.toContain('desbloqueio_confianca');
+      expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA].sort());
+      expect(FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA).toHaveLength(FERRAMENTAS_TRIAGEM.length + 1);
+    });
+
+    test('à noite a flag não muda nada: a lista noturna continua a mesma', async () => {
+      getAiConfig.mockResolvedValue(configLendoDeDia);
+      const nomes = (await contexto({ triagem: NOTURNO })).tools.map((t) => t.function.name).sort();
+      expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM_NOTURNO].sort());
+      expect(nomes).toContain('desbloqueio_confianca');
+    });
+
+    test('com a flag ligada, o prompt de dia manda chamar a ferramenta e nunca fala em desbloqueio', async () => {
+      getAiConfig.mockResolvedValue(configLendoDeDia);
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/COMPROVANTE: se o cliente enviar uma imagem/);
+      expect(sys).toMatch(/chame analisar_comprovante/);
+      expect(sys).toMatch(/NÃO confirme pagamento nem prometa liberação/);
+      // O cliente nunca pode ouvir que o comprovante dele "já foi utilizado":
+      // isso é conversa da equipe, não do atendimento.
+      expect(sys).toMatch(/NÃO diga isso ao cliente/);
+      expect(sys).not.toMatch(/desbloqueio/i);
+      expect(sys).not.toMatch(/MODO NOTURNO/);
+      // A linha antiga ("pergunte se é um comprovante") sai: perguntar antes
+      // de ler é justamente o que a flag elimina.
+      expect(sys).not.toMatch(/pergunte se é um comprovante/);
+    });
+
+    test('com a flag desligada, o prompt de dia mantém a linha antiga', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/Se o cliente enviou uma imagem, pergunte se é um comprovante/);
+      expect(sys).not.toMatch(/chame analisar_comprovante/);
     });
   });
 

@@ -2179,6 +2179,32 @@ describe('concluir_triagem', () => {
       expect(summary).not.toMatch(/Modo noturno/);
     });
   });
+
+  // De dia a leitura também existe (Parte 2), e o que ela apurou tem de chegar
+  // à atendente do mesmo jeito: no topo do resumo, com a pendência da baixa.
+  describe('comprovante lido de dia', () => {
+    test('o comprovante e a pendência abrem o resumo, sem marca de noturno', async () => {
+      const c = ctx({
+        comprovante: { valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '4321', contratoId: 17402, motivos: [] },
+      });
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95 }, c);
+      const summary = concludeAiTriage.mock.calls[0][1].summary;
+      const linhas = summary.split(String.fromCharCode(10));
+      expect(linhas[0]).toBe('Comprovante (visão): pix R$ 135,00 em 13/09/2026 — conferido, fatura 4321 do contrato 17402');
+      expect(linhas[1]).toBe('Pendente: conferir pagamento e dar baixa');
+      expect(summary).not.toMatch(/Modo noturno/);
+      // O desbloqueio é da noite: de dia não há linha nenhuma a respeito.
+      expect(summary).not.toContain('Desbloqueio em confiança');
+      expect(summary).toContain('Setor: Financeiro');
+    });
+
+    test('sem comprovante, o resumo de dia não ganha linha nenhuma', async () => {
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, ctx());
+      const summary = concludeAiTriage.mock.calls[0][1].summary;
+      expect(summary).not.toContain('Comprovante (visão)');
+      expect(summary).not.toContain('Pendente:');
+    });
+  });
 });
 
 
@@ -2353,10 +2379,30 @@ describe('analisar_comprovante', () => {
     expect(findLatestInboundImage).not.toHaveBeenCalled();
   });
 
-  test('(b) de dia: leitura de comprovante não roda', async () => {
+  test('(b) de dia com a leitura desligada: não roda', async () => {
     const r = await findTool('analisar_comprovante').executar({}, ctx({ triagem: { noturno: { ativo: false, retornoAs: null } } }));
-    expect(r).toEqual({ analisado: false, motivo: 'Leitura de comprovante só no modo noturno.' });
+    expect(r).toEqual({ analisado: false, motivo: 'Leitura de comprovante de dia está desligada.' });
     expect(findLatestInboundImage).not.toHaveBeenCalled();
+    expect(analyzeImage).not.toHaveBeenCalled();
+  });
+
+  // A flag da triagem (Parte 1) é o que abre a leitura de dia. Sem desbloqueio
+  // nenhum: de dia a ferramenta só confere e alimenta o resumo da atendente.
+  test('(b2) de dia com a leitura ligada: lê normalmente', async () => {
+    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', triageReadReceiptsDaytime: true });
+    const c = ctx({ triagem: { noturno: { ativo: false, retornoAs: null } } });
+    const r = await findTool('analisar_comprovante').executar({}, c);
+    expect(analyzeImage).toHaveBeenCalled();
+    expect(r).toMatchObject({ analisado: true, valido: true, contratoId: 17402, faturaId: '4321' });
+    expect(c.comprovante).toMatchObject({ valido: true, idTransacao: ID_TRANSACAO });
+  });
+
+  // A descrição da ferramenta é o que o modelo lê: dizer "só no modo noturno"
+  // com a leitura de dia ligada é convidá-lo a não chamar a ferramenta.
+  test('a descrição não promete modo noturno e proíbe confirmar pagamento', () => {
+    const t = findTool('analisar_comprovante');
+    expect(t.descricao).not.toMatch(/Só no modo noturno/i);
+    expect(t.descricao).toMatch(/Nunca confirma pagamento/);
   });
 
   test('(c) sem imagem do cliente nas últimas 24 horas', async () => {

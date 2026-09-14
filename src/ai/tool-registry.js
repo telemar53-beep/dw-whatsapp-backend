@@ -1013,12 +1013,18 @@ const TOOLS = [
     // Orçamento próprio: leitura do disco + visão da OpenAI (60 s) + as
     // consultas de fatura no SGP. O padrão do executor (15 s) venceria antes.
     timeoutMs: 90000,
-    descricao: 'Lê o último comprovante de pagamento (imagem) que o cliente enviou nesta conversa e confere valor, data e favorecido contra as faturas em aberto. Só no modo noturno. Use antes de qualquer desbloqueio em confiança motivado por comprovante.',
+    descricao: 'Lê o último comprovante de pagamento (imagem) que o cliente enviou nesta conversa e confere valor, data e favorecido contra as faturas em aberto. Nunca confirma pagamento. Use antes de qualquer desbloqueio em confiança motivado por comprovante.',
     parametros: { type: 'object', properties: {} },
     validar() { return { ok: true, args: {} }; },
     async executar(args, contexto) {
       if (!perfilTriagem(contexto)) return erro('analisar_comprovante is only available during AI triage');
-      if (!noturnoDoContexto(contexto)) return { analisado: false, motivo: 'Leitura de comprovante só no modo noturno.' };
+      // A configuração é lida ANTES da porta: de dia a leitura existe só com a
+      // flag ligada (é uma chamada de visão paga por imagem), e à noite ela
+      // existe sempre. A mesma config alimenta a visão mais abaixo.
+      const config = await getAiConfig();
+      if (!noturnoDoContexto(contexto) && !(config && config.triageReadReceiptsDaytime)) {
+        return { analisado: false, motivo: 'Leitura de comprovante de dia está desligada.' };
+      }
 
       const imagem = await findLatestInboundImage(contexto.conversationId, { withinMs: 24 * 60 * 60 * 1000 });
       if (!imagem) return { analisado: false, motivo: 'Nenhuma imagem recebida do cliente nas últimas 24 horas.' };
@@ -1060,7 +1066,6 @@ const TOOLS = [
         return { analisado: false, motivo: 'Nenhum nome de favorecido cadastrado em Empresa; não é possível conferir comprovantes.' };
       }
 
-      const config = await getAiConfig();
       let leitura;
       try {
         leitura = await analyzeImage({ apiKey: config.apiKey, model: config.model, imageBuffer: buffer, mimeType: imagem.mediaMimeType, prompt: PROMPT_VISAO });
@@ -1402,29 +1407,29 @@ const TOOLS = [
       // Quem pega a conversa de manhã precisa ver, na PRIMEIRA linha, que ela
       // foi atendida sozinha de madrugada e a que horas.
       const noturno = noturnoDoContexto(contexto);
-      if (noturno) {
-        // O que a IA leu do comprovante e o que ela fez com o contrato sobem
-        // para o topo do resumo, junto da marca do turno noturno: é disso que
-        // depende a baixa do pagamento de manhã.
-        const extras = [];
-        const comp = contexto.comprovante;
-        if (comp) {
-          // Valor e data podem vir nulos da visão (Task 3). Nada de toFixed em
-          // null: "R$ 0,00" faria o atendente dar baixa num valor inventado.
-          const valor = comp.valor == null ? 'valor não lido' : `R$ ${Number(comp.valor).toFixed(2).replace('.', ',')}`;
-          const data = comp.data ? formatarData(comp.data) : 'data não lida';
-          const conferencia = comp.valido ? 'conferido' : `NÃO conferiu: ${(comp.motivos || []).join('; ')}`;
-          extras.push(`Comprovante (visão): ${comp.tipo || 'outro'} ${valor} em ${data} — ${conferencia}${comp.faturaId ? `, fatura ${comp.faturaId}` : ''}${comp.contratoId ? ` do contrato ${comp.contratoId}` : ''}`);
-        }
-        const desbloqueio = contexto.desbloqueioResultado;
-        if (desbloqueio) {
-          extras.push(`Desbloqueio em confiança: ${desbloqueio.liberado
-            ? (desbloqueio.dias ? `REALIZADO (${desbloqueio.dias} dias)` : 'REALIZADO (prazo não informado)')
-            : `RECUSADO: ${desbloqueio.motivo}`}`);
-        }
-        if (comp || desbloqueio) extras.push('Pendente: conferir pagamento e dar baixa');
-        linhas.unshift(`Modo noturno · ${horaDeSaoPaulo()}`, ...extras);
+      // O que a IA leu do comprovante sobe para o topo do resumo SEMPRE que
+      // houver leitura — de dia também, desde a Parte 2: é disso que depende a
+      // baixa do pagamento. A marca do turno noturno e a linha do desbloqueio
+      // continuam só à noite, que é quando as duas coisas existem.
+      const extras = [];
+      const comp = contexto.comprovante;
+      if (comp) {
+        // Valor e data podem vir nulos da visão (Task 3). Nada de toFixed em
+        // null: "R$ 0,00" faria o atendente dar baixa num valor inventado.
+        const valor = comp.valor == null ? 'valor não lido' : `R$ ${Number(comp.valor).toFixed(2).replace('.', ',')}`;
+        const data = comp.data ? formatarData(comp.data) : 'data não lida';
+        const conferencia = comp.valido ? 'conferido' : `NÃO conferiu: ${(comp.motivos || []).join('; ')}`;
+        extras.push(`Comprovante (visão): ${comp.tipo || 'outro'} ${valor} em ${data} — ${conferencia}${comp.faturaId ? `, fatura ${comp.faturaId}` : ''}${comp.contratoId ? ` do contrato ${comp.contratoId}` : ''}`);
       }
+      const desbloqueio = noturno ? contexto.desbloqueioResultado : null;
+      if (desbloqueio) {
+        extras.push(`Desbloqueio em confiança: ${desbloqueio.liberado
+          ? (desbloqueio.dias ? `REALIZADO (${desbloqueio.dias} dias)` : 'REALIZADO (prazo não informado)')
+          : `RECUSADO: ${desbloqueio.motivo}`}`);
+      }
+      if (comp || desbloqueio) extras.push('Pendente: conferir pagamento e dar baixa');
+      if (noturno) linhas.unshift(`Modo noturno · ${horaDeSaoPaulo()}`, ...extras);
+      else if (extras.length > 0) linhas.unshift(...extras);
       const conversa = await concludeAiTriage(contexto.conversationId, {
         sectorId: setor.id, reasonId: motivo ? motivo.id : null, confidence: args.confianca,
         summary: linhas.join('\n'), identifiedBy, lowConfidence: baixa, resolvedByAi: resolvidoPelaIa,

@@ -118,6 +118,12 @@ describe('ConversationInfoPanel', () => {
       expect(screen.getByLabelText('Alterar setor')).toBeInTheDocument();
     });
 
+    test('shows a sector select for a manager even when the conversation is assigned to someone else', () => {
+      useAuth.mockReturnValue({ token: 'tok-manager', agent: { id: 'manager-1', role: 'manager' } });
+      render(<ConversationInfoPanel conversation={{ ...CONVERSATION, assignedAgentId: 'other-agent' }} />);
+      expect(screen.getByLabelText('Alterar setor')).toBeInTheDocument();
+    });
+
     test('hides the sector select for an agent who is neither assigned to the conversation nor an admin', () => {
       useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-2', role: 'agent' } });
       render(<ConversationInfoPanel conversation={{ ...CONVERSATION, assignedAgentId: 'agent-1' }} />);

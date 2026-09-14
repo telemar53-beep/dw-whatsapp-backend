@@ -52,7 +52,7 @@ function ConversationInfoPanel({ conversation }) {
     ? new Date(conversation.closedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
     : null;
 
-  const canEditSector = Boolean(agent) && (agent.role === 'admin' || conversation.assignedAgentId === agent.id);
+  const canEditSector = Boolean(agent) && (agent.role === 'admin' || agent.role === 'manager' || conversation.assignedAgentId === agent.id);
 
   function handleSectorChange(event) {
     const value = event.target.value || null;

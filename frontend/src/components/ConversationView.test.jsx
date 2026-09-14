@@ -229,6 +229,18 @@ describe('ConversationView', () => {
     expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
   });
 
+  test('shows Transferir and Fechar to a manager viewing a conversation assigned to another agent', () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'manager-1', role: 'manager' } });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-OTHER' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
+  });
+
   test('an admin does not see Transferir or Fechar on an already-closed conversation', () => {
     useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
     render(

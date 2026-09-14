@@ -225,14 +225,19 @@ describe('message repository', () => {
         metadata: { value: 135, dueDate: '2026-09-15', faturaId: 999 },
       });
 
-      await expect(markPixFallbackSent(created.id)).resolves.toBe(true);
+      await expect(markPixFallbackSent(created.id, 'cartao_nao_entregue')).resolves.toBe(true);
       // Uma segunda passada (retry da fila, restart do worker) não pode
-      // duplicar as mensagens de texto.
-      await expect(markPixFallbackSent(created.id)).resolves.toBe(false);
+      // duplicar as mensagens de texto - nem reescrever o motivo do primeiro
+      // desfecho, que é o que o chat mostra ao atendente.
+      await expect(markPixFallbackSent(created.id, 'sem_recebedor')).resolves.toBe(false);
 
       const found = await findMessageById(created.id);
       expect(found.metadata).toEqual({
-        value: 135, dueDate: '2026-09-15', faturaId: 999, fallbackTextoEnviado: true,
+        value: 135,
+        dueDate: '2026-09-15',
+        faturaId: 999,
+        fallbackTextoEnviado: true,
+        motivoTexto: 'cartao_nao_entregue',
       });
     });
 
@@ -243,9 +248,9 @@ describe('message repository', () => {
         content: 'Oi',
         status: 'sent',
       });
-      await expect(markPixFallbackSent(created.id)).resolves.toBe(true);
+      await expect(markPixFallbackSent(created.id, 'sem_recebedor')).resolves.toBe(true);
       const found = await findMessageById(created.id);
-      expect(found.metadata).toEqual({ fallbackTextoEnviado: true });
+      expect(found.metadata).toEqual({ fallbackTextoEnviado: true, motivoTexto: 'sem_recebedor' });
     });
 
     test('metadata é null quando a mensagem não tem nenhuma', async () => {

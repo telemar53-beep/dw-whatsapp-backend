@@ -289,17 +289,24 @@ async function markTranscriptionFailed(messageId, { status, detail, ms }) {
  * duas vezes. O UPDATE só pega quem ainda não está marcado, então a corrida
  * entre dois processos é resolvida pelo banco e não por quem chega antes.
  *
+ * Junto da marca vai o motivo ('sem_recebedor', 'cartao_recusado' ou
+ * 'cartao_nao_entregue'): é dele que o chat tira a explicação que o atendente
+ * lê no balão, para ninguém achar que o cliente recebeu o cartão nativo quando
+ * o que saiu foi o texto. Como o UPDATE só pega quem ainda não está marcado, o
+ * motivo do primeiro desfecho é o que fica — uma segunda chamada não reescreve.
+ *
  * Devolve true quando esta chamada foi a que marcou (pode enfileirar o texto),
  * false quando alguém já tinha marcado antes.
  */
-async function markPixFallbackSent(messageId) {
+async function markPixFallbackSent(messageId, motivo) {
   const result = await getPool().query(
     `UPDATE messages
-        SET metadata = COALESCE(metadata, '{}'::jsonb) || '{"fallbackTextoEnviado": true}'::jsonb
+        SET metadata = COALESCE(metadata, '{}'::jsonb)
+                       || jsonb_build_object('fallbackTextoEnviado', true, 'motivoTexto', $2::text)
       WHERE id = $1
         AND (metadata->>'fallbackTextoEnviado') IS DISTINCT FROM 'true'
       RETURNING id`,
-    [messageId]
+    [messageId, motivo || null]
   );
   return result.rowCount > 0;
 }

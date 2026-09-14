@@ -438,6 +438,82 @@ describe('startOutboundWorker', () => {
 
       expect(threeSixtyDialogAdapter.sendTextMessage).toHaveBeenCalledTimes(2);
       expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'D360_TXT_CODIGO');
+      // Nao faltou recebedor: o adaptador e que nao sabe mandar cartao, entao
+      // a queda fica sem motivo e o chat diz so que o cliente recebeu o texto.
+      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix', undefined);
+    });
+
+    test('a queda por falta de recebedor fica gravada na mensagem, antes de ela ser emitida', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      metaCloudAdapter.sendTextMessage
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CODIGO' });
+
+      await handler(jobPix('channel-1'));
+
+      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix', 'sem_recebedor');
+      // Antes de recordMessageSent: a mensagem que sai no message:updated já
+      // precisa carregar a metadata, senão o chat desenha o cartão.
+      expect(markPixFallbackSent.mock.invocationCallOrder[0])
+        .toBeLessThan(recordMessageSent.mock.invocationCallOrder[0]);
+    });
+
+    test('a queda por cartão recusado grava o motivo do recusado', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      getPixMerchant.mockResolvedValue(MERCHANT);
+      metaCloudAdapter.sendPixCardMessage.mockRejectedValue(new Error('400 order_details not supported'));
+      metaCloudAdapter.sendTextMessage
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CODIGO' });
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await handler(jobPix('channel-1'));
+
+      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix', 'cartao_recusado');
+      erro.mockRestore();
+    });
+
+    test('o cartão entregue não marca queda nenhuma', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      getPixMerchant.mockResolvedValue(MERCHANT);
+      metaCloudAdapter.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'wamid.PIX1' });
+
+      await handler(jobPix('channel-1'));
+
+      expect(markPixFallbackSent).not.toHaveBeenCalled();
+    });
+
+    test('o erro estruturado da API entra no log, sem o corpo da requisição nem o código Pix', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      getPixMerchant.mockResolvedValue(MERCHANT);
+      const err = new Error('Request failed with status code 400');
+      err.config = { data: `{"pix":"${PIX_CODE}"}` };
+      err.response = {
+        data: {
+          error: {
+            message: 'Unsupported message type order_details',
+            type: 'OAuthException',
+            code: 100,
+            error_data: { details: 'order_details is not enabled for this WABA' },
+            fbtrace_id: 'AbC123',
+          },
+        },
+      };
+      metaCloudAdapter.sendPixCardMessage.mockRejectedValue(err);
+      metaCloudAdapter.sendTextMessage
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
+        .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CODIGO' });
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await handler(jobPix('channel-1'));
+
+      const logado = erro.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(logado).toContain('Unsupported message type order_details');
+      expect(logado).toContain('OAuthException');
+      expect(logado).toContain('order_details is not enabled for this WABA');
+      expect(logado).not.toContain(PIX_CODE);
+      expect(logado).not.toContain('fbtrace_id');
+      erro.mockRestore();
     });
 
     test('a mensagem de Pix n\u00e3o passa pelo caminho de m\u00eddia', async () => {
@@ -506,7 +582,7 @@ describe('startOutboundWorker', () => {
 
       await jest.advanceTimersByTimeAsync(60000);
 
-      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix');
+      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix', 'cartao_nao_entregue');
       expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
       expect(enqueueOutboundMessage).toHaveBeenNthCalledWith(1, {
         conversationId: 'conv-1',
@@ -542,7 +618,7 @@ describe('startOutboundWorker', () => {
       await handler(jobPix('channel-2'));
       await jest.advanceTimersByTimeAsync(60000);
 
-      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix');
+      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix', 'cartao_nao_entregue');
       expect(enqueueOutboundMessage).not.toHaveBeenCalled();
     });
 
@@ -571,7 +647,10 @@ describe('startOutboundWorker', () => {
       await handler(jobPix('channel-2'));
       await jest.advanceTimersByTimeAsync(60000);
 
-      expect(markPixFallbackSent).not.toHaveBeenCalled();
+      // A queda já foi marcada pelo envio; a conferência de 60s nem chegou a
+      // ser agendada, então ninguém sobrescreve com 'cartao_nao_entregue'.
+      expect(markPixFallbackSent).toHaveBeenCalledTimes(1);
+      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix', 'cartao_recusado');
       expect(enqueueOutboundMessage).not.toHaveBeenCalled();
       erro.mockRestore();
     });

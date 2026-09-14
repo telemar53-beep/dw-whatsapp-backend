@@ -71,7 +71,7 @@ async function checkPixDelivery({ messageId, conversation, channel, pixCode, met
 
   // A marca vive na metadata da mensagem, no banco: um restart do worker ou um
   // retry da fila nao pode mandar o codigo duas vezes.
-  const marcou = await markPixFallbackSent(messageId);
+  const marcou = await markPixFallbackSent(messageId, 'cartao_nao_entregue');
   if (!marcou) return;
 
   console.warn(`Pix card ${messageId} got no delivery receipt after 60s; sending the text fallback`);
@@ -99,6 +99,17 @@ function schedulePixDeliveryCheck(ctx) {
   }, PIX_DELIVERY_CHECK_DELAY_MS);
 }
 
+// O erro da API oficial (Meta/360dialog) traz o motivo real da recusa do cartão
+// em err.response.data.error; o resto da resposta - e principalmente o corpo da
+// requisição, que leva o copia e cola - nunca entra em log. Por isso só estes
+// quatro campos, um a um, e nunca o objeto inteiro.
+function detalheDaApi(err) {
+  const apiError = err && err.response && err.response.data && err.response.data.error;
+  if (!apiError) return '';
+  const { code, type, message, error_data: errorData } = apiError;
+  return ` api=${JSON.stringify({ code, type, message, error_data: errorData })}`;
+}
+
 /**
  * Manda o Pix da melhor forma que o canal aceitar, sem nunca deixar o cliente
  * sem o código.
@@ -119,6 +130,14 @@ function schedulePixDeliveryCheck(ctx) {
 async function sendPixOrFallback({ adapter, channel, to, pixCode, metadata }) {
   const merchant = await getPixMerchant();
   const precisaMerchant = channel.type !== 'baileys';
+  // O motivo da queda acompanha a mensagem até o chat: sem ele o atendente vê a
+  // bolha de cartão e não sabe que precisa cadastrar o recebedor em Integrações.
+  // Fica indefinido quando o adaptador simplesmente não sabe mandar cartão: aí
+  // não faltou recebedor nenhum, e o chat diz só que o cliente recebeu o texto.
+  let motivoTexto;
+  if (typeof adapter.sendPixCardMessage === 'function' && precisaMerchant && !merchant) {
+    motivoTexto = 'sem_recebedor';
+  }
   if (typeof adapter.sendPixCardMessage === 'function' && (!precisaMerchant || merchant)) {
     try {
       const { whatsappMessageId } = await adapter.sendPixCardMessage(channel, to, {
@@ -131,13 +150,16 @@ async function sendPixOrFallback({ adapter, channel, to, pixCode, metadata }) {
       return { whatsappMessageId, viaCartao: true };
     } catch (err) {
       // mensagemSegura, e nunca o erro cru nem o pixCode: o código Pix não entra
-      // em log nenhum.
-      console.error(`Pix card send failed on channel ${channel.id}, falling back to text: ${mensagemSegura(err)}`);
+      // em log nenhum. O detalhe da API (por que ela recusou o cartão) só sai
+      // pelos quatro campos do objeto de erro dela - nunca o corpo enviado, que
+      // carrega o copia e cola.
+      console.error(`Pix card send failed on channel ${channel.id}, falling back to text: ${mensagemSegura(err)}${detalheDaApi(err)}`);
+      motivoTexto = 'cartao_recusado';
     }
   }
   await adapter.sendTextMessage(channel, to, cartaoPix({ valor: metadata.value, vencimento: metadata.dueDate }));
   const { whatsappMessageId } = await adapter.sendTextMessage(channel, to, pixCode);
-  return { whatsappMessageId, viaCartao: false };
+  return { whatsappMessageId, viaCartao: false, motivoTexto };
 }
 
 function startOutboundWorker() {
@@ -161,7 +183,7 @@ function startOutboundWorker() {
         }
       }
 
-      const { whatsappMessageId, viaCartao } = templateName
+      const { whatsappMessageId, viaCartao, motivoTexto } = templateName
         ? await adapter.sendTemplateMessage(channel, conversation.contactPhoneNumber, {
             name: templateName,
             language: templateLanguage,
@@ -190,6 +212,12 @@ function startOutboundWorker() {
             : replyOptions
               ? await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content, replyOptions)
               : await adapter.sendTextMessage(channel, conversation.contactPhoneNumber, content);
+      // Antes de recordMessageSent de propósito: é ele que emite a mensagem para
+      // o chat, e ela precisa sair já com a marca da queda - senão o atendente vê
+      // a bolha de cartão para um Pix que saiu como texto.
+      if (messageType === 'pix' && viaCartao === false) {
+        await markPixFallbackSent(messageId, motivoTexto);
+      }
       const message = await recordMessageSent(messageId, whatsappMessageId);
       if (conversation.assignedAgentId) {
         emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });

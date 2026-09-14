@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useChannels } from '../hooks/useChannels';
+import { isOfficialChannelType } from '../utils/channelTypes';
 import { IconWarning } from './icons/WaIcons';
 
 function ChannelStatusBanner() {
@@ -10,7 +11,11 @@ function ChannelStatusBanner() {
 
   if (!canSeeBanner) return null;
 
-  const problemChannels = channels.filter((c) => c.status !== 'connected');
+  // Um canal oficial (meta_cloud/360dialog) nunca entra na faixa: ele nao tem
+  // conexao para cair — quem responde e a API da Meta/BSP — e ninguem atualiza
+  // o status dele depois da criacao. Avisar sobre ele so ensina o admin a
+  // ignorar a faixa, e ai o aviso do baileys, que e de verdade, passa batido.
+  const problemChannels = channels.filter((c) => !isOfficialChannelType(c.type) && c.status !== 'connected');
   if (problemChannels.length === 0) return null;
 
   return (

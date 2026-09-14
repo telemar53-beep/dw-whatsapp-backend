@@ -293,7 +293,7 @@ router.delete('/:id', requireAuth, requireIntegrationsAccess, async (req, res) =
   if (dependents.conversations > 0 || dependents.integrations > 0) {
     return res.status(409).json({
       error:
-        'This channel already has conversations or an SGP integration and cannot be deleted without losing that history. Hide it instead.',
+        'Este canal já tem conversas ou uma integração SGP e não pode ser excluído sem perder esse histórico. Use Ocultar.',
     });
   }
   if (channel.type === 'baileys') {

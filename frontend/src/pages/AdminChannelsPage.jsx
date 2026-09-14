@@ -71,13 +71,22 @@ const STATUS_LABELS = {
   disconnected: 'Desconectado',
 };
 
-function StatusDot({ status }) {
+function StatusDot({ status, type }) {
+  // Canal oficial (meta_cloud/360dialog) nao tem conexao para cair: quem
+  // responde e a API da Meta/BSP. O status guardado nao diz nada sobre ele,
+  // entao o selo mostra o que ele e em vez de um "Conectado/Desconectado" que
+  // ninguem atualiza.
+  const official = isOfficialChannelType(type);
   const color =
-    status === 'connected' ? 'bg-wa-chip-text' : status === 'awaiting_qr' ? 'bg-wa-warn-text' : 'bg-wa-border-strong';
+    official || status === 'connected'
+      ? 'bg-wa-chip-text'
+      : status === 'awaiting_qr'
+        ? 'bg-wa-warn-text'
+        : 'bg-wa-border-strong';
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-wa-border bg-wa-surface-soft px-2.5 py-[3px] text-[12.5px] font-medium text-wa-muted">
       <span className={`h-1.5 w-1.5 rounded-full ${color}`} aria-hidden="true" />
-      {STATUS_LABELS[status] || status}
+      {official ? 'Oficial · API' : STATUS_LABELS[status] || status}
     </span>
   );
 }
@@ -112,7 +121,7 @@ function ChannelCard({
             {channelTypeLabel(channel.type)} — {channel.phoneNumber}
           </p>
         </div>
-        <StatusDot status={channel.status} />
+        <StatusDot status={channel.status} type={channel.type} />
       </div>
 
       <label className="mt-4 flex items-center gap-2 text-[14px] text-wa-muted">

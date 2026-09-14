@@ -569,6 +569,40 @@ describe('AdminChannelsPage', () => {
     expect(screen.getByText(/360dialog \(oficial\)/)).toBeInTheDocument();
   });
 
+  test('mostra "Oficial . API" no lugar de Conectado/Desconectado num canal oficial', () => {
+    useChannels.mockReturnValue({
+      channels: [
+        { id: 'ch1', type: 'meta_cloud', name: 'Meta', phoneNumber: '+5511999990000', status: 'disconnected' },
+        { id: 'ch2', type: '360dialog', name: '360', phoneNumber: '+5511999990001', status: 'connected' },
+      ],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+    expect(screen.getAllByText('Oficial · API')).toHaveLength(2);
+    expect(screen.queryByText('Desconectado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Conectado')).not.toBeInTheDocument();
+  });
+
+  test('um canal baileys continua mostrando Conectado/Desconectado', () => {
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'disconnected' }],
+      loading: false,
+      refresh: vi.fn(),
+    });
+    render(
+      <MemoryRouter>
+        <AdminChannelsPage />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('Desconectado')).toBeInTheDocument();
+    expect(screen.queryByText('Oficial · API')).not.toBeInTheDocument();
+  });
+
   test('does not show a WABA ID field for a baileys channel', () => {
     useChannels.mockReturnValue({
       channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected' }],

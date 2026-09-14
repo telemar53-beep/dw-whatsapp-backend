@@ -1034,6 +1034,9 @@ describe('DELETE /api/admin/channels/:id', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
 
     expect(res.status).toBe(409);
+    expect(res.body.error).toBe(
+      'Este canal já tem conversas ou uma integração SGP e não pode ser excluído sem perder esse histórico. Use Ocultar.'
+    );
     expect(deleteChannel).not.toHaveBeenCalled();
     expect(baileysManager.stopBaileysChannel).not.toHaveBeenCalled();
   });

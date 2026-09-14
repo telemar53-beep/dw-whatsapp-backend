@@ -221,6 +221,23 @@ describe('tool-executor — perfil com lista fixa e identidade', () => {
     expect(forte.ok).toBe(true);
   });
 
+  // Defeito D (teste real 2026-09-14): a recusa chegava ao modelo como
+  // { erro: 'identity_not_confirmed' } seco e ele improvisava.
+  test('a recusa por identidade leva a instrução do que fazer em seguida', async () => {
+    findTool.mockReturnValue(toolFake({ exigeIdentidadeForte: true }));
+    isToolEnabled.mockResolvedValue(true);
+    const r = await executeTool('consultar_plano', { contratoId: 17402 }, { ...CONTEXTO, identidade: { nivel: 'fraca' } });
+    expect(r.instrucao).toBe('Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.');
+    // O nome da ferramenta continua na auditoria, separado da instrução.
+    expect(r.detalhe).toBe('consultar_plano');
+  });
+
+  test('as outras recusas não ganham instrução (detalhe delas é texto interno)', async () => {
+    findTool.mockReturnValue(null);
+    const r = await executeTool('consultar_ip', {}, CONTEXTO);
+    expect(r.instrucao).toBeUndefined();
+  });
+
   test('exigeIdentidadeForte não se aplica quando não há identidade no contexto (modo assistente)', async () => {
     findTool.mockReturnValue(toolFake({ exigeIdentidadeForte: true }));
     isToolEnabled.mockResolvedValue(true);

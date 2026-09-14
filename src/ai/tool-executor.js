@@ -4,9 +4,25 @@ const { mensagemSegura } = require('./safe-error-log');
 
 const TIMEOUT_PADRAO_MS = 15000;
 
-function recusa(motivo, detalhe) {
-  return { ok: false, motivo, detalhe: detalhe === undefined ? null : detalhe };
+/**
+ * `detalhe` é auditoria (pode carregar texto interno bruto: "connect
+ * ECONNREFUSED 10.0.0.5:5432", um id de contrato). `instrucao` é o oposto:
+ * texto escrito à mão para o MODELO ler — só uma recusa que declara uma
+ * chega ao contexto dele. Os dois campos existem separados de propósito; usar
+ * `detalhe` para as duas coisas devolveria o endereço do banco ao modelo.
+ */
+function recusa(motivo, detalhe, instrucao) {
+  return {
+    ok: false,
+    motivo,
+    detalhe: detalhe === undefined ? null : detalhe,
+    ...(instrucao ? { instrucao } : {}),
+  };
 }
+
+// Defeito D (teste real 2026-09-14): a recusa chegava ao modelo como
+// { erro: 'identity_not_confirmed' } seco e ele improvisava.
+const INSTRUCAO_IDENTIDADE = 'Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.';
 
 function comTimeout(promise, ms) {
   let timer;
@@ -83,7 +99,7 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     // discriminador usado em tool-registry.js, importado em vez de duplicado
     // aqui, para as duas checagens nunca divergirem.
     if (tool.exigeIdentidadeForte && perfilTriagem(contexto)
-        && !(contexto.identidade && contexto.identidade.nivel === 'forte')) return recusa('identity_not_confirmed', nome);
+        && !(contexto.identidade && contexto.identidade.nivel === 'forte')) return recusa('identity_not_confirmed', nome, INSTRUCAO_IDENTIDADE);
 
     // Uma ferramenta pode declarar o próprio orçamento (tool.timeoutMs): a
     // de liberação em confiança faz duas leituras E uma escrita no SGP, cada

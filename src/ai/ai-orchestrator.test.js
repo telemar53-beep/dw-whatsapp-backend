@@ -273,6 +273,31 @@ describe('ai-orchestrator', () => {
     );
   });
 
+  // Defeito D: a instrução de uma recusa que a declara chega ao modelo; o
+  // detalhe cru (texto interno) continua só na auditoria.
+  test('a recusa com instrução a repassa ao modelo, sem o detalhe cru', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: { tool_calls: [{ id: 'c1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] },
+        usage: {},
+      })
+      .mockResolvedValueOnce({ message: { content: 'Pode me informar sua data de nascimento?' }, usage: {} });
+    executeTool.mockResolvedValue({
+      ok: false,
+      motivo: 'identity_not_confirmed',
+      detalhe: 'enviar_boleto',
+      instrucao: 'Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.',
+    });
+
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    const toolMessage = createChatCompletion.mock.calls[1][0].messages.find((m) => m.role === 'tool');
+    expect(JSON.parse(toolMessage.content)).toEqual({
+      erro: 'identity_not_confirmed',
+      instrucao: 'Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.',
+    });
+  });
+
   test('stops at the tool ceiling instead of looping forever', async () => {
     getAiConfig.mockResolvedValue({
       apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'p', maxToolsPerInteraction: 2,

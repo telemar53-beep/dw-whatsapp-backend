@@ -630,11 +630,16 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           // detalhe fica só na auditoria (toolsRefused): numa recusa inesperada
           // ele carrega texto interno bruto (ex.: "connect ECONNREFUSED
           // 10.0.0.5:5432"), que não pode entrar no contexto do modelo.
+          // `instrucao` é o campo oposto: texto escrito à mão para o modelo
+          // ler (defeito D — sem ele, a recusa seca fazia o modelo improvisar).
           toolsRefused.push({ nome, motivo: resposta.motivo, detalhe: resposta.detalhe });
           messages.push({
             role: 'tool',
             tool_call_id: chamada.id,
-            content: JSON.stringify({ erro: resposta.motivo }),
+            content: JSON.stringify({
+              erro: resposta.motivo,
+              ...(resposta.instrucao ? { instrucao: resposta.instrucao } : {}),
+            }),
           });
         }
       }

@@ -1,5 +1,7 @@
 const { verifyToken } = require('./auth.service');
 
+const ADMIN_LEVEL_ROLES = ['admin', 'manager'];
+
 function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -16,11 +18,23 @@ function requireAuth(req, res, next) {
 
 function requireRole(role) {
   return (req, res, next) => {
-    if (req.agent?.role !== role) {
+    const allowed = role === 'admin' ? ADMIN_LEVEL_ROLES : [role];
+    if (!allowed.includes(req.agent?.role)) {
       return res.status(403).json({ error: 'Insufficient permissions' });
     }
     next();
   };
 }
 
-module.exports = { requireAuth, requireRole };
+function hasIntegrationsAccess(agent) {
+  return agent?.role === 'admin' || (agent?.role === 'manager' && agent?.canManageIntegrations === true);
+}
+
+function requireIntegrationsAccess(req, res, next) {
+  if (!hasIntegrationsAccess(req.agent)) {
+    return res.status(403).json({ error: 'Insufficient permissions' });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requireRole, requireIntegrationsAccess, hasIntegrationsAccess };

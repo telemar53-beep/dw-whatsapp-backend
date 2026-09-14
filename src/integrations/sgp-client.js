@@ -68,6 +68,10 @@ function toContract(c) {
     // atendente no SGP): a listagem de promessas não existe nesta instalação.
     paymentPromisesThisMonth: Number(c.promessasPagamentoMes) || 0,
     address: formatAddress(c),
+    // Cidade crua, separada do endereço formatado: é o que o preenchimento
+    // automático da cidade do contato casa com as cidades cadastradas aqui.
+    // Uso interno — o normalizador da IA não expõe este campo ao modelo.
+    city: c.endereco_cidade || null,
     phones: (c.telefones || []).map((t) => t.contato),
     emails: (c.emails || []).map((e) => e.contato),
   };

@@ -92,6 +92,9 @@ describe('sgp-client', () => {
           openAmount: 89.9,
           paymentPromisesThisMonth: 0,
           address: 'RUA EXEMPLO, 523 - CENTRO - CANDIDO MENDES/MA',
+          // Cidade crua, de uso interno: alimenta o preenchimento automático
+          // da cidade do contato (não vai para o modelo).
+          city: 'CANDIDO MENDES',
           phones: ['(98) 98512-0338'],
           emails: ['exemplo@dominio.com'],
         },
@@ -377,6 +380,25 @@ describe('sgp-client', () => {
         connectionType: 'PPPoE', popId: 1, popName: 'POP CENTRO',
       });
       expect(JSON.stringify(contracts)).not.toContain('segredo');
+    });
+
+    test('carrega a cidade crua do endereço, e null quando o SGP não manda', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      const base = {
+        contratoId: 1, clienteId: 2, cpfCnpj: '529.982.247-25', razaoSocial: 'CLIENTE',
+        contratoStatus: 1, contratoStatusDisplay: 'Ativo', telefones: [], emails: [],
+      };
+      axios.post.mockResolvedValue({
+        data: { contratos: [
+          { ...base, endereco_cidade: 'CANDIDO MENDES', endereco_uf: 'MA' },
+          { ...base, contratoId: 2 },
+        ] },
+      });
+
+      const { contracts } = await lookupClientByCpf('52998224725');
+
+      expect(contracts[0].city).toBe('CANDIDO MENDES');
+      expect(contracts[1].city).toBeNull();
     });
   });
 });

@@ -34,6 +34,15 @@ describe('sgp-normalizer', () => {
     expect(normalizeContract({ ...RAW_CONTRACT, address: '' }).endereco).toBeNull();
   });
 
+  test('normalizeContract não expõe a cidade crua ao modelo', () => {
+    // `city` é campo de uso interno (preenche a cidade do contato); o endereço
+    // que a IA lê já contém a cidade, então não há por que duplicar.
+    const result = normalizeContract({ ...RAW_CONTRACT, city: 'CANDIDO MENDES' });
+    expect(result.city).toBeUndefined();
+    expect(result.cidade).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain('CANDIDO MENDES');
+  });
+
   test('normalizeContract falls back to desconhecido for an unmapped status code', () => {
     const result = normalizeContract({ ...RAW_CONTRACT, statusCode: 99, status: 'Algo Novo' });
     expect(result.status).toBe('desconhecido');

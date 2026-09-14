@@ -17,7 +17,7 @@ const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/so
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 const { findChannelById } = require('../channels/channel.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
-const { findActiveCityNoticeByCityId, recordNoticeDelivery } = require('../city-notices/city-notice.repository');
+const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const { getBusinessHoursConfig } = require('../business-hours/business-hours.repository');
 const { isOutsideBusinessHours } = require('../business-hours/business-hours.service');
 const {
@@ -151,10 +151,7 @@ async function ingestInboundMessage({
   }
 
   try {
-    const cityNotice = await findActiveCityNoticeByCityId(contact.cityId);
-    if (cityNotice && (await recordNoticeDelivery(cityNotice.id, contact.id))) {
-      await enqueueOutboundMessage({ conversationId: conversation.id, channelId, content: cityNotice.message });
-    }
+    await enviarAvisoDeCidadeSePreciso({ contact, conversationId: conversation.id, channelId });
   } catch (err) {
     console.error(`Failed to send city notice for conversation ${conversation.id}`, err);
   }

@@ -20,6 +20,7 @@ const { formatarData } = require('../payments/payment-card');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { primeiroNome } = require('./identity-resolver');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
+const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const { mensagemSegura } = require('./safe-error-log');
 const { findLatestInboundImage } = require('../conversations/message.repository');
 const { analyzeImage } = require('./openai-client');
@@ -1042,6 +1043,13 @@ const TOOLS = [
         // um campo acessório.
         try {
           await preencherCidadePeloSgp(contexto.contact, id.contracts);
+          // Com a cidade recém-descoberta, o aviso de falha regional sai neste
+          // mesmo turno — quem já recebeu não recebe de novo.
+          await enviarAvisoDeCidadeSePreciso({
+            contact: contexto.contact,
+            conversationId: contexto.conversationId,
+            channelId: contexto.channelId,
+          });
         } catch (err) {
           console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
         }

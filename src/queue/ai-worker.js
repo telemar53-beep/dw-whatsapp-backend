@@ -17,6 +17,9 @@ const { paraWhatsApp } = require('../ai/whatsapp-format');
 const { garantirSaudacao, corrigirPeriodoDaSaudacao } = require('../ai/saudacao');
 const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
 const { isNightModeActive } = require('../ai/night-mode');
+const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
+const { findActiveCityNoticeByCityId } = require('../city-notices/city-notice.repository');
+const { findCityById } = require('../cities/city.repository');
 
 async function handleAiJob(data) {
   if (data.tipo === 'triage-timeout') return handleTriageTimeout(data.conversationId);
@@ -150,6 +153,23 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // Nunca vai a log — é dado pessoal do cliente.
   const documentoPendente = await getTriagePendingDocument(conversation.id);
   const identidade = await resolverIdentidade({ contact, ignorarTelefone, documentoPendente });
+  // A identificação pode ter acabado de descobrir a cidade do cliente no SGP:
+  // quando a mensagem chegou (inbound-message.service.js), o contato ainda
+  // estava sem cidade e o aviso não tinha como sair. Aqui ele sai.
+  let avisoCidade = null;
+  try {
+    await enviarAvisoDeCidadeSePreciso({ contact, conversationId: conversation.id, channelId: conversation.channelId });
+    // O aviso ENTREGUE ANTES também conta para o prompt: a falha regional
+    // continua acontecendo, e é ela que explica a reclamação deste turno —
+    // mesmo que a mensagem do aviso já tenha ido em outro atendimento.
+    const avisoAtivo = contact.cityId ? await findActiveCityNoticeByCityId(contact.cityId) : null;
+    if (avisoAtivo) {
+      const cidade = await findCityById(contact.cityId);
+      avisoCidade = { cidade: cidade ? cidade.name : null, mensagem: avisoAtivo.message };
+    }
+  } catch (err) {
+    console.error(`Failed to send city notice for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+  }
   const mensagem = await findMessageById(messageId);
   const origemMensagem = mensagem && mensagem.messageType === 'audio' ? 'áudio' : 'texto';
   const attempts = conversation.triageAttempts || 0;
@@ -169,7 +189,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // (contexto.identidade em ai-orchestrator.js) — nunca vão a log nem são
   // persistidos aqui; o worker só olha turno.texto e turno.triagemConcluida.
   const turno = await runAiTurn({
-    conversation, contact, perfil: 'triagem', identidade, origemMensagem,
+    conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 

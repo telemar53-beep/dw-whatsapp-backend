@@ -16,6 +16,7 @@ jest.mock('./triage-close-reason');
 jest.mock('../conversations/message.repository');
 jest.mock('./openai-client');
 jest.mock('../cities/contact-city.service');
+jest.mock('../city-notices/city-notice.service');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
@@ -38,6 +39,7 @@ const { findLatestInboundImage } = require('../conversations/message.repository'
 const { analyzeImage } = require('./openai-client');
 const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
+const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
@@ -915,10 +917,28 @@ describe('confirmar_nascimento', () => {
     await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
     expect(preencherCidadePeloSgp).toHaveBeenCalledWith(c.contact, c.identidade.contracts);
   });
+  test('sucesso manda o aviso da cidade recém-descoberta, no mesmo turno', async () => {
+    // A cidade nasceu agora, no meio do turno: sem isto o cliente só receberia
+    // o aviso da falha regional na próxima mensagem que mandasse.
+    const c = { ...ctx(), channelId: 'ch-1' };
+    await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(enviarAvisoDeCidadeSePreciso).toHaveBeenCalledWith({
+      contact: c.contact, conversationId: 'conv-1', channelId: 'ch-1',
+    });
+  });
+  test('falha ao mandar o aviso da cidade não derruba a confirmação', async () => {
+    enviarAvisoDeCidadeSePreciso.mockRejectedValueOnce(new Error('db fora'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = ctx();
+    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(r.confirmado).toBe(true);
+    erroSpy.mockRestore();
+  });
   test('data errada não preenche cidade nenhuma', async () => {
     const c = ctx();
     await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
     expect(preencherCidadePeloSgp).not.toHaveBeenCalled();
+    expect(enviarAvisoDeCidadeSePreciso).not.toHaveBeenCalled();
   });
   test('falha ao preencher a cidade não derruba a confirmação', async () => {
     preencherCidadePeloSgp.mockRejectedValueOnce(new Error('db fora'));

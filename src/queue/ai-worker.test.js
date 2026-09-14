@@ -11,6 +11,9 @@ jest.mock('../ai/identity-resolver');
 jest.mock('../channels/channel.repository');
 jest.mock('../ai/night-mode');
 jest.mock('../queue/outbound-queue');
+jest.mock('../city-notices/city-notice.service');
+jest.mock('../city-notices/city-notice.repository');
+jest.mock('../cities/city.repository');
 
 const { runAiTurn } = require('../ai/ai-orchestrator');
 const { createSuggestion } = require('../ai/ai-suggestion.repository');
@@ -27,6 +30,9 @@ const { resolverIdentidade } = require('../ai/identity-resolver');
 const { findChannelById } = require('../channels/channel.repository');
 const { isNightModeActive } = require('../ai/night-mode');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
+const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
+const { findActiveCityNoticeByCityId } = require('../city-notices/city-notice.repository');
+const { findCityById } = require('../cities/city.repository');
 const { handleAiJob } = require('./ai-worker');
 
 beforeEach(() => {
@@ -185,6 +191,70 @@ describe('ai-worker — triagem', () => {
     // mockReturnValue(true) de um teste do modo noturno vazaria para todos os
     // testes seguintes da triagem.
     isNightModeActive.mockReset().mockReturnValue(false);
+    enviarAvisoDeCidadeSePreciso.mockReset().mockResolvedValue(null);
+    findActiveCityNoticeByCityId.mockReset().mockResolvedValue(null);
+    findCityById.mockReset().mockResolvedValue(null);
+  });
+
+  describe('aviso de cidade', () => {
+    const AVISO = { id: 'notice-1', cityId: 'city-1', message: 'Falha na fibra em Cândido Mendes.' };
+    const CONTATO_COM_CIDADE = { id: 'ct-1', phoneNumber: '55989', sgpDocument: null, cityId: 'city-1' };
+
+    test('tenta o aviso DEPOIS de identificar — a cidade pode ter acabado de ser preenchida pelo SGP', async () => {
+      // A mensagem de entrada roda antes da identificação: naquele momento o
+      // contato ainda estava sem cidade e o aviso não tinha como sair.
+      findContactById.mockResolvedValue(CONTATO_COM_CIDADE);
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(enviarAvisoDeCidadeSePreciso).toHaveBeenCalledWith({
+        contact: CONTATO_COM_CIDADE, conversationId: 'c-1', channelId: 'ch-1',
+      });
+      expect(enviarAvisoDeCidadeSePreciso.mock.invocationCallOrder[0])
+        .toBeGreaterThan(resolverIdentidade.mock.invocationCallOrder[0]);
+    });
+
+    test('o aviso ativo vai para o turno mesmo quando a mensagem já tinha sido entregue antes', async () => {
+      findContactById.mockResolvedValue(CONTATO_COM_CIDADE);
+      enviarAvisoDeCidadeSePreciso.mockResolvedValue(null); // já recebeu
+      findActiveCityNoticeByCityId.mockResolvedValue(AVISO);
+      findCityById.mockResolvedValue({ id: 'city-1', name: 'Cândido Mendes' });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+        avisoCidade: { cidade: 'Cândido Mendes', mensagem: 'Falha na fibra em Cândido Mendes.' },
+      }));
+    });
+
+    test('contato sem cidade: nada de aviso no turno', async () => {
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(findActiveCityNoticeByCityId).not.toHaveBeenCalled();
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ avisoCidade: null }));
+    });
+
+    test('cidade sem aviso ativo: nada de aviso no turno', async () => {
+      findContactById.mockResolvedValue(CONTATO_COM_CIDADE);
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(findActiveCityNoticeByCityId).toHaveBeenCalledWith('city-1');
+      expect(findCityById).not.toHaveBeenCalled();
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ avisoCidade: null }));
+    });
+
+    test('uma falha no aviso não derruba o turno', async () => {
+      findContactById.mockResolvedValue(CONTATO_COM_CIDADE);
+      enviarAvisoDeCidadeSePreciso.mockRejectedValue(new Error('db unavailable'));
+      const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ avisoCidade: null }));
+      expect(enqueueOutboundMessage).toHaveBeenCalled();
+      erroSpy.mockRestore();
+    });
   });
 
   test('conversa pending sem atendente roda o perfil de triagem e responde ao cliente como IA', async () => {

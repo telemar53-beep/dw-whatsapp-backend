@@ -50,6 +50,19 @@ describe('NavRail', () => {
     expect(screen.queryByLabelText('Administração')).not.toBeInTheDocument();
   });
 
+  test('shows the admin-only links for a manager', () => {
+    useAuth.mockReturnValue({ agent: { id: 'manager-1', name: 'Marcia', role: 'manager' }, logout: vi.fn() });
+    renderRail();
+    expect(screen.getByLabelText('Dashboard de atendimento')).toBeInTheDocument();
+    expect(screen.getByLabelText('Administração')).toBeInTheDocument();
+  });
+
+  test('hides Atendimentos encerrados for a manager (they use the Attendance Dashboard instead)', () => {
+    useAuth.mockReturnValue({ agent: { id: 'manager-1', name: 'Marcia', role: 'manager' }, logout: vi.fn() });
+    renderRail();
+    expect(screen.queryByLabelText('Atendimentos encerrados')).not.toBeInTheDocument();
+  });
+
   test('renders Conversas as a link to / when no onConversasClick is given', () => {
     renderRail();
     expect(screen.getByLabelText('Conversas')).toHaveAttribute('href', '/');

@@ -6,7 +6,7 @@ function ProtectedRoute({ children, requireAdmin = false }) {
   if (!token) {
     return <Navigate to="/login" replace />;
   }
-  if (requireAdmin && (!agent || agent.role !== 'admin')) {
+  if (requireAdmin && (!agent || (agent.role !== 'admin' && agent.role !== 'manager'))) {
     return <Navigate to="/" replace />;
   }
   return children;

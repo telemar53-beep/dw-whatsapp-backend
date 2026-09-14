@@ -55,4 +55,25 @@ describe('ChannelStatusBanner', () => {
     renderBanner();
     expect(screen.getByText(/QR/)).toBeInTheDocument();
   });
+
+  test('warns a manager with canManageIntegrations about a disconnected channel', () => {
+    useAuth.mockReturnValue({ agent: { role: 'manager', canManageIntegrations: true } });
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', name: 'Berg', status: 'disconnected' }],
+      loading: false,
+    });
+    renderBanner();
+    expect(screen.getByText(/Berg/)).toBeInTheDocument();
+    expect(screen.getByText(/desconectado/i)).toBeInTheDocument();
+  });
+
+  test('renders nothing for a manager without canManageIntegrations', () => {
+    useAuth.mockReturnValue({ agent: { role: 'manager', canManageIntegrations: false } });
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', name: 'Berg', status: 'disconnected' }],
+      loading: false,
+    });
+    const { container } = renderBanner();
+    expect(container).toBeEmptyDOMElement();
+  });
 });

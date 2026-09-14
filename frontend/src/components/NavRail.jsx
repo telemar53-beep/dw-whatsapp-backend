@@ -95,7 +95,7 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
           <RailLink to="/campaigns" label="Campanhas" active={active === 'campaigns'}>
             <IconMegaphone size={23} />
           </RailLink>
-          {agent?.role === 'admin' && (
+          {(agent?.role === 'admin' || agent?.role === 'manager') && (
             <>
               <RailLink to="/admin/dashboard" label="Dashboard de atendimento" active={active === 'dashboard'}>
                 <IconTeam size={23} />
@@ -112,7 +112,7 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
           <RailButton label={muted ? 'Som desativado' : 'Som ativado'} onClick={toggleMuted} highlight={muted}>
             {muted ? <IconBellOff size={22} /> : <IconBellOn size={22} />}
           </RailButton>
-          {agent?.role !== 'admin' && (
+          {agent?.role !== 'admin' && agent?.role !== 'manager' && (
             <RailButton label="Atendimentos encerrados" onClick={() => setClosedConversationsOpen(true)}>
               <IconCheckCircle size={22} />
             </RailButton>

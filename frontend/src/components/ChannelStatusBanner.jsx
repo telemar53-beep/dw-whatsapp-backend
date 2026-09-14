@@ -5,10 +5,10 @@ import { IconWarning } from './icons/WaIcons';
 
 function ChannelStatusBanner() {
   const { agent } = useAuth();
-  const isAdmin = agent?.role === 'admin';
-  const { channels } = useChannels(isAdmin);
+  const canSeeBanner = agent?.role === 'admin' || (agent?.role === 'manager' && agent?.canManageIntegrations === true);
+  const { channels } = useChannels(canSeeBanner);
 
-  if (!isAdmin) return null;
+  if (!canSeeBanner) return null;
 
   const problemChannels = channels.filter((c) => c.status !== 'connected');
   if (problemChannels.length === 0) return null;

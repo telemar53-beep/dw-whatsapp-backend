@@ -12,10 +12,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   io.mockReturnValue({ on: vi.fn(), off: vi.fn(), close: vi.fn() });
-  // A tela de login busca o nome da empresa na rota publica, e o chat busca a
-  // configuracao da empresa: sem estes dois, o automock devolve undefined.
+  // Login, chat e menu leem o nome da empresa pela rota publica: sem este
+  // mock o automock devolve undefined.
   api.getPublicCompany.mockResolvedValue({ name: 'Provedor X' });
-  api.getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
 });
 
 describe('App', () => {

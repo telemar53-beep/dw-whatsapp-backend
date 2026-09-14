@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
+import { useCompanyName } from '../hooks/useCompanyName';
 import ClosedConversationsModal from './ClosedConversationsModal';
 import AgentAvatar from './AgentAvatar';
 import {
@@ -16,6 +17,19 @@ import {
   IconMegaphone,
   IconCheckCircle,
 } from './icons/WaIcons';
+
+// O logo do menu era o texto fixo "DW". Agora sai do nome cadastrado: a
+// primeira letra de até duas palavras. Sem nome não há o que abreviar — quem
+// desenha o lugar é o ícone.
+export function iniciaisDaEmpresa(nome) {
+  const palavras = String(nome || '').trim().split(/\s+/).filter(Boolean);
+  if (palavras.length === 0) return '';
+  // Nome que já começa por sigla ("DW Telecom", "MG Fibra") mantém a sigla:
+  // pela regra crua das iniciais viraria "DT", que não é o logo de ninguém.
+  const primeira = palavras[0];
+  if (primeira.length <= 2 && primeira === primeira.toUpperCase()) return primeira;
+  return palavras.slice(0, 2).map((palavra) => palavra[0].toUpperCase()).join('');
+}
 
 const RAIL_BUTTON_BASE =
   'relative flex h-12 w-12 items-center justify-center rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
@@ -63,6 +77,8 @@ function RailLink({ to, label, children, active }) {
 function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = false }) {
   const { agent, logout } = useAuth();
   const { muted, toggleMuted } = useQueueNotificationSound();
+  const { name: companyName } = useCompanyName();
+  const iniciais = iniciaisDaEmpresa(companyName);
   const [closedConversationsOpen, setClosedConversationsOpen] = useState(false);
 
   return (
@@ -78,7 +94,7 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
             aria-hidden="true"
             className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.12] font-display text-[14px] font-semibold tracking-tight text-chat-text"
           >
-            DW
+            {iniciais || <IconChats size={22} />}
           </span>
           {onConversasClick ? (
             <RailButton label="Conversas" active={active === 'conversas'} onClick={onConversasClick}>

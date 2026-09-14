@@ -13,7 +13,7 @@ import {
   getDashboardConversationByProtocol,
   getDashboardConversationsByPhone,
   closeConversation,
-  getCompanyConfig,
+  getPublicCompany,
 } from '../services/api';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
@@ -51,7 +51,7 @@ beforeEach(() => {
   useSectors.mockReturnValue({ sectors: [{ id: 'sector-1', name: 'Financeiro' }], loading: false, refresh: vi.fn() });
   getDashboardClosedToday.mockResolvedValue({ items: [], hasMore: false });
   // O aviso do topo do chat (aberto no popup) cita a empresa cadastrada.
-  getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
+  getPublicCompany.mockResolvedValue({ name: '' });
   closeConversation.mockResolvedValue({ id: 'c2', status: 'closed' });
   useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn() });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });

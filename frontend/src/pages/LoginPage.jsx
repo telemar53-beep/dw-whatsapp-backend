@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getPublicCompany } from '../services/api';
+import { useCompanyName } from '../hooks/useCompanyName';
 
 function SignalMark() {
   return (
@@ -34,19 +34,7 @@ function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   // O nome da empresa vem da rota pública: aqui ainda não existe token. Sem
   // nome cadastrado (ou com a rota fora do ar) a tela continua de pé.
-  const [companyName, setCompanyName] = useState('');
-
-  useEffect(() => {
-    let ativo = true;
-    getPublicCompany()
-      .then((data) => {
-        if (ativo) setCompanyName((data && data.name) || '');
-      })
-      .catch(() => {});
-    return () => {
-      ativo = false;
-    };
-  }, []);
+  const { name: companyName } = useCompanyName();
 
   async function handleSubmit(event) {
     event.preventDefault();

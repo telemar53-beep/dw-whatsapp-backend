@@ -36,11 +36,16 @@ vi.mock('../hooks/useTriage');
 vi.mock('../hooks/useTemplates');
 vi.mock('../hooks/useCityNotices');
 vi.mock('../contexts/AuthContext');
+import * as api from '../services/api';
+
 vi.mock('../services/api');
 
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
+  // O logo do NavRail (presente em todas estas telas) le o nome da empresa
+  // pela rota publica.
+  api.getPublicCompany.mockResolvedValue({ name: 'Provedor X' });
   useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
   useAssignmentMessageConfig.mockReturnValue({
     config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },

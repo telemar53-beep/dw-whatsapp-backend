@@ -12,6 +12,7 @@ import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
 import { closeConversation } from '../services/api';
+import { useCompanyName } from '../hooks/useCompanyName';
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -27,6 +28,7 @@ vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useQueueNotificationSound');
 vi.mock('../hooks/useUnreadMyConversations');
+vi.mock('../hooks/useCompanyName');
 vi.mock('../components/StartConversationModal', () => ({
   default: ({ onCreated }) => (
     <button
@@ -48,6 +50,7 @@ beforeEach(() => {
   useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted: vi.fn() });
   useUnreadMyConversations.mockReturnValue({ unreadIds: new Set(), clearUnread: vi.fn() });
   closeConversation.mockResolvedValue({ id: 'c1', status: 'closed' });
+  useCompanyName.mockReturnValue({ name: 'Net Fibra' });
 });
 
 function renderDashboard() {
@@ -59,6 +62,23 @@ function renderDashboard() {
 }
 
 describe('DashboardPage', () => {
+  // A tela vazia dizia "DW Telecom Atendimento": nome de provedor nenhum fica
+  // no código.
+  test('a tela sem conversa selecionada cita a empresa cadastrada', () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.getByText('Net Fibra · Atendimento')).toBeInTheDocument();
+  });
+
+  test('sem empresa cadastrada, a tela vazia mostra só Atendimento', () => {
+    useCompanyName.mockReturnValue({ name: '' });
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([]);
+    renderDashboard();
+    expect(screen.getByText('Atendimento')).toBeInTheDocument();
+  });
+
   test('shows my conversations in the Andamento tab by default', () => {
     useQueue.mockReturnValue([{ id: 'c1', contactDisplayName: 'Carlos' }]);
     useMyConversations.mockReturnValue([{ id: 'c2', contactDisplayName: 'Maria' }]);

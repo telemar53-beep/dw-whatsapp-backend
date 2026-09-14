@@ -44,8 +44,9 @@ beforeEach(() => {
     refresh: vi.fn(),
   });
   useAiSuggestion.mockReturnValue({ suggestion: null, send: vi.fn(), edit: vi.fn(), discard: vi.fn() });
-  // O aviso do topo do chat cita a empresa cadastrada.
-  api.getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: [] });
+  // O aviso do topo do chat cita a empresa cadastrada, pela rota pública: o
+  // atendente comum não pode chamar a rota de admin.
+  api.getPublicCompany.mockResolvedValue({ name: 'Provedor X' });
 });
 
 describe('ConversationView', () => {
@@ -56,7 +57,7 @@ describe('ConversationView', () => {
   });
 
   test('sem empresa cadastrada, o aviso do topo fica generico', async () => {
-    api.getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
+    api.getPublicCompany.mockResolvedValue({ name: '' });
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
     expect(await screen.findByText('Este atendimento fica registrado no sistema da empresa.')).toBeInTheDocument();
   });

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
+import { useCompanyName } from '../hooks/useCompanyName';
 import { closeConversation } from '../services/api';
 import QueueList from '../components/QueueList';
 import MyConversationsList from '../components/MyConversationsList';
@@ -41,6 +42,7 @@ function DashboardPage() {
   const { token } = useAuth();
   const queue = useQueue();
   const myConversations = useMyConversations();
+  const { name: companyName } = useCompanyName();
   const [activeTab, setActiveTab] = useState('inProgress');
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState('');
@@ -226,7 +228,9 @@ function DashboardPage() {
               <span className="text-white/10">
                 <IconEmptyChat width={320} height={190} />
               </span>
-              <p className="mt-6 font-display text-[32px] font-light leading-tight text-chat-text/90">DW Telecom Atendimento</p>
+              <p className="mt-6 font-display text-[32px] font-light leading-tight text-chat-text/90">
+                {companyName ? `${companyName} · Atendimento` : 'Atendimento'}
+              </p>
               <p className="mt-3 max-w-[38ch] text-[14px] leading-[20px] text-chat-muted">
                 Selecione uma conversa na lista ao lado para ler o histórico e responder ao cliente.
               </p>

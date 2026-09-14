@@ -41,6 +41,9 @@ function renderPage() {
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'agent' } });
+  // O logo do NavRail (presente em todas estas telas) le o nome da empresa
+  // pela rota publica.
+  api.getPublicCompany.mockResolvedValue({ name: 'Provedor X' });
 });
 
 describe('MetricsPage', () => {

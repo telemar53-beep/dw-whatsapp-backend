@@ -2,7 +2,8 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import NavRail from './NavRail';
+import NavRail, { iniciaisDaEmpresa } from './NavRail';
+import { useCompanyName } from '../hooks/useCompanyName';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useMyClosedConversations } from '../hooks/useMyClosedConversations';
@@ -10,6 +11,7 @@ import { useMyClosedConversations } from '../hooks/useMyClosedConversations';
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useQueueNotificationSound');
 vi.mock('../hooks/useMyClosedConversations');
+vi.mock('../hooks/useCompanyName');
 
 function renderRail(props = {}) {
   return render(
@@ -23,9 +25,48 @@ beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ agent: { id: 'agent-1', name: 'Ana', role: 'agent' }, logout: vi.fn() });
   useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted: vi.fn() });
+  useCompanyName.mockReturnValue({ name: 'Net Fibra Ltda' });
+});
+
+// O logo era o texto fixo "DW": o sistema roda em mais de um provedor.
+describe('iniciaisDaEmpresa', () => {
+  test('pega a primeira letra de até duas palavras, em maiúsculas', () => {
+    expect(iniciaisDaEmpresa('Net Fibra Ltda')).toBe('NF');
+    expect(iniciaisDaEmpresa('provedor')).toBe('P');
+  });
+
+  // Nome que já começa por sigla ("DW Telecom") mantém a sigla: pela regra
+  // crua das iniciais viraria "DT", que não é o logo de ninguém.
+  test('nome que começa por sigla mantém a sigla', () => {
+    expect(iniciaisDaEmpresa('DW Telecom')).toBe('DW');
+    expect(iniciaisDaEmpresa('MG Fibra Ltda')).toBe('MG');
+  });
+
+  test('espaços sobrando não viram inicial vazia', () => {
+    expect(iniciaisDaEmpresa('  Net   Fibra  ')).toBe('NF');
+  });
+
+  test('sem nome não há iniciais', () => {
+    expect(iniciaisDaEmpresa('')).toBe('');
+    expect(iniciaisDaEmpresa(null)).toBe('');
+    expect(iniciaisDaEmpresa(undefined)).toBe('');
+    expect(iniciaisDaEmpresa('   ')).toBe('');
+  });
 });
 
 describe('NavRail', () => {
+  test('o logo mostra as iniciais da empresa cadastrada', () => {
+    renderRail();
+    expect(screen.getByText('NF')).toBeInTheDocument();
+  });
+
+  test('sem empresa cadastrada, o logo não inventa iniciais', () => {
+    useCompanyName.mockReturnValue({ name: '' });
+    renderRail();
+    expect(screen.queryByText('NF')).not.toBeInTheDocument();
+    expect(screen.queryByText('DW')).not.toBeInTheDocument();
+  });
+
   test('always shows Conversas and Relatório', () => {
     renderRail();
     expect(screen.getByLabelText('Conversas')).toBeInTheDocument();

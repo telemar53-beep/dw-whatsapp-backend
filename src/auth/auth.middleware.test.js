@@ -1,6 +1,6 @@
 jest.mock('./auth.service');
 const { verifyToken } = require('./auth.service');
-const { requireAuth, requireRole, requireIntegrationsAccess, hasIntegrationsAccess } = require('./auth.middleware');
+const { requireAuth, requireRole, requireIntegrationsAccess, hasIntegrationsAccess, hasAdminLevelAccess } = require('./auth.middleware');
 
 function mockRes() {
   return { status: jest.fn().mockReturnThis(), json: jest.fn() };
@@ -108,6 +108,24 @@ describe('hasIntegrationsAccess', () => {
 
   test('returns false for a missing agent', () => {
     expect(hasIntegrationsAccess(undefined)).toBe(false);
+  });
+});
+
+describe('hasAdminLevelAccess', () => {
+  test('returns true for an admin', () => {
+    expect(hasAdminLevelAccess({ role: 'admin' })).toBe(true);
+  });
+
+  test('returns true for a manager', () => {
+    expect(hasAdminLevelAccess({ role: 'manager' })).toBe(true);
+  });
+
+  test('returns false for a plain agent', () => {
+    expect(hasAdminLevelAccess({ role: 'agent' })).toBe(false);
+  });
+
+  test('returns false for a missing agent', () => {
+    expect(hasAdminLevelAccess(undefined)).toBe(false);
   });
 });
 

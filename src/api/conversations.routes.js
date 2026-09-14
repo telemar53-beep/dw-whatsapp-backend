@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { requireAuth } = require('../auth/auth.middleware');
+const { requireAuth, hasAdminLevelAccess } = require('../auth/auth.middleware');
 const {
   listWaitingConversations,
   listConversationsByAgent,
@@ -331,7 +331,7 @@ router.post('/:id/transfer', async (req, res) => {
   if (!toAgentId) {
     return res.status(400).json({ error: 'toAgentId is required' });
   }
-  const isAdmin = req.agent.role === 'admin';
+  const isAdmin = hasAdminLevelAccess(req.agent);
   const conversation = isAdmin
     ? await adminTransferConversation(req.params.id, toAgentId)
     : await transferConversation(req.params.id, req.agent.agentId, toAgentId);
@@ -362,7 +362,7 @@ router.put('/:id/sector', async (req, res) => {
   if (!conversation) {
     return res.status(404).json({ error: 'Conversation not found' });
   }
-  const isAdmin = req.agent.role === 'admin';
+  const isAdmin = hasAdminLevelAccess(req.agent);
   if (!isAdmin && conversation.assignedAgentId !== req.agent.agentId) {
     return res.status(403).json({ error: 'Only the assigned agent can change the sector' });
   }
@@ -393,7 +393,7 @@ router.post('/:id/close', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or inactive reasonId' });
     }
   }
-  const conversation = req.agent.role === 'admin'
+  const conversation = hasAdminLevelAccess(req.agent)
     ? await adminCloseConversation(req.params.id, req.agent.agentId, reasonId || null)
     : await closeConversation(req.params.id, req.agent.agentId, reasonId || null);
   if (!conversation) {

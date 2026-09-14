@@ -94,6 +94,22 @@ describe('GET /api/metrics', () => {
     });
   });
 
+  test('returns the full team breakdown for a manager too', async () => {
+    getMetricsForAllAgents.mockResolvedValue([
+      { agentId: 'a1', agentName: 'Ana', closedCount: 2, avgResolutionMinutes: 10, avgFirstResponseMinutes: 3 },
+    ]);
+    getMetricsBySector.mockResolvedValue([{ sectorId: 's1', sectorName: 'Financeiro', closedCount: 2 }]);
+    getMetricsByReason.mockResolvedValue([{ reasonId: 'r1', reasonName: 'Troca de senha', closedCount: 2 }]);
+
+    const res = await request(buildApp())
+      .get('/api/metrics?period=7d')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.scope).toBe('admin');
+    expect(getMetricsForAllAgents).toHaveBeenCalledWith(expect.any(Date));
+  });
+
   test('accepts a custom period with a valid days value', async () => {
     getMetricsForAgent.mockResolvedValue({ closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null });
 

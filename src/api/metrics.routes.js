@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../auth/auth.middleware');
+const { requireAuth, hasAdminLevelAccess } = require('../auth/auth.middleware');
 const { getMetricsForAgent, getMetricsForAllAgents, getMetricsBySector, getMetricsByReason } = require('../metrics/metrics.repository');
 
 const router = express.Router();
@@ -24,7 +24,7 @@ router.get('/', requireAuth, async (req, res) => {
     return res.status(400).json({ error: `period must be one of: today, 7d, 30d, or custom with a days parameter from 1 to ${CUSTOM_DAYS_MAX}` });
   }
 
-  if (req.agent.role === 'admin') {
+  if (hasAdminLevelAccess(req.agent)) {
     const [byAgent, bySector, byReason] = await Promise.all([
       getMetricsForAllAgents(since),
       getMetricsBySector(since),

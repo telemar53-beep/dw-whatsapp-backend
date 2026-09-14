@@ -107,6 +107,19 @@ describe('socket server', () => {
     agentClient.on('connect', onBothConnected);
   });
 
+  test('a manager socket also joins the dashboard room and receives broadcastToDashboard events', (done) => {
+    const managerToken = jwt.sign({ agentId: 'agent-manager-1', role: 'manager' }, process.env.JWT_SECRET);
+    const managerClient = connect(managerToken);
+    managerClient.on('connect', () => {
+      managerClient.on('dashboard:conversation', (payload) => {
+        expect(payload).toEqual({ hello: 'dashboard-manager' });
+        managerClient.close();
+        done();
+      });
+      broadcastToDashboard('dashboard:conversation', { hello: 'dashboard-manager' });
+    });
+  });
+
   test('connecting broadcasts presence:online to already-connected clients', (done) => {
     const tokenA = jwt.sign({ agentId: 'agent-presence-a', role: 'agent' }, process.env.JWT_SECRET);
     const tokenB = jwt.sign({ agentId: 'agent-presence-b', role: 'agent' }, process.env.JWT_SECRET);

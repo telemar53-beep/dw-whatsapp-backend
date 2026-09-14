@@ -2,6 +2,7 @@ const { Server } = require('socket.io');
 const { verifyToken } = require('../auth/auth.service');
 const { getAllowedOrigins } = require('../config/cors-origins');
 const { markAgentOnline, markAgentOffline } = require('./presence');
+const { hasAdminLevelAccess } = require('../auth/auth.middleware');
 
 let io;
 
@@ -18,7 +19,7 @@ function initSocketServer(httpServer) {
   });
   io.on('connection', (socket) => {
     socket.join(`agent:${socket.agent.agentId}`);
-    if (socket.agent.role === 'admin') {
+    if (hasAdminLevelAccess(socket.agent)) {
       socket.join('dashboard');
     }
     if (markAgentOnline(socket.agent.agentId)) {

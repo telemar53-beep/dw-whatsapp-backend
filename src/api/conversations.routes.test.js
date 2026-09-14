@@ -799,6 +799,17 @@ describe('POST /api/conversations/:id/transfer', () => {
     expect(transferConversation).not.toHaveBeenCalled();
   });
 
+  test('a manager can transfer a conversation assigned to a different agent', async () => {
+    adminTransferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ toAgentId: 'agent-2' });
+    expect(res.status).toBe(200);
+    expect(adminTransferConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'agent-2');
+    expect(transferConversation).not.toHaveBeenCalled();
+  });
+
   test('does not emit conversation:removed to the admin performing the transfer, only conversation:assigned to the new agent', async () => {
     adminTransferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
@@ -966,6 +977,17 @@ describe('POST /api/conversations/:id/close', () => {
       .send({ reasonId: REASON_ID });
     expect(res.status).toBe(200);
     expect(adminCloseConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'admin-1', REASON_ID);
+    expect(closeConversation).not.toHaveBeenCalled();
+  });
+
+  test('a manager can close a conversation assigned to a different agent', async () => {
+    adminCloseConversation.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: 'agent-1' });
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/close`)
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ reasonId: REASON_ID });
+    expect(res.status).toBe(200);
+    expect(adminCloseConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'manager-1', REASON_ID);
     expect(closeConversation).not.toHaveBeenCalled();
   });
 
@@ -1688,6 +1710,20 @@ describe('PUT /api/conversations/:id/sector', () => {
       .send({ sectorId: 's-2' });
 
     expect(adminRes.status).toBe(200);
+  });
+
+  test('um gerente também pode trocar o setor de uma conversa que não é dele', async () => {
+    getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, assignedAgentId: 'outro-agente', aiTriageSectorId: 's-1' });
+    listSectors.mockResolvedValue([{ id: 's-2', name: 'Suporte' }]);
+    setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, sectorId: 's-2' });
+
+    const res = await request(buildApp())
+      .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ sectorId: 's-2' });
+
+    expect(res.status).toBe(200);
+    expect(setConversationSector).toHaveBeenCalledWith(CONVERSATION_ID, 's-2');
   });
 
   test('rejeita setor inexistente', async () => {

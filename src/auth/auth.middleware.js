@@ -30,6 +30,10 @@ function hasIntegrationsAccess(agent) {
   return agent?.role === 'admin' || (agent?.role === 'manager' && agent?.canManageIntegrations === true);
 }
 
+function hasAdminLevelAccess(agent) {
+  return ADMIN_LEVEL_ROLES.includes(agent?.role);
+}
+
 function requireIntegrationsAccess(req, res, next) {
   if (!hasIntegrationsAccess(req.agent)) {
     return res.status(403).json({ error: 'Insufficient permissions' });
@@ -37,4 +41,4 @@ function requireIntegrationsAccess(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireRole, requireIntegrationsAccess, hasIntegrationsAccess };
+module.exports = { requireAuth, requireRole, requireIntegrationsAccess, hasIntegrationsAccess, hasAdminLevelAccess };

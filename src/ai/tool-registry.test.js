@@ -911,6 +911,15 @@ describe('confirmar_nascimento', () => {
     await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
     expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
   });
+  test('falha ao limpar o CPF pendente não derruba a confirmação já persistida', async () => {
+    setTriagePendingDocument.mockRejectedValueOnce(new Error('db fora'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = ctx();
+    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(r.confirmado).toBe(true);
+    expect(c.identidade.nivel).toBe('forte');
+    erroSpy.mockRestore();
+  });
   test('data errada NÃO limpa o CPF pendente (o cliente ainda pode tentar de novo)', async () => {
     const c = ctx();
     await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
@@ -1082,6 +1091,24 @@ describe('esquecer_identificacao', () => {
     expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
   });
 
+  // O CPF pendente é a identidade inteira depois de buscar_cliente: se
+  // markPhoneContested falhar e levar a limpeza dele junto, o CPF descartado
+  // ressuscita como identidade fraca no turno seguinte — exatamente o que
+  // esquecer_identificacao acabou de desfazer.
+  test('markPhoneContested falhando ainda assim limpa o CPF pendente', async () => {
+    markPhoneContested.mockRejectedValueOnce(new Error('db fora'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = {
+      identidade: { nivel: 'fraca', origem: 'cpf', primeiroNome: 'João' },
+      contracts: [],
+      contact: { id: 'ct-1', sgpDocument: null, sgpClientId: null, sgpContractId: null },
+      conversationId: 'conv-1',
+    };
+    await findTool('esquecer_identificacao').executar({}, c);
+    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
+    erroSpy.mockRestore();
+  });
+
   test('markPhoneContested falhando não derruba a limpeza em memória nem do vínculo', async () => {
     markPhoneContested.mockRejectedValue(new Error('db fora'));
     const c = {
@@ -1133,6 +1160,22 @@ describe('buscar_cliente no perfil de triagem', () => {
     const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
     await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
     expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', '11122233344');
+  });
+
+  test('falha ao gravar o CPF pendente não derruba a busca (o turno atual ainda vale)', async () => {
+    // Perder a persistência é voltar ao comportamento antigo; perder o turno
+    // inteiro é pior — o cliente acabou de digitar o CPF.
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1 }] });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
+    setTriagePendingDocument.mockRejectedValueOnce(new Error('db fora'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(r.cliente).toEqual({ nome: 'Maria' });
+    expect(c.identidade.nivel).toBe('fraca');
+    // O CPF nunca vai a log.
+    expect(erroSpy.mock.calls.map((a) => JSON.stringify(a)).join(' ')).not.toContain('11122233344');
+    erroSpy.mockRestore();
   });
 
   test('no perfil assistente NÃO grava CPF pendente (a coluna é só da triagem)', async () => {

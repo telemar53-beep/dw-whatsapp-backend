@@ -222,8 +222,17 @@ const TOOLS = [
         // A identidade FRACA precisa sobreviver ao fim do turno: sem isto,
         // resolverIdentidade devolvia 'none' no turno seguinte e o modelo
         // pedia o CPF outra vez (defeito A, teste real 2026-09-14). A coluna
-        // é dedicada e fica fora dos resumos; o CPF nunca vai a log.
-        await setTriagePendingDocument(contexto.conversationId, args.cpf);
+        // é dedicada e fica fora dos resumos.
+        //
+        // Try/catch: a identidade deste turno já está montada e vale. Perder a
+        // persistência é voltar ao comportamento antigo; derrubar o turno
+        // inteiro (execution_error) logo depois de o cliente digitar o CPF é
+        // pior. O CPF nunca entra na mensagem de log.
+        try {
+          await setTriagePendingDocument(contexto.conversationId, args.cpf);
+        } catch (err) {
+          console.error(`Failed to store the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+        }
         // As palavras do modelo vão direto ao cliente na triagem: nunca o
         // sobrenome completo nem o login PPPoE, só o que já se apresentaria
         // por telefone.
@@ -1027,8 +1036,15 @@ const TOOLS = [
         });
         contexto.contact.sgpDocument = id.client.document;
         // Confirmada: a identidade passa a viver no vínculo do contato, então
-        // o CPF pendente não é mais necessário na conversa.
-        await setTriagePendingDocument(contexto.conversationId, null);
+        // o CPF pendente não é mais necessário na conversa. Try/catch porque a
+        // confirmação (setContactSgpLink acima) já está persistida: um resto
+        // na coluna é inofensivo (a memória tem precedência no resolvedor) e
+        // não pode transformar uma confirmação bem-sucedida em recusa.
+        try {
+          await setTriagePendingDocument(contexto.conversationId, null);
+        } catch (err) {
+          console.error(`Failed to clear the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+        }
         // Só agora os contratos chegam ao modelo, e com o ENDEREÇO — que é o
         // que o cliente reconhece. O número continua existindo só para as
         // ferramentas.
@@ -1084,11 +1100,18 @@ const TOOLS = [
       // causa disto.
       try {
         await markPhoneContested(contexto.conversationId);
-        // O CPF digitado também é descartado: esquecer_identificacao apaga a
-        // identificação inteira, não só a que veio do telefone.
-        await setTriagePendingDocument(contexto.conversationId, null);
       } catch (err) {
         console.error(`Failed to mark phone contested for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+      }
+      // Try/catch PRÓPRIO, e não junto do de cima: depois de buscar_cliente o
+      // CPF pendente É a identidade inteira. Se a falha de markPhoneContested
+      // levasse esta limpeza junto, o CPF que o cliente acabou de descartar
+      // ressuscitaria como identidade fraca no turno seguinte — exatamente o
+      // que esquecer_identificacao existe para desfazer.
+      try {
+        await setTriagePendingDocument(contexto.conversationId, null);
+      } catch (err) {
+        console.error(`Failed to clear the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
       }
       return { esquecido: true };
     },

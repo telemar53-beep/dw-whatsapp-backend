@@ -281,7 +281,7 @@ async function montarContextoTriagem(config, identidade, triagem) {
       );
     }
     if (identidade.nivel === 'fraca') {
-      linhas.push('Identificação por CPF ainda NÃO confirmada: para entregar boleto ou PIX, pergunte a data de nascimento e chame confirmar_nascimento. Se não confirmar, apenas encaminhe.');
+      linhas.push('Identificação por CPF ainda NÃO confirmada: para entregar boleto ou PIX, pergunte a data de nascimento e chame confirmar_nascimento. Se não confirmar, apenas encaminhe. O CPF já foi informado; NÃO peça o CPF de novo.');
     } else {
       linhas.push(
         // Com um motivo de encerramento configurado, o atendimento que começou

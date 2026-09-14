@@ -24,6 +24,7 @@ const { findReasonById } = require('../reasons/reason.repository');
 const {
   setConversationSector, setSuggestedReason, concludeAiTriage, getConversationWithContact,
   incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
+  setTriagePendingDocument,
 } = require('../conversations/conversation.repository');
 const { setContactSgpLink } = require('../conversations/contact.repository');
 const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
@@ -905,6 +906,16 @@ describe('confirmar_nascimento', () => {
     expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: 9, sgpContractId: 5, sgpDocument: '11122233344', sgpFirstName: 'Maria' });
     expect(c.contact.sgpDocument).toBe('11122233344');
   });
+  test('sucesso limpa o CPF pendente da conversa (a identidade agora vive no vínculo do contato)', async () => {
+    const c = ctx();
+    await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
+  });
+  test('data errada NÃO limpa o CPF pendente (o cliente ainda pode tentar de novo)', async () => {
+    const c = ctx();
+    await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
+    expect(setTriagePendingDocument).not.toHaveBeenCalled();
+  });
   test('aceita AAAA-MM-DD e D/M/AA', async () => {
     for (const data of ['1990-05-20', '20/5/90']) {
       const c = ctx();
@@ -1019,6 +1030,17 @@ describe('esquecer_identificacao', () => {
     expect(markPhoneContested).toHaveBeenCalledWith('conv-1');
   });
 
+  test('limpa também o CPF pendente da conversa', async () => {
+    const c = {
+      identidade: { nivel: 'fraca', origem: 'cpf', primeiroNome: 'João' },
+      contracts: [],
+      contact: { id: 'ct-1', sgpDocument: null, sgpClientId: null, sgpContractId: null },
+      conversationId: 'conv-1',
+    };
+    await findTool('esquecer_identificacao').executar({}, c);
+    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
+  });
+
   test('markPhoneContested falhando não derruba a limpeza em memória nem do vínculo', async () => {
     markPhoneContested.mockRejectedValue(new Error('db fora'));
     const c = {
@@ -1060,6 +1082,23 @@ describe('buscar_cliente no perfil de triagem', () => {
     // identidade FORTE por memória, pulando confirmar_nascimento de vez.
     expect(setContactSgpLink).not.toHaveBeenCalled();
     expect(c.contact.sgpDocument).toBeUndefined();
+  });
+
+  test('grava o CPF digitado na conversa, para o próximo turno reconstruir a identidade fraca', async () => {
+    // Defeito A: sem isto, resolverIdentidade devolvia 'none' no turno
+    // seguinte e o modelo pedia o CPF de novo.
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1 }] });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
+    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
+    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', '11122233344');
+  });
+
+  test('no perfil assistente NÃO grava CPF pendente (a coluna é só da triagem)', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'X SOBRENOME', document: '1' }, contracts: [] });
+    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' } };
+    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(setTriagePendingDocument).not.toHaveBeenCalled();
   });
 
   // C2 (fix round 1): na triagem as palavras do modelo vão direto ao

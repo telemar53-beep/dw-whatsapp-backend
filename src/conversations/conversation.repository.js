@@ -312,6 +312,32 @@ async function isPhoneContested(conversationId) {
   return Boolean(result.rows[0].ai_triage_phone_contested);
 }
 
+/**
+ * ai_triage_pending_document: o CPF/CNPJ que o cliente DIGITOU na triagem e
+ * que ainda não passou pela conferência da data de nascimento. Mesmo
+ * tratamento de ai_triage_phone_contested — fora do mapper e das consultas que
+ * enumeram colunas, só estas duas funções o leem/escrevem, e ele nunca entra
+ * num resumo de conversa. Sem isto, a identidade FRACA vivia só no contexto do
+ * turno e o turno seguinte pedia o CPF de novo.
+ *
+ * Nunca vai a log: é dado pessoal do cliente.
+ */
+async function setTriagePendingDocument(conversationId, document) {
+  await getPool().query(
+    `UPDATE conversations SET ai_triage_pending_document = $2 WHERE id = $1`,
+    [conversationId, document || null]
+  );
+}
+
+async function getTriagePendingDocument(conversationId) {
+  const result = await getPool().query(
+    `SELECT ai_triage_pending_document FROM conversations WHERE id = $1`,
+    [conversationId]
+  );
+  if (result.rowCount === 0) return null;
+  return result.rows[0].ai_triage_pending_document || null;
+}
+
 async function activateConversation(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET status = 'waiting', updated_at = now()
@@ -722,4 +748,6 @@ module.exports = {
   setConversationSector,
   markPhoneContested,
   isPhoneContested,
+  setTriagePendingDocument,
+  getTriagePendingDocument,
 };

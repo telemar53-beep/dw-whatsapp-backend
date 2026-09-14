@@ -4,7 +4,7 @@ const { createSuggestion } = require('../ai/ai-suggestion.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const {
   getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
-  closeConversationByAi,
+  closeConversationByAi, getTriagePendingDocument,
 } = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
 const { findLatestInboundMessageId, findMessageById } = require('../conversations/message.repository');
@@ -144,7 +144,12 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // nome) — sem isto o turno seguinte buscaria de novo pelo MESMO telefone no
   // SGP e cumprimentaria a mesma pessoa errada de novo.
   const ignorarTelefone = await isPhoneContested(conversation.id);
-  const identidade = await resolverIdentidade({ contact, ignorarTelefone });
+  // O CPF digitado num turno anterior e ainda não confirmado pela data de
+  // nascimento: sem ele, a identidade FRACA morre no fim do turno e o modelo
+  // pede o CPF de novo ("me informe o CPF novamente", teste real 2026-09-14).
+  // Nunca vai a log — é dado pessoal do cliente.
+  const documentoPendente = await getTriagePendingDocument(conversation.id);
+  const identidade = await resolverIdentidade({ contact, ignorarTelefone, documentoPendente });
   const mensagem = await findMessageById(messageId);
   const origemMensagem = mensagem && mensagem.messageType === 'audio' ? 'áudio' : 'texto';
   const attempts = conversation.triageAttempts || 0;

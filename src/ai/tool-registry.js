@@ -8,6 +8,7 @@ const { listSectors } = require('../sectors/sector.repository');
 const {
   setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
   incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
+  setTriagePendingDocument,
 } = require('../conversations/conversation.repository');
 const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
@@ -227,6 +228,11 @@ const TOOLS = [
           nivel: 'fraca', origem: 'cpf', primeiroNome: primeiroNome(client.name), contracts,
           client: { id: client.id, document: args.cpf }, dataNascimento, contestado: false, nascimentoTentado: false,
         };
+        // A identidade FRACA precisa sobreviver ao fim do turno: sem isto,
+        // resolverIdentidade devolvia 'none' no turno seguinte e o modelo
+        // pedia o CPF outra vez (defeito A, teste real 2026-09-14). A coluna
+        // é dedicada e fica fora dos resumos; o CPF nunca vai a log.
+        await setTriagePendingDocument(contexto.conversationId, args.cpf);
         // As palavras do modelo vão direto ao cliente na triagem: nunca o
         // sobrenome completo nem o login PPPoE, só o que já se apresentaria
         // por telefone.
@@ -1012,6 +1018,9 @@ const TOOLS = [
           sgpFirstName: primeiroNome(id.primeiroNome),
         });
         contexto.contact.sgpDocument = id.client.document;
+        // Confirmada: a identidade passa a viver no vínculo do contato, então
+        // o CPF pendente não é mais necessário na conversa.
+        await setTriagePendingDocument(contexto.conversationId, null);
         return { confirmado: true };
       }
       return { confirmado: false, motivo: 'Data não confere. Não entregue dados; encaminhe para o setor.' };
@@ -1045,6 +1054,9 @@ const TOOLS = [
       // causa disto.
       try {
         await markPhoneContested(contexto.conversationId);
+        // O CPF digitado também é descartado: esquecer_identificacao apaga a
+        // identificação inteira, não só a que veio do telefone.
+        await setTriagePendingDocument(contexto.conversationId, null);
       } catch (err) {
         console.error(`Failed to mark phone contested for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
       }

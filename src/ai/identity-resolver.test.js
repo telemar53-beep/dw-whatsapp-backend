@@ -171,6 +171,67 @@ describe('resolverIdentidade', () => {
     expect(sgpClient.findClientRecord).not.toHaveBeenCalled();
   });
 
+  test('documentoPendente: CPF digitado num turno anterior identifica de novo, como FRACA', async () => {
+    // Defeito A: sem isto, o turno seguinte devolvia 'none' e o modelo pedia
+    // o CPF outra vez ("me informe o CPF novamente").
+    sgpClient.findClientRecord
+      .mockResolvedValueOnce({ total: 0, cliente: null })   // telefone: não bate
+      .mockResolvedValueOnce({ total: 0, cliente: null })   // variante sem o 9º
+      .mockResolvedValueOnce({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    const r = await resolverIdentidade({
+      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null },
+      documentoPendente: '52998224725',
+    });
+    expect(r).toMatchObject({ nivel: 'fraca', origem: 'cpf', primeiroNome: 'João' });
+    expect(r.contracts).toEqual(CONTRACTS);
+    expect(r.dataNascimento).toBe('1990-05-20');
+    expect(sgpClient.lookupClientByCpf).toHaveBeenCalledWith('52998224725');
+  });
+
+  test('documentoPendente: nada é gravado no contato (identidade fraca não vira memória)', async () => {
+    sgpClient.findClientRecord.mockResolvedValue({ total: 0, cliente: null });
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    await resolverIdentidade({
+      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null },
+      documentoPendente: '52998224725',
+    });
+    expect(setContactSgpLink).not.toHaveBeenCalled();
+  });
+
+  test('documentoPendente: vale também com ignorarTelefone (depois de esquecer_identificacao)', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
+    const r = await resolverIdentidade({
+      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null },
+      ignorarTelefone: true,
+      documentoPendente: '52998224725',
+    });
+    expect(r).toMatchObject({ nivel: 'fraca', origem: 'cpf' });
+    expect(sgpClient.findClientRecord).not.toHaveBeenCalledWith({ telefone: '98985120338' });
+  });
+
+  test('documentoPendente: a memória tem precedência e continua forte', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
+    const r = await resolverIdentidade({
+      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725' },
+      documentoPendente: '11122233344',
+    });
+    expect(r).toMatchObject({ nivel: 'forte', origem: 'memory' });
+    expect(sgpClient.lookupClientByCpf).toHaveBeenCalledWith('52998224725');
+  });
+
+  test('documentoPendente: SGP fora nesse caminho volta a none, sem lançar', async () => {
+    sgpClient.findClientRecord.mockResolvedValue({ total: 0, cliente: null });
+    sgpClient.lookupClientByCpf.mockRejectedValueOnce(new Error('SGP down'));
+    const r = await resolverIdentidade({
+      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null },
+      documentoPendente: '52998224725',
+    });
+    expect(r).toMatchObject({ nivel: 'none', origem: 'none' });
+  });
+
   test('ignorarTelefone: true não afeta a memória (sgpDocument já vinculado continua identificando)', async () => {
     sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });

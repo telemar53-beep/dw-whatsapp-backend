@@ -44,6 +44,8 @@ const {
   findRecentAiClosedConversation,
   markPhoneContested,
   isPhoneContested,
+  setTriagePendingDocument,
+  getTriagePendingDocument,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -1243,6 +1245,30 @@ describe('conversation repository', () => {
 
     test('isPhoneContested devolve false para uma conversa que não existe', async () => {
       expect(await isPhoneContested('00000000-0000-0000-0000-000000000000')).toBe(false);
+    });
+  });
+
+  describe('ai_triage_pending_document', () => {
+    test('getTriagePendingDocument é null por padrão numa conversa nova', async () => {
+      const conv = await createConversation(contactId, channelId, 'pending');
+      expect(await getTriagePendingDocument(conv.id)).toBeNull();
+    });
+
+    test('setTriagePendingDocument grava o documento e getTriagePendingDocument o devolve', async () => {
+      const conv = await createConversation(contactId, channelId, 'pending');
+      await setTriagePendingDocument(conv.id, '52998224725');
+      expect(await getTriagePendingDocument(conv.id)).toBe('52998224725');
+    });
+
+    test('setTriagePendingDocument com null limpa o documento pendente', async () => {
+      const conv = await createConversation(contactId, channelId, 'pending');
+      await setTriagePendingDocument(conv.id, '52998224725');
+      await setTriagePendingDocument(conv.id, null);
+      expect(await getTriagePendingDocument(conv.id)).toBeNull();
+    });
+
+    test('getTriagePendingDocument devolve null para uma conversa que não existe', async () => {
+      expect(await getTriagePendingDocument('00000000-0000-0000-0000-000000000000')).toBeNull();
     });
   });
 });

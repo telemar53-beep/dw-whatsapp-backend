@@ -629,6 +629,13 @@ describe('perfil de triagem', () => {
     expect(sys).toMatch(/confirmar_nascimento/);
   });
 
+  // Defeito A: com a identidade fraca chegando já pronta do resolvedor, o
+  // modelo não precisa (e não deve) chamar buscar_cliente de novo.
+  test('identidade fraca proíbe pedir o CPF outra vez', async () => {
+    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
+    expect(sys).toContain('O CPF já foi informado; NÃO peça o CPF de novo.');
+  });
+
   // Minor (revisão final do branch inteiro): um cliente identificado (nível
   // != none) mas sem primeiroNome no cadastro não pode virar "primeiro nome
   // null" no contexto — o modelo repetiria isso de volta ao cliente.

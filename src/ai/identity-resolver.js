@@ -10,7 +10,9 @@ const { mensagemSegura } = require('./safe-error-log');
  * Nível 'forte' = telefone bateu (exatamente um cadastro) ou memória; a
  * confirmação leve é chamar pelo primeiro nome — se não for ele, ele diz.
  * CPF digitado por número desconhecido é 'fraca' e é elevado pela ferramenta
- * confirmar_nascimento; isso acontece dentro do turno, não aqui.
+ * confirmar_nascimento; a elevação acontece dentro do turno, não aqui — mas a
+ * identidade fraca em si volta por aqui nos turnos seguintes, via
+ * documentoPendente (ai_triage_pending_document da conversa).
  *
  * dataNascimento fica neste objeto para a comparação em código. Nunca vai ao
  * modelo nem a log — o contexto do sistema só usa nivel/origem/primeiroNome.
@@ -86,7 +88,22 @@ function porMemoriaSemSgp(contact) {
   };
 }
 
-async function resolverIdentidade({ contact, ignorarTelefone = false }) {
+/**
+ * O CPF que o cliente DIGITOU num turno anterior e que ainda não passou pela
+ * data de nascimento. Reconstrói a identidade FRACA (porCpf devolve forte —
+ * rebaixa aqui) sem tocar no contato: nada de setContactSgpLink, porque o
+ * dono do CPF digitado pode não ser quem está no WhatsApp. Só
+ * confirmar_nascimento persiste o vínculo.
+ *
+ * Sem isto (defeito A, teste real 2026-09-14), o turno seguinte devolvia
+ * 'none' e o modelo pedia o CPF de novo — "me informe o CPF novamente".
+ */
+async function porDocumentoPendente(documentoPendente) {
+  const identidade = await porCpf(documentoPendente, 'cpf');
+  return { ...identidade, nivel: 'fraca', origem: 'cpf' };
+}
+
+async function resolverIdentidade({ contact, ignorarTelefone = false, documentoPendente = null }) {
   try {
     if (contact.sgpDocument) {
       const identidade = await porCpf(contact.sgpDocument, 'memory');
@@ -96,7 +113,13 @@ async function resolverIdentidade({ contact, ignorarTelefone = false }) {
     // ignorarTelefone: true depois de esquecer_identificacao (contestação do
     // nome) — buscar de novo pelo MESMO telefone cumprimentaria a mesma
     // pessoa errada outra vez. A memória (acima) continua valendo.
-    if (ignorarTelefone) return vazio();
+    if (ignorarTelefone) {
+      // `return await` de propósito (nos dois pontos): sem o await a promise
+      // escaparia deste try/catch e uma falha do SGP viraria rejeição em vez
+      // de vazio().
+      if (documentoPendente) return await porDocumentoPendente(documentoPendente);
+      return vazio();
+    }
     for (const telefone of variantesTelefone(contact.phoneNumber)) {
       const rec = await sgpClient.findClientRecord({ telefone });
       if (rec.total === 0) continue;
@@ -110,6 +133,7 @@ async function resolverIdentidade({ contact, ignorarTelefone = false }) {
       });
       return identidade;
     }
+    if (documentoPendente) return await porDocumentoPendente(documentoPendente);
     return vazio();
   } catch (err) {
     if (contact.sgpDocument) {

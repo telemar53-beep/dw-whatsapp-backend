@@ -24,6 +24,9 @@ const { findLatestInboundImage } = require('../conversations/message.repository'
 const { analyzeImage } = require('./openai-client');
 const { getAiConfig } = require('./ai-config.repository');
 const { conferirComprovante, PROMPT_VISAO } = require('./comprovante');
+// Mesmo normalizador que sgp-client.js usa no que vem do cadastro: os dois
+// lados da conferência da data precisam concordar sobre o que é uma data.
+const { normalizarDataNascimento } = require('./data-nascimento');
 
 // A imagem só sai do servidor depois de passar por estes dois filtros: o
 // que a OpenAI consegue ler de verdade, e um teto de bytes.
@@ -62,18 +65,6 @@ function validarContratoId(args) {
 function totalDaPaginacao(paginacao) {
   const total = paginacao && Number(paginacao.total);
   return Number.isInteger(total) ? total : null;
-}
-
-/** '20/05/1990', '20/5/90', '1990-05-20' → '1990-05-20'; senão null. */
-function normalizarDataNascimento(texto) {
-  const t = String(texto || '').trim();
-  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) return t;
-  m = t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
-  if (!m) return null;
-  let [, d, mo, y] = m;
-  if (y.length === 2) y = (Number(y) > 30 ? '19' : '20') + y;
-  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
 }
 
 /**
@@ -984,7 +975,18 @@ const TOOLS = [
       // prompt que fez um cliente identificado pelo telefone ser cobrado da
       // data. Não conta tentativa nem sobrescreve a origem.
       if (id && id.nivel === 'forte') return { confirmado: true, jaConfirmada: true, instrucao: 'A identidade já estava confirmada; não pergunte a data de nascimento. Siga o atendimento.' };
-      if (!id || !id.dataNascimento) return { confirmado: false, motivo: 'Não há data de nascimento no cadastro para confirmar. Encaminhe sem entregar dados.' };
+      // Defeito B: o retorno seco ("Não há data de nascimento no cadastro")
+      // fazia o modelo encaminhar em silêncio, logo depois de o cliente ter
+      // informado a data. A instrução diz o que falar E o que chamar na mesma
+      // resposta.
+      if (!id || !id.dataNascimento) {
+        return {
+          confirmado: false,
+          semDataNoCadastro: true,
+          motivo: 'O cadastro não tem data de nascimento para conferir.',
+          instrucao: 'Diga ao cliente que não foi possível confirmar a identidade pelo chat e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.',
+        };
+      }
       // O limite de tentativas é por conversa, gravado no banco — não no
       // objeto de identidade em memória, que zera a cada turno e também com
       // esquecer_identificacao. Sem isso, o cliente podia tentar de novo só
@@ -1023,7 +1025,19 @@ const TOOLS = [
         await setTriagePendingDocument(contexto.conversationId, null);
         return { confirmado: true };
       }
-      return { confirmado: false, motivo: 'Data não confere. Não entregue dados; encaminhe para o setor.' };
+      // Ainda há uma tentativa (o teto é 2): pedir a data de novo é melhor do
+      // que encaminhar quem só errou de digitar. Na última, encaminha.
+      if (tentativas < 2) {
+        return {
+          confirmado: false,
+          tentativasRestantes: 2 - tentativas,
+          instrucao: 'Diga que a data não confere e peça a data de nascimento mais uma vez.',
+        };
+      }
+      return {
+        confirmado: false,
+        instrucao: 'Diga que não foi possível confirmar a identidade e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.',
+      };
     },
   },
   {

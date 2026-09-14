@@ -492,6 +492,25 @@ describe('findClientRecord', () => {
     expect(r.cliente.dataNascimento).toBeNull();
   });
 
+  // Defeito B (teste real 2026-09-14): a checagem antiga exigia AAAA-MM-DD
+  // cru; qualquer outro formato virava null e confirmar_nascimento respondia
+  // "não há data de nascimento no cadastro" logo depois de o cliente informar
+  // a data.
+  test('normaliza a data de nascimento do cadastro em qualquer formato comum', async () => {
+    for (const [bruto, esperado] of [
+      ['1990-05-20', '1990-05-20'],
+      ['10/05/2001', '2001-05-10'],
+      ['10-05-2001', '2001-05-10'],
+      ['2001-05-10T00:00:00', '2001-05-10'],
+      ['abc', null],
+      ['', null],
+    ]) {
+      axios.post.mockResolvedValue({ data: { paginacao: { total: 1 }, clientes: [{ id: 1, cpfcnpj: '52998224725', dataNascimento: bruto }] } });
+      const r = await findClientRecord({ cpfcnpj: '52998224725' });
+      expect(r.cliente.dataNascimento).toBe(esperado);
+    }
+  });
+
   test('zero ou vários resultados devolvem cliente nulo com o total', async () => {
     axios.post.mockResolvedValue({ data: { paginacao: { total: 3 }, clientes: [{ id: 1, cpfcnpj: '1' }, { id: 2, cpfcnpj: '2' }] } });
     expect(await findClientRecord({ telefone: '00000000000' })).toEqual({ total: 3, cliente: null });

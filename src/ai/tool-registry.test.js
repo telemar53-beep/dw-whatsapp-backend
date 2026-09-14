@@ -940,8 +940,32 @@ describe('confirmar_nascimento', () => {
 
   test('sem data de nascimento no cadastro, não confirma, explica e não conta tentativa', async () => {
     const c = { identidade: { nivel: 'fraca', dataNascimento: null, nascimentoTentado: false } };
-    expect((await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c)).confirmado).toBe(false);
+    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(r.confirmado).toBe(false);
     expect(incrementBirthdateAttempts).not.toHaveBeenCalled();
+    // Defeito B: o retorno seco fazia o modelo encaminhar em silêncio. Agora
+    // ele recebe a instrução do que dizer E do que chamar na mesma resposta.
+    expect(r.semDataNoCadastro).toBe(true);
+    expect(r.motivo).toBe('O cadastro não tem data de nascimento para conferir.');
+    expect(r.instrucao).toBe('Diga ao cliente que não foi possível confirmar a identidade pelo chat e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.');
+  });
+
+  test('data errada com tentativa sobrando manda pedir a data de novo', async () => {
+    incrementBirthdateAttempts.mockResolvedValue(1);
+    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, ctx());
+    expect(r).toEqual({
+      confirmado: false,
+      tentativasRestantes: 1,
+      instrucao: 'Diga que a data não confere e peça a data de nascimento mais uma vez.',
+    });
+  });
+
+  test('data errada na última tentativa manda encaminhar na mesma resposta', async () => {
+    incrementBirthdateAttempts.mockResolvedValue(2);
+    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, ctx());
+    expect(r.confirmado).toBe(false);
+    expect(r.tentativasRestantes).toBeUndefined();
+    expect(r.instrucao).toBe('Diga que não foi possível confirmar a identidade e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.');
   });
   // Fix round 2: incrementBirthdateAttempts devolve 0 quando a conversa não
   // é encontrada — e 0 > 2 é falso, então sem esta checagem extra o contador

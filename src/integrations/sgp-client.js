@@ -1,5 +1,9 @@
 const axios = require('axios');
 const { getSgpQueryConfig } = require('./sgp-query-config.repository');
+// Módulo puro (sem requires): não forma ciclo com nada aqui. É o MESMO
+// normalizador que confirmar_nascimento usa no que o cliente digita — os dois
+// lados da conferência precisam concordar sobre o que é uma data.
+const { normalizarDataNascimento } = require('../ai/data-nascimento');
 
 class SgpNotConfiguredError extends Error {}
 class SgpDisabledError extends Error {}
@@ -235,7 +239,11 @@ async function findClientRecord(filtro) {
     cliente: {
       id: c.id,
       cpfcnpj: String(c.cpfcnpj || '').replace(/\D/g, ''),
-      dataNascimento: /^\d{4}-\d{2}-\d{2}$/.test(String(c.dataNascimento || '')) ? c.dataNascimento : null,
+      // Defeito B (teste real 2026-09-14): a checagem antiga exigia AAAA-MM-DD
+      // cru. Cadastros com a data em DD/MM/AAAA ou com hora (ISO) viravam
+      // null, e confirmar_nascimento respondia "não há data de nascimento no
+      // cadastro" logo depois de o cliente informar a data.
+      dataNascimento: normalizarDataNascimento(c.dataNascimento),
     },
   };
 }

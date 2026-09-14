@@ -67,6 +67,13 @@ const LIBERACAO_RECENTE_MS = 24 * 60 * 60 * 1000;
 function afirmaLiberacao(texto) { return AFIRMA_LIBERACAO.test(String(texto || '')); }
 function afirmaFila(texto) { return AFIRMA_FILA.test(String(texto || '')); }
 
+// Teste real 2026-09-14: identificado o cliente, o modelo escreveu "Perfeito.
+// Vou seguir com o Pix do contrato em aberto." e não chamou gerar_pix — o
+// cliente teve de pedir "pode mandar" para receber o que já tinha pedido. A
+// promessa de enviar só vale com a ferramenta de entrega tendo rodado.
+const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|emitir)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo)\b/i;
+function afirmaEnvio(texto) { return AFIRMA_ENVIO.test(String(texto || '')); }
+
 function papelDaMensagem(message) {
   return message.direction === 'inbound' ? 'user' : 'assistant';
 }
@@ -469,6 +476,10 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   // Uma única correção por turno: se o modelo insistir na afirmação falsa
   // depois de corrigido, o texto sai como está em vez de o laço girar sem fim.
   let corrigiuLiberacao = false;
+  // Envio anunciado sem ferramenta de entrega. Uma vez por turno: se o modelo
+  // insistir em prometer sem entregar, o texto sai como está em vez de o laço
+  // girar sem fim.
+  let exigiuEntregaPorAnuncio = false;
   let proximoToolChoice;
 
   try {
@@ -545,6 +556,22 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
             }
             break;
           }
+        }
+        // Antes da guarda de encaminhamento: o que o cliente pediu foi o Pix
+        // (ou o boleto), e é ele que falta. A conclusão, se for o caso, ainda
+        // cabe na volta seguinte — e o worker conclui em código de qualquer jeito.
+        if (
+          perfil === 'triagem' && conteudo && !exigiuEntregaPorAnuncio
+          && !contexto.resolvidoPelaIa && afirmaEnvio(conteudo)
+        ) {
+          exigiuEntregaPorAnuncio = true;
+          messages.push({ role: 'assistant', content: conteudo });
+          messages.push({
+            role: 'system',
+            content: 'Você disse que vai enviar, mas não chamou gerar_pix/enviar_boleto. Chame a ferramenta de entrega AGORA (o contrato único, ou o escolhido) e depois responda.',
+          });
+          proximoToolChoice = 'required';
+          continue;
         }
         if (
           perfil === 'triagem' && conteudo && !exigiuConclusaoPorAnuncio
@@ -695,4 +722,4 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   };
 }
 
-module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, ferramentasDaTriagem, afirmaLiberacao, afirmaFila };
+module.exports = { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, ferramentasDaTriagem, afirmaLiberacao, afirmaFila, afirmaEnvio };

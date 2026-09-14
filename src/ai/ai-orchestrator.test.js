@@ -725,6 +725,70 @@ describe('perfil de triagem', () => {
   // I3 (review): a fixture original (IDENT_FORTE) não tinha nenhum campo
   // perigoso — um teste de "não vaza nada" que não pode vazar nada não prova
   // nada. Agora o fixture carrega CPF, login PPPoE e sobrenome de verdade.
+  // Teste real 2026-09-14: depois de identificar, o modelo escreveu "Perfeito.
+  // Vou seguir com o Pix do contrato em aberto." e não chamou gerar_pix — o
+  // cliente teve de dizer "pode mandar" para receber o que já tinha pedido.
+  describe('anunciou o envio mas não entregou', () => {
+    test('"Vou seguir com o Pix do contrato em aberto." obriga a ferramenta de entrega', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Perfeito. Vou seguir com o Pix do contrato em aberto.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'gerar_pix', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Enviei acima o PIX, João.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, ctx) => {
+        ctx.resolvidoPelaIa = true;
+        return { ok: true, resultado: { enviado: true } };
+      });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      const segunda = createChatCompletion.mock.calls[1][0];
+      expect(segunda.toolChoice).toBe('required');
+      // messages é o mesmo array mutado a cada volta: procurar a mensagem em
+      // vez de olhar a última posição.
+      expect(segunda.messages).toEqual(expect.arrayContaining([{
+        role: 'system',
+        content: 'Você disse que vai enviar, mas não chamou gerar_pix/enviar_boleto. Chame a ferramenta de entrega AGORA (o contrato único, ou o escolhido) e depois responda.',
+      }]));
+      expect(segunda.messages).toEqual(expect.arrayContaining([{
+        role: 'assistant',
+        content: 'Perfeito. Vou seguir com o Pix do contrato em aberto.',
+      }]));
+      expect(r.texto).toBe('Enviei acima o PIX, João.');
+    });
+
+    test('texto sem anúncio de envio não dá volta nenhuma', async () => {
+      createChatCompletion.mockResolvedValueOnce({ message: { content: 'Claro, João! De qual endereço você precisa?' }, usage: {} });
+
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(createChatCompletion).toHaveBeenCalledTimes(1);
+    });
+
+    test('anúncio com a entrega já feita no turno não dá volta extra', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'gerar_pix', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Pronto! Vou te enviar o PIX agora mesmo.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, ctx) => {
+        ctx.resolvidoPelaIa = true;
+        return { ok: true, resultado: { enviado: true } };
+      });
+
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+    });
+
+    test('a exigência acontece uma vez só por turno', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Vou gerar o PIX para você.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Vou gerar o PIX para você.' }, usage: {} });
+
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('com a data de nascimento dispensada (padrão)', () => {
     beforeEach(() => {
       getAiConfig.mockResolvedValue({

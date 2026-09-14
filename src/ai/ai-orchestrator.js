@@ -330,6 +330,10 @@ async function montarContextoTriagem(config, identidade, triagem) {
     // em que a IA confirmou a cobertura, engoliu os planos que estavam nas
     // instruções adicionais e encaminhou. Planos e cidades vêm SÓ de lá.
     'COMERCIAL (cobertura, planos, contratar, mudar de plano): responda com o que estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO, listando os planos em linhas com "•" no formato "• 500 Mega por R$ 100/mês". Nunca peça CPF de cliente novo. Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma a cobertura e conclua para o Comercial, sem inventar. Modelos:',
+    // Print 1 (teste real 2026-09-14): quem já é cliente e queria outro ponto
+    // caía no roteiro de cliente novo, e a IA despejava a lista inteira de
+    // cidades atendidas em vez de confirmar a dele.
+    'Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF e data de nascimento) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.',
     [
       '- Cliente NOVO (não identificado): "Boa tarde! Que bom ter você por aqui 😊 Atendemos em Godofredo Viana e temos estas opções de internet 100% fibra óptica:',
       '',

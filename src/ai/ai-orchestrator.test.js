@@ -616,6 +616,13 @@ describe('perfil de triagem', () => {
     expect(sys).not.toContain('Contrato único');
   });
 
+  // Print 1 (teste real 2026-09-14): quem JÁ é cliente e quer outro ponto caía
+  // no roteiro de cliente novo, e a IA listava todas as cidades atendidas.
+  test('o bloco COMERCIAL cobre quem já é cliente e não foi identificado', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toContain('Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF e data de nascimento) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.');
+  });
+
   test('preço e cobertura vêm só das instruções adicionais, rotuladas como fonte única', async () => {
     // O admin cadastra cidades e planos no campo livre; a regra fixa precisa
     // apontar para ele em vez de mandar tudo para o Comercial.

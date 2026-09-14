@@ -1,7 +1,7 @@
 const express = require('express');
 const QRCode = require('qrcode');
 const crypto = require('crypto');
-const { requireAuth, requireRole } = require('../auth/auth.middleware');
+const { requireAuth, requireRole, requireIntegrationsAccess, hasIntegrationsAccess } = require('../auth/auth.middleware');
 const { verifyToken } = require('../auth/auth.service');
 const { loadConfig } = require('../config/env');
 const {
@@ -39,7 +39,7 @@ function authenticateQrRoute(req, res, next) {
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
-  if (req.agent.role !== 'admin') {
+  if (!hasIntegrationsAccess(req.agent)) {
     return res.status(403).json({ error: 'Insufficient permissions' });
   }
   next();
@@ -67,7 +67,7 @@ router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
   res.json(channels.map(toChannelResponse));
 });
 
-router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
+router.post('/', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const { type, name, phoneNumber } = req.body || {};
   if (!type || !name || !phoneNumber) {
     return res.status(400).json({ error: 'type, name and phoneNumber are required' });
@@ -116,7 +116,7 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
   return res.status(400).json({ error: 'type must be meta_cloud, baileys, or 360dialog' });
 });
 
-router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+router.patch('/:id', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const { triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled, aiTriageEnabled, aiNightModeEnabled } = req.body || {};
   if (
     triageEnabled === undefined &&
@@ -256,7 +256,7 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   res.json(toChannelResponse(channel));
 });
 
-router.post('/:id/reconnect', requireAuth, requireRole('admin'), async (req, res) => {
+router.post('/:id/reconnect', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const channel = await findChannelById(req.params.id);
   if (!channel) {
     return res.status(404).json({ error: 'Channel not found' });
@@ -269,7 +269,7 @@ router.post('/:id/reconnect', requireAuth, requireRole('admin'), async (req, res
   res.json(toChannelResponse(updated || channel));
 });
 
-router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+router.delete('/:id', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const channel = await findChannelById(req.params.id);
   if (!channel) {
     return res.status(404).json({ error: 'Channel not found' });

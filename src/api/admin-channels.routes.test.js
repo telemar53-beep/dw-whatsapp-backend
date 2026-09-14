@@ -33,8 +33,8 @@ function buildApp() {
   return app;
 }
 
-function tokenFor(agentId, role) {
-  return jwt.sign({ agentId, role }, process.env.JWT_SECRET);
+function tokenFor(agentId, role, canManageIntegrations = false) {
+  return jwt.sign({ agentId, role, canManageIntegrations }, process.env.JWT_SECRET);
 }
 
 describe('GET /api/admin/channels', () => {
@@ -78,6 +78,14 @@ describe('GET /api/admin/channels', () => {
       .get('/api/admin/channels')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(403);
+  });
+
+  test('returns 200 for a manager without canManageIntegrations', async () => {
+    listChannels.mockResolvedValue([]);
+    const res = await request(buildApp())
+      .get('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
+    expect(res.status).toBe(200);
   });
 
   test('returns 401 without a token', async () => {
@@ -188,6 +196,26 @@ describe('POST /api/admin/channels', () => {
     expect(res.status).toBe(403);
   });
 
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ type: 'baileys', name: 'X', phoneNumber: '+5511900000000' });
+    expect(res.status).toBe(403);
+  });
+
+  test('creates a channel for a manager with canManageIntegrations', async () => {
+    createChannel.mockResolvedValue({
+      id: 'channel-9', type: 'baileys', name: 'X', phoneNumber: '+5511900000000',
+      config: {}, status: 'disconnected', triageEnabled: false, hidden: false, welcomeMessage: null,
+    });
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager', true)}`)
+      .send({ type: 'baileys', name: 'X', phoneNumber: '+5511900000000' });
+    expect(res.status).toBe(201);
+  });
+
   test('creates a 360dialog channel, registering the webhook after creating the row', async () => {
     threeSixtyDialogAdapter.registerWebhook.mockResolvedValue(undefined);
     createChannel.mockResolvedValue({
@@ -293,6 +321,13 @@ describe('GET /api/admin/channels/:id/qr', () => {
     expect(res.status).toBe(403);
   });
 
+  test('returns 403 via query string token for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp()).get(
+      `/api/admin/channels/channel-4/qr?token=${tokenFor('manager-1', 'manager')}`
+    );
+    expect(res.status).toBe(403);
+  });
+
   test('returns 404 when the channel does not exist', async () => {
     findChannelById.mockResolvedValue(null);
     const res = await request(buildApp())
@@ -373,6 +408,14 @@ describe('PATCH /api/admin/channels/:id', () => {
     const res = await request(buildApp())
       .patch('/api/admin/channels/channel-1')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ triageEnabled: true });
+    expect(res.status).toBe(403);
+  });
+
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
       .send({ triageEnabled: true });
     expect(res.status).toBe(403);
   });
@@ -934,6 +977,14 @@ describe('POST /api/admin/channels/:id/reconnect', () => {
     expect(res.status).toBe(403);
     expect(baileysManager.reconnectBaileysChannel).not.toHaveBeenCalled();
   });
+
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/channels/ch-1/reconnect')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
+    expect(res.status).toBe(403);
+    expect(baileysManager.reconnectBaileysChannel).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/admin/channels/:id', () => {
@@ -991,6 +1042,14 @@ describe('DELETE /api/admin/channels/:id', () => {
     const res = await request(buildApp())
       .delete('/api/admin/channels/ch-1')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+    expect(deleteChannel).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .delete('/api/admin/channels/ch-1')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
     expect(res.status).toBe(403);
     expect(deleteChannel).not.toHaveBeenCalled();
   });

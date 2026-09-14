@@ -16,6 +16,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
   const [generatingPassword, setGeneratingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const isSelf = agentRow.id === currentAgent?.id;
 
   async function handleGeneratePassword() {
     setPasswordError(null);
@@ -39,7 +40,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
   function handleEditSectorsClick() {
     setSelectedIds(agentRow.sectors.map((s) => s.id));
     setError(null);
-    setEditingSectors(true);
+    setEditingSectors((prev) => !prev);
   }
 
   function handleCancel() {
@@ -66,47 +67,51 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
     }
   }
 
+  const sectorsText = agentRow.sectors.length > 0 ? agentRow.sectors.map((s) => s.name).join(', ') : 'Nenhum setor';
+  const roleLabel = agentRow.role === 'admin' ? 'Administrador' : 'Atendente';
+
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium text-wa-text">{agentRow.name}</p>
-          <p className="text-sm text-wa-muted">
-            {agentRow.email} — {agentRow.role === 'admin' ? 'Administrador' : 'Atendente'}
-          </p>
-          <p className="text-sm text-wa-muted">
-            Setores: {agentRow.sectors.length > 0 ? agentRow.sectors.map((s) => s.name).join(', ') : 'Nenhum setor'}
+    <li className="p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-medium text-wa-text">{agentRow.name}</p>
+          <p className="mt-0.5 truncate text-[12.5px] text-wa-muted">
+            {agentRow.email} — {roleLabel} · {sectorsText}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className={`text-sm font-medium ${agentRow.active ? 'text-wa-link' : 'text-wa-muted'}`}>
-            {agentRow.active ? 'Ativo' : 'Desativado'}
-          </span>
-          <button
-            onClick={handleEditSectorsClick}
-            className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
-          >
-            Editar setores
-          </button>
-          {agentRow.id !== currentAgent?.id && (
+        <span
+          className={`shrink-0 text-[12.5px] font-medium ${agentRow.active ? 'text-wa-chip-text' : 'text-wa-muted'}`}
+        >
+          {agentRow.active ? 'Ativo' : 'Desativado'}
+        </span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button
+          onClick={handleEditSectorsClick}
+          className="text-[12.5px] font-medium text-wa-link hover:text-wa-link/80 hover:underline"
+        >
+          Editar setores
+        </button>
+        {!isSelf && (
+          <>
             <button
               onClick={handleGeneratePassword}
               disabled={generatingPassword}
-              className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline disabled:opacity-50"
+              className="text-[12.5px] font-medium text-wa-link hover:text-wa-link/80 hover:underline disabled:opacity-50"
             >
               Gerar nova senha
             </button>
-          )}
-          {agentRow.id !== currentAgent?.id && (
             <button
               onClick={() => onToggleActive(agentRow)}
-              className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
+              className="text-[12.5px] font-medium text-wa-link hover:text-wa-link/80 hover:underline"
             >
               {agentRow.active ? 'Desativar' : 'Reativar'}
             </button>
-          )}
-        </div>
+          </>
+        )}
       </div>
+
       {passwordError && <p className={`mt-2 ${waErrorClass}`}>{passwordError}</p>}
       {generatedPassword && (
         <WaDialog title="Nova senha gerada" onClose={() => setGeneratedPassword(null)} size="max-w-sm">
@@ -130,40 +135,43 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
           </div>
         </WaDialog>
       )}
+
       {editingSectors && (
-        <div className="mt-3 space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-3 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-          {sectors.map((sector) => (
-            <label key={sector.id} className="flex items-center gap-2 text-sm text-wa-muted">
-              <input
-                type="checkbox"
-                checked={selectedIds.includes(sector.id)}
-                onChange={() => toggleSector(sector.id)}
-                className="h-4 w-4 accent-wa-green"
-              />
-              {sector.name}
-            </label>
-          ))}
-          {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
+        <div className="mt-2.5 space-y-2 rounded-[12px] border border-wa-border bg-wa-panel p-3">
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {sectors.map((sector) => (
+              <label key={sector.id} className="flex items-center gap-1.5 text-[13px] text-wa-muted">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(sector.id)}
+                  onChange={() => toggleSector(sector.id)}
+                  className="h-4 w-4 accent-wa-green"
+                />
+                {sector.name}
+              </label>
+            ))}
+          </div>
+          {error && <p className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">{error}</p>}
           <div className="flex gap-2">
             <button
               type="button"
               onClick={handleSaveSectors}
               disabled={submitting}
-              className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[10px] bg-wa-green px-3 py-1.5 text-[13px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Salvar
             </button>
             <button
               type="button"
               onClick={handleCancel}
-              className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
+              className="rounded-[10px] border border-wa-border bg-wa-surface px-3 py-1.5 text-[13px] font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
             >
               Cancelar
             </button>
           </div>
         </div>
       )}
-    </div>
+    </li>
   );
 }
 
@@ -179,24 +187,28 @@ function AgentsAdminTab() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        {agents.map((agentRow) => (
-          <AgentRow
-            key={agentRow.id}
-            agentRow={agentRow}
-            currentAgent={currentAgent}
-            sectors={sectors}
-            onToggleActive={handleToggleActive}
-            onSectorsSaved={refresh}
-          />
-        ))}
-      </div>
+    <div className="space-y-4">
+      {agents.length === 0 ? (
+        <p className="text-[14px] text-wa-muted">Nenhum atendente cadastrado ainda.</p>
+      ) : (
+        <ul className="divide-y divide-wa-border overflow-hidden rounded-[16px] border border-wa-border bg-wa-surface">
+          {agents.map((agentRow) => (
+            <AgentRow
+              key={agentRow.id}
+              agentRow={agentRow}
+              currentAgent={currentAgent}
+              sectors={sectors}
+              onToggleActive={handleToggleActive}
+              onSectorsSaved={refresh}
+            />
+          ))}
+        </ul>
+      )}
       {!creatingAgent && (
         <button
           type="button"
           onClick={() => setCreatingAgent(true)}
-          className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
+          className="rounded-[10px] border border-wa-border bg-wa-field px-3.5 py-2 text-[13.5px] font-medium text-wa-text transition hover:bg-wa-panel"
         >
           Criar atendente
         </button>

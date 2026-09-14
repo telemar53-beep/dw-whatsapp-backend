@@ -3,56 +3,73 @@ import { useCities } from '../hooks/useCities';
 import { useAuth } from '../contexts/AuthContext';
 import { deleteCity } from '../services/api';
 import CreateCityForm from './CreateCityForm';
+import { IconClose } from './icons/WaIcons';
 
-function CityRow({ city, onDeleted }) {
+// Cidade é só um nome com um botão de excluir — uma etiqueta cabe muito mais
+// por linha do que um cartão inteiro, e com 20+ cidades isso é o que evita
+// uma lista quilométrica.
+function CityChip({ city, onDeleted, onError }) {
   const { token } = useAuth();
-  const [deleteError, setDeleteError] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
     if (!window.confirm(`Excluir a cidade "${city.name}"?`)) {
       return;
     }
-    setDeleteError(null);
+    onError(city.id, null);
     setDeleting(true);
     try {
       await deleteCity(city.id, token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      onError(city.id, (err.body && err.body.error) || 'Falha ao excluir');
       setDeleting(false);
     }
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center justify-between">
-        <p className="font-medium text-wa-text">{city.name}</p>
-        <button
-          onClick={handleDelete}
-          disabled={deleting}
-          className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
-        >
-          Excluir
-        </button>
-      </div>
-      {deleteError && (
-        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
-      )}
-    </div>
+    <span className="group inline-flex items-center gap-1.5 rounded-full border border-wa-border bg-wa-surface py-1.5 pl-3.5 pr-2 text-[13.5px] text-wa-text transition-colors hover:border-wa-error-text/40">
+      {city.name}
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={deleting}
+        aria-label={`Excluir ${city.name}`}
+        title={`Excluir ${city.name}`}
+        className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full text-wa-muted transition-colors hover:bg-wa-error-bg hover:text-wa-error-text disabled:opacity-50"
+      >
+        <IconClose size={11} />
+      </button>
+    </span>
   );
 }
 
 function CitiesAdminTab() {
   const { cities, refresh } = useCities();
+  const [errors, setErrors] = useState({});
+
+  function setCityError(cityId, message) {
+    setErrors((prev) => ({ ...prev, [cityId]: message }));
+  }
+
+  const errorMessages = Object.values(errors).filter(Boolean);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        {cities.map((city) => (
-          <CityRow key={city.id} city={city} onDeleted={refresh} />
-        ))}
-      </div>
+    <div className="space-y-5">
+      {cities.length === 0 ? (
+        <p className="text-[14px] text-wa-muted">Nenhuma cidade cadastrada ainda.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {cities.map((city) => (
+            <CityChip key={city.id} city={city} onDeleted={refresh} onError={setCityError} />
+          ))}
+        </div>
+      )}
+      {errorMessages.map((message, index) => (
+        <p key={index} className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">
+          {message}
+        </p>
+      ))}
       <CreateCityForm onCreated={refresh} />
     </div>
   );

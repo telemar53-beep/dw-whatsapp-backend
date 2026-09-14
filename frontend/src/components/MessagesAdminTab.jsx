@@ -212,80 +212,80 @@ function ChannelWelcomeMessageRow({ channel, onSaved }) {
 
   if (editing) {
     return (
-      <form
-        onSubmit={handleSave}
-        className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
-      >
-        <p className="font-medium text-wa-text">{channel.name}</p>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-          required
-        />
-        {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
-            Cancelar
-          </button>
-        </div>
-      </form>
+      <li className="p-3.5">
+        <form onSubmit={handleSave} className="space-y-2">
+          <p className="text-[13.5px] font-medium text-wa-text">{channel.name}</p>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={2}
+            className="w-full rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-[13.5px] text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60"
+            required
+          />
+          {error && <p className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-[10px] bg-wa-green px-3 py-1.5 text-[13px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Salvar
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="rounded-[10px] border border-wa-border bg-wa-surface px-3 py-1.5 text-[13px] font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </li>
     );
   }
 
   if (!channel.welcomeMessage) {
     return (
-      <div className="flex items-center justify-between rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-        <p className="font-medium text-wa-text">{channel.name}</p>
-        <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+      <li className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+        <p className="truncate text-[13.5px] text-wa-text">{channel.name}</p>
+        <button onClick={handleEditClick} className="shrink-0 text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
           Criar boas-vindas
         </button>
-      </div>
+      </li>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium text-wa-text">{channel.name}</p>
-          <p className="text-sm text-wa-muted">{channel.welcomeMessage}</p>
+    <li className="px-3.5 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[13.5px] font-medium text-wa-text">{channel.name}</p>
+          <p className="truncate text-[12.5px] text-wa-muted">{channel.welcomeMessage}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+        <div className="flex shrink-0 items-center gap-3">
+          <button onClick={handleEditClick} className="text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
             Editar
           </button>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
+            className="text-[13px] font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
           >
             Excluir
           </button>
         </div>
       </div>
       {deleteError && (
-        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
+        <p className="mt-2 rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[12.5px] text-wa-error-text">{deleteError}</p>
       )}
-    </div>
+    </li>
   );
 }
 
 function CityStatusDot({ enabled }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-wa-muted">
-      <span className={`h-2 w-2 rounded-full ${enabled ? 'bg-wa-chip-text' : 'bg-wa-border-strong'}`} aria-hidden="true" />
+    <span className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] font-medium text-wa-muted">
+      <span className={`h-1.5 w-1.5 rounded-full ${enabled ? 'bg-wa-chip-text' : 'bg-wa-border-strong'}`} aria-hidden="true" />
       {enabled ? 'Ativo' : 'Inativo'}
     </span>
   );
@@ -347,85 +347,86 @@ function CityNoticeRow({ city, onSaved }) {
 
   if (editing) {
     return (
-      <form
-        onSubmit={handleSave}
-        className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
-      >
-        <p className="font-medium text-wa-text">{city.name}</p>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-          required
-        />
-        <label className="flex items-center gap-2 text-sm text-wa-muted">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-            className="h-4 w-4 accent-wa-green"
+      <li className="p-3.5">
+        <form onSubmit={handleSave} className="space-y-2">
+          <p className="text-[13.5px] font-medium text-wa-text">{city.name}</p>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={2}
+            className="w-full rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-[13.5px] text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60"
+            required
           />
-          Ativo
-        </label>
-        {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
-            Cancelar
-          </button>
-        </div>
-      </form>
+          <label className="flex items-center gap-2 text-[13px] text-wa-muted">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              className="h-4 w-4 accent-wa-green"
+            />
+            Ativo
+          </label>
+          {error && <p className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-[10px] bg-wa-green px-3 py-1.5 text-[13px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Salvar
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="rounded-[10px] border border-wa-border bg-wa-surface px-3 py-1.5 text-[13px] font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </li>
     );
   }
 
   if (!city.notice) {
     return (
-      <div className="flex items-center justify-between rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-        <p className="font-medium text-wa-text">{city.name}</p>
-        <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+      <li className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+        <p className="truncate text-[13.5px] text-wa-text">{city.name}</p>
+        <button onClick={handleEditClick} className="shrink-0 text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
           Criar aviso
         </button>
-      </div>
+      </li>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <li className="px-3.5 py-2.5">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="font-medium text-wa-text">{city.name}</p>
-          <p className="text-sm text-wa-muted">{city.notice.message}</p>
+        <div className="min-w-0">
+          <p className="truncate text-[13.5px] font-medium text-wa-text">{city.name}</p>
+          <p className="truncate text-[12.5px] text-wa-muted">{city.notice.message}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           <CityStatusDot enabled={city.notice.enabled} />
-          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+          <button onClick={handleEditClick} className="text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
             Editar
           </button>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
+            className="text-[13px] font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
           >
             Excluir
           </button>
         </div>
       </div>
       {deleteError && (
-        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
+        <p className="mt-2 rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[12.5px] text-wa-error-text">{deleteError}</p>
       )}
-    </div>
+    </li>
   );
 }
+
 
 function AssignmentMessageSection() {
   const { token } = useAuth();
@@ -777,9 +778,13 @@ function MessagesAdminTab() {
             </p>
           </SectionHelp>
         </div>
-        {channels.map((channel) => (
-          <ChannelWelcomeMessageRow key={channel.id} channel={channel} onSaved={refreshChannels} />
-        ))}
+        {channels.length > 0 && (
+          <ul className="divide-y divide-wa-border overflow-hidden rounded-[16px] border border-wa-border bg-wa-surface">
+            {channels.map((channel) => (
+              <ChannelWelcomeMessageRow key={channel.id} channel={channel} onSaved={refreshChannels} />
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -796,14 +801,17 @@ function MessagesAdminTab() {
             </p>
           </SectionHelp>
         </div>
-        {cityNotices.length === 0 && (
+        {cityNotices.length === 0 ? (
           <p className="rounded-lg border border-wa-warn-text/30 bg-wa-warn-bg px-3 py-2 text-sm text-wa-warn-text">
             Nenhuma cidade cadastrada ainda. Cadastre cidades na aba Cidades para poder criar avisos.
           </p>
+        ) : (
+          <ul className="divide-y divide-wa-border overflow-hidden rounded-[16px] border border-wa-border bg-wa-surface">
+            {cityNotices.map((city) => (
+              <CityNoticeRow key={city.id} city={city} onSaved={refreshCityNotices} />
+            ))}
+          </ul>
         )}
-        {cityNotices.map((city) => (
-          <CityNoticeRow key={city.id} city={city} onSaved={refreshCityNotices} />
-        ))}
       </div>
 
       <div className="space-y-3">

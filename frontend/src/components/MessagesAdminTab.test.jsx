@@ -177,7 +177,7 @@ describe('MessagesAdminTab', () => {
 
     expect(screen.getByText('WhatsApp Vendas')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /criar boas-vindas/i })).toBeInTheDocument();
-    const channelRow = screen.getByText('WhatsApp Vendas').closest('.rounded-2xl');
+    const channelRow = screen.getByText('WhatsApp Vendas').closest('li');
     expect(within(channelRow).queryByRole('textbox')).not.toBeInTheDocument();
   });
 
@@ -194,7 +194,7 @@ describe('MessagesAdminTab', () => {
     expect(screen.getByText('Olá! Bem-vindo às vendas.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^editar$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^excluir$/i })).toBeInTheDocument();
-    const channelRow = screen.getByText('WhatsApp Vendas').closest('.rounded-2xl');
+    const channelRow = screen.getByText('WhatsApp Vendas').closest('li');
     expect(within(channelRow).queryByRole('textbox')).not.toBeInTheDocument();
   });
 
@@ -352,7 +352,7 @@ describe('MessagesAdminTab', () => {
 
     expect(screen.getByText('Maracaçumé')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /criar aviso/i })).toBeInTheDocument();
-    const cityRow = screen.getByText('Maracaçumé').closest('.rounded-2xl');
+    const cityRow = screen.getByText('Maracaçumé').closest('li');
     expect(within(cityRow).queryByRole('textbox')).not.toBeInTheDocument();
   });
 
@@ -369,7 +369,7 @@ describe('MessagesAdminTab', () => {
     expect(screen.getByText('Ativo')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^editar$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^excluir$/i })).toBeInTheDocument();
-    const cityRow = screen.getByText('Maracaçumé').closest('.rounded-2xl');
+    const cityRow = screen.getByText('Maracaçumé').closest('li');
     expect(within(cityRow).queryByRole('textbox')).not.toBeInTheDocument();
   });
 

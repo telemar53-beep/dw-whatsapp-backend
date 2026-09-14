@@ -36,9 +36,9 @@ function CreateAgentForm({ onCreated, onCancel }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      className="space-y-3 rounded-[16px] border border-wa-border bg-wa-surface p-5"
     >
-      <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar novo atendente</h3>
+      <h3 className="text-[15px] font-medium text-wa-text">Cadastrar novo atendente</h3>
       <div>
         <label htmlFor="agent-name" className={labelClass}>
           Nome

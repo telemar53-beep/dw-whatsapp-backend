@@ -42,7 +42,7 @@ const { analyzeImage } = require('./openai-client');
 const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { getCompanyConfig } = require('../company/company-config.repository');
-const { claimReceipt } = require('./receipt-usage.repository');
+const { claimReceipt, releaseReceipt } = require('./receipt-usage.repository');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
@@ -663,6 +663,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
     enqueueOutboundMessage.mockResolvedValue({ id: 'm-1' });
     // Padrão: o comprovante ainda não tinha sido usado.
     claimReceipt.mockResolvedValue(true);
+    releaseReceipt.mockResolvedValue(undefined);
     // A releitura da conversa (mesma guarda de gerar_pix/enviar_boleto) agora
     // roda antes do aviso: por padrão a conversa segue em triagem.
     // mockReset porque clearAllMocks NÃO apaga implementação — sem isto, o
@@ -704,6 +705,59 @@ describe('desbloqueio_confianca — modo noturno', () => {
     expect(claimReceipt.mock.invocationCallOrder[0])
       .toBeLessThan(enqueueOutboundMessage.mock.invocationCallOrder[0]);
     expect(r.liberado).toBe(true);
+  });
+
+  // A reserva vale enquanto a liberação estiver de pé: recusada a liberação,
+  // o comprovante volta a valer — ele não pode ser queimado por uma recusa
+  // que não foi do cliente.
+  test('SGP recusa a liberação: a reserva do comprovante é devolvida', async () => {
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: false, liberadoDias: null, protocolo: null, motivo: 'contrato com bloqueio judicial' });
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
+    expect(claimReceipt).toHaveBeenCalled();
+    expect(releaseReceipt).toHaveBeenCalledWith(ID_TRANSACAO);
+    expect(r.liberado).toBe(false);
+  });
+
+  test('erro do SGP que não é timeout também devolve a reserva', async () => {
+    sgpClient.requestTrustUnlock.mockRejectedValue(new Error('500 Internal Server Error'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno())).rejects.toThrow('500 Internal Server Error');
+    expect(releaseReceipt).toHaveBeenCalledWith(ID_TRANSACAO);
+    erroSpy.mockRestore();
+  });
+
+  // Timeout é desfecho DESCONHECIDO: o SGP pode ter liberado. Devolver a
+  // reserva aqui deixaria o mesmo comprovante liberar de novo em cima de uma
+  // liberação que talvez exista.
+  test('timeout do SGP mantém a reserva: o desfecho é desconhecido', async () => {
+    sgpClient.requestTrustUnlock.mockRejectedValue(new Error('socket hang up: timeout'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
+    expect(r.indeterminado).toBe(true);
+    expect(releaseReceipt).not.toHaveBeenCalled();
+    erroSpy.mockRestore();
+  });
+
+  test('a devolução da reserva que falha não derruba a resposta ao cliente', async () => {
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: false, liberadoDias: null, protocolo: null, motivo: 'sem autorização' });
+    releaseReceipt.mockRejectedValue(new Error('banco fora do ar'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
+    expect(r.liberado).toBe(false);
+    expect(r.instrucao).toContain('Não consegui liberar o acesso em confiança agora');
+    erroSpy.mockRestore();
+  });
+
+  test('liberação bem-sucedida não devolve a reserva', async () => {
+    const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
+    expect(r.liberado).toBe(true);
+    expect(releaseReceipt).not.toHaveBeenCalled();
+  });
+
+  test('sem comprovante não há reserva para devolver quando o SGP recusa', async () => {
+    sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: false, liberadoDias: null, protocolo: null, motivo: 'sem autorização' });
+    await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno({ comprovante: undefined }));
+    expect(releaseReceipt).not.toHaveBeenCalled();
   });
 
   test('comprovante já utilizado: recusa acolhendo, sem aviso e sem escrita no SGP', async () => {

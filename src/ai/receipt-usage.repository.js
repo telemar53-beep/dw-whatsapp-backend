@@ -19,4 +19,11 @@ async function claimReceipt({ transactionId, contactId, contractId }) {
   }
 }
 
-module.exports = { claimReceipt };
+// A reserva vale enquanto a liberação estiver de pé. Se a liberação não
+// aconteceu (o SGP recusou), o comprovante volta a valer: o cliente não pode
+// perder o comprovante dele por causa de uma recusa que não foi dele.
+async function releaseReceipt(transactionId) {
+  await getPool().query('DELETE FROM ai_receipts_used WHERE transaction_id = $1', [transactionId]);
+}
+
+module.exports = { claimReceipt, releaseReceipt };

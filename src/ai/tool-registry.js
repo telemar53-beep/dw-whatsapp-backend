@@ -27,7 +27,7 @@ const { analyzeImage } = require('./openai-client');
 const { getAiConfig } = require('./ai-config.repository');
 const { conferirComprovante, PROMPT_VISAO } = require('./comprovante');
 const { getCompanyConfig } = require('../company/company-config.repository');
-const { claimReceipt } = require('./receipt-usage.repository');
+const { claimReceipt, releaseReceipt } = require('./receipt-usage.repository');
 // Mesmo normalizador que sgp-client.js usa no que vem do cadastro: os dois
 // lados da conferência da data precisam concordar sobre o que é uma data.
 const { normalizarDataNascimento } = require('./data-nascimento');
@@ -794,6 +794,21 @@ const TOOLS = [
       // Toda recusa da noite fica no contexto, não só o sucesso: é isso que o
       // resumo da fila mostra ao atendente de manhã ("RECUSADO: motivo").
       const registrarRecusa = (motivo) => { contexto.desbloqueioResultado = { liberado: false, motivo }; };
+      // A reserva do comprovante (mais abaixo, no ramo noturno) vale enquanto a
+      // liberação estiver de pé. Se a liberação não acontecer, ela é devolvida:
+      // o cliente não pode perder o comprovante dele por uma recusa do SGP.
+      let reservaFeita = false;
+      const devolverReserva = async () => {
+        if (!reservaFeita) return;
+        reservaFeita = false;
+        try {
+          await releaseReceipt(comprovante.idTransacao);
+        } catch (err) {
+          // A resposta ao cliente não pode virar erro por causa disto: o
+          // comprovante fica marcado como usado e o atendente resolve de manhã.
+          console.error(`Failed to release receipt for contract ${args.contratoId}: ${mensagemSegura(err)}`);
+        }
+      };
 
       const status = normalizeContract(contrato).status;
       // Não usamos velocidade reduzida: só contrato suspenso é elegível.
@@ -900,6 +915,9 @@ const TOOLS = [
             contactId: (contexto.contact && contexto.contact.id) || null,
             contractId: args.contratoId,
           });
+          // Só quem reservou devolve: numa recusa por repetição a linha é de
+          // outro atendimento.
+          reservaFeita = reservado === true;
           if (!reservado) {
             const motivo = 'Este comprovante já foi utilizado.';
             registrarRecusa(motivo);
@@ -937,11 +955,17 @@ const TOOLS = [
             // curto diz exatamente o que se sabe — nada foi confirmado.
             registrarRecusa('não foi possível confirmar a liberação');
           }
+          // A reserva FICA: desfecho desconhecido é liberação possível, e
+          // devolver o comprovante deixaria o mesmo comprovante liberar de novo
+          // em cima de uma liberação que talvez exista.
           return indeterminado;
         }
+        // Erro que não é timeout: a liberação não aconteceu.
+        await devolverReserva();
         throw err;
       }
       if (!resultado.liberado) {
+        await devolverReserva();
         const recusa = { liberado: false, motivo: resultado.motivo };
         // O SGP pode recusar sem dizer por quê: a frase que o modelo vai
         // repetir ao cliente não pode terminar em "agora: null".

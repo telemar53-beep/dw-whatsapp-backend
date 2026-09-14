@@ -1,5 +1,5 @@
 const { getPool, closePool } = require('../db/pool');
-const { claimReceipt } = require('./receipt-usage.repository');
+const { claimReceipt, releaseReceipt } = require('./receipt-usage.repository');
 
 describe('receipt usage repository', () => {
   beforeEach(async () => {
@@ -30,6 +30,20 @@ describe('receipt usage repository', () => {
   test('ids diferentes passam', async () => {
     expect(await claimReceipt({ transactionId: 'E123', contactId: null, contractId: 26515 })).toBe(true);
     expect(await claimReceipt({ transactionId: 'E456', contactId: null, contractId: 26515 })).toBe(true);
+  });
+
+  // A reserva vale enquanto a liberação estiver de pé: se o SGP recusar, o
+  // comprovante volta a valer — o cliente não pode perder o comprovante por
+  // uma recusa que não foi dele.
+  test('releaseReceipt devolve o comprovante, e ele pode ser reservado de novo', async () => {
+    expect(await claimReceipt({ transactionId: 'E123', contactId: null, contractId: 26515 })).toBe(true);
+    await releaseReceipt('E123');
+    expect(await getPool().query('SELECT id FROM ai_receipts_used')).toMatchObject({ rowCount: 0 });
+    expect(await claimReceipt({ transactionId: 'E123', contactId: null, contractId: 26515 })).toBe(true);
+  });
+
+  test('releaseReceipt de um id que não está reservado não quebra', async () => {
+    await expect(releaseReceipt('E-que-nunca-existiu')).resolves.not.toThrow();
   });
 
   test('grava o contato quando ele existe', async () => {

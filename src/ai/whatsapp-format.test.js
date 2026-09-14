@@ -1,4 +1,4 @@
-const { paraWhatsApp } = require('./whatsapp-format');
+const { paraWhatsApp, semNumeroDeContrato } = require('./whatsapp-format');
 
 describe('paraWhatsApp', () => {
   test('converte negrito markdown (**) para o asterisco simples do WhatsApp', () => {
@@ -58,8 +58,9 @@ describe('paraWhatsApp', () => {
   test('linhas legitimamente repetidas em contratos diferentes ficam intactas', () => {
     // O deduplicador é da mensagem inteira, não de linhas: "Status: Ativo"
     // aparece uma vez por contrato e as duas precisam sobreviver.
+    // (o número do contrato sai por semNumeroDeContrato, à parte)
     const texto = 'Contrato 111 — Rua X\nStatus: Ativo\n\nContrato 222 — Rua Y\nStatus: Ativo';
-    expect(paraWhatsApp(texto)).toBe(texto);
+    expect(paraWhatsApp(texto)).toBe('Contrato \u2014 Rua X\nStatus: Ativo\n\nContrato \u2014 Rua Y\nStatus: Ativo');
   });
 
   test('parágrafos diferentes e listas de uma linha ficam intactos', () => {
@@ -92,9 +93,52 @@ describe('paraWhatsApp', () => {
       expect(paraWhatsApp(texto)).toBe(texto);
     });
 
+    // O número do contrato sai por semNumeroDeContrato (nunca vai ao cliente);
+    // o que este teste guarda é que as linhas curtas repetidas sobrevivem.
     test('linhas curtas iguais (status por contrato, itens de lista) nunca são tocadas', () => {
       const texto = 'Contrato 111 — Rua X\nStatus: Ativo\nPlano: 600 Mega\n\nContrato 222 — Rua Y\nStatus: Ativo\nPlano: 600 Mega';
-      expect(paraWhatsApp(texto)).toBe(texto);
+      expect(paraWhatsApp(texto)).toBe('Contrato \u2014 Rua X\nStatus: Ativo\nPlano: 600 Mega\n\nContrato \u2014 Rua Y\nStatus: Ativo\nPlano: 600 Mega');
     });
+  });
+});
+
+// Defeito C (teste real 2026-09-14): mesmo com o prompt proibindo, o modelo
+// escreveu "contrato 2354" ao cliente. O cliente não conhece esse número, e
+// com identidade ainda fraca ele é dado de outra pessoa. Guarda em código.
+describe('semNumeroDeContrato', () => {
+  test('tira o número depois de "contrato", mantendo a preposição', () => {
+    expect(semNumeroDeContrato('a do contrato 2354')).toBe('a do contrato');
+    expect(semNumeroDeContrato('a fatura do contrato 2354 está em aberto')).toBe('a fatura do contrato está em aberto');
+    expect(semNumeroDeContrato('pelo contrato 17402 e no contrato 999')).toBe('pelo contrato e no contrato');
+  });
+
+  test('aceita "nº", "no" e "n°" antes do número, e preserva o C maiúsculo', () => {
+    expect(semNumeroDeContrato('Contrato nº 17402 está ativo')).toBe('Contrato está ativo');
+    expect(semNumeroDeContrato('Contrato n° 17402 está ativo')).toBe('Contrato está ativo');
+    expect(semNumeroDeContrato('contrato no 17402')).toBe('contrato');
+  });
+
+  test('texto sem número de contrato fica intacto', () => {
+    const texto = 'Enviei acima o boleto referente ao seu contrato do endereço Agenor Costa.';
+    expect(semNumeroDeContrato(texto)).toBe(texto);
+  });
+
+  test('não toca em número que não vem depois da palavra contrato', () => {
+    expect(semNumeroDeContrato('o protocolo 20260914-0007 do seu atendimento')).toBe('o protocolo 20260914-0007 do seu atendimento');
+  });
+
+  test('o código PIX copia e cola fica intacto', () => {
+    const pix = '00020126580014BR.GOV.BCB.PIX0136a1b2c3d4-5e6f-7890-abcd-ef1234567890520400005303986540510.005802BR5913DW TELECOM6009SAO PAULO62070503***6304ABCD';
+    expect(semNumeroDeContrato(pix)).toBe(pix);
+    expect(paraWhatsApp(pix)).toBe(pix);
+  });
+
+  test('paraWhatsApp aplica a guarda', () => {
+    expect(paraWhatsApp('Vou consultar a fatura do **contrato 2354** para você.')).toBe('Vou consultar a fatura do *contrato* para você.');
+  });
+
+  test('texto vazio ou nulo passa sem quebrar', () => {
+    expect(semNumeroDeContrato('')).toBe('');
+    expect(semNumeroDeContrato(null)).toBeNull();
   });
 });

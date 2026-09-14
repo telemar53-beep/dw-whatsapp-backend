@@ -897,7 +897,7 @@ describe('confirmar_nascimento', () => {
   test('data certa em DD/MM/AAAA eleva para forte e persiste o vínculo do contato', async () => {
     const c = ctx();
     const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r).toEqual({ confirmado: true });
+    expect(r.confirmado).toBe(true);
     expect(c.identidade.nivel).toBe('forte');
     expect(c.identidade.origem).toBe('cpf_confirmed');
     // C1 (fix round 1): antes da confirmação o vínculo não existe; só agora,
@@ -916,6 +916,23 @@ describe('confirmar_nascimento', () => {
     await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
     expect(setTriagePendingDocument).not.toHaveBeenCalled();
   });
+  // Defeito C: os contratos só chegam ao modelo DEPOIS da confirmação — e com
+  // endereço, que é o que o cliente reconhece. O número segue existindo só
+  // para as ferramentas.
+  test('sucesso devolve os contratos com endereço e a instrução de seguir', async () => {
+    const c = ctx();
+    c.identidade.contracts = [
+      { id: 5, statusCode: 1, address: 'RUA X, 10' },
+      { id: 6, statusCode: 4, address: 'AV Y, 20' },
+    ];
+    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(r.contratos).toEqual([
+      { id: 5, status: 'ativo', endereco: 'RUA X, 10' },
+      { id: 6, status: 'suspenso', endereco: 'AV Y, 20' },
+    ]);
+    expect(r.instrucao).toBe('Identidade confirmada. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.');
+  });
+
   test('aceita AAAA-MM-DD e D/M/AA', async () => {
     for (const data of ['1990-05-20', '20/5/90']) {
       const c = ctx();
@@ -1135,9 +1152,27 @@ describe('buscar_cliente no perfil de triagem', () => {
     // I5 (revisão final do branch inteiro): a triagem não devolve mais o
     // plano contratado ao modelo — só id e status, o suficiente para
     // classificar sem entregar dado sensível a uma identidade ainda fraca.
-    expect(r).toEqual({ cliente: { nome: 'Maria' }, contratos: [{ id: 5, status: 'ativo' }] });
+    // Defeito C (teste real 2026-09-14): com a lista de contratos na mão, o
+    // modelo citava "contrato 2354" e perguntava "qual contrato" mesmo com um
+    // contrato só. Antes da confirmação ele recebe só a quantidade.
+    expect(r).toEqual({
+      cliente: { nome: 'Maria' },
+      quantidadeContratos: 1,
+      proximoPasso: 'Identificação por CPF ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento. NÃO cite contrato, endereço nem plano; NÃO pergunte qual contrato.',
+    });
     expect(JSON.stringify(r)).not.toContain('SOUZA');
     expect(JSON.stringify(r)).not.toContain('joao123');
+    expect(JSON.stringify(r)).not.toContain('5');
+  });
+
+  test('os contratos continuam no contexto (o executor e o pós-confirmação precisam deles)', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1 }, { id: 6, statusCode: 1 }] });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
+    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(r.quantidadeContratos).toBe(2);
+    expect(c.contracts).toEqual([{ id: 5, statusCode: 1 }, { id: 6, statusCode: 1 }]);
+    expect(c.identidade.contracts).toEqual([{ id: 5, statusCode: 1 }, { id: 6, statusCode: 1 }]);
   });
 
   test('sem identidade no contexto (assistente) não muda nada e persiste o vínculo de imediato', async () => {
@@ -1196,7 +1231,7 @@ describe('buscar_cliente no perfil de triagem', () => {
     sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
     const c = { contact: { id: 'ct-1' }, ferramentasPermitidas: ['buscar_cliente'], identidade: null };
     const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(r).toEqual({ cliente: { nome: 'Maria' }, contratos: [{ id: 5, status: 'ativo' }] });
+    expect(r).toEqual({ cliente: { nome: 'Maria' }, quantidadeContratos: 1, proximoPasso: expect.stringContaining('confirmar_nascimento') });
     expect(setContactSgpLink).not.toHaveBeenCalled();
     expect(c.contact.sgpDocument).toBeUndefined();
   });

@@ -227,11 +227,17 @@ const TOOLS = [
         // As palavras do modelo vão direto ao cliente na triagem: nunca o
         // sobrenome completo nem o login PPPoE, só o que já se apresentaria
         // por telefone.
+        //
+        // Defeito C (teste real 2026-09-14): a lista de contratos saía daqui
+        // com id e status, e o modelo citava "contrato 2354" ao cliente e
+        // perguntava "qual contrato" mesmo com um contrato só. Antes da
+        // confirmação ele recebe só a quantidade — os contratos continuam em
+        // contexto.identidade.contracts, para o executor e para
+        // confirmar_nascimento devolvê-los depois.
         return {
           cliente: { nome: primeiroNome(client.name) },
-          contratos: contracts.map((c) => ({
-            id: c.id, status: normalizeContract(c).status,
-          })),
+          quantidadeContratos: contracts.length,
+          proximoPasso: 'Identificação por CPF ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento. NÃO cite contrato, endereço nem plano; NÃO pergunte qual contrato.',
         };
       }
 
@@ -1023,7 +1029,17 @@ const TOOLS = [
         // Confirmada: a identidade passa a viver no vínculo do contato, então
         // o CPF pendente não é mais necessário na conversa.
         await setTriagePendingDocument(contexto.conversationId, null);
-        return { confirmado: true };
+        // Só agora os contratos chegam ao modelo, e com o ENDEREÇO — que é o
+        // que o cliente reconhece. O número continua existindo só para as
+        // ferramentas.
+        return {
+          confirmado: true,
+          contratos: id.contracts.map((c) => {
+            const n = normalizeContract(c);
+            return { id: c.id, status: n.status, endereco: n.endereco };
+          }),
+          instrucao: 'Identidade confirmada. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
+        };
       }
       // Ainda há uma tentativa (o teto é 2): pedir a data de novo é melhor do
       // que encaminhar quem só errou de digitar. Na última, encaminha.

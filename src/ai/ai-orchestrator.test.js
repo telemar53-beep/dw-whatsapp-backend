@@ -549,6 +549,48 @@ describe('perfil de triagem', () => {
     expect(sys).not.toContain('Rua X ou');
   });
 
+  // Defeito C (teste real 2026-09-14): o modelo citou "contrato 2354" e, com
+  // um contrato só, ainda perguntou "qual contrato/endereço".
+  test('com identidade fraca, o contexto não lista contratos — só a quantidade', async () => {
+    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
+    expect(sys).toContain('Contratos: 1');
+    expect(sys).not.toContain('Contratos dele:');
+    expect(sys).not.toContain('17402');
+    expect(sys).not.toContain('600MB');
+  });
+
+  test('com identidade forte, os contratos continuam listados com endereço', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toContain('Contratos dele:');
+    expect(sys).toContain('RUA X');
+  });
+
+  test('os dois níveis proíbem citar o número do contrato ao cliente', async () => {
+    for (const nivel of ['forte', 'fraca']) {
+      jest.clearAllMocks();
+      createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
+      const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel, origem: nivel === 'forte' ? 'phone' : 'cpf' } })).messages[0].content;
+      expect(sys).toContain('NUNCA cite o número do contrato ao cliente.');
+    }
+  });
+
+  test('com um contrato só, os dois níveis mandam usá-lo sem perguntar qual', async () => {
+    for (const nivel of ['forte', 'fraca']) {
+      jest.clearAllMocks();
+      createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
+      const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel, origem: nivel === 'forte' ? 'phone' : 'cpf' } })).messages[0].content;
+      expect(sys).toContain('Contrato único: use-o sem perguntar qual.');
+      // Unificado: a instrução aparece uma vez só, não duplicada por nível.
+      expect(sys.split('Contrato único: use-o sem perguntar qual.').length - 1).toBe(1);
+    }
+  });
+
+  test('com mais de um contrato, não há a instrução de contrato único', async () => {
+    const dois = { ...IDENT_FORTE, contracts: [...IDENT_FORTE.contracts, { id: 17405, statusCode: 1, plan: '600MB', address: 'AV Y' }] };
+    const sys = (await contexto({ identidade: dois })).messages[0].content;
+    expect(sys).not.toContain('Contrato único');
+  });
+
   test('preço e cobertura vêm só das instruções adicionais, rotuladas como fonte única', async () => {
     // O admin cadastra cidades e planos no campo livre; a regra fixa precisa
     // apontar para ele em vez de mandar tudo para o Comercial.

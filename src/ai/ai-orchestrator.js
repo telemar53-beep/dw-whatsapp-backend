@@ -267,18 +267,25 @@ async function montarContextoTriagem(config, identidade, triagem) {
     // nome null", que o modelo podia repetir de volta ao cliente.
     linhas.push(`Cliente identificado (${identidade.origem === 'memory' ? 'memória' : identidade.origem === 'phone' ? 'telefone' : 'CPF'}): primeiro nome ${identidade.primeiroNome || 'cliente'}. A PRIMEIRA resposta desta conversa começa SEMPRE com a saudação da hora e o primeiro nome ("Bom dia, ${identidade.primeiroNome || 'cliente'}!"), mesmo quando você já entregou algo por ferramenta. Se ele disser que não é ele ou que o nome está errado, chame esquecer_identificacao e peça o CPF.`);
     if (contratos.length > 0) {
-      linhas.push('Contratos dele:');
-      for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
-      // O endereço só pode ser falado de volta ao cliente quando a
-      // identidade já é FORTE: é o endereço do próprio cliente. Com
-      // identidade fraca (CPF ainda não confirmado por data de nascimento) o
-      // endereço pertence a quem quer que seja o dono do CPF digitado — pode
-      // não ser quem está no WhatsApp, então nada do cadastro pode ser dito.
-      linhas.push(
-        identidade.nivel === 'forte'
-          ? 'Nunca peça o número do contrato nem pergunte "qual contrato": o cliente não sabe. Se precisar saber de qual ponto ele fala, pergunte de uma vez pelo endereço, citando os endereços ("é o da Rua X ou o da Av. Y?"). Pergunte SÓ quando a resposta depender do ponto.'
-          : 'Nunca peça o número do contrato e NUNCA cite endereço, plano ou qualquer dado do cadastro ao cliente: a identificação ainda não foi confirmada. Se precisar desambiguar, peça que ELE descreva o local, sem você citar nada.'
-      );
+      // O endereço (e o próprio fato de existirem dois pontos) só pode ser
+      // falado de volta ao cliente quando a identidade já é FORTE: é o
+      // endereço do próprio cliente. Com identidade fraca (CPF ainda não
+      // confirmado por data de nascimento) o cadastro pertence a quem quer
+      // que seja o dono do CPF digitado — pode não ser quem está no WhatsApp.
+      // Defeito C: listar os contratos também com identidade fraca era o que
+      // dava ao modelo o número que ele acabava citando ("contrato 2354").
+      if (identidade.nivel === 'forte') {
+        linhas.push('Contratos dele:');
+        for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
+        linhas.push('Se precisar saber de qual ponto ele fala, pergunte de uma vez pelo endereço, citando os endereços ("é o da Rua X ou o da Av. Y?"). Pergunte SÓ quando a resposta depender do ponto.');
+      } else {
+        linhas.push(`Contratos: ${contratos.length}.`);
+        linhas.push('NUNCA cite endereço, plano ou qualquer dado do cadastro ao cliente: a identificação ainda não foi confirmada. Se precisar desambiguar, peça que ELE descreva o local, sem você citar nada.');
+      }
+      // Vale para os DOIS níveis, e aparece uma vez só: o cliente não conhece
+      // o número do contrato, nem com a identidade já confirmada.
+      linhas.push('Nunca peça o número do contrato nem pergunte "qual contrato": o cliente não sabe. NUNCA cite o número do contrato ao cliente.');
+      if (contratos.length === 1) linhas.push('Contrato único: use-o sem perguntar qual.');
     }
     if (identidade.nivel === 'fraca') {
       linhas.push('Identificação por CPF ainda NÃO confirmada: para entregar boleto ou PIX, pergunte a data de nascimento e chame confirmar_nascimento. Se não confirmar, apenas encaminhe. O CPF já foi informado; NÃO peça o CPF de novo.');

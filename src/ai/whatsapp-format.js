@@ -38,7 +38,27 @@ function paraWhatsApp(texto) {
     .replace(/^\*\s+/gm, '- ')
     .replace(LINK_COM_PLACEHOLDER, '$1 ($2)');
 
-  return semParagrafoQuaseRepetido(semRepeticaoIntegral(convertido.replace(PLACEHOLDER, (_, i) => urls[Number(i)])));
+  return semNumeroDeContrato(semParagrafoQuaseRepetido(semRepeticaoIntegral(convertido.replace(PLACEHOLDER, (_, i) => urls[Number(i)]))));
+}
+
+/**
+ * Defeito C (teste real 2026-09-14): o modelo escreveu "a do contrato 2354" ao
+ * cliente. O número do contrato não significa nada para ele — e com a
+ * identidade ainda fraca (CPF digitado, data não conferida) é dado de outra
+ * pessoa. O prompt proíbe; isto é a garantia determinística.
+ *
+ * Só o NÚMERO cai; a palavra "contrato" e a preposição antes dela ficam, para
+ * a frase continuar de pé ("a fatura do contrato 2354 está em aberto" → "a
+ * fatura do contrato está em aberto"). O $1 preserva o C maiúsculo. Uma regra
+ * separada para "do/no/para o/pelo contrato NNN" seria redundante: esta já
+ * deixa a preposição intacta.
+ *
+ * Não toca em número que não venha logo depois de "contrato" (protocolo, CEP),
+ * nem no código PIX copia e cola, que não contém a palavra.
+ */
+function semNumeroDeContrato(texto) {
+  if (!texto) return texto;
+  return texto.replace(/\b(contratos?)\s+(n[ºo°]?\s*)?\d{3,}\b/gi, '$1');
 }
 
 function tokensNormalizados(linha) {
@@ -107,4 +127,4 @@ function semRepeticaoIntegral(texto) {
   return t;
 }
 
-module.exports = { paraWhatsApp, semParagrafoQuaseRepetido };
+module.exports = { paraWhatsApp, semParagrafoQuaseRepetido, semNumeroDeContrato };

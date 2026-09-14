@@ -31,6 +31,7 @@ function toConfigResponse(config) {
     triageExtraInstructions: config.triageExtraInstructions,
     triageResolvedReasonId: config.triageResolvedReasonId || null,
     triageRequireBirthdate: Boolean(config.triageRequireBirthdate),
+    triageReadReceiptsDaytime: Boolean(config.triageReadReceiptsDaytime),
     nightStartTime: config.nightStartTime || null,
     nightEndTime: config.nightEndTime || null,
   };
@@ -159,7 +160,14 @@ router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
   if (triageRequireBirthdate !== undefined && typeof triageRequireBirthdate !== 'boolean') {
     return res.status(400).json({ error: 'triageRequireBirthdate must be a boolean' });
   }
-  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido, nightStartTime: inicioNoturno, nightEndTime: fimNoturno, triageRequireBirthdate: triageRequireBirthdate === true });
+  // A leitura de comprovante de dia tambem e OPCIONAL, e ausente = desligada:
+  // cada leitura e uma chamada de visao paga, e um payload antigo nao pode
+  // ligar isso sem querer.
+  const { triageReadReceiptsDaytime } = req.body || {};
+  if (triageReadReceiptsDaytime !== undefined && typeof triageReadReceiptsDaytime !== 'boolean') {
+    return res.status(400).json({ error: 'triageReadReceiptsDaytime must be a boolean' });
+  }
+  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido, nightStartTime: inicioNoturno, nightEndTime: fimNoturno, triageRequireBirthdate: triageRequireBirthdate === true, triageReadReceiptsDaytime: triageReadReceiptsDaytime === true });
   res.json(toConfigResponse(config));
 });
 

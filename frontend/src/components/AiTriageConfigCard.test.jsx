@@ -58,6 +58,8 @@ describe('AiTriageConfigCard', () => {
         nightEndTime: '08:00',
         // Desmarcado é o padrão: o CPF digitado já identifica o cliente.
         triageRequireBirthdate: false,
+        // Desmarcado é o padrão: de dia a triagem não abre a imagem.
+        triageReadReceiptsDaytime: false,
       },
       't'
     ));
@@ -140,6 +142,49 @@ describe('AiTriageConfigCard', () => {
       });
       render(<AiTriageConfigCard />);
       expect(await screen.findByLabelText(/exigir data de nascimento depois do CPF/i)).toBeChecked();
+    });
+  });
+
+  describe('ler comprovantes também de dia', () => {
+    test('nasce desmarcado e vai como false ao salvar', async () => {
+      updateAiTriageConfig.mockResolvedValue({});
+      render(<AiTriageConfigCard />);
+
+      const caixa = await screen.findByLabelText(/ler comprovantes também de dia/i);
+      expect(caixa).not.toBeChecked();
+      expect(screen.getByText(/avisa a atendente se o comprovante já foi usado/i)).toBeInTheDocument();
+      expect(screen.getByText(/Nenhuma liberação de dia/i)).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+      await waitFor(() => expect(updateAiTriageConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ triageReadReceiptsDaytime: false }), 't'
+      ));
+    });
+
+    test('marcar manda true', async () => {
+      updateAiTriageConfig.mockResolvedValue({});
+      render(<AiTriageConfigCard />);
+
+      await userEvent.click(await screen.findByLabelText(/ler comprovantes também de dia/i));
+      await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+
+      await waitFor(() => expect(updateAiTriageConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ triageReadReceiptsDaytime: true }), 't'
+      ));
+    });
+
+    test('carrega marcado quando a config já lê de dia', async () => {
+      getAiConfig.mockResolvedValue({
+        configured: true,
+        triageConfidenceThreshold: 0.65,
+        triageMaxQuestions: 4,
+        triageTimeoutMinutes: 12,
+        triageExtraInstructions: 'Pergunte o CPF antes de tudo',
+        triageResolvedReasonId: null,
+        triageReadReceiptsDaytime: true,
+      });
+      render(<AiTriageConfigCard />);
+      expect(await screen.findByLabelText(/ler comprovantes também de dia/i)).toBeChecked();
     });
   });
 

@@ -335,6 +335,51 @@ describe('admin ai routes', () => {
     expect(res.body.error).toBe('triageRequireBirthdate must be a boolean');
   });
 
+  test('PUT /triage grava triageReadReceiptsDaytime e trata ausente como desligado', async () => {
+    updateTriageConfig.mockResolvedValue({
+      triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+      triageExtraInstructions: 'x', triageReadReceiptsDaytime: true,
+    });
+    const res = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({
+        triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+        triageExtraInstructions: 'x', triageReadReceiptsDaytime: true,
+      }).expect(200);
+    expect(updateTriageConfig).toHaveBeenCalledWith(expect.objectContaining({ triageReadReceiptsDaytime: true }));
+    expect(res.body.triageReadReceiptsDaytime).toBe(true);
+
+    // Ausente e' desligado: um payload sem o campo nao pode ligar a leitura
+    // de dia sem querer — cada leitura e' uma chamada de visao paga.
+    updateTriageConfig.mockResolvedValue({
+      triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+      triageExtraInstructions: 'x', triageReadReceiptsDaytime: false,
+    });
+    const semCampo = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x' }).expect(200);
+    expect(updateTriageConfig).toHaveBeenLastCalledWith(expect.objectContaining({ triageReadReceiptsDaytime: false }));
+    expect(semCampo.body.triageReadReceiptsDaytime).toBe(false);
+  });
+
+  test('PUT /triage recusa triageReadReceiptsDaytime que nao e booleano', async () => {
+    const res = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
+      .send({
+        triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+        triageExtraInstructions: 'x', triageReadReceiptsDaytime: 'sim',
+      }).expect(400);
+    expect(res.body.error).toBe('triageReadReceiptsDaytime must be a boolean');
+    expect(updateTriageConfig).not.toHaveBeenCalled();
+  });
+
+  test('GET /config devolve triageReadReceiptsDaytime', async () => {
+    getAiConfig.mockResolvedValue({
+      id: 1, apiKey: 'sk-1234567890abcd', model: 'gpt-x', mode: 'assistant',
+      systemPrompt: 'p', maxToolsPerInteraction: 8, triageReadReceiptsDaytime: true,
+    });
+    const res = await request(buildApp()).get('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('admin')}`).expect(200);
+    expect(res.body.triageReadReceiptsDaytime).toBe(true);
+  });
+
   test('PUT /triage aceita null e um motivo ativo em triageResolvedReasonId', async () => {
     updateTriageConfig.mockResolvedValue({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x', triageResolvedReasonId: null });
     await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)

@@ -26,6 +26,9 @@ function AiTriageConfigCard() {
   // Desmarcado por padrão: decisão do dono (2026-09-14) de que o CPF, que é
   // o que o cliente usa para entrar no site do SGP, basta para identificar.
   const [requireBirthdate, setRequireBirthdate] = useState(false);
+  // Desmarcado por padrão: de dia a triagem não abre a imagem. Ligar custa uma
+  // chamada de visão à OpenAI por comprovante.
+  const [readReceiptsDaytime, setReadReceiptsDaytime] = useState(false);
   const [nightStart, setNightStart] = useState(NOTURNO_INICIO_PADRAO);
   const [nightEnd, setNightEnd] = useState(NOTURNO_FIM_PADRAO);
   const [saving, setSaving] = useState(false);
@@ -47,6 +50,7 @@ function AiTriageConfigCard() {
     setExtraInstructions(config.triageExtraInstructions || '');
     setResolvedReasonId(config.triageResolvedReasonId || '');
     setRequireBirthdate(Boolean(config.triageRequireBirthdate));
+    setReadReceiptsDaytime(Boolean(config.triageReadReceiptsDaytime));
     setNightStart(config.nightStartTime || NOTURNO_INICIO_PADRAO);
     setNightEnd(config.nightEndTime || NOTURNO_FIM_PADRAO);
   }, [config]);
@@ -74,6 +78,7 @@ function AiTriageConfigCard() {
           nightStartTime: nightStart || null,
           nightEndTime: nightEnd || null,
           triageRequireBirthdate: requireBirthdate,
+          triageReadReceiptsDaytime: readReceiptsDaytime,
         },
         token
       );
@@ -166,6 +171,24 @@ function AiTriageConfigCard() {
         </label>
         <p className="text-[12px] text-wa-muted">
           Desmarcado, o CPF digitado já identifica o cliente e libera boleto/PIX.
+        </p>
+      </div>
+
+      <div>
+        <label htmlFor="triage-read-receipts-daytime" className="flex items-center gap-2 text-sm font-medium text-wa-muted">
+          <input
+            id="triage-read-receipts-daytime"
+            type="checkbox"
+            checked={readReceiptsDaytime}
+            onChange={(e) => setReadReceiptsDaytime(e.target.checked)}
+            className="h-4 w-4 rounded border-wa-border text-wa-green focus:ring-wa-green/25"
+          />
+          Ler comprovantes também de dia (sem desbloqueio)
+        </label>
+        <p className="text-[12px] text-wa-muted">
+          A triagem lê a imagem, confere valor, data e favorecido e avisa a atendente se o
+          comprovante já foi usado. Nenhuma liberação de dia. Cada leitura é uma chamada de visão
+          à OpenAI.
         </p>
       </div>
 

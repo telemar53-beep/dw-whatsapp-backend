@@ -15,7 +15,7 @@ describe('ai config repository', () => {
     await getPool().query(
       "UPDATE ai_config SET triage_confidence_threshold = 0.800, triage_max_questions = 2, " +
       "triage_timeout_minutes = 3, triage_extra_instructions = '', triage_resolved_reason_id = NULL, " +
-      'night_start_time = NULL, night_end_time = NULL WHERE id = 1'
+      'night_start_time = NULL, night_end_time = NULL, triage_read_receipts_daytime = false WHERE id = 1'
     );
   });
 
@@ -150,6 +150,24 @@ describe('ai config repository', () => {
     });
     expect(semExigir.triageRequireBirthdate).toBe(false);
     expect((await getAiConfig()).triageRequireBirthdate).toBe(false);
+  });
+
+  test('triageReadReceiptsDaytime sai desligado e updateTriageConfig liga e desliga', async () => {
+    expect((await getAiConfig()).triageReadReceiptsDaytime).toBe(false);
+
+    const lendo = await updateTriageConfig({
+      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3,
+      triageExtraInstructions: '', triageReadReceiptsDaytime: true,
+    });
+    expect(lendo.triageReadReceiptsDaytime).toBe(true);
+    expect((await getAiConfig()).triageReadReceiptsDaytime).toBe(true);
+
+    const semLer = await updateTriageConfig({
+      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3,
+      triageExtraInstructions: '', triageReadReceiptsDaytime: false,
+    });
+    expect(semLer.triageReadReceiptsDaytime).toBe(false);
+    expect((await getAiConfig()).triageReadReceiptsDaytime).toBe(false);
   });
 
   test('updateTriageConfig grava e apaga o motivo de encerramento pela IA', async () => {

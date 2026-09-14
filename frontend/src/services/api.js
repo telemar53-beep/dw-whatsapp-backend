@@ -381,6 +381,19 @@ export function updateBusinessHoursConfig(payload, token) {
   return apiFetch('/api/admin/business-hours', { method: 'PUT', body: payload, token });
 }
 
+export function getCompanyConfig(token) {
+  return apiFetch('/api/admin/company', { token });
+}
+
+export function updateCompanyConfig(payload, token) {
+  return apiFetch('/api/admin/company', { method: 'PUT', body: payload, token });
+}
+
+// Sem token: a tela de login precisa do nome da empresa antes de alguém entrar.
+export function getPublicCompany() {
+  return apiFetch('/api/public/company');
+}
+
 export function lookupSgpClient(cpf, token) {
   return apiFetch(`/api/sgp/clientes?cpf=${encodeURIComponent(cpf)}`, { token });
 }

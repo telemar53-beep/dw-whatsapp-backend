@@ -5,6 +5,7 @@ import { useChannels } from '../hooks/useChannels';
 import { useTemplates } from '../hooks/useTemplates';
 import { createSgpIntegration, updateSgpIntegration, rotateSgpIntegrationKey } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
+import CompanyConfigCard from './CompanyConfigCard';
 import SgpQueryConfigCard from './SgpQueryConfigCard';
 import OpenAiConfigCard from './OpenAiConfigCard';
 import AudioTranscriptionConfigCard from './AudioTranscriptionConfigCard';
@@ -284,6 +285,7 @@ function IntegrationsAdminTab() {
 
   return (
     <div className="space-y-6">
+      <CompanyConfigCard />
       <SgpQueryConfigCard />
       <OpenAiConfigCard />
       <AudioTranscriptionConfigCard />

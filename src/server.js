@@ -31,6 +31,8 @@ const adminIntegrationsRoutes = require('./api/admin-integrations.routes');
 const adminDashboardRoutes = require('./api/admin-dashboard.routes');
 const adminAssignmentMessagesRoutes = require('./api/admin-assignment-messages.routes');
 const adminBusinessHoursRoutes = require('./api/admin-business-hours.routes');
+const adminCompanyRoutes = require('./api/admin-company.routes');
+const publicCompanyRoutes = require('./api/public-company.routes');
 const reasonsRoutes = require('./api/reasons.routes');
 const adminReasonsRoutes = require('./api/admin-reasons.routes');
 const adminAiRoutes = require('./api/admin-ai.routes');
@@ -94,6 +96,9 @@ app.use('/api/admin/integrations', adminIntegrationsRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/admin/assignment-message', adminAssignmentMessagesRoutes);
 app.use('/api/admin/business-hours', adminBusinessHoursRoutes);
+app.use('/api/admin/company', adminCompanyRoutes);
+// Sem auth de propósito: a tela de login precisa do nome da empresa antes de existir token.
+app.use('/api/public/company', publicCompanyRoutes);
 app.use('/api/reasons', reasonsRoutes);
 app.use('/api/admin/reasons', adminReasonsRoutes);
 app.use('/api/admin/ai', adminAiRoutes);

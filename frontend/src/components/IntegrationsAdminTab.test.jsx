@@ -32,9 +32,19 @@ beforeEach(() => {
   // AiTriageConfigCard (renderizado por esta aba) lista os motivos para o
   // select de encerramento pela IA; sem o mock, o hook recebe undefined.
   api.listReasons.mockResolvedValue([]);
+  // CompanyConfigCard (o primeiro cartão da aba) busca a configuração da empresa.
+  api.getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
 });
 
 describe('IntegrationsAdminTab', () => {
+  // A empresa é a primeira configuração da aba: sem ela, nenhum comprovante
+  // confere e o nome do provedor não aparece para o cliente.
+  test('mostra o cartão da empresa no topo da aba', () => {
+    useSgpIntegrations.mockReturnValue({ integrations: [], refresh: vi.fn() });
+    render(<IntegrationsAdminTab />);
+    expect(screen.getByText('Empresa')).toBeInTheDocument();
+  });
+
   test('lists existing integrations with their channel name and mode label', () => {
     useSgpIntegrations.mockReturnValue({
       integrations: [{ id: 'int-1', description: 'Baileys principal', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true }],

@@ -65,8 +65,6 @@ const SECTION_GROUPS = [
   },
 ];
 
-const SECTIONS = SECTION_GROUPS.flatMap((group) => group.items);
-
 const STATUS_LABELS = {
   connected: 'Conectado',
   awaiting_qr: 'Aguardando QR code',
@@ -217,7 +215,7 @@ function AdminChannelsPage() {
   const visibleSections = visibleSectionGroups.flatMap((group) => group.items);
   const [showHidden, setShowHidden] = useState(false);
   const { channels, refresh } = useChannels(true, showHidden);
-  const [activeTab, setActiveTab] = useState(hasIntegrationsAccess ? 'channels' : 'triage');
+  const [activeTab, setActiveTab] = useState(hasIntegrationsAccess ? 'channels' : visibleSections[0]?.value);
   const [triageToggleError, setTriageToggleError] = useState(null);
   const [aiToggleError, setAiToggleError] = useState(null);
   const [aiTriageToggleError, setAiTriageToggleError] = useState(null);

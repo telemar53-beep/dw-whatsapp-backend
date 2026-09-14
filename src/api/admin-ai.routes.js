@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth, requireRole } = require('../auth/auth.middleware');
+const { requireAuth, requireRole, requireIntegrationsAccess } = require('../auth/auth.middleware');
 const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listTools, findTool } = require('../ai/tool-registry');
 const { listModels } = require('../ai/openai-client');
@@ -40,7 +40,7 @@ router.get('/config', requireAuth, requireRole('admin'), async (req, res) => {
   res.json(toConfigResponse(config));
 });
 
-router.put('/config', requireAuth, requireRole('admin'), async (req, res) => {
+router.put('/config', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const { apiKey, model, mode, systemPrompt } = req.body || {};
   if (typeof model !== 'string') {
     return res.status(400).json({ error: 'model is required' });
@@ -156,7 +156,7 @@ router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
   res.json(toConfigResponse(config));
 });
 
-router.post('/test-connection', requireAuth, requireRole('admin'), async (req, res) => {
+router.post('/test-connection', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const { apiKey } = req.body || {};
   const existing = await getAiConfig();
   const chave = typeof apiKey === 'string' && apiKey.trim() ? apiKey.trim() : existing.apiKey;

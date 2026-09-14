@@ -16,8 +16,8 @@ function buildApp() {
   app.use('/api/admin/ai', adminAiRoutes);
   return app;
 }
-function tokenFor(role) {
-  return jwt.sign({ agentId: 'a-1', role }, process.env.JWT_SECRET);
+function tokenFor(role, canManageIntegrations = false) {
+  return jwt.sign({ agentId: 'a-1', role, canManageIntegrations }, process.env.JWT_SECRET);
 }
 
 beforeEach(() => {
@@ -48,6 +48,11 @@ describe('admin ai routes', () => {
     expect(res.body.apiKeyLast4).toBe('abcd');
     expect(JSON.stringify(res.body)).not.toContain('sk-1234567890abcd');
     expect(res.body.configured).toBe(true);
+  });
+
+  test('GET /config returns 200 for a manager without canManageIntegrations', async () => {
+    await request(buildApp()).get('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('manager')}`).expect(200);
   });
 
   test('GET /config reports not configured when there is no key', async () => {
@@ -125,6 +130,22 @@ describe('admin ai routes', () => {
     expect(JSON.stringify(res.body)).not.toContain('sk-newapikey1234');
   });
 
+  test('PUT /config returns 403 for a manager without canManageIntegrations', async () => {
+    await request(buildApp()).put('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('manager')}`)
+      .send({ apiKey: 'sk-newapikey1234', model: 'gpt-x', mode: 'assistant' })
+      .expect(403);
+    expect(updateAiConfig).not.toHaveBeenCalled();
+  });
+
+  test('PUT /config succeeds for a manager with canManageIntegrations', async () => {
+    updateAiConfig.mockResolvedValue({ id: 1, apiKey: 'sk-newapikey1234', model: 'gpt-x', mode: 'assistant', systemPrompt: 'p', maxToolsPerInteraction: 8 });
+    await request(buildApp()).put('/api/admin/ai/config')
+      .set('Authorization', `Bearer ${tokenFor('manager', true)}`)
+      .send({ apiKey: 'sk-newapikey1234', model: 'gpt-x', mode: 'assistant' })
+      .expect(200);
+  });
+
   test('POST /test-connection returns the available models', async () => {
     listModels.mockResolvedValue(['gpt-a', 'gpt-b']);
     const res = await request(buildApp()).post('/api/admin/ai/test-connection')
@@ -139,6 +160,11 @@ describe('admin ai routes', () => {
     expect(res.body.ok).toBe(false);
   });
 
+  test('POST /test-connection returns 403 for a manager without canManageIntegrations', async () => {
+    await request(buildApp()).post('/api/admin/ai/test-connection')
+      .set('Authorization', `Bearer ${tokenFor('manager')}`).send({}).expect(403);
+  });
+
   test('GET /tools merges the registry with the stored permissions', async () => {
     const res = await request(buildApp()).get('/api/admin/ai/tools')
       .set('Authorization', `Bearer ${tokenFor('admin')}`).expect(200);
@@ -147,6 +173,11 @@ describe('admin ai routes', () => {
     expect(plano.categoria).toBe('CONSULTA');
     const pix = res.body.find((t) => t.nome === 'gerar_pix');
     expect(pix.enabled).toBe(false);
+  });
+
+  test('GET /tools returns 200 for a manager without canManageIntegrations', async () => {
+    await request(buildApp()).get('/api/admin/ai/tools')
+      .set('Authorization', `Bearer ${tokenFor('manager')}`).expect(200);
   });
 
   test('PUT /tools/:nome rejects a tool that is not in the registry', async () => {
@@ -161,6 +192,13 @@ describe('admin ai routes', () => {
       .set('Authorization', `Bearer ${tokenFor('admin')}`)
       .send({ enabled: false }).expect(200);
     expect(setToolPermission).toHaveBeenCalledWith('consultar_plano', false);
+  });
+
+  test('PUT /tools/:nome returns 200 for a manager without canManageIntegrations', async () => {
+    setToolPermission.mockResolvedValue({ toolName: 'consultar_plano', enabled: false });
+    await request(buildApp()).put('/api/admin/ai/tools/consultar_plano')
+      .set('Authorization', `Bearer ${tokenFor('manager')}`)
+      .send({ enabled: false }).expect(200);
   });
 
   test('GET /config devolve os campos de transcrição', async () => {
@@ -214,6 +252,18 @@ describe('admin ai routes', () => {
     expect(res.body.transcriptionModel).toBe('m');
   });
 
+  test('PUT /transcription returns 200 for a manager without canManageIntegrations', async () => {
+    updateTranscriptionConfig.mockResolvedValue({
+      transcriptionEnabled: true, transcriptionModel: 'm', transcriptionMaxSeconds: 60,
+      transcriptionMaxBytes: 1000, transcriptionPrompt: 'PPPoE', transcriptionFeedAi: true,
+    });
+    await request(buildApp()).put('/api/admin/ai/transcription')
+      .set('Authorization', `Bearer ${tokenFor('manager')}`)
+      .send({ transcriptionEnabled: true, transcriptionModel: 'm', transcriptionMaxSeconds: 60,
+              transcriptionMaxBytes: 1000, transcriptionPrompt: 'PPPoE', transcriptionFeedAi: true })
+      .expect(200);
+  });
+
   test('PUT /triage valida e salva', async () => {
     updateTriageConfig.mockResolvedValue({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x' });
     const res = await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
@@ -222,6 +272,12 @@ describe('admin ai routes', () => {
     await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('admin')}`)
       .send({ triageConfidenceThreshold: 1.5, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: '' }).expect(400);
     await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('agent')}`).send({}).expect(403);
+  });
+
+  test('PUT /triage returns 200 for a manager without canManageIntegrations', async () => {
+    updateTriageConfig.mockResolvedValue({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x' });
+    await request(buildApp()).put('/api/admin/ai/triage').set('Authorization', `Bearer ${tokenFor('manager')}`)
+      .send({ triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5, triageExtraInstructions: 'x' }).expect(200);
   });
 
   // I2 (revisão final do branch inteiro): Number(null)/Number('')/Number(false)

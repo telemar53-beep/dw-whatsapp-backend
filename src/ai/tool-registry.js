@@ -19,6 +19,7 @@ const { enviarPix, enviarBoleto } = require('../payments/payment-sender');
 const { formatarData } = require('../payments/payment-card');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { primeiroNome } = require('./identity-resolver');
+const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { mensagemSegura } = require('./safe-error-log');
 const { findLatestInboundImage } = require('../conversations/message.repository');
 const { analyzeImage } = require('./openai-client');
@@ -1035,6 +1036,15 @@ const TOOLS = [
           sgpFirstName: primeiroNome(id.primeiroNome),
         });
         contexto.contact.sgpDocument = id.client.document;
+        // Com o vínculo gravado, o endereço do contrato pode preencher a
+        // cidade do contato. Try/catch pelo mesmo motivo do bloco abaixo: a
+        // confirmação já está persistida e não pode virar recusa por causa de
+        // um campo acessório.
+        try {
+          await preencherCidadePeloSgp(contexto.contact, id.contracts);
+        } catch (err) {
+          console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
+        }
         // Confirmada: a identidade passa a viver no vínculo do contato, então
         // o CPF pendente não é mais necessário na conversa. Try/catch porque a
         // confirmação (setContactSgpLink acima) já está persistida: um resto

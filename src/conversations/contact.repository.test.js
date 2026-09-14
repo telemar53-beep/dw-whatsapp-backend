@@ -11,6 +11,7 @@ const {
   updateContact,
   listContactsMissingAvatarForBaileysBackfill,
   setContactSgpLink,
+  setContactCityIfEmpty,
 } = require('./contact.repository');
 
 describe('contact repository', () => {
@@ -165,6 +166,33 @@ describe('contact repository', () => {
     const updated = await updateContact(contact.id, { displayName: 'Maria', cityId: null, internalNote: null });
 
     expect(updated.internalNote).toBeNull();
+  });
+
+  test('setContactCityIfEmpty preenche a cidade quando o contato ainda não tem', async () => {
+    const city = await createCity({ name: 'Cândido Mendes' });
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+
+    const updated = await setContactCityIfEmpty(contact.id, city.id);
+
+    expect(updated.cityId).toBe(city.id);
+    expect((await findContactById(contact.id)).cityId).toBe(city.id);
+  });
+
+  test('setContactCityIfEmpty NÃO sobrescreve a cidade que o atendente já escolheu', async () => {
+    const escolhida = await createCity({ name: 'Godofredo Viana' });
+    const outra = await createCity({ name: 'Cândido Mendes' });
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+    await updateContact(contact.id, { displayName: 'Maria', cityId: escolhida.id });
+
+    const updated = await setContactCityIfEmpty(contact.id, outra.id);
+
+    expect(updated).toBeNull();
+    expect((await findContactById(contact.id)).cityId).toBe(escolhida.id);
+  });
+
+  test('setContactCityIfEmpty devolve null quando o contato não existe', async () => {
+    const city = await createCity({ name: 'Cândido Mendes' });
+    expect(await setContactCityIfEmpty('00000000-0000-0000-0000-000000000000', city.id)).toBeNull();
   });
 
   test('a freshly created contact has no internal note', async () => {

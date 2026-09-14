@@ -1,5 +1,6 @@
 const sgpClient = require('../integrations/sgp-client');
 const { setContactSgpLink } = require('../conversations/contact.repository');
+const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { mensagemSegura } = require('./safe-error-log');
 
 /**
@@ -98,6 +99,20 @@ function porMemoriaSemSgp(contact) {
  * Sem isto (defeito A, teste real 2026-09-14), o turno seguinte devolvia
  * 'none' e o modelo pedia o CPF de novo — "me informe o CPF novamente".
  */
+/**
+ * O preenchimento da cidade já engole os próprios erros, mas ele roda DENTRO
+ * do try que decide entre identidade e vazio(): se algum dia escapar alguma
+ * coisa dali, o cliente seria tratado como não identificado por causa de um
+ * campo acessório. Esta casca garante que isso não acontece.
+ */
+async function preencherCidadeSemDerrubar(contact, identidade) {
+  try {
+    await preencherCidadePeloSgp(contact, identidade.contracts);
+  } catch (err) {
+    console.error(`City autofill failed for contact ${contact.id}: ${mensagemSegura(err)}`);
+  }
+}
+
 async function porDocumentoPendente(documentoPendente) {
   const identidade = await porCpf(documentoPendente, 'cpf');
   return { ...identidade, nivel: 'fraca', origem: 'cpf' };
@@ -108,6 +123,10 @@ async function resolverIdentidade({ contact, ignorarTelefone = false, documentoP
     if (contact.sgpDocument) {
       const identidade = await porCpf(contact.sgpDocument, 'memory');
       await backfillPrimeiroNome(contact, identidade);
+      // O endereço do contrato é a única fonte de cidade que temos; com ela o
+      // aviso de falha regional passa a valer para quem nunca foi editado à
+      // mão. Só nos caminhos FORTES: identidade fraca não encosta no contato.
+      await preencherCidadeSemDerrubar(contact, identidade);
       return identidade;
     }
     // ignorarTelefone: true depois de esquecer_identificacao (contestação do
@@ -131,6 +150,7 @@ async function resolverIdentidade({ contact, ignorarTelefone = false, documentoP
         sgpDocument: rec.cliente.cpfcnpj,
         sgpFirstName: identidade.primeiroNome,
       });
+      await preencherCidadeSemDerrubar(contact, identidade);
       return identidade;
     }
     if (documentoPendente) return await porDocumentoPendente(documentoPendente);

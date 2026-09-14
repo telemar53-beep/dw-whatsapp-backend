@@ -15,6 +15,7 @@ jest.mock('./ai-config.repository');
 jest.mock('./triage-close-reason');
 jest.mock('../conversations/message.repository');
 jest.mock('./openai-client');
+jest.mock('../cities/contact-city.service');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
@@ -36,6 +37,7 @@ const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 const { findLatestInboundImage } = require('../conversations/message.repository');
 const { analyzeImage } = require('./openai-client');
 const { PROMPT_VISAO } = require('./comprovante');
+const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
@@ -905,6 +907,26 @@ describe('confirmar_nascimento', () => {
     // memory/forte de um CPF que nunca foi confirmado).
     expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: 9, sgpContractId: 5, sgpDocument: '11122233344', sgpFirstName: 'Maria' });
     expect(c.contact.sgpDocument).toBe('11122233344');
+  });
+  test('sucesso preenche a cidade do contato com a do contrato', async () => {
+    // Só aqui, depois da data batida: antes disso o CPF podia ser de outra
+    // pessoa e a cidade dela não pode encostar neste contato.
+    const c = ctx();
+    await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(preencherCidadePeloSgp).toHaveBeenCalledWith(c.contact, c.identidade.contracts);
+  });
+  test('data errada não preenche cidade nenhuma', async () => {
+    const c = ctx();
+    await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
+    expect(preencherCidadePeloSgp).not.toHaveBeenCalled();
+  });
+  test('falha ao preencher a cidade não derruba a confirmação', async () => {
+    preencherCidadePeloSgp.mockRejectedValueOnce(new Error('db fora'));
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = ctx();
+    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
+    expect(r.confirmado).toBe(true);
+    erroSpy.mockRestore();
   });
   test('sucesso limpa o CPF pendente da conversa (a identidade agora vive no vínculo do contato)', async () => {
     const c = ctx();

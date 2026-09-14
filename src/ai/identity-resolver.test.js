@@ -1,7 +1,9 @@
 jest.mock('../integrations/sgp-client');
 jest.mock('../conversations/contact.repository');
+jest.mock('../cities/contact-city.service');
 const sgpClient = require('../integrations/sgp-client');
 const { setContactSgpLink } = require('../conversations/contact.repository');
+const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { resolverIdentidade, variantesTelefone, primeiroNome } = require('./identity-resolver');
 
 const CLIENT = { id: 16957, name: 'JOÃO DA SILVA', document: '529.982.247-25' };
@@ -230,6 +232,60 @@ describe('resolverIdentidade', () => {
       documentoPendente: '52998224725',
     });
     expect(r).toMatchObject({ nivel: 'none', origem: 'none' });
+  });
+
+  test('memória: aproveita os contratos para preencher a cidade do contato', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
+    const contact = { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725' };
+
+    await resolverIdentidade({ contact });
+
+    expect(preencherCidadePeloSgp).toHaveBeenCalledWith(contact, CONTRACTS);
+  });
+
+  test('telefone: aproveita os contratos para preencher a cidade do contato', async () => {
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    const contact = { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null };
+
+    await resolverIdentidade({ contact });
+
+    expect(preencherCidadePeloSgp).toHaveBeenCalledWith(contact, CONTRACTS);
+  });
+
+  test('identidade FRACA (CPF digitado, ainda sem confirmar) não preenche cidade nenhuma', async () => {
+    // Quem digitou o CPF pode não ser o dono dele: nada do cadastro alheio
+    // pode encostar no contato antes de confirmar_nascimento.
+    sgpClient.findClientRecord.mockResolvedValue({ total: 0, cliente: null });
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+
+    await resolverIdentidade({
+      contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null },
+      documentoPendente: '52998224725',
+    });
+
+    expect(preencherCidadePeloSgp).not.toHaveBeenCalled();
+  });
+
+  test('sem identidade nenhuma, nada de cidade', async () => {
+    sgpClient.findClientRecord.mockResolvedValue({ total: 0, cliente: null });
+    await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null } });
+    expect(preencherCidadePeloSgp).not.toHaveBeenCalled();
+  });
+
+  test('uma falha do preenchimento de cidade não derruba a identificação', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
+    preencherCidadePeloSgp.mockRejectedValueOnce(new Error('banco fora'));
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: '52998224725' } });
+
+    // Não pode cair no caminho de "SGP fora" (que devolveria contracts vazio).
+    expect(r).toMatchObject({ nivel: 'forte', origem: 'memory' });
+    expect(r.contracts).toEqual(CONTRACTS);
+    spy.mockRestore();
   });
 
   test('ignorarTelefone: true não afeta a memória (sgpDocument já vinculado continua identificando)', async () => {

@@ -84,6 +84,21 @@ async function updateContact(id, { displayName, cityId, internalNote }) {
   return toContact(result.rows[0]);
 }
 
+// Preenche a cidade só quando o contato ainda não tem uma. A condição mora no
+// próprio UPDATE de propósito: a cidade descoberta no SGP nunca pode passar por
+// cima da que um atendente escolheu à mão, e ler antes para decidir depois
+// deixaria uma corrida entre dois turnos do mesmo contato. Devolve o contato
+// atualizado, ou null quando nada foi tocado (já tinha cidade ou não existe).
+async function setContactCityIfEmpty(contactId, cityId) {
+  const result = await getPool().query(
+    `UPDATE contacts SET city_id = $2 WHERE id = $1 AND city_id IS NULL
+     RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
+    [contactId, cityId]
+  );
+  if (result.rowCount === 0) return null;
+  return toContact(result.rows[0]);
+}
+
 async function listContactsMissingAvatarForBaileysBackfill() {
   const result = await getPool().query(`
     SELECT DISTINCT ON (ct.id) ct.id AS contact_id, ct.phone_number, c.channel_id
@@ -125,6 +140,7 @@ module.exports = {
   findContactById,
   findContactByPhoneNumber,
   updateContact,
+  setContactCityIfEmpty,
   listContactsMissingAvatarForBaileysBackfill,
   setContactSgpLink,
 };

@@ -521,6 +521,10 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/COMPROVANTE À NOITE/);
       expect(sys).toMatch(/chame analisar_comprovante/);
       expect(sys).toMatch(/NUNCA diga "pagamento confirmado" nem "acesso liberado"/);
+      // O contrato do uso anterior é de outro cliente: à noite, como de dia, o
+      // cliente ouve o mesmo acolhimento e nada mais.
+      expect(sys).toMatch(/jaUtilizado/);
+      expect(sys).toMatch(/NÃO diga isso ao cliente nem cite outro contrato/);
       jest.clearAllMocks();
       createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
       const dia = (await contexto()).messages[0].content;

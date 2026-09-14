@@ -925,12 +925,17 @@ const TOOLS = [
             // atendente entender o que aconteceu. O cliente lê a mesma frase
             // de sempre: o contrato e a hora são de OUTRA pessoa, e o `motivo`
             // devolvido aqui é lido pelo modelo, que pode repeti-lo.
-            let descricao = null;
-            try {
-              const uso = await findReceiptUsage(comprovante.idTransacao);
-              if (uso) descricao = descreverUsoAnterior(uso);
-            } catch (err) {
-              console.error(`Failed to look up previous receipt usage for contract ${args.contratoId}: ${mensagemSegura(err)}`);
+            // analisar_comprovante já consultou o uso neste mesmo turno e
+            // guardou a descrição: o banco só é consultado quando ela não
+            // existe (o cliente pediu a liberação sem a leitura ter rodado).
+            let descricao = (comprovante.usoAnterior && comprovante.usoAnterior.descricao) || null;
+            if (!descricao) {
+              try {
+                const uso = await findReceiptUsage(comprovante.idTransacao);
+                if (uso) descricao = descreverUsoAnterior(uso);
+              } catch (err) {
+                console.error(`Failed to look up previous receipt usage for contract ${args.contratoId}: ${mensagemSegura(err)}`);
+              }
             }
             registrarRecusa(descricao ? `Este comprovante já foi utilizado (${descricao}).` : motivo);
             return { liberado: false, motivo, instrucao: instrucaoDeRecusa('Não consegui liberar o acesso em confiança agora', motivo) };
@@ -1113,13 +1118,12 @@ const TOOLS = [
           console.error(`analisar_comprovante: uso anterior indisponível na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
         }
       }
-      resultado.usoAnterior = usoAnterior;
-      // jaUtilizado é o que o modelo lê. A descrição vai junto porque o
-      // roteiro manda NÃO contá-la ao cliente: ela existe para o resumo.
-      if (usoAnterior) {
-        resultado.jaUtilizado = true;
-        resultado.descricao = usoAnterior.descricao;
-      }
+      // O resultado é serializado para a OpenAI: o que entra aqui o modelo lê e
+      // pode repetir ao cliente. O contrato e a hora são de OUTRA pessoa, então
+      // atravessa só o fato — e o roteiro do prompt manda nem esse fato ser
+      // contado. A descrição fica no contexto do turno, que não vai ao modelo:
+      // é de lá que o resumo e a recusa do desbloqueio a pegam.
+      resultado.jaUtilizado = Boolean(usoAnterior);
 
       // O veredito fica no contexto do turno para o desbloqueio em confiança
       // poder consultá-lo sem reler a imagem.

@@ -793,6 +793,20 @@ describe('desbloqueio_confianca — modo noturno', () => {
       });
     });
 
+    // analisar_comprovante, no mesmo turno, já consultou o uso e guardou a
+    // descrição no contexto: repetir a consulta seria uma ida ao banco por
+    // nada, no caminho de uma recusa.
+    test('com a descrição já no contexto, não vai ao banco de novo', async () => {
+      const ctx = noturno({
+        comprovante: { ...COMPROVANTE, usoAnterior: { contractId: 26515, usedAt: USADO_EM, descricao: DESCRICAO } },
+      });
+      await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
+      expect(findReceiptUsage).not.toHaveBeenCalled();
+      expect(ctx.desbloqueioResultado).toEqual({
+        liberado: false, motivo: `Este comprovante já foi utilizado (${DESCRICAO}).`,
+      });
+    });
+
     // A garantia que importa: nada do uso anterior pode chegar ao WhatsApp de
     // quem mandou a imagem — nem pela frase pronta, nem pelo motivo que o
     // modelo lê e pode repetir.
@@ -2563,31 +2577,41 @@ describe('analisar_comprovante', () => {
   describe('uso anterior do mesmo id de transação', () => {
     const USADO_EM = new Date('2026-09-14T02:12:00.000Z');
 
-    test('comprovante já usado: o resultado avisa, com contrato e hora', async () => {
+    // O resultado da ferramenta é serializado para a OpenAI: tudo o que entra
+    // nele o modelo lê e pode repetir ao cliente. O contrato do uso anterior é
+    // de OUTRA pessoa, então ele fica fora — só o fato "sim, já foi usado"
+    // atravessa. A descrição vive no contexto do turno, que nunca vai ao modelo.
+    test('comprovante já usado: o modelo recebe o fato, nunca o contrato nem a hora', async () => {
       findReceiptUsage.mockResolvedValue({ contactId: 'ct-9', contractId: 26515, usedAt: USADO_EM });
       const c = ctx();
       const r = await findTool('analisar_comprovante').executar({}, c);
 
       expect(findReceiptUsage).toHaveBeenCalledWith(ID_TRANSACAO);
       expect(r.jaUtilizado).toBe(true);
-      expect(r.descricao).toBe('já utilizado no contrato 26515 em 13/09 às 23:12');
-      expect(r.usoAnterior).toEqual({
+      expect(r).not.toHaveProperty('descricao');
+      expect(r).not.toHaveProperty('usoAnterior');
+      const serializado = JSON.stringify(r);
+      expect(serializado).not.toContain('26515');
+      expect(serializado).not.toContain('23:12');
+      expect(serializado).not.toContain('13/09');
+
+      // A descrição existe — só não no que o modelo lê.
+      expect(c.comprovante.usoAnterior).toEqual({
         contractId: 26515, usedAt: USADO_EM,
         descricao: 'já utilizado no contrato 26515 em 13/09 às 23:12',
       });
-      expect(c.comprovante.usoAnterior).toEqual(r.usoAnterior);
       // O contato do outro cliente não interessa a ninguém aqui: só contrato
       // e hora vão para o resumo.
-      expect(r.usoAnterior).not.toHaveProperty('contactId');
+      expect(c.comprovante.usoAnterior).not.toHaveProperty('contactId');
     });
 
-    test('comprovante inédito: usoAnterior nulo e sem jaUtilizado', async () => {
+    test('comprovante inédito: jaUtilizado falso e usoAnterior nulo no contexto', async () => {
       const c = ctx();
       const r = await findTool('analisar_comprovante').executar({}, c);
       expect(findReceiptUsage).toHaveBeenCalledWith(ID_TRANSACAO);
-      expect(r.usoAnterior).toBeNull();
-      expect(r.jaUtilizado).toBeFalsy();
+      expect(r.jaUtilizado).toBe(false);
       expect(r).not.toHaveProperty('descricao');
+      expect(r).not.toHaveProperty('usoAnterior');
       expect(c.comprovante.usoAnterior).toBeNull();
     });
 
@@ -2597,18 +2621,20 @@ describe('analisar_comprovante', () => {
       const c = ctx();
       const r = await findTool('analisar_comprovante').executar({}, c);
       expect(findReceiptUsage).not.toHaveBeenCalled();
-      expect(r.usoAnterior).toBeNull();
+      expect(r.jaUtilizado).toBe(false);
       expect(c.comprovante.usoAnterior).toBeNull();
     });
 
     // Vale de dia também: é justamente de dia que o comprovante reenviado por
     // outra pessoa passava despercebido.
-    test('de dia, com a leitura ligada, o aviso sai igual', async () => {
+    test('de dia, com a leitura ligada, o aviso sai igual — e igualmente sem contrato', async () => {
       getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', triageReadReceiptsDaytime: true });
       findReceiptUsage.mockResolvedValue({ contactId: 'ct-9', contractId: 26515, usedAt: USADO_EM });
-      const r = await findTool('analisar_comprovante').executar({}, ctx({ triagem: { noturno: { ativo: false, retornoAs: null } } }));
+      const c = ctx({ triagem: { noturno: { ativo: false, retornoAs: null } } });
+      const r = await findTool('analisar_comprovante').executar({}, c);
       expect(r.jaUtilizado).toBe(true);
-      expect(r.descricao).toBe('já utilizado no contrato 26515 em 13/09 às 23:12');
+      expect(JSON.stringify(r)).not.toContain('26515');
+      expect(c.comprovante.usoAnterior.descricao).toBe('já utilizado no contrato 26515 em 13/09 às 23:12');
     });
   });
 

@@ -45,7 +45,16 @@ async function login({ email, password }) {
     process.env.JWT_SECRET,
     { expiresIn: TOKEN_EXPIRY }
   );
-  return { token, agent: { id: agent.id, name: agent.name, email: agent.email, role: agent.role } };
+  return {
+    token,
+    agent: {
+      id: agent.id,
+      name: agent.name,
+      email: agent.email,
+      role: agent.role,
+      avatarPath: agent.avatarPath || null,
+    },
+  };
 }
 
 function verifyToken(token) {

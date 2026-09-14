@@ -28,7 +28,7 @@ async function createAgent({ name, email, password, role }) {
 
 async function findAgentByEmail(email) {
   const result = await getPool().query(
-    'SELECT id, name, email, role, active, password_hash, created_at FROM agents WHERE email = $1',
+    'SELECT id, name, email, role, active, password_hash, avatar_path, created_at FROM agents WHERE email = $1',
     [email]
   );
   if (result.rowCount === 0) return null;
@@ -40,6 +40,7 @@ async function findAgentByEmail(email) {
     role: row.role,
     active: row.active,
     passwordHash: row.password_hash,
+    avatarPath: row.avatar_path,
     createdAt: row.created_at,
   };
 }

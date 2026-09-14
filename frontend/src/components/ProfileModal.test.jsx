@@ -10,7 +10,7 @@ vi.mock('../services/api');
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useAuth.mockReturnValue({ token: 'tok-123' });
+  useAuth.mockReturnValue({ token: 'tok-123', updateAgent: vi.fn() });
   api.getMyProfile.mockResolvedValue({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: '11999998888', avatarPath: null, role: 'agent' });
 });
 

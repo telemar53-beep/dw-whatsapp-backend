@@ -5,7 +5,7 @@ import AgentAvatar from './AgentAvatar';
 import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
 
 function ProfileModal({ onClose, onProfileUpdated }) {
-  const { token } = useAuth();
+  const { token, updateAgent } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [name, setName] = useState('');
@@ -43,6 +43,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
     try {
       const updated = await updateMyProfile({ name, phone }, token);
       setProfile(updated);
+      updateAgent({ name: updated.name });
       setProfileSuccess(true);
       onProfileUpdated && onProfileUpdated();
     } catch (err) {
@@ -61,6 +62,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
     try {
       const result = await uploadMyAvatar(file, token);
       setProfile((prev) => ({ ...prev, avatarPath: result.avatarPath }));
+      updateAgent({ avatarPath: result.avatarPath });
       onProfileUpdated && onProfileUpdated();
     } catch (err) {
       setAvatarError((err.body && err.body.error) || 'Falha ao enviar foto');
@@ -75,6 +77,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
     try {
       await deleteMyAvatar(token);
       setProfile((prev) => ({ ...prev, avatarPath: null }));
+      updateAgent({ avatarPath: null });
       onProfileUpdated && onProfileUpdated();
     } catch (err) {
       setAvatarError((err.body && err.body.error) || 'Falha ao remover foto');

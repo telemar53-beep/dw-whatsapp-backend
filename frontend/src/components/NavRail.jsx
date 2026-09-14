@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import ClosedConversationsModal from './ClosedConversationsModal';
+import AgentAvatar from './AgentAvatar';
 import {
   IconChats,
   IconChart,
@@ -63,7 +64,6 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
   const { agent, logout } = useAuth();
   const { muted, toggleMuted } = useQueueNotificationSound();
   const [closedConversationsOpen, setClosedConversationsOpen] = useState(false);
-  const agentInitial = agent?.name ? agent.name.trim().charAt(0).toUpperCase() : 'DW';
 
   return (
     <>
@@ -123,12 +123,14 @@ function NavRail({ active, onConversasClick, onProfileClick, mobileHidden = fals
           <RailButton label="Sair" onClick={logout}>
             <IconLogout size={22} />
           </RailButton>
-          <span
-            aria-hidden="true"
-            title={agent?.name || 'Atendente'}
-            className="mt-2 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-white/[0.12] font-display text-[15px] font-medium text-chat-text"
-          >
-            {agentInitial}
+          <span className="mt-2 overflow-hidden rounded-[14px] border border-white/20" title={agent?.name || 'Atendente'}>
+            <AgentAvatar
+              agentId={agent?.id}
+              avatarPath={agent?.avatarPath}
+              name={agent?.name}
+              size={48}
+              shape="square"
+            />
           </span>
         </div>
       </nav>

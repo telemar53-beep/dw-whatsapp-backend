@@ -26,6 +26,17 @@ export function AuthProvider({ children }) {
     return result;
   }, []);
 
+  // O perfil muda sem relogar (nome e foto em "Meu perfil"): o que está na tela
+  // precisa acompanhar, e o que está guardado também.
+  const updateAgent = useCallback((partial) => {
+    setAgent((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...partial };
+      localStorage.setItem('dw_agent', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('dw_token');
     localStorage.removeItem('dw_agent');
@@ -38,7 +49,9 @@ export function AuthProvider({ children }) {
     return () => setUnauthorizedHandler(null);
   }, [logout]);
 
-  return <AuthContext.Provider value={{ token, agent, login, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ token, agent, login, logout, updateAgent }}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

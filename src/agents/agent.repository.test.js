@@ -31,6 +31,19 @@ describe('agent repository', () => {
     expect(agent.id).toBeDefined();
   });
 
+  test('createAgent stores canManageIntegrations for a manager', async () => {
+    const agent = await createAgent({
+      name: 'Marcia', email: 'marcia@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+    });
+    expect(agent.role).toBe('manager');
+    expect(agent.canManageIntegrations).toBe(true);
+  });
+
+  test('createAgent defaults canManageIntegrations to false when omitted', async () => {
+    const agent = await createAgent({ name: 'Nilo', email: 'nilo@dw.com', password: 'secret123', role: 'agent' });
+    expect(agent.canManageIntegrations).toBe(false);
+  });
+
   test('findAgentByEmail returns the agent with its password hash and active flag', async () => {
     await createAgent({ name: 'Beto', email: 'b@dw.com', password: 'secret123', role: 'admin' });
     const agent = await findAgentByEmail('b@dw.com');
@@ -39,6 +52,14 @@ describe('agent repository', () => {
     expect(agent.active).toBe(true);
     const matches = await bcrypt.compare('secret123', agent.passwordHash);
     expect(matches).toBe(true);
+  });
+
+  test('findAgentByEmail includes canManageIntegrations', async () => {
+    await createAgent({
+      name: 'Paula', email: 'paula@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+    });
+    const agent = await findAgentByEmail('paula@dw.com');
+    expect(agent.canManageIntegrations).toBe(true);
   });
 
   test('findAgentByEmail returns null when not found', async () => {
@@ -52,6 +73,14 @@ describe('agent repository', () => {
     expect(agent.name).toBe('Carla');
     expect(agent.email).toBe('c@dw.com');
     expect(agent.passwordHash).toBeUndefined();
+  });
+
+  test('findAgentById includes canManageIntegrations', async () => {
+    const created = await createAgent({
+      name: 'Otavio', email: 'otavio@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+    });
+    const agent = await findAgentById(created.id);
+    expect(agent.canManageIntegrations).toBe(true);
   });
 
   test('listAgents returns every agent ordered by email', async () => {
@@ -91,6 +120,14 @@ describe('agent repository', () => {
 
     const reactivated = await setAgentActive(created.id, true);
     expect(reactivated.active).toBe(true);
+  });
+
+  test('setAgentActive preserves canManageIntegrations', async () => {
+    const created = await createAgent({
+      name: 'Quenia', email: 'quenia@dw.com', password: 'secret123', role: 'manager', canManageIntegrations: true,
+    });
+    const updated = await setAgentActive(created.id, false);
+    expect(updated.canManageIntegrations).toBe(true);
   });
 
   test('setAgentActive returns null when the agent does not exist', async () => {

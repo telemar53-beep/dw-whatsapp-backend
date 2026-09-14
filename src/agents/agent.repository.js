@@ -10,25 +10,26 @@ function toPublicAgent(row) {
     email: row.email,
     role: row.role,
     active: row.active,
+    canManageIntegrations: row.can_manage_integrations,
     phone: row.phone,
     avatarPath: row.avatar_path,
     createdAt: row.created_at,
   };
 }
 
-async function createAgent({ name, email, password, role }) {
+async function createAgent({ name, email, password, role, canManageIntegrations = false }) {
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const result = await getPool().query(
-    `INSERT INTO agents (name, email, password_hash, role) VALUES ($1, $2, $3, $4)
-     RETURNING id, name, email, role, active, phone, avatar_path, created_at`,
-    [name || email.split('@')[0], email, passwordHash, role]
+    `INSERT INTO agents (name, email, password_hash, role, can_manage_integrations) VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, name, email, role, active, can_manage_integrations, phone, avatar_path, created_at`,
+    [name || email.split('@')[0], email, passwordHash, role, canManageIntegrations]
   );
   return toPublicAgent(result.rows[0]);
 }
 
 async function findAgentByEmail(email) {
   const result = await getPool().query(
-    'SELECT id, name, email, role, active, password_hash, avatar_path, created_at FROM agents WHERE email = $1',
+    'SELECT id, name, email, role, active, password_hash, can_manage_integrations, avatar_path, created_at FROM agents WHERE email = $1',
     [email]
   );
   if (result.rowCount === 0) return null;
@@ -40,6 +41,7 @@ async function findAgentByEmail(email) {
     role: row.role,
     active: row.active,
     passwordHash: row.password_hash,
+    canManageIntegrations: row.can_manage_integrations,
     avatarPath: row.avatar_path,
     createdAt: row.created_at,
   };
@@ -65,7 +67,7 @@ async function findAgentByIdWithPasswordHash(id) {
 
 async function findAgentById(id) {
   const result = await getPool().query(
-    'SELECT id, name, email, role, active, phone, avatar_path, created_at FROM agents WHERE id = $1',
+    'SELECT id, name, email, role, active, can_manage_integrations, phone, avatar_path, created_at FROM agents WHERE id = $1',
     [id]
   );
   if (result.rowCount === 0) return null;
@@ -74,7 +76,7 @@ async function findAgentById(id) {
 
 async function listAgents() {
   const result = await getPool().query(`
-    SELECT a.id, a.name, a.email, a.role, a.active, a.phone, a.avatar_path, a.created_at,
+    SELECT a.id, a.name, a.email, a.role, a.active, a.can_manage_integrations, a.phone, a.avatar_path, a.created_at,
            COALESCE(
              json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name) FILTER (WHERE s.id IS NOT NULL),
              '[]'
@@ -90,7 +92,7 @@ async function listAgents() {
 
 async function setAgentActive(id, active) {
   const result = await getPool().query(
-    'UPDATE agents SET active = $2 WHERE id = $1 RETURNING id, name, email, role, active, created_at',
+    'UPDATE agents SET active = $2 WHERE id = $1 RETURNING id, name, email, role, active, can_manage_integrations, created_at',
     [id, active]
   );
   if (result.rowCount === 0) return null;
@@ -104,7 +106,7 @@ async function updateAgentPassword(id, passwordHash) {
 async function updateAgentProfile(id, { name, phone }) {
   const result = await getPool().query(
     `UPDATE agents SET name = $2, phone = $3 WHERE id = $1
-     RETURNING id, name, email, role, active, phone, avatar_path, created_at`,
+     RETURNING id, name, email, role, active, can_manage_integrations, phone, avatar_path, created_at`,
     [id, name, phone || null]
   );
   if (result.rowCount === 0) return null;

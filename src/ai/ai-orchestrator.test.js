@@ -1210,6 +1210,24 @@ describe('perfil de triagem', () => {
 
   // A IA cumprimentava sem saudação ("vou encaminhar...") porque nada no
   // contexto dizia que horas são — o modelo não tem relógio.
+  // Sem esta linha, a triagem pede reinício de equipamento a quem está no meio
+  // de uma falha regional que a empresa já conhece.
+  test('com aviso de cidade, o contexto traz o aviso e a instrução da falha regional', async () => {
+    const sys = (await contexto({
+      avisoCidade: { cidade: 'Cândido Mendes', mensagem: 'Rompimento de fibra; equipe em campo.' },
+    })).messages[0].content;
+    expect(sys).toContain('AVISO ATIVO NA CIDADE DO CLIENTE (Cândido Mendes): Rompimento de fibra; equipe em campo.');
+    expect(sys).toMatch(/falha regional em andamento nessa cidade/);
+    expect(sys).toMatch(/NÃO peça verificações de equipamento/);
+    expect(sys).toMatch(/Se o assunto for outro, atenda normalmente/);
+  });
+
+  test('sem aviso de cidade, nenhuma das duas linhas aparece', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).not.toMatch(/AVISO ATIVO NA CIDADE DO CLIENTE/);
+    expect(sys).not.toMatch(/falha regional em andamento/);
+  });
+
   test('o contexto informa a hora de Brasília e a regra de saudação', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-09-13T13:05:00-03:00'));
     try {

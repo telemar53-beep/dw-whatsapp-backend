@@ -201,7 +201,7 @@ function horaDeBrasilia() {
 // pergunta por vez) e proibições próprias (nunca revelar fatura, valor,
 // endereço ou "pagamento confirmado" — isso vai só no resumo interno para o
 // atendente humano).
-async function montarContextoTriagem(config, identidade, triagem) {
+async function montarContextoTriagem(config, identidade, triagem, avisoCidade) {
   // Guarda defensiva: um identidade null/undefined não pode derrubar a
   // montagem do contexto — cai no mesmo tratamento de "não identificado".
   identidade = identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
@@ -228,6 +228,15 @@ async function montarContextoTriagem(config, identidade, triagem) {
     // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
     `Agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois.`,
   ];
+  // A empresa já sabe da falha: mandar o cliente reiniciar o roteador é perder
+  // o tempo dele e o nosso. O aviso entra cedo no contexto, antes de qualquer
+  // roteiro de suporte, porque é ele que muda o roteiro.
+  if (avisoCidade) {
+    linhas.push(
+      `AVISO ATIVO NA CIDADE DO CLIENTE (${avisoCidade.cidade}): ${avisoCidade.mensagem}`,
+      'Se ele reclamar de internet lenta, caindo ou sem acesso: informe que há uma falha regional em andamento nessa cidade (use o aviso acima), NÃO peça verificações de equipamento, NÃO prometa previsão, e conclua para o Suporte na mesma resposta com "falha regional" no resumo. Se o assunto for outro, atenda normalmente.',
+    );
+  }
   // Fora do horário comercial não há ninguém para "continuar daqui": o modelo
   // precisa saber disso ANTES de escrever qualquer promessa ao cliente.
   if (triagem && triagem.noturno && triagem.noturno.ativo) {
@@ -375,7 +384,7 @@ async function montarContextoTriagem(config, identidade, triagem) {
   return linhas.join('\n');
 }
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
 
@@ -398,7 +407,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem), registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
     };
-    systemContent = await montarContextoTriagem(config, identidadeEfetiva, triagem);
+    systemContent = await montarContextoTriagem(config, identidadeEfetiva, triagem, avisoCidade);
   } else {
     const permissoes = await listToolPermissions();
     const habilitadas = permissoes.filter((p) => p.enabled).map((p) => p.toolName);

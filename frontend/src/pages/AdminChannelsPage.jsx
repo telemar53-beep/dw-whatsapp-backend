@@ -335,7 +335,7 @@ function AdminChannelsPage() {
   const section = SECTIONS.find((item) => item.value === activeTab) || SECTIONS[0];
 
   function sectionButtonClass(value) {
-    return `relative flex w-auto shrink-0 items-center whitespace-nowrap rounded-[12px] px-3 py-[7px] text-left text-[14px] transition md:w-full ${
+    return `relative flex w-auto shrink-0 items-center whitespace-nowrap rounded-[12px] px-2.5 py-[7px] text-left text-[14px] transition md:w-full ${
       activeTab === value
         ? 'bg-white/[0.10] font-medium text-chat-text'
         : 'text-chat-muted hover:bg-white/[0.05] hover:text-chat-text'
@@ -358,16 +358,16 @@ function AdminChannelsPage() {
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:flex-row">
 
-        <aside className="flex min-w-0 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.09] backdrop-blur-2xl md:w-[224px] md:shrink-0">
-          <div className="shrink-0 px-4 pb-2 pt-4 md:pb-2 md:pt-5">
+        <aside className="flex min-w-0 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.09] backdrop-blur-2xl md:w-[184px] md:shrink-0">
+          <div className="shrink-0 px-3.5 pb-2 pt-4 md:pb-2 md:pt-5">
             <h1 className="font-display text-[18px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
               Administração
             </h1>
           </div>
-          <nav className="chat-scroll flex min-h-0 gap-1 overflow-x-auto px-2 pb-3 md:flex-1 md:flex-col md:gap-0 md:overflow-x-hidden md:overflow-y-auto md:pb-4">
+          <nav className="chat-scroll flex min-h-0 gap-1 overflow-x-auto px-2 pb-3 md:flex-1 md:flex-col md:gap-0 md:overflow-x-hidden md:overflow-y-auto md:px-1.5 md:pb-4">
             {SECTION_GROUPS.map((group) => (
               <div key={group.group} className="flex gap-1 md:block">
-                <p className="hidden px-3 pb-1 pt-3.5 text-[11.5px] font-medium text-chat-faint md:block">{group.group}</p>
+                <p className="hidden px-2.5 pb-1 pt-3.5 text-[11.5px] font-medium text-chat-faint md:block">{group.group}</p>
                 {group.items.map((item) => (
                   <button
                     key={item.value}

@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth, requireRole } = require('../auth/auth.middleware');
+const { requireAuth, requireIntegrationsAccess } = require('../auth/auth.middleware');
 const {
   listSgpIntegrations,
   createSgpIntegration,
@@ -28,12 +28,12 @@ function modeForChannel(channel) {
   return isOfficialChannelType(channel.type) ? 'template' : 'freetext';
 }
 
-router.get('/sgp', requireAuth, requireRole('admin'), async (req, res) => {
+router.get('/sgp', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const integrations = await listSgpIntegrations();
   res.json(integrations.map(toIntegrationResponse));
 });
 
-router.post('/sgp', requireAuth, requireRole('admin'), async (req, res) => {
+router.post('/sgp', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const { description, channelId, defaultTemplateId, enabled } = req.body || {};
   if (typeof description !== 'string' || !description.trim()) {
     return res.status(400).json({ error: 'description is required' });
@@ -62,7 +62,7 @@ router.post('/sgp', requireAuth, requireRole('admin'), async (req, res) => {
   res.status(201).json(toIntegrationResponse(integration));
 });
 
-router.put('/sgp/:id', requireAuth, requireRole('admin'), async (req, res) => {
+router.put('/sgp/:id', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const { description, channelId, defaultTemplateId, enabled } = req.body || {};
   if (typeof description !== 'string' || !description.trim()) {
     return res.status(400).json({ error: 'description is required' });
@@ -94,7 +94,7 @@ router.put('/sgp/:id', requireAuth, requireRole('admin'), async (req, res) => {
   res.json(toIntegrationResponse(integration));
 });
 
-router.post('/sgp/:id/rotate-key', requireAuth, requireRole('admin'), async (req, res) => {
+router.post('/sgp/:id/rotate-key', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const rotated = await rotateSgpApiKey(req.params.id);
   if (!rotated) {
     return res.status(404).json({ error: 'Integration not found' });
@@ -126,12 +126,12 @@ function textoOuNulo(valor) {
   return typeof valor === 'string' && valor.trim() ? valor.trim() : null;
 }
 
-router.get('/sgp-query-config', requireAuth, requireRole('admin'), async (req, res) => {
+router.get('/sgp-query-config', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const config = await getSgpQueryConfig();
   res.json(toQueryConfigResponse(config));
 });
 
-router.put('/sgp-query-config', requireAuth, requireRole('admin'), async (req, res) => {
+router.put('/sgp-query-config', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const { baseUrl, app, token, enabled, pixMerchantName, pixMerchantKey, pixMerchantKeyType } = req.body || {};
   if (typeof baseUrl !== 'string' || !baseUrl.trim()) {
     return res.status(400).json({ error: 'baseUrl is required' });

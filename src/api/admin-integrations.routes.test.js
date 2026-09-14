@@ -21,8 +21,8 @@ function buildApp() {
   return app;
 }
 
-function tokenFor(agentId, role) {
-  return jwt.sign({ agentId, role }, process.env.JWT_SECRET);
+function tokenFor(agentId, role, canManageIntegrations = false) {
+  return jwt.sign({ agentId, role, canManageIntegrations }, process.env.JWT_SECRET);
 }
 
 const BAILEYS_CHANNEL = { id: 'channel-1', type: 'baileys' };
@@ -59,6 +59,22 @@ describe('GET /api/admin/integrations/sgp', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(403);
     expect(listSgpIntegrations).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/integrations/sgp')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
+    expect(res.status).toBe(403);
+    expect(listSgpIntegrations).not.toHaveBeenCalled();
+  });
+
+  test('returns 200 for a manager with canManageIntegrations', async () => {
+    listSgpIntegrations.mockResolvedValue([]);
+    const res = await request(buildApp())
+      .get('/api/admin/integrations/sgp')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager', true)}`);
+    expect(res.status).toBe(200);
   });
 });
 
@@ -157,6 +173,15 @@ describe('POST /api/admin/integrations/sgp', () => {
     expect(res.status).toBe(403);
     expect(createSgpIntegration).not.toHaveBeenCalled();
   });
+
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/integrations/sgp')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ description: 'Baileys', channelId: 'channel-1', enabled: true });
+    expect(res.status).toBe(403);
+    expect(createSgpIntegration).not.toHaveBeenCalled();
+  });
 });
 
 describe('PUT /api/admin/integrations/sgp/:id', () => {
@@ -205,6 +230,15 @@ describe('PUT /api/admin/integrations/sgp/:id', () => {
     expect(res.status).toBe(403);
     expect(updateSgpIntegration).not.toHaveBeenCalled();
   });
+
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .put('/api/admin/integrations/sgp/int-1')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ description: 'x', channelId: 'channel-1', enabled: true });
+    expect(res.status).toBe(403);
+    expect(updateSgpIntegration).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/admin/integrations/sgp/:id/rotate-key', () => {
@@ -237,6 +271,14 @@ describe('POST /api/admin/integrations/sgp/:id/rotate-key', () => {
     const res = await request(buildApp())
       .post('/api/admin/integrations/sgp/int-1/rotate-key')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+    expect(rotateSgpApiKey).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/integrations/sgp/int-1/rotate-key')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
     expect(res.status).toBe(403);
     expect(rotateSgpApiKey).not.toHaveBeenCalled();
   });
@@ -284,6 +326,14 @@ describe('GET /api/admin/integrations/sgp-query-config', () => {
     const res = await request(buildApp())
       .get('/api/admin/integrations/sgp-query-config')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    expect(res.status).toBe(403);
+    expect(getSgpQueryConfig).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
     expect(res.status).toBe(403);
     expect(getSgpQueryConfig).not.toHaveBeenCalled();
   });
@@ -397,6 +447,15 @@ describe('PUT /api/admin/integrations/sgp-query-config', () => {
     const res = await request(buildApp())
       .put('/api/admin/integrations/sgp-query-config')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ baseUrl: 'https://x.example', app: 'chatmix', token: 'tok', enabled: true });
+    expect(res.status).toBe(403);
+    expect(upsertSgpQueryConfig).not.toHaveBeenCalled();
+  });
+
+  test('returns 403 for a manager without canManageIntegrations', async () => {
+    const res = await request(buildApp())
+      .put('/api/admin/integrations/sgp-query-config')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
       .send({ baseUrl: 'https://x.example', app: 'chatmix', token: 'tok', enabled: true });
     expect(res.status).toBe(403);
     expect(upsertSgpQueryConfig).not.toHaveBeenCalled();

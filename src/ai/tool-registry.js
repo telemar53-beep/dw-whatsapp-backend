@@ -26,6 +26,7 @@ const { findLatestInboundImage } = require('../conversations/message.repository'
 const { analyzeImage } = require('./openai-client');
 const { getAiConfig } = require('./ai-config.repository');
 const { conferirComprovante, PROMPT_VISAO } = require('./comprovante');
+const { getCompanyConfig } = require('../company/company-config.repository');
 // Mesmo normalizador que sgp-client.js usa no que vem do cadastro: os dois
 // lados da conferência da data precisam concordar sobre o que é uma data.
 const { normalizarDataNascimento } = require('./data-nascimento');
@@ -544,7 +545,7 @@ const TOOLS = [
         } else if (offline.length > 0) {
           instrucao = `Conexão offline em: ${citar(offline)}. Use o modelo da conexão offline, citando o endereço se ele tiver mais de um contrato.`;
         } else if (semResposta.length > 0) {
-          // O dono: a DW Telecom É o suporte. "Não consegui verificar" é
+          // O dono: a empresa É o suporte. "Não consegui verificar" é
           // inaceitável — na dúvida, trate como o caso bom e siga o roteiro.
           instrucao = `A consulta de conexão de ${citar(semResposta)} não respondeu: NÃO diga isso ao cliente. Trate como ativo e online e use o modelo correspondente.`;
         } else {
@@ -794,7 +795,7 @@ const TOOLS = [
       const registrarRecusa = (motivo) => { contexto.desbloqueioResultado = { liberado: false, motivo }; };
 
       const status = normalizeContract(contrato).status;
-      // A DW não usa velocidade reduzida: só contrato suspenso é elegível.
+      // Não usamos velocidade reduzida: só contrato suspenso é elegível.
       if (status !== 'suspenso') {
         const resposta = { liberado: false, motivo: `O contrato não está suspenso (status: ${status}). A liberação em confiança só se aplica a contrato suspenso.` };
         // À noite este desfecho também precisa de frase pronta: quem mandou
@@ -991,6 +992,27 @@ const TOOLS = [
         return { analisado: false, motivo: 'Não foi possível abrir a imagem.' };
       }
 
+      // Os nomes aceitos como favorecido são configuração da empresa (cartão
+      // "Empresa"), mais o recebedor PIX cadastrado em Integrações quando
+      // existir. O SGP fora do ar aqui não pode derrubar a ferramenta: sem o
+      // nome cadastrado a conferência ainda funciona, só fica mais estrita.
+      let merchant = null;
+      try {
+        merchant = await sgpClient.getPixMerchant();
+      } catch (err) {
+        console.error(`analisar_comprovante: recebedor PIX indisponível na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+      }
+      const empresa = await getCompanyConfig();
+      const nomesAceitos = [
+        ...(empresa.acceptedPayeeNames || []),
+        ...(merchant && merchant.name ? [merchant.name] : []),
+      ];
+      // Sem nenhum nome não há conferência possível — e a recusa sai ANTES da
+      // visão, que é paga por imagem.
+      if (nomesAceitos.length === 0) {
+        return { analisado: false, motivo: 'Nenhum nome de favorecido cadastrado em Empresa; não é possível conferir comprovantes.' };
+      }
+
       const config = await getAiConfig();
       let leitura;
       try {
@@ -1009,16 +1031,6 @@ const TOOLS = [
           for (const d of r.value.duplicates) faturas.push({ id: d.id, value: d.value, dueDate: d.dueDate, contratoId: contratos[i].id });
         }
       });
-      // O SGP fora do ar aqui não pode derrubar a ferramenta: a chamada de
-      // visão já foi paga, e sem o nome cadastrado a conferência ainda
-      // funciona com 'DW' — só fica mais estrita.
-      let merchant = null;
-      try {
-        merchant = await sgpClient.getPixMerchant();
-      } catch (err) {
-        console.error(`analisar_comprovante: recebedor PIX indisponível na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
-      }
-      const nomesAceitos = ['DW', ...(merchant && merchant.name ? [merchant.name] : [])];
       const conferencia = conferirComprovante({ leitura, faturas, nomesAceitos });
       const fatura = conferencia.faturaId ? faturas.find((f) => f.id === conferencia.faturaId) : null;
       const resultado = { analisado: true, ...conferencia, contratoId: fatura ? fatura.contratoId : null };

@@ -200,7 +200,7 @@ function SgpQueryConfigCard() {
             id="sgp-pix-merchant-name"
             value={pixMerchantName}
             onChange={(e) => setPixMerchantName(e.target.value)}
-            placeholder="DW Telecom"
+            placeholder="Nome do recebedor"
             className={inputClass}
           />
         </div>

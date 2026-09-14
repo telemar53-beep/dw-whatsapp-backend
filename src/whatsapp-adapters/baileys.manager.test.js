@@ -16,6 +16,7 @@ jest.mock('../media/media-storage', () => ({
   getMediaFilePath: jest.fn(),
 }));
 jest.mock('../realtime/socket-server');
+jest.mock('../company/company-config.repository');
 jest.mock('../config/env');
 jest.mock('fs', () => ({
   ...jest.requireActual('fs'),
@@ -36,6 +37,7 @@ const { ingestInboundMessage } = require('../conversations/inbound-message.servi
 const { setContactAvatarPath, claimContactAvatarRefresh, findContactByPhoneNumber } = require('../conversations/contact.repository');
 const { applyParsedMessageStatusUpdates } = require('../conversations/message-status.service');
 const { broadcast } = require('../realtime/socket-server');
+const { getCompanyConfig } = require('../company/company-config.repository');
 const manager = require('./baileys.manager');
 
 function createMockSock() {
@@ -58,6 +60,9 @@ describe('baileys.manager', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     loadConfig.mockReturnValue({ baileysSessionsDir: '/sessions' });
+    // O nome do recebedor do cartao de Pix cai na empresa cadastrada quando
+    // nao ha recebedor PIX proprio.
+    getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: [] });
     baileysLib.useMultiFileAuthState.mockResolvedValue({ state: {}, saveCreds: jest.fn() });
     ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-default' }, contactJustCreated: false });
     // Por padrão o contato ainda não foi conferido: a trava libera a busca.
@@ -948,16 +953,20 @@ describe('baileys.manager', () => {
       const sock = createMockSock();
       sock.user = { id: '5511999990000:1@s.whatsapp.net' };
       baileysLib.default.mockReturnValue(sock);
-      const channel = { id: 'channel-pix', type: 'baileys', name: 'DW Telecom' };
+      const channel = { id: 'channel-pix', type: 'baileys', name: 'automacao' };
       await manager.startBaileysConnection(channel);
 
       const result = await manager.sendPixCardMessage(channel, '5511999993333', CARD);
 
       expect(baileysLib.generateWAMessageFromContent).toHaveBeenCalledWith(
         '5511999993333@s.whatsapp.net',
-        manager.buildPixNativeFlowContent(CARD, channel),
+        manager.buildPixNativeFlowContent(CARD, channel, 'Provedor X'),
         { userJid: '5511999990000:1@s.whatsapp.net' }
       );
+      // O nome da empresa cadastrada, e nao o do canal, e o que o cliente le.
+      const enviado = baileysLib.generateWAMessageFromContent.mock.calls[0][1];
+      const paramsEnviados = JSON.parse(enviado.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson);
+      expect(paramsEnviados.payment_settings[0].pix_static_code.merchant_name).toBe('Provedor X');
       // O que faz o cartão renderizar no celular: o envelope multi-device e os nós
       // biz/bot na retransmissão. Sem eles (1º teste real) a mensagem aparecia no
       // chat e nunca chegava ao cliente.
@@ -991,7 +1000,7 @@ describe('baileys.manager', () => {
 
     test('a chave do bot\u00e3o payment_info \u00e9 o pr\u00f3prio copia e cola, com tipo EVP', () => {
       // O nome do canal ("automação") não pode virar o nome do recebedor no cartão.
-      const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'automação' });
+      const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'automação' }, 'Provedor X');
       const botoes = content.interactiveMessage.nativeFlowMessage.buttons;
       expect(botoes).toHaveLength(1);
       expect(botoes[0].name).toBe('payment_info');
@@ -1000,7 +1009,7 @@ describe('baileys.manager', () => {
       expect(params.payment_settings[0].type).toBe('pix_static_code');
       expect(params.payment_settings[0].pix_static_code.key).toBe(CARD.pixCode);
       expect(params.payment_settings[0].pix_static_code.key_type).toBe('EVP');
-      expect(params.payment_settings[0].pix_static_code.merchant_name).toBe('DW Telecom');
+      expect(params.payment_settings[0].pix_static_code.merchant_name).toBe('Provedor X');
       expect(params.total_amount).toEqual({ value: 13500, offset: 100 });
       expect(params.reference_id).toBe('4321');
       expect(params.currency).toBe('BRL');
@@ -1017,20 +1026,27 @@ describe('baileys.manager', () => {
 
     test('o recebedor cadastrado, quando existe, aparece como merchant_name', () => {
       const content = manager.buildPixNativeFlowContent(
-        { ...CARD, merchant: { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' } },
-        { id: 'channel-pix', name: 'DW Telecom' }
+        { ...CARD, merchant: { name: 'PROVEDOR X LTDA', key: '12345678000199', keyType: 'CNPJ' } },
+        { id: 'channel-pix', name: 'automacao' },
+        'Provedor X'
       );
       const params = JSON.parse(content.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson);
-      expect(params.payment_settings[0].pix_static_code.merchant_name).toBe('DW TELECOM LTDA');
+      expect(params.payment_settings[0].pix_static_code.merchant_name).toBe('PROVEDOR X LTDA');
       // A chave continua sendo o copia e cola: no Baileys o cadastro nao entra no lugar dela.
       expect(params.payment_settings[0].pix_static_code.key).toBe(CARD.pixCode);
+    });
+
+    test('sem recebedor e sem empresa cadastrada, sobra o nome do canal', () => {
+      const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'Provedor do Bairro' }, '');
+      const params = JSON.parse(content.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson);
+      expect(params.payment_settings[0].pix_static_code.merchant_name).toBe('Provedor do Bairro');
     });
 
     test('o conte\u00fado \u00e9 o interactiveMessage cru, sem envelope viewOnce', () => {
       // O envelope multi-device e os n\u00f3s biz/bot entram s\u00f3 na retransmiss\u00e3o
       // (sendPixCardMessage); embrulhar aqui em viewOnceMessage era o que fazia o
       // celular descartar o cart\u00e3o no 1\u00ba teste real.
-      const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'DW Telecom' });
+      const content = manager.buildPixNativeFlowContent(CARD, { id: 'channel-pix', name: 'automacao' }, 'Provedor X');
       expect(Object.keys(content)).toEqual(['interactiveMessage']);
       expect(content.interactiveMessage.nativeFlowMessage.messageVersion).toBe(1);
       // Título, corpo e rodapé são o texto visível do cartão no celular.

@@ -16,6 +16,7 @@ jest.mock('./triage-close-reason');
 jest.mock('../conversations/message.repository');
 jest.mock('./openai-client');
 jest.mock('../cities/contact-city.service');
+jest.mock('../company/company-config.repository');
 jest.mock('../city-notices/city-notice.service');
 
 const sgpClient = require('../integrations/sgp-client');
@@ -39,6 +40,7 @@ const { findLatestInboundImage } = require('../conversations/message.repository'
 const { analyzeImage } = require('./openai-client');
 const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
+const { getCompanyConfig } = require('../company/company-config.repository');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
@@ -2201,7 +2203,7 @@ describe('analisar_comprovante', () => {
   const hojeEmSaoPaulo = () => new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date());
-  const LEITURA = { ehComprovante: true, tipo: 'pix', valor: 135, data: hojeEmSaoPaulo(), favorecido: 'DW TELECOM LTDA', banco: 'Nubank', confianca: 0.95 };
+  const LEITURA = { ehComprovante: true, tipo: 'pix', valor: 135, data: hojeEmSaoPaulo(), favorecido: 'PROVEDOR X LTDA', banco: 'Nubank', confianca: 0.95 };
   const ctx = (extra = {}) => ({
     conversationId: 'c-1',
     contracts: [{ id: 17402, address: 'RUA X' }],
@@ -2221,7 +2223,8 @@ describe('analisar_comprovante', () => {
     getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x' });
     analyzeImage.mockResolvedValue({ ...LEITURA });
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '4321', value: 135, dueDate: '2026-09-16' }] });
-    sgpClient.getPixMerchant.mockResolvedValue({ name: 'DW TELECOM LTDA', key: '12345', keyType: 'cnpj' });
+    sgpClient.getPixMerchant.mockResolvedValue({ name: 'PROVEDOR X LTDA', key: '12345', keyType: 'cnpj' });
+    getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: ['Provedor X Ltda'] });
   });
 
   afterEach(() => {
@@ -2354,22 +2357,41 @@ describe('analisar_comprovante', () => {
     expect(r.analisado).toBe(true);
     expect(r.valido).toBe(false);
     expect(r.motivos).toEqual(expect.arrayContaining([
-      'favorecido não é a DW', 'valor não corresponde a nenhuma fatura em aberto',
+      'favorecido não confere com os nomes cadastrados da empresa', 'valor não corresponde a nenhuma fatura em aberto',
     ]));
     expect(r.contratoId).toBeNull();
     expect(c.comprovante.valido).toBe(false);
   });
 
-  test('sem recebedor PIX cadastrado em Integrações, o nome DW ainda é aceito', async () => {
+  test('sem recebedor PIX cadastrado em Integrações, os nomes de Empresa ainda conferem', async () => {
     sgpClient.getPixMerchant.mockResolvedValue(null);
     const r = await findTool('analisar_comprovante').executar({}, ctx());
     expect(r.favorecidoConfere).toBe(true);
   });
 
-  // Fix round 1, achado 2: getPixMerchant ficava fora de qualquer proteção,
-  // depois do allSettled. Uma rejeição derrubava executar e jogava fora a
-  // chamada de visão que já tinha sido paga à OpenAI.
-  test('recebedor PIX indisponível no SGP não joga fora a leitura já paga', async () => {
+  test('o recebedor PIX cadastrado entra na lista junto com os nomes de Empresa', async () => {
+    getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: [] });
+    sgpClient.getPixMerchant.mockResolvedValue({ name: 'PROVEDOR X LTDA', key: '12345', keyType: 'cnpj' });
+    const r = await findTool('analisar_comprovante').executar({}, ctx());
+    expect(r.favorecidoConfere).toBe(true);
+  });
+
+  // Sem nenhum nome cadastrado nada pode conferir: a recusa sai ANTES da
+  // visão, que é paga por imagem.
+  test('sem nenhum nome de favorecido cadastrado, recusa antes de gastar a visão', async () => {
+    getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
+    sgpClient.getPixMerchant.mockResolvedValue(null);
+    const c = ctx();
+    const r = await findTool('analisar_comprovante').executar({}, c);
+    expect(r).toEqual({ analisado: false, motivo: 'Nenhum nome de favorecido cadastrado em Empresa; não é possível conferir comprovantes.' });
+    expect(analyzeImage).not.toHaveBeenCalled();
+    expect(c.comprovante).toBeUndefined();
+  });
+
+  // Fix round 1, achado 2: getPixMerchant ficava fora de qualquer proteção.
+  // Uma rejeição derrubava executar — hoje ela acontece antes da visão, mas
+  // continua não podendo derrubar a conferência: os nomes de Empresa bastam.
+  test('recebedor PIX indisponível no SGP não derruba a conferência', async () => {
     sgpClient.getPixMerchant.mockRejectedValue(new Error('SGP fora do ar'));
     const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const c = ctx();

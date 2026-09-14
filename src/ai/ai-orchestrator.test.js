@@ -7,6 +7,7 @@ jest.mock('../reasons/reason.repository');
 jest.mock('../sectors/sector.repository');
 jest.mock('../integrations/sgp-client');
 jest.mock('./trust-unlock.repository');
+jest.mock('../company/company-config.repository');
 
 const { createChatCompletion } = require('./openai-client');
 const { executeTool } = require('./tool-executor');
@@ -17,6 +18,7 @@ const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
+const { getCompanyConfig } = require('../company/company-config.repository');
 const { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO } = require('./ai-orchestrator');
 
 const CONVERSATION = { id: 'c-1', channelId: 'ch-1' };
@@ -26,7 +28,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   getAiConfig.mockResolvedValue({
     apiKey: 'sk', model: 'gpt-x', mode: 'assistant',
-    systemPrompt: 'Você é a assistente da DW Telecom.', maxToolsPerInteraction: 8,
+    systemPrompt: 'Você é a assistente do provedor.', maxToolsPerInteraction: 8,
   });
   listToolPermissions.mockResolvedValue([{ toolName: 'consultar_plano', enabled: true }]);
   listRecentMessagesByConversation.mockResolvedValue([
@@ -37,6 +39,7 @@ beforeEach(() => {
   recordAiInteraction.mockResolvedValue({ id: 'i-1' });
   // Padrão: nenhuma liberação em confiança recente para o contato.
   hasRecentTrustUnlockByContact.mockResolvedValue(false);
+  getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: [] });
 });
 
 describe('ai-orchestrator', () => {
@@ -1044,11 +1047,20 @@ describe('perfil de triagem', () => {
 
   // Para o dono, "não consegui confirmar aqui o status da conexão... posso
   // encaminhar para o suporte verificar" é inaceitável: a empresa É o suporte.
-  test('proíbe dizer ao cliente que não conseguiu verificar algo', async () => {
+  test('proíbe dizer ao cliente que não conseguiu verificar algo, citando a empresa cadastrada', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).toMatch(/NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo/);
-    expect(sys).toMatch(/a DW Telecom é o suporte/);
+    expect(sys).toMatch(/a Provedor X é o suporte/);
     expect(sys).toMatch(/Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica/);
+  });
+
+  // Sem empresa cadastrada a frase continua fazendo sentido — e nenhum nome
+  // de provedor fica embutido no código.
+  test('sem nome cadastrado, a frase cai no genérico "a empresa"', async () => {
+    getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/a empresa é o suporte/);
+    expect(sys).not.toMatch(/DW/);
   });
 
   // Teste real (2026-09-13): com vários contratos o Suporte estourou o teto de

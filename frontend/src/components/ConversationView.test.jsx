@@ -44,9 +44,23 @@ beforeEach(() => {
     refresh: vi.fn(),
   });
   useAiSuggestion.mockReturnValue({ suggestion: null, send: vi.fn(), edit: vi.fn(), discard: vi.fn() });
+  // O aviso do topo do chat cita a empresa cadastrada.
+  api.getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: [] });
 });
 
 describe('ConversationView', () => {
+  // O nome do provedor e configuracao: o sistema roda em mais de uma empresa.
+  test('o aviso do topo cita a empresa cadastrada', async () => {
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+    expect(await screen.findByText('Este atendimento fica registrado no sistema da Provedor X.')).toBeInTheDocument();
+  });
+
+  test('sem empresa cadastrada, o aviso do topo fica generico', async () => {
+    api.getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+    expect(await screen.findByText('Este atendimento fica registrado no sistema da empresa.')).toBeInTheDocument();
+  });
+
   test('renders the message history', () => {
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
     expect(screen.getByText('Oi, preciso de ajuda')).toBeInTheDocument();

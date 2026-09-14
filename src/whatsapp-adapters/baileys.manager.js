@@ -9,6 +9,7 @@ const { applyParsedMessageStatusUpdates } = require('../conversations/message-st
 const { saveMediaFile, deleteMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
 const { broadcast } = require('../realtime/socket-server');
 const { formatarData, formatarValor } = require('../payments/payment-card');
+const { getCompanyConfig } = require('../company/company-config.repository');
 
 function loadBaileysLib() {
   return require('@whiskeysockets/baileys');
@@ -494,7 +495,7 @@ async function sendTextMessage(channel, toPhoneNumber, content, replyContext = {
  * celular descarta em silêncio — foi exatamente o que aconteceu no primeiro
  * teste real (2026-09-13): a mensagem aparecia no chat e nunca chegava.
  */
-function buildPixNativeFlowContent(card, channel) {
+function buildPixNativeFlowContent(card, channel, empresa) {
   const centavos = Math.round(Number(card.value) * 100);
   const referenceId = String(card.faturaId || `PIX${Date.now()}`);
   const titulo = `Fatura · vence ${formatarData(card.dueDate)}`;
@@ -528,8 +529,10 @@ function buildPixNativeFlowContent(card, channel) {
                   type: 'pix_static_code',
                   pix_static_code: {
                     // O nome do canal ("automação", "principal"…) não é nome de
-                    // recebedor: no 2º teste real ele apareceu no cabeçalho do cartão.
-                    merchant_name: (card.merchant && card.merchant.name) || 'DW Telecom',
+                    // recebedor: no 2º teste real ele apareceu no cabeçalho do
+                    // cartão. Por isso a ordem: recebedor PIX cadastrado, nome
+                    // da empresa configurado e, só em último caso, o canal.
+                    merchant_name: (card.merchant && card.merchant.name) || empresa || (channel && channel.name) || '',
                     key: card.pixCode,
                     key_type: 'EVP',
                   },
@@ -566,7 +569,9 @@ async function sendPixCardMessage(channel, toPhoneNumber, card) {
   }
   const { generateWAMessageFromContent } = loadBaileysLib();
   const jid = `${toPhoneNumber}@s.whatsapp.net`;
-  const content = buildPixNativeFlowContent(card, channel);
+  // O builder é puro: quem lê a configuração é esta função.
+  const empresa = await getCompanyConfig();
+  const content = buildPixNativeFlowContent(card, channel, empresa.name);
   const msg = generateWAMessageFromContent(jid, content, { userJid: entry.sock.user && entry.sock.user.id });
   // Envelope multi-device: é assim que o WhatsApp Web empacota botões e
   // mensagens interativas para os outros aparelhos da conta aceitarem.

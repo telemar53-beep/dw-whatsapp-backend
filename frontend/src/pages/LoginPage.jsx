@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getPublicCompany } from '../services/api';
 
 function SignalMark() {
   return (
@@ -31,6 +32,21 @@ function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // O nome da empresa vem da rota pública: aqui ainda não existe token. Sem
+  // nome cadastrado (ou com a rota fora do ar) a tela continua de pé.
+  const [companyName, setCompanyName] = useState('');
+
+  useEffect(() => {
+    let ativo = true;
+    getPublicCompany()
+      .then((data) => {
+        if (ativo) setCompanyName((data && data.name) || '');
+      })
+      .catch(() => {});
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -68,7 +84,7 @@ function LoginPage() {
               <SignalMark />
             </span>
             <h1 className="font-display text-[22px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
-              DW Telecom
+              {companyName || 'Atendimento'}
             </h1>
             <p className="mt-1.5 text-[14px] text-chat-muted">Painel de atendimento</p>
           </div>
@@ -121,7 +137,9 @@ function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-[12.5px] text-chat-faint">
-          Acesso restrito à equipe de atendimento da DW Telecom.
+          {companyName
+            ? `Acesso restrito à equipe de atendimento da ${companyName}.`
+            : 'Acesso restrito à equipe de atendimento.'}
         </p>
       </div>
     </div>

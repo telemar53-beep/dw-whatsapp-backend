@@ -71,7 +71,7 @@ app.get('/health', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.json({ message: 'API WhatsApp DW Telecom' });
+  res.json({ message: 'API WhatsApp' });
 });
 
 app.use(globalLimiter);

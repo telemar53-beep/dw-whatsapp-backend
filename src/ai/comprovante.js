@@ -22,10 +22,11 @@ function escaparRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Nome curto casa por PALAVRA INTEIRA: 'DW' como substring aceitava
-// 'EDWARD SILVA ME' como favorecido. Nome maior (o recebedor PIX cadastrado,
-// tipo 'DW Telecom Ltda') segue por substring, porque o banco costuma cercar
-// o nome de prefixos e sufixos ('PAGAMENTO A ... ME').
+// Nome curto casa por PALAVRA INTEIRA: uma sigla de duas letras como
+// substring aceitava qualquer favorecido que a contivesse no meio de outra
+// palavra. Nome maior (a razão social, o recebedor PIX cadastrado) segue por
+// substring, porque o banco costuma cercar o nome de prefixos e sufixos
+// ('PAGAMENTO A ... ME').
 function nomeCasa(favorecido, nome) {
   const n = semAcento(nome);
   if (!n) return false;
@@ -73,7 +74,7 @@ function conferirComprovante({ leitura, faturas, nomesAceitos, hoje = new Date()
 
   const favorecido = semAcento(l.favorecido);
   const favorecidoConfere = Boolean(favorecido) && (nomesAceitos || []).some((n) => nomeCasa(favorecido, n));
-  if (!favorecidoConfere) motivos.push('favorecido não é a DW');
+  if (!favorecidoConfere) motivos.push('favorecido não confere com os nomes cadastrados da empresa');
 
   const dataOk = typeof l.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.data);
   const dias = dataOk ? diasEntre(l.data, hoje) : null;

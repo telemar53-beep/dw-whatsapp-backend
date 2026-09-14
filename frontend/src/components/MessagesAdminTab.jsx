@@ -773,7 +773,7 @@ function MessagesAdminTab() {
               canal — antes de qualquer outra automação.
             </p>
             <p className="mt-2 italic">
-              Exemplo: "Olá! Bem-vindo à DW Telecom. Em instantes um atendente vai continuar o seu
+              Exemplo: "Olá! Bem-vindo à nossa empresa. Em instantes um atendente vai continuar o seu
               atendimento."
             </p>
           </SectionHelp>

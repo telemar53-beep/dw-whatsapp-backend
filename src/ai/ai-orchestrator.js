@@ -7,6 +7,7 @@ const { listRecentMessagesByConversation } = require('../conversations/message.r
 const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
+const { getCompanyConfig } = require('../company/company-config.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { mensagemSegura } = require('./safe-error-log');
 const { maskDocument, normalizeContract } = require('./sgp-normalizer');
@@ -205,6 +206,10 @@ function ferramentasDaTriagem(triagem, config) {
   return lista.filter((n) => n !== 'confirmar_nascimento');
 }
 
+// Sem empresa cadastrada a frase precisa continuar de pé: "a empresa é o
+// suporte" diz a mesma coisa sem nome nenhum embutido no código.
+const NOME_GENERICO_EMPRESA = 'empresa';
+
 function horaDeBrasilia() {
   return new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false,
@@ -217,7 +222,7 @@ function horaDeBrasilia() {
 // pergunta por vez) e proibições próprias (nunca revelar fatura, valor,
 // endereço ou "pagamento confirmado" — isso vai só no resumo interno para o
 // atendente humano).
-async function montarContextoTriagem(config, identidade, triagem, avisoCidade) {
+async function montarContextoTriagem(config, identidade, triagem, avisoCidade, empresa) {
   // Com a confirmação por data de nascimento desligada (o padrão), a data
   // não é citada em lugar nenhum do prompt: o CPF sozinho identifica.
   const exigeNascimento = Boolean(config && config.triageRequireBirthdate);
@@ -244,7 +249,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade) {
     // escreveu "não consegui confirmar aqui o status da conexão... posso
     // encaminhar para o suporte verificar". Para o dono, inaceitável: a
     // empresa É o suporte, não há para quem encaminhar "a verificação".
-    'NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo: a DW Telecom é o suporte. Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica.',
+    `NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo: a ${empresa || NOME_GENERICO_EMPRESA} é o suporte. Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica.`,
     // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
     // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
     `Agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois.`,
@@ -408,6 +413,9 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade) {
 async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
+  // Uma leitura por turno: o nome da empresa é configuração, não constante —
+  // o sistema roda em mais de um provedor.
+  const empresa = await getCompanyConfig();
 
   let tools;
   let contexto;
@@ -428,7 +436,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem, config), registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
     };
-    systemContent = await montarContextoTriagem(config, identidadeEfetiva, triagem, avisoCidade);
+    systemContent = await montarContextoTriagem(config, identidadeEfetiva, triagem, avisoCidade, empresa.name);
   } else {
     const permissoes = await listToolPermissions();
     const habilitadas = permissoes.filter((p) => p.enabled).map((p) => p.toolName);

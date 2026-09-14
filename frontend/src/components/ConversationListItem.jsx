@@ -26,7 +26,7 @@ function formatMessageTime(lastMessageAt) {
   return new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected }) {
+function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected, divided = true }) {
   const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
   const displayLabel = conversation.contactCityName ? `${nameLabel} - ${conversation.contactCityName}` : nameLabel;
   const previewText = getPreviewText(conversation);
@@ -129,7 +129,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
         )}
       </div>
       {/* A conversa aberta é um cartão inteiro; as demais ficam separadas por um fio. */}
-      {!selected && <span aria-hidden="true" className="mx-4 block h-px bg-white/[0.07]" />}
+      {divided && !selected && <span aria-hidden="true" className="mx-4 block h-px bg-white/[0.07]" />}
     </li>
   );
 }

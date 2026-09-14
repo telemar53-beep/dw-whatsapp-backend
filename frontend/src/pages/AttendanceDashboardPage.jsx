@@ -393,7 +393,13 @@ function AttendanceDashboardPage() {
           ) : (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08] [&>li]:backdrop-blur-2xl">
               {phoneSearchResult.conversations.map(withAgentName).map((conversation) => (
-                <ConversationListItem key={conversation.id} conversation={conversation} onSelect={openConversation} selected={false} />
+                <ConversationListItem
+                  key={conversation.id}
+                  conversation={conversation}
+                  onSelect={openConversation}
+                  selected={false}
+                  divided={false}
+                />
               ))}
             </ul>
           )}
@@ -431,7 +437,13 @@ function AttendanceDashboardPage() {
           ) : (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08] [&>li]:backdrop-blur-2xl">
               {displayClosed.map((conversation) => (
-                <ConversationListItem key={conversation.id} conversation={conversation} onSelect={openConversation} selected={false} />
+                <ConversationListItem
+                  key={conversation.id}
+                  conversation={conversation}
+                  onSelect={openConversation}
+                  selected={false}
+                  divided={false}
+                />
               ))}
             </ul>
           )}

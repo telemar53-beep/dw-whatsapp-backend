@@ -10,8 +10,8 @@ function ClosedConversationsModal({ onClose }) {
 
   return (
     <>
-      <WaDialog title="Atendimentos encerrados" onClose={onClose} size="max-w-md">
-        <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <WaDialog title="Atendimentos encerrados" onClose={onClose} size="max-w-[1500px]">
+        <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-1">
           <ClosedConversationsList
             conversations={items}
             onSelect={setSelectedConversation}

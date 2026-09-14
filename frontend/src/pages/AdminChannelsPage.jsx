@@ -335,7 +335,7 @@ function AdminChannelsPage() {
   const section = SECTIONS.find((item) => item.value === activeTab) || SECTIONS[0];
 
   function sectionButtonClass(value) {
-    return `relative flex w-auto shrink-0 items-center whitespace-nowrap rounded-[14px] px-3 py-2.5 text-left text-[14.5px] transition md:w-full ${
+    return `relative flex w-auto shrink-0 items-center whitespace-nowrap rounded-[12px] px-3 py-[7px] text-left text-[14px] transition md:w-full ${
       activeTab === value
         ? 'bg-white/[0.10] font-medium text-chat-text'
         : 'text-chat-muted hover:bg-white/[0.05] hover:text-chat-text'
@@ -358,17 +358,16 @@ function AdminChannelsPage() {
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:flex-row">
 
-        <aside className="flex min-w-0 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.09] backdrop-blur-2xl md:w-[250px] md:shrink-0">
-          <div className="shrink-0 px-5 pb-2 pt-4 md:pb-3 md:pt-6">
-            <h1 className="font-display text-[22px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
+        <aside className="flex min-w-0 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.09] backdrop-blur-2xl md:w-[224px] md:shrink-0">
+          <div className="shrink-0 px-4 pb-2 pt-4 md:pb-2 md:pt-5">
+            <h1 className="font-display text-[18px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
               Administração
             </h1>
-            <p className="mt-1.5 text-[13.5px] leading-[19px] text-chat-muted">Como o atendimento funciona</p>
           </div>
-          <nav className="chat-scroll flex min-h-0 gap-1 overflow-x-auto px-2 pb-3 md:flex-1 md:flex-col md:gap-0 md:overflow-x-hidden md:overflow-y-auto md:pb-5">
+          <nav className="chat-scroll flex min-h-0 gap-1 overflow-x-auto px-2 pb-3 md:flex-1 md:flex-col md:gap-0 md:overflow-x-hidden md:overflow-y-auto md:pb-4">
             {SECTION_GROUPS.map((group) => (
               <div key={group.group} className="flex gap-1 md:block">
-                <p className="hidden px-3 pb-1.5 pt-4 text-[12px] font-medium text-chat-faint md:block">{group.group}</p>
+                <p className="hidden px-3 pb-1 pt-3.5 text-[11.5px] font-medium text-chat-faint md:block">{group.group}</p>
                 {group.items.map((item) => (
                   <button
                     key={item.value}
@@ -377,7 +376,7 @@ function AdminChannelsPage() {
                     className={sectionButtonClass(item.value)}
                   >
                     {activeTab === item.value && (
-                      <span aria-hidden="true" className="absolute left-0 h-5 w-[3px] rounded-full bg-chat-orange" />
+                      <span aria-hidden="true" className="absolute left-0 h-4 w-[3px] rounded-full bg-chat-orange" />
                     )}
                     {item.label}
                   </button>

@@ -35,6 +35,15 @@ describe('AgentsAdminTab', () => {
     expect(screen.getByText('Desativado')).toBeInTheDocument();
   });
 
+  test('shows Gerente as the role label for a manager', () => {
+    useAgentsAdmin.mockReturnValue({
+      agents: [{ id: 'a1', name: 'Marcia', email: 'marcia@dw.com', role: 'manager', active: true, sectors: [] }],
+      refresh: vi.fn(),
+    });
+    render(<AgentsAdminTab />);
+    expect(screen.getByText(/Gerente/)).toBeInTheDocument();
+  });
+
   test('deactivates an active agent', async () => {
     const refresh = vi.fn();
     useAgentsAdmin.mockReturnValue({

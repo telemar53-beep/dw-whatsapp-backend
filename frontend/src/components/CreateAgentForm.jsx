@@ -12,6 +12,7 @@ function CreateAgentForm({ onCreated, onCancel }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('agent');
+  const [canManageIntegrations, setCanManageIntegrations] = useState(false);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,11 +21,16 @@ function CreateAgentForm({ onCreated, onCancel }) {
     setError(null);
     setSubmitting(true);
     try {
-      await createAgent({ name, email, password, role }, token);
+      const payload = { name, email, password, role };
+      if (role === 'manager') {
+        payload.canManageIntegrations = canManageIntegrations;
+      }
+      await createAgent(payload, token);
       setName('');
       setEmail('');
       setPassword('');
       setRole('agent');
+      setCanManageIntegrations(false);
       onCreated();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao cadastrar atendente');
@@ -88,9 +94,21 @@ function CreateAgentForm({ onCreated, onCancel }) {
           className={inputClass}
         >
           <option value="agent">Atendente</option>
+          <option value="manager">Gerente</option>
           <option value="admin">Administrador</option>
         </select>
       </div>
+      {role === 'manager' && (
+        <label className="flex items-center gap-2 text-sm text-wa-muted">
+          <input
+            type="checkbox"
+            checked={canManageIntegrations}
+            onChange={(e) => setCanManageIntegrations(e.target.checked)}
+            className="h-4 w-4 accent-wa-green"
+          />
+          Pode gerenciar Canais e Integrações
+        </label>
+      )}
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">
         <button

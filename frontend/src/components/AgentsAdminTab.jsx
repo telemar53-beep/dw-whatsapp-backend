@@ -68,7 +68,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
   }
 
   const sectorsText = agentRow.sectors.length > 0 ? agentRow.sectors.map((s) => s.name).join(', ') : 'Nenhum setor';
-  const roleLabel = agentRow.role === 'admin' ? 'Administrador' : 'Atendente';
+  const roleLabel = agentRow.role === 'admin' ? 'Administrador' : agentRow.role === 'manager' ? 'Gerente' : 'Atendente';
 
   return (
     <li className="p-3.5">

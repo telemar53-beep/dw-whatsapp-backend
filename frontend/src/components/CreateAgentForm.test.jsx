@@ -51,6 +51,54 @@ describe('CreateAgentForm', () => {
     );
   });
 
+  test('does not show the integrations checkbox for the agent or admin role', () => {
+    render(<CreateAgentForm onCreated={vi.fn()} />);
+    expect(screen.queryByLabelText(/pode gerenciar canais e integrações/i)).not.toBeInTheDocument();
+  });
+
+  test('shows the integrations checkbox when the manager role is selected', async () => {
+    render(<CreateAgentForm onCreated={vi.fn()} />);
+    await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'manager');
+    expect(screen.getByLabelText(/pode gerenciar canais e integrações/i)).toBeInTheDocument();
+  });
+
+  test('creates a manager with canManageIntegrations checked', async () => {
+    api.createAgent.mockResolvedValue({ id: 'a3' });
+    render(<CreateAgentForm onCreated={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText(/nome/i), 'Marcia Reis');
+    await userEvent.type(screen.getByLabelText(/email/i), 'marcia@dw.com');
+    await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp11223');
+    await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'manager');
+    await userEvent.click(screen.getByLabelText(/pode gerenciar canais e integrações/i));
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createAgent).toHaveBeenCalledWith(
+        { name: 'Marcia Reis', email: 'marcia@dw.com', password: 'temp11223', role: 'manager', canManageIntegrations: true },
+        'tok-123'
+      )
+    );
+  });
+
+  test('creates a manager with canManageIntegrations false when the checkbox is left unchecked', async () => {
+    api.createAgent.mockResolvedValue({ id: 'a4' });
+    render(<CreateAgentForm onCreated={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText(/nome/i), 'Nilo Reis');
+    await userEvent.type(screen.getByLabelText(/email/i), 'nilo@dw.com');
+    await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp44556');
+    await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'manager');
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createAgent).toHaveBeenCalledWith(
+        { name: 'Nilo Reis', email: 'nilo@dw.com', password: 'temp44556', role: 'manager', canManageIntegrations: false },
+        'tok-123'
+      )
+    );
+  });
+
   test('shows an error message when creation fails', async () => {
     api.createAgent.mockRejectedValue({ body: { error: 'Já existe um atendente com esse email' } });
     render(<CreateAgentForm onCreated={vi.fn()} />);

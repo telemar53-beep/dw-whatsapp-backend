@@ -54,8 +54,10 @@ describe('NightModePage', () => {
         triageTimeoutMinutes: 12,
         triageExtraInstructions: 'Pergunte o CPF antes de tudo',
         triageResolvedReasonId: null,
-        nightStartTime: '20:00',
-        nightEndTime: '08:00',
+        // Config sem janela: os campos nascem vazios e salvam null (não mais
+        // o padrão 20:00/08:00).
+        nightStartTime: null,
+        nightEndTime: null,
         triageRequireBirthdate: false,
         triageReadReceiptsDaytime: false,
       },
@@ -95,20 +97,24 @@ describe('NightModePage', () => {
   test('recusa meia janela: só o início preenchido', async () => {
     renderInShell(<NightModePage />, { path: PATH });
 
-    await userEvent.clear(screen.getByLabelText('Fim'));
+    await userEvent.type(screen.getByLabelText('Início'), '20:00');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar janela noturna' }));
 
     expect(await screen.findByText('Informe início e fim do atendimento noturno, ou deixe os dois vazios')).toBeInTheDocument();
     expect(api.updateAiTriageConfig).not.toHaveBeenCalled();
   });
 
-  // Revisão final do branch anterior: a config saía do banco sem janela (os
-  // dois campos NULL) e o admin ligava o interruptor no canal achando que
-  // bastava, e o modo noturno nunca ativava.
-  test('config sem janela: os campos nascem no padrão da spec (20:00 / 08:00)', () => {
+  // Revisão final desta leva: a config sai do banco sem janela (os dois
+  // campos NULL) e os campos NÃO devem nascer preenchidos com 20:00/08:00 —
+  // isso gravaria uma janela que o admin nunca escolheu. Só a sugestão em
+  // placeholder e o texto de ajuda indicam o valor comum.
+  test('config sem janela: campos vazios com sugestão', () => {
     renderInShell(<NightModePage />, { path: PATH });
-    expect(screen.getByLabelText('Início')).toHaveValue('20:00');
-    expect(screen.getByLabelText('Fim')).toHaveValue('08:00');
+    expect(screen.getByLabelText('Início')).toHaveValue('');
+    expect(screen.getByLabelText('Início')).toHaveAttribute('placeholder', '20:00');
+    expect(screen.getByLabelText('Fim')).toHaveValue('');
+    expect(screen.getByLabelText('Fim')).toHaveAttribute('placeholder', '08:00');
+    expect(screen.getByText(/Ex\.: 20:00 a 08:00/)).toBeInTheDocument();
   });
 
   test('o texto de ajuda avisa que a janela precisa ser salva antes de ligar o canal', () => {

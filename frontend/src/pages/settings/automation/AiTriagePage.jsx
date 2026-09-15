@@ -17,10 +17,8 @@ const STATUS_BADGE_CLASS = {
 function AiTriagePage() {
   const form = useAiTriageForm();
   const { config } = useAiConfig();
-  const { reasons, loading: reasonsLoading, status: reasonsHookStatus } = useReasons();
-  const reasonsStatus = reasonsHookStatus || (reasonsLoading ? 'loading' : 'ready');
-  const { channels, loading: channelsLoading, status: channelsHookStatus } = useChannels(true);
-  const channelsStatus = channelsHookStatus || (channelsLoading ? 'loading' : 'ready');
+  const { reasons, status: reasonsStatus } = useReasons();
+  const { channels, status: channelsStatus } = useChannels(true);
 
   const openAiStatus = computeStatus({ mode: config.mode, configured: config.configured, hasError: false });
   const aiChannels = channels.filter((c) => c.aiEnabled);

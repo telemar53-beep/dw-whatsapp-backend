@@ -41,11 +41,15 @@ describe('useAiTriageForm', () => {
       'tok'
     );
   });
-  test('config sem janela nasce com 20:00 / 08:00', () => {
+  test('config sem janela nasce vazia e salva null', async () => {
     useAiConfig.mockReturnValue({ config: { ...saved, nightStartTime: null, nightEndTime: null }, status: 'ready', loading: false, refresh: vi.fn() });
     const { result } = renderHook(() => useAiTriageForm());
-    expect(result.current.values.nightStart).toBe('20:00');
-    expect(result.current.values.nightEnd).toBe('08:00');
+    expect(result.current.values.nightStart).toBe('');
+    expect(result.current.values.nightEnd).toBe('');
+
+    await act(() => result.current.save());
+    expect(api.updateAiTriageConfig.mock.calls[0][0].nightStartTime).toBe(null);
+    expect(api.updateAiTriageConfig.mock.calls[0][0].nightEndTime).toBe(null);
   });
   test('meia janela é recusada antes de chamar a API', async () => {
     const { result } = renderHook(() => useAiTriageForm());

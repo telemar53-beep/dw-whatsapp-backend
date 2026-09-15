@@ -3,9 +3,6 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { useAiConfig } from '../../../hooks/useAiConfig';
 import { updateAiTriageConfig } from '../../../services/api';
 
-const NOTURNO_INICIO_PADRAO = '20:00';
-const NOTURNO_FIM_PADRAO = '08:00';
-
 function fromConfig(config) {
   return {
     confidencePercent: config.triageConfidenceThreshold == null ? 80 : Math.round(config.triageConfidenceThreshold * 100),
@@ -15,8 +12,12 @@ function fromConfig(config) {
     resolvedReasonId: config.triageResolvedReasonId || '',
     requireBirthdate: Boolean(config.triageRequireBirthdate),
     readReceiptsDaytime: Boolean(config.triageReadReceiptsDaytime),
-    nightStart: config.nightStartTime || NOTURNO_INICIO_PADRAO,
-    nightEnd: config.nightEndTime || NOTURNO_FIM_PADRAO,
+    // Sem valor salvo, o campo nasce vazio: "20:00"/"08:00" eram só sugestão
+    // de placeholder em NightModePage, mas qualquer save() nas outras duas
+    // páginas (que não mostram a janela) já gravava esse padrão sem o admin
+    // ter escolhido nada — o canal achava a janela "definida" sem ser.
+    nightStart: config.nightStartTime || '',
+    nightEnd: config.nightEndTime || '',
   };
 }
 

@@ -51,8 +51,10 @@ describe('IdentificationPage', () => {
         triageTimeoutMinutes: 12,
         triageExtraInstructions: 'Pergunte o CPF antes de tudo',
         triageResolvedReasonId: null,
-        nightStartTime: '20:00',
-        nightEndTime: '08:00',
+        // Config sem janela: os campos nascem vazios e salvam null (não mais
+        // o padrão 20:00/08:00 — essa página não mostra a janela).
+        nightStartTime: null,
+        nightEndTime: null,
         triageRequireBirthdate: false,
         triageReadReceiptsDaytime: false,
       },

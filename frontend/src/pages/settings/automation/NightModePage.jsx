@@ -6,8 +6,7 @@ import { useChannels } from '../../../hooks/useChannels';
 
 function NightModePage() {
   const form = useAiTriageForm();
-  const { channels, loading: channelsLoading, status: channelsHookStatus } = useChannels(true);
-  const channelsStatus = channelsHookStatus || (channelsLoading ? 'loading' : 'ready');
+  const { channels, status: channelsStatus } = useChannels(true);
   const noturnos = channels.filter((c) => c.aiNightModeEnabled);
 
   return (
@@ -23,10 +22,10 @@ function NightModePage() {
           <Card title="Janela noturna" scope="global" footer={<Button type="submit" loading={form.saving}>Salvar janela noturna</Button>}>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field id="triage-night-start" label="Início">
-                <input id="triage-night-start" type="time" value={form.values.nightStart} onChange={(e) => form.setValue('nightStart', e.target.value)} className={inputClass} />
+                <input id="triage-night-start" type="time" placeholder="20:00" value={form.values.nightStart} onChange={(e) => form.setValue('nightStart', e.target.value)} className={inputClass} />
               </Field>
               <Field id="triage-night-end" label="Fim">
-                <input id="triage-night-end" type="time" value={form.values.nightEnd} onChange={(e) => form.setValue('nightEnd', e.target.value)} className={inputClass} />
+                <input id="triage-night-end" type="time" placeholder="08:00" value={form.values.nightEnd} onChange={(e) => form.setValue('nightEnd', e.target.value)} className={inputClass} />
               </Field>
             </div>
             <HelpText>Todos os dias, feriados incluídos. Ex.: 20:00 a 08:00. Salve a janela antes de ligar o interruptor "Atendimento noturno" no canal: sem ela o canal recusa ligar.</HelpText>

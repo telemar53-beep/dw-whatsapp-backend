@@ -311,16 +311,6 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
   });
 
-  // O link "Relatório" era do NavRail próprio da página; agora mora só no
-  // SideNav do AppShell (label "Relatórios", coberto em SideNav.test.jsx).
-  // NavRail some de vez na Task 18 — não há substituto dentro de DashboardPage.
-  test.skip('shows a Relatório link for any attendant', () => {
-    useQueue.mockReturnValue({ queue: [], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    renderDashboard();
-    expect(screen.getByRole('link', { name: /relatório/i })).toBeInTheDocument();
-  });
-
   test('shows the list and hides the conversation panel on mobile when nothing is selected', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
@@ -428,24 +418,6 @@ describe('DashboardPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /som ativado/i }));
 
     expect(toggleMuted).toHaveBeenCalledTimes(1);
-  });
-
-  // O link "Dashboard de atendimento" era do NavRail próprio da página; agora
-  // mora só no SideNav do AppShell (coberto em SideNav.test.jsx). NavRail
-  // some de vez na Task 18 — não há substituto dentro de DashboardPage.
-  test.skip('shows a link to the attendance dashboard for an admin, and not for a regular agent', () => {
-    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'admin' }, logout: vi.fn() });
-    useQueue.mockReturnValue({ queue: [], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    renderDashboard();
-    expect(screen.getByLabelText('Dashboard de atendimento')).toBeInTheDocument();
-  });
-
-  test.skip('does not show the attendance dashboard link for a non-admin agent', () => {
-    useQueue.mockReturnValue({ queue: [], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    renderDashboard();
-    expect(screen.queryByLabelText('Dashboard de atendimento')).not.toBeInTheDocument();
   });
 
   test('opens a conversation passed in via location.state.pendingConversation, even when not in queue or myConversations', () => {

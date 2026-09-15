@@ -1,8 +1,8 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import AttendanceDashboardPage from './AttendanceDashboardPage';
+import { renderInShell } from '../test-utils/renderInShell';
+import SupervisionPage from './SupervisionPage';
 import { useAttendanceDashboard } from '../hooks/useAttendanceDashboard';
 import { useChannels } from '../hooks/useChannels';
 import { useAgents } from '../hooks/useAgents';
@@ -36,11 +36,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <AttendanceDashboardPage />
-    </MemoryRouter>
-  );
+  return renderInShell(<SupervisionPage />, { path: '/supervisao' });
 }
 
 beforeEach(() => {
@@ -66,7 +62,7 @@ beforeEach(() => {
   });
 });
 
-describe('AttendanceDashboardPage', () => {
+describe('SupervisionPage', () => {
   test('shows the "Todos atendimentos" tab active by default, with the 3 live columns', async () => {
     renderPage();
     expect(screen.getByRole('tab', { name: /todos atendimentos/i })).toHaveAttribute('aria-selected', 'true');
@@ -75,14 +71,14 @@ describe('AttendanceDashboardPage', () => {
     expect(await screen.findByText('Carlos')).toBeInTheDocument();
     expect(screen.getByText('Em espera')).toBeInTheDocument();
     expect(screen.getByText('Maria')).toBeInTheDocument();
-    expect(screen.getByText('Na automação')).toBeInTheDocument();
+    expect(screen.getByText('Em automação')).toBeInTheDocument();
     expect(screen.getByText('Joao')).toBeInTheDocument();
   });
 
   test('the "Todos atendimentos" tab badge sums the 3 live columns', async () => {
     renderPage();
     expect(await screen.findByText('Carlos')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-count-all')).toHaveTextContent('3');
+    expect(within(screen.getByRole('tab', { name: /todos/i })).getByText('3')).toBeInTheDocument();
   });
 
   test('quick-closes a conversation from the "Em espera" column without asking for a reason', async () => {
@@ -97,12 +93,12 @@ describe('AttendanceDashboardPage', () => {
     window.confirm.mockRestore();
   });
 
-  test('quick-closes a conversation from the "Na automação" column without asking for a reason', async () => {
+  test('quick-closes a conversation from the "Em automação" column without asking for a reason', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderPage();
     expect(await screen.findByText('Joao')).toBeInTheDocument();
 
-    const automationColumn = screen.getByText('Na automação').closest('div').parentElement;
+    const automationColumn = screen.getByText('Em automação').closest('div').parentElement;
     await userEvent.click(within(automationColumn).getByRole('button', { name: /finalizar/i }));
 
     expect(closeConversation).toHaveBeenCalledWith('c3', null, 'tok-123');
@@ -286,9 +282,10 @@ describe('AttendanceDashboardPage', () => {
     });
 
     renderPage();
-    await screen.findByTestId('tab-count-closed');
 
-    expect(screen.getByTestId('tab-count-closed')).toHaveTextContent('57');
+    await waitFor(() => {
+      expect(within(screen.getByRole('tab', { name: /encerrados hoje/i })).getByText('57')).toBeInTheDocument();
+    });
   });
 
   test('shows the filtered visible count on the tab badge when a filter is active', async () => {
@@ -322,7 +319,22 @@ describe('AttendanceDashboardPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /canais/i }));
     await userEvent.click(screen.getByLabelText('WhatsApp Vendas'));
 
-    await waitFor(() => expect(screen.getByTestId('tab-count-closed')).toHaveTextContent('1'));
+    await waitFor(() => {
+      expect(within(screen.getByRole('tab', { name: /encerrados hoje/i })).getByText('1')).toBeInTheDocument();
+    });
+  });
+
+  test('lê os filtros da URL e escreve de volta ao mudar', async () => {
+    useChannels.mockReturnValue({ channels: [{ id: 'ch1', name: 'Berg' }, { id: 'ch2', name: 'Suporte' }], loading: false });
+    useSectors.mockReturnValue({ sectors: [{ id: 's1', name: 'Financeiro' }], loading: false });
+    renderInShell(<SupervisionPage />, { path: '/supervisao', initialEntries: ['/supervisao?canal=ch1&aba=encerrados'] });
+    expect(await screen.findByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(screen.getByRole('button', { name: /^canais/i }));
+    expect(screen.getByRole('checkbox', { name: 'Berg' })).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: /^setores/i }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Financeiro' }));
+    expect(screen.getByTestId('location-search')).toHaveTextContent('canal=ch1');
+    expect(screen.getByTestId('location-search')).toHaveTextContent('setor=s1');
   });
 
   test('searching by protocol number opens the matching conversation', async () => {

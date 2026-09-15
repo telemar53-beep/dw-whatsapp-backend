@@ -7,7 +7,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminChannelsPage from './pages/AdminChannelsPage';
 import MetricsPage from './pages/MetricsPage';
-import AttendanceDashboardPage from './pages/AttendanceDashboardPage';
+import SupervisionPage from './pages/SupervisionPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import SettingsLayout from './pages/settings/SettingsLayout';
@@ -50,7 +50,7 @@ function App() {
                 path="/supervisao"
                 element={
                   <ProtectedRoute level="admin" areaLabel="Supervisão">
-                    <AttendanceDashboardPage />
+                    <SupervisionPage />
                   </ProtectedRoute>
                 }
               />

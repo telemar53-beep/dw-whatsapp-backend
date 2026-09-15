@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAttendanceDashboard } from '../hooks/useAttendanceDashboard';
 import { useChannels } from '../hooks/useChannels';
@@ -11,10 +12,9 @@ import {
   closeConversation,
 } from '../services/api';
 import ConversationListItem from '../components/ConversationListItem';
-import NavRail from '../components/NavRail';
-import ProfileModal from '../components/ProfileModal';
 import ConversationModal from '../components/ConversationModal';
 import TransferModal from '../components/TransferModal';
+import { PageHeader, Tabs } from '../components/ui';
 
 const CLOSED_PAGE_SIZE = 20;
 
@@ -87,7 +87,7 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
 
 function DashboardColumn({ title, count, conversations, onSelect, onQuickClose, emptyMessage, footer }) {
   return (
-    <div className="flex min-w-[300px] flex-1 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl">
+    <div className="flex max-h-[40vh] flex-1 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl md:max-h-none md:min-w-[300px]">
       <div className="flex items-center justify-between px-5 py-4">
         <h2 className="font-display text-[16px] font-semibold text-chat-text">{title}</h2>
         <span className="rounded-full border border-white/10 bg-white/[0.07] px-2.5 py-[2px] text-[12px] font-medium text-chat-muted">
@@ -116,15 +116,38 @@ function DashboardColumn({ title, count, conversations, onSelect, onQuickClose, 
   );
 }
 
-function AttendanceDashboardPage() {
+function SupervisionPage() {
   const { token } = useAuth();
   const { inProgress, waiting, inAutomation, closedTodayCount } = useAttendanceDashboard();
   const { channels } = useChannels(true);
   const agents = useAgents();
   const { sectors } = useSectors();
 
-  const [activeTab, setActiveTab] = useState('all');
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const channelFilter = searchParams.getAll('canal');
+  const agentFilter = searchParams.getAll('atendente');
+  const sectorFilter = searchParams.getAll('setor');
+  const activeTab = searchParams.get('aba') === 'encerrados' ? 'closed' : 'all';
+
+  function setFilterParam(key, values) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete(key);
+      values.forEach((v) => next.append(key, v));
+      return next;
+    }, { replace: true });
+  }
+  function toggleFilterValue(key, current, value) {
+    setFilterParam(key, current.includes(value) ? current.filter((v) => v !== value) : [...current, value]);
+  }
+  function setActiveTab(tab) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tab === 'closed') next.set('aba', 'encerrados'); else next.delete('aba');
+      return next;
+    }, { replace: true });
+  }
+
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [transferringId, setTransferringId] = useState(null);
 
@@ -133,9 +156,6 @@ function AttendanceDashboardPage() {
     [agents]
   );
 
-  const [channelFilter, setChannelFilter] = useState([]);
-  const [agentFilter, setAgentFilter] = useState([]);
-  const [sectorFilter, setSectorFilter] = useState([]);
   const [openFilterMenu, setOpenFilterMenu] = useState(null);
 
   const [closedItems, setClosedItems] = useState([]);
@@ -251,83 +271,26 @@ function AttendanceDashboardPage() {
     (phoneSearchResult && phoneSearchResult.conversations.find((c) => c.id === selectedConversationId)) ||
     null;
 
-  function toggleFilterValue(setFilter, value) {
-    setFilter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
-  }
-
   return (
-    <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[38%] -top-[10%] h-[38rem] w-[42rem] rounded-full bg-chat-copper/45 blur-[150px]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-[6%] bottom-[-15%] h-[30rem] w-[32rem] rounded-full bg-chat-copper/25 blur-[150px]"
-      />
-      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-3">
-      <NavRail active="dashboard" onProfileClick={() => setProfileOpen(true)} />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center justify-between px-2 pb-4 pt-2">
-        <div>
-          <h1 className="font-display text-[26px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
-            Dashboard de atendimento
-          </h1>
-          <p className="mt-1.5 text-[14px] text-chat-muted">Acompanhe os atendimentos da equipe em tempo real</p>
-        </div>
-      </header>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <PageHeader title="Supervisão" description="Acompanhe os atendimentos da equipe em tempo real" />
 
       <div className="flex shrink-0 flex-wrap items-center gap-3 px-2 pb-4">
-        <div role="tablist" className="flex gap-3.5">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'all'}
-            onClick={() => setActiveTab('all')}
-            className={`relative shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition ${
-              activeTab === 'all'
-                ? 'border-chat-orange/70 text-chat-text'
-                : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
-            }`}
-          >
-            Todos atendimentos
-            {totalActiveCount > 0 && (
-              <span
-                data-testid="tab-count-all"
-                className="absolute -right-2 -top-2 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-chat-orange px-1 text-[12px] font-semibold text-white"
-              >
-                {totalActiveCount}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'closed'}
-            onClick={() => setActiveTab('closed')}
-            className={`relative shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition ${
-              activeTab === 'closed'
-                ? 'border-chat-orange/70 text-chat-text'
-                : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
-            }`}
-          >
-            Encerrados hoje
-            {closedCount > 0 && (
-              <span
-                data-testid="tab-count-closed"
-                className="absolute -right-2 -top-2 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-chat-orange px-1 text-[12px] font-semibold text-white"
-              >
-                {closedCount}
-              </span>
-            )}
-          </button>
-        </div>
+        <Tabs
+          label="Atendimentos"
+          active={activeTab}
+          onChange={setActiveTab}
+          tabs={[
+            { key: 'all', label: 'Todos atendimentos', count: totalActiveCount },
+            { key: 'closed', label: 'Encerrados hoje', count: closedCount },
+          ]}
+        />
         <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10" />
         <FilterDropdown
           label="Canais"
           options={channels.map((c) => ({ value: c.id, label: c.name }))}
           selected={channelFilter}
-          onToggle={(value) => toggleFilterValue(setChannelFilter, value)}
+          onToggle={(value) => toggleFilterValue('canal', channelFilter, value)}
           open={openFilterMenu === 'channels'}
           onOpenChange={(next) => setOpenFilterMenu(next ? 'channels' : null)}
         />
@@ -335,15 +298,15 @@ function AttendanceDashboardPage() {
           label="Atendentes"
           options={[{ value: AI_AGENT_FILTER, label: 'IA' }, ...agents.map((a) => ({ value: a.id, label: a.name || a.email }))]}
           selected={agentFilter}
-          onToggle={(value) => toggleFilterValue(setAgentFilter, value)}
+          onToggle={(value) => toggleFilterValue('atendente', agentFilter, value)}
           open={openFilterMenu === 'agents'}
           onOpenChange={(next) => setOpenFilterMenu(next ? 'agents' : null)}
         />
         <FilterDropdown
-          label="Departamentos"
+          label="Setores"
           options={sectors.map((s) => ({ value: s.id, label: s.name }))}
           selected={sectorFilter}
-          onToggle={(value) => toggleFilterValue(setSectorFilter, value)}
+          onToggle={(value) => toggleFilterValue('setor', sectorFilter, value)}
           open={openFilterMenu === 'sectors'}
           onOpenChange={(next) => setOpenFilterMenu(next ? 'sectors' : null)}
         />
@@ -405,7 +368,7 @@ function AttendanceDashboardPage() {
           )}
         </div>
       ) : activeTab === 'all' ? (
-        <div role="tabpanel" className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-2 pb-2">
+        <div role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 pb-2 md:flex-row md:overflow-x-auto">
           <DashboardColumn
             title="Em andamento"
             count={filteredInProgress.length}
@@ -419,21 +382,21 @@ function AttendanceDashboardPage() {
             conversations={displayWaiting}
             onSelect={openConversation}
             onQuickClose={quickCloseConversation}
-            emptyMessage="Nenhuma conversa aguardando."
+            emptyMessage="Nenhum atendimento em espera."
           />
           <DashboardColumn
-            title="Na automação"
+            title="Em automação"
             count={filteredInAutomation.length}
             conversations={displayInAutomation}
             onSelect={openConversation}
             onQuickClose={quickCloseConversation}
-            emptyMessage="Nenhuma conversa em triagem automática."
+            emptyMessage="Nenhum atendimento em automação."
           />
         </div>
       ) : (
         <div role="tabpanel" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {displayClosed.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[13.5px] text-chat-faint">Nenhum atendimento encerrado nas últimas 24 horas.</p>
+            <p className="px-4 py-10 text-center text-[13.5px] text-chat-faint">Nenhum atendimento encerrado hoje.</p>
           ) : (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08] [&>li]:backdrop-blur-2xl">
               {displayClosed.map((conversation) => (
@@ -459,9 +422,6 @@ function AttendanceDashboardPage() {
           )}
         </div>
       )}
-      </div>
-      </div>
-      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
       {selectedConversation && (
         <ConversationModal
           conversation={selectedConversation}
@@ -474,4 +434,4 @@ function AttendanceDashboardPage() {
   );
 }
 
-export default AttendanceDashboardPage;
+export default SupervisionPage;

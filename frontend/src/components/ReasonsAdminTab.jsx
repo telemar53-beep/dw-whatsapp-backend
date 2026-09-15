@@ -143,8 +143,8 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
           <SectionHelp label="Motivos" title="Motivos de contato">
             <p>
               Lista de motivos que o atendente escolhe ao encerrar um atendimento — fica
-              registrado no histórico e aparece agrupado no Relatório, em "Motivos de
-              Contato".
+              registrado no histórico e aparece agrupado em Relatórios, em "Motivos de
+              contato".
             </p>
             <p className="mt-2 italic">Exemplo: "Troca de senha", "Pagamento - sem conexão".</p>
           </SectionHelp>

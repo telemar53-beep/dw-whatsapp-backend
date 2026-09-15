@@ -30,7 +30,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
         <AsyncState
           status={status}
           isEmpty={reasons.length === 0}
-          emptyMessage="Nenhum motivo de contato cadastrado ainda. Peça a um administrador para cadastrar ao menos um motivo em Administração → Motivos antes de encerrar este atendimento."
+          emptyMessage="Nenhum motivo de contato cadastrado ainda. Peça a um administrador para cadastrar ao menos um motivo em Configurações → Motivos antes de encerrar este atendimento."
         >
           {reasons.map((reason) => (
             <label key={reason.id} className="flex items-center gap-2 text-[14.5px] text-wa-text">

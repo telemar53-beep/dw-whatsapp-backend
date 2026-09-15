@@ -136,15 +136,15 @@ describe('MessageInput', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /respostas rápidas/i }));
 
-    expect(screen.getByText(/nenhuma resposta cadastrada/i)).toBeInTheDocument();
+    expect(screen.getByText(/nenhuma resposta rápida cadastrada/i)).toBeInTheDocument();
   });
 
-  test('em carregamento não mostra "Nenhuma resposta cadastrada"', async () => {
+  test('em carregamento não mostra "Nenhuma resposta rápida cadastrada"', async () => {
     render(<MessageInput onSend={vi.fn()} quickReplies={[]} quickRepliesStatus="loading" />);
 
     await userEvent.click(screen.getByRole('button', { name: /respostas rápidas/i }));
 
-    expect(screen.queryByText(/nenhuma resposta cadastrada/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/nenhuma resposta rápida cadastrada/i)).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 

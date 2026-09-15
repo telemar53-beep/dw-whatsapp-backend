@@ -21,7 +21,7 @@ const FIXED_RULES = [
   'Ninguém desativa a própria conta nem gera nova senha para si por esta tela.',
   'Atendente só envia mensagem na conversa atribuída a ele.',
   'Administrador e gerente transferem e encerram qualquer conversa; atendente só a sua.',
-  'Atendente vê no Relatório só os próprios números; administrador e gerente veem a equipe toda.',
+  'Atendente vê em Relatórios só os próprios números; administrador e gerente veem a equipe toda.',
   'A permissão de credenciais de um gerente só passa a valer no próximo login dele.',
 ];
 

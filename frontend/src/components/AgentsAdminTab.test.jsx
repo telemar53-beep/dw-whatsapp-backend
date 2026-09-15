@@ -141,7 +141,7 @@ describe('AgentsAdminTab', () => {
     useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
     render(<AgentsAdminTab />);
 
-    expect(screen.queryByText(/Cadastrar novo atendente/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cadastrar novo usuário/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /criar usuário/i })).toBeInTheDocument();
   });
 
@@ -151,7 +151,7 @@ describe('AgentsAdminTab', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /criar usuário/i }));
 
-    expect(screen.getByText(/Cadastrar novo atendente/)).toBeInTheDocument();
+    expect(screen.getByText(/Cadastrar novo usuário/)).toBeInTheDocument();
   });
 
   test('canceling the create-agent form hides it again', async () => {
@@ -161,7 +161,7 @@ describe('AgentsAdminTab', () => {
     await userEvent.click(screen.getByRole('button', { name: /criar usuário/i }));
     await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
 
-    expect(screen.queryByText(/Cadastrar novo atendente/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cadastrar novo usuário/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /criar usuário/i })).toBeInTheDocument();
   });
 

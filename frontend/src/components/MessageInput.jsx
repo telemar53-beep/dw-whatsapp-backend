@@ -309,7 +309,7 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
                   <AsyncState
                     status={quickRepliesStatus}
                     isEmpty={quickReplies.length === 0}
-                    emptyMessage="Nenhuma resposta cadastrada"
+                    emptyMessage="Nenhuma resposta rápida cadastrada."
                     skeletonLines={2}
                   >
                     <ul>

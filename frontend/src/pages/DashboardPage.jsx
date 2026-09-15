@@ -145,6 +145,8 @@ function DashboardPage() {
           <div className="shrink-0">
             <Tabs
               look="underline"
+              size="lg"
+              align="center"
               label="Filas"
               active={activeTab}
               onChange={setActiveTab}
@@ -184,7 +186,7 @@ function DashboardPage() {
                 onSelect={setSelectedId}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
-                emptyMessage="Nenhum atendimento em automação."
+                emptyMessage="Nenhum atendimento com a IA."
               />
             )}
           </div>

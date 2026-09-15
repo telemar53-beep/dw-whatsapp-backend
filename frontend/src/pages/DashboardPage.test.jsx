@@ -256,9 +256,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByRole('link', { name: /administração/i })).not.toBeInTheDocument();
   });
 
-  // O botão "Meu perfil" era do NavRail próprio da página; agora mora só no
-  // SideNav do AppShell, que chama openProfile do contexto do shell (Task 5).
-  // NavRail some de vez na Task 18 — não há substituto dentro de DashboardPage.
+  // Equivalente real: SideNav.test.jsx > 'clica em "Meu perfil" chama onProfileClick'.
   test.skip('opens the profile modal from the header', async () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
@@ -381,9 +379,7 @@ describe('DashboardPage', () => {
     expect(container.querySelector('[data-testid="channel-banner-wrapper"]').className).toMatch(/\bhidden\b/);
   });
 
-  // `h-dvh` era da casca própria de DashboardPage; agora é o AppShell (Task 8)
-  // que controla a altura da viewport para todas as páginas. AppShell.jsx
-  // ainda não tem teste próprio para essa classe — sem substituto aqui.
+  // Equivalente real: AppShell.test.jsx > 'a raiz usa h-dvh para a altura da viewport'.
   test.skip('uses the dynamic viewport height unit so mobile browser chrome cannot cover the composer', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
@@ -399,9 +395,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/nenhum atendente cadastrado/i)).toBeInTheDocument();
   });
 
-  // O botão de som era do NavRail próprio da página; agora mora só no SideNav
-  // do AppShell (coberto em SideNav.test.jsx). NavRail some de vez na Task 18
-  // — não há substituto dentro de DashboardPage.
+  // Equivalente real: SideNav.test.jsx > 'mostra as iniciais da empresa e o botão de som'.
   test.skip('shows the sound toggle button reflecting the unmuted state', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
@@ -409,6 +403,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: /som ativado/i })).toBeInTheDocument();
   });
 
+  // Equivalente real: SideNav.test.jsx > 'com o som mutado, o botão vira "Som desativado"'.
   test.skip('shows the sound toggle button reflecting the muted state', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
@@ -417,6 +412,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: /som desativado/i })).toBeInTheDocument();
   });
 
+  // Equivalente real: SideNav.test.jsx > 'clicar no botão de som chama toggleMuted'.
   test.skip('clicking the sound toggle button calls toggleMuted', async () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);

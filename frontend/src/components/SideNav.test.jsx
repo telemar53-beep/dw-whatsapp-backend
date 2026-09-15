@@ -81,4 +81,25 @@ describe('SideNav', () => {
     expect(screen.getByText('DW')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /som ativado/i })).toBeInTheDocument();
   });
+
+  test('clica em "Meu perfil" chama onProfileClick', async () => {
+    const onProfileClick = vi.fn();
+    renderNav({ role: 'agent' }, '/', { onProfileClick });
+    await userEvent.click(screen.getByRole('button', { name: /^meu perfil$/i }));
+    expect(onProfileClick).toHaveBeenCalledTimes(1);
+  });
+
+  test('com o som mutado, o botão vira "Som desativado"', () => {
+    useQueueNotificationSound.mockReturnValue({ muted: true, toggleMuted: vi.fn() });
+    renderNav({ role: 'agent' });
+    expect(screen.getByRole('button', { name: /som desativado/i })).toBeInTheDocument();
+  });
+
+  test('clicar no botão de som chama toggleMuted', async () => {
+    const toggleMuted = vi.fn();
+    useQueueNotificationSound.mockReturnValue({ muted: false, toggleMuted });
+    renderNav({ role: 'agent' });
+    await userEvent.click(screen.getByRole('button', { name: /som ativado/i }));
+    expect(toggleMuted).toHaveBeenCalledTimes(1);
+  });
 });

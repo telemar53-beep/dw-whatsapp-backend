@@ -75,9 +75,9 @@ export const SETTINGS_SECTIONS = [
   },
   {
     group: 'Cadastros auxiliares', groupKey: 'cadastros', icon: IconTags,
+    // Uma entrada só: Motivos e Cidades são abas dentro da página.
     items: [
-      { key: 'motivos', label: 'Motivos de atendimento', to: s('cadastros/motivos'), level: 'admin', description: 'O motivo escolhido ao encerrar um atendimento.' },
-      { key: 'cidades', label: 'Cidades', to: s('cadastros/cidades'), level: 'admin', description: 'As cidades do cadastro do cliente e dos avisos por região.' },
+      { key: 'cadastros', label: 'Cadastros auxiliares', to: s('cadastros'), level: 'admin', description: 'Motivos de atendimento e cidades.' },
     ],
   },
   {

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createCity } from '../services/api';
 
-function CreateCityForm({ onCreated, onCancel }) {
+// `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
+function CreateCityForm({ onCreated, onCancel, embedded = false }) {
   const { token } = useAuth();
   const [name, setName] = useState('');
   const [error, setError] = useState(null);
@@ -24,8 +25,8 @@ function CreateCityForm({ onCreated, onCancel }) {
   }
 
   return (
-    <div className="rounded-[16px] border border-wa-border bg-wa-surface p-4">
-      <h3 className="mb-2.5 text-[13.5px] font-medium text-wa-text">Cadastrar nova cidade</h3>
+    <div className={embedded ? '' : 'rounded-[16px] border border-wa-border bg-wa-surface p-4'}>
+      {!embedded && <h3 className="mb-2.5 text-[13.5px] font-medium text-wa-text">Cadastrar nova cidade</h3>}
       <form onSubmit={handleSubmit} className="flex gap-2">
         <label htmlFor="city-name" className="sr-only">
           Nome da cidade

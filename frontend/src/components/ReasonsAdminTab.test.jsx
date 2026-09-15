@@ -31,7 +31,7 @@ describe('ReasonsAdminTab', () => {
     api.createReason.mockResolvedValue({ id: 'r1', name: 'Pagamento', active: true });
     render(<ReasonsAdminTab />);
 
-    await userEvent.click(screen.getByRole('button', { name: /criar motivo/i }));
+    await userEvent.click(screen.getByRole('button', { name: /novo motivo/i }));
     await userEvent.type(screen.getByLabelText(/nome/i), 'Pagamento');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 
@@ -48,6 +48,7 @@ describe('ReasonsAdminTab', () => {
     api.updateReason.mockResolvedValue({ id: 'r1', name: 'Troca de senha', active: false });
     render(<ReasonsAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /mais ações/i }));
     await userEvent.click(screen.getByRole('button', { name: /desativar/i }));
 
     expect(api.updateReason).toHaveBeenCalledWith('r1', { active: false }, 'tok-123');
@@ -63,18 +64,20 @@ describe('ReasonsAdminTab', () => {
     api.updateReason.mockRejectedValue({ body: { error: 'Falha ao atualizar' } });
     render(<ReasonsAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /mais ações/i }));
     await userEvent.click(screen.getByRole('button', { name: /desativar/i }));
 
     expect(await screen.findByText('Falha ao atualizar')).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  test('shows Ativar for an inactive reason', () => {
+  test('shows Ativar for an inactive reason', async () => {
     useReasonsAdmin.mockReturnValue({
       reasons: [{ id: 'r1', name: 'Antigo', active: false }],
       refresh: vi.fn(),
     });
     render(<ReasonsAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /mais ações/i }));
     expect(screen.getByRole('button', { name: /ativar/i })).toBeInTheDocument();
   });
 
@@ -101,8 +104,8 @@ describe('ReasonsAdminTab', () => {
     useReasonsAdmin.mockReturnValue({ reasons: [], refresh: vi.fn() });
     render(<ReasonsAdminTab />);
 
-    await userEvent.click(screen.getByRole('button', { name: /criar motivo/i }));
-    expect(screen.getByText(/Cadastrar novo motivo/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /novo motivo/i }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
 
     expect(screen.queryByText(/Cadastrar novo motivo/)).not.toBeInTheDocument();

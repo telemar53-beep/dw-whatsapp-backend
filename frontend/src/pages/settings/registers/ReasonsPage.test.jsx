@@ -23,12 +23,13 @@ beforeEach(() => {
 describe('ReasonsPage', () => {
   test('marca o motivo que a IA usa ao encerrar', () => {
     renderInShell(<ReasonsPage />, { path: '/configuracoes/cadastros/motivos' });
-    expect(screen.getByText('Usado pela IA ao encerrar')).toBeInTheDocument();
+    expect(screen.getByText('Encerramento pela IA')).toBeInTheDocument();
   });
   test('desativar o motivo da IA pede confirmação e explica a consequência', async () => {
     api.updateReason.mockResolvedValue({});
     renderInShell(<ReasonsPage />, { path: '/configuracoes/cadastros/motivos' });
-    await userEvent.click(screen.getAllByRole('button', { name: 'Desativar' })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /mais ações/i })[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Desativar' }));
     expect(screen.getByRole('alertdialog')).toHaveTextContent(/a ia vai parar de encerrar sozinha/i);
     await userEvent.click(screen.getByRole('button', { name: 'Desativar mesmo assim' }));
     expect(api.updateReason).toHaveBeenCalledWith('r1', { active: false }, 'tok');
@@ -36,7 +37,8 @@ describe('ReasonsPage', () => {
   test('desativar outro motivo não pede confirmação', async () => {
     api.updateReason.mockResolvedValue({});
     renderInShell(<ReasonsPage />, { path: '/configuracoes/cadastros/motivos' });
-    await userEvent.click(screen.getAllByRole('button', { name: 'Desativar' })[1]);
+    await userEvent.click(screen.getAllByRole('button', { name: /mais ações/i })[1]);
+    await userEvent.click(screen.getByRole('button', { name: 'Desativar' }));
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(api.updateReason).toHaveBeenCalledWith('r2', { active: false }, 'tok');
   });

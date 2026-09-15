@@ -415,3 +415,11 @@ export function IconBrain(props) {
     </Svg>
   );
 }
+
+export function IconEdit(props) {
+  return (
+    <Svg {...props}>
+      <path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75zm17.7-10.2a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75z" />
+    </Svg>
+  );
+}

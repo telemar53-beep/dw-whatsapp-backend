@@ -1,22 +1,29 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useCities } from '../hooks/useCities';
 import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { deleteCity } from '../services/api';
 import CreateCityForm from './CreateCityForm';
-import { IconClose } from './icons/WaIcons';
-import { AsyncState } from './ui';
+import WaDialog, { waErrorClass } from './WaDialog';
+import { AsyncState, Button } from './ui';
+import { IconSearch, IconNewChat } from './icons/WaIcons';
 
-// Cidade é só um nome com um botão de excluir — uma etiqueta cabe muito mais
-// por linha do que um cartão inteiro, e com 20+ cidades isso é o que evita
-// uma lista quilométrica.
-function CityChip({ city, onDeleted, onError }) {
+// Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
+const CELL = 'px-3 py-3 align-middle';
+const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
+const CONTROL =
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-wa-green/60 focus:ring-2 focus:ring-wa-green/25';
+const DANGER_BTN =
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 text-[13px] font-medium text-wa-error-text transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:opacity-50';
+
+function CityRow({ city, onDeleted, onError }) {
   const { token } = useAuth();
   const { confirm, confirmDialog } = useConfirm();
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
-    const ok = await confirm(`Excluir a cidade "${city.name}"?`, { danger: true, confirmLabel: 'Excluir' });
+    const question = 'Excluir a cidade "' + city.name + '"?';
+    const ok = await confirm(question, { danger: true, confirmLabel: 'Excluir' });
     if (!ok) {
       return;
     }
@@ -32,26 +39,33 @@ function CityChip({ city, onDeleted, onError }) {
   }
 
   return (
-    <span className="group inline-flex items-center gap-1.5 rounded-full border border-wa-border bg-wa-surface py-1.5 pl-3.5 pr-2 text-[13.5px] text-wa-text transition-colors hover:border-wa-error-text/40">
-      {city.name}
-      <button
-        type="button"
-        onClick={handleDelete}
-        disabled={deleting}
-        aria-label={`Excluir ${city.name}`}
-        title={`Excluir ${city.name}`}
-        className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full text-wa-muted transition-colors hover:bg-wa-error-bg hover:text-wa-error-text disabled:opacity-50"
-      >
-        <IconClose size={11} />
-      </button>
-      {confirmDialog}
-    </span>
+    <tr className="border-t border-wa-border">
+      <td className={`${CELL} text-[14px] font-medium text-wa-text`}>{city.name}</td>
+      <td className={`${CELL} whitespace-nowrap`}>
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            aria-label={`Excluir ${city.name}`}
+            title={`Excluir ${city.name}`}
+            className={DANGER_BTN}
+          >
+            Excluir
+          </button>
+        </div>
+        {confirmDialog}
+      </td>
+    </tr>
   );
 }
 
+// Controlado (a página passa `creating`): o cartão tem o botão "Nova cidade" e
+// o formulário abre num pop-up. Sem controle: o formulário fica inline embaixo.
 function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const { cities, status, refresh } = useCities();
   const [errors, setErrors] = useState({});
+  const [search, setSearch] = useState('');
   const [internalCreating, setInternalCreating] = useState(false);
   const controlled = creatingProp !== undefined;
   const creating = controlled ? creatingProp : internalCreating;
@@ -62,31 +76,118 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   }
 
   const errorMessages = Object.values(errors).filter(Boolean);
+  const term = search.trim().toLowerCase();
+  const visible = useMemo(
+    () => cities.filter((city) => !term || String(city.name || '').toLowerCase().includes(term)),
+    [cities, term]
+  );
+  const countLabel =
+    visible.length !== cities.length
+      ? `${visible.length} de ${cities.length} cidades`
+      : `${cities.length} ${cities.length === 1 ? 'cidade' : 'cidades'}`;
 
   return (
-    <div className="space-y-5">
-      <AsyncState status={status} isEmpty={cities.length === 0} emptyMessage="Nenhuma cidade cadastrada ainda.">
-        <div className="flex flex-wrap gap-2">
-          {cities.map((city) => (
-            <CityChip key={city.id} city={city} onDeleted={refresh} onError={setCityError} />
+    <>
+      <section
+        aria-labelledby="cities-card-title"
+        className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-4 pt-5 sm:px-5">
+          <div className="min-w-0">
+            <h2 id="cities-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
+              Cidades
+            </h2>
+            <p className="mt-1 max-w-[60ch] text-[13.5px] leading-[19px] text-wa-muted">
+              As cidades do cadastro do cliente e dos avisos por região. Os nomes precisam ser iguais aos do SGP.
+            </p>
+          </div>
+          {controlled && (
+            <Button onClick={() => setCreating(true)} className="!py-2">
+              <IconNewChat size={18} />
+              Nova cidade
+            </Button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 px-4 pb-4 sm:px-5">
+          <label
+            className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
+          >
+            <span className="shrink-0 text-wa-muted">
+              <IconSearch size={17} />
+            </span>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar cidade"
+              aria-label="Buscar cidade"
+              className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-wa-muted"
+            />
+          </label>
+        </div>
+
+        <div className="px-4 pb-1 sm:px-5">
+          <AsyncState status={status} isEmpty={cities.length === 0} emptyMessage="Nenhuma cidade cadastrada ainda.">
+            <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
+              <table className="w-full min-w-[420px] border-collapse text-[13.5px]">
+                <thead>
+                  <tr className="bg-black/[0.16]">
+                    <th scope="col" className={HEAD}>
+                      Cidade
+                    </th>
+                    <th scope="col" className={`${HEAD} text-right`}>
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.length === 0 ? (
+                    <tr className="border-t border-wa-border">
+                      <td colSpan={2} className="px-3 py-6 text-center text-[13.5px] text-wa-muted">
+                        Nenhuma cidade com esse nome.
+                      </td>
+                    </tr>
+                  ) : (
+                    visible.map((city) => <CityRow key={city.id} city={city} onDeleted={refresh} onError={setCityError} />)
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </AsyncState>
+          {errorMessages.map((message, index) => (
+            <p key={index} className={`mb-3 ${waErrorClass}`}>
+              {message}
+            </p>
           ))}
         </div>
-      </AsyncState>
-      {errorMessages.map((message, index) => (
-        <p key={index} className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">
-          {message}
-        </p>
-      ))}
-      {(!controlled || creating) && (
+
+        <div className="border-t border-wa-border px-4 py-3 text-[12.5px] text-wa-muted sm:px-5">{countLabel}</div>
+      </section>
+
+      {controlled && creating && (
+        <WaDialog title="Nova cidade" onClose={() => setCreating(false)} size="max-w-md">
+          <div className="px-6 pb-5 pt-2">
+            <CreateCityForm
+              embedded
+              onCreated={() => {
+                refresh();
+                setCreating(false);
+              }}
+              onCancel={() => setCreating(false)}
+            />
+          </div>
+        </WaDialog>
+      )}
+      {!controlled && (
         <CreateCityForm
           onCreated={() => {
             refresh();
             setCreating(false);
           }}
-          onCancel={() => setCreating(false)}
         />
       )}
-    </div>
+    </>
   );
 }
 

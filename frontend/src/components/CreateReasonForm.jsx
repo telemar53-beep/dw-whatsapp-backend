@@ -6,7 +6,8 @@ const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 
-function CreateReasonForm({ onCreated, onCancel }) {
+// `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
+function CreateReasonForm({ onCreated, onCancel, embedded = false }) {
   const { token } = useAuth();
   const [name, setName] = useState('');
   const [error, setError] = useState(null);
@@ -30,9 +31,9 @@ function CreateReasonForm({ onCreated, onCancel }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      className={embedded ? 'space-y-3' : 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 backdrop-blur-xl'}
     >
-      <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar novo motivo</h3>
+      {!embedded && <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar novo motivo</h3>}
       <div>
         <label htmlFor="reason-name" className={labelClass}>
           Nome

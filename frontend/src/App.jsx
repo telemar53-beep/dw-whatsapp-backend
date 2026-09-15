@@ -19,6 +19,7 @@ import TeamLayout from './pages/settings/team/TeamLayout';
 import UsersPage from './pages/settings/team/UsersPage';
 import SectorsPage from './pages/settings/team/SectorsPage';
 import RolesPage from './pages/settings/team/RolesPage';
+import RegistersLayout from './pages/settings/registers/RegistersLayout';
 import ReasonsPage from './pages/settings/registers/ReasonsPage';
 import CitiesPage from './pages/settings/registers/CitiesPage';
 import CompanyPage from './pages/settings/CompanyPage';
@@ -103,8 +104,11 @@ function App() {
                   <Route path="setores" element={<SectorsPage />} />
                   <Route path="perfis" element={<RolesPage />} />
                 </Route>
-                <Route path="cadastros/motivos" element={<ReasonsPage />} />
-                <Route path="cadastros/cidades" element={<CitiesPage />} />
+                <Route path="cadastros" element={<RegistersLayout />}>
+                  <Route index element={<Navigate to="motivos" replace />} />
+                  <Route path="motivos" element={<ReasonsPage />} />
+                  <Route path="cidades" element={<CitiesPage />} />
+                </Route>
                 <Route path="empresa" element={<CompanyPage />} />
                 <Route path="mensagens" element={<MessagesLayout />}>
                   <Route index element={<Navigate to="boas-vindas" replace />} />

@@ -39,4 +39,17 @@ describe('useAgentsAdmin', () => {
     const { result } = renderHook(() => useAgentsAdmin(true));
     await waitFor(() => expect(result.current.loading).toBe(false));
   });
+
+  test('expõe status loading → ready', async () => {
+    api.listAgentsAdmin.mockResolvedValue([]);
+    const { result } = renderHook(() => useAgentsAdmin(true));
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.listAgentsAdmin.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useAgentsAdmin(true));
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

@@ -44,4 +44,17 @@ describe('useAssignmentMessageConfig', () => {
 
     expect(result.current.config.openingMessage).toBe('nova');
   });
+
+  test('expõe status loading → ready', async () => {
+    api.getAssignmentMessageConfig.mockResolvedValue({ id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] });
+    const { result } = renderHook(() => useAssignmentMessageConfig());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.getAssignmentMessageConfig.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useAssignmentMessageConfig());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

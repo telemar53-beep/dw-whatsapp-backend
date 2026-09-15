@@ -43,4 +43,17 @@ describe('useBusinessHoursConfig', () => {
 
     expect(result.current.config.message).toBe('novo aviso');
   });
+
+  test('expõe status loading → ready', async () => {
+    api.getBusinessHoursConfig.mockResolvedValue({ id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' });
+    const { result } = renderHook(() => useBusinessHoursConfig());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.getBusinessHoursConfig.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useBusinessHoursConfig());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

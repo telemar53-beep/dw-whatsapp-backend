@@ -8,10 +8,19 @@ export function useMyConversations() {
   const { token } = useAuth();
   const socket = useSocket();
   const [conversations, setConversations] = useState([]);
+  const [status, setStatus] = useState('loading');
 
   useEffect(() => {
     if (!token) return;
-    getMyConversations(token).then(setConversations).catch(() => {});
+    setStatus('loading');
+    getMyConversations(token)
+      .then((data) => {
+        setConversations(data);
+        setStatus('ready');
+      })
+      .catch((err) => {
+        setStatus(err && err.status === 403 ? 'forbidden' : 'error');
+      });
   }, [token]);
 
   useEffect(() => {
@@ -47,5 +56,5 @@ export function useMyConversations() {
     };
   }, [socket]);
 
-  return conversations;
+  return { conversations, status, loading: status === 'loading' };
 }

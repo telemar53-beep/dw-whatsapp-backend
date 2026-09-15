@@ -54,4 +54,17 @@ describe('useMyClosedConversations', () => {
     expect(api.getMyClosedConversations).toHaveBeenLastCalledWith({ offset: 0, limit: 20 }, 'tok-123');
     expect(result.current.items).toEqual([{ id: 'c2' }]);
   });
+
+  test('expõe status loading → ready', async () => {
+    api.getMyClosedConversations.mockResolvedValue({ items: [], hasMore: false });
+    const { result } = renderHook(() => useMyClosedConversations());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.getMyClosedConversations.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useMyClosedConversations());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

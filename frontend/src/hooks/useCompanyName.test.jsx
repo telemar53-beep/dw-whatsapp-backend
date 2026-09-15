@@ -42,4 +42,17 @@ describe('useCompanyName', () => {
     await waitFor(() => expect(api.getPublicCompany).toHaveBeenCalled());
     expect(result.current.name).toBe('');
   });
+
+  test('expõe status loading → ready', async () => {
+    api.getPublicCompany.mockResolvedValue({ name: 'Provedor X' });
+    const { result } = renderHook(() => useCompanyName());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.getPublicCompany.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useCompanyName());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

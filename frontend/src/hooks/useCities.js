@@ -1,28 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listCities } from '../services/api';
+import { useAsyncResource } from './useAsyncResource';
 
 export function useCities() {
   const { token } = useAuth();
-  const [cities, setCities] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(() => {
-    if (!token) return Promise.resolve();
-    setLoading(true);
-    return listCities(token)
-      .then((data) => {
-        setCities(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, [token]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { cities, loading, refresh };
+  const { data, status, error, refresh } = useAsyncResource(() => listCities(token), [token], { initial: [], enabled: Boolean(token) });
+  return { cities: data, status, error, loading: status === 'loading', refresh };
 }

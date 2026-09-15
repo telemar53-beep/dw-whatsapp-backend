@@ -38,4 +38,17 @@ describe('useChannels', () => {
     const { result } = renderHook(() => useChannels(true));
     await waitFor(() => expect(result.current.loading).toBe(false));
   });
+
+  test('expõe status loading → ready', async () => {
+    api.listChannels.mockResolvedValue([]);
+    const { result } = renderHook(() => useChannels(true));
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.listChannels.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useChannels(true));
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

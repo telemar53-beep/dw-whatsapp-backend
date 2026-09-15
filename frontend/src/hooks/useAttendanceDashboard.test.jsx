@@ -141,4 +141,17 @@ describe('useAttendanceDashboard', () => {
     expect(result.current.inProgress).toEqual([]);
     expect(result.current.closedTodayCount).toBe(3);
   });
+
+  test('expõe status loading → ready', async () => {
+    getDashboardConversations.mockResolvedValue({ inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0 });
+    const { result } = renderHook(() => useAttendanceDashboard());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    getDashboardConversations.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useAttendanceDashboard());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

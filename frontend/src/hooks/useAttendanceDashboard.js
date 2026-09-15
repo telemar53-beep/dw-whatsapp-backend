@@ -24,10 +24,12 @@ export function useAttendanceDashboard() {
   const [inAutomation, setInAutomation] = useState([]);
   const [closedTodayCount, setClosedTodayCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState('loading');
 
   const refresh = useCallback(() => {
     if (!token) return Promise.resolve();
     setLoading(true);
+    setStatus('loading');
     return getDashboardConversations(token)
       .then((data) => {
         setInProgress(data.inProgress);
@@ -35,8 +37,12 @@ export function useAttendanceDashboard() {
         setInAutomation(data.inAutomation);
         setClosedTodayCount(data.closedTodayCount);
         setLoading(false);
+        setStatus('ready');
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setLoading(false);
+        setStatus(err && err.status === 403 ? 'forbidden' : 'error');
+      });
   }, [token]);
 
   useEffect(() => {
@@ -74,5 +80,5 @@ export function useAttendanceDashboard() {
     };
   }, [socket]);
 
-  return { inProgress, waiting, inAutomation, closedTodayCount, loading, refresh };
+  return { inProgress, waiting, inAutomation, closedTodayCount, loading, status, refresh };
 }

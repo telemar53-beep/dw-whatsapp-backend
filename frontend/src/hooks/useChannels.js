@@ -1,28 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listChannels } from '../services/api';
+import { useAsyncResource } from './useAsyncResource';
 
 export function useChannels(enabled = true, includeHidden = false) {
   const { token } = useAuth();
-  const [channels, setChannels] = useState([]);
-  const [loading, setLoading] = useState(enabled);
-
-  const refresh = useCallback(() => {
-    if (!token || !enabled) return Promise.resolve();
-    setLoading(true);
-    return listChannels(token, { includeHidden })
-      .then((data) => {
-        setChannels(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, [token, enabled, includeHidden]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { channels, loading, refresh };
+  const { data, status, error, refresh } = useAsyncResource(
+    () => listChannels(token, { includeHidden }),
+    [token, includeHidden],
+    { initial: [], enabled: Boolean(token) && enabled }
+  );
+  return { channels: data, status, error, loading: status === 'loading', refresh };
 }

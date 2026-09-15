@@ -32,4 +32,17 @@ describe('useQuickReplies', () => {
 
     expect(result.current.quickReplies).toEqual([{ id: 'qr-2', title: 'Nova', content: 'Texto' }]);
   });
+
+  test('expõe status loading → ready', async () => {
+    api.listQuickReplies.mockResolvedValue([]);
+    const { result } = renderHook(() => useQuickReplies());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.listQuickReplies.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useQuickReplies());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

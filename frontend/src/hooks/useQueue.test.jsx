@@ -33,19 +33,32 @@ describe('useQueue', () => {
   test('fetches the initial queue on mount', async () => {
     api.getQueue.mockResolvedValue([{ id: 'c1', contactDisplayName: 'Carlos' }]);
     const { result } = renderHook(() => useQueue());
-    await waitFor(() => expect(result.current).toEqual([{ id: 'c1', contactDisplayName: 'Carlos' }]));
+    await waitFor(() => expect(result.current.queue).toEqual([{ id: 'c1', contactDisplayName: 'Carlos' }]));
+  });
+
+  test('expõe status loading → ready', async () => {
+    api.getQueue.mockResolvedValue([]);
+    const { result } = renderHook(() => useQueue());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.getQueue.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useQueue());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
   });
 
   test('queue:new upserts by conversation id instead of appending', async () => {
     api.getQueue.mockResolvedValue([{ id: 'c1', contactDisplayName: 'Carlos' }]);
     const { result } = renderHook(() => useQueue());
-    await waitFor(() => expect(result.current).toHaveLength(1));
+    await waitFor(() => expect(result.current.queue).toHaveLength(1));
 
     act(() => {
       fakeSocket.trigger('queue:new', { conversation: { id: 'c1', contactDisplayName: 'Carlos (atualizado)' } });
     });
 
-    expect(result.current).toEqual([{ id: 'c1', contactDisplayName: 'Carlos (atualizado)' }]);
+    expect(result.current.queue).toEqual([{ id: 'c1', contactDisplayName: 'Carlos (atualizado)' }]);
   });
 
   test('contact:avatar-updated swaps the avatar of every conversation of that contact', async () => {
@@ -54,13 +67,13 @@ describe('useQueue', () => {
       { id: 'c2', contactId: 'ct2', contactAvatarPath: null },
     ]);
     const { result } = renderHook(() => useQueue());
-    await waitFor(() => expect(result.current).toHaveLength(2));
+    await waitFor(() => expect(result.current.queue).toHaveLength(2));
 
     act(() => {
       fakeSocket.trigger('contact:avatar-updated', { contactId: 'ct1', avatarPath: 'new.jpg' });
     });
 
-    expect(result.current).toEqual([
+    expect(result.current.queue).toEqual([
       { id: 'c1', contactId: 'ct1', contactAvatarPath: 'new.jpg' },
       { id: 'c2', contactId: 'ct2', contactAvatarPath: null },
     ]);
@@ -69,24 +82,24 @@ describe('useQueue', () => {
   test('queue:new adds a new entry for an unseen conversation', async () => {
     api.getQueue.mockResolvedValue([]);
     const { result } = renderHook(() => useQueue());
-    await waitFor(() => expect(result.current).toEqual([]));
+    await waitFor(() => expect(result.current.queue).toEqual([]));
 
     act(() => {
       fakeSocket.trigger('queue:new', { conversation: { id: 'c2', contactDisplayName: 'Maria' } });
     });
 
-    expect(result.current).toEqual([{ id: 'c2', contactDisplayName: 'Maria' }]);
+    expect(result.current.queue).toEqual([{ id: 'c2', contactDisplayName: 'Maria' }]);
   });
 
   test('queue:removed removes the conversation from the list', async () => {
     api.getQueue.mockResolvedValue([{ id: 'c1' }, { id: 'c2' }]);
     const { result } = renderHook(() => useQueue());
-    await waitFor(() => expect(result.current).toHaveLength(2));
+    await waitFor(() => expect(result.current.queue).toHaveLength(2));
 
     act(() => {
       fakeSocket.trigger('queue:removed', { conversationId: 'c1' });
     });
 
-    expect(result.current).toEqual([{ id: 'c2' }]);
+    expect(result.current.queue).toEqual([{ id: 'c2' }]);
   });
 });

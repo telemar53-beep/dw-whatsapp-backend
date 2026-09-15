@@ -45,4 +45,17 @@ describe('useCompanyConfig', () => {
     expect(api.getCompanyConfig).not.toHaveBeenCalled();
     expect(result.current.config).toEqual({ id: null, name: '', acceptedPayeeNames: [] });
   });
+
+  test('expõe status loading → ready', async () => {
+    api.getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
+    const { result } = renderHook(() => useCompanyConfig());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.getCompanyConfig.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useCompanyConfig());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

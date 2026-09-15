@@ -8,10 +8,19 @@ export function useQueue() {
   const { token } = useAuth();
   const socket = useSocket();
   const [queue, setQueue] = useState([]);
+  const [status, setStatus] = useState('loading');
 
   useEffect(() => {
     if (!token) return;
-    getQueue(token).then(setQueue).catch(() => {});
+    setStatus('loading');
+    getQueue(token)
+      .then((data) => {
+        setQueue(data);
+        setStatus('ready');
+      })
+      .catch((err) => {
+        setStatus(err && err.status === 403 ? 'forbidden' : 'error');
+      });
   }, [token]);
 
   useEffect(() => {
@@ -45,5 +54,5 @@ export function useQueue() {
     };
   }, [socket]);
 
-  return queue;
+  return { queue, status, loading: status === 'loading' };
 }

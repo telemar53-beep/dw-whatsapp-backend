@@ -36,4 +36,17 @@ describe('useSgpIntegrations', () => {
 
     expect(result.current.integrations).toHaveLength(1);
   });
+
+  test('expõe status loading → ready', async () => {
+    api.listSgpIntegrations.mockResolvedValue([]);
+    const { result } = renderHook(() => useSgpIntegrations());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.listSgpIntegrations.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useSgpIntegrations());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

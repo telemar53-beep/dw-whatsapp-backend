@@ -35,4 +35,17 @@ describe('useReasonsAdmin', () => {
 
     expect(result.current.reasons).toEqual([{ id: 'r3', name: 'Nova', active: true }]);
   });
+
+  test('expõe status loading → ready', async () => {
+    api.listReasonsAdmin.mockResolvedValue([]);
+    const { result } = renderHook(() => useReasonsAdmin());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.listReasonsAdmin.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useReasonsAdmin());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

@@ -32,4 +32,17 @@ describe('useSectors', () => {
 
     expect(result.current.sectors).toEqual([{ id: 'sector-2', name: 'Nova' }]);
   });
+
+  test('expõe status loading → ready', async () => {
+    api.listSectors.mockResolvedValue([]);
+    const { result } = renderHook(() => useSectors());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.listSectors.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useSectors());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

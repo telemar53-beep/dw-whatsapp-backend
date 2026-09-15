@@ -1,30 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getTriage } from '../services/api';
+import { useAsyncResource } from './useAsyncResource';
+
+const EMPTY = { config: null, options: [] };
 
 export function useTriage() {
   const { token } = useAuth();
-  const [config, setConfig] = useState(null);
-  const [options, setOptions] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(() => {
-    if (!token) return Promise.resolve();
-    setLoading(true);
-    return getTriage(token)
-      .then((data) => {
-        setConfig({ questionText: data.questionText, confirmationText: data.confirmationText, maxAttempts: data.maxAttempts });
-        setOptions(data.options);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, [token]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { config, options, loading, refresh };
+  const { data, status, error, refresh } = useAsyncResource(
+    () =>
+      getTriage(token).then((result) => ({
+        config: { questionText: result.questionText, confirmationText: result.confirmationText, maxAttempts: result.maxAttempts },
+        options: result.options,
+      })),
+    [token],
+    { initial: EMPTY, enabled: Boolean(token) }
+  );
+  return { config: data.config, options: data.options, status, error, loading: status === 'loading', refresh };
 }

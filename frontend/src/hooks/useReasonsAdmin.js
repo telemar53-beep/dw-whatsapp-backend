@@ -1,28 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listReasonsAdmin } from '../services/api';
+import { useAsyncResource } from './useAsyncResource';
 
 export function useReasonsAdmin() {
   const { token } = useAuth();
-  const [reasons, setReasons] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(() => {
-    if (!token) return Promise.resolve();
-    setLoading(true);
-    return listReasonsAdmin(token)
-      .then((data) => {
-        setReasons(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, [token]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { reasons, loading, refresh };
+  const { data, status, error, refresh } = useAsyncResource(() => listReasonsAdmin(token), [token], { initial: [], enabled: Boolean(token) });
+  return { reasons: data, status, error, loading: status === 'loading', refresh };
 }

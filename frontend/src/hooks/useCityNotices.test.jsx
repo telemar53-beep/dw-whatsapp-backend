@@ -32,4 +32,17 @@ describe('useCityNotices', () => {
 
     expect(result.current.cityNotices).toEqual([{ id: 'city-2', name: 'Nova', notice: null }]);
   });
+
+  test('expõe status loading → ready', async () => {
+    api.listCityNotices.mockResolvedValue([]);
+    const { result } = renderHook(() => useCityNotices());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.listCityNotices.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useCityNotices());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

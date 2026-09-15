@@ -32,4 +32,17 @@ describe('useReasons', () => {
 
     expect(result.current.reasons).toEqual([{ id: 'r2', name: 'Pagamento', active: true }]);
   });
+
+  test('expõe status loading → ready', async () => {
+    api.listReasons.mockResolvedValue([]);
+    const { result } = renderHook(() => useReasons());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.listReasons.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useReasons());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

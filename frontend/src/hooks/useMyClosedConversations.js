@@ -9,18 +9,22 @@ export function useMyClosedConversations() {
   const [items, setItems] = useState([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState('loading');
 
   const refresh = useCallback(() => {
     if (!token) return Promise.resolve();
     setLoading(true);
+    setStatus('loading');
     return getMyClosedConversations({ offset: 0, limit: PAGE_SIZE }, token)
       .then((data) => {
         setItems(data.items);
         setHasMore(data.hasMore);
         setLoading(false);
+        setStatus('ready');
       })
-      .catch(() => {
+      .catch((err) => {
         setLoading(false);
+        setStatus(err && err.status === 403 ? 'forbidden' : 'error');
       });
   }, [token]);
 
@@ -45,5 +49,5 @@ export function useMyClosedConversations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  return { items, hasMore, loading, loadMore, refresh };
+  return { items, hasMore, loading, status, loadMore, refresh };
 }

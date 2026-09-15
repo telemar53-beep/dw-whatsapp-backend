@@ -1,28 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listQuickReplies } from '../services/api';
+import { useAsyncResource } from './useAsyncResource';
 
 export function useQuickReplies() {
   const { token } = useAuth();
-  const [quickReplies, setQuickReplies] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(() => {
-    if (!token) return Promise.resolve();
-    setLoading(true);
-    return listQuickReplies(token)
-      .then((data) => {
-        setQuickReplies(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, [token]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { quickReplies, loading, refresh };
+  const { data, status, error, refresh } = useAsyncResource(() => listQuickReplies(token), [token], { initial: [], enabled: Boolean(token) });
+  return { quickReplies: data, status, error, loading: status === 'loading', refresh };
 }

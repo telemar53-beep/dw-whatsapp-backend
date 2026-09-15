@@ -37,4 +37,17 @@ describe('useTriage', () => {
 
     await waitFor(() => expect(result.current.config.questionText).toBe('C'));
   });
+
+  test('expõe status loading → ready', async () => {
+    api.getTriage.mockResolvedValue({ questionText: 'A', confirmationText: 'B', maxAttempts: 1, options: [] });
+    const { result } = renderHook(() => useTriage());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.getTriage.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useTriage());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

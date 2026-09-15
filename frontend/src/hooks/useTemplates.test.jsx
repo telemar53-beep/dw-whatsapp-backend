@@ -29,4 +29,17 @@ describe('useTemplates', () => {
     });
     expect(result.current.templates).toEqual([{ id: 'tpl-2' }]);
   });
+
+  test('expõe status loading → ready', async () => {
+    api.listTemplatesAdmin.mockResolvedValue([]);
+    const { result } = renderHook(() => useTemplates());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.listTemplatesAdmin.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useTemplates());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

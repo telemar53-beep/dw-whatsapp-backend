@@ -38,4 +38,17 @@ describe('useSgpQueryConfig', () => {
 
     expect(result.current.config.baseUrl).toBe('https://y.example');
   });
+
+  test('expõe status loading → ready', async () => {
+    api.getSgpQueryConfig.mockResolvedValue({ configured: false });
+    const { result } = renderHook(() => useSgpQueryConfig());
+    expect(result.current.status).toBe('loading');
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+  });
+
+  test('403 vira forbidden', async () => {
+    api.getSgpQueryConfig.mockRejectedValue({ status: 403, body: { error: 'Insufficient permissions' } });
+    const { result } = renderHook(() => useSgpQueryConfig());
+    await waitFor(() => expect(result.current.status).toBe('forbidden'));
+  });
 });

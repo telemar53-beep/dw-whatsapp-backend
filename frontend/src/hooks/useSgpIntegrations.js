@@ -1,28 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listSgpIntegrations } from '../services/api';
+import { useAsyncResource } from './useAsyncResource';
 
 export function useSgpIntegrations() {
   const { token } = useAuth();
-  const [integrations, setIntegrations] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(() => {
-    if (!token) return Promise.resolve();
-    setLoading(true);
-    return listSgpIntegrations(token)
-      .then((data) => {
-        setIntegrations(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, [token]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { integrations, loading, refresh };
+  const { data, status, error, refresh } = useAsyncResource(() => listSgpIntegrations(token), [token], { initial: [], enabled: Boolean(token) });
+  return { integrations: data, status, error, loading: status === 'loading', refresh };
 }

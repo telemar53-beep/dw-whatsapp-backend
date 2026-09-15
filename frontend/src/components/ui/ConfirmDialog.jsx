@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import WaDialog from '../WaDialog';
 import { Button } from './Button';
 
 export function ConfirmDialog({ open, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false, onConfirm, onCancel }) {
   const cancelRef = useRef(null);
+  const confirmRef = useRef(null);
   const openerRef = useRef(null);
+  const messageId = useId();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -17,13 +19,32 @@ export function ConfirmDialog({ open, message, confirmLabel = 'Confirmar', cance
   }, [open]);
 
   if (!open) return null;
+
+  // Só há dois elementos focáveis dentro do diálogo (Cancelar e Confirmar):
+  // prende o Tab entre eles para o foco não escapar para trás do overlay.
+  function trapTab(event) {
+    if (event.key !== 'Tab') return;
+    const first = cancelRef.current;
+    const last = confirmRef.current;
+    if (!first || !last) return;
+    if (event.shiftKey) {
+      if (document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      }
+    } else if (document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   return (
     <WaDialog onClose={onCancel} size="max-w-sm">
-      <div role="alertdialog" aria-modal="true" aria-describedby="confirm-message" className="px-6 pb-4 pt-5">
-        <p id="confirm-message" className="text-[15px] leading-[22px] text-wa-text">{message}</p>
+      <div role="alertdialog" aria-modal="true" aria-describedby={messageId} className="px-6 pb-4 pt-5" onKeyDown={trapTab}>
+        <p id={messageId} className="text-[15px] leading-[22px] text-wa-text">{message}</p>
         <div className="mt-5 flex justify-end gap-2">
           <Button ref={cancelRef} variant="ghost" onClick={onCancel}>{cancelLabel}</Button>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button>
+          <Button ref={confirmRef} variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button>
         </div>
       </div>
     </WaDialog>

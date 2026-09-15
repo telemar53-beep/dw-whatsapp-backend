@@ -54,6 +54,21 @@ describe('useConfirm', () => {
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(opener).toHaveFocus();
   });
+  test('Tab prende o foco entre Cancelar e o botão de confirmação', async () => {
+    render(<Demo />);
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir' }));
+    const cancelar = screen.getByRole('button', { name: 'Cancelar' });
+    const confirmar = screen.getByRole('button', { name: 'Excluir' });
+    expect(cancelar).toHaveFocus();
+
+    await userEvent.tab();
+    expect(confirmar).toHaveFocus();
+    await userEvent.tab();
+    expect(cancelar).toHaveFocus();
+
+    await userEvent.tab({ shift: true });
+    expect(confirmar).toHaveFocus();
+  });
   test('Esc cancela e resolve false', async () => {
     render(<Demo />);
     await userEvent.click(screen.getByRole('button', { name: 'Abrir' }));

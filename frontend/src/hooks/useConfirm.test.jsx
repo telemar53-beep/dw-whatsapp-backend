@@ -21,6 +21,27 @@ function Demo() {
   );
 }
 
+function DemoConcurrent() {
+  const { confirm, confirmDialog } = useConfirm();
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={async () => {
+          const [a, b] = await Promise.all([
+            confirm('Primeiro diálogo?', { confirmLabel: 'Ok' }),
+            confirm('Segundo diálogo?', { confirmLabel: 'Ok' }),
+          ]);
+          document.title = `${a}-${b}`;
+        }}
+      >
+        Abrir dois
+      </button>
+      {confirmDialog}
+    </div>
+  );
+}
+
 describe('useConfirm', () => {
   test('confirmar resolve true e devolve o foco ao botão de origem', async () => {
     render(<Demo />);
@@ -38,5 +59,18 @@ describe('useConfirm', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Abrir' }));
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(document.title).toBe('nao'));
+  });
+  test('segundo confirm() enquanto o primeiro está pendente resolve false imediatamente e não toca o diálogo aberto', async () => {
+    render(<DemoConcurrent />);
+    const opener = screen.getByRole('button', { name: 'Abrir dois' });
+    await userEvent.click(opener);
+    // Verifica que o diálogo mostra a primeira mensagem (não foi sobrescrito pela segunda)
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Primeiro diálogo?');
+    // Clica no botão Ok do primeiro diálogo - isso fará a primeira promise resolver true
+    // e a segunda já deve estar resolvida como false
+    await userEvent.click(screen.getByRole('button', { name: 'Ok' }));
+    // Aguarda o título ser atualizado (true da primeira, false da segunda)
+    await waitFor(() => expect(document.title).toBe('true-false'));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 });

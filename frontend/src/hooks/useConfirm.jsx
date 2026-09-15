@@ -6,6 +6,10 @@ export function useConfirm() {
   const resolver = useRef(null);
 
   const confirm = useCallback((message, options = {}) => {
+    // Se já há uma confirmação pendente, resolve false imediatamente sem alterar o diálogo aberto
+    if (resolver.current) {
+      return Promise.resolve(false);
+    }
     return new Promise((resolve) => {
       resolver.current = resolve;
       setState({ message, ...options });

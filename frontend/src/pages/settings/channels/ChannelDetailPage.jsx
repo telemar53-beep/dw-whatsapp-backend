@@ -12,8 +12,7 @@ function ChannelDetailPage() {
   const { id } = useParams();
   const { agent } = useAuth();
   const canManage = hasLevel(agent, 'integrations');
-  const { channels, loading, status: hookStatus, refresh } = useChannels(true, true);
-  const status = hookStatus || (loading ? 'loading' : 'ready');
+  const { channels, status, refresh } = useChannels(true, true);
   const actions = useChannelActions(refresh);
   const channel = channels.find((c) => c.id === id);
 

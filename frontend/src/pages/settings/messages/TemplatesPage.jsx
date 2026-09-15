@@ -7,8 +7,7 @@ import TemplatesAdminTab from '../../../components/TemplatesAdminTab';
 
 function TemplatesPage() {
   const [creating, setCreating] = useState(false);
-  const { channels, loading, status: hookStatus } = useChannels(true);
-  const status = hookStatus || (loading ? 'loading' : 'ready');
+  const { channels, status } = useChannels(true);
   const hasOfficialChannel = channels.some((channel) => isOfficialChannelType(channel.type));
 
   return (

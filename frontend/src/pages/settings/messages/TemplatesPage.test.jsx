@@ -15,7 +15,7 @@ vi.mock('../../../services/api');
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { role: 'admin' } });
-  useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+  useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
 });
 
 describe('TemplatesPage', () => {
@@ -23,14 +23,14 @@ describe('TemplatesPage', () => {
   // MessagesAdminTab como um Card sempre visível no topo da página — mesmo
   // texto, sem precisar clicar em nada para revelá-lo.
   test('shows the explanation for the templates feature directly, without a popup', () => {
-    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }], loading: false, refresh: vi.fn() });
+    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }], status: 'ready', refresh: vi.fn() });
     renderInShell(<TemplatesPage />, { path: '/configuracoes/mensagens/templates' });
 
     expect(screen.getByText(/templates são mensagens pré-aprovadas pela meta/i)).toBeInTheDocument();
   });
 
   test('shows the Templates section with its own create button', () => {
-    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }], loading: false, refresh: vi.fn() });
+    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }], status: 'ready', refresh: vi.fn() });
     renderInShell(<TemplatesPage />, { path: '/configuracoes/mensagens/templates' });
 
     expect(screen.getByText('Templates')).toBeInTheDocument();
@@ -41,7 +41,7 @@ describe('TemplatesPage', () => {
   // de Configurações), controlando o formulário dentro de TemplatesAdminTab
   // em vez do botão interno "Cadastrar novo template".
   test('clicking the header action opens the create-template form', async () => {
-    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }], loading: false, refresh: vi.fn() });
+    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }], status: 'ready', refresh: vi.fn() });
     renderInShell(<TemplatesPage />, { path: '/configuracoes/mensagens/templates' });
 
     expect(screen.queryByRole('form', { name: /cadastrar novo template/i })).not.toBeInTheDocument();
@@ -53,7 +53,7 @@ describe('TemplatesPage', () => {
   });
 
   test('shows a warning when there is no official channel registered', () => {
-    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'baileys', name: 'Não oficial' }], loading: false, refresh: vi.fn() });
+    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'baileys', name: 'Não oficial' }], status: 'ready', refresh: vi.fn() });
     renderInShell(<TemplatesPage />, { path: '/configuracoes/mensagens/templates' });
 
     expect(

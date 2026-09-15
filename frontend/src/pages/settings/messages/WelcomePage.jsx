@@ -8,8 +8,7 @@ import ChannelWelcomeMessageRow from '../../../components/messages/ChannelWelcom
 function WelcomePage() {
   const { agent } = useAuth();
   const canEdit = hasLevel(agent, 'integrations');
-  const { channels, loading, status: hookStatus, refresh } = useChannels(true);
-  const status = hookStatus || (loading ? 'loading' : 'ready');
+  const { channels, status, refresh } = useChannels(true);
   return (
     <SettingsPage
       title="Boas-vindas"

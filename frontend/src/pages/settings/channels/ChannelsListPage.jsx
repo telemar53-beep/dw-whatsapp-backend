@@ -59,8 +59,7 @@ function ChannelsListPage() {
   const canManage = hasLevel(agent, 'integrations');
   const [searchParams, setSearchParams] = useSearchParams();
   const showHidden = searchParams.get('ocultos') === '1';
-  const { channels, loading, status: hookStatus, refresh } = useChannels(true, showHidden);
-  const status = hookStatus || (loading ? 'loading' : 'ready');
+  const { channels, status, refresh } = useChannels(true, showHidden);
   const { options } = useTriage();
   const { config: aiConfig } = useAiConfig();
   const [creatingChannel, setCreatingChannel] = useState(false);

@@ -24,7 +24,7 @@ function fromConfig(config) {
 // trata campo ausente como "desligado". Por isso save() manda os nove sempre.
 export function useAiTriageForm() {
   const { token } = useAuth();
-  const { config, status, loading, refresh } = useAiConfig();
+  const { config, status, refresh } = useAiConfig();
   const [values, setValues] = useState(() => fromConfig(config));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -65,5 +65,5 @@ export function useAiTriageForm() {
     }
   }
 
-  return { status: status || (loading ? 'loading' : 'ready'), config, values, setValue, save, saving, error, refresh };
+  return { status, config, values, setValue, save, saving, error, refresh };
 }

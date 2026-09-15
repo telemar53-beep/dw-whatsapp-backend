@@ -123,12 +123,11 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
 }
 
 function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedReasonId = null } = {}) {
-  const { reasons, status: hookStatus, loading, refresh } = useReasonsAdmin();
+  const { reasons, status, refresh } = useReasonsAdmin();
   const [internalCreating, setInternalCreating] = useState(false);
   const controlled = creatingProp !== undefined;
   const creatingReason = controlled ? creatingProp : internalCreating;
   const setCreatingReason = controlled ? onCreatingChange : setInternalCreating;
-  const status = hookStatus || (loading ? 'loading' : 'ready');
 
   return (
     <div className="space-y-6">

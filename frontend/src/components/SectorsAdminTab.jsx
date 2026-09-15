@@ -131,12 +131,11 @@ function SectorRow({ sector, onSaved, onDeleted }) {
 }
 
 function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
-  const { sectors, status: hookStatus, loading, refresh } = useSectors();
+  const { sectors, status, refresh } = useSectors();
   const [internalCreating, setInternalCreating] = useState(false);
   const controlled = creatingProp !== undefined;
   const creating = controlled ? creatingProp : internalCreating;
   const setCreating = controlled ? onCreatingChange : setInternalCreating;
-  const status = hookStatus || (loading ? 'loading' : 'ready');
 
   return (
     <div className="space-y-6">

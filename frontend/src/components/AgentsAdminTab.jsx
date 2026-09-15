@@ -178,13 +178,12 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
 
 function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const { token, agent: currentAgent } = useAuth();
-  const { agents, status: hookStatus, loading, refresh } = useAgentsAdmin();
+  const { agents, status, refresh } = useAgentsAdmin();
   const { sectors } = useSectors();
   const [internalCreating, setInternalCreating] = useState(false);
   const controlled = creatingProp !== undefined;
   const creatingAgent = controlled ? creatingProp : internalCreating;
   const setCreatingAgent = controlled ? onCreatingChange : setInternalCreating;
-  const status = hookStatus || (loading ? 'loading' : 'ready');
 
   async function handleToggleActive(agentToToggle) {
     await setAgentActive(agentToToggle.id, !agentToToggle.active, token);

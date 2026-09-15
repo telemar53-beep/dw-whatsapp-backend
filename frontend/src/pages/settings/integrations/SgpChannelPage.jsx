@@ -10,12 +10,11 @@ import SgpIntegrationCard from '../../../components/integrations/SgpIntegrationC
 import CreateSgpIntegrationForm from '../../../components/integrations/CreateSgpIntegrationForm';
 
 function SgpChannelPage() {
-  const { integrations, loading, status: hookStatus, error, refresh } = useSgpIntegrations();
-  const status = hookStatus || (loading ? 'loading' : 'ready');
+  const { integrations, status, error, refresh } = useSgpIntegrations();
   const { channels } = useChannels();
   const { templates } = useTemplates();
   const query = useSgpQueryConfig();
-  const queryStatus = query.status || (query.loading ? 'loading' : 'ready');
+  const queryStatus = query.status;
   const [creating, setCreating] = useState(false);
   const approvedTemplates = templates.filter((t) => t.status === 'APPROVED');
   const consultaDesligada = queryStatus === 'ready' && query.config.configured && !query.config.enabled;

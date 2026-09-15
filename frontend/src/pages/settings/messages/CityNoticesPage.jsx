@@ -5,8 +5,7 @@ import { useCityNotices } from '../../../hooks/useCityNotices';
 import CityNoticeRow from '../../../components/messages/CityNoticeRow';
 
 function CityNoticesPage() {
-  const { cityNotices, loading, status: hookStatus, refresh } = useCityNotices();
-  const status = hookStatus || (loading ? 'loading' : 'ready');
+  const { cityNotices, status, refresh } = useCityNotices();
   return (
     <SettingsPage title="Avisos por cidade" description="Avisos de instabilidade ou manutenção por região." scope="global">
       <Card title="Como funciona">

@@ -4,8 +4,7 @@ import CompanyConfigCard from '../../components/CompanyConfigCard';
 import { useCompanyConfig } from '../../hooks/useCompanyConfig';
 
 function CompanyPage() {
-  const { config, status: hookStatus, loading } = useCompanyConfig();
-  const status = hookStatus || (loading ? 'loading' : 'ready');
+  const { config, status } = useCompanyConfig();
   const semNomes = status === 'ready' && (!config.acceptedPayeeNames || config.acceptedPayeeNames.length === 0);
   return (
     <SettingsPage title="Empresa" description="Nome da empresa e nomes aceitos na conferência de comprovantes." scope="global">

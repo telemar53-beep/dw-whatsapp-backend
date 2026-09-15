@@ -50,13 +50,12 @@ function CityChip({ city, onDeleted, onError }) {
 }
 
 function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
-  const { cities, status: hookStatus, loading, refresh } = useCities();
+  const { cities, status, refresh } = useCities();
   const [errors, setErrors] = useState({});
   const [internalCreating, setInternalCreating] = useState(false);
   const controlled = creatingProp !== undefined;
   const creating = controlled ? creatingProp : internalCreating;
   const setCreating = controlled ? onCreatingChange : setInternalCreating;
-  const status = hookStatus || (loading ? 'loading' : 'ready');
 
   function setCityError(cityId, message) {
     setErrors((prev) => ({ ...prev, [cityId]: message }));

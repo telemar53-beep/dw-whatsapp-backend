@@ -7,8 +7,7 @@ import CreateQuickReplyForm from '../../../components/CreateQuickReplyForm';
 
 function QuickRepliesPage() {
   const [creating, setCreating] = useState(false);
-  const { quickReplies, loading, status: hookStatus, refresh } = useQuickReplies();
-  const status = hookStatus || (loading ? 'loading' : 'ready');
+  const { quickReplies, status, refresh } = useQuickReplies();
   return (
     <SettingsPage
       title="Respostas rápidas"

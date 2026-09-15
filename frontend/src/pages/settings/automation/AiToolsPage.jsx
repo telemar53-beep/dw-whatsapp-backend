@@ -12,8 +12,7 @@ const CATEGORY_LABELS = { CONSULTA: 'Consulta', ACAO: 'Ação', ACAO_SENSIVEL: '
 function AiToolsPage() {
   const { token } = useAuth();
   const { config } = useAiConfig();
-  const { tools, loading, status: hookStatus, refresh } = useAiTools();
-  const status = hookStatus || (loading ? 'loading' : 'ready');
+  const { tools, status, refresh } = useAiTools();
 
   async function handleToggle(nome, enabled) {
     await setAiToolEnabled(nome, enabled, token);

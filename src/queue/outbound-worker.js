@@ -6,7 +6,7 @@ const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { emitToAgent } = require('../realtime/socket-server');
-const { lerRecebedorDoPix } = require('../payments/pix-emv');
+const { lerRecebedorDoPix, resolverRecebedorPix } = require('../payments/pix-emv');
 const { isOfficialChannelType } = require('../channels/channel-types');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { cartaoPix } = require('../payments/payment-card');
@@ -118,8 +118,11 @@ function detalheDaApi(err) {
  *
  * A preferência é o cartão nativo do WhatsApp, com botão "Copiar código Pix".
  * Nos canais oficiais ele exige o recebedor (nome, chave e tipo), que sai de
- * dentro do próprio código Pix do boleto; no Baileys não, porque lá a "chave"
- * declarada é o próprio copia e cola.
+ * dentro do próprio código Pix do boleto; se o código for dinâmico e não
+ * trouxer a chave embutida, os canais oficiais ainda tentam resolvê-la
+ * buscando a própria URL de cobrança do código antes de cair para texto. No
+ * Baileys não há nada disso: lá a "chave" declarada é o próprio copia e cola,
+ * lido sem nenhuma chamada de rede.
  *
  * A decisão fica aqui, na hora do envio, e não em quem enfileirou: só agora se
  * sabe por qual canal a mensagem vai sair e o que o código carrega. E quando o
@@ -131,8 +134,8 @@ function detalheDaApi(err) {
  * copia, e é por ela que os recibos de entrega/leitura devem ser casados.
  */
 async function sendPixOrFallback({ adapter, channel, to, pixCode, metadata }) {
-  const merchant = lerRecebedorDoPix(pixCode);
   const oficial = isOfficialChannelType(channel.type);
+  const merchant = oficial ? await resolverRecebedorPix(pixCode) : lerRecebedorDoPix(pixCode);
   // Código dinâmico (só a URL do payload) ou texto que nem é EMV: não há chave
   // para declarar, e a API oficial recusaria o cartão.
   const semChaveNoOficial = oficial && (!merchant || !merchant.key);

@@ -7,6 +7,17 @@ jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
 jest.mock('../realtime/socket-server');
 jest.mock('../company/company-config.repository');
+// Recebedor real por padrão (as mesmas contas puras de sempre, sem rede) -
+// só os testes de resolução dinâmica sobrescrevem resolverRecebedorPix por
+// vez; assim o resto da suíte de Pix continua lendo os códigos EMV de
+// verdade, sem precisar simular cada um deles.
+jest.mock('../payments/pix-emv', () => {
+  const real = jest.requireActual('../payments/pix-emv');
+  return {
+    lerRecebedorDoPix: jest.fn(real.lerRecebedorDoPix),
+    resolverRecebedorPix: jest.fn(real.resolverRecebedorPix),
+  };
+});
 
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
@@ -16,6 +27,7 @@ const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { emitToAgent } = require('../realtime/socket-server');
+const { lerRecebedorDoPix, resolverRecebedorPix } = require('../payments/pix-emv');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { cartaoPix } = require('../payments/payment-card');
 const { startOutboundWorker } = require('./outbound-worker');
@@ -369,6 +381,10 @@ describe('startOutboundWorker', () => {
       );
       expect(baileysManager.sendTextMessage).not.toHaveBeenCalled();
       expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'BAILEYS_PIX_1');
+      // Baileys lê a chave só do próprio código, sem nenhuma chamada de rede -
+      // mesmo para um código dinâmico como este.
+      expect(lerRecebedorDoPix).toHaveBeenCalledWith(PIX_SEM_CHAVE);
+      expect(resolverRecebedorPix).not.toHaveBeenCalled();
     });
 
     test('no meta_cloud manda o cart\u00e3o com o recebedor lido do c\u00f3digo', async () => {
@@ -386,11 +402,35 @@ describe('startOutboundWorker', () => {
       expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'wamid.PIX1');
     });
 
+    test('no meta_cloud, c\u00f3digo din\u00e2mico resolvido pela cobran\u00e7a manda o cart\u00e3o com a chave achada', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      metaCloudAdapter.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'wamid.PIX_RESOLVIDO' });
+      const resolvido = { name: 'DW TELECOM', key: '12345678000199', keyType: 'CNPJ' };
+      resolverRecebedorPix.mockResolvedValueOnce(resolvido);
+
+      await handler(jobPix('channel-1', PIX_SEM_CHAVE));
+
+      expect(resolverRecebedorPix).toHaveBeenCalledWith(PIX_SEM_CHAVE);
+      expect(metaCloudAdapter.sendPixCardMessage).toHaveBeenCalledWith(
+        { id: 'channel-1', type: 'meta_cloud', config: {} },
+        '5511999998888',
+        { pixCode: PIX_SEM_CHAVE, value: 135, dueDate: '2026-09-15', faturaId: 4321, merchant: resolvido }
+      );
+      expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();
+      expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'wamid.PIX_RESOLVIDO');
+      // Canal oficial: a chave veio da resolu\u00e7\u00e3o ass\u00edncrona, n\u00e3o da leitura s\u00edncrona.
+      expect(lerRecebedorDoPix).not.toHaveBeenCalled();
+    });
+
     test('no meta_cloud, c\u00f3digo sem chave cai no texto: cart\u00e3o e depois o c\u00f3digo', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
       metaCloudAdapter.sendTextMessage
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CODIGO' });
+      // A resolu\u00e7\u00e3o din\u00e2mica n\u00e3o achou chave (c\u00f3digo sem localiza\u00e7\u00e3o v\u00e1lida,
+      // rede fora do ar, etc.) - simulada aqui em vez de bater numa URL de
+      // verdade, que este c\u00f3digo de teste nem tem.
+      resolverRecebedorPix.mockResolvedValueOnce({ name: 'DW TELECOM', key: null, keyType: null });
       const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       await handler(jobPix('channel-1', PIX_SEM_CHAVE));
@@ -456,6 +496,7 @@ describe('startOutboundWorker', () => {
       metaCloudAdapter.sendTextMessage
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CODIGO' });
+      resolverRecebedorPix.mockResolvedValueOnce({ name: 'DW TELECOM', key: null, keyType: null });
       const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       await handler(jobPix('channel-1', PIX_SEM_CHAVE));

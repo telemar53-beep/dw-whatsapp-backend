@@ -88,7 +88,7 @@ router.post('/', async (req, res) => {
   let finalTemplateVariables = null;
 
   if (channel.type === 'baileys') {
-    if (!content) {
+    if (!content || !content.trim()) {
       return res.status(400).json({ error: 'content is required' });
     }
     messageType = 'text';

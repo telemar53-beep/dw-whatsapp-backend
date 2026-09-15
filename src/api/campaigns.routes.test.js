@@ -183,6 +183,19 @@ describe('POST /api/campaigns', () => {
     expect(createCampaign).not.toHaveBeenCalled();
   });
 
+  test('rejects a whitespace-only content with 400 content is required', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
+
+    const res = await request(buildApp())
+      .post('/api/campaigns')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ channelId: 'channel-1', content: '   ', recipients: '5511999990000' });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'content is required' });
+    expect(createCampaign).not.toHaveBeenCalled();
+  });
+
   test('rejects a recipients list larger than 2000 entries', async () => {
     findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', status: 'connected', config: {} });
     const hugeList = Array.from({ length: 2001 }, (_, i) => `55119999${String(i).padStart(5, '0')}`).join('\n');

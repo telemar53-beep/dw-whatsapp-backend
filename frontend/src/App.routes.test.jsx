@@ -51,7 +51,7 @@ describe('rotas', () => {
     api.getCampaign.mockResolvedValue({ id: 'abc', name: 'Promo', sentCount: 0, failedCount: 0, skippedCount: 0, totalRecipients: 0, processedCount: 0, recipients: [] });
     window.history.pushState({}, '', '/campaigns/abc');
     render(<App />);
-    expect(await screen.findByText('Promo')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Promo' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/campanhas/abc');
   });
 

@@ -2,19 +2,26 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getCampaign } from '../services/api';
-import NavRail from '../components/NavRail';
-import ProfileModal from '../components/ProfileModal';
+import { useChannels } from '../hooks/useChannels';
+import { PageHeader, AsyncState } from '../components/ui';
 
 const STATUS_LABELS = { pending: 'Pendente', sent: 'Enviado', failed: 'Falhou', skipped: 'Pulado' };
 
 function CampaignDetailPage() {
   const { id } = useParams();
   const { token } = useAuth();
+  const { channels } = useChannels();
   const [campaign, setCampaign] = useState(null);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [status, setStatus] = useState('loading');
 
   const refresh = useCallback(() => {
-    return getCampaign(id, token).then(setCampaign);
+    setStatus('loading');
+    return getCampaign(id, token)
+      .then((data) => {
+        setCampaign(data);
+        setStatus('ready');
+      })
+      .catch(() => setStatus('error'));
   }, [id, token]);
 
   useEffect(() => {
@@ -33,53 +40,23 @@ function CampaignDetailPage() {
     return () => clearInterval(interval);
   }, [stillProcessing, refresh]);
 
-  if (!campaign) {
-    return (
-      <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute left-[36%] -top-[12%] h-[38rem] w-[42rem] rounded-full bg-chat-copper/40 blur-[150px]"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-[8%] bottom-[-18%] h-[30rem] w-[32rem] rounded-full bg-chat-copper/25 blur-[150px]"
-        />
-
-        <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-3">
-          <NavRail active="campaigns" onProfileClick={() => setProfileOpen(true)} />
-          <p className="px-4 py-4 text-[14px] text-chat-muted">Carregando...</p>
-        </div>
-        {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
-      </div>
-    );
-  }
+  const channelName = campaign && (campaign.channelName || channels.find((channel) => channel.id === campaign.channelId)?.name);
 
   return (
-    <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[36%] -top-[12%] h-[38rem] w-[42rem] rounded-full bg-chat-copper/40 blur-[150px]"
+    <div className="flex min-h-0 flex-1 flex-col">
+      <PageHeader
+        title={campaign ? campaign.name || 'Sem nome' : 'Campanha'}
+        description={
+          campaign
+            ? `Canal: ${channelName || '—'} — ${campaign.sentCount} enviados, ${campaign.failedCount} falharam, ${campaign.skippedCount} pulados de ${campaign.totalRecipients}`
+            : undefined
+        }
+        crumbs={[{ label: 'Campanhas', to: '/campanhas' }, { label: campaign?.name || 'Sem nome' }]}
       />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-[8%] bottom-[-18%] h-[30rem] w-[32rem] rounded-full bg-chat-copper/25 blur-[150px]"
-      />
 
-      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-3">
-        <NavRail active="campaigns" onProfileClick={() => setProfileOpen(true)} />
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="shrink-0 px-2 pb-4 pt-2">
-            <h1 className="font-display text-[26px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
-              {campaign.name || 'Sem nome'}
-            </h1>
-            <p className="mt-1.5 text-[14px] text-chat-muted">
-              {campaign.sentCount} enviados, {campaign.failedCount} falharam, {campaign.skippedCount} pulados de{' '}
-              {campaign.totalRecipients}
-            </p>
-          </header>
-
-          <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+        <AsyncState status={status} onRetry={refresh} isEmpty={status === 'ready' && campaign && campaign.recipients.length === 0} emptyMessage="Nenhum destinatário nesta campanha.">
+          {campaign && (
             <ul className="space-y-1.5">
               {campaign.recipients.map((recipient) => (
                 <li
@@ -94,11 +71,9 @@ function CampaignDetailPage() {
                 </li>
               ))}
             </ul>
-          </div>
-        </div>
+          )}
+        </AsyncState>
       </div>
-
-      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
     </div>
   );
 }

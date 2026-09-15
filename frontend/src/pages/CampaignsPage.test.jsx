@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { renderInShell } from '../test-utils/renderInShell';
 import CampaignsPage from './CampaignsPage';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
@@ -10,30 +10,25 @@ vi.mock('../contexts/AuthContext');
 vi.mock('../services/api');
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <CampaignsPage />
-    </MemoryRouter>
-  );
+  return renderInShell(<CampaignsPage />, { path: '/campanhas' });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', name: 'Ana', role: 'agent' }, logout: vi.fn() });
-  // O logo do NavRail (presente em todas estas telas) le o nome da empresa
-  // pela rota publica.
-  api.getPublicCompany.mockResolvedValue({ name: 'Provedor X' });
+  api.listChannels.mockResolvedValue([]);
 });
 
 describe('CampaignsPage', () => {
   test('lists existing campaigns with their counters', async () => {
     api.listCampaigns.mockResolvedValue([
-      { id: 'campaign-1', name: 'Aviso setembro', totalRecipients: 45, sentCount: 42, failedCount: 2, skippedCount: 1, createdAt: '2026-09-11T10:00:00Z' },
+      { id: 'campaign-1', name: 'Aviso setembro', channelName: 'Berg', totalRecipients: 45, sentCount: 42, failedCount: 2, skippedCount: 1, createdAt: '2026-09-11T10:00:00Z' },
     ]);
     renderPage();
 
     expect(await screen.findByText('Aviso setembro')).toBeInTheDocument();
     expect(screen.getByText(/42/)).toBeInTheDocument();
+    expect(await screen.findByText(/Berg/)).toBeInTheDocument();
   });
 
   test('shows a message when there are no campaigns yet', async () => {
@@ -55,7 +50,7 @@ describe('CampaignsPage', () => {
   });
 
   test('adds the new campaign to the list after creating it', async () => {
-    const newCampaign = { id: 'campaign-new', name: 'Nova', totalRecipients: 1, sentCount: 0, failedCount: 0, skippedCount: 0, createdAt: '2026-09-11T10:00:00Z' };
+    const newCampaign = { id: 'campaign-new', name: 'Nova', channelName: 'Berg', totalRecipients: 1, sentCount: 0, failedCount: 0, skippedCount: 0, createdAt: '2026-09-11T10:00:00Z' };
     api.listCampaigns.mockResolvedValueOnce([]).mockResolvedValueOnce([newCampaign]);
     api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
     api.createCampaign.mockResolvedValue(newCampaign);
@@ -66,8 +61,19 @@ describe('CampaignsPage', () => {
     await screen.findByText('Berg');
     await userEvent.type(screen.getByLabelText(/mensagem/i), 'Oi');
     await userEvent.type(screen.getByLabelText(/destinatários/i), '5511999990000');
-    await userEvent.click(screen.getByRole('button', { name: /disparar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /revisar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /confirmar e disparar/i }));
 
     await waitFor(() => expect(screen.getByText('Nova')).toBeInTheDocument());
+  });
+
+  test('links each campaign to its detail page', async () => {
+    api.listCampaigns.mockResolvedValue([
+      { id: 'campaign-1', name: 'Aviso setembro', channelName: 'Berg', totalRecipients: 45, sentCount: 42, failedCount: 2, skippedCount: 1, createdAt: '2026-09-11T10:00:00Z' },
+    ]);
+    renderPage();
+
+    const link = await screen.findByRole('link', { name: /Aviso setembro/ });
+    expect(link).toHaveAttribute('href', '/campanhas/campaign-1');
   });
 });

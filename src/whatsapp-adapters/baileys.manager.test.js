@@ -1169,7 +1169,7 @@ describe('baileys.manager', () => {
   });
 
   describe('resolveWhatsAppJid', () => {
-    test('resolves to the canonical phone number WhatsApp reports for the number', async () => {
+    test('resolves to the canonical phone number WhatsApp reports for the number, trying both with and without the ninth digit', async () => {
       const sock = createMockSock();
       sock.onWhatsApp.mockResolvedValue([{ jid: '559885120338@s.whatsapp.net', exists: true }]);
       baileysLib.default.mockReturnValue(sock);
@@ -1178,8 +1178,49 @@ describe('baileys.manager', () => {
 
       const result = await manager.resolveWhatsAppJid(channel, '5598985120338');
 
-      expect(sock.onWhatsApp).toHaveBeenCalledWith('5598985120338');
+      expect(sock.onWhatsApp).toHaveBeenCalledWith('5598985120338', '559885120338');
       expect(result).toBe('559885120338');
+    });
+
+    test('resolves the ninth-digit form when the account typed without it is only registered with the 9', async () => {
+      const sock = createMockSock();
+      sock.onWhatsApp.mockResolvedValue([{ jid: '5598985120338@s.whatsapp.net', exists: true }]);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-onwa-3', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.resolveWhatsAppJid(channel, '559885120338');
+
+      expect(sock.onWhatsApp).toHaveBeenCalledWith('559885120338', '5598985120338');
+      expect(result).toBe('5598985120338');
+    });
+
+    test('prefers the typed form when both the typed and alternate forms exist on WhatsApp', async () => {
+      const sock = createMockSock();
+      sock.onWhatsApp.mockResolvedValue([
+        { jid: '559885120338@s.whatsapp.net', exists: true },
+        { jid: '5598985120338@s.whatsapp.net', exists: true },
+      ]);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-onwa-4', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.resolveWhatsAppJid(channel, '5598985120338');
+
+      expect(result).toBe('5598985120338');
+    });
+
+    test('does not try a ninth-digit variant for a landline number', async () => {
+      const sock = createMockSock();
+      sock.onWhatsApp.mockResolvedValue([{ jid: '551133334444@s.whatsapp.net', exists: true }]);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-onwa-5', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.resolveWhatsAppJid(channel, '551133334444');
+
+      expect(sock.onWhatsApp).toHaveBeenCalledWith('551133334444');
+      expect(result).toBe('551133334444');
     });
 
     test('returns null when the number is not registered on WhatsApp', async () => {
@@ -1198,6 +1239,24 @@ describe('baileys.manager', () => {
       await expect(
         manager.resolveWhatsAppJid({ id: 'channel-does-not-exist' }, '5511999992222')
       ).rejects.toThrow('No active Baileys connection for channel channel-does-not-exist');
+    });
+  });
+
+  describe('brazilianNumberVariants', () => {
+    test('adds the 8-digit form when typed with the ninth digit', () => {
+      expect(manager.brazilianNumberVariants('5598985120338')).toEqual(['5598985120338', '559885120338']);
+    });
+
+    test('adds the 9-digit form when typed without the ninth digit for a mobile number', () => {
+      expect(manager.brazilianNumberVariants('559885120338')).toEqual(['559885120338', '5598985120338']);
+    });
+
+    test('leaves a landline number untouched', () => {
+      expect(manager.brazilianNumberVariants('551133334444')).toEqual(['551133334444']);
+    });
+
+    test('leaves a non-Brazilian number untouched', () => {
+      expect(manager.brazilianNumberVariants('14155552671')).toEqual(['14155552671']);
     });
   });
 

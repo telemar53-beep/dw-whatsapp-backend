@@ -689,13 +689,36 @@ function getQrForChannel(channelId) {
   return entry ? entry.qr : null;
 }
 
+// Brazilian mobiles gained a ninth digit, but plenty of WhatsApp accounts are still
+// registered under the old 8-digit form (or vice versa). Given the digits the attendant
+// typed, return the candidate forms to ask WhatsApp about, typed form first.
+function brazilianNumberVariants(digits) {
+  const withNine = digits.match(/^55(\d{2})9(\d{8})$/);
+  if (withNine) {
+    const [, ddd, rest8] = withNine;
+    return [digits, `55${ddd}${rest8}`];
+  }
+  const withoutNine = digits.match(/^55(\d{2})([6-9]\d{7})$/);
+  if (withoutNine) {
+    const [, ddd, rest8] = withoutNine;
+    return [digits, `55${ddd}9${rest8}`];
+  }
+  return [digits];
+}
+
 async function resolveWhatsAppJid(channel, phoneNumber) {
   const entry = connections.get(channel.id);
   if (!entry) {
     throw new Error(`No active Baileys connection for channel ${channel.id}`);
   }
-  const [result] = await entry.sock.onWhatsApp(phoneNumber);
-  return result ? jidToPhoneNumber(result.jid) : null;
+  const variants = brazilianNumberVariants(phoneNumber);
+  const results = await entry.sock.onWhatsApp(...variants);
+  const found = (results || []).filter((r) => r && r.exists !== false);
+  if (found.length === 0) {
+    return null;
+  }
+  const typedMatch = found.find((r) => jidToPhoneNumber(r.jid) === phoneNumber);
+  return jidToPhoneNumber((typedMatch || found[0]).jid);
 }
 
 module.exports = {
@@ -710,6 +733,7 @@ module.exports = {
   buildPixNativeFlowContent,
   verifyMediaDelivery,
   resolveWhatsAppJid,
+  brazilianNumberVariants,
   getQrForChannel,
   fetchContactAvatarForChannel,
   parseBaileysStatusUpdates,

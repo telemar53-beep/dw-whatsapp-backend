@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createCity } from '../services/api';
 
-function CreateCityForm({ onCreated }) {
+function CreateCityForm({ onCreated, onCancel }) {
   const { token } = useAuth();
   const [name, setName] = useState('');
   const [error, setError] = useState(null);
@@ -45,6 +45,15 @@ function CreateCityForm({ onCreated }) {
         >
           Cadastrar
         </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-10 shrink-0 rounded-[10px] border border-wa-border bg-wa-surface px-3 text-[13.5px] font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
+          >
+            Cancelar
+          </button>
+        )}
       </form>
       {error && (
         <p className="mt-2 rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">

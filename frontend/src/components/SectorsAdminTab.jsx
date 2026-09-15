@@ -151,8 +151,9 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         <CreateSectorForm
           onCreated={() => {
             refresh();
-            if (controlled) setCreating(false);
+            setCreating(false);
           }}
+          onCancel={() => setCreating(false)}
         />
       )}
     </div>

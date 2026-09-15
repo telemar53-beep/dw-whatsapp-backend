@@ -96,4 +96,16 @@ describe('ReasonsAdminTab', () => {
     expect(api.updateReason).toHaveBeenCalledWith('r1', { name: 'Editado' }, 'tok-123');
     expect(refresh).toHaveBeenCalled();
   });
+
+  test('canceling the create-reason form hides it and does not create anything', async () => {
+    useReasonsAdmin.mockReturnValue({ reasons: [], refresh: vi.fn() });
+    render(<ReasonsAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /criar motivo/i }));
+    expect(screen.getByText(/Cadastrar novo motivo/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(screen.queryByText(/Cadastrar novo motivo/)).not.toBeInTheDocument();
+    expect(api.createReason).not.toHaveBeenCalled();
+  });
 });

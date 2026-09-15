@@ -6,7 +6,7 @@ const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 
-function CreateSectorForm({ onCreated }) {
+function CreateSectorForm({ onCreated, onCancel }) {
   const { token } = useAuth();
   const [name, setName] = useState('');
   const [error, setError] = useState(null);
@@ -40,13 +40,24 @@ function CreateSectorForm({ onCreated }) {
         <input id="sector-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
       </div>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        Cadastrar
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Cadastrar
+        </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
+          >
+            Cancelar
+          </button>
+        )}
+      </div>
     </form>
   );
 }

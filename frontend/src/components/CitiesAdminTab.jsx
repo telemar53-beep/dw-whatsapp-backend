@@ -82,8 +82,9 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         <CreateCityForm
           onCreated={() => {
             refresh();
-            if (controlled) setCreating(false);
+            setCreating(false);
           }}
+          onCancel={() => setCreating(false)}
         />
       )}
     </div>

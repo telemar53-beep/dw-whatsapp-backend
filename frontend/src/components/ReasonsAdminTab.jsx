@@ -157,7 +157,7 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
             refresh();
             setCreatingReason(false);
           }}
-          onCancel={controlled ? () => setCreatingReason(false) : undefined}
+          onCancel={() => setCreatingReason(false)}
         />
       )}
       <AsyncState status={status} isEmpty={reasons.length === 0} emptyMessage="Nenhum motivo cadastrado ainda.">

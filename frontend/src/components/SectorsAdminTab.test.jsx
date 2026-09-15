@@ -78,7 +78,9 @@ describe('SectorsAdminTab', () => {
     const nameInput = screen.getByDisplayValue('Financeiro');
     await userEvent.clear(nameInput);
     await userEvent.type(nameInput, 'Rascunho abandonado');
-    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+    // A criação de setor também tem um botão "Cancelar" nesta tela; escopar
+    // ao formulário de edição evita ambiguidade entre os dois.
+    await userEvent.click(within(nameInput.closest('form')).getByRole('button', { name: /cancelar/i }));
 
     await userEvent.click(screen.getByRole('button', { name: /editar/i }));
     expect(screen.getByDisplayValue('Financeiro')).toBeInTheDocument();
@@ -123,5 +125,16 @@ describe('SectorsAdminTab', () => {
     useSectors.mockReturnValue({ sectors: [], refresh: vi.fn() });
     render(<SectorsAdminTab />);
     expect(screen.getByText(/Cadastrar novo setor/)).toBeInTheDocument();
+  });
+
+  test('controlled: canceling the create-sector form closes it without creating anything', async () => {
+    useSectors.mockReturnValue({ sectors: [], refresh: vi.fn() });
+    const onCreatingChange = vi.fn();
+    render(<SectorsAdminTab creating onCreatingChange={onCreatingChange} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(onCreatingChange).toHaveBeenCalledWith(false);
+    expect(api.createSector).not.toHaveBeenCalled();
   });
 });

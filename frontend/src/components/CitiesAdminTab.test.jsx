@@ -62,4 +62,15 @@ describe('CitiesAdminTab', () => {
     render(<CitiesAdminTab />);
     expect(screen.getByText(/Cadastrar nova cidade/)).toBeInTheDocument();
   });
+
+  test('controlled: canceling the create-city form closes it without creating anything', async () => {
+    useCities.mockReturnValue({ cities: [], refresh: vi.fn() });
+    const onCreatingChange = vi.fn();
+    render(<CitiesAdminTab creating onCreatingChange={onCreatingChange} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(onCreatingChange).toHaveBeenCalledWith(false);
+    expect(api.createCity).not.toHaveBeenCalled();
+  });
 });

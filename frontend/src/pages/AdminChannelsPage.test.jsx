@@ -184,36 +184,6 @@ describe('AdminChannelsPage', () => {
     expect(screen.queryByText('Berg')).not.toBeInTheDocument();
   });
 
-  test('switches to the Mensagens tab and shows quick replies and per-channel welcome messages', async () => {
-    useChannels.mockReturnValue({
-      channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', welcomeMessage: null }],
-      loading: false,
-      refresh: vi.fn(),
-    });
-    useQuickReplies.mockReturnValue({
-      quickReplies: [{ id: 'qr1', title: 'Boas-vindas', content: 'Olá!' }],
-      refresh: vi.fn(),
-    });
-    render(
-      <MemoryRouter>
-        <AdminChannelsPage />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByText('Conectado')).toBeInTheDocument();
-    expect(screen.queryByText('Boas-vindas')).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: /mensagens/i }));
-
-    expect(screen.getByText('Berg')).toBeInTheDocument();
-    expect(screen.queryByText('Conectado')).not.toBeInTheDocument();
-
-    // Quick replies are now hidden behind the "Ver mensagens" button
-    await userEvent.click(screen.getByRole('button', { name: /ver mensagens/i }));
-
-    expect(screen.getByText('Boas-vindas')).toBeInTheDocument();
-  });
-
   test('switches to the Triagem tab and shows the triage configuration UI', async () => {
     useChannels.mockReturnValue({
       channels: [{ id: 'ch1', type: 'baileys', name: 'Berg', phoneNumber: '+5598985004187', status: 'connected', triageEnabled: false }],

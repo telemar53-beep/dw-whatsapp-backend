@@ -6,7 +6,6 @@ import ProfileModal from '../components/ProfileModal';
 import CreateChannelModal from '../components/CreateChannelModal';
 import QrCodeView from '../components/QrCodeView';
 import AgentsAdminTab from '../components/AgentsAdminTab';
-import MessagesAdminTab from '../components/MessagesAdminTab';
 import SectorsAdminTab from '../components/SectorsAdminTab';
 import ReasonsAdminTab from '../components/ReasonsAdminTab';
 import CitiesAdminTab from '../components/CitiesAdminTab';
@@ -467,7 +466,7 @@ function AdminChannelsPage() {
               ) : activeTab === 'agents' ? (
                 <AgentsAdminTab />
               ) : activeTab === 'quickReplies' ? (
-                <MessagesAdminTab />
+                <p>Movido para Mensagens e templates.</p>
               ) : activeTab === 'sectors' ? (
                 <SectorsAdminTab />
               ) : activeTab === 'reasons' ? (

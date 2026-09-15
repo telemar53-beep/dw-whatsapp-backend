@@ -305,6 +305,12 @@ async function markTranscriptionFailed(messageId, { status, detail, ms }) {
  * própria chamada à API estoura). O motivo vive na metadata - igual à queda de
  * Pix para texto (markPixFallbackSent) - porque é dali que o chat lê a
  * explicação a mostrar sob o balão vermelho.
+ *
+ * Só grava se a mensagem ainda não tem motivoFalha: o webhook de status da
+ * Meta/360dialog (markMessageFailedByWhatsappId) pode ter chegado primeiro com
+ * o motivo real e estruturado, e este caminho não pode sobrescrevê-lo com um
+ * texto menos informativo vindo do worker. Retorna null quando não atualiza
+ * nada.
  */
 async function markMessageFailed(messageId, motivo) {
   const result = await getPool().query(
@@ -312,6 +318,7 @@ async function markMessageFailed(messageId, motivo) {
         SET status = 'failed',
             metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('motivoFalha', $2::text)
       WHERE id = $1
+        AND (metadata->>'motivoFalha') IS NULL
       RETURNING ${MESSAGE_COLUMNS}`,
     [messageId, motivo || null]
   );

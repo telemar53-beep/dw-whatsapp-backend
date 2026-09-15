@@ -256,8 +256,11 @@ function startOutboundWorker() {
       // acima - nunca o conteúdo da mensagem, nunca o corpo da requisição.
       console.error(`Outbound message ${messageId} failed on channel ${channel.id}: ${mensagemSegura(err)}${detalheDaApi(err)}`);
       const motivo = motivoDaMeta(err.response?.data?.error) || mensagemSegura(err);
-      const message = await markMessageFailed(messageId, motivo);
-      if (conversation.assignedAgentId) {
+      // Se markMessageFailed voltar null é porque o webhook de status já gravou um
+      // motivoFalha antes (ver a guarda em message.repository) - busca a linha atual
+      // para o emit não sair sem mensagem nenhuma.
+      const message = (await markMessageFailed(messageId, motivo)) || (await findMessageById(messageId));
+      if (conversation.assignedAgentId && message) {
         emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
       }
       throw err;

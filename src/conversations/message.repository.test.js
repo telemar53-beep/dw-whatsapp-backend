@@ -416,6 +416,20 @@ describe('message repository', () => {
       const updated = await markMessageFailed('00000000-0000-0000-0000-000000000000', 'motivo');
       expect(updated).toBeNull();
     });
+
+    test('does not overwrite a motivoFalha already recorded (e.g. by the status webhook) and returns null', async () => {
+      const message = await createMessage({
+        conversationId, direction: 'outbound', content: 'Promoção especial', whatsappMessageId: 'wamid.WEBHOOK1',
+        status: 'failed', metadata: { motivoFalha: '(131026) Número não recebe mensagens.' },
+      });
+
+      const updated = await markMessageFailed(message.id, 'network error');
+
+      expect(updated).toBeNull();
+      const stored = await findMessageById(message.id);
+      expect(stored.status).toBe('failed');
+      expect(stored.metadata).toEqual({ motivoFalha: '(131026) Número não recebe mensagens.' });
+    });
   });
 
   describe('markMessageFailedByWhatsappId', () => {

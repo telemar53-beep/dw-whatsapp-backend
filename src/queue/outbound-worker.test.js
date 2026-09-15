@@ -183,6 +183,58 @@ describe('startOutboundWorker', () => {
     });
   });
 
+  test('falls back to findMessageById for the emit when markMessageFailed returns null (status webhook already recorded the real motivo)', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      contactPhoneNumber: '5511999998888',
+      assignedAgentId: 'agent-1',
+    });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    metaCloudAdapter.sendTextMessage.mockRejectedValue(new Error('network error'));
+    markMessageFailed.mockResolvedValue(null);
+    findMessageById
+      .mockResolvedValueOnce(null) // idempotency check at the top of the handler
+      .mockResolvedValueOnce({
+        id: 'msg-2',
+        status: 'failed',
+        metadata: { motivoFalha: '(131026) Número não recebe mensagens.' },
+      });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      handler({ messageId: 'msg-2', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+    ).rejects.toThrow('network error');
+
+    expect(findMessageById).toHaveBeenCalledWith('msg-2');
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:updated', {
+      conversationId: 'conv-1',
+      message: {
+        id: 'msg-2',
+        status: 'failed',
+        metadata: { motivoFalha: '(131026) Número não recebe mensagens.' },
+      },
+    });
+  });
+
+  test('does not emit when markMessageFailed and findMessageById both find nothing', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      contactPhoneNumber: '5511999998888',
+      assignedAgentId: 'agent-1',
+    });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    metaCloudAdapter.sendTextMessage.mockRejectedValue(new Error('network error'));
+    markMessageFailed.mockResolvedValue(null);
+    findMessageById.mockResolvedValue(null);
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      handler({ messageId: 'msg-2', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+    ).rejects.toThrow('network error');
+
+    expect(emitToAgent).not.toHaveBeenCalled();
+  });
+
   test('sends via sendMediaMessage when the message has a non-text messageType', async () => {
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
     findChannelById.mockResolvedValue({

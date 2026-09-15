@@ -207,11 +207,20 @@ function summarize(byAgent) {
 const CUSTOM_DAYS_MAX = 365;
 const PERIOD_VALUES = ['today', '7d', '30d', 'custom'];
 
+function isValidCustomDays(value) {
+  return Number.isInteger(value) && value >= 1 && value <= CUSTOM_DAYS_MAX;
+}
+
 function ReportsPage() {
   const { token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const period = PERIOD_VALUES.includes(searchParams.get('periodo')) ? searchParams.get('periodo') : 'today';
-  const customDays = period === 'custom' ? Number(searchParams.get('dias')) || null : null;
+  const rawPeriod = PERIOD_VALUES.includes(searchParams.get('periodo')) ? searchParams.get('periodo') : 'today';
+  const customDaysFromUrl = Number(searchParams.get('dias'));
+  const validCustomDaysFromUrl = isValidCustomDays(customDaysFromUrl) ? customDaysFromUrl : null;
+  // periodo=custom sem "dias" válido (1..365) não tem o que buscar — em vez
+  // de ficar preso em "Carregando indicadores..." pra sempre, cai para "today".
+  const period = rawPeriod === 'custom' && !validCustomDaysFromUrl ? 'today' : rawPeriod;
+  const customDays = period === 'custom' ? validCustomDaysFromUrl : null;
   const [customDaysInput, setCustomDaysInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [data, setData] = useState(null);
@@ -227,7 +236,6 @@ function ReportsPage() {
   }
 
   useEffect(() => {
-    if (period === 'custom' && !customDays) return;
     setError(null);
     getMetrics(period, token, customDays)
       .then(setData)
@@ -235,7 +243,7 @@ function ReportsPage() {
   }, [period, token, customDays]);
 
   const customDaysValue = Number(customDaysInput);
-  const customDaysValid = Number.isInteger(customDaysValue) && customDaysValue >= 1 && customDaysValue <= CUSTOM_DAYS_MAX;
+  const customDaysValid = isValidCustomDays(customDaysValue);
 
   function handleApplyCustomDays() {
     if (!customDaysValid) return;

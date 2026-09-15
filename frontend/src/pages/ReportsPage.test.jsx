@@ -203,6 +203,23 @@ describe('ReportsPage', () => {
     expect(screen.getByRole('button', { name: /aplicar/i })).toBeDisabled();
   });
 
+  // Fix: periodo=custom chegando pela URL sem um "dias" válido (1..365) —
+  // link colado à mão, favorito antigo, "dias" apagado — ficava preso em
+  // "Carregando indicadores..." pra sempre, porque o efeito de busca só
+  // rodava com customDays truthy. Agora cai para "today".
+  test('periodo=custom sem dias válido na URL cai para hoje em vez de travar carregando', async () => {
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'agent',
+      own: { closedCount: 7, avgResolutionMinutes: 5, avgFirstResponseMinutes: 2 },
+    });
+    renderInShell(<ReportsPage />, { path: '/relatorios', initialEntries: ['/relatorios?periodo=custom'] });
+
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('today', 'tok-123', null));
+    expect(await screen.findByText('7')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /últimas 24 horas/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   test('switching back to a fixed period after a custom one refetches with that period', async () => {
     api.getMetrics.mockResolvedValue({
       period: 'today',

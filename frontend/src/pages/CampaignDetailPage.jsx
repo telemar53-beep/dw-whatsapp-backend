@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getCampaign } from '../services/api';
-import { useChannels } from '../hooks/useChannels';
+import { useAgentChannels } from '../hooks/useAgentChannels';
 import { PageHeader, AsyncState } from '../components/ui';
 
 const STATUS_LABELS = { pending: 'Pendente', sent: 'Enviado', failed: 'Falhou', skipped: 'Pulado' };
@@ -10,7 +10,7 @@ const STATUS_LABELS = { pending: 'Pendente', sent: 'Enviado', failed: 'Falhou', 
 function CampaignDetailPage() {
   const { id } = useParams();
   const { token } = useAuth();
-  const { channels } = useChannels();
+  const { channels } = useAgentChannels();
   const [campaign, setCampaign] = useState(null);
   const [status, setStatus] = useState('loading');
 

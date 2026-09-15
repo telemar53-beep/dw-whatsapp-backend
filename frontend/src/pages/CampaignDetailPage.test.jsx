@@ -15,7 +15,7 @@ function renderPage(id = 'campaign-1') {
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', name: 'Ana', role: 'agent' }, logout: vi.fn() });
-  api.listChannels.mockResolvedValue([]);
+  api.listChannelsForAgent.mockResolvedValue([]);
 });
 
 describe('CampaignDetailPage', () => {

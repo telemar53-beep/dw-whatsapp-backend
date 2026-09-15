@@ -16,7 +16,7 @@ function renderPage() {
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', name: 'Ana', role: 'agent' }, logout: vi.fn() });
-  api.listChannels.mockResolvedValue([]);
+  api.listChannelsForAgent.mockResolvedValue([]);
 });
 
 describe('CampaignsPage', () => {
@@ -65,6 +65,21 @@ describe('CampaignsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /confirmar e disparar/i }));
 
     await waitFor(() => expect(screen.getByText('Nova')).toBeInTheDocument());
+  });
+
+  // Fix: a página usava useChannels() (GET /api/admin/channels), que devolve
+  // 403 para atendente comum — o nome do canal ficava em branco. Agora usa
+  // useAgentChannels() (GET /api/channels), liberado para qualquer autenticado.
+  test('um atendente (não-admin) vê o nome do canal, sem chamar o endpoint admin', async () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', name: 'Ana', role: 'agent' }, logout: vi.fn() });
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch1', name: 'Berg', type: 'baileys' }]);
+    api.listCampaigns.mockResolvedValue([
+      { id: 'campaign-1', name: 'Aviso setembro', channelId: 'ch1', totalRecipients: 45, sentCount: 42, failedCount: 2, skippedCount: 1, createdAt: '2026-09-11T10:00:00Z' },
+    ]);
+    renderPage();
+
+    expect(await screen.findByText(/Berg/)).toBeInTheDocument();
+    expect(api.listChannels).not.toHaveBeenCalled();
   });
 
   test('links each campaign to its detail page', async () => {

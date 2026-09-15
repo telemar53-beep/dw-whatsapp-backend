@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { listCampaigns } from '../services/api';
-import { useChannels } from '../hooks/useChannels';
+import { useAgentChannels } from '../hooks/useAgentChannels';
 import CreateCampaignModal from '../components/CreateCampaignModal';
 import { PageHeader, Button, AsyncState } from '../components/ui';
 
@@ -12,7 +12,7 @@ function formatDate(iso) {
 
 function CampaignsPage() {
   const { token } = useAuth();
-  const { channels } = useChannels();
+  const { channels } = useAgentChannels();
   const [campaigns, setCampaigns] = useState([]);
   const [status, setStatus] = useState('loading');
   const [creating, setCreating] = useState(false);

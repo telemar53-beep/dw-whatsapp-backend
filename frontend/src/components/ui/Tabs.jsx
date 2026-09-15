@@ -43,29 +43,41 @@ export function Tabs({ tabs, active, onChange, label = 'Abas' }) {
     if (el) el.focus();
   }
 
+  // Abas ligadas a rota são links, não abas: role="tablist"/role="tab" exige
+  // que os filhos sejam abas, e um link ali dentro é semântica inválida. Um
+  // <nav> com links comuns (marcados por aria-current, via TabLink) é o papel
+  // certo para navegação entre páginas que só parece com abas visualmente.
+  const isRouteTabs = tabs.length > 0 && tabs.every((tab) => tab.to);
+
+  if (isRouteTabs) {
+    return (
+      <nav aria-label={label} className="chat-scroll -my-1 flex shrink-0 gap-3.5 overflow-x-auto px-1 py-1">
+        {tabs.map((tab, index) => (
+          <TabLink key={tab.key} tab={tab} onKeyDown={(e) => onKeyDown(e, index)} />
+        ))}
+      </nav>
+    );
+  }
+
   return (
     <div role="tablist" aria-label={label} className="chat-scroll -my-1 flex shrink-0 gap-3.5 overflow-x-auto px-1 py-1">
-      {tabs.map((tab, index) =>
-        tab.to ? (
-          <TabLink key={tab.key} tab={tab} onKeyDown={(e) => onKeyDown(e, index)} />
-        ) : (
-          <button
-            key={tab.key}
-            id={`tab-${tab.key}`}
-            type="button"
-            role="tab"
-            aria-selected={active === tab.key}
-            aria-controls={`tabpanel-${tab.key}`}
-            tabIndex={active === tab.key ? 0 : -1}
-            onClick={() => onChange(tab.key)}
-            onKeyDown={(e) => onKeyDown(e, index)}
-            className={`${TAB_BASE} ${active === tab.key ? ACTIVE : IDLE}`}
-          >
-            {tab.label}
-            <Count value={tab.count} />
-          </button>
-        )
-      )}
+      {tabs.map((tab, index) => (
+        <button
+          key={tab.key}
+          id={`tab-${tab.key}`}
+          type="button"
+          role="tab"
+          aria-selected={active === tab.key}
+          aria-controls={`tabpanel-${tab.key}`}
+          tabIndex={active === tab.key ? 0 : -1}
+          onClick={() => onChange(tab.key)}
+          onKeyDown={(e) => onKeyDown(e, index)}
+          className={`${TAB_BASE} ${active === tab.key ? ACTIVE : IDLE}`}
+        >
+          {tab.label}
+          <Count value={tab.count} />
+        </button>
+      ))}
     </div>
   );
 }

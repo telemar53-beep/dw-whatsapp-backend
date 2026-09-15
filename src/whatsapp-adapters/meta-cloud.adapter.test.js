@@ -690,7 +690,7 @@ describe('buildPixOrderDetailsBody', () => {
       type: 'interactive',
       interactive: {
         type: 'order_details',
-        body: { text: 'Pix da fatura \u00b7 vence 15/09/2026' },
+        body: { text: 'Pix da fatura - vence 15/09/2026' },
         action: {
           name: 'review_and_pay',
           parameters: {
@@ -715,12 +715,15 @@ describe('buildPixOrderDetailsBody', () => {
               items: [
                 {
                   retailer_id: '4321',
-                  name: 'Fatura \u00b7 vence 15/09/2026',
+                  name: 'Fatura - vence 15/09/2026',
                   amount: { value: 13500, offset: 100 },
                   quantity: 1,
                 },
               ],
               subtotal: { value: 13500, offset: 100 },
+              // A Meta exige tax (pode ser zero) e confere
+              // total = subtotal + tax: sem ele o cartao e recusado.
+              tax: { value: 0, offset: 100 },
             },
           },
         },

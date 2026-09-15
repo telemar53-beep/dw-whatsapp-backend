@@ -228,7 +228,9 @@ function buildPixOrderDetailsBody(to, card) {
   if (!card.merchant) throw new Error('Pix merchant is not configured');
   const centavos = Math.round(Number(card.value) * 100);
   const referenceId = String(card.faturaId || `PIX${Date.now()}`);
-  const titulo = `Fatura · vence ${formatarData(card.dueDate)}`;
+  // Hífen simples, e não o ponto do meio do cartão do Baileys: aqui o texto
+  // passa pela validação da Meta, e o ASCII puro é o que não dá margem a recusa.
+  const titulo = `Fatura - vence ${formatarData(card.dueDate)}`;
   const valor = { value: centavos, offset: 100 };
   return {
     messaging_product: 'whatsapp',
@@ -237,7 +239,7 @@ function buildPixOrderDetailsBody(to, card) {
     type: 'interactive',
     interactive: {
       type: 'order_details',
-      body: { text: `Pix da fatura · vence ${formatarData(card.dueDate)}` },
+      body: { text: `Pix da fatura - vence ${formatarData(card.dueDate)}` },
       action: {
         name: 'review_and_pay',
         parameters: {
@@ -261,6 +263,12 @@ function buildPixOrderDetailsBody(to, card) {
             status: 'pending',
             items: [{ retailer_id: referenceId, name: titulo, amount: { ...valor }, quantity: 1 }],
             subtotal: { ...valor },
+            // 1º teste real no canal oficial (2026-09-14): o cartão caiu para
+            // texto. A documentação da Meta e da 360dialog trazem tax em todo
+            // exemplo e exigem total_amount = subtotal + tax; sem o campo o
+            // corpo é recusado. Fatura de provedor não tem imposto destacado:
+            // zero.
+            tax: { value: 0, offset: 100 },
           },
         },
       },

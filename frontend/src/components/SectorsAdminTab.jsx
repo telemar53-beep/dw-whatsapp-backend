@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useSectors } from '../hooks/useSectors';
 import { useAuth } from '../contexts/AuthContext';
+import { useConfirm } from '../hooks/useConfirm';
 import { updateSector, deleteSector } from '../services/api';
 import CreateSectorForm from './CreateSectorForm';
+import { AsyncState } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 
 function SectorRow({ sector, onSaved, onDeleted }) {
   const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirm();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(sector.name);
   const [aiHint, setAiHint] = useState(sector.aiHint || '');
@@ -47,7 +50,8 @@ function SectorRow({ sector, onSaved, onDeleted }) {
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Excluir o setor "${sector.name}"?`)) {
+    const ok = await confirm(`Excluir o setor "${sector.name}"?`, { danger: true, confirmLabel: 'Excluir' });
+    if (!ok) {
       return;
     }
     setDeleteError(null);
@@ -121,21 +125,36 @@ function SectorRow({ sector, onSaved, onDeleted }) {
       {deleteError && (
         <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
       )}
+      {confirmDialog}
     </div>
   );
 }
 
-function SectorsAdminTab() {
-  const { sectors, refresh } = useSectors();
+function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
+  const { sectors, status: hookStatus, loading, refresh } = useSectors();
+  const [internalCreating, setInternalCreating] = useState(false);
+  const controlled = creatingProp !== undefined;
+  const creating = controlled ? creatingProp : internalCreating;
+  const setCreating = controlled ? onCreatingChange : setInternalCreating;
+  const status = hookStatus || (loading ? 'loading' : 'ready');
 
   return (
     <div className="space-y-6">
-      <div className="space-y-3">
-        {sectors.map((sector) => (
-          <SectorRow key={sector.id} sector={sector} onSaved={refresh} onDeleted={refresh} />
-        ))}
-      </div>
-      <CreateSectorForm onCreated={refresh} />
+      <AsyncState status={status} isEmpty={sectors.length === 0} emptyMessage="Nenhum setor cadastrado ainda.">
+        <div className="space-y-3">
+          {sectors.map((sector) => (
+            <SectorRow key={sector.id} sector={sector} onSaved={refresh} onDeleted={refresh} />
+          ))}
+        </div>
+      </AsyncState>
+      {(!controlled || creating) && (
+        <CreateSectorForm
+          onCreated={() => {
+            refresh();
+            if (controlled) setCreating(false);
+          }}
+        />
+      )}
     </div>
   );
 }

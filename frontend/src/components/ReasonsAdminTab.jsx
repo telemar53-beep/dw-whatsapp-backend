@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { useReasonsAdmin } from '../hooks/useReasonsAdmin';
 import { useAuth } from '../contexts/AuthContext';
+import { useConfirm } from '../hooks/useConfirm';
 import { updateReason } from '../services/api';
 import CreateReasonForm from './CreateReasonForm';
 import SectionHelp from './SectionHelp';
+import { AsyncState } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 
-function ReasonRow({ reason, onSaved }) {
+function ReasonRow({ reason, usedByAi, onSaved }) {
   const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirm();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(reason.name);
   const [error, setError] = useState(null);
@@ -45,6 +48,10 @@ function ReasonRow({ reason, onSaved }) {
   }
 
   async function handleToggleActive() {
+    if (reason.active && usedByAi) {
+      const ok = await confirm('A IA vai parar de encerrar sozinha até outro motivo ser escolhido. Desativar mesmo assim?', { danger: true, confirmLabel: 'Desativar mesmo assim' });
+      if (!ok) return;
+    }
     setToggling(true);
     setToggleError(null);
     try {
@@ -88,7 +95,12 @@ function ReasonRow({ reason, onSaved }) {
   return (
     <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
       <div className="flex items-center justify-between">
-        <p className="font-medium text-wa-text">{reason.name}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-medium text-wa-text">{reason.name}</p>
+          {usedByAi && (
+            <span className="rounded-full bg-wa-chip px-2 py-[2px] text-[11.5px] font-medium text-wa-chip-text">Usado pela IA ao encerrar</span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
             Editar
@@ -105,47 +117,56 @@ function ReasonRow({ reason, onSaved }) {
       {toggleError && (
         <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{toggleError}</p>
       )}
+      {confirmDialog}
     </div>
   );
 }
 
-function ReasonsAdminTab() {
-  const { reasons, refresh } = useReasonsAdmin();
-  const [creatingReason, setCreatingReason] = useState(false);
+function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedReasonId = null } = {}) {
+  const { reasons, status: hookStatus, loading, refresh } = useReasonsAdmin();
+  const [internalCreating, setInternalCreating] = useState(false);
+  const controlled = creatingProp !== undefined;
+  const creatingReason = controlled ? creatingProp : internalCreating;
+  const setCreatingReason = controlled ? onCreatingChange : setInternalCreating;
+  const status = hookStatus || (loading ? 'loading' : 'ready');
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setCreatingReason(true)}
-          className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
-        >
-          Criar motivo
-        </button>
-        <SectionHelp label="Motivos" title="Motivos de contato">
-          <p>
-            Lista de motivos que o atendente escolhe ao encerrar um atendimento — fica
-            registrado no histórico e aparece agrupado no Relatório, em "Motivos de
-            Contato".
-          </p>
-          <p className="mt-2 italic">Exemplo: "Troca de senha", "Pagamento - sem conexão".</p>
-        </SectionHelp>
-      </div>
+      {!controlled && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCreatingReason(true)}
+            className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
+          >
+            Criar motivo
+          </button>
+          <SectionHelp label="Motivos" title="Motivos de contato">
+            <p>
+              Lista de motivos que o atendente escolhe ao encerrar um atendimento — fica
+              registrado no histórico e aparece agrupado no Relatório, em "Motivos de
+              Contato".
+            </p>
+            <p className="mt-2 italic">Exemplo: "Troca de senha", "Pagamento - sem conexão".</p>
+          </SectionHelp>
+        </div>
+      )}
       {creatingReason && (
         <CreateReasonForm
           onCreated={() => {
             refresh();
             setCreatingReason(false);
           }}
-          onCancel={() => setCreatingReason(false)}
+          onCancel={controlled ? () => setCreatingReason(false) : undefined}
         />
       )}
-      <div className="space-y-3">
-        {reasons.map((reason) => (
-          <ReasonRow key={reason.id} reason={reason} onSaved={refresh} />
-        ))}
-      </div>
+      <AsyncState status={status} isEmpty={reasons.length === 0} emptyMessage="Nenhum motivo cadastrado ainda.">
+        <div className="space-y-3">
+          {reasons.map((reason) => (
+            <ReasonRow key={reason.id} reason={reason} usedByAi={reason.id === aiResolvedReasonId} onSaved={refresh} />
+          ))}
+        </div>
+      </AsyncState>
     </div>
   );
 }

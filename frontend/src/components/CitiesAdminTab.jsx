@@ -1,19 +1,23 @@
 import { useState } from 'react';
 import { useCities } from '../hooks/useCities';
 import { useAuth } from '../contexts/AuthContext';
+import { useConfirm } from '../hooks/useConfirm';
 import { deleteCity } from '../services/api';
 import CreateCityForm from './CreateCityForm';
 import { IconClose } from './icons/WaIcons';
+import { AsyncState } from './ui';
 
 // Cidade é só um nome com um botão de excluir — uma etiqueta cabe muito mais
 // por linha do que um cartão inteiro, e com 20+ cidades isso é o que evita
 // uma lista quilométrica.
 function CityChip({ city, onDeleted, onError }) {
   const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirm();
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
-    if (!window.confirm(`Excluir a cidade "${city.name}"?`)) {
+    const ok = await confirm(`Excluir a cidade "${city.name}"?`, { danger: true, confirmLabel: 'Excluir' });
+    if (!ok) {
       return;
     }
     onError(city.id, null);
@@ -40,13 +44,19 @@ function CityChip({ city, onDeleted, onError }) {
       >
         <IconClose size={11} />
       </button>
+      {confirmDialog}
     </span>
   );
 }
 
-function CitiesAdminTab() {
-  const { cities, refresh } = useCities();
+function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
+  const { cities, status: hookStatus, loading, refresh } = useCities();
   const [errors, setErrors] = useState({});
+  const [internalCreating, setInternalCreating] = useState(false);
+  const controlled = creatingProp !== undefined;
+  const creating = controlled ? creatingProp : internalCreating;
+  const setCreating = controlled ? onCreatingChange : setInternalCreating;
+  const status = hookStatus || (loading ? 'loading' : 'ready');
 
   function setCityError(cityId, message) {
     setErrors((prev) => ({ ...prev, [cityId]: message }));
@@ -56,21 +66,26 @@ function CitiesAdminTab() {
 
   return (
     <div className="space-y-5">
-      {cities.length === 0 ? (
-        <p className="text-[14px] text-wa-muted">Nenhuma cidade cadastrada ainda.</p>
-      ) : (
+      <AsyncState status={status} isEmpty={cities.length === 0} emptyMessage="Nenhuma cidade cadastrada ainda.">
         <div className="flex flex-wrap gap-2">
           {cities.map((city) => (
             <CityChip key={city.id} city={city} onDeleted={refresh} onError={setCityError} />
           ))}
         </div>
-      )}
+      </AsyncState>
       {errorMessages.map((message, index) => (
         <p key={index} className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">
           {message}
         </p>
       ))}
-      <CreateCityForm onCreated={refresh} />
+      {(!controlled || creating) && (
+        <CreateCityForm
+          onCreated={() => {
+            refresh();
+            if (controlled) setCreating(false);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -12,6 +12,12 @@ import CampaignsPage from './pages/CampaignsPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import SettingsLayout from './pages/settings/SettingsLayout';
 import SettingsIndex from './pages/settings/SettingsIndex';
+import UsersPage from './pages/settings/team/UsersPage';
+import SectorsPage from './pages/settings/team/SectorsPage';
+import RolesPage from './pages/settings/team/RolesPage';
+import ReasonsPage from './pages/settings/registers/ReasonsPage';
+import CitiesPage from './pages/settings/registers/CitiesPage';
+import CompanyPage from './pages/settings/CompanyPage';
 import { LEGACY_REDIRECTS } from './navigation/navItems';
 
 // Rota antiga → nova, trocando :params e mantendo ?query.
@@ -63,7 +69,13 @@ function App() {
                 }
               >
                 <Route index element={<SettingsIndex />} />
-                {/* Provisório até as Tasks 13–18: tudo cai na página antiga. */}
+                <Route path="equipe/usuarios" element={<UsersPage />} />
+                <Route path="equipe/setores" element={<SectorsPage />} />
+                <Route path="equipe/perfis" element={<RolesPage />} />
+                <Route path="cadastros/motivos" element={<ReasonsPage />} />
+                <Route path="cadastros/cidades" element={<CitiesPage />} />
+                <Route path="empresa" element={<CompanyPage />} />
+                {/* Provisório até a Task 18: o resto cai na página antiga. */}
                 <Route path="*" element={<AdminChannelsPage />} />
               </Route>
             </Route>

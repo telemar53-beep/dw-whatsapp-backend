@@ -5,6 +5,7 @@ import { useSectors } from '../hooks/useSectors';
 import { setAgentActive, setAgentSectors, resetAgentPassword } from '../services/api';
 import CreateAgentForm from './CreateAgentForm';
 import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
+import { AsyncState } from './ui';
 
 function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSaved }) {
   const { token } = useAuth();
@@ -175,11 +176,15 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
   );
 }
 
-function AgentsAdminTab() {
+function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const { token, agent: currentAgent } = useAuth();
-  const { agents, refresh } = useAgentsAdmin();
+  const { agents, status: hookStatus, loading, refresh } = useAgentsAdmin();
   const { sectors } = useSectors();
-  const [creatingAgent, setCreatingAgent] = useState(false);
+  const [internalCreating, setInternalCreating] = useState(false);
+  const controlled = creatingProp !== undefined;
+  const creatingAgent = controlled ? creatingProp : internalCreating;
+  const setCreatingAgent = controlled ? onCreatingChange : setInternalCreating;
+  const status = hookStatus || (loading ? 'loading' : 'ready');
 
   async function handleToggleActive(agentToToggle) {
     await setAgentActive(agentToToggle.id, !agentToToggle.active, token);
@@ -188,9 +193,7 @@ function AgentsAdminTab() {
 
   return (
     <div className="space-y-4">
-      {agents.length === 0 ? (
-        <p className="text-[14px] text-wa-muted">Nenhum atendente cadastrado ainda.</p>
-      ) : (
+      <AsyncState status={status} isEmpty={agents.length === 0} emptyMessage="Nenhum usuário cadastrado ainda.">
         <ul className="divide-y divide-wa-border overflow-hidden rounded-[16px] border border-wa-border bg-wa-surface">
           {agents.map((agentRow) => (
             <AgentRow
@@ -203,14 +206,14 @@ function AgentsAdminTab() {
             />
           ))}
         </ul>
-      )}
-      {!creatingAgent && (
+      </AsyncState>
+      {!controlled && !creatingAgent && (
         <button
           type="button"
           onClick={() => setCreatingAgent(true)}
           className="rounded-[10px] border border-wa-border bg-wa-field px-3.5 py-2 text-[13.5px] font-medium text-wa-text transition hover:bg-wa-panel"
         >
-          Criar atendente
+          Criar usuário
         </button>
       )}
       {creatingAgent && (

@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CitiesAdminTab from './CitiesAdminTab';
 import { useCities } from '../hooks/useCities';
@@ -24,35 +24,35 @@ describe('CitiesAdminTab', () => {
   });
 
   test('deleting a city asks for confirmation and calls deleteCity when accepted', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const refresh = vi.fn();
     useCities.mockReturnValue({ cities: [{ id: 'city-1', name: 'Bahia' }], refresh });
     api.deleteCity.mockResolvedValue(undefined);
     render(<CitiesAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Excluir' }));
 
     await waitFor(() => expect(api.deleteCity).toHaveBeenCalledWith('city-1', 'tok-123'));
     expect(refresh).toHaveBeenCalled();
   });
 
   test('does not delete when the confirmation is declined', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     useCities.mockReturnValue({ cities: [{ id: 'city-1', name: 'Bahia' }], refresh: vi.fn() });
     render(<CitiesAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: /cancelar/i }));
 
     expect(api.deleteCity).not.toHaveBeenCalled();
   });
 
   test('shows an error message when deleting fails', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     useCities.mockReturnValue({ cities: [{ id: 'city-1', name: 'Bahia' }], refresh: vi.fn() });
     api.deleteCity.mockRejectedValue({ body: { error: 'Falha ao excluir' } });
     render(<CitiesAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Excluir' }));
 
     expect(await screen.findByText('Falha ao excluir')).toBeInTheDocument();
   });

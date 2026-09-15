@@ -197,44 +197,62 @@ describe('metrics repository', () => {
     expect(metrics.some((m) => m.agentId === noConversations.id)).toBe(false);
   });
 
-  test('getMetricsBySector counts a closed conversation toward every sector the closing agent belongs to', async () => {
+  test('getMetricsBySector agrupa pelo setor da conversa, uma vez por conversa', async () => {
     const agent = await createAgent({ email: 'metrics-multisector@dw.com', password: 'secret123', role: 'agent' });
     const financeiro = await createSector({ name: 'Financeiro' });
     const comercial = await createSector({ name: 'Comercial' });
     await setAgentSectors(agent.id, [financeiro.id, comercial.id]);
     const channelId = await seedChannel();
 
-    await seedClosedConversation({
-      channelId,
-      contactId: await seedContact(),
-      agentId: agent.id,
-      startedAt: new Date('2026-01-02T10:00:00Z'),
-      closedAt: new Date('2026-01-02T10:30:00Z'),
-      firstResponseAt: new Date('2026-01-02T10:05:00Z'),
+    const conversationId = await seedClosedConversation({
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T10:00:00Z'), closedAt: new Date('2026-01-02T10:30:00Z'), firstResponseAt: new Date('2026-01-02T10:05:00Z'),
     });
+    await getPool().query('UPDATE conversations SET sector_id = $1 WHERE id = $2', [financeiro.id, conversationId]);
 
     const metrics = await getMetricsBySector(SINCE);
 
-    expect(metrics.map((m) => m.sectorName).sort()).toEqual(['Comercial', 'Financeiro']);
-    expect(metrics.every((m) => m.closedCount === 1)).toBe(true);
+    expect(metrics).toEqual([{ sectorId: financeiro.id, sectorName: 'Financeiro', closedCount: 1 }]);
   });
 
-  test('getMetricsBySector omits an agent who belongs to no sector', async () => {
+  test('getMetricsBySector mostra "Sem setor" para conversa encerrada sem setor, por último', async () => {
     const agent = await createAgent({ email: 'metrics-nosector@dw.com', password: 'secret123', role: 'agent' });
+    const suporte = await createSector({ name: 'Suporte' });
     const channelId = await seedChannel();
 
+    const comSetor = await seedClosedConversation({
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T10:00:00Z'), closedAt: new Date('2026-01-02T10:30:00Z'), firstResponseAt: new Date('2026-01-02T10:05:00Z'),
+    });
+    await getPool().query('UPDATE conversations SET sector_id = $1 WHERE id = $2', [suporte.id, comSetor]);
     await seedClosedConversation({
-      channelId,
-      contactId: await seedContact(),
-      agentId: agent.id,
-      startedAt: new Date('2026-01-02T10:00:00Z'),
-      closedAt: new Date('2026-01-02T10:30:00Z'),
-      firstResponseAt: new Date('2026-01-02T10:05:00Z'),
+      channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T11:00:00Z'), closedAt: new Date('2026-01-02T11:30:00Z'), firstResponseAt: new Date('2026-01-02T11:05:00Z'),
     });
 
     const metrics = await getMetricsBySector(SINCE);
 
-    expect(metrics).toEqual([]);
+    expect(metrics).toEqual([
+      { sectorId: suporte.id, sectorName: 'Suporte', closedCount: 1 },
+      { sectorId: null, sectorName: 'Sem setor', closedCount: 1 },
+    ]);
+  });
+
+  test('getMetricsByReason mostra "Sem motivo" para encerramento sem motivo', async () => {
+    const agent = await createAgent({ email: 'metrics-noreason@dw.com', password: 'secret123', role: 'agent' });
+    const channelId = await seedChannel();
+    const senha = await createReason({ name: 'Troca de senha' });
+    await seedClosedConversation({ channelId, contactId: await seedContact(), agentId: agent.id, reasonId: senha.id,
+      startedAt: new Date('2026-01-02T10:00:00Z'), closedAt: new Date('2026-01-02T10:30:00Z'), firstResponseAt: new Date('2026-01-02T10:05:00Z') });
+    await seedClosedConversation({ channelId, contactId: await seedContact(), agentId: agent.id,
+      startedAt: new Date('2026-01-02T11:00:00Z'), closedAt: new Date('2026-01-02T11:30:00Z'), firstResponseAt: new Date('2026-01-02T11:05:00Z') });
+
+    const metrics = await getMetricsByReason(SINCE);
+
+    expect(metrics).toEqual([
+      { reasonId: senha.id, reasonName: 'Troca de senha', closedCount: 1 },
+      { reasonId: null, reasonName: 'Sem motivo', closedCount: 1 },
+    ]);
   });
 
   test('getMetricsByReason counts closed conversations per reason, ordered by frequency', async () => {
@@ -290,20 +308,6 @@ describe('metrics repository', () => {
       { reasonId: pagamento.id, reasonName: 'Pagamento', closedCount: 1 },
       { reasonId: senha.id, reasonName: 'Troca de senha', closedCount: 1 },
     ]);
-  });
-
-  test('getMetricsByReason ignores conversations closed without a reason', async () => {
-    const agent = await createAgent({ email: 'metrics-reason2@dw.com', password: 'secret123', role: 'agent' });
-    const channelId = await seedChannel();
-
-    await seedClosedConversation({
-      channelId, contactId: await seedContact(), agentId: agent.id,
-      startedAt: new Date('2026-01-02T10:00:00Z'), closedAt: new Date('2026-01-02T10:30:00Z'),
-    });
-
-    const metrics = await getMetricsByReason(SINCE);
-
-    expect(metrics).toEqual([]);
   });
 
   test('getMetricsByReason excludes conversations closed before the since timestamp', async () => {

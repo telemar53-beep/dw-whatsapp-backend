@@ -84,19 +84,23 @@ async function getMetricsForAllAgents(since) {
   }));
 }
 
+// Agrupa pelo setor da CONVERSA, não pelos setores do atendente: antes, atendente sem setor
+// sumia do gráfico e atendente em dois setores contava duas vezes. NULL vira a barra
+// 'Sem setor' — nenhum setor é atribuído retroativamente.
 async function getMetricsBySector(since) {
   const result = await getPool().query(
     `WITH closed AS (
-       SELECT ce.conversation_id, ce.from_agent_id AS agent_id
+       SELECT c.sector_id
        FROM conversation_events ce
+       JOIN conversations c ON c.id = ce.conversation_id
+       JOIN agents a ON a.id = ce.from_agent_id
        WHERE ce.event_type = 'closed' AND ce.from_agent_id IS NOT NULL AND ce.created_at >= $1
      )
-     SELECT s.id AS sector_id, s.name AS sector_name, COUNT(*)::int AS closed_count
+     SELECT closed.sector_id, COALESCE(s.name, 'Sem setor') AS sector_name, COUNT(*)::int AS closed_count
      FROM closed
-     JOIN agent_sectors ags ON ags.agent_id = closed.agent_id
-     JOIN sectors s ON s.id = ags.sector_id
-     GROUP BY s.id, s.name
-     ORDER BY s.name ASC`,
+     LEFT JOIN sectors s ON s.id = closed.sector_id
+     GROUP BY closed.sector_id, s.name
+     ORDER BY (closed.sector_id IS NULL) ASC, s.name ASC`,
     [since]
   );
   return result.rows.map((row) => ({
@@ -111,13 +115,13 @@ async function getMetricsByReason(since) {
     `WITH closed AS (
        SELECT ce.reason_id
        FROM conversation_events ce
-       WHERE ce.event_type = 'closed' AND ce.reason_id IS NOT NULL AND ce.created_at >= $1
+       WHERE ce.event_type = 'closed' AND ce.created_at >= $1
      )
-     SELECT r.id AS reason_id, r.name AS reason_name, COUNT(*)::int AS closed_count
+     SELECT closed.reason_id, COALESCE(r.name, 'Sem motivo') AS reason_name, COUNT(*)::int AS closed_count
      FROM closed
-     JOIN contact_reasons r ON r.id = closed.reason_id
-     GROUP BY r.id, r.name
-     ORDER BY closed_count DESC, r.name ASC`,
+     LEFT JOIN contact_reasons r ON r.id = closed.reason_id
+     GROUP BY closed.reason_id, r.name
+     ORDER BY (closed.reason_id IS NULL) ASC, closed_count DESC, r.name ASC`,
     [since]
   );
   return result.rows.map((row) => ({

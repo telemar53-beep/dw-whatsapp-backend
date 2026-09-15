@@ -106,6 +106,7 @@ describe('POST /webhooks/meta', () => {
       mediaFilename: undefined,
       locationLatitude: undefined,
       locationLongitude: undefined,
+      repliedToWhatsappMessageId: null,
     });
   });
 
@@ -251,6 +252,7 @@ describe('POST /webhooks/meta', () => {
       mediaFilename: null,
       locationLatitude: undefined,
       locationLongitude: undefined,
+      repliedToWhatsappMessageId: null,
     });
   });
 
@@ -297,6 +299,7 @@ describe('POST /webhooks/meta', () => {
       mediaFilename: undefined,
       locationLatitude: -3.1,
       locationLongitude: -60.0,
+      repliedToWhatsappMessageId: null,
     });
   });
 });

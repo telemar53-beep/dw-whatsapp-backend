@@ -65,6 +65,7 @@ describe('POST /webhooks/360dialog/:webhookToken', () => {
       mediaFilename: undefined,
       locationLatitude: undefined,
       locationLongitude: undefined,
+      repliedToWhatsappMessageId: null,
     });
   });
 

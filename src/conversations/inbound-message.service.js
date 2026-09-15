@@ -12,7 +12,7 @@ const { ehMensagemDeCortesia } = require('./courtesy-message');
 // Suporte). Fixa de propósito — 30 min cobre a troca de gentilezas e não
 // segura um pedido de verdade, que de qualquer jeito não passa no filtro.
 const JANELA_DE_CORTESIA_MS = 30 * 60 * 1000;
-const { createMessage } = require('./message.repository');
+const { createMessage, findMessageByWhatsappMessageId } = require('./message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 const { findChannelById } = require('../channels/channel.repository');
@@ -43,6 +43,7 @@ async function ingestInboundMessage({
   locationLatitude,
   locationLongitude,
   audioDurationSeconds,
+  repliedToWhatsappMessageId,
 }) {
   const { wasCreated, ...contact } = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   const contactJustCreated = Boolean(wasCreated);
@@ -120,6 +121,23 @@ async function ingestInboundMessage({
       console.error(`Failed to schedule triage timeout for conversation ${conversation.id}: ${mensagemSegura(err)}`);
     }
   }
+  // Resolve a mensagem citada (se houver) antes de gravar: o id que o cliente
+  // ecoou é o whatsapp_message_id de uma mensagem NOSSA, então a busca é
+  // sempre escopada a esta conversa. Uma citação que não resolve — mensagem
+  // que nunca guardamos, de outra conversa, uma notificação de status que não
+  // é mensagem de verdade — é ignorada em silêncio: a mensagem do cliente é
+  // gravada normalmente, sem citação, exatamente como sempre foi antes desta
+  // função existir. A busca nunca pode derrubar a ingestão.
+  let repliedTo = null;
+  if (repliedToWhatsappMessageId) {
+    try {
+      repliedTo = await findMessageByWhatsappMessageId(conversation.id, repliedToWhatsappMessageId);
+    } catch (err) {
+      console.error(`Failed to resolve quoted message for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+    }
+  }
+  const repliedToPreview = repliedTo ? { content: repliedTo.content, direction: repliedTo.direction } : null;
+
   let message;
   try {
     message = await createMessage({
@@ -134,10 +152,17 @@ async function ingestInboundMessage({
       mediaFilename,
       locationLatitude,
       locationLongitude,
+      repliedToMessageId: repliedTo ? repliedTo.id : null,
     });
   } catch (err) {
     if (err.code !== UNIQUE_VIOLATION) throw err;
     return { contact, conversation, message: null, contactJustCreated };
+  }
+  // createMessage devolve a linha crua, sem o JOIN que listMessagesByConversation
+  // faz para montar repliedToPreview — sem isso aqui, quem está com o chat
+  // aberto só veria a citação depois de recarregar a lista inteira.
+  if (repliedToPreview) {
+    message = { ...message, repliedToPreview };
   }
   if (justCreated) {
     try {
@@ -196,7 +221,10 @@ async function ingestInboundMessage({
     if (message.messageType === 'audio' && (await shouldTranscribe(channelId))) {
       audioTranscriptionScheduled = true;
       const updated = await markTranscriptionScheduled(message, audioDurationSeconds);
-      if (updated) message = updated;
+      // markTranscriptionScheduled devolve a linha do banco (sem o JOIN da
+      // citação): reaplica repliedToPreview por cima para o áudio transcrito
+      // não perder a citação que acabou de ganhar, alguns passos acima.
+      if (updated) message = repliedToPreview ? { ...updated, repliedToPreview } : updated;
     }
   } catch (err) {
     console.error(`Failed to schedule transcription for conversation ${conversation.id}`, err);

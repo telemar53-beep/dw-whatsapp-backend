@@ -9,6 +9,7 @@ const {
   listMessagesByConversation,
   listRecentMessagesByConversation,
   findMessageById,
+  findMessageByWhatsappMessageId,
   advanceMessageStatus,
   findLatestInboundMessageId,
   findLatestInboundImage,
@@ -286,6 +287,50 @@ describe('message repository', () => {
       repliedToMessageId: original.id,
     });
     expect(reply.repliedToMessageId).toBe(original.id);
+  });
+
+  describe('findMessageByWhatsappMessageId', () => {
+    test('returns the message with that whatsapp_message_id in the conversation', async () => {
+      const created = await createMessage({
+        conversationId,
+        direction: 'inbound',
+        content: 'Qual o valor da fatura?',
+        whatsappMessageId: 'wamid.QUOTED1',
+        status: 'received',
+      });
+
+      const found = await findMessageByWhatsappMessageId(conversationId, 'wamid.QUOTED1');
+
+      expect(found.id).toBe(created.id);
+      expect(found.content).toBe('Qual o valor da fatura?');
+    });
+
+    test('returns null when no message in the conversation has that whatsapp_message_id', async () => {
+      const found = await findMessageByWhatsappMessageId(conversationId, 'wamid.DOES-NOT-EXIST');
+      expect(found).toBeNull();
+    });
+
+    test('does not resolve a whatsapp_message_id that belongs to a different conversation', async () => {
+      const contact2 = await findOrCreateContactByPhoneNumber('+5511977776666', 'Bia');
+      const channel2 = await createChannel({
+        type: 'meta_cloud',
+        name: 'Canal Teste 3',
+        phoneNumber: '+5511999990020',
+        config: { phoneNumberId: '333', accessToken: 'tok3' },
+      });
+      const otherConversation = await createConversation(contact2.id, channel2.id);
+      await createMessage({
+        conversationId: otherConversation.id,
+        direction: 'inbound',
+        content: 'Mensagem de outra conversa',
+        whatsappMessageId: 'wamid.OTHERCONV1',
+        status: 'received',
+      });
+
+      const found = await findMessageByWhatsappMessageId(conversationId, 'wamid.OTHERCONV1');
+
+      expect(found).toBeNull();
+    });
   });
 
   test('createMessage leaves repliedToMessageId null when not provided', async () => {

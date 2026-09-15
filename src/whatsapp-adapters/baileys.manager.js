@@ -113,6 +113,23 @@ function extractMediaInfo(message) {
   return null;
 }
 
+// Quando o cliente responde citando uma mensagem, o Baileys guarda o id da
+// mensagem citada em contextInfo.stanzaId dentro do nó de conteúdo (varia por
+// tipo: extendedTextMessage, imageMessage, audioMessage, etc.) — não existe um
+// campo único no nível de `message`. Em vez de listar cada tipo, percorre os
+// valores de `message` e devolve o primeiro stanzaId não-vazio que achar.
+function extractQuotedMessageId(message) {
+  if (!message) return null;
+  for (const value of Object.values(message)) {
+    if (!value || typeof value !== 'object') continue;
+    const stanzaId = value.contextInfo && value.contextInfo.stanzaId;
+    if (typeof stanzaId === 'string' && stanzaId) {
+      return stanzaId;
+    }
+  }
+  return null;
+}
+
 function extractLocation(message) {
   if (!message || !message.locationMessage) return null;
   return {
@@ -291,6 +308,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
     const fromPhoneNumber = jidToPhoneNumber(phoneJid);
     const contactDisplayName = msg.pushName ? msg.pushName.trim() : null;
     const innerMessage = unwrapMessage(msg.message);
+    const repliedToWhatsappMessageId = extractQuotedMessageId(innerMessage);
 
     const location = extractLocation(innerMessage);
     if (location) {
@@ -302,6 +320,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         messageType: 'location',
         locationLatitude: location.latitude,
         locationLongitude: location.longitude,
+        repliedToWhatsappMessageId,
       });
       scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
       continue;
@@ -323,6 +342,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         mediaMimeType: mediaInfo.mimeType,
         mediaFilename: mediaInfo.filename,
         audioDurationSeconds: mediaInfo.durationSeconds || null,
+        repliedToWhatsappMessageId,
       });
       scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
       continue;
@@ -344,6 +364,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       whatsappMessageId: msg.key.id,
       messageType: 'text',
       content,
+      repliedToWhatsappMessageId,
     });
     scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
   }
@@ -692,5 +713,6 @@ module.exports = {
   getQrForChannel,
   fetchContactAvatarForChannel,
   parseBaileysStatusUpdates,
+  extractQuotedMessageId,
   AVATAR_REFRESH_INTERVAL_MS,
 };

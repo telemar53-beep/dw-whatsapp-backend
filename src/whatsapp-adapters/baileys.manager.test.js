@@ -167,17 +167,23 @@ describe('baileys.manager', () => {
         whatsappMessageId: 'BAILEYS_MSG_1',
         messageType: 'text',
         content: 'Oi, preciso de ajuda',
+        repliedToWhatsappMessageId: null,
       });
     });
 
-    test('ingests an extended text message (reply/quoted message)', async () => {
+    test('ingests an extended text message and forwards the quoted stanzaId as repliedToWhatsappMessageId', async () => {
       await sock.handlers['messages.upsert']({
         type: 'notify',
         messages: [
           {
             key: { remoteJid: '5511999997777@s.whatsapp.net', fromMe: false, id: 'BAILEYS_MSG_2' },
             pushName: 'Outro Cliente',
-            message: { extendedTextMessage: { text: 'Respondendo aqui' } },
+            message: {
+              extendedTextMessage: {
+                text: 'Respondendo aqui',
+                contextInfo: { stanzaId: 'BAILEYS_ORIGINAL_1' },
+              },
+            },
           },
         ],
       });
@@ -189,6 +195,7 @@ describe('baileys.manager', () => {
         whatsappMessageId: 'BAILEYS_MSG_2',
         messageType: 'text',
         content: 'Respondendo aqui',
+        repliedToWhatsappMessageId: 'BAILEYS_ORIGINAL_1',
       });
     });
 
@@ -217,6 +224,7 @@ describe('baileys.manager', () => {
         whatsappMessageId: 'BAILEYS_BTN_1',
         messageType: 'text',
         content: 'Seu cartao foi aprovado. Toque no botao abaixo para ativar.',
+        repliedToWhatsappMessageId: null,
       });
     });
 
@@ -246,6 +254,7 @@ describe('baileys.manager', () => {
         whatsappMessageId: 'BAILEYS_TPL_1',
         messageType: 'text',
         content: 'Sua fatura vence em 3 dias.',
+        repliedToWhatsappMessageId: null,
       });
     });
 
@@ -273,6 +282,7 @@ describe('baileys.manager', () => {
         whatsappMessageId: 'BAILEYS_INT_1',
         messageType: 'text',
         content: 'Seu treino de hoje esta liberado.',
+        repliedToWhatsappMessageId: null,
       });
     });
 
@@ -363,6 +373,7 @@ describe('baileys.manager', () => {
         whatsappMessageId: 'LID_MSG_1',
         messageType: 'text',
         content: 'Oi, preciso de suporte',
+        repliedToWhatsappMessageId: null,
       });
     });
 
@@ -415,6 +426,7 @@ describe('baileys.manager', () => {
         mediaMimeType: 'image/jpeg',
         mediaFilename: null,
         audioDurationSeconds: null,
+        repliedToWhatsappMessageId: null,
       });
     });
 
@@ -445,6 +457,7 @@ describe('baileys.manager', () => {
         mediaMimeType: 'application/pdf',
         mediaFilename: 'comprovante.pdf',
         audioDurationSeconds: null,
+        repliedToWhatsappMessageId: null,
       });
     });
 
@@ -478,6 +491,7 @@ describe('baileys.manager', () => {
         mediaMimeType: `application/${type}-test`,
         mediaFilename: null,
         audioDurationSeconds: null,
+        repliedToWhatsappMessageId: null,
       });
     });
 
@@ -554,6 +568,7 @@ describe('baileys.manager', () => {
         mediaMimeType: 'image/jpeg',
         mediaFilename: null,
         audioDurationSeconds: null,
+        repliedToWhatsappMessageId: null,
       });
     });
 
@@ -588,6 +603,7 @@ describe('baileys.manager', () => {
         mediaMimeType: 'audio/ogg',
         mediaFilename: null,
         audioDurationSeconds: null,
+        repliedToWhatsappMessageId: null,
       });
     });
 
@@ -653,7 +669,30 @@ describe('baileys.manager', () => {
         messageType: 'location',
         locationLatitude: -3.119,
         locationLongitude: -60.021,
+        repliedToWhatsappMessageId: null,
       });
+    });
+  });
+
+  describe('extractQuotedMessageId', () => {
+    test('reads contextInfo.stanzaId from extendedTextMessage', () => {
+      const message = { extendedTextMessage: { text: 'Respondendo', contextInfo: { stanzaId: 'ORIGINAL_1' } } };
+      expect(manager.extractQuotedMessageId(message)).toBe('ORIGINAL_1');
+    });
+
+    test('reads contextInfo.stanzaId from imageMessage', () => {
+      const message = { imageMessage: { mimetype: 'image/jpeg', contextInfo: { stanzaId: 'ORIGINAL_2' } } };
+      expect(manager.extractQuotedMessageId(message)).toBe('ORIGINAL_2');
+    });
+
+    test('returns null when there is no contextInfo', () => {
+      const message = { conversation: 'Oi, sem citação' };
+      expect(manager.extractQuotedMessageId(message)).toBeNull();
+    });
+
+    test('returns null when message is null or undefined', () => {
+      expect(manager.extractQuotedMessageId(null)).toBeNull();
+      expect(manager.extractQuotedMessageId(undefined)).toBeNull();
     });
   });
 

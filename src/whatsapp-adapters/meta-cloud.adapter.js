@@ -45,6 +45,7 @@ function parseInboundMessages(webhookBody) {
           fromPhoneNumber: message.from,
           contactDisplayName: contactsById[message.from] || null,
           whatsappMessageId: message.id,
+          repliedToWhatsappMessageId: (message.context && message.context.id) || null,
         };
         if (message.type === 'text') {
           messages.push({ ...base, messageType: 'text', content: message.text.body });

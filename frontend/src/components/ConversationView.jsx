@@ -402,7 +402,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                         {repliedToLabel}
                       </span>
                       <span className="block truncate text-[13px] leading-[18px] text-chat-muted">
-                        {message.repliedToPreview.content}
+                        {message.repliedToPreview.content || 'Mídia'}
                       </span>
                     </span>
                   </div>

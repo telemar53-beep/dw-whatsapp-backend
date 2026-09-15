@@ -16,7 +16,7 @@ const {
   findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent,
   findRecentAiClosedConversation,
 } = require('./conversation.repository');
-const { createMessage } = require('./message.repository');
+const { createMessage, findMessageByWhatsappMessageId } = require('./message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 const { findChannelById } = require('../channels/channel.repository');
@@ -81,6 +81,7 @@ describe('ingestInboundMessage', () => {
       content: 'Oi',
       whatsappMessageId: 'wamid.X',
       status: 'received',
+      repliedToMessageId: null,
     });
     expect(result).toEqual({
       contact: { id: 'contact-1', phoneNumber: '+5511999998888', displayName: 'Cliente' },
@@ -486,6 +487,7 @@ describe('ingestInboundMessage', () => {
       mediaFilename: null,
       locationLatitude: undefined,
       locationLongitude: undefined,
+      repliedToMessageId: null,
     });
     expect(broadcast).toHaveBeenCalledWith('queue:new', {
       conversation: {
@@ -524,6 +526,7 @@ describe('ingestInboundMessage', () => {
       mediaFilename: undefined,
       locationLatitude: undefined,
       locationLongitude: undefined,
+      repliedToMessageId: null,
     });
   });
 
@@ -590,6 +593,7 @@ describe('ingestInboundMessage', () => {
       content: 'Já paguei, obrigado!',
       whatsappMessageId: 'wamid.SGP1',
       status: 'received',
+      repliedToMessageId: null,
     });
     expect(broadcast).toHaveBeenCalledWith('queue:new', {
       conversation: {
@@ -1433,6 +1437,108 @@ describe('ingestInboundMessage', () => {
 
       expect(result.message).not.toBeNull();
       expect(enqueueTranscriptionJob).toHaveBeenCalled();
+    });
+  });
+
+  describe('citação inbound (cliente respondendo a uma mensagem no WhatsApp)', () => {
+    test('quote que resolve na mesma conversa: createMessage recebe repliedToMessageId e o emit carrega repliedToPreview', async () => {
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-quote-1' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-quote-1', assignedAgentId: null });
+      findMessageByWhatsappMessageId.mockResolvedValue({
+        id: 'msg-original-1', content: 'Qual o valor da fatura?', direction: 'outbound',
+      });
+      createMessage.mockResolvedValue({ id: 'msg-quote-1', messageType: 'text' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-quote-1', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900008888', contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wa-quote-1', messageType: 'text', content: 'R$150,00',
+        repliedToWhatsappMessageId: 'wa-original-1',
+      });
+
+      expect(findMessageByWhatsappMessageId).toHaveBeenCalledWith('conv-quote-1', 'wa-original-1');
+      expect(createMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ repliedToMessageId: 'msg-original-1' })
+      );
+      expect(broadcast).toHaveBeenCalledWith('queue:new', expect.objectContaining({
+        message: expect.objectContaining({
+          id: 'msg-quote-1',
+          repliedToPreview: { content: 'Qual o valor da fatura?', direction: 'outbound' },
+        }),
+      }));
+    });
+
+    test('quote não encontrada: repliedToMessageId null, sem preview, ingestão segue normal', async () => {
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-quote-2' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-quote-2', assignedAgentId: null });
+      findMessageByWhatsappMessageId.mockResolvedValue(null);
+      createMessage.mockResolvedValue({ id: 'msg-quote-2', messageType: 'text' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-quote-2', assignedAgentId: null });
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900008889', contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wa-quote-2', messageType: 'text', content: 'Oi',
+        repliedToWhatsappMessageId: 'wa-does-not-exist',
+      });
+
+      expect(createMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ repliedToMessageId: null })
+      );
+      expect(result.message.repliedToPreview).toBeUndefined();
+      expect(broadcast).toHaveBeenCalledWith('queue:new', expect.objectContaining({
+        message: expect.not.objectContaining({ repliedToPreview: expect.anything() }),
+      }));
+    });
+
+    test('findMessageByWhatsappMessageId lançando erro só loga: mensagem é criada normal, sem citação', async () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-quote-3' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-quote-3', assignedAgentId: null });
+      findMessageByWhatsappMessageId.mockRejectedValue(new Error('db fora'));
+      createMessage.mockResolvedValue({ id: 'msg-quote-3', messageType: 'text' });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-quote-3', assignedAgentId: null });
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900008890', contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wa-quote-3', messageType: 'text', content: 'Oi',
+        repliedToWhatsappMessageId: 'wa-original-3',
+      });
+
+      expect(result.message).not.toBeNull();
+      expect(createMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ repliedToMessageId: null })
+      );
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to resolve quoted message'));
+      errorSpy.mockRestore();
+    });
+
+    test('áudio com quote resolvida: markTranscriptionScheduled troca a linha da mensagem, mas o emit ainda carrega repliedToPreview', async () => {
+      shouldTranscribe.mockResolvedValue(true);
+      findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-quote-4' });
+      findOpenConversation.mockResolvedValue({ id: 'conv-quote-4', assignedAgentId: null });
+      findMessageByWhatsappMessageId.mockResolvedValue({
+        id: 'msg-original-4', content: 'Manda o comprovante em áudio', direction: 'outbound',
+      });
+      createMessage.mockResolvedValue({ id: 'msg-quote-4', messageType: 'audio' });
+      markTranscriptionScheduled.mockResolvedValue({
+        id: 'msg-quote-4', messageType: 'audio', transcriptionStatus: 'pending',
+      });
+      getConversationWithContact.mockResolvedValue({ id: 'conv-quote-4', assignedAgentId: null });
+
+      await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '5598900008891', contactDisplayName: 'Cliente',
+        whatsappMessageId: 'wa-quote-4', messageType: 'audio', content: null,
+        mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg', audioDurationSeconds: 5,
+        repliedToWhatsappMessageId: 'wa-original-4',
+      });
+
+      expect(broadcast).toHaveBeenCalledWith('queue:new', expect.objectContaining({
+        message: expect.objectContaining({
+          id: 'msg-quote-4',
+          transcriptionStatus: 'pending',
+          repliedToPreview: { content: 'Manda o comprovante em áudio', direction: 'outbound' },
+        }),
+      }));
     });
   });
 });

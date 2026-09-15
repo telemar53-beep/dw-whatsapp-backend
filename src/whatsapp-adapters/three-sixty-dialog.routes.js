@@ -34,6 +34,7 @@ router.post('/360dialog/:webhookToken', async (req, res) => {
         mediaFilename: inboundMessage.mediaFilename,
         locationLatitude: inboundMessage.latitude,
         locationLongitude: inboundMessage.longitude,
+        repliedToWhatsappMessageId: inboundMessage.repliedToWhatsappMessageId,
       });
     } catch (err) {
       console.error('Failed to process inbound 360dialog message', err);

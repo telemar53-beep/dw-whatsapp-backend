@@ -69,6 +69,45 @@ describe('parseInboundMessages', () => {
         whatsappMessageId: 'wamid.ABC',
         messageType: 'text',
         content: 'Ola',
+        repliedToWhatsappMessageId: null,
+      },
+    ]);
+  });
+
+  test('extracts repliedToWhatsappMessageId from message.context.id when the customer replies quoting a message', () => {
+    const webhookBody = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
+                messages: [
+                  {
+                    from: '5511999998888',
+                    id: 'wamid.REPLY',
+                    type: 'text',
+                    text: { body: 'Isso mesmo' },
+                    context: { from: '5511888887777', id: 'wamid.ORIGINAL' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const result = parseInboundMessages(webhookBody);
+    expect(result).toEqual([
+      {
+        metaPhoneNumberId: '1234567890',
+        fromPhoneNumber: '5511999998888',
+        contactDisplayName: 'Carlos',
+        whatsappMessageId: 'wamid.REPLY',
+        messageType: 'text',
+        content: 'Isso mesmo',
+        repliedToWhatsappMessageId: 'wamid.ORIGINAL',
       },
     ]);
   });
@@ -108,6 +147,7 @@ describe('parseInboundMessages', () => {
         mediaMimeType: 'image/jpeg',
         mediaFilename: null,
         content: 'Comprovante',
+        repliedToWhatsappMessageId: null,
       },
     ]);
   });
@@ -147,6 +187,7 @@ describe('parseInboundMessages', () => {
         mediaMimeType: 'application/pdf',
         mediaFilename: 'comprovante.pdf',
         content: null,
+        repliedToWhatsappMessageId: null,
       },
     ]);
   });
@@ -179,6 +220,7 @@ describe('parseInboundMessages', () => {
         mediaMimeType: 'application/octet-stream',
         mediaFilename: null,
         content: null,
+        repliedToWhatsappMessageId: null,
       },
     ]);
   });
@@ -216,6 +258,7 @@ describe('parseInboundMessages', () => {
         messageType: 'location',
         latitude: -3.119,
         longitude: -60.021,
+        repliedToWhatsappMessageId: null,
       },
     ]);
   });
@@ -230,8 +273,8 @@ describe('parseInboundMessages', () => {
                 metadata: { phone_number_id: '1234567890' },
                 contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
                 messages: [
-                  { from: '5511999998888', id: 'wamid.BADIMG', type: 'image' },
-                  { from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } },
+                  { from: '5511999998888', id: 'wamid.BADIMGSKIP', type: 'image' },
+                  { from: '5511999998888', id: 'wamid.ABCMEDIASKIP', type: 'text', text: { body: 'Ola' } },
                 ],
               },
             },
@@ -248,9 +291,10 @@ describe('parseInboundMessages', () => {
         metaPhoneNumberId: '1234567890',
         fromPhoneNumber: '5511999998888',
         contactDisplayName: 'Carlos',
-        whatsappMessageId: 'wamid.ABC',
+        whatsappMessageId: 'wamid.ABCMEDIASKIP',
         messageType: 'text',
         content: 'Ola',
+        repliedToWhatsappMessageId: null,
       },
     ]);
   });
@@ -266,7 +310,7 @@ describe('parseInboundMessages', () => {
                 contacts: [],
                 messages: [
                   { from: '5511999998888', id: 'wamid.BADLOC', type: 'location' },
-                  { from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } },
+                  { from: '5511999998888', id: 'wamid.ABCLOCSKIP', type: 'text', text: { body: 'Ola' } },
                 ],
               },
             },
@@ -283,9 +327,10 @@ describe('parseInboundMessages', () => {
         metaPhoneNumberId: '1234567890',
         fromPhoneNumber: '5511999998888',
         contactDisplayName: null,
-        whatsappMessageId: 'wamid.ABC',
+        whatsappMessageId: 'wamid.ABCLOCSKIP',
         messageType: 'text',
         content: 'Ola',
+        repliedToWhatsappMessageId: null,
       },
     ]);
   });

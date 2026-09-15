@@ -171,6 +171,23 @@ async function findMessageById(id) {
 }
 
 /**
+ * A mensagem citada por um reply INBOUND, pelo whatsapp_message_id que o
+ * cliente ecoou de volta. Escopado à conversa: o mesmo whatsapp_message_id
+ * nunca deveria repetir entre conversas diferentes, mas restringir aqui evita
+ * que uma citação vaze para outra conversa caso isso um dia aconteça.
+ */
+async function findMessageByWhatsappMessageId(conversationId, whatsappMessageId) {
+  const result = await getPool().query(
+    `SELECT ${MESSAGE_COLUMNS} FROM messages
+      WHERE conversation_id = $1 AND whatsapp_message_id = $2
+      LIMIT 1`,
+    [conversationId, whatsappMessageId]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
+/**
  * O id da mensagem inbound mais recente da conversa (ou null, se não houver
  * nenhuma). Usada pela fila da IA para saber se um job ainda representa a
  * última coisa que o cliente escreveu — filtra por direction porque a
@@ -319,6 +336,7 @@ module.exports = {
   listMessagesByConversation,
   listRecentMessagesByConversation,
   findMessageById,
+  findMessageByWhatsappMessageId,
   findLatestInboundMessageId,
   findLatestInboundImage,
   markTranscriptionPending,

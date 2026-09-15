@@ -621,6 +621,27 @@ describe('ConversationView', () => {
     expect(screen.getByText('Você')).toBeInTheDocument();
     expect(screen.getByText('Já registramos o pagamento')).toBeInTheDocument();
   });
+
+  test('shows "Mídia" as the quoted preview when the quoted message has no text content (photo, audio, sticker)', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [
+        {
+          id: 'm2',
+          direction: 'inbound',
+          content: 'Isso mesmo',
+          repliedToPreview: { content: null, direction: 'outbound' },
+        },
+      ],
+      sendMessage: vi.fn(),
+    });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Carlos' }}
+        onTransferClick={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Mídia')).toBeInTheDocument();
+  });
 });
 
 describe('SGP lookup panel', () => {

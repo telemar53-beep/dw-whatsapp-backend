@@ -39,7 +39,7 @@ describe('App', () => {
     expect(await screen.findByText(/Selecione uma conversa/i)).toBeInTheDocument();
   });
 
-  test('an already-authenticated non-admin visiting /admin/channels is redirected to the dashboard', async () => {
+  test('an already-authenticated non-admin visiting /admin/channels sees the access denied page', async () => {
     localStorage.setItem('dw_token', 'tok-123');
     localStorage.setItem('dw_agent', JSON.stringify({ id: 'agent-1', email: 'a@dw.com', role: 'agent' }));
     window.history.pushState({}, '', '/admin/channels');
@@ -50,8 +50,8 @@ describe('App', () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText(/Selecione uma conversa/i)).toBeInTheDocument());
-    expect(screen.queryByText(/Administração de Canais/)).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /sem acesso/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Selecione uma conversa/i)).not.toBeInTheDocument();
   });
 
   test('an authenticated non-admin can reach /metrics', async () => {

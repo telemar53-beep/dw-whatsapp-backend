@@ -6,21 +6,17 @@ import { useAuth } from '../contexts/AuthContext';
 
 vi.mock('../contexts/AuthContext');
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
-function renderProtected({ requireAdmin = false } = {}) {
+function renderAt(level, agent, areaLabel = 'Supervisão') {
+  useAuth.mockReturnValue({ token: agent ? 'tok' : null, agent });
   return render(
-    <MemoryRouter initialEntries={['/target']}>
+    <MemoryRouter initialEntries={['/x']}>
       <Routes>
-        <Route path="/login" element={<div>Login Page</div>} />
-        <Route path="/" element={<div>Dashboard Page</div>} />
+        <Route path="/login" element={<p>Login</p>} />
         <Route
-          path="/target"
+          path="/x"
           element={
-            <ProtectedRoute requireAdmin={requireAdmin}>
-              <div>Protected Content</div>
+            <ProtectedRoute level={level} areaLabel={areaLabel}>
+              <p>Conteúdo protegido</p>
             </ProtectedRoute>
           }
         />
@@ -29,35 +25,44 @@ function renderProtected({ requireAdmin = false } = {}) {
   );
 }
 
+beforeEach(() => vi.clearAllMocks());
+
 describe('ProtectedRoute', () => {
-  test('redirects to /login when there is no token', () => {
-    useAuth.mockReturnValue({ token: null, agent: null });
-    renderProtected();
-    expect(screen.getByText('Login Page')).toBeInTheDocument();
+  test('sem token manda para /login', () => {
+    renderAt('auth', null);
+    expect(screen.getByText('Login')).toBeInTheDocument();
   });
 
-  test('renders the children when a token is present and requireAdmin is false', () => {
-    useAuth.mockReturnValue({ token: 'tok-123', agent: { role: 'agent' } });
-    renderProtected();
-    expect(screen.getByText('Protected Content')).toBeInTheDocument();
+  test('atendente entra em nível auth', () => {
+    renderAt('auth', { role: 'agent' });
+    expect(screen.getByText('Conteúdo protegido')).toBeInTheDocument();
   });
 
-  test('redirects a plain agent to / when requireAdmin is true', () => {
-    useAuth.mockReturnValue({ token: 'tok-123', agent: { role: 'agent' } });
-    renderProtected({ requireAdmin: true });
-    expect(screen.getByText('Dashboard Page')).toBeInTheDocument();
-    expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
+  test('atendente em nível admin vê a página de acesso negado com o nome da área', () => {
+    renderAt('admin', { role: 'agent' });
+    expect(screen.getByRole('heading', { name: /sem acesso a supervisão/i })).toBeInTheDocument();
+    expect(screen.getByText(/administradores e gerentes/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /ir para o atendimento/i })).toHaveAttribute('href', '/');
   });
 
-  test('renders the children for an admin when requireAdmin is true', () => {
-    useAuth.mockReturnValue({ token: 'tok-123', agent: { role: 'admin' } });
-    renderProtected({ requireAdmin: true });
-    expect(screen.getByText('Protected Content')).toBeInTheDocument();
+  test('gerente sem a flag em nível integrations vê a explicação da permissão', () => {
+    renderAt('integrations', { role: 'manager', canManageIntegrations: false }, 'OpenAI');
+    expect(screen.getByRole('heading', { name: /sem acesso a openai/i })).toBeInTheDocument();
+    expect(screen.getByText(/canais e integrações/i)).toBeInTheDocument();
   });
 
-  test('renders the children for a manager when requireAdmin is true', () => {
-    useAuth.mockReturnValue({ token: 'tok-123', agent: { role: 'manager' } });
-    renderProtected({ requireAdmin: true });
-    expect(screen.getByText('Protected Content')).toBeInTheDocument();
+  test('gerente com a flag entra em nível integrations', () => {
+    renderAt('integrations', { role: 'manager', canManageIntegrations: true });
+    expect(screen.getByText('Conteúdo protegido')).toBeInTheDocument();
+  });
+
+  test('requireAdmin ainda funciona como alias de level admin', () => {
+    useAuth.mockReturnValue({ token: 'tok', agent: { role: 'manager' } });
+    render(
+      <MemoryRouter>
+        <ProtectedRoute requireAdmin><p>ok</p></ProtectedRoute>
+      </MemoryRouter>
+    );
+    expect(screen.getByText('ok')).toBeInTheDocument();
   });
 });

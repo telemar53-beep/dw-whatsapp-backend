@@ -3,7 +3,7 @@ jest.mock('./message.repository');
 jest.mock('./conversation.repository');
 jest.mock('../realtime/socket-server');
 const { parseStatusUpdates } = require('../whatsapp-adapters/meta-cloud.adapter');
-const { advanceMessageStatus } = require('./message.repository');
+const { advanceMessageStatus, markMessageFailedByWhatsappId } = require('./message.repository');
 const { getConversationWithContact } = require('./conversation.repository');
 const { emitToAgent } = require('../realtime/socket-server');
 const { applyMessageStatusUpdates, applyParsedMessageStatusUpdates } = require('./message-status.service');
@@ -70,6 +70,33 @@ describe('applyMessageStatusUpdates', () => {
       conversationId: 'conv-b',
       message: { id: 'msg-b', conversationId: 'conv-b', status: 'read' },
     });
+  });
+
+  test('marks the message failed with the motivo from the update, and emits message:updated with it', async () => {
+    parseStatusUpdates.mockReturnValue([{ whatsappMessageId: 'wamid.ABC', status: 'failed', error: '(131049) A Meta limitou marketing.' }]);
+    markMessageFailedByWhatsappId.mockResolvedValue({
+      id: 'msg-1', conversationId: 'conv-1', status: 'failed', metadata: { motivoFalha: '(131049) A Meta limitou marketing.' },
+    });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-1' });
+
+    await applyMessageStatusUpdates({ entry: [] });
+
+    expect(markMessageFailedByWhatsappId).toHaveBeenCalledWith('wamid.ABC', '(131049) A Meta limitou marketing.');
+    expect(advanceMessageStatus).not.toHaveBeenCalled();
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:updated', {
+      conversationId: 'conv-1',
+      message: { id: 'msg-1', conversationId: 'conv-1', status: 'failed', metadata: { motivoFalha: '(131049) A Meta limitou marketing.' } },
+    });
+  });
+
+  test('falls back to a generic motivo when the failed update carries no error', async () => {
+    parseStatusUpdates.mockReturnValue([{ whatsappMessageId: 'wamid.ABC', status: 'failed', error: null }]);
+    markMessageFailedByWhatsappId.mockResolvedValue({ id: 'msg-1', conversationId: 'conv-1', status: 'failed' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
+
+    await applyMessageStatusUpdates({ entry: [] });
+
+    expect(markMessageFailedByWhatsappId).toHaveBeenCalledWith('wamid.ABC', 'Falha reportada pelo WhatsApp');
   });
 });
 

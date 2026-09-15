@@ -666,11 +666,43 @@ describe('parseStatusUpdates', () => {
     expect(parseStatusUpdates(webhookBody)).toEqual([{ whatsappMessageId: 'wamid.ABC', status: 'delivered' }]);
   });
 
-  test.each(['sent', 'delivered', 'read', 'failed'])('accepts a "%s" status', (status) => {
+  test.each(['sent', 'delivered', 'read'])('accepts a "%s" status', (status) => {
     const webhookBody = {
       entry: [{ changes: [{ value: { statuses: [{ id: 'wamid.ABC', status }] } }] }],
     };
     expect(parseStatusUpdates(webhookBody)).toEqual([{ whatsappMessageId: 'wamid.ABC', status }]);
+  });
+
+  test('a "failed" status with no errors array comes with error: null', () => {
+    const webhookBody = {
+      entry: [{ changes: [{ value: { statuses: [{ id: 'wamid.ABC', status: 'failed' }] } }] }],
+    };
+    expect(parseStatusUpdates(webhookBody)).toEqual([{ whatsappMessageId: 'wamid.ABC', status: 'failed', error: null }]);
+  });
+
+  test('a "failed" status carries the motivo extracted from statuses[].errors[0]', () => {
+    const webhookBody = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                statuses: [
+                  {
+                    id: 'wamid.ABC',
+                    status: 'failed',
+                    errors: [{ code: 131049, title: 'Message limit', error_user_msg: 'A Meta limitou mensagens de marketing.' }],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    expect(parseStatusUpdates(webhookBody)).toEqual([
+      { whatsappMessageId: 'wamid.ABC', status: 'failed', error: '(131049) A Meta limitou mensagens de marketing.' },
+    ]);
   });
 
   test('ignores an unrecognized status value', () => {

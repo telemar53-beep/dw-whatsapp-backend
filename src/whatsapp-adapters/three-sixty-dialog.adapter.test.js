@@ -9,6 +9,7 @@ const {
   deleteMetaTemplate,
   registerWebhook,
   parseInboundMessages,
+  parseStatusUpdates,
   sendPixCardMessage,
 } = require('./three-sixty-dialog.adapter');
 
@@ -193,6 +194,34 @@ describe('re-exported webhook parsers', () => {
   test('parseInboundMessages is the same function as meta-cloud.adapter exports', () => {
     const metaCloudAdapter = require('./meta-cloud.adapter');
     expect(parseInboundMessages).toBe(metaCloudAdapter.parseInboundMessages);
+  });
+
+  // O 360dialog reusa parseStatusUpdates do meta-cloud sem nenhuma adaptação -
+  // mesmo endpoint, mesmo formato de statuses[].errors[]. Sem este teste, um
+  // dia alguém poderia reimplementar o parse aqui e esquecer de incluir o
+  // motivo da falha nesse caminho.
+  test('parseStatusUpdates is the same function as meta-cloud.adapter exports, and extracts the failure motivo', () => {
+    const metaCloudAdapter = require('./meta-cloud.adapter');
+    expect(parseStatusUpdates).toBe(metaCloudAdapter.parseStatusUpdates);
+
+    const webhookBody = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                statuses: [
+                  { id: 'wamid.D360FAIL', status: 'failed', errors: [{ code: 131026, title: 'Client error' }] },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    expect(parseStatusUpdates(webhookBody)).toEqual([
+      { whatsappMessageId: 'wamid.D360FAIL', status: 'failed', error: '(131026) Client error' },
+    ]);
   });
 });
 

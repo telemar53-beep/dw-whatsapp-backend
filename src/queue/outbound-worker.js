@@ -1,7 +1,7 @@
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
-const { findMessageById, updateMessageStatus, recordMessageSent, markPixFallbackSent } = require('../conversations/message.repository');
+const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFailed } = require('../conversations/message.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -11,6 +11,7 @@ const { isOfficialChannelType } = require('../channels/channel-types');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { cartaoPix } = require('../payments/payment-card');
 const { mensagemSegura } = require('../ai/safe-error-log');
+const { motivoDaMeta } = require('../whatsapp-adapters/meta-error');
 
 const ADAPTERS_BY_CHANNEL_TYPE = {
   meta_cloud: metaCloudAdapter,
@@ -251,7 +252,11 @@ function startOutboundWorker() {
         schedulePixDeliveryCheck({ messageId, conversation, channel, pixCode: content, metadata });
       }
     } catch (err) {
-      const message = await updateMessageStatus(messageId, 'failed');
+      // mensagemSegura + detalheDaApi: mesma disciplina do log do cartão de Pix logo
+      // acima - nunca o conteúdo da mensagem, nunca o corpo da requisição.
+      console.error(`Outbound message ${messageId} failed on channel ${channel.id}: ${mensagemSegura(err)}${detalheDaApi(err)}`);
+      const motivo = motivoDaMeta(err.response?.data?.error) || mensagemSegura(err);
+      const message = await markMessageFailed(messageId, motivo);
       if (conversation.assignedAgentId) {
         emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
       }

@@ -120,6 +120,38 @@ describe('ConversationView', () => {
     expect(screen.queryByTitle('Lido')).not.toBeInTheDocument();
   });
 
+  test('shows the Portuguese explanation for a failed message with a mapped Meta error code', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{
+        id: 'm1', direction: 'outbound', content: 'Promoção de aniversário', status: 'failed',
+        metadata: { motivoFalha: '(131049) Marketing message limit reached' },
+      }],
+      sendMessage: vi.fn(),
+    });
+    render(<ConversationView conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }} onTransferClick={vi.fn()} />);
+    expect(screen.getByText(
+      'Não entregue: A Meta limitou mensagens de marketing para este contato (baixo engajamento). Tente um template de utilidade ou espere o cliente responder (código 131049)'
+    )).toBeInTheDocument();
+  });
+
+  test('shows just "Não entregue" for a failed message with no motivoFalha', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'outbound', content: 'Oi', status: 'failed' }],
+      sendMessage: vi.fn(),
+    });
+    render(<ConversationView conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }} onTransferClick={vi.fn()} />);
+    expect(screen.getByText('Não entregue')).toBeInTheDocument();
+  });
+
+  test('shows no failure line on a delivered outbound message', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'outbound', content: 'Oi', status: 'delivered' }],
+      sendMessage: vi.fn(),
+    });
+    render(<ConversationView conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1' }} onTransferClick={vi.fn()} />);
+    expect(screen.queryByText(/Não entregue/)).not.toBeInTheDocument();
+  });
+
   test('renders an image attachment alongside a caption', () => {
     useConversationMessages.mockReturnValue({
       messages: [

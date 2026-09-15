@@ -18,6 +18,8 @@ const {
   saveTranscription,
   markTranscriptionFailed,
   markPixFallbackSent,
+  markMessageFailed,
+  markMessageFailedByWhatsappId,
 } = require('./message.repository');
 
 describe('message repository', () => {
@@ -384,6 +386,67 @@ describe('message repository', () => {
       const message = messages.find((m) => m.content === 'Mensagem solta');
 
       expect(message.repliedToPreview).toBeNull();
+    });
+  });
+
+  describe('markMessageFailed', () => {
+    test('sets status to failed and records the motivo in metadata.motivoFalha', async () => {
+      const message = await createMessage({
+        conversationId, direction: 'outbound', content: 'Promoção especial', whatsappMessageId: null, status: 'sent',
+      });
+
+      const updated = await markMessageFailed(message.id, '(131049) A Meta limitou mensagens de marketing.');
+
+      expect(updated.status).toBe('failed');
+      expect(updated.metadata).toEqual({ motivoFalha: '(131049) A Meta limitou mensagens de marketing.' });
+    });
+
+    test('merges motivoFalha into existing metadata instead of overwriting it', async () => {
+      const message = await createMessage({
+        conversationId, direction: 'outbound', content: '00020126580014BR.GOV.BCB.PIX0136chave-pix',
+        status: 'sent', messageType: 'pix', metadata: { value: 135, dueDate: '2026-09-15' },
+      });
+
+      const updated = await markMessageFailed(message.id, 'algum motivo');
+
+      expect(updated.metadata).toEqual({ value: 135, dueDate: '2026-09-15', motivoFalha: 'algum motivo' });
+    });
+
+    test('returns null for an id that does not exist', async () => {
+      const updated = await markMessageFailed('00000000-0000-0000-0000-000000000000', 'motivo');
+      expect(updated).toBeNull();
+    });
+  });
+
+  describe('markMessageFailedByWhatsappId', () => {
+    test('sets status to failed and records the motivo, keyed by whatsapp_message_id', async () => {
+      await createMessage({
+        conversationId, direction: 'outbound', content: 'Promoção', whatsappMessageId: 'wamid.FAIL1', status: 'sent',
+      });
+
+      const updated = await markMessageFailedByWhatsappId('wamid.FAIL1', '(131026) Número não recebe mensagens.');
+
+      expect(updated.status).toBe('failed');
+      expect(updated.metadata).toEqual({ motivoFalha: '(131026) Número não recebe mensagens.' });
+    });
+
+    test('does not regress a message that already reached a later status than sent', async () => {
+      // Mesma semantica de advanceMessageStatus: 'failed' e o rank mais alto,
+      // entao esta guarda so bloqueia quando a mensagem ja esta 'failed' - um
+      // segundo webhook de falha (retry da Meta) nao pode sobrescrever o motivo
+      // do primeiro.
+      await createMessage({
+        conversationId, direction: 'outbound', content: 'Promoção', whatsappMessageId: 'wamid.FAIL2', status: 'failed',
+      });
+
+      const result = await markMessageFailedByWhatsappId('wamid.FAIL2', 'motivo novo');
+
+      expect(result).toBeNull();
+    });
+
+    test('returns null when no message has that whatsapp message id', async () => {
+      const result = await markMessageFailedByWhatsappId('wamid.UNKNOWN', 'motivo');
+      expect(result).toBeNull();
     });
   });
 

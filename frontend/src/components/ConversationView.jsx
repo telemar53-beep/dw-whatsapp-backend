@@ -8,6 +8,7 @@ import { claimConversation, closeConversation, sendSgpBoletoPdf, sendSgpPix, sen
 import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
 import MessageStatusTicks from './MessageStatusTicks';
+import { descreverFalha } from '../utils/failureReasons';
 import ConversationHistoryModal from './ConversationHistoryModal';
 import CloseReasonModal from './CloseReasonModal';
 import ContactAvatar from './ContactAvatar';
@@ -432,6 +433,14 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                       className="inline-block h-[1px] align-bottom"
                       style={{ width: outbound ? 82 : 58 }}
                     />
+                  </p>
+                )}
+
+                {outbound && message.status === 'failed' && (
+                  <p className="mt-1 text-[12px] leading-[16px] text-red-400">
+                    {message.metadata?.motivoFalha
+                      ? `Não entregue: ${descreverFalha(message.metadata.motivoFalha)}`
+                      : 'Não entregue'}
                   </p>
                 )}
 

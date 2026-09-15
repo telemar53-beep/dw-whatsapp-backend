@@ -299,6 +299,52 @@ async function markTranscriptionFailed(messageId, { status, detail, ms }) {
 }
 
 /**
+ * Marca a mensagem como falha, com o motivo gravado em metadata.motivoFalha.
+ *
+ * Usada pelo caminho síncrono do envio (o catch do outbound-worker, quando a
+ * própria chamada à API estoura). O motivo vive na metadata - igual à queda de
+ * Pix para texto (markPixFallbackSent) - porque é dali que o chat lê a
+ * explicação a mostrar sob o balão vermelho.
+ */
+async function markMessageFailed(messageId, motivo) {
+  const result = await getPool().query(
+    `UPDATE messages
+        SET status = 'failed',
+            metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('motivoFalha', $2::text)
+      WHERE id = $1
+      RETURNING ${MESSAGE_COLUMNS}`,
+    [messageId, motivo || null]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
+/**
+ * A mesma marca de falha, mas pelo caminho assíncrono: o webhook de status da
+ * Meta/360dialog, que só sabe o whatsapp_message_id (a mensagem já foi
+ * enviada e recebeu o id de volta).
+ *
+ * Usa a mesma guarda de ordem que advanceMessageStatus - STATUS_RANK_SQL < o
+ * rank de 'failed' (o mais alto, 4) - para não reescrever um status que já
+ * chegou a 'failed' por outro caminho (ex.: o próprio catch do worker já
+ * marcou antes do webhook chegar). Igual a advanceMessageStatus, uma condição
+ * de corrida entre duas chamadas é resolvida pelo banco.
+ */
+async function markMessageFailedByWhatsappId(whatsappMessageId, motivo) {
+  const result = await getPool().query(
+    `UPDATE messages
+        SET status = 'failed',
+            metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('motivoFalha', $2::text)
+      WHERE whatsapp_message_id = $1
+        AND ${STATUS_RANK_SQL} < 4
+      RETURNING ${MESSAGE_COLUMNS}`,
+    [whatsappMessageId, motivo || null]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
+/**
  * Marca que a queda para texto do cartão de Pix já foi feita nesta mensagem.
  *
  * A marca vive na própria metadata da mensagem porque precisa sobreviver a um
@@ -332,6 +378,8 @@ module.exports = {
   createMessage,
   updateMessageStatus,
   advanceMessageStatus,
+  markMessageFailed,
+  markMessageFailedByWhatsappId,
   recordMessageSent,
   listMessagesByConversation,
   listRecentMessagesByConversation,

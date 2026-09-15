@@ -26,7 +26,7 @@ jest.mock('../payments/pix-emv', () => {
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
-const { findMessageById, updateMessageStatus, recordMessageSent, markPixFallbackSent } = require('../conversations/message.repository');
+const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFailed } = require('../conversations/message.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -66,7 +66,7 @@ describe('startOutboundWorker', () => {
     );
     expect(baileysManager.sendTextMessage).not.toHaveBeenCalled();
     expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.OUT1');
-    expect(updateMessageStatus).not.toHaveBeenCalled();
+    expect(markMessageFailed).not.toHaveBeenCalled();
   });
 
   test('sends via the Baileys manager when the channel type is baileys', async () => {
@@ -102,17 +102,42 @@ describe('startOutboundWorker', () => {
     expect(baileysManager.sendTextMessage).not.toHaveBeenCalled();
   });
 
-  test('marks the message failed and rethrows when sending fails', async () => {
+  test('marks the message failed with the error message as motivo and rethrows when sending fails', async () => {
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
     findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
     metaCloudAdapter.sendTextMessage.mockRejectedValue(new Error('network error'));
+    const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
       handler({ messageId: 'msg-3', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
     ).rejects.toThrow('network error');
 
-    expect(updateMessageStatus).toHaveBeenCalledWith('msg-3', 'failed');
+    expect(markMessageFailed).toHaveBeenCalledWith('msg-3', 'network error');
     expect(recordMessageSent).not.toHaveBeenCalled();
+    const logado = erro.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(logado).toContain('Outbound message msg-3 failed on channel channel-1');
+    expect(logado).toContain('network error');
+    erro.mockRestore();
+  });
+
+  test('marks the message failed with the Meta error motivo when the API returns a structured error', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    const err = new Error('Request failed with status code 400');
+    err.response = {
+      data: {
+        error: { code: 131049, error_user_msg: 'A Meta limitou mensagens de marketing.', title: 'Message limit' },
+      },
+    };
+    metaCloudAdapter.sendTextMessage.mockRejectedValue(err);
+    const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      handler({ messageId: 'msg-3', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+    ).rejects.toThrow('Request failed with status code 400');
+
+    expect(markMessageFailed).toHaveBeenCalledWith('msg-3', '(131049) A Meta limitou mensagens de marketing.');
+    erro.mockRestore();
   });
 
   test('emits message:updated to the assigned agent on success', async () => {
@@ -145,7 +170,8 @@ describe('startOutboundWorker', () => {
     });
     findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
     metaCloudAdapter.sendTextMessage.mockRejectedValue(new Error('network error'));
-    updateMessageStatus.mockResolvedValue({ id: 'msg-2', status: 'failed' });
+    markMessageFailed.mockResolvedValue({ id: 'msg-2', status: 'failed' });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
       handler({ messageId: 'msg-2', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
@@ -464,7 +490,7 @@ describe('startOutboundWorker', () => {
 
       expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalledTimes(2);
       expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'wamid.TXT_CODIGO');
-      expect(updateMessageStatus).not.toHaveBeenCalled();
+      expect(markMessageFailed).not.toHaveBeenCalled();
       // O c\u00f3digo Pix nunca pode aparecer no log.
       const logado = erro.mock.calls.map((c) => c.join(' ')).join('\n');
       expect(logado).toContain('falling back to text');

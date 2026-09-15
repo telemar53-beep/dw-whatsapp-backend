@@ -4,6 +4,7 @@ const fs = require('fs');
 const FormData = require('form-data');
 const { getMediaFilePath } = require('../media/media-storage');
 const { formatarData } = require('../payments/payment-card');
+const { motivoDaMeta } = require('./meta-error');
 
 function verifyWebhookChallenge(query, verifyToken) {
   if (query['hub.mode'] === 'subscribe' && query['hub.verify_token'] === verifyToken) {
@@ -188,7 +189,14 @@ function parseStatusUpdates(webhookBody) {
       const value = change.value || {};
       for (const status of value.statuses || []) {
         if (!MESSAGE_STATUS_VALUES.has(status.status)) continue;
-        updates.push({ whatsappMessageId: status.id, status: status.status });
+        const update = { whatsappMessageId: status.id, status: status.status };
+        // Só 'failed' carrega motivo: é o único status cujo webhook traz um
+        // errors[] pra explicar - os demais (sent/delivered/read) não têm o
+        // que dizer além do próprio avanço de status.
+        if (status.status === 'failed') {
+          update.error = motivoDaMeta(status.errors && status.errors[0]) || null;
+        }
+        updates.push(update);
       }
     }
   }

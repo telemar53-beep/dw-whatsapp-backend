@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { renderInShell } from '../test-utils/renderInShell';
@@ -73,8 +73,10 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
-    expect(screen.queryByText('Atendimento')).not.toBeInTheDocument();
-    expect(screen.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
+    // O painel da lista sempre tem o título "Atendimento"; o que não pode aparecer é o da tela vazia.
+    const emptyState = within(screen.getByRole('main'));
+    expect(emptyState.queryByText('Atendimento')).not.toBeInTheDocument();
+    expect(emptyState.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
   });
 
   test('sem empresa cadastrada, a tela vazia mostra só Atendimento', () => {
@@ -82,7 +84,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
-    expect(screen.getByText('Atendimento')).toBeInTheDocument();
+    expect(within(screen.getByRole('main')).getByText('Atendimento')).toBeInTheDocument();
   });
 
   test('shows my conversations in the Andamento tab by default', () => {
@@ -226,8 +228,8 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
 
-    const inProgressButton = screen.getByRole('tab', { name: /andamento/i });
-    expect(inProgressButton.querySelector('span')).not.toBeInTheDocument();
+    // Só o rótulo: nenhum número de contagem junto (o traço laranja da aba ativa não tem texto).
+    expect(screen.getByRole('tab', { name: /andamento/i }).textContent).toBe('Em andamento');
   });
 
   test('selecting a conversation from the Espera tab opens the conversation view', async () => {
@@ -263,7 +265,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
-    expect(screen.getByRole('button', { name: /iniciar conversa/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /nova conversa/i })).toBeInTheDocument();
   });
 
   test('starting a conversation opens it immediately, even before it appears in myConversations', async () => {
@@ -271,7 +273,7 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
 
-    await userEvent.click(screen.getByRole('button', { name: /iniciar conversa/i }));
+    await userEvent.click(screen.getByRole('button', { name: /nova conversa/i }));
     await userEvent.click(screen.getByText('Mock Start Conversation'));
 
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
@@ -295,7 +297,7 @@ describe('DashboardPage', () => {
     );
     const { rerender } = render(shellTree());
 
-    await userEvent.click(screen.getByRole('button', { name: /iniciar conversa/i }));
+    await userEvent.click(screen.getByRole('button', { name: /nova conversa/i }));
     await userEvent.click(screen.getByText('Mock Start Conversation'));
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
 

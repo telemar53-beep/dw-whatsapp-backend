@@ -219,7 +219,7 @@ describe('ConversationView', () => {
       />
     );
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /encerrar atendimento/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /assumir/i })).not.toBeInTheDocument();
   });
 
@@ -231,7 +231,7 @@ describe('ConversationView', () => {
         onTransferClick={vi.fn()}
       />
     );
-    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
     expect(screen.getByText('Motivo do contato')).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText('Troca de senha'));
@@ -261,7 +261,7 @@ describe('ConversationView', () => {
     );
     expect(screen.queryByRole('button', { name: /assumir/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /encerrar atendimento/i })).not.toBeInTheDocument();
   });
 
   test('shows Transferir and Fechar to an admin viewing a conversation assigned to another agent', () => {
@@ -273,7 +273,7 @@ describe('ConversationView', () => {
       />
     );
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /encerrar atendimento/i })).toBeInTheDocument();
   });
 
   test('shows Transferir and Fechar to a manager viewing a conversation assigned to another agent', () => {
@@ -285,7 +285,7 @@ describe('ConversationView', () => {
       />
     );
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /encerrar atendimento/i })).toBeInTheDocument();
   });
 
   test('an admin does not see Transferir or Fechar on an already-closed conversation', () => {
@@ -297,7 +297,7 @@ describe('ConversationView', () => {
       />
     );
     expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /fechar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /encerrar atendimento/i })).not.toBeInTheDocument();
   });
 
   test('shows Transferir and Fechar for a waiting conversation too, without needing to claim it first', () => {
@@ -308,7 +308,7 @@ describe('ConversationView', () => {
       />
     );
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /fechar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /encerrar atendimento/i })).toBeInTheDocument();
   });
 
   test('clicking Transferir on a waiting conversation calls onTransferClick', async () => {
@@ -331,7 +331,7 @@ describe('ConversationView', () => {
         onTransferClick={vi.fn()}
       />
     );
-    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
     await userEvent.click(screen.getByLabelText('Troca de senha'));
     await userEvent.click(screen.getByRole('button', { name: /confirmar encerramento/i }));
 
@@ -347,7 +347,7 @@ describe('ConversationView', () => {
         onTransferClick={vi.fn()}
       />
     );
-    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
     await userEvent.click(screen.getByLabelText('Troca de senha'));
     await userEvent.click(screen.getByRole('button', { name: /confirmar encerramento/i }));
 
@@ -797,7 +797,7 @@ describe('SGP lookup panel', () => {
     const CONVERSATION_A = { id: 'c1', status: 'waiting', assignedAgentId: null };
     const CONVERSATION_B = { id: 'c2', status: 'waiting', assignedAgentId: null };
     const { rerender } = render(<ConversationView conversation={CONVERSATION_A} onTransferClick={vi.fn()} onBack={vi.fn()} />);
-    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
     expect(screen.getByText('Motivo do contato')).toBeInTheDocument();
 
     rerender(<ConversationView conversation={CONVERSATION_B} onTransferClick={vi.fn()} onBack={vi.fn()} />);
@@ -945,7 +945,7 @@ describe('AI suggestion card', () => {
       />
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
     expect(screen.getByLabelText('Sem conexão')).toBeChecked();
   });
@@ -958,7 +958,7 @@ describe('AI suggestion card', () => {
       />
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
     expect(screen.getByLabelText('Troca de senha')).not.toBeChecked();
     expect(screen.getByRole('button', { name: /confirmar encerramento/i })).toBeDisabled();

@@ -76,15 +76,34 @@ function buildTimeline(messages) {
   return rows;
 }
 
-function HeaderChip({ children, strong = false }) {
+// Todos os tipos de canal do sistema são WhatsApp; o que distingue é o nome dado
+// ao canal em Configurações. Conversa sem canal na carga (ex.: recém-criada pelo
+// popup "Nova conversa") não ganha linha inventada — cai no telefone.
+function channelLine(conversation) {
+  return conversation.channelName ? `WhatsApp · ${conversation.channelName}` : null;
+}
+
+function conversationStatus(conversation) {
+  if (conversation.status === 'closed') return { label: 'Encerrado', dot: 'bg-chat-faint' };
+  if (conversation.assignedAgentId) return { label: 'Em atendimento', dot: 'bg-chat-online' };
+  if (conversation.triageState === 'pending') return { label: 'Em automação', dot: 'bg-chat-orange' };
+  return { label: 'Em espera', dot: 'bg-chat-orange' };
+}
+
+// Uma família só de controles no cabeçalho: mesma altura, mesmo raio. O laranja
+// fica só na ação principal (Encerrar / Assumir); o resto é vidro.
+const ACTION =
+  'flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[10px] text-[13.5px] font-medium leading-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
+const ACTION_GHOST = `${ACTION} border border-white/[0.12] bg-white/[0.06] text-chat-text hover:bg-white/[0.12]`;
+const ACTION_PRIMARY = `${ACTION} bg-chat-orange px-3.5 text-white hover:brightness-110`;
+
+function HeaderChip({ children, title, strong = false, className = '' }) {
   return (
     <span
-      title={typeof children === 'string' ? children : undefined}
-      className={`max-w-[150px] shrink-0 truncate rounded-full border px-2.5 py-[2px] text-[12.5px] leading-[18px] ${
-        strong
-          ? 'border-white/[0.18] bg-white/[0.12] font-medium text-chat-text'
-          : 'border-white/[0.10] bg-white/[0.06] text-chat-muted'
-      }`}
+      title={title || (typeof children === 'string' ? children : undefined)}
+      className={`h-9 max-w-[180px] shrink-0 items-center truncate rounded-[10px] border border-white/[0.12] bg-white/[0.06] px-3 text-[13px] leading-[34px] ${
+        strong ? 'font-medium tabular-nums text-chat-text' : 'text-chat-muted'
+      } ${className}`}
     >
       {children}
     </span>
@@ -98,7 +117,7 @@ function HeaderIconButton({ label, onClick, children }) {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="flex h-12 w-12 items-center justify-center rounded-full text-chat-icon transition-colors hover:bg-white/10 hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+      className={`${ACTION_GHOST} w-9 text-chat-icon hover:text-chat-text`}
     >
       {children}
     </button>
@@ -154,7 +173,8 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const headerLabel = cityName ? `${nameLabel} - ${cityName}` : nameLabel;
   // Só vale repetir o telefone embaixo quando o título é o nome do contato.
   const phoneLine = displayName && conversation.contactPhoneNumber ? conversation.contactPhoneNumber : null;
-  const hasContext = Boolean(phoneLine || cityName || conversation.sectorName);
+  const secondLine = channelLine(conversation) || phoneLine;
+  const status = conversationStatus(conversation);
 
   async function handleSend(content, file, repliedToMessageId, isVoiceNote) {
     const pending = editedSuggestion;
@@ -260,7 +280,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   return (
     <div className="flex h-full">
       <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
-      <div className="z-10 flex shrink-0 items-center gap-3 px-2 py-3 md:px-6 md:py-3.5">
+      <div className="@container z-10 flex shrink-0 items-center gap-3 border-b border-white/[0.07] px-2 py-3 md:px-5">
         <button
           onClick={onBack}
           className="flex h-10 w-10 items-center justify-center rounded-full text-chat-icon hover:bg-white/10 md:hidden"
@@ -270,7 +290,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         </button>
         <button
           onClick={() => setEditingContact(true)}
-          className="flex min-w-0 flex-1 items-center gap-3.5 rounded-2xl p-1.5 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] p-1.5 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
           aria-label={`Editar cliente: ${headerLabel}`}
         >
           <ContactAvatar
@@ -278,55 +298,70 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             avatarPath={conversation.contactAvatarPath}
             displayName={displayName}
             phoneNumber={conversation.contactPhoneNumber}
-            size={52}
+            size={44}
             dark
           />
           <span className="min-w-0 flex-1">
-            <span title={nameLabel} className="block truncate text-[19px] leading-[25px] text-chat-text">
+            <span title={phoneLine || nameLabel} className="block truncate text-[16px] font-semibold leading-[22px] text-chat-text">
               {nameLabel}
             </span>
-            <span className="mt-1 flex min-w-0 items-center gap-1.5">
-              {phoneLine && (
-                <span className="shrink-0 text-[13.5px] leading-[18px] text-chat-muted">{phoneLine}</span>
-              )}
-              {cityName && <HeaderChip>{cityName}</HeaderChip>}
-              {conversation.sectorName && <HeaderChip strong>{conversation.sectorName}</HeaderChip>}
-              {!hasContext && (
-                <span className="truncate text-[13.5px] leading-[18px] text-chat-faint">
-                  clique aqui para ver os dados do contato
-                </span>
-              )}
+            {secondLine ? (
+              <span className="block truncate text-[12.5px] leading-[17px] text-chat-muted">{secondLine}</span>
+            ) : (
+              <span className="block truncate text-[12.5px] leading-[17px] text-chat-faint">
+                clique aqui para ver os dados do contato
+              </span>
+            )}
+            <span className="mt-[3px] flex items-center gap-1.5 whitespace-nowrap text-[12.5px] leading-[17px] text-chat-muted">
+              <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${status.dot}`} />
+              {status.label}
             </span>
           </span>
         </button>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
+          <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
+            <IconHistory size={20} />
+          </HeaderIconButton>
+          <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
+            <IconSearch size={20} />
+          </HeaderIconButton>
+          {conversation.protocolNumber && (
+            <HeaderChip strong title={`Protocolo ${conversation.protocolNumber}`} className="hidden @min-[760px]:inline-flex">
+              #{conversation.protocolNumber}
+            </HeaderChip>
+          )}
+          {cityName && <HeaderChip className="hidden @min-[880px]:inline-flex">{cityName}</HeaderChip>}
+          {conversation.sectorName && <HeaderChip className="hidden @min-[620px]:inline-flex">{conversation.sectorName}</HeaderChip>}
           {isUnassigned && (
-            <button
-              onClick={handleClaim}
-              className="flex items-center gap-1.5 rounded-full bg-chat-orange px-4 py-2.5 text-[14px] font-medium text-white transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
-            >
+            <button onClick={handleClaim} className={ACTION_PRIMARY}>
               <IconClaim size={18} />
               Assumir
             </button>
           )}
-          <div className="flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.06] p-2">
-            <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
-              <IconHistory size={22} />
-            </HeaderIconButton>
-            <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
-              <IconSearch size={22} />
-            </HeaderIconButton>
-            {(isMine || isUnassigned || isAdmin) && (
-              <>
-                <HeaderIconButton label="Transferir atendimento" onClick={() => onTransferClick(conversation.id)}>
-                  <IconTransfer size={22} />
-                </HeaderIconButton>
-                <HeaderIconButton label="Fechar atendimento" onClick={() => setClosingReason(true)}>
-                  <IconCheckCircle size={22} />
-                </HeaderIconButton>
-              </>
-            )}
-          </div>
+          {(isMine || isUnassigned || isAdmin) && (
+            <>
+              <button
+                type="button"
+                onClick={() => onTransferClick(conversation.id)}
+                aria-label="Transferir atendimento"
+                title="Transferir atendimento"
+                className={`${ACTION_GHOST} w-9 @min-[560px]:w-auto @min-[560px]:px-3.5`}
+              >
+                <IconTransfer size={18} />
+                <span className="hidden @min-[560px]:inline">Transferir</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setClosingReason(true)}
+                aria-label="Encerrar atendimento"
+                title="Encerrar atendimento"
+                className={isUnassigned ? `${ACTION_GHOST} w-9` : ACTION_PRIMARY}
+              >
+                <IconCheckCircle size={18} />
+                {!isUnassigned && 'Encerrar'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 

@@ -19,7 +19,7 @@ import { IconNewChat, IconSearch, IconLock, IconEmptyChat } from '../components/
 const TABS = [
   { value: 'inProgress', label: 'Em andamento' },
   { value: 'waiting', label: 'Em espera' },
-  { value: 'automation', label: 'Em automação' },
+  { value: 'automation', label: 'Automação' },
 ];
 
 function matchesSearch(conversation, term) {
@@ -113,32 +113,38 @@ function DashboardPage() {
             selectedConversation ? 'hidden' : 'flex'
           } w-full min-w-0 flex-col bg-white/[0.09] backdrop-blur-2xl md:flex md:w-[380px] md:shrink-0 md:overflow-clip md:rounded-[22px] md:border md:border-white/[0.07] lg:w-[28%] lg:min-w-[360px] lg:max-w-[440px]`}
         >
-          <div className="flex shrink-0 items-center gap-3.5 px-3 pb-2 pt-[18px]">
-            <label className="flex h-[46px] min-w-0 flex-1 items-center gap-3 rounded-full border border-white/[0.07] bg-white/[0.06] px-4 transition focus-within:border-white/20 focus-within:bg-white/[0.10]">
+          <div className="flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-4">
+            <h1 className="font-display text-[20px] font-semibold leading-7 text-chat-text">Atendimento</h1>
+            <button
+              onClick={() => setStartingConversation(true)}
+              aria-label="Nova conversa"
+              title="Nova conversa"
+              className="flex h-9 shrink-0 items-center gap-1 rounded-[10px] bg-chat-orange pl-2.5 pr-3.5 text-[13.5px] font-semibold text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+            >
+              <IconNewChat size={18} />
+              Nova
+            </button>
+          </div>
+
+          <div className="shrink-0 px-4 pb-3">
+            <label className="flex h-[42px] min-w-0 items-center gap-2.5 rounded-[12px] border border-white/[0.09] bg-white/[0.06] px-3.5 transition focus-within:border-white/20 focus-within:bg-white/[0.10]">
               <span className="shrink-0 text-chat-faint">
-                <IconSearch size={19} />
+                <IconSearch size={18} />
               </span>
               <input
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Pesquisar uma conversa"
-                aria-label="Pesquisar uma conversa"
-                className="min-w-0 flex-1 bg-transparent text-[15px] text-chat-text outline-none placeholder:text-chat-faint"
+                placeholder="Buscar conversa"
+                aria-label="Buscar conversa"
+                className="min-w-0 flex-1 bg-transparent text-[14.5px] text-chat-text outline-none placeholder:text-chat-faint"
               />
             </label>
-            <button
-              onClick={() => setStartingConversation(true)}
-              aria-label="Iniciar conversa"
-              title="Iniciar conversa"
-              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-white/[0.13] text-chat-text transition hover:bg-white/[0.18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
-            >
-              <IconNewChat size={24} />
-            </button>
           </div>
 
-          <div className="shrink-0 px-2 pb-2 pt-3.5">
+          <div className="shrink-0">
             <Tabs
+              look="underline"
               label="Filas"
               active={activeTab}
               onChange={setActiveTab}

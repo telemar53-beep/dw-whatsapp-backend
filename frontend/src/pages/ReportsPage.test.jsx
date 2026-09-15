@@ -1,8 +1,8 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import MetricsPage from './MetricsPage';
+import { renderInShell } from '../test-utils/renderInShell';
+import ReportsPage from './ReportsPage';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
 
@@ -23,6 +23,7 @@ vi.mock('recharts', () => ({
     </div>
   ),
   Bar: () => null,
+  Cell: () => null,
   XAxis: () => null,
   YAxis: () => null,
   CartesianGrid: () => null,
@@ -31,22 +32,15 @@ vi.mock('recharts', () => ({
 }));
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <MetricsPage />
-    </MemoryRouter>
-  );
+  return renderInShell(<ReportsPage />, { path: '/relatorios' });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'agent' } });
-  // O logo do NavRail (presente em todas estas telas) le o nome da empresa
-  // pela rota publica.
-  api.getPublicCompany.mockResolvedValue({ name: 'Provedor X' });
 });
 
-describe('MetricsPage', () => {
+describe('ReportsPage', () => {
   test('shows own metrics for a non-admin agent', async () => {
     api.getMetrics.mockResolvedValue({
       period: 'today',
@@ -56,8 +50,8 @@ describe('MetricsPage', () => {
     renderPage();
 
     expect(await screen.findByText('3')).toBeInTheDocument();
-    expect(screen.getByText('12.5')).toBeInTheDocument();
-    expect(screen.getByText('4.2')).toBeInTheDocument();
+    expect(screen.getByText('13 min')).toBeInTheDocument();
+    expect(screen.getByText('4 min')).toBeInTheDocument();
   });
 
   test('shows a dash for a metric with no data yet', async () => {
@@ -69,7 +63,7 @@ describe('MetricsPage', () => {
     renderPage();
 
     await screen.findByText('0');
-    expect(screen.getAllByText('-')).toHaveLength(2);
+    expect(screen.getAllByText('—')).toHaveLength(2);
   });
 
   test('shows the per-agent and per-sector charts for an admin', async () => {
@@ -225,7 +219,9 @@ describe('MetricsPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /últimas 24 horas/i }));
 
-    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('today', 'tok-123', 45));
+    // O período volta a ser lido da URL: ao sair de "custom" o parâmetro `dias`
+    // é removido, então o dia customizado não vaza para o período fixo.
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('today', 'tok-123', null));
   });
 
   test('exporting downloads a CSV named after the period', async () => {
@@ -264,5 +260,41 @@ describe('MetricsPage', () => {
     renderPage();
 
     expect(screen.getByRole('button', { name: /exportar csv/i })).toBeDisabled();
+  });
+
+  test('mostra tempos legíveis em vez de minutos crus', async () => {
+    api.getMetrics.mockResolvedValue({ period: 'today', scope: 'agent', own: { closedCount: 3, avgResolutionMinutes: 85.3, avgFirstResponseMinutes: 4.2 } });
+    renderInShell(<ReportsPage />, { path: '/relatorios' });
+    expect(await screen.findByText('1 h 25 min')).toBeInTheDocument();
+    expect(screen.getByText('4 min')).toBeInTheDocument();
+  });
+
+  test('lê o período da URL e escreve ao trocar', async () => {
+    api.getMetrics.mockResolvedValue({ period: '7d', scope: 'agent', own: { closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null } });
+    renderInShell(<ReportsPage />, { path: '/relatorios', initialEntries: ['/relatorios?periodo=7d'] });
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledWith('7d', 'tok-123', null));
+    await userEvent.click(screen.getByRole('button', { name: /últimos 30 dias/i }));
+    expect(screen.getByTestId('location-search')).toHaveTextContent('periodo=30d');
+  });
+
+  test('explica o critério dos tempos', async () => {
+    api.getMetrics.mockResolvedValue({ period: 'today', scope: 'agent', own: { closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null } });
+    renderInShell(<ReportsPage />, { path: '/relatorios' });
+    await userEvent.click(await screen.findByRole('button', { name: /como os tempos são calculados/i }));
+    expect(screen.getByRole('dialog')).toHaveTextContent(/começa quando a conversa é criada/i);
+    expect(screen.getByRole('dialog')).toHaveTextContent(/inclui o tempo em espera, na triagem e com a IA/i);
+  });
+
+  test('pinta a barra "Sem setor" como sem setor', async () => {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
+    api.getMetrics.mockResolvedValue({
+      period: 'today', scope: 'admin',
+      byAgent: [{ agentId: 'a1', agentName: 'Ana', closedCount: 2, avgResolutionMinutes: 10, avgFirstResponseMinutes: 2 }],
+      bySector: [{ sectorId: null, sectorName: 'Sem setor', closedCount: 2 }],
+      byReason: [],
+    });
+    renderInShell(<ReportsPage />, { path: '/relatorios' });
+    expect(await screen.findByText(/"sectorName":"Sem setor"/)).toBeInTheDocument();
+    expect(screen.getByText(/encerradas sem setor definido/i)).toBeInTheDocument();
   });
 });

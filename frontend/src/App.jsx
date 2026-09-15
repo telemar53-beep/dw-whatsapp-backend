@@ -6,7 +6,7 @@ import AppShell from './components/AppShell';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminChannelsPage from './pages/AdminChannelsPage';
-import MetricsPage from './pages/MetricsPage';
+import ReportsPage from './pages/ReportsPage';
 import SupervisionPage from './pages/SupervisionPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
@@ -45,7 +45,7 @@ function App() {
             </Route>
 
             <Route element={<Shell dense />}>
-              <Route path="/relatorios" element={<MetricsPage />} />
+              <Route path="/relatorios" element={<ReportsPage />} />
               <Route
                 path="/supervisao"
                 element={

@@ -16,18 +16,29 @@ beforeEach(() => {
 
 describe('TeamPanel', () => {
   test('shows a message when there are no agents', () => {
-    useAgents.mockReturnValue([]);
+    useAgents.mockReturnValue({ agents: [], status: 'ready' });
     usePresence.mockReturnValue(new Set());
     render(<TeamPanel />);
     expect(screen.getByText(/nenhum atendente cadastrado/i)).toBeInTheDocument();
   });
 
+  test('em carregamento não mostra "Nenhum atendente"', () => {
+    useAgents.mockReturnValue({ agents: [], status: 'loading' });
+    usePresence.mockReturnValue(new Set());
+    render(<TeamPanel />);
+    expect(screen.queryByText(/nenhum atendente/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
   test('lists online agents before offline agents, alphabetically within each group', () => {
-    useAgents.mockReturnValue([
-      { id: 'a1', name: 'Carlos', avatarPath: null },
-      { id: 'a2', name: 'Ana', avatarPath: null },
-      { id: 'a3', name: 'Bruno', avatarPath: null },
-    ]);
+    useAgents.mockReturnValue({
+      agents: [
+        { id: 'a1', name: 'Carlos', avatarPath: null },
+        { id: 'a2', name: 'Ana', avatarPath: null },
+        { id: 'a3', name: 'Bruno', avatarPath: null },
+      ],
+      status: 'ready',
+    });
     usePresence.mockReturnValue(new Set(['a1', 'a2']));
     render(<TeamPanel />);
 
@@ -36,10 +47,13 @@ describe('TeamPanel', () => {
   });
 
   test('shows an online dot for a connected agent and an offline dot for a disconnected one', () => {
-    useAgents.mockReturnValue([
-      { id: 'a1', name: 'Ana', avatarPath: null },
-      { id: 'a2', name: 'Bruno', avatarPath: null },
-    ]);
+    useAgents.mockReturnValue({
+      agents: [
+        { id: 'a1', name: 'Ana', avatarPath: null },
+        { id: 'a2', name: 'Bruno', avatarPath: null },
+      ],
+      status: 'ready',
+    });
     usePresence.mockReturnValue(new Set(['a1']));
     render(<TeamPanel />);
 
@@ -48,10 +62,13 @@ describe('TeamPanel', () => {
   });
 
   test('shows each teammate\'s avatar', () => {
-    useAgents.mockReturnValue([
-      { id: 'a1', name: 'Ana', avatarPath: 'avatars/a1.jpg' },
-      { id: 'a2', name: 'Bruno', avatarPath: null },
-    ]);
+    useAgents.mockReturnValue({
+      agents: [
+        { id: 'a1', name: 'Ana', avatarPath: 'avatars/a1.jpg' },
+        { id: 'a2', name: 'Bruno', avatarPath: null },
+      ],
+      status: 'ready',
+    });
     usePresence.mockReturnValue(new Set());
     render(<TeamPanel />);
 

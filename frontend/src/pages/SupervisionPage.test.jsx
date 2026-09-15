@@ -43,7 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'agent' } });
   useChannels.mockReturnValue({ channels: [{ id: 'chan-1', name: 'WhatsApp Vendas' }], loading: false, refresh: vi.fn() });
-  useAgents.mockReturnValue([{ id: 'agent-1', name: 'Ana', email: 'ana@dw.com' }]);
+  useAgents.mockReturnValue({ agents: [{ id: 'agent-1', name: 'Ana', email: 'ana@dw.com' }], status: 'ready' });
   useSectors.mockReturnValue({ sectors: [{ id: 'sector-1', name: 'Financeiro' }], loading: false, refresh: vi.fn() });
   getDashboardClosedToday.mockResolvedValue({ items: [], hasMore: false });
   // O aviso do topo do chat (aberto no popup) cita a empresa cadastrada.

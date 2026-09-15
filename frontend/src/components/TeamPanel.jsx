@@ -3,6 +3,7 @@ import { useAgents } from '../hooks/useAgents';
 import { usePresence } from '../hooks/usePresence';
 import { IconChevronDown, IconTeam } from './icons/WaIcons';
 import AgentAvatar from './AgentAvatar';
+import { AsyncState } from './ui';
 
 function sortAgents(agents, onlineIds) {
   return [...agents].sort((a, b) => {
@@ -14,7 +15,7 @@ function sortAgents(agents, onlineIds) {
 }
 
 function TeamPanel() {
-  const agents = useAgents();
+  const { agents, status } = useAgents();
   const onlineIds = usePresence(agents);
   const sorted = sortAgents(agents, onlineIds);
   const [open, setOpen] = useState(true);
@@ -42,13 +43,11 @@ function TeamPanel() {
         </span>
       </button>
       {open && (
-        <div className="chat-scroll max-h-44 overflow-y-auto pb-4">
-          {sorted.length === 0 ? (
-            <p className="px-4 pb-2 text-[13.5px] text-chat-faint">Nenhum atendente cadastrado.</p>
-          ) : (
+        <div className="chat-scroll max-h-44 overflow-y-auto px-4 pb-4">
+          <AsyncState status={status} isEmpty={sorted.length === 0} emptyMessage="Nenhum atendente cadastrado.">
             <ul>
               {sorted.map((teammate) => (
-                <li key={teammate.id} className="flex items-center gap-3 px-4 py-[8px] text-[14.5px] text-chat-text">
+                <li key={teammate.id} className="flex items-center gap-3 py-[8px] text-[14.5px] text-chat-text">
                   <span
                     title={onlineIds.has(teammate.id) ? 'Online' : 'Offline'}
                     className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
@@ -60,7 +59,7 @@ function TeamPanel() {
                 </li>
               ))}
             </ul>
-          )}
+          </AsyncState>
         </div>
       )}
     </div>

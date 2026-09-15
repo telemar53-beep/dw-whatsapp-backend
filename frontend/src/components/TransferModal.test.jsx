@@ -13,10 +13,13 @@ vi.mock('../services/api');
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1' } });
-  useAgents.mockReturnValue([
-    { id: 'agent-1', email: 'me@dw.com', role: 'agent' },
-    { id: 'agent-2', email: 'other@dw.com', role: 'agent' },
-  ]);
+  useAgents.mockReturnValue({
+    agents: [
+      { id: 'agent-1', email: 'me@dw.com', role: 'agent' },
+      { id: 'agent-2', email: 'other@dw.com', role: 'agent' },
+    ],
+    status: 'ready',
+  });
 });
 
 describe('TransferModal', () => {
@@ -43,5 +46,12 @@ describe('TransferModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
     expect(onClose).toHaveBeenCalled();
     expect(api.transferConversation).not.toHaveBeenCalled();
+  });
+
+  test('em carregamento não mostra "Nenhum outro atendente disponível"', () => {
+    useAgents.mockReturnValue({ agents: [], status: 'loading' });
+    render(<TransferModal conversationId="c1" onClose={vi.fn()} />);
+    expect(screen.queryByText(/nenhum outro atendente disponível/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

@@ -39,9 +39,9 @@ function DashboardPage() {
   const navigate = useNavigate();
   const { token } = useAuth();
   const { profileVersion, setConversationOpen } = useOutletContext();
-  const queue = useQueue();
-  const myConversations = useMyConversations();
-  const { name: companyName } = useCompanyName();
+  const { queue, status: queueStatus } = useQueue();
+  const { conversations: myConversations, status: myConversationsStatus } = useMyConversations();
+  const { name: companyName, status: companyNameStatus } = useCompanyName();
   const [activeTab, setActiveTab] = useState('inProgress');
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState('');
@@ -170,6 +170,7 @@ function DashboardPage() {
             {activeTab === 'inProgress' && (
               <MyConversationsList
                 conversations={visibleMine}
+                status={myConversationsStatus}
                 onSelect={selectConversation}
                 unreadIds={unreadIds}
                 selectedId={selectedId}
@@ -178,6 +179,7 @@ function DashboardPage() {
             {activeTab === 'waiting' && (
               <QueueList
                 conversations={visibleWaiting}
+                status={queueStatus}
                 onSelect={setSelectedId}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
@@ -187,6 +189,7 @@ function DashboardPage() {
             {activeTab === 'automation' && (
               <QueueList
                 conversations={visibleAutomation}
+                status={queueStatus}
                 onSelect={setSelectedId}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
@@ -215,7 +218,7 @@ function DashboardPage() {
                 <IconEmptyChat width={320} height={190} />
               </span>
               <p className="mt-6 font-display text-[32px] font-light leading-tight text-chat-text/90">
-                {companyName ? `${companyName} · Atendimento` : 'Atendimento'}
+                {companyNameStatus === 'ready' ? (companyName ? `${companyName} · Atendimento` : 'Atendimento') : ''}
               </p>
               <p className="mt-3 max-w-[38ch] text-[14px] leading-[20px] text-chat-muted">
                 Selecione uma conversa na lista ao lado para ler o histórico e responder ao cliente.

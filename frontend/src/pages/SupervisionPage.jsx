@@ -120,7 +120,7 @@ function SupervisionPage() {
   const { token } = useAuth();
   const { inProgress, waiting, inAutomation, closedTodayCount } = useAttendanceDashboard();
   const { channels } = useChannels(true);
-  const agents = useAgents();
+  const { agents } = useAgents();
   const { sectors } = useSectors();
 
   const [searchParams, setSearchParams] = useSearchParams();

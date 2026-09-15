@@ -1,22 +1,21 @@
 import ConversationListItem from './ConversationListItem';
+import { AsyncState } from './ui';
 
-function QueueList({ conversations, onSelect, onQuickClose, emptyMessage = 'Nenhum atendimento em espera.', selectedId }) {
-  if (conversations.length === 0) {
-    return <p className="px-6 py-10 text-center text-[14px] leading-[20px] text-chat-faint">{emptyMessage}</p>;
-  }
-
+function QueueList({ conversations, status, onSelect, onQuickClose, emptyMessage = 'Nenhum atendimento em espera.', selectedId }) {
   return (
-    <ul>
-      {conversations.map((conversation) => (
-        <ConversationListItem
-          key={conversation.id}
-          conversation={conversation}
-          onSelect={onSelect}
-          onQuickClose={onQuickClose}
-          selected={selectedId === conversation.id}
-        />
-      ))}
-    </ul>
+    <AsyncState status={status} isEmpty={conversations.length === 0} emptyMessage={emptyMessage}>
+      <ul>
+        {conversations.map((conversation) => (
+          <ConversationListItem
+            key={conversation.id}
+            conversation={conversation}
+            onSelect={onSelect}
+            onQuickClose={onQuickClose}
+            selected={selectedId === conversation.id}
+          />
+        ))}
+      </ul>
+    </AsyncState>
   );
 }
 

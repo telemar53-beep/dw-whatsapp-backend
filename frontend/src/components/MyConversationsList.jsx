@@ -1,24 +1,21 @@
 import ConversationListItem from './ConversationListItem';
+import { AsyncState } from './ui';
 
-function MyConversationsList({ conversations, onSelect, unreadIds, selectedId }) {
-  if (conversations.length === 0) {
-    return (
-      <p className="px-6 py-10 text-center text-[14px] leading-[20px] text-chat-faint">Nenhum atendimento em andamento.</p>
-    );
-  }
-
+function MyConversationsList({ conversations, status, onSelect, unreadIds, selectedId }) {
   return (
-    <ul>
-      {conversations.map((conversation) => (
-        <ConversationListItem
-          key={conversation.id}
-          conversation={conversation}
-          onSelect={onSelect}
-          unread={Boolean(unreadIds && unreadIds.has(conversation.id))}
-          selected={selectedId === conversation.id}
-        />
-      ))}
-    </ul>
+    <AsyncState status={status} isEmpty={conversations.length === 0} emptyMessage="Nenhum atendimento em andamento.">
+      <ul>
+        {conversations.map((conversation) => (
+          <ConversationListItem
+            key={conversation.id}
+            conversation={conversation}
+            onSelect={onSelect}
+            unread={Boolean(unreadIds && unreadIds.has(conversation.id))}
+            selected={selectedId === conversation.id}
+          />
+        ))}
+      </ul>
+    </AsyncState>
   );
 }
 

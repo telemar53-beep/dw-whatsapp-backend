@@ -203,7 +203,14 @@ function CreateCampaignModal({ onClose, onCreated }) {
             ) : channels.length === 0 ? (
               <p className="text-[14px] text-wa-muted">Nenhum canal conectado no momento.</p>
             ) : (
-              <select id="campaign-channel" value={channelId} onChange={(e) => setChannelId(e.target.value)} className={waInputClass}>
+              <select
+                id="campaign-channel"
+                value={channelId}
+                onChange={(e) => setChannelId(e.target.value)}
+                className={waInputClass}
+                aria-invalid={Boolean(fieldErrors.channelId)}
+                aria-describedby={fieldErrors.channelId ? 'campaign-channel-error' : undefined}
+              >
                 {channels.map((channel) => (
                   <option key={channel.id} value={channel.id}>
                     {channel.name}
@@ -211,7 +218,11 @@ function CreateCampaignModal({ onClose, onCreated }) {
                 ))}
               </select>
             )}
-            {fieldErrors.channelId && <p className={waErrorClass}>{fieldErrors.channelId}</p>}
+            {fieldErrors.channelId && (
+              <p className={waErrorClass} id="campaign-channel-error">
+                {fieldErrors.channelId}
+              </p>
+            )}
           </div>
           {isOfficialChannel ? (
             <>
@@ -225,13 +236,26 @@ function CreateCampaignModal({ onClose, onCreated }) {
                 {templates.length === 0 ? (
                   <p className="text-[14px] text-wa-muted">Nenhum template aprovado para este canal.</p>
                 ) : (
-                  <select id="campaign-template" value={templateId} onChange={(e) => setTemplateId(e.target.value)} className={waInputClass}>
+                  <select
+                    id="campaign-template"
+                    value={templateId}
+                    onChange={(e) => setTemplateId(e.target.value)}
+                    className={waInputClass}
+                    aria-invalid={Boolean(fieldErrors.templateId)}
+                    aria-describedby={fieldErrors.templateId ? 'campaign-template-error' : undefined}
+                  >
+                    <option value="">Selecione um template</option>
                     {templates.map((tpl) => (
                       <option key={tpl.id} value={tpl.id}>
                         {tpl.name}
                       </option>
                     ))}
                   </select>
+                )}
+                {fieldErrors.templateId && (
+                  <p className={waErrorClass} id="campaign-template-error">
+                    {fieldErrors.templateId}
+                  </p>
                 )}
               </div>
               {templateVariableValues.map((value, index) => (

@@ -100,6 +100,18 @@ describe('CreateCampaignModal', () => {
     expect(screen.getByText('Informe ao menos um destinatário.')).toBeInTheDocument();
   });
 
+  test('canal oficial exige template selecionado (placeholder não conta)', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-2', type: 'meta_cloud', name: 'Oficial', status: 'connected' }]);
+    api.listTemplatesForChannel.mockResolvedValue([{ id: 'tpl-1', name: 'aviso', variableCount: 1 }]);
+    render(<CreateCampaignModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    await userEvent.selectOptions(await screen.findByLabelText(/template/i), '');
+    await userEvent.type(screen.getByLabelText(/destinatários/i), '5511999990000');
+    await userEvent.click(screen.getByRole('button', { name: /revisar/i }));
+    expect(screen.getByText('Selecione um template aprovado.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/template/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(api.createCampaign).not.toHaveBeenCalled();
+  });
+
   test('canal oficial exige template e variáveis preenchidas', async () => {
     api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-2', type: 'meta_cloud', name: 'Oficial', status: 'connected' }]);
     api.listTemplatesForChannel.mockResolvedValue([{ id: 'tpl-1', name: 'aviso', variableCount: 1 }]);

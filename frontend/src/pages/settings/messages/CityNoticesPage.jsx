@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import SettingsPage from '../SettingsPage';
 import { Card, AsyncState } from '../../../components/ui';
 import { useCityNotices } from '../../../hooks/useCityNotices';
 import CityNoticeRow from '../../../components/messages/CityNoticeRow';
@@ -7,7 +6,7 @@ import CityNoticeRow from '../../../components/messages/CityNoticeRow';
 function CityNoticesPage() {
   const { cityNotices, status, refresh } = useCityNotices();
   return (
-    <SettingsPage title="Avisos por cidade" description="Avisos de instabilidade ou manutenção por região." scope="global">
+    <>
       <Card title="Como funciona">
         <p>
           Enviado automaticamente para clientes daquela cidade quando entram em contato, além
@@ -40,7 +39,7 @@ function CityNoticesPage() {
           </ul>
         </AsyncState>
       </Card>
-    </SettingsPage>
+    </>
   );
 }
 

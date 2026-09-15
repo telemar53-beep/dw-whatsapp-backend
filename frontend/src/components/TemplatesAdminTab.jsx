@@ -1,21 +1,117 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { useTemplates } from '../hooks/useTemplates';
 import { useChannels } from '../hooks/useChannels';
 import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
-import WaDialog from './WaDialog';
-import { AsyncState } from './ui';
+import WaDialog, { waErrorClass } from './WaDialog';
+import { AsyncState, Button, inputClass } from './ui';
+import { IconSearch, IconRefresh, IconNewChat, IconMore, IconInfo, IconFile } from './icons/WaIcons';
 
-function TemplateRow({ template, onDeleted }) {
+const STATUS_META = {
+  APPROVED: { label: 'Aprovado', chip: 'border-wa-chip-text/30 bg-wa-chip text-wa-chip-text' },
+  PENDING: { label: 'Em análise', chip: 'border-wa-warn-text/30 bg-wa-warn-bg text-wa-warn-text' },
+  REJECTED: { label: 'Rejeitado', chip: 'border-wa-error-text/30 bg-wa-error-bg text-wa-error-text' },
+  PAUSED: { label: 'Pausado', chip: 'border-wa-warn-text/30 bg-wa-warn-bg text-wa-warn-text' },
+  DISABLED: { label: 'Desativado', chip: 'border-wa-border bg-white/[0.06] text-wa-muted' },
+};
+const STATUS_OPTIONS = [
+  ['all', 'Todos os status'],
+  ['APPROVED', 'Aprovado'],
+  ['PENDING', 'Em análise'],
+  ['REJECTED', 'Rejeitado'],
+];
+const CATEGORY_LABELS = { UTILITY: 'Utilidade', MARKETING: 'Marketing', AUTHENTICATION: 'Autenticação' };
+const LANGUAGE_LABELS = { pt_BR: 'Português (Brasil)', en_US: 'Inglês (EUA)', es: 'Espanhol' };
+
+function statusMeta(status) {
+  return STATUS_META[status] || { label: status || '—', chip: 'border-wa-border bg-white/[0.06] text-wa-muted' };
+}
+function categoryLabel(category) {
+  return CATEGORY_LABELS[category] || category || '—';
+}
+function languageLabel(language) {
+  return LANGUAGE_LABELS[language] || language || '—';
+}
+
+// Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10 > item de menu 8.
+const CARD = 'overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl';
+const CELL = 'px-3 py-3 align-middle';
+const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
+const CONTROL =
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-wa-green/60 focus:ring-2 focus:ring-wa-green/25';
+const ICON_BTN =
+  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
+const MENU_ITEM =
+  'flex w-full items-center rounded-[8px] px-3 py-2 text-left text-[13.5px] transition hover:bg-wa-hover disabled:opacity-50';
+const LABEL = 'mb-1.5 block text-[13px] font-medium text-wa-muted';
+
+function StatusChip({ status }) {
+  const meta = statusMeta(status);
+  return (
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-[3px] text-[12.5px] font-medium ${meta.chip}`}>
+      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+      {meta.label}
+    </span>
+  );
+}
+
+// Botão de reticências com um pop-up de ações; fecha ao clicar fora, no Esc ou ao escolher.
+function RowMenu({ label, children }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function onDown(event) {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    }
+    function onKey(event) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative inline-block" onClick={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        className={ICON_BTN}
+      >
+        <IconMore size={18} />
+      </button>
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          className="absolute right-0 top-[calc(100%+4px)] z-20 min-w-[170px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TemplateRow({ template, selected, onSelect, onDeleted }) {
   const { token } = useAuth();
   const { confirm, confirmDialog } = useConfirm();
   const [deleteError, setDeleteError] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
-    if (!(await confirm(`Excluir o template "${template.name}"?`, { danger: true, confirmLabel: 'Excluir' }))) {
+    const question = 'Excluir o template "' + template.name + '"?';
+    if (!(await confirm(question, { danger: true, confirmLabel: 'Excluir' }))) {
       return;
     }
     setDeleteError(null);
@@ -30,49 +126,162 @@ function TemplateRow({ template, onDeleted }) {
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-medium text-wa-text">{template.name}</p>
-          <p className="text-sm text-wa-muted">
-            <span>{template.language}</span> · <span>{template.category}</span> · <span>{template.status}</span>
-          </p>
-          {template.rejectionReason && <p className="text-sm text-wa-error-text">{template.rejectionReason}</p>}
-        </div>
+    <tr
+      onClick={onSelect}
+      aria-selected={selected}
+      className={`cursor-pointer border-t border-wa-border transition-colors ${
+        selected ? 'bg-chat-orange/[0.08] shadow-[inset_3px_0_0_var(--color-chat-orange)]' : 'hover:bg-wa-hover'
+      }`}
+    >
+      <td className={CELL}>
         <button
-          onClick={handleDelete}
-          disabled={deleting}
-          className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
+          type="button"
+          onClick={onSelect}
+          className="block max-w-[260px] truncate text-left text-[14px] font-medium text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          title={template.name}
         >
-          Excluir
+          {template.name}
         </button>
-      </div>
-      {deleteError && (
-        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
-      )}
-      {confirmDialog}
-    </div>
+        {template.rejectionReason && <p className="mt-0.5 text-[12px] text-wa-error-text">{template.rejectionReason}</p>}
+        {deleteError && <p className={`mt-2 ${waErrorClass}`}>{deleteError}</p>}
+      </td>
+      <td className={`${CELL} whitespace-nowrap text-wa-text`}>{categoryLabel(template.category)}</td>
+      <td className={`${CELL} whitespace-nowrap`}>
+        <StatusChip status={template.status} />
+      </td>
+      <td className={`${CELL} whitespace-nowrap`}>
+        <div className="flex items-center justify-end">
+          <RowMenu label={`Mais ações para ${template.name}`}>
+            <button type="button" onClick={handleDelete} disabled={deleting} className={`${MENU_ITEM} text-wa-error-text`}>
+              Excluir
+            </button>
+          </RowMenu>
+        </div>
+        {confirmDialog}
+      </td>
+    </tr>
   );
 }
 
-function TemplatesModal({ templates, status, onClose, onDeleted }) {
+function ChannelSelect({ id, value, onChange, channels, placeholder }) {
   return (
-    <WaDialog title="Templates cadastrados" onClose={onClose} size="max-w-lg">
-      <div className="wa-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-4">
-        <AsyncState status={status} isEmpty={templates.length === 0} emptyMessage="Nenhum template cadastrado ainda.">
-          {templates.map((template) => <TemplateRow key={template.id} template={template} onDeleted={onDeleted} />)}
-        </AsyncState>
-      </div>
-    </WaDialog>
+    <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={inputClass} required>
+      {placeholder && <option value="">{placeholder}</option>}
+      {channels.map((channel) => (
+        <option key={channel.id} value={channel.id}>
+          {channel.name}
+        </option>
+      ))}
+    </select>
   );
 }
 
-function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
+function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onCancel }) {
   const { token } = useAuth();
-  const { channels } = useChannels();
-  const officialChannels = channels.filter((channel) => isOfficialChannelType(channel.type));
+  const [channelId, setChannelId] = useState(initialChannelId || '');
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('UTILITY');
+  const [language, setLanguage] = useState('pt_BR');
+  const [bodyText, setBodyText] = useState('');
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const firstOfficialChannelId = officialChannels[0]?.id;
 
-  const [channelId, setChannelId] = useState('');
+  // Os canais podem chegar depois do formulário abrir: preenche o primeiro
+  // oficial assim que existir, sem obrigar o admin a mexer no select.
+  useEffect(() => {
+    if (!channelId && firstOfficialChannelId) {
+      setChannelId(firstOfficialChannelId);
+    }
+  }, [firstOfficialChannelId, channelId]);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await createTemplateAdmin({ channelId, name, category, language, bodyText }, token);
+      onCreated();
+    } catch (err) {
+      setError((err.body && err.body.error) || 'Falha ao criar template');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} aria-label="Cadastrar novo template" className="space-y-3">
+      <div>
+        <label htmlFor="template-channel" className={LABEL}>
+          Canal
+        </label>
+        <ChannelSelect id="template-channel" value={channelId} onChange={setChannelId} channels={officialChannels} />
+      </div>
+      <div>
+        <label htmlFor="template-name" className={LABEL}>
+          Nome
+        </label>
+        <input
+          id="template-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="saudacao_inicial"
+          className={inputClass}
+          required
+        />
+        <p className="mt-1 text-xs text-wa-muted">Só letras minúsculas, números e _ (ex.: saudacao_inicial)</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor="template-category" className={LABEL}>
+            Categoria
+          </label>
+          <select id="template-category" value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
+            <option value="UTILITY">Utilidade</option>
+            <option value="MARKETING">Marketing</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="template-language" className={LABEL}>
+            Idioma
+          </label>
+          <select id="template-language" value={language} onChange={(e) => setLanguage(e.target.value)} className={inputClass} required>
+            <option value="pt_BR">Português (BR)</option>
+            <option value="en_US">Inglês (EUA)</option>
+            <option value="es">Espanhol</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label htmlFor="template-body" className={LABEL}>
+          Corpo da mensagem
+        </label>
+        <textarea
+          id="template-body"
+          rows={4}
+          value={bodyText}
+          onChange={(e) => setBodyText(e.target.value)}
+          placeholder="Olá {{1}}, sua fatura de {{2}} venceu."
+          className={inputClass}
+          required
+        />
+      </div>
+      {error && <p className={waErrorClass}>{error}</p>}
+      <div className="flex gap-2">
+        <Button type="submit" loading={submitting}>
+          Cadastrar
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function RegisterExistingTemplateForm({ officialChannels, initialChannelId, onRegistered, onCancel }) {
+  const { token } = useAuth();
+  const [channelId, setChannelId] = useState(initialChannelId || '');
   const [name, setName] = useState('');
   const [language, setLanguage] = useState('pt_BR');
   const [headerType, setHeaderType] = useState('');
@@ -85,9 +294,6 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
     setSubmitting(true);
     try {
       await registerExistingTemplateAdmin({ channelId, name, language, headerType: headerType || null }, token);
-      setName('');
-      setLanguage('pt_BR');
-      setHeaderType('');
       onRegistered();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao registrar template');
@@ -97,271 +303,38 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      aria-label="Registrar template existente"
-      className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
-    >
-      <h3 className="font-display text-base font-semibold text-wa-text">Registrar template existente</h3>
-      <p className="text-sm text-wa-muted">
-        Para um template já aprovado pela Meta fora deste sistema — busca o corpo e a quantidade de variáveis automaticamente pelo nome.
+    <form onSubmit={handleSubmit} aria-label="Registrar template existente" className="space-y-3">
+      <p className="text-[13.5px] leading-[19px] text-wa-muted">
+        Para um template já aprovado pela Meta fora deste sistema — o corpo e a quantidade de variáveis são buscados pelo nome.
       </p>
       <div>
-        <label htmlFor="existing-template-channel" className="mb-1.5 block text-sm font-medium text-wa-muted">Canal</label>
-        <select
+        <label htmlFor="existing-template-channel" className={LABEL}>
+          Canal
+        </label>
+        <ChannelSelect
           id="existing-template-channel"
           value={channelId}
-          onChange={(e) => setChannelId(e.target.value)}
-          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-          required
-        >
-          <option value="">Selecione um canal</option>
-          {officialChannels.map((channel) => (
-            <option key={channel.id} value={channel.id}>{channel.name}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label htmlFor="existing-template-name" className="mb-1.5 block text-sm font-medium text-wa-muted">Nome exato na Meta</label>
-        <input
-          id="existing-template-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-          required
+          onChange={setChannelId}
+          channels={officialChannels}
+          placeholder="Selecione um canal"
         />
       </div>
       <div>
-        <label htmlFor="existing-template-language" className="mb-1.5 block text-sm font-medium text-wa-muted">Idioma</label>
-        <select
-          id="existing-template-language"
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-          required
-        >
-          <option value="pt_BR">Português (BR)</option>
-          <option value="en_US">Inglês (EUA)</option>
-          <option value="es">Espanhol</option>
-        </select>
+        <label htmlFor="existing-template-name" className={LABEL}>
+          Nome exato na Meta
+        </label>
+        <input id="existing-template-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
       </div>
-      <div>
-        <label htmlFor="existing-template-header" className="mb-1.5 block text-sm font-medium text-wa-muted">Cabeçalho</label>
-        <select
-          id="existing-template-header"
-          value={headerType}
-          onChange={(e) => setHeaderType(e.target.value)}
-          className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-        >
-          <option value="">Nenhum</option>
-          <option value="document">Documento</option>
-          <option value="image">Imagem</option>
-          <option value="video">Vídeo</option>
-        </select>
-      </div>
-      {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Registrar
-        </button>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
-            Cancelar
-          </button>
-        )}
-      </div>
-    </form>
-  );
-}
-
-function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
-  const { token } = useAuth();
-  const { templates, status, refresh } = useTemplates();
-  const { channels } = useChannels();
-  const officialChannels = channels.filter((channel) => isOfficialChannelType(channel.type));
-
-  const [viewingTemplates, setViewingTemplates] = useState(false);
-  const [internalCreatingTemplate, setInternalCreatingTemplate] = useState(false);
-  const controlled = creatingProp !== undefined;
-  const creatingTemplate = controlled ? creatingProp : internalCreatingTemplate;
-  const setCreatingTemplate = controlled ? onCreatingChange : setInternalCreatingTemplate;
-  const [registeringTemplate, setRegisteringTemplate] = useState(false);
-  const [channelId, setChannelId] = useState('');
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('UTILITY');
-  const [language, setLanguage] = useState('pt_BR');
-  const [bodyText, setBodyText] = useState('');
-  const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [syncError, setSyncError] = useState(null);
-
-  const wabaIds = [...new Set(officialChannels.map((channel) => channel.wabaId).filter(Boolean))];
-
-  const firstOfficialChannelId = officialChannels[0]?.id;
-
-  useEffect(() => {
-    if (!channelId && firstOfficialChannelId) {
-      setChannelId(firstOfficialChannelId);
-    }
-  }, [firstOfficialChannelId, channelId]);
-
-  async function handleCreate(event) {
-    event.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
-      await createTemplateAdmin({ channelId, name, category, language, bodyText }, token);
-      setName('');
-      setBodyText('');
-      setLanguage('pt_BR');
-      setCreatingTemplate(false);
-      refresh();
-    } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao criar template');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function handleCancelCreate() {
-    setName('');
-    setBodyText('');
-    setLanguage('pt_BR');
-    setError(null);
-    setCreatingTemplate(false);
-  }
-
-  async function handleSync(wabaId) {
-    setSyncError(null);
-    try {
-      await syncTemplatesAdmin(wabaId, token);
-      refresh();
-    } catch (err) {
-      setSyncError((err.body && err.body.error) || 'Falha ao sincronizar');
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      {wabaIds.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {wabaIds.map((wabaId) => (
-            <button
-              key={wabaId}
-              onClick={() => handleSync(wabaId)}
-              className="rounded-[10px] border border-wa-border bg-wa-surface px-3 py-1.5 text-[13.5px] font-medium text-wa-text transition hover:bg-wa-hover"
-            >
-              Sincronizar agora ({wabaId})
-            </button>
-          ))}
-        </div>
-      )}
-      {syncError && (
-        <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{syncError}</p>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setViewingTemplates(true)}
-          className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
-        >
-          Ver templates ({templates.length})
-        </button>
-        {!controlled && !creatingTemplate && (
-          <button
-            type="button"
-            onClick={() => setCreatingTemplate(true)}
-            className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
-          >
-            Cadastrar novo template
-          </button>
-        )}
-        {!registeringTemplate && (
-          <button
-            type="button"
-            onClick={() => setRegisteringTemplate(true)}
-            className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
-          >
-            Registrar template existente
-          </button>
-        )}
-      </div>
-
-      {viewingTemplates && (
-        <TemplatesModal templates={templates} status={status} onClose={() => setViewingTemplates(false)} onDeleted={refresh} />
-      )}
-
-      {creatingTemplate && (
-      <form
-        onSubmit={handleCreate}
-        aria-label="Cadastrar novo template"
-        className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
-      >
-        <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar novo template</h3>
+      <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label htmlFor="template-channel" className="mb-1.5 block text-sm font-medium text-wa-muted">
-            Canal
-          </label>
-          <select
-            id="template-channel"
-            value={channelId}
-            onChange={(e) => setChannelId(e.target.value)}
-            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-            required
-          >
-            {officialChannels.map((channel) => (
-              <option key={channel.id} value={channel.id}>
-                {channel.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="template-name" className="mb-1.5 block text-sm font-medium text-wa-muted">
-            Nome
-          </label>
-          <input
-            id="template-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="saudacao_inicial"
-            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-            required
-          />
-          <p className="mt-1 text-xs text-wa-muted">Só letras minúsculas, números e _ (ex.: saudacao_inicial)</p>
-        </div>
-        <div>
-          <label htmlFor="template-category" className="mb-1.5 block text-sm font-medium text-wa-muted">
-            Categoria
-          </label>
-          <select
-            id="template-category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-          >
-            <option value="UTILITY">Utilidade</option>
-            <option value="MARKETING">Marketing</option>
-          </select>
-        </div>
-        <div>
-          <label htmlFor="template-language" className="mb-1.5 block text-sm font-medium text-wa-muted">
+          <label htmlFor="existing-template-language" className={LABEL}>
             Idioma
           </label>
           <select
-            id="template-language"
+            id="existing-template-language"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
+            className={inputClass}
             required
           >
             <option value="pt_BR">Português (BR)</option>
@@ -370,50 +343,338 @@ function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </select>
         </div>
         <div>
-          <label htmlFor="template-body" className="mb-1.5 block text-sm font-medium text-wa-muted">
-            Corpo da mensagem
+          <label htmlFor="existing-template-header" className={LABEL}>
+            Cabeçalho
           </label>
-          <textarea
-            id="template-body"
-            value={bodyText}
-            onChange={(e) => setBodyText(e.target.value)}
-            placeholder="Olá {{1}}, sua fatura de {{2}} venceu."
-            className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
-            required
-          />
+          <select id="existing-template-header" value={headerType} onChange={(e) => setHeaderType(e.target.value)} className={inputClass}>
+            <option value="">Nenhum</option>
+            <option value="document">Documento</option>
+            <option value="image">Imagem</option>
+            <option value="video">Vídeo</option>
+          </select>
         </div>
-        {error && (
-          <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>
+      </div>
+      {error && <p className={waErrorClass}>{error}</p>}
+      <div className="flex gap-2">
+        <Button type="submit" loading={submitting}>
+          Registrar
+        </Button>
+        <Button variant="secondary" onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function iniciais(nome) {
+  const palavras = String(nome || '').trim().split(/\s+/).filter(Boolean);
+  if (palavras.length === 0) return '?';
+  const primeira = palavras[0];
+  if (primeira.length <= 2 && primeira === primeira.toUpperCase()) return primeira;
+  return palavras.slice(0, 2).map((p) => p[0].toUpperCase()).join('');
+}
+
+// Prévia ilustrativa: o corpo do template numa conversa parecida com o WhatsApp
+// do cliente, com o canal como remetente. Nada é enviado.
+function TemplatePreview({ template, channel }) {
+  const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return (
+    <section aria-labelledby="template-preview-title" className={`${CARD} flex flex-col`}>
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-3 pt-5 sm:px-5">
+        <div className="min-w-0">
+          <h2 id="template-preview-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
+            Prévia da mensagem
+          </h2>
+          <p className="mt-0.5 truncate text-[13px] text-wa-muted">{template ? template.name : 'Nenhum template selecionado'}</p>
+        </div>
+        {template && (
+          <span className="inline-flex shrink-0 items-center rounded-full border border-wa-border bg-white/[0.05] px-2.5 py-[3px] text-[12px] font-medium text-wa-muted">
+            {languageLabel(template.language)}
+          </span>
         )}
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Cadastrar
-          </button>
-          <button
-            type="button"
-            onClick={handleCancelCreate}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
-            Cancelar
-          </button>
+      </div>
+
+      <div className="px-4 sm:px-5">
+        <div className="overflow-hidden rounded-[14px] border border-white/[0.06] bg-[#0b141a]">
+          <div className="flex items-center gap-3 border-b border-white/[0.06] bg-[#1f2c34] px-4 py-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chat-orange text-[13px] font-semibold text-white">
+              {iniciais(channel?.name)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[14px] font-medium text-[#e9edef]">{channel?.name || 'Canal'}</span>
+              <span className="block text-[12px] text-[#8696a0]">Conta comercial</span>
+            </span>
+            <span aria-hidden="true" className="text-[#8696a0]">
+              <IconMore size={18} className="rotate-90" />
+            </span>
+          </div>
+          <div className="min-h-[150px] bg-[#0e1a20] px-4 py-5">
+            {template ? (
+              <div className="relative max-w-[88%] rounded-[10px] rounded-tl-none bg-[#f4f1ed] px-3 pb-5 pt-2 text-[14px] leading-[20px] text-[#111b21] shadow-sm">
+                <p className="whitespace-pre-wrap break-words">{template.bodyText || 'Corpo do template não informado.'}</p>
+                <span className="absolute bottom-1 right-2 text-[11px] text-[#667781]">{hora}</span>
+              </div>
+            ) : (
+              <p className="text-center text-[13px] text-[#8696a0]">Selecione um template na lista para ver a prévia.</p>
+            )}
+          </div>
         </div>
-      </form>
+      </div>
+
+      {template && (
+        <dl className="mx-4 mt-4 grid grid-cols-3 divide-x divide-wa-border border-t border-wa-border pt-4 sm:mx-5">
+          <div className="pr-3">
+            <dt className="text-[12px] text-wa-muted">Categoria</dt>
+            <dd className="mt-1 text-[13.5px] text-wa-text">{categoryLabel(template.category)}</dd>
+          </div>
+          <div className="px-3">
+            <dt className="text-[12px] text-wa-muted">Status</dt>
+            <dd className="mt-1 text-[13.5px] text-wa-text">
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${statusMeta(template.status).chip.split(' ').pop()} bg-current`} />
+                {statusMeta(template.status).label}
+              </span>
+            </dd>
+          </div>
+          <div className="pl-3">
+            <dt className="text-[12px] text-wa-muted">Canal</dt>
+            <dd className="mt-1 truncate text-[13.5px] text-wa-text">{channel?.name || '—'}</dd>
+          </div>
+        </dl>
       )}
 
-      {registeringTemplate && (
-        <RegisterExistingTemplateForm
-          onRegistered={() => {
-            refresh();
-            setRegisteringTemplate(false);
+      <p className="mt-auto flex items-center gap-1.5 px-4 py-3 text-[12px] text-wa-muted sm:px-5">
+        <IconInfo size={14} />
+        Prévia ilustrativa. Nenhuma mensagem será enviada.
+      </p>
+    </section>
+  );
+}
+
+function TemplatesAdminTab() {
+  const { token } = useAuth();
+  const { templates, status, refresh } = useTemplates();
+  const { channels } = useChannels();
+  const officialChannels = useMemo(() => channels.filter((channel) => isOfficialChannelType(channel.type)), [channels]);
+
+  const [channelId, setChannelId] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedId, setSelectedId] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(null);
+
+  const firstOfficialChannelId = officialChannels[0]?.id;
+  useEffect(() => {
+    if (!channelId && firstOfficialChannelId) setChannelId(firstOfficialChannelId);
+  }, [firstOfficialChannelId, channelId]);
+
+  const channel = officialChannels.find((c) => c.id === channelId) || null;
+  const term = search.trim().toLowerCase();
+
+  // Template sem WABA (registro antigo) aparece em qualquer canal; os demais só
+  // no canal cuja conta (WABA) é a mesma.
+  const visible = useMemo(
+    () =>
+      templates.filter((template) => {
+        if (channel && template.wabaId && channel.wabaId && template.wabaId !== channel.wabaId) return false;
+        if (statusFilter !== 'all' && template.status !== statusFilter) return false;
+        if (term && !String(template.name || '').toLowerCase().includes(term)) return false;
+        return true;
+      }),
+    [templates, channel, statusFilter, term]
+  );
+  const selected = visible.find((template) => template.id === selectedId) || visible[0] || null;
+
+  async function handleSync() {
+    if (!channel?.wabaId) return;
+    setSyncError(null);
+    setSyncing(true);
+    try {
+      await syncTemplatesAdmin(channel.wabaId, token);
+      refresh();
+    } catch (err) {
+      setSyncError((err.body && err.body.error) || 'Falha ao sincronizar');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-3">
+        <label
+          className={`${CONTROL} flex min-w-[200px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
+        >
+          <span className="shrink-0 text-wa-muted">
+            <IconSearch size={17} />
+          </span>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar template"
+            aria-label="Buscar template"
+            className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-wa-muted"
+          />
+        </label>
+        <select
+          aria-label="Canal"
+          value={channelId}
+          onChange={(event) => {
+            setChannelId(event.target.value);
+            setSelectedId(null);
           }}
-          onCancel={() => setRegisteringTemplate(false)}
-        />
+          className={`${CONTROL} max-w-[240px] px-3 pr-8`}
+        >
+          {officialChannels.length === 0 && <option value="">Nenhum canal oficial</option>}
+          {officialChannels.map((c) => (
+            <option key={c.id} value={c.id}>
+              Canal: {c.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Status"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+          className={`${CONTROL} px-3 pr-8`}
+        >
+          {STATUS_OPTIONS.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="secondary"
+          onClick={handleSync}
+          loading={syncing}
+          disabled={!channel?.wabaId}
+          title={channel?.wabaId ? `Buscar na Meta os templates da conta ${channel.wabaId}` : 'O canal selecionado não tem WABA ID'}
+          className="!py-2"
+        >
+          <IconRefresh size={17} />
+          Sincronizar
+        </Button>
+        <Button onClick={() => setCreating(true)} className="!py-2">
+          <IconNewChat size={18} />
+          Novo template
+        </Button>
+      </div>
+      {syncError && <p className={waErrorClass}>{syncError}</p>}
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <div className="space-y-5">
+          <section aria-labelledby="templates-card-title" className={CARD}>
+            <div className="flex items-center gap-2.5 px-4 pb-3 pt-5 sm:px-5">
+              <h2 id="templates-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
+                Templates do canal
+              </h2>
+              <span className="inline-flex h-[20px] min-w-[22px] items-center justify-center rounded-[6px] bg-white/[0.10] px-1.5 text-[12px] font-semibold text-wa-text">
+                {visible.length}
+              </span>
+            </div>
+            <div className="px-4 pb-1 sm:px-5">
+              <AsyncState status={status} onRetry={refresh} isEmpty={templates.length === 0} emptyMessage="Nenhum template cadastrado ainda.">
+                <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
+                  <table className="w-full min-w-[480px] border-collapse text-[13.5px]">
+                    <thead>
+                      <tr className="bg-black/[0.16]">
+                        <th scope="col" className={HEAD}>
+                          Nome
+                        </th>
+                        <th scope="col" className={HEAD}>
+                          Categoria
+                        </th>
+                        <th scope="col" className={HEAD}>
+                          Status
+                        </th>
+                        <th scope="col" className={`${HEAD} text-right`}>
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visible.length === 0 ? (
+                        <tr className="border-t border-wa-border">
+                          <td colSpan={4} className="px-3 py-6 text-center text-[13.5px] text-wa-muted">
+                            Nenhum template neste canal com esse filtro.
+                          </td>
+                        </tr>
+                      ) : (
+                        visible.map((template) => (
+                          <TemplateRow
+                            key={template.id}
+                            template={template}
+                            selected={selected?.id === template.id}
+                            onSelect={() => setSelectedId(template.id)}
+                            onDeleted={refresh}
+                          />
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </AsyncState>
+            </div>
+            <p className="flex items-center gap-1.5 border-t border-wa-border px-4 py-3 text-[12px] text-wa-muted sm:px-5">
+              <IconInfo size={14} />
+              Status de aprovação informado pela Meta.
+            </p>
+          </section>
+
+          <section className={`${CARD} flex flex-wrap items-center gap-4 px-4 py-4 sm:px-5`}>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-white/[0.06] text-wa-muted">
+              <IconFile size={22} />
+            </span>
+            <div className="min-w-0 flex-1 basis-[14rem]">
+              <p className="text-[14.5px] font-medium text-wa-text">Já tem um template cadastrado?</p>
+              <p className="mt-0.5 text-[13px] text-wa-muted">Vincule um modelo existente ao canal selecionado.</p>
+            </div>
+            <Button variant="secondary" onClick={() => setRegistering(true)} aria-label="Registrar template existente" className="!py-2">
+              Registrar existente
+            </Button>
+          </section>
+        </div>
+
+        <TemplatePreview template={selected} channel={channel} />
+      </div>
+
+      {creating && (
+        <WaDialog title="Novo template" onClose={() => setCreating(false)} size="max-w-lg">
+          <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-2">
+            <CreateTemplateForm
+              officialChannels={officialChannels}
+              initialChannelId={channelId}
+              onCreated={() => {
+                setCreating(false);
+                refresh();
+              }}
+              onCancel={() => setCreating(false)}
+            />
+          </div>
+        </WaDialog>
       )}
-    </div>
+      {registering && (
+        <WaDialog title="Registrar template existente" onClose={() => setRegistering(false)} size="max-w-lg">
+          <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-2">
+            <RegisterExistingTemplateForm
+              officialChannels={officialChannels}
+              initialChannelId={channelId}
+              onRegistered={() => {
+                setRegistering(false);
+                refresh();
+              }}
+              onCancel={() => setRegistering(false)}
+            />
+          </div>
+        </WaDialog>
+      )}
+    </>
   );
 }
 

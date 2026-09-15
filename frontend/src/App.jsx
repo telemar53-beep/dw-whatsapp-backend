@@ -22,6 +22,7 @@ import RolesPage from './pages/settings/team/RolesPage';
 import ReasonsPage from './pages/settings/registers/ReasonsPage';
 import CitiesPage from './pages/settings/registers/CitiesPage';
 import CompanyPage from './pages/settings/CompanyPage';
+import MessagesLayout from './pages/settings/messages/MessagesLayout';
 import WelcomePage from './pages/settings/messages/WelcomePage';
 import CityNoticesPage from './pages/settings/messages/CityNoticesPage';
 import QuickRepliesPage from './pages/settings/messages/QuickRepliesPage';
@@ -103,11 +104,14 @@ function App() {
                 <Route path="cadastros/motivos" element={<ReasonsPage />} />
                 <Route path="cadastros/cidades" element={<CitiesPage />} />
                 <Route path="empresa" element={<CompanyPage />} />
-                <Route path="mensagens/boas-vindas" element={<WelcomePage />} />
-                <Route path="mensagens/avisos-cidade" element={<CityNoticesPage />} />
-                <Route path="mensagens/respostas-rapidas" element={<QuickRepliesPage />} />
-                <Route path="mensagens/templates" element={<TemplatesPage />} />
-                <Route path="regras/atribuicao" element={<AssignmentPage />} />
+                <Route path="mensagens" element={<MessagesLayout />}>
+                  <Route index element={<Navigate to="boas-vindas" replace />} />
+                  <Route path="boas-vindas" element={<WelcomePage />} />
+                  <Route path="abertura-encerramento" element={<AssignmentPage />} />
+                  <Route path="avisos-cidade" element={<CityNoticesPage />} />
+                  <Route path="respostas-rapidas" element={<QuickRepliesPage />} />
+                  <Route path="templates" element={<TemplatesPage />} />
+                </Route>
                 <Route path="regras/horario" element={<BusinessHoursPage />} />
                 <Route path="automacao/triagem-menu" element={<MenuTriagePage />} />
                 <Route path="automacao/ia" element={<AiTriagePage />} />

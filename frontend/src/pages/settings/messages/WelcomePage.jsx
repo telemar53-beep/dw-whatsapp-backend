@@ -1,4 +1,3 @@
-import SettingsPage from '../SettingsPage';
 import { Card, AsyncState } from '../../../components/ui';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useChannels } from '../../../hooks/useChannels';
@@ -10,11 +9,7 @@ function WelcomePage() {
   const canEdit = hasLevel(agent, 'integrations');
   const { channels, status, refresh } = useChannels(true);
   return (
-    <SettingsPage
-      title="Boas-vindas"
-      description="A primeira mensagem que cada canal envia ao cliente, antes de qualquer automação."
-      scope="channel"
-    >
+    <>
       <Card title="Como funciona">
         <p>
           Enviada automaticamente para o cliente assim que ele manda a primeira mensagem em um
@@ -34,7 +29,7 @@ function WelcomePage() {
           </ul>
         </AsyncState>
       </Card>
-    </SettingsPage>
+    </>
   );
 }
 

@@ -1,11 +1,10 @@
-import SettingsPage from '../SettingsPage';
 import { Card } from '../../../components/ui';
 import AssignmentMessageSection from '../../../components/messages/AssignmentMessageSection';
 
 function AssignmentPage() {
   return (
-    <SettingsPage title="Atribuição" description="Mensagens automáticas ao assumir e ao encerrar um atendimento." scope="global">
-      <Card title="Como funciona">
+    <>
+      <Card title="Abertura e encerramento" description="Mensagens automáticas ao assumir e ao encerrar um atendimento.">
         <p>
           Enviada automaticamente para o cliente quando um atendente assume o
           atendimento, e uma segunda mensagem quando ele é encerrado. Escolha
@@ -23,7 +22,7 @@ function AssignmentPage() {
         </p>
       </Card>
       <AssignmentMessageSection />
-    </SettingsPage>
+    </>
   );
 }
 

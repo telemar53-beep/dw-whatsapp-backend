@@ -19,37 +19,23 @@ beforeEach(() => {
 });
 
 describe('TemplatesPage', () => {
-  // Restaura o antigo popup "O que é isso: templates" (SectionHelp) do
-  // MessagesAdminTab como um Card sempre visível no topo da página — mesmo
-  // texto, sem precisar clicar em nada para revelá-lo.
-  test('shows the explanation for the templates feature directly, without a popup', () => {
-    useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }], status: 'ready', refresh: vi.fn() });
-    renderInShell(<TemplatesPage />, { path: '/configuracoes/mensagens/templates' });
-
-    expect(screen.getByText(/templates são mensagens pré-aprovadas pela meta/i)).toBeInTheDocument();
-  });
-
   test('shows the Templates section with its own create button', () => {
     useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }], status: 'ready', refresh: vi.fn() });
     renderInShell(<TemplatesPage />, { path: '/configuracoes/mensagens/templates' });
 
-    expect(screen.getByText('Templates')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /cadastrar template/i })).toBeInTheDocument();
+    expect(screen.getByText('Templates do canal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /novo template/i })).toBeInTheDocument();
   });
 
-  // O botão de criar agora fica no cabeçalho da página (como nas outras telas
-  // de Configurações), controlando o formulário dentro de TemplatesAdminTab
-  // em vez do botão interno "Cadastrar novo template".
-  test('clicking the header action opens the create-template form', async () => {
+  test('clicking Novo template opens the create-template form in a dialog', async () => {
     useChannels.mockReturnValue({ channels: [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', wabaId: 'waba-1' }], status: 'ready', refresh: vi.fn() });
     renderInShell(<TemplatesPage />, { path: '/configuracoes/mensagens/templates' });
 
     expect(screen.queryByRole('form', { name: /cadastrar novo template/i })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /cadastrar template/i }));
+    await userEvent.click(screen.getByRole('button', { name: /novo template/i }));
 
     expect(screen.getByRole('form', { name: /cadastrar novo template/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /cadastrar template/i })).not.toBeInTheDocument();
   });
 
   test('shows a warning when there is no official channel registered', () => {

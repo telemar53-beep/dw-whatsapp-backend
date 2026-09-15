@@ -367,3 +367,27 @@ export function IconMore(props) {
     </Svg>
   );
 }
+
+export function IconRefresh(props) {
+  return (
+    <Svg {...props}>
+      <path d="M17.65 6.35A7.96 7.96 0 0012 4a8 8 0 100 16 7.98 7.98 0 007.73-6h-2.08A6 6 0 1112 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z" />
+    </Svg>
+  );
+}
+
+export function IconInfo(props) {
+  return (
+    <Svg {...props}>
+      <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-11h2V7h-2zm0 8h2v-6h-2z" />
+    </Svg>
+  );
+}
+
+export function IconFile(props) {
+  return (
+    <Svg {...props}>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zm4 18H6V4h7v5h5zM8 12h8v2H8zm0 4h8v2H8z" />
+    </Svg>
+  );
+}

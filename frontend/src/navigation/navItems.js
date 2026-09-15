@@ -49,17 +49,14 @@ export const SETTINGS_SECTIONS = [
   {
     group: 'Regras de atendimento', groupKey: 'regras', icon: IconRules,
     items: [
-      { key: 'atribuicao', label: 'Atribuição', to: s('regras/atribuicao'), level: 'admin', description: 'Mensagens automáticas ao assumir e ao encerrar um atendimento.' },
       { key: 'horario', label: 'Horário de atendimento', to: s('regras/horario'), level: 'admin', description: 'Quando há atendente humano e o aviso fora do expediente.' },
     ],
   },
   {
     group: 'Mensagens e templates', groupKey: 'mensagens', icon: IconQuickReply,
+    // Uma entrada só: as cinco telas são abas dentro da página.
     items: [
-      { key: 'boas-vindas', label: 'Boas-vindas', to: s('mensagens/boas-vindas'), level: 'admin', description: 'A primeira mensagem que cada canal envia ao cliente.' },
-      { key: 'avisos-cidade', label: 'Avisos por cidade', to: s('mensagens/avisos-cidade'), level: 'admin', description: 'Avisos de instabilidade ou manutenção por região.' },
-      { key: 'respostas-rapidas', label: 'Respostas rápidas', to: s('mensagens/respostas-rapidas'), level: 'admin', description: 'Textos prontos que o atendente insere com um clique.' },
-      { key: 'templates', label: 'Templates WhatsApp', to: s('mensagens/templates'), level: 'admin', description: 'Mensagens aprovadas pela Meta para os canais oficiais.' },
+      { key: 'mensagens', label: 'Mensagens e templates', to: s('mensagens'), level: 'admin', description: 'Boas-vindas, abertura e encerramento, avisos por cidade, respostas rápidas e templates.' },
     ],
   },
   {
@@ -98,6 +95,7 @@ export const LEGACY_REDIRECTS = [
   { from: '/metrics', to: '/relatorios' },
   { from: '/campaigns', to: '/campanhas' },
   { from: '/campaigns/:id', to: '/campanhas/:id' },
+  { from: s('regras/atribuicao'), to: s('mensagens/abertura-encerramento') },
 ];
 
 export function firstAllowedSettingsPath(agent) {

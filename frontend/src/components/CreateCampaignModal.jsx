@@ -141,7 +141,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
                       (vão aparecer como "falhou")
                     </p>
                   )}
-                  {summary.valid.length > RECIPIENT_LIMIT && (
+                  {summary.valid.length + summary.invalid > RECIPIENT_LIMIT && (
                     <p className={waErrorClass}>O limite é de {RECIPIENT_LIMIT} destinatários por campanha.</p>
                   )}
                 </dd>
@@ -171,7 +171,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting || summary.valid.length > RECIPIENT_LIMIT}
+              disabled={submitting || summary.valid.length + summary.invalid > RECIPIENT_LIMIT}
               className={waPrimaryButtonClass}
             >
               Confirmar e disparar

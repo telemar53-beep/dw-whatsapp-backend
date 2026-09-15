@@ -48,6 +48,7 @@ beforeEach(() => {
   api.deleteChannel.mockResolvedValue({});
   api.reconnectChannel.mockResolvedValue({});
   api.setChannelHidden.mockResolvedValue({});
+  api.setChannelAiNightModeEnabled.mockResolvedValue({});
 });
 
 describe('ChannelDetailPage', () => {
@@ -155,6 +156,19 @@ describe('ChannelDetailPage', () => {
     useChannels.mockReturnValue({ channels: [{ ...berg, type: 'meta_cloud', status: 'connected' }], status: 'ready', refresh });
     renderDetail('/configuracoes/canais/ch1/conexao');
     expect(screen.queryByRole('button', { name: /reconectar/i })).not.toBeInTheDocument();
+  });
+
+  // Fix: o interruptor ficava travado ligado quando a janela noturna global
+  // era apagada depois do canal já estar com o noturno ativo — o admin não
+  // conseguia mais desligá-lo por ali, só editando o canal via API.
+  test('noturno já ligado continua desligável mesmo sem a janela definida', async () => {
+    useChannels.mockReturnValue({ channels: [{ ...berg, aiTriageEnabled: true, aiNightModeEnabled: true }], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/atendimento');
+    const noturno = screen.getByRole('checkbox', { name: /atendimento noturno/i });
+    expect(noturno).not.toBeDisabled();
+
+    await userEvent.click(noturno);
+    await waitFor(() => expect(api.setChannelAiNightModeEnabled).toHaveBeenCalledWith('ch1', false, 'tok'));
   });
 
   test('sem o Atendimento com IA ligado, a Triagem com IA fica desabilitada com a explicação', () => {

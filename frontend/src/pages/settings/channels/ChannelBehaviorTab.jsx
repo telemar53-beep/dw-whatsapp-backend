@@ -96,7 +96,7 @@ function ChannelBehaviorTab() {
           id="channel-ai-night-mode"
           checked={Boolean(channel.aiNightModeEnabled)}
           onChange={(e) => actions.toggleAiNightMode(channel.id, e.target.checked)}
-          disabled={!canManage || !channel.aiTriageEnabled || !nightWindowSet}
+          disabled={!canManage || (!channel.aiNightModeEnabled && (!channel.aiTriageEnabled || !nightWindowSet))}
           disabledReason={nightModeDisabledReason}
           label="Atendimento noturno"
         />

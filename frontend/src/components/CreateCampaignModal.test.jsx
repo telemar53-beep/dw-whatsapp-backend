@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CreateCampaignModal from './CreateCampaignModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -167,6 +167,27 @@ describe('CreateCampaignModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /revisar/i }));
     await userEvent.click(screen.getByRole('button', { name: /voltar/i }));
     expect(screen.getByLabelText(/mensagem/i)).toHaveValue('Oi');
+  });
+
+  // Fix: o limite comparava só summary.valid.length, mas o backend conta
+  // válidos + inválidos na contagem de destinatários da campanha (linhas
+  // inválidas viram "falhou", não somem). 1999 válidos + 2 inválidos passa
+  // dos 2000 na soma, mas não nos válidos sozinhos.
+  test('o limite conta válidos + inválidos, não só os válidos', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    render(<CreateCampaignModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    await screen.findByText('Berg');
+    await userEvent.type(screen.getByLabelText(/mensagem/i), 'Oi');
+
+    const validLines = Array.from({ length: 1999 }, (_, i) => `551199990${String(i).padStart(4, '0')}`);
+    const recipients = [...validLines, 'abc', 'def'].join('\n');
+    fireEvent.change(screen.getByLabelText(/destinatários/i), { target: { value: recipients } });
+
+    await userEvent.click(screen.getByRole('button', { name: /revisar/i }));
+
+    expect(screen.getByText('O limite é de 2000 destinatários por campanha.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /confirmar e disparar/i })).toBeDisabled();
+    expect(api.createCampaign).not.toHaveBeenCalled();
   });
 
   test('revisão de canal oficial mostra o template e as variáveis', async () => {

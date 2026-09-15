@@ -182,6 +182,17 @@ O trabalho foi dividido em 21 tarefas, cada uma revisada antes da próxima come�
 
 Todas as 21 tarefas passaram por uma revisão dedicada antes de a próxima começar; rodadas de correção ficam registradas nos commits "Fix round 1" listados acima.
 
+**Correções da revisão final**
+- `e50b258` Fix: Campanhas usa o endpoint de canais liberado para atendente
+- `d2bf4a5` Fix: janela noturna não nasce mais com 20:00/08:00 sem o admin escolher
+- `4ce93cd` Fix: prende o foco (Tab/Shift+Tab) dentro do ConfirmDialog
+- `65440d6` Fix: limite de destinatários e interruptor de noturno travado ligado
+- `00c4014` Cleanup: remove dead test.skip blocks with no in-page equivalent
+- `d4b1b58` Fix: abas ligadas a rota usam <nav> de links, não role="tablist"
+- `850f412` Fix: periodo=custom sem dias válido na URL cai para hoje
+- `6646ef7` Cleanup: escopo do cabeçalho de Canais, hasLevel na faixa e texto de ajuda
+- `fda0ab0` Fix: App.routes.test.jsx mocka listChannelsForAgent
+
 ---
 
 ## 5. Testes e evidências
@@ -190,7 +201,7 @@ Todas as 21 tarefas passaram por uma revisão dedicada antes de a próxima come�
 
 | Suíte | Antes da reorganização | Depois (agora) |
 |---|---|---|
-| Frontend (`frontend/src`) | 83 arquivos, 799 testes | 114 arquivos, 969 testes (961 passando, 8 propositalmente pulados — cobertos por um teste equivalente em outro arquivo, com o comentário explicando onde) |
+| Frontend (`frontend/src`) | 83 arquivos, 799 testes | 115 arquivos, 970 testes (965 passando, 5 pulados — cobertos por um teste equivalente em SideNav/AppShell, com o comentário explicando onde) |
 | Backend (`src`, raiz do projeto) | não fazia parte desta reorganização (só uma consulta de leitura mudou, seção 9.1 da spec) | 116 suítes, 2259 testes, todos passando |
 
 As duas suítes completas (`npx vitest run` no frontend e `npm test` na raiz) rodaram limpas ao final desta revisão.
@@ -219,7 +230,13 @@ Nenhum teste automático, nem a conferência visual, enviou mensagem de WhatsApp
 
 Estes pontos foram identificados durante o trabalho, mas ficaram combinados como fora do escopo. Nenhum é um problema novo criado por esta reorganização — são coisas que já existiam ou que foram descobertas e adiadas de propósito.
 
-1. **Motivo de contato misturado com resultado.** Hoje um único campo serve tanto para "por que o cliente entrou em contato" quanto para "o que a IA resolveu". Separar os dois exige mudar o banco de dados, o relatório e o CSV exportado — é um projeto à parte.
+### Mudança deliberada de comportamento
+
+A janela do atendimento noturno não é mais preenchida sozinha com 20:00 e 08:00. Antes, salvar o cartão de triagem gravava esses valores mesmo sem o administrador escolher. Agora a janela só é gravada quando alguém a define na página Atendimento noturno; até lá, o interruptor de noturno do canal continua bloqueado com a explicação.
+
+### Pendências
+
+1. **Motivo de contato misturado com resultado.** Hoje um único campo serve tanto para "por que o cliente entrou em contato" quanto para "o que a IA resolveu". Separar os dois exige mudar o banco de dados, o relatório e o CSV exportado — é um projeto à parte. Motivos de contato inclui atendimentos encerrados pela IA; o total e o gráfico por setor contam só os encerrados por atendentes. A ajuda da página explica isso.
 2. **Algumas checagens do backend não conferem se a pessoa é dona da conversa.** Editar o cadastro do cliente, ler o histórico de mensagens e consultar o SGP hoje só exigem estar logado, não exigem ser o atendente daquela conversa específica. Isso é assim desde antes desta reorganização; é uma decisão de segurança, não de organização de tela, e fica para outra rodada.
 3. **Lista de destinatários de uma campanha não pagina.** Campanhas com uma lista muito grande de destinatários mostram tudo de uma vez, sem "próxima página".
 4. **A permissão "Pode gerenciar Canais e Integrações" de um gerente só vale a partir do próximo login dele.** Isso é uma característica de como o sistema guarda a permissão (dentro do token de acesso), não um bug desta entrega.

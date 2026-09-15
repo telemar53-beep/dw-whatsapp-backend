@@ -91,6 +91,18 @@ describe('AudioTranscriptionConfigCard', () => {
     expect(updateTranscriptionConfig).not.toHaveBeenCalled();
   });
 
+  test('desabilita Buscar modelos com dica quando a OpenAI ainda não está configurada', async () => {
+    getAiConfig.mockResolvedValue({
+      configured: false, transcriptionEnabled: false, transcriptionModel: '',
+      transcriptionMaxSeconds: 300, transcriptionMaxBytes: 26214400,
+      transcriptionPrompt: '', transcriptionFeedAi: true,
+    });
+    render(<AudioTranscriptionConfigCard />);
+    const buscar = await screen.findByRole('button', { name: /buscar modelos/i });
+    expect(buscar).toBeDisabled();
+    expect(buscar).toHaveAttribute('title', 'Salve a chave da OpenAI primeiro');
+  });
+
   test('desabilita o botão Salvar enquanto a configuração ainda está carregando', async () => {
     // Uma promise que nunca resolve simula a janela de carregamento em que
     // `loading` do useAiConfig ainda é true e os states carregam os defaults.

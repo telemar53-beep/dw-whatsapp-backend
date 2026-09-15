@@ -27,6 +27,12 @@ import BusinessHoursPage from './pages/settings/rules/BusinessHoursPage';
 import SgpQueryPage from './pages/settings/integrations/SgpQueryPage';
 import SgpChannelPage from './pages/settings/integrations/SgpChannelPage';
 import OpenAiPage from './pages/settings/integrations/OpenAiPage';
+import MenuTriagePage from './pages/settings/automation/MenuTriagePage';
+import AiTriagePage from './pages/settings/automation/AiTriagePage';
+import IdentificationPage from './pages/settings/automation/IdentificationPage';
+import TranscriptionPage from './pages/settings/automation/TranscriptionPage';
+import NightModePage from './pages/settings/automation/NightModePage';
+import AiToolsPage from './pages/settings/automation/AiToolsPage';
 import { LEGACY_REDIRECTS } from './navigation/navItems';
 
 // Rota antiga → nova, trocando :params e mantendo ?query.
@@ -90,6 +96,12 @@ function App() {
                 <Route path="mensagens/templates" element={<TemplatesPage />} />
                 <Route path="regras/atribuicao" element={<AssignmentPage />} />
                 <Route path="regras/horario" element={<BusinessHoursPage />} />
+                <Route path="automacao/triagem-menu" element={<MenuTriagePage />} />
+                <Route path="automacao/ia" element={<AiTriagePage />} />
+                <Route path="automacao/identificacao" element={<IdentificationPage />} />
+                <Route path="automacao/transcricao" element={<TranscriptionPage />} />
+                <Route path="automacao/noturno" element={<NightModePage />} />
+                <Route path="automacao/ferramentas" element={<AiToolsPage />} />
                 <Route path="integracoes/sgp-consulta" element={<SgpQueryPage />} />
                 <Route path="integracoes/sgp-canal" element={<SgpChannelPage />} />
                 <Route path="integracoes/openai" element={<OpenAiPage />} />

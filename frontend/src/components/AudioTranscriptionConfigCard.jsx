@@ -174,7 +174,8 @@ function AudioTranscriptionConfigCard() {
         <button
           type="button"
           onClick={handleFetchModels}
-          disabled={testing}
+          disabled={testing || !config.configured}
+          title={!config.configured ? 'Salve a chave da OpenAI primeiro' : undefined}
           className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel disabled:cursor-not-allowed disabled:opacity-50"
         >
           Buscar modelos
@@ -184,7 +185,7 @@ function AudioTranscriptionConfigCard() {
           disabled={saving || loading}
           className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Salvar
+          Salvar transcrição
         </button>
       </div>
     </form>

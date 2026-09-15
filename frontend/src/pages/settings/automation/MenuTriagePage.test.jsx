@@ -1,27 +1,30 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import TriageAdminTab from './TriageAdminTab';
-import { useTriage } from '../hooks/useTriage';
-import { useSectors } from '../hooks/useSectors';
-import { useAuth } from '../contexts/AuthContext';
-import * as api from '../services/api';
+import { renderInShell } from '../../../test-utils/renderInShell';
+import MenuTriagePage from './MenuTriagePage';
+import { useTriage } from '../../../hooks/useTriage';
+import { useSectors } from '../../../hooks/useSectors';
+import { useAuth } from '../../../contexts/AuthContext';
+import * as api from '../../../services/api';
 
-vi.mock('../hooks/useTriage');
-vi.mock('../hooks/useSectors');
-vi.mock('../contexts/AuthContext');
-vi.mock('../services/api');
+vi.mock('../../../hooks/useTriage');
+vi.mock('../../../hooks/useSectors');
+vi.mock('../../../contexts/AuthContext');
+vi.mock('../../../services/api');
+
+const PATH = '/configuracoes/automacao/triagem-menu';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useAuth.mockReturnValue({ token: 'tok-123' });
+  useAuth.mockReturnValue({ token: 'tok-123', agent: { role: 'admin' } });
   useSectors.mockReturnValue({ sectors: [{ id: 's1', name: 'Financeiro' }, { id: 's2', name: 'Suporte' }] });
 });
 
-describe('TriageAdminTab', () => {
+describe('MenuTriagePage', () => {
   test('shows a loading message before the config arrives', () => {
     useTriage.mockReturnValue({ config: null, options: [], refresh: vi.fn() });
-    render(<TriageAdminTab />);
+    renderInShell(<MenuTriagePage />, { path: PATH });
     expect(screen.getByText(/carregando/i)).toBeInTheDocument();
   });
 
@@ -31,7 +34,7 @@ describe('TriageAdminTab', () => {
       options: [],
       refresh: vi.fn(),
     });
-    render(<TriageAdminTab />);
+    renderInShell(<MenuTriagePage />, { path: PATH });
     expect(screen.getByDisplayValue('Escolha uma opção')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Obrigado')).toBeInTheDocument();
     expect(screen.getByDisplayValue('2')).toBeInTheDocument();
@@ -45,7 +48,7 @@ describe('TriageAdminTab', () => {
       refresh,
     });
     api.updateTriageConfig.mockResolvedValue({ questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 3 });
-    render(<TriageAdminTab />);
+    renderInShell(<MenuTriagePage />, { path: PATH });
 
     await userEvent.clear(screen.getByLabelText(/tentativas/i));
     await userEvent.type(screen.getByLabelText(/tentativas/i), '3');
@@ -66,12 +69,15 @@ describe('TriageAdminTab', () => {
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: ['fatura', 'boleto'] }],
       refresh: vi.fn(),
     });
-    render(<TriageAdminTab />);
+    renderInShell(<MenuTriagePage />, { path: PATH });
     expect(screen.getByText('1 - Financeiro')).toBeInTheDocument();
     expect(screen.getByText('fatura, boleto')).toBeInTheDocument();
   });
 
-  test('creates a new option and calls refresh', async () => {
+  // O botão de criar agora fica no cabeçalho da página (como nas outras
+  // telas de Configurações), controlando o formulário dentro de
+  // TriageAdminTab em vez do botão interno "Criar opção".
+  test('creates a new option via the header action and calls refresh', async () => {
     const refresh = vi.fn();
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
@@ -79,9 +85,12 @@ describe('TriageAdminTab', () => {
       refresh,
     });
     api.createTriageOption.mockResolvedValue({ id: 'opt-2', optionNumber: 2, sectorId: 's2', sectorName: 'Suporte', keywords: ['internet'] });
-    render(<TriageAdminTab />);
+    renderInShell(<MenuTriagePage />, { path: PATH });
 
+    expect(screen.queryByLabelText(/número da opção/i)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /criar opção/i }));
+    expect(screen.queryByRole('button', { name: /criar opção/i })).not.toBeInTheDocument();
+
     await userEvent.type(screen.getByLabelText(/número da opção/i), '2');
     await userEvent.selectOptions(screen.getByLabelText(/^setor$/i), 's2');
     await userEvent.type(screen.getByLabelText(/frases-gatilho/i), 'internet');
@@ -101,7 +110,7 @@ describe('TriageAdminTab', () => {
       refresh,
     });
     api.deleteTriageOption.mockResolvedValue(undefined);
-    render(<TriageAdminTab />);
+    renderInShell(<MenuTriagePage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Excluir' }));
@@ -111,13 +120,12 @@ describe('TriageAdminTab', () => {
   });
 
   test('does not delete when the confirmation is declined', async () => {
-    const refresh = vi.fn();
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: [] }],
-      refresh,
+      refresh: vi.fn(),
     });
-    render(<TriageAdminTab />);
+    renderInShell(<MenuTriagePage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: /cancelar/i }));
@@ -125,14 +133,16 @@ describe('TriageAdminTab', () => {
     expect(api.deleteTriageOption).not.toHaveBeenCalled();
   });
 
-  test('shows a warning when no triage options are configured', () => {
+  test('shows the new warning when no triage options are configured, without the word "toggle"', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
       refresh: vi.fn(),
     });
-    render(<TriageAdminTab />);
-    expect(screen.getByText(/nenhuma opção cadastrada: a triagem por menu não roda em nenhum canal, mesmo com o interruptor ligado/i)).toBeInTheDocument();
+    renderInShell(<MenuTriagePage />, { path: PATH });
+    expect(
+      screen.getByText('Nenhuma opção cadastrada: a triagem por menu não roda em nenhum canal, mesmo com o interruptor ligado.')
+    ).toBeInTheDocument();
     expect(screen.queryByText(/toggle/i)).not.toBeInTheDocument();
   });
 
@@ -142,28 +152,8 @@ describe('TriageAdminTab', () => {
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: [] }],
       refresh: vi.fn(),
     });
-    render(<TriageAdminTab />);
+    renderInShell(<MenuTriagePage />, { path: PATH });
     expect(screen.queryByText(/nenhuma opção cadastrada/i)).not.toBeInTheDocument();
-  });
-
-  test('hides its own "Criar opção" button when creating is controlled from outside', () => {
-    useTriage.mockReturnValue({
-      config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
-      options: [],
-      refresh: vi.fn(),
-    });
-    render(<TriageAdminTab creating={false} onCreatingChange={vi.fn()} />);
-    expect(screen.queryByRole('button', { name: /^criar opção$/i })).not.toBeInTheDocument();
-  });
-
-  test('shows the create form when the controlled creating prop is true', () => {
-    useTriage.mockReturnValue({
-      config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
-      options: [],
-      refresh: vi.fn(),
-    });
-    render(<TriageAdminTab creating onCreatingChange={vi.fn()} />);
-    expect(screen.getByLabelText(/número da opção/i)).toBeInTheDocument();
   });
 
   test('shows a help popup explaining what triage options are, with an example', async () => {
@@ -172,7 +162,7 @@ describe('TriageAdminTab', () => {
       options: [],
       refresh: vi.fn(),
     });
-    render(<TriageAdminTab />);
+    renderInShell(<MenuTriagePage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: /o que é isso/i }));
 

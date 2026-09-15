@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useConfirm } from '../hooks/useConfirm';
 import { useTriage } from '../hooks/useTriage';
 import { useSectors } from '../hooks/useSectors';
 import { updateTriageOption, deleteTriageOption } from '../services/api';
@@ -12,6 +13,7 @@ const inputClass =
 
 function TriageOptionRow({ option, onSaved, onDeleted }) {
   const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirm();
   const { sectors } = useSectors();
   const [editing, setEditing] = useState(false);
   const [optionNumber, setOptionNumber] = useState(String(option.optionNumber));
@@ -55,7 +57,8 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Excluir a opção ${option.optionNumber} (${option.sectorName})?`)) {
+    const ok = await confirm(`Excluir a opção ${option.optionNumber} (${option.sectorName})?`, { danger: true, confirmLabel: 'Excluir' });
+    if (!ok) {
       return;
     }
     setDeleteError(null);
@@ -142,13 +145,17 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
       {deleteError && (
         <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
       )}
+      {confirmDialog}
     </div>
   );
 }
 
-function TriageAdminTab() {
+function TriageAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const { config, options, refresh } = useTriage();
-  const [creatingOption, setCreatingOption] = useState(false);
+  const [internalCreatingOption, setInternalCreatingOption] = useState(false);
+  const controlled = creatingProp !== undefined;
+  const creatingOption = controlled ? creatingProp : internalCreatingOption;
+  const setCreatingOption = controlled ? onCreatingChange : setInternalCreatingOption;
 
   if (!config) {
     return <p className="text-sm text-wa-muted">Carregando...</p>;
@@ -158,19 +165,21 @@ function TriageAdminTab() {
     <div className="space-y-6">
       {options.length === 0 && (
         <p className="rounded-lg border border-wa-warn-text/30 bg-wa-warn-bg px-3 py-2 text-sm text-wa-warn-text">
-          Nenhuma opção cadastrada — a triagem não será executada em nenhum canal, mesmo com o toggle ligado.
+          Nenhuma opção cadastrada: a triagem por menu não roda em nenhum canal, mesmo com o interruptor ligado.
         </p>
       )}
       <TriageConfigForm config={config} onSaved={refresh} />
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCreatingOption(true)}
-            className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
-          >
-            Criar opção
-          </button>
+          {!controlled && (
+            <button
+              type="button"
+              onClick={() => setCreatingOption(true)}
+              className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
+            >
+              Criar opção
+            </button>
+          )}
           <SectionHelp label="Triagem" title="Triagem">
             <p>
               Cada opção é um item do menu automático mostrado ao cliente na primeira

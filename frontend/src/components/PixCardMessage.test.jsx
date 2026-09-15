@@ -36,10 +36,10 @@ describe('PixCardMessage', () => {
     expect(screen.getByText('15/09/2026')).toBeInTheDocument();
   });
 
-  test('diz que o Pix saiu como texto, e por falta de recebedor, mantendo vencimento e valor', () => {
+  test('diz que o Pix saiu como texto porque o código não traz a chave, mantendo vencimento e valor', () => {
     const message = {
       content: '000201ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-      metadata: { value: 135, dueDate: '2026-09-15', fallbackTextoEnviado: true, motivoTexto: 'sem_recebedor' },
+      metadata: { value: 135, dueDate: '2026-09-15', fallbackTextoEnviado: true, motivoTexto: 'codigo_sem_chave' },
     };
     render(<PixCardMessage message={message} />);
 
@@ -50,7 +50,9 @@ describe('PixCardMessage', () => {
     expect(screen.getByText('000201ABCDEFGHIJKL…')).toBeInTheDocument();
     expect(screen.queryByText(message.content)).not.toBeInTheDocument();
     expect(
-      screen.getByText('Sem recebedor Pix cadastrado em Integrações: o cliente recebeu o código em texto.')
+      screen.getByText(
+        'O código Pix deste boleto não traz a chave do recebedor, que o WhatsApp oficial exige no cartão: o cliente recebeu o código em texto.'
+      )
     ).toBeInTheDocument();
   });
 

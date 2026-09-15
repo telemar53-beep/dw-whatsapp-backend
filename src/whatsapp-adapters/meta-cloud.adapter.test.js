@@ -741,8 +741,10 @@ describe('buildPixOrderDetailsBody', () => {
     expect(body.interactive.action.parameters.reference_id).toMatch(/^PIX\d+$/);
   });
 
-  test('lan\u00e7a quando o recebedor Pix n\u00e3o est\u00e1 cadastrado', () => {
-    expect(() => buildPixOrderDetailsBody('5511999998888', { ...CARD, merchant: null })).toThrow('Pix merchant is not configured');
+  test('lan\u00e7a quando o c\u00f3digo Pix n\u00e3o traz a chave do recebedor', () => {
+    expect(() => buildPixOrderDetailsBody('5511999998888', { ...CARD, merchant: null })).toThrow('Pix code has no merchant key');
+    expect(() => buildPixOrderDetailsBody('5511999998888', { ...CARD, merchant: { name: 'DW TELECOM LTDA', key: null, keyType: null } }))
+      .toThrow('Pix code has no merchant key');
   });
 });
 
@@ -770,11 +772,11 @@ describe('sendPixCardMessage (meta cloud)', () => {
     expect(result).toEqual({ whatsappMessageId: 'wamid.PIX1' });
   });
 
-  test('n\u00e3o chama a API quando o recebedor Pix n\u00e3o est\u00e1 cadastrado', async () => {
+  test('n\u00e3o chama a API quando o c\u00f3digo Pix n\u00e3o traz a chave do recebedor', async () => {
     const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
     await expect(
       sendPixCardMessage(channel, '5511999998888', { pixCode: 'x', value: 10, dueDate: '2026-09-15', faturaId: 1, merchant: null })
-    ).rejects.toThrow('Pix merchant is not configured');
+    ).rejects.toThrow('Pix code has no merchant key');
     expect(axios.post).not.toHaveBeenCalled();
   });
 });

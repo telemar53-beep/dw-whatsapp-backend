@@ -218,10 +218,10 @@ describe('sendPixCardMessage (360dialog)', () => {
     expect(result).toEqual({ whatsappMessageId: 'wamid.PIX360' });
   });
 
-  test('propaga o erro de recebedor n\u00e3o cadastrado sem chamar a API', async () => {
+  test('propaga o erro de c\u00f3digo sem chave do recebedor sem chamar a API', async () => {
     await expect(
       sendPixCardMessage(CHANNEL, '5511999998888', { pixCode: 'x', value: 10, dueDate: '2026-09-15', faturaId: 1, merchant: null })
-    ).rejects.toThrow('Pix merchant is not configured');
+    ).rejects.toThrow('Pix code has no merchant key');
     expect(axios.post).not.toHaveBeenCalled();
   });
 });

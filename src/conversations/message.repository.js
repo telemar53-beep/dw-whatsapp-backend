@@ -289,7 +289,7 @@ async function markTranscriptionFailed(messageId, { status, detail, ms }) {
  * duas vezes. O UPDATE só pega quem ainda não está marcado, então a corrida
  * entre dois processos é resolvida pelo banco e não por quem chega antes.
  *
- * Junto da marca vai o motivo ('sem_recebedor', 'cartao_recusado' ou
+ * Junto da marca vai o motivo ('codigo_sem_chave', 'cartao_recusado' ou
  * 'cartao_nao_entregue'): é dele que o chat tira a explicação que o atendente
  * lê no balão, para ninguém achar que o cliente recebeu o cartão nativo quando
  * o que saiu foi o texto. Como o UPDATE só pega quem ainda não está marcado, o

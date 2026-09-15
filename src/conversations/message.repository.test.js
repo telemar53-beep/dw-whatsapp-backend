@@ -229,7 +229,7 @@ describe('message repository', () => {
       // Uma segunda passada (retry da fila, restart do worker) não pode
       // duplicar as mensagens de texto - nem reescrever o motivo do primeiro
       // desfecho, que é o que o chat mostra ao atendente.
-      await expect(markPixFallbackSent(created.id, 'sem_recebedor')).resolves.toBe(false);
+      await expect(markPixFallbackSent(created.id, 'codigo_sem_chave')).resolves.toBe(false);
 
       const found = await findMessageById(created.id);
       expect(found.metadata).toEqual({
@@ -248,9 +248,9 @@ describe('message repository', () => {
         content: 'Oi',
         status: 'sent',
       });
-      await expect(markPixFallbackSent(created.id, 'sem_recebedor')).resolves.toBe(true);
+      await expect(markPixFallbackSent(created.id, 'codigo_sem_chave')).resolves.toBe(true);
       const found = await findMessageById(created.id);
-      expect(found.metadata).toEqual({ fallbackTextoEnviado: true, motivoTexto: 'sem_recebedor' });
+      expect(found.metadata).toEqual({ fallbackTextoEnviado: true, motivoTexto: 'codigo_sem_chave' });
     });
 
     test('metadata é null quando a mensagem não tem nenhuma', async () => {

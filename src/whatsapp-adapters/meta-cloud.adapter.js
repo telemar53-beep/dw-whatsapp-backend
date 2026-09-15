@@ -225,7 +225,10 @@ function parseTemplateStatusUpdates(webhookBody) {
  * antes da chamada e quem envia cai no texto.
  */
 function buildPixOrderDetailsBody(to, card) {
-  if (!card.merchant) throw new Error('Pix merchant is not configured');
+  // O recebedor é lido de dentro do próprio código Pix do boleto
+  // (src/payments/pix-emv.js). Sem a chave não há cartão oficial possível —
+  // código dinâmico, que só traz a URL do payload, cai aqui.
+  if (!card.merchant || !card.merchant.key) throw new Error('Pix code has no merchant key');
   const centavos = Math.round(Number(card.value) * 100);
   const referenceId = String(card.faturaId || `PIX${Date.now()}`);
   // Hífen simples, e não o ponto do meio do cartão do Baileys: aqui o texto

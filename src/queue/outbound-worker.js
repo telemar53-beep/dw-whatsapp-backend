@@ -6,7 +6,9 @@ const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { emitToAgent } = require('../realtime/socket-server');
-const { getPixMerchant } = require('../integrations/sgp-client');
+const { lerRecebedorDoPix } = require('../payments/pix-emv');
+const { isOfficialChannelType } = require('../channels/channel-types');
+const { getCompanyConfig } = require('../company/company-config.repository');
 const { cartaoPix } = require('../payments/payment-card');
 const { mensagemSegura } = require('../ai/safe-error-log');
 
@@ -115,37 +117,52 @@ function detalheDaApi(err) {
  * sem o código.
  *
  * A preferência é o cartão nativo do WhatsApp, com botão "Copiar código Pix".
- * Nos canais oficiais ele exige o recebedor cadastrado (nome, chave e tipo);
- * no Baileys não, porque lá a "chave" declarada é o próprio copia e cola.
+ * Nos canais oficiais ele exige o recebedor (nome, chave e tipo), que sai de
+ * dentro do próprio código Pix do boleto; no Baileys não, porque lá a "chave"
+ * declarada é o próprio copia e cola.
  *
  * A decisão fica aqui, na hora do envio, e não em quem enfileirou: só agora se
- * sabe por qual canal a mensagem vai sair e se há recebedor cadastrado. E
- * quando o cartão falha — recebedor faltando, API recusando, adaptador que nem
- * sabe mandar cartão — a queda é para o formato de sempre (cartão de texto +
- * código sozinho), nunca para uma mensagem não entregue.
+ * sabe por qual canal a mensagem vai sair e o que o código carrega. E quando o
+ * cartão falha — código sem chave, API recusando, adaptador que nem sabe mandar
+ * cartão — a queda é para o formato de sempre (cartão de texto + código
+ * sozinho), nunca para uma mensagem não entregue.
  *
  * O id gravado na mensagem é o do envio do código: é essa a bolha que o cliente
  * copia, e é por ela que os recibos de entrega/leitura devem ser casados.
  */
 async function sendPixOrFallback({ adapter, channel, to, pixCode, metadata }) {
-  const merchant = await getPixMerchant();
-  const precisaMerchant = channel.type !== 'baileys';
+  const merchant = lerRecebedorDoPix(pixCode);
+  const oficial = isOfficialChannelType(channel.type);
+  // Código dinâmico (só a URL do payload) ou texto que nem é EMV: não há chave
+  // para declarar, e a API oficial recusaria o cartão.
+  const semChaveNoOficial = oficial && (!merchant || !merchant.key);
   // O motivo da queda acompanha a mensagem até o chat: sem ele o atendente vê a
-  // bolha de cartão e não sabe que precisa cadastrar o recebedor em Integrações.
-  // Fica indefinido quando o adaptador simplesmente não sabe mandar cartão: aí
-  // não faltou recebedor nenhum, e o chat diz só que o cliente recebeu o texto.
+  // bolha de texto e não sabe por que o cartão não saiu. Fica indefinido quando
+  // o adaptador simplesmente não sabe mandar cartão: aí não faltou nada ao
+  // código, e o chat diz só que o cliente recebeu o texto.
   let motivoTexto;
-  if (typeof adapter.sendPixCardMessage === 'function' && precisaMerchant && !merchant) {
-    motivoTexto = 'sem_recebedor';
+  if (typeof adapter.sendPixCardMessage === 'function' && semChaveNoOficial) {
+    // Sem o código em log, nunca: só o fato de ele não trazer a chave.
+    console.error(`Pix code carries no merchant key; card needs it on official channels (channel ${channel.id})`);
+    motivoTexto = 'codigo_sem_chave';
   }
-  if (typeof adapter.sendPixCardMessage === 'function' && (!precisaMerchant || merchant)) {
+  if (typeof adapter.sendPixCardMessage === 'function' && !semChaveNoOficial) {
+    // A Meta exige merchant_name junto da chave, e nem todo código traz a tag
+    // 59. O builder é puro, então o nome de reserva (empresa, depois canal) é
+    // resolvido aqui. No Baileys o merchant vai como veio: o builder de lá já
+    // tem a própria queda para o nome da empresa.
+    let recebedor = merchant;
+    if (oficial && !merchant.name) {
+      const empresa = await getCompanyConfig();
+      recebedor = { ...merchant, name: empresa.name || channel.name };
+    }
     try {
       const { whatsappMessageId } = await adapter.sendPixCardMessage(channel, to, {
         pixCode,
         value: metadata.value,
         dueDate: metadata.dueDate,
         faturaId: metadata.faturaId,
-        merchant,
+        merchant: recebedor,
       });
       return { whatsappMessageId, viaCartao: true };
     } catch (err) {

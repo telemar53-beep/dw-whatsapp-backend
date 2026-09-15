@@ -6,7 +6,7 @@ jest.mock('../whatsapp-adapters/meta-cloud.adapter');
 jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
 jest.mock('../realtime/socket-server');
-jest.mock('../integrations/sgp-client');
+jest.mock('../company/company-config.repository');
 
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
@@ -16,7 +16,7 @@ const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { emitToAgent } = require('../realtime/socket-server');
-const { getPixMerchant } = require('../integrations/sgp-client');
+const { getCompanyConfig } = require('../company/company-config.repository');
 const { cartaoPix } = require('../payments/payment-card');
 const { startOutboundWorker } = require('./outbound-worker');
 
@@ -329,13 +329,15 @@ describe('startOutboundWorker', () => {
 
   describe('mensagem de Pix: cart\u00e3o nativo, com queda para texto', () => {
     const METADATA = { value: 135, dueDate: '2026-09-15', faturaId: 4321 };
-    const PIX_CODE = '00020126580014BR.GOV.BCB.PIX0136chave-pix';
+    // Codigos EMV de teste: o recebedor do cartao sai de dentro do proprio codigo.
+    const PIX_CODE = '00020126360014BR.GOV.BCB.PIX011412345678000199520400005303986540513.505802BR5915DW TELECOM LTDA6008SAO LUIS62070503***6304ABCD';
+    const PIX_SEM_CHAVE = '00020126500014BR.GOV.BCB.PIX2528pix.example.com/qr/v2/abc123520400005303986540513.505802BR5910DW TELECOM6008SAO LUIS62070503***6304ABCD';
     const MERCHANT = { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' };
 
-    function jobPix(channelId) {
+    function jobPix(channelId, codigo = PIX_CODE) {
       return {
         messageId: 'msg-pix', conversationId: 'conv-1', channelId,
-        content: PIX_CODE, messageType: 'pix', metadata: METADATA,
+        content: codigo, messageType: 'pix', metadata: METADATA,
       };
     }
 
@@ -344,31 +346,33 @@ describe('startOutboundWorker', () => {
       // esses testes deixariam um setTimeout de 60s solto para tras.
       jest.useFakeTimers();
       getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
-      getPixMerchant.mockResolvedValue(null);
+      getCompanyConfig.mockResolvedValue({ id: 'empresa-1', name: 'EMPRESA TESTE', acceptedPayeeNames: [] });
     });
 
     afterEach(() => {
       jest.useRealTimers();
     });
 
-    test('no Baileys manda o cart\u00e3o sem precisar de recebedor cadastrado', async () => {
+    test('no Baileys manda o cart\u00e3o mesmo com c\u00f3digo sem chave, com o nome lido do c\u00f3digo', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-2', type: 'baileys', config: {} });
       baileysManager.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'BAILEYS_PIX_1' });
 
-      await handler(jobPix('channel-2'));
+      await handler(jobPix('channel-2', PIX_SEM_CHAVE));
 
       expect(baileysManager.sendPixCardMessage).toHaveBeenCalledWith(
         { id: 'channel-2', type: 'baileys', config: {} },
         '5511999998888',
-        { pixCode: PIX_CODE, value: 135, dueDate: '2026-09-15', faturaId: 4321, merchant: null }
+        {
+          pixCode: PIX_SEM_CHAVE, value: 135, dueDate: '2026-09-15', faturaId: 4321,
+          merchant: { name: 'DW TELECOM', key: null, keyType: null },
+        }
       );
       expect(baileysManager.sendTextMessage).not.toHaveBeenCalled();
       expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'BAILEYS_PIX_1');
     });
 
-    test('no meta_cloud com recebedor cadastrado manda o cart\u00e3o', async () => {
+    test('no meta_cloud manda o cart\u00e3o com o recebedor lido do c\u00f3digo', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
-      getPixMerchant.mockResolvedValue(MERCHANT);
       metaCloudAdapter.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'wamid.PIX1' });
 
       await handler(jobPix('channel-1'));
@@ -382,25 +386,30 @@ describe('startOutboundWorker', () => {
       expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'wamid.PIX1');
     });
 
-    test('no meta_cloud SEM recebedor cadastrado cai no texto: cart\u00e3o e depois o c\u00f3digo', async () => {
+    test('no meta_cloud, c\u00f3digo sem chave cai no texto: cart\u00e3o e depois o c\u00f3digo', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
       metaCloudAdapter.sendTextMessage
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CODIGO' });
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      await handler(jobPix('channel-1'));
+      await handler(jobPix('channel-1', PIX_SEM_CHAVE));
 
       expect(metaCloudAdapter.sendPixCardMessage).not.toHaveBeenCalled();
       expect(metaCloudAdapter.sendTextMessage).toHaveBeenCalledTimes(2);
       expect(metaCloudAdapter.sendTextMessage.mock.calls[0][2]).toBe(cartaoPix({ valor: 135, vencimento: '2026-09-15' }));
-      expect(metaCloudAdapter.sendTextMessage.mock.calls[1][2]).toBe(PIX_CODE);
+      expect(metaCloudAdapter.sendTextMessage.mock.calls[1][2]).toBe(PIX_SEM_CHAVE);
+      // Nem o aviso de que faltou a chave pode carregar o codigo Pix.
+      const logado = erro.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(logado).toContain('Pix code carries no merchant key');
+      expect(logado).not.toContain(PIX_SEM_CHAVE);
+      erro.mockRestore();
       // O id gravado \u00e9 o da mensagem do c\u00f3digo, n\u00e3o o do cart\u00e3o de texto.
       expect(recordMessageSent).toHaveBeenCalledWith('msg-pix', 'wamid.TXT_CODIGO');
     });
 
     test('cart\u00e3o recusado pela API cai no texto, sem derrubar o envio', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
-      getPixMerchant.mockResolvedValue(MERCHANT);
       metaCloudAdapter.sendPixCardMessage.mockRejectedValue(new Error('400 order_details not supported'));
       metaCloudAdapter.sendTextMessage
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
@@ -421,7 +430,6 @@ describe('startOutboundWorker', () => {
 
     test('um adaptador sem sendPixCardMessage simplesmente usa o texto', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-3', type: '360dialog', config: {} });
-      getPixMerchant.mockResolvedValue(MERCHANT);
       // Restaurado no fim: apagar a função do módulo mockado vazaria para os
       // testes seguintes, que nunca mais veriam o adaptador saber mandar cartão.
       const original = threeSixtyDialogAdapter.sendPixCardMessage;
@@ -443,15 +451,17 @@ describe('startOutboundWorker', () => {
       expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix', undefined);
     });
 
-    test('a queda por falta de recebedor fica gravada na mensagem, antes de ela ser emitida', async () => {
+    test('a queda por c\u00f3digo sem chave fica gravada na mensagem, antes de ela ser emitida', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
       metaCloudAdapter.sendTextMessage
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CODIGO' });
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      await handler(jobPix('channel-1'));
+      await handler(jobPix('channel-1', PIX_SEM_CHAVE));
+      erro.mockRestore();
 
-      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix', 'sem_recebedor');
+      expect(markPixFallbackSent).toHaveBeenCalledWith('msg-pix', 'codigo_sem_chave');
       // Antes de recordMessageSent: a mensagem que sai no message:updated já
       // precisa carregar a metadata, senão o chat desenha o cartão.
       expect(markPixFallbackSent.mock.invocationCallOrder[0])
@@ -460,7 +470,6 @@ describe('startOutboundWorker', () => {
 
     test('a queda por cartão recusado grava o motivo do recusado', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
-      getPixMerchant.mockResolvedValue(MERCHANT);
       metaCloudAdapter.sendPixCardMessage.mockRejectedValue(new Error('400 order_details not supported'));
       metaCloudAdapter.sendTextMessage
         .mockResolvedValueOnce({ whatsappMessageId: 'wamid.TXT_CARTAO' })
@@ -473,9 +482,20 @@ describe('startOutboundWorker', () => {
       erro.mockRestore();
     });
 
+    test('c\u00f3digo sem nome do recebedor usa o nome da empresa no cart\u00e3o oficial', async () => {
+      const PIX_SEM_NOME = '00020126360014BR.GOV.BCB.PIX0114+5598999990000520400005303986540513.505802BR6008SAO LUIS62070503***6304ABCD';
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', name: 'Canal Oficial', config: {} });
+      metaCloudAdapter.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'wamid.PIX1' });
+
+      await handler(jobPix('channel-1', PIX_SEM_NOME));
+
+      expect(metaCloudAdapter.sendPixCardMessage.mock.calls[0][2].merchant).toEqual({
+        name: 'EMPRESA TESTE', key: '+5598999990000', keyType: 'PHONE',
+      });
+    });
+
     test('o cartão entregue não marca queda nenhuma', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
-      getPixMerchant.mockResolvedValue(MERCHANT);
       metaCloudAdapter.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'wamid.PIX1' });
 
       await handler(jobPix('channel-1'));
@@ -485,7 +505,6 @@ describe('startOutboundWorker', () => {
 
     test('o erro estruturado da API entra no log, sem o corpo da requisição nem o código Pix', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
-      getPixMerchant.mockResolvedValue(MERCHANT);
       const err = new Error('Request failed with status code 400');
       err.config = { data: `{"pix":"${PIX_CODE}"}` };
       err.response = {
@@ -528,14 +547,16 @@ describe('startOutboundWorker', () => {
 
   describe('queda para texto quando o cartão de Pix não recebe recibo', () => {
     const METADATA = { value: 135, dueDate: '2026-09-15', faturaId: 4321 };
-    const PIX_CODE = '00020126580014BR.GOV.BCB.PIX0136chave-pix';
+    // Codigos EMV de teste: o recebedor do cartao sai de dentro do proprio codigo.
+    const PIX_CODE = '00020126360014BR.GOV.BCB.PIX011412345678000199520400005303986540513.505802BR5915DW TELECOM LTDA6008SAO LUIS62070503***6304ABCD';
+    const PIX_SEM_CHAVE = '00020126500014BR.GOV.BCB.PIX2528pix.example.com/qr/v2/abc123520400005303986540513.505802BR5910DW TELECOM6008SAO LUIS62070503***6304ABCD';
     const MERCHANT = { name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' };
     const CONVERSA = { id: 'conv-1', contactPhoneNumber: '5511999998888', assignedAgentId: 'agent-1' };
 
-    function jobPix(channelId) {
+    function jobPix(channelId, codigo = PIX_CODE) {
       return {
         messageId: 'msg-pix', conversationId: 'conv-1', channelId,
-        content: PIX_CODE, messageType: 'pix', metadata: METADATA,
+        content: codigo, messageType: 'pix', metadata: METADATA,
       };
     }
 
@@ -550,7 +571,7 @@ describe('startOutboundWorker', () => {
     beforeEach(() => {
       jest.useFakeTimers();
       getConversationWithContact.mockResolvedValue(CONVERSA);
-      getPixMerchant.mockResolvedValue(null);
+      getCompanyConfig.mockResolvedValue({ id: 'empresa-1', name: 'EMPRESA TESTE', acceptedPayeeNames: [] });
       markPixFallbackSent.mockResolvedValue(true);
       enqueueOutboundMessage.mockResolvedValue({ id: 'msg-texto' });
     });
@@ -624,7 +645,6 @@ describe('startOutboundWorker', () => {
 
     test('canal oficial não agenda conferência nenhuma', async () => {
       findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
-      getPixMerchant.mockResolvedValue(MERCHANT);
       metaCloudAdapter.sendPixCardMessage.mockResolvedValue({ whatsappMessageId: 'wamid.PIX1' });
       mensagemGravadaCom('sent');
 

@@ -21,10 +21,11 @@ function formatValue(value) {
 // A queda para texto precisa aparecer no balão: o atendente clicou em "Cód Pix"
 // e, se o cartão não saiu, o que o cliente tem na mão é o copia e cola solto.
 // Mostrar o cartão nesse caso faz o atendente garantir ao cliente uma bolha que
-// nunca chegou - e, no caso do recebedor faltando, esconde o que dá para
-// arrumar em Integrações.
+// nunca chegou - e, quando o código do boleto não traz a chave do recebedor,
+// esconde a única explicação possível para o cartão oficial não ter saído.
 const MOTIVO_TEXTO = {
-  sem_recebedor: 'Sem recebedor Pix cadastrado em Integrações: o cliente recebeu o código em texto.',
+  codigo_sem_chave:
+    'O código Pix deste boleto não traz a chave do recebedor, que o WhatsApp oficial exige no cartão: o cliente recebeu o código em texto.',
   cartao_recusado: 'O WhatsApp oficial recusou o cartão: o cliente recebeu o código em texto.',
   cartao_nao_entregue: 'O cartão não chegou ao cliente: o código foi reenviado em texto.',
 };

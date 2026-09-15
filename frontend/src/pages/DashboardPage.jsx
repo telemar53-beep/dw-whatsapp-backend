@@ -19,7 +19,7 @@ import { IconNewChat, IconSearch, IconLock, IconEmptyChat } from '../components/
 const TABS = [
   { value: 'inProgress', label: 'Em andamento' },
   { value: 'waiting', label: 'Em espera' },
-  { value: 'automation', label: 'Automação' },
+  { value: 'automation', label: 'IA' },
 ];
 
 function matchesSearch(conversation, term) {

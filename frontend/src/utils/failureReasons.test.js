@@ -12,6 +12,10 @@ describe('descreverFalha', () => {
     expect(descreverFalha('(999999) Erro desconhecido da Meta')).toBe('(999999) Erro desconhecido da Meta');
   });
 
+  test('um motivo do 360dialog (código sem mapeamento) passa direto', () => {
+    expect(descreverFalha('(403) some text')).toBe('(403) some text');
+  });
+
   test('uma mensagem simples, sem prefixo de código, passa direto', () => {
     expect(descreverFalha('network error')).toBe('network error');
   });

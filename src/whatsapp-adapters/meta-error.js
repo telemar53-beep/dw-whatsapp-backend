@@ -18,4 +18,25 @@ function motivoDaMeta(error) {
   return code !== undefined && code !== null ? `(${code}) ${texto}` : texto;
 }
 
-module.exports = { motivoDaMeta };
+// motivoDaMeta só entende o formato da Meta ({ error: { code, ... } }); o
+// 360dialog (waba-v2.360dialog.io) devolve erros de política/cobrança/permissão
+// no formato próprio dele, tipicamente { meta: { success, http_code,
+// developer_message } }. Esta função recebe o corpo inteiro da resposta
+// (err.response.data) e tenta, em ordem, cada formato conhecido antes de
+// desistir - nunca lança, uma resposta sem nenhum campo usável só devolve null.
+function motivoDaResposta(data) {
+  if (!data) return null;
+  if (data.error && typeof data.error === 'object') {
+    return motivoDaMeta(data.error);
+  }
+  if (data.meta && data.meta.developer_message) {
+    const { http_code: httpCode, developer_message: developerMessage } = data.meta;
+    return httpCode !== undefined && httpCode !== null ? `(${httpCode}) ${developerMessage}` : developerMessage;
+  }
+  if (typeof data === 'string' && data.trim()) {
+    return data.trim().slice(0, 300);
+  }
+  return null;
+}
+
+module.exports = { motivoDaMeta, motivoDaResposta };

@@ -11,7 +11,7 @@ const { isOfficialChannelType } = require('../channels/channel-types');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { cartaoPix } = require('../payments/payment-card');
 const { mensagemSegura } = require('../ai/safe-error-log');
-const { motivoDaMeta } = require('../whatsapp-adapters/meta-error');
+const { motivoDaResposta } = require('../whatsapp-adapters/meta-error');
 
 const ADAPTERS_BY_CHANNEL_TYPE = {
   meta_cloud: metaCloudAdapter,
@@ -102,15 +102,27 @@ function schedulePixDeliveryCheck(ctx) {
   }, PIX_DELIVERY_CHECK_DELAY_MS);
 }
 
-// O erro da API oficial (Meta/360dialog) traz o motivo real da recusa do cartão
-// em err.response.data.error; o resto da resposta - e principalmente o corpo da
+// O erro da Meta traz o motivo real da recusa do cartão em
+// err.response.data.error; o resto da resposta - e principalmente o corpo da
 // requisição, que leva o copia e cola - nunca entra em log. Por isso só estes
 // quatro campos, um a um, e nunca o objeto inteiro.
+//
+// O 360dialog (e qualquer outra API que fuja do formato da Meta) não traz esse
+// campo error, então cai no outro ramo: aí é seguro logar a RESPOSTA inteira
+// (truncada) porque é sempre a resposta de uma chamada que falhou - ela nunca
+// carrega de volta o corpo da nossa requisição, então não tem código Pix nem
+// conteúdo de mensagem para vazar.
 function detalheDaApi(err) {
-  const apiError = err && err.response && err.response.data && err.response.data.error;
-  if (!apiError) return '';
-  const { code, type, message, error_data: errorData } = apiError;
-  return ` api=${JSON.stringify({ code, type, message, error_data: errorData })}`;
+  const response = err && err.response;
+  if (!response) return '';
+  const data = response.data;
+  const apiError = data && typeof data === 'object' && data.error;
+  if (apiError && typeof apiError === 'object') {
+    const { code, type, message, error_data: errorData } = apiError;
+    return ` api=${JSON.stringify({ code, type, message, error_data: errorData })}`;
+  }
+  const body = data !== undefined ? ` body=${JSON.stringify(data).slice(0, 500)}` : '';
+  return ` status=${response.status}${body}`;
 }
 
 /**
@@ -255,7 +267,7 @@ function startOutboundWorker() {
       // mensagemSegura + detalheDaApi: mesma disciplina do log do cartão de Pix logo
       // acima - nunca o conteúdo da mensagem, nunca o corpo da requisição.
       console.error(`Outbound message ${messageId} failed on channel ${channel.id}: ${mensagemSegura(err)}${detalheDaApi(err)}`);
-      const motivo = motivoDaMeta(err.response?.data?.error) || mensagemSegura(err);
+      const motivo = motivoDaResposta(err.response && err.response.data) || mensagemSegura(err);
       // Se markMessageFailed voltar null é porque o webhook de status já gravou um
       // motivoFalha antes (ver a guarda em message.repository) - busca a linha atual
       // para o emit não sair sem mensagem nenhuma.

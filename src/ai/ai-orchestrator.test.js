@@ -490,6 +490,11 @@ describe('perfil de triagem', () => {
       'consultar_plano', 'transferir_atendimento', 'definir_motivo_atendimento',
       'desbloqueio_confianca', 'consultar_financeiro', 'consultar_faturas',
     ]));
+    // Teste real 2026-09-15: gerar_segunda_via só devolve linha e link ao
+    // modelo (não envia nada) e marcava a triagem como resolvida — com ela na
+    // lista, o modelo dizia "enviei acima o boleto" sem nenhum envio. Na
+    // triagem quem entrega é enviar_boleto; a segunda via fica no assistente.
+    expect(FERRAMENTAS_TRIAGEM).not.toContain('gerar_segunda_via');
   });
 
   describe('perfil noturno', () => {
@@ -819,6 +824,46 @@ describe('perfil de triagem', () => {
         content: 'Perfeito. Vou seguir com o Pix do contrato em aberto.',
       }]));
       expect(r.texto).toBe('Enviei acima o PIX, João.');
+    });
+
+    // Teste real 2026-09-15 (produção): o cliente pediu o boleto e o modelo
+    // respondeu "Enviei acima o boleto referente ao seu contrato do endereço
+    // Agenor Costa, em PDF e com a linha digitável..." sem chamar
+    // enviar_boleto — nada chegou ao cliente. A guarda só olhava o futuro
+    // ("vou enviar"); a afirmação no passado passava direto.
+    test('"Enviei acima o boleto..." sem ferramenta de entrega obriga a entrega', async () => {
+      const afirmacao = 'Enviei acima o boleto referente ao seu contrato do endereço Agenor Costa, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!';
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: afirmacao }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Enviei acima o boleto, João.' }, usage: {} });
+      executeTool.mockImplementation(async (nome, args, ctx) => {
+        ctx.resolvidoPelaIa = true;
+        return { ok: true, resultado: { enviado: true } };
+      });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      const segunda = createChatCompletion.mock.calls[1][0];
+      expect(segunda.toolChoice).toBe('required');
+      expect(segunda.messages).toEqual(expect.arrayContaining([{
+        role: 'system',
+        content: 'Você disse que vai enviar, mas não chamou gerar_pix/enviar_boleto. Chame a ferramenta de entrega AGORA (o contrato único, ou o escolhido) e depois responda.',
+      }]));
+      expect(executeTool).toHaveBeenCalledWith('enviar_boleto', { contratoId: 17402 }, expect.any(Object));
+      expect(r.texto).toBe('Enviei acima o boleto, João.');
+    });
+
+    test('afirmaEnvio: pega a promessa no futuro e a afirmação no passado, sem falso positivo', () => {
+      const { afirmaEnvio } = require('./ai-orchestrator');
+      expect(afirmaEnvio('Perfeito. Vou seguir com o Pix do contrato em aberto.')).toBe(true);
+      expect(afirmaEnvio('Enviei acima o boleto referente ao seu contrato, em PDF.')).toBe(true);
+      expect(afirmaEnvio('Enviei acima o PIX, João.')).toBe(true);
+      expect(afirmaEnvio('Mandei o código PIX aqui em cima.')).toBe(true);
+      expect(afirmaEnvio('Segue o boleto em PDF com a linha digitável.')).toBe(true);
+      expect(afirmaEnvio('Claro, João! De qual endereço você precisa?')).toBe(false);
+      expect(afirmaEnvio('Encaminhei seu atendimento para o Financeiro.')).toBe(false);
+      expect(afirmaEnvio('Enviei seu pedido para a equipe conferir.')).toBe(false);
     });
 
     test('texto sem anúncio de envio não dá volta nenhuma', async () => {
@@ -1400,15 +1445,18 @@ describe('perfil de triagem', () => {
     test('com motivo, traz os modelos de frase da entrega e da despedida, e manda chamar encerrar_atendimento', async () => {
       getAiConfig.mockResolvedValue(COM_MOTIVO);
       const sys = (await contexto()).messages[0].content;
-      // Modelos de frase pedidos pelo dono (2026-09-13).
-      expect(sys).toMatch(/Enviei acima o PIX referente ao seu contrato do endereço/);
-      expect(sys).toMatch(/PIX Copia e Cola/);
+      // Modelos de frase pedidos pelo dono (2026-09-13). Os da ENTREGA saíram
+      // do prompt (teste real 2026-09-15: o modelo copiou "Enviei acima o
+      // boleto..." do exemplo sem chamar enviar_boleto): agora só a própria
+      // ferramenta devolve o modelo, depois de enviar de verdade.
+      expect(sys).toMatch(/responda EXATAMENTE no modelo que a ferramenta devolver no campo instrucao/);
+      expect(sys).toMatch(/NUNCA diga que enviou o boleto ou o PIX antes de a ferramenta confirmar o envio/);
+      expect(sys).not.toMatch(/Enviei acima o PIX/);
+      expect(sys).not.toMatch(/Enviei acima o boleto/);
+      expect(sys).not.toMatch(/Agenor Costa/);
       expect(sys).toMatch(/Imagina, Willemberg! 😊/);
       expect(sys).toMatch(/Tenha um ótimo dia!/);
       expect(sys).toMatch(/Se responder só "ok"/);
-      // Boleto: mesma lógica, sem emoji, com PDF + linha digitável.
-      expect(sys).toMatch(/Enviei acima o boleto referente ao seu contrato do endereço/);
-      expect(sys).toMatch(/em PDF e com a linha digitável/);
       expect(sys).toMatch(/No fluxo do BOLETO as mesmas despedidas valem, mas SEM emoji/);
       expect(sys).toMatch(/chame encerrar_atendimento/);
       expect(sys).toMatch(/Tom: caloroso e direto/);
@@ -1478,7 +1526,7 @@ describe('perfil de triagem', () => {
 
   test('encerrar_atendimento entra na lista fixa da triagem', async () => {
     expect(FERRAMENTAS_TRIAGEM).toContain('encerrar_atendimento');
-    expect(FERRAMENTAS_TRIAGEM).toHaveLength(12);
+    expect(FERRAMENTAS_TRIAGEM).toHaveLength(11);
   });
 
   // 2N chamadas (status do contrato + da conexão de cada contrato) estouravam

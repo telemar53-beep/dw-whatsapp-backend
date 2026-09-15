@@ -1624,6 +1624,11 @@ describe('enviar_boleto', () => {
     expect(r).toMatchObject({ enviado: true, valor: 89.9, vencimento: '2026-09-20', linhaDigitavelEnviada: true });
     expect(r.instrucao).toMatch(/linha digitável em mensagem separada/);
     expect(r.instrucao).toMatch(/sem emoji/);
+    // O modelo de frase do dono sai DAQUI, depois do envio real (teste real
+    // 2026-09-15: no prompt, o modelo copiava a frase sem enviar nada). Com
+    // um contrato só, sem endereço.
+    expect(r.instrucao).toContain('Responda EXATAMENTE no modelo, sem emoji: "Enviei acima o boleto em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
+    expect(r.instrucao).not.toMatch(/endereço/);
     // A linha digitável vai junto, sozinha numa mensagem, pelo mesmo sender do
     // botão "Cód Barras" da atendente.
     expect(enviarBoleto).toHaveBeenCalledWith({
@@ -1753,6 +1758,9 @@ describe('enviar_boleto', () => {
       expect(r).not.toHaveProperty('pixCopiaCola');
       expect(c.resolvidoPelaIa).toBe(true);
       expect(markTriageResolvedByAi).toHaveBeenCalledWith('c-1');
+      // Modelo de frase do dono, devolvido só depois do envio real; com um
+      // contrato só, sem endereço.
+      expect(r.instrucao).toContain('Responda EXATAMENTE no modelo: "Enviei acima o PIX. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
     });
 
     // I1b (fix round 1) também vale aqui: fora da triagem não há guarda nem
@@ -1849,7 +1857,8 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       expect(enviarPix).toHaveBeenCalledWith(expect.objectContaining({
         fatura: expect.objectContaining({ id: 'f-17405', pixCode: 'pix-17405' }), sentBy: 'ai',
       }));
-      expect(r.instrucao).toMatch(/de qual endereço é a fatura/i);
+      // Mais de um contrato: o modelo de frase cita o endereço do ponto entregue.
+      expect(r.instrucao).toContain('Responda EXATAMENTE no modelo: "Enviei acima o PIX referente ao seu contrato do endereço AGENOR COSTA, 523. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
     });
 
     test('(b) contrato pedido já tem fatura: entrega essa sem consultar o outro', async () => {
@@ -1915,6 +1924,7 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       expect(r.contratoUsado).toEqual({ contratoId: 17405, endereco: 'AGENOR COSTA, 523' });
       expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/17405.pdf');
       expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ messageType: 'document', sentBy: 'ai' }));
+      expect(r.instrucao).toContain('"Enviei acima o boleto referente ao seu contrato do endereço AGENOR COSTA, 523, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
     });
 
     test('(b) contrato pedido já tem fatura: envia essa sem consultar o outro', async () => {
@@ -1922,6 +1932,9 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
       expect(r).toMatchObject({ enviado: true, valor: 100, vencimento: '2026-09-20' });
       expect(r.contratoUsado).toBeUndefined();
+      // Sem troca de contrato, mas com mais de um ponto: o endereço ainda é
+      // citado (regra do dono: "cite o endereço só quando ele tiver mais de um contrato").
+      expect(r.instrucao).toContain('Enviei acima o boleto referente ao seu contrato do endereço RUA J.K., 544, em PDF e com a linha digitável.');
       expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledTimes(1);
       expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/17402.pdf');
     });

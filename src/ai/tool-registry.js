@@ -163,6 +163,20 @@ async function faturaEmAlgumContrato(contratoPedido, contexto) {
   };
 }
 
+/**
+ * Endereço que o modelo de frase da entrega cita ao cliente. Regra do dono:
+ * "cite o endereço só quando ele tiver mais de um contrato" — com um ponto
+ * só, nada; com vários, o endereço do contrato de onde a fatura saiu (o
+ * pedido, ou o outro quando faturaEmAlgumContrato trocou).
+ */
+function enderecoParaCitar(busca, contexto) {
+  const contratos = (contexto && contexto.contracts) || [];
+  if (contratos.length < 2) return null;
+  if (busca.endereco) return busca.endereco;
+  const usado = contratos.find((c) => c.id === busca.contratoId);
+  return usado ? normalizeContract(usado).endereco : null;
+}
+
 /** Busca no cache do turno; só chama o SGP se ainda não houver nada. */
 async function contratoDoCache(contexto, contratoId) {
   const achado = (contexto.contracts || []).find((c) => c.id === contratoId);
@@ -738,12 +752,16 @@ const TOOLS = [
       // Grava a entrega: contexto.resolvidoPelaIa nasce false a cada turno, e o
       // "nao preciso de mais nada" do cliente costuma vir no turno SEGUINTE.
       await markTriageResolvedByAi(contexto.conversationId);
+      // O modelo de frase do dono sai DAQUI, e só depois do envio real: no
+      // prompt, o modelo copiava a frase sem chamar a ferramenta (teste real
+      // 2026-09-15, com o boleto).
+      const endereco = enderecoParaCitar(busca, contexto);
       return {
         enviado: true,
         valor: primeira.value,
         vencimento: primeira.dueDate,
         ...(contratoUsado ? { contratoUsado } : {}),
-        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão com botão de copiar). Responda dizendo que enviou acima o PIX${contratoUsado ? ' referente ao contrato do endereço ' + contratoUsado.endereco : ''}, que é só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do banco, e que se tiver dificuldade é só avisar. NÃO repita o código nem o valor.${contratoUsado ? ' Diga ao cliente de qual endereço é a fatura.' : ''}`,
+        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão com botão de copiar). Responda EXATAMENTE no modelo: "Enviei acima o PIX${endereco ? ' referente ao seu contrato do endereço ' + endereco : ''}. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!" NÃO repita o código nem o valor.`,
       };
     },
   },
@@ -1352,14 +1370,18 @@ const TOOLS = [
       // encerrar_atendimento num turno posterior à entrega.
       await markTriageResolvedByAi(contexto.conversationId);
       // contratoUsado só aparece quando a fatura veio de OUTRO contrato do
-      // mesmo cliente — o modelo precisa dizer de qual endereço é o boleto.
+      // mesmo cliente. O modelo de frase do dono sai DAQUI, e só depois do
+      // envio real (teste real 2026-09-15: no prompt, o modelo copiava a frase
+      // sem chamar a ferramenta e o cliente não recebia nada).
+      const endereco = enderecoParaCitar(busca, contexto);
+      const frase = `Enviei acima o boleto${endereco ? ' referente ao seu contrato do endereço ' + endereco + ',' : ''} em PDF${linhaDigitavelEnviada ? ' e com a linha digitável' : ''}. É só pagar pelo aplicativo do seu banco${linhaDigitavelEnviada ? ', copiando a linha digitável,' : ''} ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!`;
       return {
         enviado: true,
         valor: primeira.value,
         vencimento: primeira.dueDate,
         linhaDigitavelEnviada,
         ...(contratoUsado ? { contratoUsado } : {}),
-        instrucao: `O boleto já foi enviado ao cliente nesta conversa em PDF${linhaDigitavelEnviada ? ' e com a linha digitável em mensagem separada' : ''}. Responda sem emoji dizendo que enviou acima o boleto${contratoUsado ? ' referente ao contrato do endereço ' + contratoUsado.endereco : ''}, que é só pagar pelo aplicativo do banco${linhaDigitavelEnviada ? ' copiando a linha digitável' : ''} ou em qualquer lotérica, e que se tiver dificuldade é só avisar. NÃO repita a linha digitável nem o valor.`,
+        instrucao: `O boleto já foi enviado ao cliente nesta conversa em PDF${linhaDigitavelEnviada ? ' e com a linha digitável em mensagem separada' : ''}. Responda EXATAMENTE no modelo, sem emoji: "${frase}" NÃO repita a linha digitável nem o valor.`,
       };
     },
   },

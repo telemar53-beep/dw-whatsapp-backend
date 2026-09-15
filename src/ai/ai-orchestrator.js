@@ -72,12 +72,21 @@ function afirmaFila(texto) { return AFIRMA_FILA.test(String(texto || '')); }
 // Vou seguir com o Pix do contrato em aberto." e não chamou gerar_pix — o
 // cliente teve de pedir "pode mandar" para receber o que já tinha pedido. A
 // promessa de enviar só vale com a ferramenta de entrega tendo rodado.
-const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|emitir)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo)\b/i;
+//
+// Teste real 2026-09-15 (produção): "Enviei acima o boleto referente ao seu
+// contrato..., em PDF e com a linha digitável" — afirmação no PASSADO, sem
+// nenhuma chamada a enviar_boleto, e nada chegou ao cliente. A guarda só
+// olhava o futuro ("vou enviar"). Agora "enviei/mandei/segue ... boleto/PIX/
+// PDF/linha digitável" também conta: dizer que já foi só vale com a entrega
+// feita neste turno.
+const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|emitir)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo)\b|\b(enviei|mandei|gerei|segue|seguem)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo|pdf|linha digit[áa]vel)\b/i;
 function afirmaEnvio(texto) { return AFIRMA_ENVIO.test(String(texto || '')); }
 
-// As três que de fato põem o pagamento na mão do cliente. É o que a volta
+// As duas que de fato põem o pagamento na mão do cliente. É o que a volta
 // forçada por anúncio de envio aceita como cumprimento da promessa.
-const FERRAMENTAS_DE_ENTREGA = ['gerar_pix', 'enviar_boleto', 'gerar_segunda_via'];
+// gerar_segunda_via NÃO entra: ela só devolve linha e link ao modelo, sem
+// enviar nada — aceitá-la aqui é aceitar a promessa sem o boleto.
+const FERRAMENTAS_DE_ENTREGA = ['gerar_pix', 'enviar_boleto'];
 
 function papelDaMensagem(message) {
   return message.direction === 'inbound' ? 'user' : 'assistant';
@@ -186,7 +195,12 @@ const FERRAMENTAS_TRIAGEM = [
   'buscar_cliente', 'confirmar_nascimento', 'esquecer_identificacao',
   'consultar_status_contrato', 'consultar_status_conexao',
   'consultar_status_todos_contratos', 'consultar_faturas_todos_contratos',
-  'gerar_pix', 'gerar_segunda_via', 'enviar_boleto', 'concluir_triagem', 'encerrar_atendimento',
+  // gerar_segunda_via fica de fora de propósito (teste real 2026-09-15): na
+  // triagem ela só devolvia linha e link ao modelo, sem enviar, e marcava a
+  // conversa como resolvida — o modelo então dizia "enviei acima o boleto"
+  // sem nenhum envio. Quem entrega o boleto na triagem é enviar_boleto; a
+  // segunda via continua no assistente, com um humano no comando.
+  'gerar_pix', 'enviar_boleto', 'concluir_triagem', 'encerrar_atendimento',
 ];
 
 // À noite não há atendente: a triagem precisa das ferramentas que resolvem
@@ -341,7 +355,12 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
         config.triageResolvedReasonId
           ? [
             `Identidade JÁ confirmada: NÃO peça CPF${nemDataDeNascimento}. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. NÃO conclua a triagem nesse momento.`,
-            'Depois de entregar, responda no modelo (adapte nome, endereço e PIX/boleto): "Enviei acima o PIX referente ao seu contrato do endereço Agenor Costa. É só copiar o código e colar na opção \"PIX Copia e Cola\" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!" Cite o endereço só quando ele tiver mais de um contrato. Para BOLETO, mesma lógica e SEM emoji: "Enviei acima o boleto referente ao seu contrato do endereço Agenor Costa, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!"',
+            // Os modelos de frase da entrega NÃO ficam aqui (teste real
+            // 2026-09-15: com o exemplo "Enviei acima o boleto..." no prompt, o
+            // modelo copiou a frase sem chamar enviar_boleto e o cliente não
+            // recebeu nada). A frase sai da própria ferramenta, no campo
+            // instrucao, só depois de ela ter enviado de verdade.
+            'Depois de entregar, responda EXATAMENTE no modelo que a ferramenta devolver no campo instrucao. NUNCA diga que enviou o boleto ou o PIX antes de a ferramenta confirmar o envio (enviado: true): sem essa confirmação, nada chegou ao cliente.',
             'Se depois disso ele agradecer ("obrigado", "valeu"): chame encerrar_atendimento e responda no modelo: "Imagina, Willemberg! 😊 Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" (à noite, "Tenha uma boa noite!"). Se responder só "ok", "certo" ou um joinha: chame encerrar_atendimento e responda: "Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" Se pedir outra coisa, siga a triagem normalmente e encerre só quando ele agradecer ou confirmar que está tudo certo. No fluxo do BOLETO as mesmas despedidas valem, mas SEM emoji ("Imagina, Willemberg! Qualquer dúvida…").',
           ].join('\n')
           : `Identidade JÁ confirmada: NÃO peça CPF${nemDataDeNascimento}. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.`,

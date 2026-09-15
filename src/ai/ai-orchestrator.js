@@ -11,6 +11,7 @@ const { getCompanyConfig } = require('../company/company-config.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { mensagemSegura } = require('./safe-error-log');
 const { maskDocument, normalizeContract } = require('./sgp-normalizer');
+const { temAlfabetoEstranho, semAlfabetoEstranho } = require('./idioma');
 
 // A auditoria (ai_interactions.tools_requested) grava os argumentos como o
 // modelo os enviou, verbatim — inclui o CPF/CNPJ inteiro de buscar_cliente se
@@ -81,6 +82,35 @@ function afirmaFila(texto) { return AFIRMA_FILA.test(String(texto || '')); }
 // feita neste turno.
 const AFIRMA_ENVIO = /\bvou (te )?(enviar|mandar|gerar|seguir com|providenciar|emitir)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo)\b|\b(enviei|mandei|gerei|segue|seguem)\b[^.!?\n]{0,60}\b(pix|boleto|fatura|segunda via|c[óo]digo|pdf|linha digit[áa]vel)\b/i;
 function afirmaEnvio(texto) { return AFIRMA_ENVIO.test(String(texto || '')); }
+
+// Teste real 2026-09-15 (produção, gpt-5.4-mini): "Boa noite, Willemberg! كيف
+// posso ajudar você hoje?". O prompt-base já pede português; quando o texto
+// final traz letra de outro alfabeto, o turno faz UMA chamada extra, sem
+// ferramentas, pedindo a mesma resposta em português. Se ainda vier estranha
+// (ou a chamada falhar, ou o tempo do turno tiver acabado), as palavras
+// estranhas são cortadas: pior uma palavra a menos do que árabe no WhatsApp.
+const INSTRUCAO_PORTUGUES = 'Sua resposta contém palavras ou letras de outro idioma/alfabeto. Reescreva a MESMA resposta, com o mesmo sentido, inteiramente em português do Brasil, sem nenhuma palavra de outro idioma.';
+
+async function garantirPortugues({ texto, messages, config, iniciadoEm, conversationId }) {
+  const tokens = { prompt: 0, completion: 0 };
+  if (!texto || !temAlfabetoEstranho(texto)) return { texto, tokens };
+  if (Date.now() - iniciadoEm < TURNO_MAX_MS) {
+    try {
+      const r = await createChatCompletion({
+        apiKey: config.apiKey, model: config.model, tools: [],
+        messages: [...messages, { role: 'assistant', content: texto }, { role: 'system', content: INSTRUCAO_PORTUGUES }],
+      });
+      tokens.prompt += (r.usage && r.usage.promptTokens) || 0;
+      tokens.completion += (r.usage && r.usage.completionTokens) || 0;
+      const reescrito = r.message && r.message.content;
+      if (reescrito && !temAlfabetoEstranho(reescrito)) return { texto: reescrito, tokens };
+    } catch (err) {
+      console.error(`Reescrita em português falhou na conversa ${conversationId}: ${mensagemSegura(err)}`);
+    }
+  }
+  console.error(`Resposta da IA com alfabeto estranho cortada na conversa ${conversationId}`);
+  return { texto: semAlfabetoEstranho(texto), tokens };
+}
 
 // As duas que de fato põem o pagamento na mão do cliente. É o que a volta
 // forçada por anúncio de envio aceita como cumprimento da promessa.
@@ -750,6 +780,13 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   } catch (err) {
     erro = err.message;
   }
+
+  // Depois do laço, antes da auditoria: vale para os dois perfis, e o que fica
+  // gravado (finalResponse) é o que o cliente/atendente recebe de fato.
+  const portugues = await garantirPortugues({ texto, messages, config, iniciadoEm, conversationId: conversation.id });
+  texto = portugues.texto;
+  promptTokens += portugues.tokens.prompt;
+  completionTokens += portugues.tokens.completion;
 
   await recordAiInteraction({
     conversationId: conversation.id,

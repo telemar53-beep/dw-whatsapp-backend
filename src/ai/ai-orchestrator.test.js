@@ -80,6 +80,68 @@ describe('ai-orchestrator', () => {
     expect(nomes).toEqual(['consultar_plano']);
   });
 
+  // Teste real 2026-09-15 (produção, gpt-5.4-mini): "Boa noite, Willemberg!
+  // كيف posso ajudar você hoje?" — palavra em árabe no meio da saudação, e não
+  // foi a primeira vez. O prompt-base já pede português; a garantia é em
+  // código: uma reescrita sem ferramentas e, se ainda vier estranho, o corte.
+  describe('resposta com letras de outro alfabeto', () => {
+    const INSTRUCAO = 'Sua resposta contém palavras ou letras de outro idioma/alfabeto. Reescreva a MESMA resposta, com o mesmo sentido, inteiramente em português do Brasil, sem nenhuma palavra de outro idioma.';
+
+    test('pede uma reescrita sem ferramentas e devolve o texto reescrito', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Boa noite, Willemberg! كيف posso ajudar você hoje?' }, usage: { promptTokens: 10, completionTokens: 5 } })
+        .mockResolvedValueOnce({ message: { content: 'Boa noite, Willemberg! Como posso ajudar você hoje?' }, usage: { promptTokens: 12, completionTokens: 6 } });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+      expect(r.texto).toBe('Boa noite, Willemberg! Como posso ajudar você hoje?');
+      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+      const segunda = createChatCompletion.mock.calls[1][0];
+      expect(segunda.tools).toEqual([]);
+      expect(segunda.messages.slice(-2)).toEqual([
+        { role: 'assistant', content: 'Boa noite, Willemberg! كيف posso ajudar você hoje?' },
+        { role: 'system', content: INSTRUCAO },
+      ]);
+      // A auditoria guarda o que o cliente recebe e soma os tokens da reescrita.
+      expect(recordAiInteraction).toHaveBeenCalledWith(expect.objectContaining({
+        finalResponse: 'Boa noite, Willemberg! Como posso ajudar você hoje?', promptTokens: 22, completionTokens: 11, error: null,
+      }));
+    });
+
+    test('reescrita ainda estranha (ou vazia): corta as palavras estranhas e segue', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Boa noite, Willemberg! كيف posso ajudar você hoje?' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Boa noite, Willemberg! كيف posso ajudar?' }, usage: {} });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+      expect(r.texto).toBe('Boa noite, Willemberg! posso ajudar você hoje?');
+      expect(createChatCompletion).toHaveBeenCalledTimes(2);
+      expect(r.erro).toBeNull();
+    });
+
+    test('falha na chamada de reescrita não derruba o turno: corta e segue', async () => {
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Olá! Привет, tudo bem?' }, usage: {} })
+        .mockRejectedValueOnce(new Error('openai_timeout'));
+      const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+        expect(r.texto).toBe('Olá!, tudo bem?');
+        expect(r.erro).toBeNull();
+      } finally {
+        erroSpy.mockRestore();
+      }
+    });
+
+    test('texto só em português não gera chamada extra', async () => {
+      createChatCompletion.mockResolvedValue({ message: { content: 'Boa noite, Willemberg! 😊 Como posso ajudar você hoje?' }, usage: {} });
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+      expect(r.texto).toBe('Boa noite, Willemberg! 😊 Como posso ajudar você hoje?');
+      expect(createChatCompletion).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('contratos no contexto do sistema', () => {
     const IDENTIFICADO = { id: 'ct-1', sgpClientId: 10, sgpContractId: null, sgpDocument: '52998224725' };
     const CONTRATO_A = {

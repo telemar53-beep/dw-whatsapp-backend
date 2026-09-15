@@ -62,7 +62,8 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
       <button
         type="button"
         onClick={() => onOpenChange(!open)}
-        className="h-[38px] rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-muted transition hover:bg-white/[0.10] hover:text-chat-text"
+        aria-expanded={open}
+        className="h-[38px] shrink-0 rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-muted transition hover:border-white/25 hover:bg-white/[0.10] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
       >
         {label}
         {selected.length > 0 && <span className="ml-1.5 font-medium text-chat-orange">{selected.length}</span>}
@@ -73,9 +74,9 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
             <p className="px-2 py-1 text-[13px] text-wa-muted">Nenhuma opção</p>
           ) : (
             options.map((option) => (
-              <label key={option.value} className="flex items-center gap-2 rounded-[10px] px-2 py-1.5 text-[13.5px] text-chat-muted hover:bg-white/[0.07] hover:text-chat-text">
-                <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} className="h-4 w-4 accent-chat-orange" />
-                {option.label}
+              <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded-[10px] px-2 py-1.5 text-[13.5px] text-chat-muted hover:bg-white/[0.07] hover:text-chat-text">
+                <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} className="h-4 w-4 shrink-0 accent-chat-orange focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70" />
+                <span className="min-w-0 truncate">{option.label}</span>
               </label>
             ))
           )}
@@ -88,15 +89,15 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
 function DashboardColumn({ title, count, conversations, onSelect, onQuickClose, emptyMessage, footer }) {
   return (
     <div className="flex max-h-[40vh] flex-1 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl md:max-h-none md:min-w-[300px]">
-      <div className="flex items-center justify-between px-5 py-4">
-        <h2 className="font-display text-[16px] font-semibold text-chat-text">{title}</h2>
+      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-5 py-4">
+        <h2 className="min-w-0 truncate font-display text-[16px] font-semibold text-chat-text">{title}</h2>
         <span className="rounded-full border border-white/10 bg-white/[0.07] px-2.5 py-[2px] text-[12px] font-medium text-chat-muted">
           {count}
         </span>
       </div>
       <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-0.5">
         {conversations.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[13.5px] text-chat-faint">{emptyMessage}</p>
+          <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">{emptyMessage}</p>
         ) : (
           <ul>
             {conversations.map((conversation) => (
@@ -275,7 +276,7 @@ function SupervisionPage() {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <PageHeader title="Supervisão" description="Acompanhe os atendimentos da equipe em tempo real" />
 
-      <div className="flex shrink-0 flex-wrap items-center gap-3 px-2 pb-4">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2.5 px-2 pb-4">
         <Tabs
           label="Atendimentos"
           active={activeTab}
@@ -311,34 +312,34 @@ function SupervisionPage() {
           onOpenChange={(next) => setOpenFilterMenu(next ? 'sectors' : null)}
         />
         <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10" />
-        <form onSubmit={handleProtocolSearch}>
+        <form onSubmit={handleProtocolSearch} className="min-w-0 max-w-full shrink-0">
           <input
             type="text"
             value={protocolQuery}
             onChange={(e) => setProtocolQuery(e.target.value)}
             placeholder="Buscar por protocolo"
             aria-label="Buscar por protocolo"
-            className="h-[38px] w-[170px] rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-text outline-none placeholder:text-chat-muted focus:border-white/25"
+            className="h-[38px] w-[205px] max-w-full rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
           />
         </form>
-        <form onSubmit={handlePhoneSearch}>
+        <form onSubmit={handlePhoneSearch} className="min-w-0 max-w-full shrink-0">
           <input
             type="text"
             value={phoneQuery}
             onChange={(e) => setPhoneQuery(e.target.value)}
             placeholder="Buscar por telefone do cliente"
             aria-label="Buscar por telefone do cliente"
-            className="h-[38px] w-[220px] rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-text outline-none placeholder:text-chat-muted focus:border-white/25"
+            className="h-[38px] w-[262px] max-w-full rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
           />
         </form>
       </div>
       {(protocolError || phoneError) && (
-        <p className="px-2 pb-2 text-[13px] text-chat-faint">{protocolError || phoneError}</p>
+        <p role="alert" className="px-2 pb-2 text-[13px] text-wa-error-text">{protocolError || phoneError}</p>
       )}
 
       {phoneSearchResult ? (
-        <div role="tabpanel" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-          <div className="mb-3 flex items-center justify-between px-1">
+        <div role="tabpanel" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
             <p className="text-[14px] text-chat-muted">
               {phoneSearchResult.conversations.length} atendimento(s) de{' '}
               {phoneSearchResult.contact.displayName || phoneSearchResult.contact.phoneNumber}
@@ -346,13 +347,13 @@ function SupervisionPage() {
             <button
               type="button"
               onClick={clearPhoneSearch}
-              className="text-[13px] font-medium text-chat-orange hover:underline"
+              className="shrink-0 rounded-[8px] text-[13px] font-medium text-chat-orange hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
             >
               Limpar busca
             </button>
           </div>
           {phoneSearchResult.conversations.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[13.5px] text-chat-faint">Esse cliente ainda não teve nenhum atendimento.</p>
+            <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">Esse cliente ainda não teve nenhum atendimento.</p>
           ) : (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08] [&>li]:backdrop-blur-2xl">
               {phoneSearchResult.conversations.map(withAgentName).map((conversation) => (
@@ -368,7 +369,7 @@ function SupervisionPage() {
           )}
         </div>
       ) : activeTab === 'all' ? (
-        <div role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 pb-2 md:flex-row md:overflow-x-auto">
+        <div id="tabpanel-all" role="tabpanel" aria-labelledby="tab-all" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 pb-4 md:flex-row md:overflow-x-auto">
           <DashboardColumn
             title="Em andamento"
             count={filteredInProgress.length}
@@ -394,9 +395,9 @@ function SupervisionPage() {
           />
         </div>
       ) : (
-        <div role="tabpanel" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <div id="tabpanel-closed" role="tabpanel" aria-labelledby="tab-closed" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {displayClosed.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[13.5px] text-chat-faint">Nenhum atendimento encerrado hoje.</p>
+            <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">Nenhum atendimento encerrado hoje.</p>
           ) : (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08] [&>li]:backdrop-blur-2xl">
               {displayClosed.map((conversation) => (
@@ -415,7 +416,7 @@ function SupervisionPage() {
               type="button"
               onClick={loadMoreClosed}
               disabled={loadingClosed}
-              className="mt-3 w-full rounded-[16px] border border-white/[0.10] bg-white/[0.06] px-4 py-3 text-[14px] font-medium text-chat-text transition hover:bg-white/[0.10] disabled:opacity-50"
+              className="mt-3 w-full rounded-[16px] border border-white/[0.10] bg-white/[0.06] px-4 py-3 text-[14px] font-medium text-chat-text transition hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loadingClosed ? 'Carregando...' : 'Carregar mais'}
             </button>

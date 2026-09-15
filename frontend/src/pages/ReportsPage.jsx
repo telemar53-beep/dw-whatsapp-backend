@@ -133,8 +133,8 @@ const PANEL_CLASS = 'rounded-[22px] border border-white/[0.07] bg-white/[0.08] b
 function StatTile({ icon, value, label }) {
   const display = value === null || value === undefined ? '—' : value;
   return (
-    <div className={`${PANEL_CLASS} p-6`}>
-      <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.07] text-chat-orange">
+    <div className={`${PANEL_CLASS} p-5 sm:p-6`}>
+      <span aria-hidden="true" className="mb-4 flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.07] text-chat-orange">
         {icon}
       </span>
       <p className="font-display text-[32px] font-semibold leading-tight text-chat-text">{display}</p>
@@ -145,12 +145,12 @@ function StatTile({ icon, value, label }) {
 
 function ChartCard({ title, icon, children }) {
   return (
-    <div className={`${PANEL_CLASS} p-6`}>
+    <div className={`${PANEL_CLASS} min-w-0 p-5 sm:p-6`}>
       <div className="mb-5 flex items-center gap-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.07] text-chat-orange">
+        <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.07] text-chat-orange">
           {icon}
         </span>
-        <h2 className="font-display text-[16px] font-semibold text-chat-text">{title}</h2>
+        <h2 className="min-w-0 font-display text-[16px] font-semibold leading-[22px] text-chat-text">{title}</h2>
       </div>
       {children}
     </div>
@@ -160,8 +160,8 @@ function ChartCard({ title, icon, children }) {
 function EmptyState() {
   return (
     <div className="flex h-[260px] flex-col items-center justify-center gap-2 rounded-[16px] border border-dashed border-white/[0.12] text-center">
-      <IconInbox className="h-6 w-6 text-chat-faint" />
-      <p className="text-[13.5px] text-chat-faint">Nenhum atendimento fechado nesse período.</p>
+      <IconInbox className="h-6 w-6 text-chat-muted" />
+      <p className="px-4 text-[13.5px] text-chat-muted">Nenhum atendimento fechado nesse período.</p>
     </div>
   );
 }
@@ -261,7 +261,9 @@ function ReportsPage() {
 
   function periodButtonClass(selected) {
     return `shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${
-      selected ? 'border-chat-orange/70 text-chat-text' : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
+      selected
+        ? 'border-chat-orange/70 bg-chat-orange/[0.12] font-medium text-chat-text'
+        : 'border-white/[0.12] text-chat-muted hover:border-white/25 hover:text-chat-text'
     }`;
   }
 
@@ -281,10 +283,12 @@ function ReportsPage() {
         }
       />
 
-      <div className="flex shrink-0 flex-wrap items-center gap-3 px-2 pb-4">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2.5 px-2 pb-4">
         {PERIODS.map((p) => (
           <button
             key={p.value}
+            type="button"
+            aria-pressed={period === p.value}
             onClick={() => {
               selectPeriod(p.value);
               setShowCustomInput(false);
@@ -294,7 +298,7 @@ function ReportsPage() {
             {p.label}
           </button>
         ))}
-        <button onClick={() => setShowCustomInput((prev) => !prev)} className={periodButtonClass(period === 'custom')}>
+        <button type="button" aria-pressed={period === 'custom'} aria-expanded={showCustomInput} onClick={() => setShowCustomInput((prev) => !prev)} className={periodButtonClass(period === 'custom')}>
           Personalizado
         </button>
 
@@ -312,14 +316,14 @@ function ReportsPage() {
                 max={CUSTOM_DAYS_MAX}
                 value={customDaysInput}
                 onChange={(e) => setCustomDaysInput(e.target.value)}
-                className="h-[40px] w-20 rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 text-[14px] text-chat-text outline-none transition focus:border-chat-orange/60"
+                className="h-[40px] w-20 rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 text-[14px] text-chat-text outline-none transition focus-visible:border-chat-orange/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
               />
               <span className="text-[14px] text-chat-muted">dias</span>
               <button
                 type="button"
                 onClick={handleApplyCustomDays}
                 disabled={!customDaysValid}
-                className="h-[40px] rounded-[12px] bg-chat-orange px-4 text-[14px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-[40px] shrink-0 rounded-[12px] bg-chat-orange px-4 text-[14px] font-medium text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-orange disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Aplicar
               </button>
@@ -327,7 +331,7 @@ function ReportsPage() {
           </>
         )}
 
-        <div className="ml-auto">
+        <div className="ml-auto shrink-0">
           <SectionHelp label="Como os tempos são calculados" title="Como os tempos são calculados">
             <p>
               <strong>Tempo médio de atendimento</strong> começa quando a conversa é criada e termina no encerramento.
@@ -345,16 +349,16 @@ function ReportsPage() {
         </div>
       </div>
 
-      <div className="chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-2">
+      <div className="chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-4">
         {error && (
-          <div className="flex items-center gap-2 rounded-[14px] bg-wa-error-bg px-4 py-3 text-[14px] text-wa-error-text">
+          <div role="alert" className="flex items-center gap-2 rounded-[14px] bg-wa-error-bg px-4 py-3 text-[14px] text-wa-error-text">
             <IconAlert className="h-4 w-4 flex-shrink-0" />
             <p>{error}</p>
           </div>
         )}
 
         {!data && !error && (
-          <p className="px-1 py-10 text-center text-[14px] text-chat-faint">Carregando indicadores...</p>
+          <p role="status" aria-live="polite" className="px-1 py-10 text-center text-[14px] text-chat-muted">Carregando indicadores...</p>
         )}
 
         {data && data.scope === 'agent' && (
@@ -428,7 +432,7 @@ function ReportsPage() {
                       </BarChart>
                     </ResponsiveContainer>
                     {hasUnsetSector && (
-                      <p className="mt-2 text-[12.5px] text-chat-faint">
+                      <p className="mt-2 text-[12.5px] leading-[17px] text-chat-muted">
                         "Sem setor" são conversas encerradas sem setor definido na triagem ou pelo atendente.
                       </p>
                     )}
@@ -453,7 +457,7 @@ function ReportsPage() {
                       </BarChart>
                     </ResponsiveContainer>
                     {hasUnsetReason && (
-                      <p className="mt-2 text-[12.5px] text-chat-faint">
+                      <p className="mt-2 text-[12.5px] leading-[17px] text-chat-muted">
                         "Sem motivo" são conversas finalizadas direto da fila, sem motivo.
                       </p>
                     )}

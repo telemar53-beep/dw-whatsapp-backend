@@ -34,12 +34,12 @@ function RolesPage() {
   return (
     <SettingsPage title="Perfis de acesso" description="O que cada perfil pode ver e fazer. Esta tabela é gerada da mesma lista que controla o menu e as rotas." scope="global" wide>
       <Card title="Páginas e ações">
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13.5px]">
+        <div className="chat-scroll -mx-1 overflow-x-auto px-1 pb-1">
+          <table className="w-full min-w-[560px] text-[13.5px]">
             <thead>
               <tr className="text-left text-wa-muted">
                 <th scope="col" className="py-2 pr-3 font-medium">Área</th>
-                {PROFILES.map((p) => <th key={p.label} scope="col" className="px-3 py-2 font-medium">{p.label}</th>)}
+                {PROFILES.map((p) => <th key={p.label} scope="col" className="whitespace-nowrap px-3 py-2 font-medium">{p.label}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -48,7 +48,7 @@ function RolesPage() {
                   <th scope="row" className="py-2 pr-3 text-left font-normal text-wa-text">{row.label}</th>
                   {PROFILES.map((p) => {
                     const ok = hasLevel(p.agent, row.level);
-                    return <td key={p.label} className={`px-3 py-2 ${ok ? 'text-wa-chip-text' : 'text-wa-muted'}`}>{ok ? 'Sim' : 'Não'}</td>;
+                    return <td key={p.label} className={`whitespace-nowrap px-3 py-2 ${ok ? 'text-wa-chip-text' : 'text-wa-muted'}`}>{ok ? 'Sim' : 'Não'}</td>;
                   })}
                 </tr>
               ))}

@@ -52,7 +52,7 @@ function AiToolsPage() {
                   label={toolLabel(tool.nome)}
                   description={tool.descricao}
                 />
-                <code className="ml-7 block text-[11.5px] text-wa-faint">{tool.nome}</code>
+                <code className="ml-7 block text-[11.5px] text-wa-muted">{tool.nome}</code>
               </div>
             ))}
           </Card>

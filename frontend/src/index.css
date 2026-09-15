@@ -131,6 +131,22 @@
   --scroll-thumb-hover: rgba(11, 20, 26, 0.34);
 }
 
+/* ---------- Foco por teclado ----------
+   Rede de segurança: todo link e botão ganha um anel visível mesmo quando a
+   classe do componente não declara um. Fica na camada base, então qualquer
+   utilitário `focus-visible:outline-*` do próprio componente continua vencendo
+   e mantém a cor certa (laranja no CTA, verde no formulário). */
+@layer base {
+  .chat-theme a:focus-visible,
+  .chat-theme button:focus-visible,
+  .chat-theme summary:focus-visible,
+  .chat-theme [role="button"]:focus-visible,
+  .chat-theme [tabindex]:not([tabindex="-1"]):focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.7);
+    outline-offset: 2px;
+  }
+}
+
 /* ---------- Fundo do chat ---------- */
 .wa-wallpaper {
   background-color: var(--color-wa-chat);

@@ -80,7 +80,7 @@ function ChannelsListPage() {
     <SettingsPage
       title="Canais"
       description="Os números de WhatsApp ligados ao atendimento."
-      scope="channel"
+      scope="global"
       action={canManage && <Button onClick={() => setCreatingChannel(true)}>Criar canal</Button>}
       wide
     >

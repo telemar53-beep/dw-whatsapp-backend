@@ -353,6 +353,10 @@ function ReportsPage() {
               Os dois números da equipe são médias ponderadas pelo total de atendimentos fechados de cada atendente.
               O CSV exporta os valores em minutos.
             </p>
+            <p className="mt-2">
+              Motivos de contato inclui também os atendimentos encerrados pela IA; os totais e o gráfico por setor
+              contam só os encerrados por atendentes.
+            </p>
           </SectionHelp>
         </div>
       </div>

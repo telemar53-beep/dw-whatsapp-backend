@@ -36,6 +36,15 @@ describe('ChannelsListPage', () => {
     expect(screen.getByText('Noturno ligado sem janela definida')).toBeInTheDocument();
   });
 
+  // Fix: o cabeçalho mostrava "Este canal" (scope="channel"), mas a lista
+  // vale para toda a operação, não para um canal específico.
+  test('o cabeçalho mostra o escopo "Toda a operação", não "Este canal"', () => {
+    useChannels.mockReturnValue({ channels: [], status: 'ready', refresh: vi.fn() });
+    renderInShell(<ChannelsListPage />, { path: '/configuracoes/canais' });
+    expect(screen.getByText('Toda a operação')).toBeInTheDocument();
+    expect(screen.queryByText('Este canal')).not.toBeInTheDocument();
+  });
+
   // Fix round 1: só havia teste de quem NÃO vê o botão; faltava confirmar
   // que quem tem a permissão (admin, o caso comum) realmente o vê.
   test('admin vê o botão Criar canal', () => {

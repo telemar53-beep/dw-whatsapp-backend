@@ -220,6 +220,20 @@ describe('ReportsPage', () => {
     expect(screen.getByRole('button', { name: /últimas 24 horas/i })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('o texto de ajuda explica que motivos inclui a IA mas o resto só conta atendentes', async () => {
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'agent',
+      own: { closedCount: 1, avgResolutionMinutes: 1, avgFirstResponseMinutes: 1 },
+    });
+    renderPage();
+    await waitFor(() => expect(api.getMetrics).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /o que é isso/i }));
+
+    expect(screen.getByText(/motivos de contato inclui também os atendimentos encerrados pela ia/i)).toBeInTheDocument();
+  });
+
   test('switching back to a fixed period after a custom one refetches with that period', async () => {
     api.getMetrics.mockResolvedValue({
       period: 'today',

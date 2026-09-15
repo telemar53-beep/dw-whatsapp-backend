@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useChannels } from '../hooks/useChannels';
+import { hasLevel } from '../navigation/navItems';
 import { isOfficialChannelType } from '../utils/channelTypes';
 import { IconWarning } from './icons/WaIcons';
 
 function ChannelStatusBanner() {
   const { agent } = useAuth();
-  const canSeeBanner = agent?.role === 'admin' || (agent?.role === 'manager' && agent?.canManageIntegrations === true);
+  const canSeeBanner = hasLevel(agent, 'integrations');
   const { channels } = useChannels(canSeeBanner);
 
   if (!canSeeBanner) return null;

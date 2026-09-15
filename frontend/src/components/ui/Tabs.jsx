@@ -1,15 +1,19 @@
 import { NavLink } from 'react-router-dom';
 
 const TAB_BASE =
-  'relative shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
+  'relative shrink-0 rounded-full border px-2.5 py-[5px] text-[13px] leading-5 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
 // Ativo tem borda laranja, fundo e texto cheio: o estado não fica só na cor da borda.
 const ACTIVE = 'border-chat-orange/70 bg-chat-orange/[0.12] font-medium text-chat-text';
 const IDLE = 'border-white/[0.12] text-chat-muted hover:border-white/25 hover:text-chat-text';
 
+// A bolinha sai 6px para fora da pílula (-top/-right-1.5). A faixa em volta
+// tem 6px de padding e NÃO rola (overflow-x-auto arrasta overflow-y junto e
+// cortava o topo da bolinha, além de criar uma barra de rolagem fantasma pelo
+// transbordo de poucos px). Quando não cabe, a faixa quebra linha em vez de rolar.
 function Count({ value }) {
   if (!value) return null;
   return (
-    <span className="absolute -right-2 -top-2 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-chat-orange px-1 text-[12px] font-semibold text-white">
+    <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-chat-orange px-1 text-[11px] font-semibold leading-none text-white">
       {value}
     </span>
   );
@@ -51,7 +55,7 @@ export function Tabs({ tabs, active, onChange, label = 'Abas' }) {
 
   if (isRouteTabs) {
     return (
-      <nav aria-label={label} className="chat-scroll -my-1 flex shrink-0 gap-3.5 overflow-x-auto px-1 py-1">
+      <nav aria-label={label} className="-my-1.5 flex min-w-0 flex-wrap gap-2 px-1.5 py-1.5">
         {tabs.map((tab, index) => (
           <TabLink key={tab.key} tab={tab} onKeyDown={(e) => onKeyDown(e, index)} />
         ))}
@@ -60,7 +64,7 @@ export function Tabs({ tabs, active, onChange, label = 'Abas' }) {
   }
 
   return (
-    <div role="tablist" aria-label={label} className="chat-scroll -my-1 flex shrink-0 gap-3.5 overflow-x-auto px-1 py-1">
+    <div role="tablist" aria-label={label} className="-my-1.5 flex min-w-0 flex-wrap gap-2 px-1.5 py-1.5">
       {tabs.map((tab, index) => (
         <button
           key={tab.key}

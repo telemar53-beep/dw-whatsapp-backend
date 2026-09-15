@@ -13,6 +13,7 @@ import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
 import StartConversationModal from '../components/StartConversationModal';
 import TeamPanel from '../components/TeamPanel';
+import { Tabs } from '../components/ui/Tabs';
 import { IconNewChat, IconSearch, IconLock, IconEmptyChat } from '../components/icons/WaIcons';
 
 const TABS = [
@@ -136,29 +137,13 @@ function DashboardPage() {
             </button>
           </div>
 
-          <div role="tablist" className="flex shrink-0 gap-3.5 overflow-x-auto px-3 pb-3 pt-4">
-            {TABS.map((tab) => (
-              <button
-                key={tab.value}
-                id={`tab-${tab.value}`}
-                role="tab"
-                aria-selected={activeTab === tab.value}
-                aria-controls={`tabpanel-${tab.value}`}
-                onClick={() => setActiveTab(tab.value)}
-                className={`relative shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${
-                  activeTab === tab.value
-                    ? 'border-chat-orange/70 text-chat-text'
-                    : 'border-white/[0.12] text-chat-muted hover:text-chat-text'
-                }`}
-              >
-                {tab.label}
-                {tabCounts[tab.value] > 0 && (
-                  <span className="absolute -right-2 -top-2 flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-chat-orange px-1 text-[12px] font-semibold text-white">
-                    {tabCounts[tab.value]}
-                  </span>
-                )}
-              </button>
-            ))}
+          <div className="shrink-0 px-2 pb-2 pt-3.5">
+            <Tabs
+              label="Filas"
+              active={activeTab}
+              onChange={setActiveTab}
+              tabs={TABS.map((tab) => ({ key: tab.value, label: tab.label, count: tabCounts[tab.value] }))}
+            />
           </div>
 
           <div

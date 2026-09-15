@@ -20,6 +20,7 @@ beforeEach(() => {
   api.getQueue.mockResolvedValue([]);
   api.getMyConversations.mockResolvedValue([]);
   api.listChannels.mockResolvedValue([]);
+  api.listChannelsForAgent.mockResolvedValue([]);
   api.listAgents.mockResolvedValue([]);
   api.listSectors.mockResolvedValue([]);
   // A rota padrão de /configuracoes agora é a lista de Canais (Task 17), que

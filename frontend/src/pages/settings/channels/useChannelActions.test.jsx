@@ -170,4 +170,21 @@ describe('useChannelActions', () => {
 
     expect(result.current.errors.wabaId).toBe('Falha ao atualizar o WABA ID');
   });
+
+  // reconnect() só pergunta quando o canal já está conectado (ver comentário
+  // em useChannelActions.js): aguardando QR, não há sessão para derrubar,
+  // então chama a API direto, sem abrir o confirmDialog. Os caminhos que
+  // abrem o diálogo (canal conectado, toggleHidden, remove) são cobertos em
+  // ChannelDetailPage.test.jsx, onde `actions.confirmDialog` é de fato
+  // montado na árvore — aqui, via renderHook, ele nunca chega ao DOM.
+  test('reconnect num canal aguardando QR chama a API direto, sem diálogo', async () => {
+    const refresh = vi.fn();
+    api.reconnectChannel.mockResolvedValue({});
+    const { result } = renderHook(() => useChannelActions(refresh));
+
+    await act(() => result.current.reconnect({ id: 'ch1', name: 'Berg', status: 'awaiting_qr' }));
+
+    expect(api.reconnectChannel).toHaveBeenCalledWith('ch1', 'tok-123');
+    expect(refresh).toHaveBeenCalled();
+  });
 });

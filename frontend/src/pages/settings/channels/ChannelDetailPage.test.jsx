@@ -46,6 +46,8 @@ beforeEach(() => {
   api.setChannelAiEnabled.mockResolvedValue({});
   api.setChannelTriageEnabled.mockResolvedValue({});
   api.deleteChannel.mockResolvedValue({});
+  api.reconnectChannel.mockResolvedValue({});
+  api.setChannelHidden.mockResolvedValue({});
 });
 
 describe('ChannelDetailPage', () => {
@@ -90,6 +92,76 @@ describe('ChannelDetailPage', () => {
     expect(api.deleteChannel).not.toHaveBeenCalled();
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: /excluir/i }));
     await waitFor(() => expect(api.deleteChannel).toHaveBeenCalledWith('ch1', 'tok'));
+  });
+
+  // Fix round 1: reconnect()/toggleHidden() não tinham nenhum teste — o
+  // AdminChannelsPage.test.jsx que os cobria foi apagado na Task 17 e a
+  // migração só levou os handlers sem confirmação (triage/ai/aiTriage/
+  // aiNightMode/wabaId) para useChannelActions.test.jsx.
+  test('reconectar um canal já conectado pede confirmação; só chama a API depois de "Continuar", e cancelar não chama nada', async () => {
+    useChannels.mockReturnValue({ channels: [{ ...berg, status: 'connected' }], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await userEvent.click(screen.getByRole('button', { name: /reconectar/i }));
+    let dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent(
+      'está conectado. Reconectar vai derrubar a sessão atual e pedir um QR code novo. Continuar?'
+    );
+    expect(api.reconnectChannel).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /cancelar/i }));
+    expect(api.reconnectChannel).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /reconectar/i }));
+    dialog = screen.getByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: /continuar/i }));
+    await waitFor(() => expect(api.reconnectChannel).toHaveBeenCalledWith('ch1', 'tok'));
+  });
+
+  test('ocultar um canal visível pede confirmação e chama setChannelHidden com hidden true', async () => {
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await userEvent.click(screen.getByRole('button', { name: /^ocultar$/i }));
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent(
+      'Ocultar o canal "Berg"? Ele sai da lista e a sessão do WhatsApp é encerrada. O histórico é preservado.'
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: /^ocultar$/i }));
+    await waitFor(() => expect(api.setChannelHidden).toHaveBeenCalledWith('ch1', true, 'tok'));
+  });
+
+  test('canal oculto mostra Reexibir; confirmar chama setChannelHidden com hidden false', async () => {
+    useChannels.mockReturnValue({ channels: [{ ...berg, hidden: true }], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await userEvent.click(screen.getByRole('button', { name: /^reexibir$/i }));
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Reexibir o canal "Berg"?');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^reexibir$/i }));
+    await waitFor(() => expect(api.setChannelHidden).toHaveBeenCalledWith('ch1', false, 'tok'));
+  });
+
+  test('excluir recusado pela API mostra a mensagem devolvida em errors.action', async () => {
+    api.deleteChannel.mockRejectedValue({ body: { error: 'Canal já teve conversas. Use Ocultar.' } });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: /excluir/i }));
+
+    expect(await screen.findByText('Canal já teve conversas. Use Ocultar.')).toBeInTheDocument();
+  });
+
+  test('canal meta_cloud não mostra o botão Reconectar (não tem QR para reconectar)', () => {
+    useChannels.mockReturnValue({ channels: [{ ...berg, type: 'meta_cloud', status: 'connected' }], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+    expect(screen.queryByRole('button', { name: /reconectar/i })).not.toBeInTheDocument();
+  });
+
+  test('sem o Atendimento com IA ligado, a Triagem com IA fica desabilitada com a explicação', () => {
+    useChannels.mockReturnValue({ channels: [{ ...berg, aiEnabled: false }], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/atendimento');
+    expect(screen.getByRole('checkbox', { name: /triagem com ia/i })).toBeDisabled();
+    expect(screen.getByText('Precisa de Atendimento com IA ligado')).toBeInTheDocument();
   });
 
   test('canal inexistente mostra aviso e link para a lista', () => {

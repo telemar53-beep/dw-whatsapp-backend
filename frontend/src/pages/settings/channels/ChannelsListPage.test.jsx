@@ -36,6 +36,14 @@ describe('ChannelsListPage', () => {
     expect(screen.getByText('Noturno ligado sem janela definida')).toBeInTheDocument();
   });
 
+  // Fix round 1: só havia teste de quem NÃO vê o botão; faltava confirmar
+  // que quem tem a permissão (admin, o caso comum) realmente o vê.
+  test('admin vê o botão Criar canal', () => {
+    useChannels.mockReturnValue({ channels: [baileys], status: 'ready', refresh: vi.fn() });
+    renderInShell(<ChannelsListPage />, { path: '/configuracoes/canais' });
+    expect(screen.getByRole('button', { name: /criar canal/i })).toBeInTheDocument();
+  });
+
   test('gerente sem a flag vê a lista mas não o botão Criar canal', () => {
     useAuth.mockReturnValue({ token: 'tok', agent: { role: 'manager', canManageIntegrations: false } });
     useChannels.mockReturnValue({ channels: [baileys], status: 'ready', refresh: vi.fn() });

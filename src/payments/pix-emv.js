@@ -135,13 +135,34 @@ async function resolverRecebedorPix(codigo) {
   if (!url) return resultado;
 
   try {
-    const response = await axios.get('https://' + url, { timeout: 5000 });
+    // A URL vem de dentro de um código que nem sempre chega pelo SGP — o
+    // endpoint de disparo aceita pixCode livre no corpo da requisição, sem
+    // checar CRC. Por isso o destino é tratado como não confiável: só HTTPS,
+    // sem usuário/senha embutido (truque de SSRF via "user@host") e nunca um
+    // literal de IP ou localhost, que apontariam para a própria rede interna.
+    const alvo = new URL('https://' + url);
+    if (alvo.protocol !== 'https:' || alvo.username || alvo.password) {
+      console.warn('Pix charge lookup rejected the URL');
+      return resultado;
+    }
+    if (/^\[|^\d+\.\d+\.\d+\.\d+$/.test(alvo.hostname) || /(^|\.)localhost$/i.test(alvo.hostname)) {
+      console.warn('Pix charge lookup rejected the URL');
+      return resultado;
+    }
+    const response = await axios.get(alvo.toString(), {
+      timeout: 5000,
+      signal: AbortSignal.timeout(5000),
+      maxRedirects: 0,
+      maxContentLength: 64 * 1024,
+      responseType: 'json',
+    });
     const chave = response.data && response.data.chave;
     if (typeof chave === 'string' && chave.trim()) {
       return { name: resultado.name, key: chave.trim(), keyType: tipoDaChave(chave.trim()) };
     }
     return resultado;
   } catch (err) {
+    console.warn(`Pix charge lookup failed (${err && err.code ? err.code : 'unknown'})`);
     return resultado;
   }
 }

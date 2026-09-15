@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { IconEmoji, IconAttach, IconQuickReply, IconMic, IconSend, IconTrash, IconStop } from './icons/WaIcons';
+import { AsyncState } from './ui';
 
 const AUDIO_MIME_CANDIDATES = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm'];
 
@@ -38,7 +39,7 @@ function ComposerButton({ label, onClick, disabled, active, children, as = 'butt
   );
 }
 
-function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelReply, draftContent, draftKey }) {
+function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready', replyingTo = null, onCancelReply, draftContent, draftKey }) {
   const [content, setContent] = useState('');
   const [file, setFile] = useState(null);
   // A microphone recording is a voice note; a file picked from disk is an attachment.
@@ -305,9 +306,12 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
 
               {showingQuickReplies && (
                 <div className="animate-wa-pop chat-scroll absolute bottom-full left-0 z-20 mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-[#232325]/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-                  {quickReplies.length === 0 ? (
-                    <p className="px-3 py-2 text-[13.5px] text-chat-muted">Nenhuma resposta cadastrada</p>
-                  ) : (
+                  <AsyncState
+                    status={quickRepliesStatus}
+                    isEmpty={quickReplies.length === 0}
+                    emptyMessage="Nenhuma resposta cadastrada"
+                    skeletonLines={2}
+                  >
                     <ul>
                       {quickReplies.map((quickReply) => (
                         <li key={quickReply.id}>
@@ -325,7 +329,7 @@ function MessageInput({ onSend, quickReplies = [], replyingTo = null, onCancelRe
                         </li>
                       ))}
                     </ul>
-                  )}
+                  </AsyncState>
                 </div>
               )}
             </div>

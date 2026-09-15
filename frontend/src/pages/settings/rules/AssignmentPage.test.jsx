@@ -35,7 +35,7 @@ describe('AssignmentPage', () => {
   // visível no topo da página — sem precisar clicar em nada para revelá-la.
   test('shows the explanation card for the assignment-message feature directly, without a popup', () => {
     useAssignmentMessageConfig.mockReturnValue({
-      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -46,7 +46,7 @@ describe('AssignmentPage', () => {
 
   test('shows a "Criar atribuição" button when no config exists yet', () => {
     useAssignmentMessageConfig.mockReturnValue({
-      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -57,7 +57,7 @@ describe('AssignmentPage', () => {
   test('fills the form, saves and shows the closed summary', async () => {
     const refresh = vi.fn();
     useAssignmentMessageConfig.mockReturnValue({
-      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] }, status: 'ready',
       loading: false,
       refresh,
     });
@@ -97,7 +97,7 @@ describe('AssignmentPage', () => {
 
   test('checking an already-checked agent unchecks it', async () => {
     useAssignmentMessageConfig.mockReturnValue({
-      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -113,7 +113,7 @@ describe('AssignmentPage', () => {
 
   test('canceling while creating does not leave a stale draft on reopen', async () => {
     useAssignmentMessageConfig.mockReturnValue({
-      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -136,7 +136,7 @@ describe('AssignmentPage', () => {
         closingMessage: 'fechamento',
         agentIds: ['agent-1', 'agent-2'],
         channelIds: [],
-      },
+      }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -153,7 +153,7 @@ describe('AssignmentPage', () => {
         closingMessage: 'Texto de encerramento',
         agentIds: ['agent-1'],
         channelIds: [],
-      },
+      }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -164,5 +164,18 @@ describe('AssignmentPage', () => {
     expect(screen.getByLabelText(/mensagem de abertura/i)).toHaveValue('Texto de abertura');
     expect(screen.getByLabelText(/mensagem de encerramento/i)).toHaveValue('Texto de encerramento');
     expect(screen.getByLabelText('Geovanna Silva')).toBeChecked();
+  });
+
+  test('em carregamento não mostra "Nenhuma configuração criada ainda"', () => {
+    useAssignmentMessageConfig.mockReturnValue({
+      config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] },
+      status: 'loading',
+      loading: true,
+      refresh: vi.fn(),
+    });
+    renderInShell(<AssignmentPage />, { path: '/configuracoes/regras/atribuicao' });
+
+    expect(screen.queryByRole('button', { name: 'Criar atribuição' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

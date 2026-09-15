@@ -25,6 +25,16 @@ describe('OpenAiConfigCard', () => {
     expect(await screen.findByText('Conectada')).toBeInTheDocument();
   });
 
+  test('em carregamento não mostra o selo de status nem os campos', () => {
+    getAiConfig.mockReturnValue(new Promise(() => {}));
+    render(<OpenAiConfigCard />);
+
+    expect(screen.queryByText('Conectada')).not.toBeInTheDocument();
+    expect(screen.queryByText('Desativada')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/modelo/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
   test('does not offer automatic mode, which Phase 1 does not support', async () => {
     render(<OpenAiConfigCard />);
     await screen.findByText(/abcd/);

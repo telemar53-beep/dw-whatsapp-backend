@@ -4,12 +4,12 @@ import { useAgentsAdmin } from '../../hooks/useAgentsAdmin';
 import { useChannels } from '../../hooks/useChannels';
 import { useAssignmentMessageConfig } from '../../hooks/useAssignmentMessageConfig';
 import { updateAssignmentMessageConfig } from '../../services/api';
-import { inputClass } from '../ui';
+import { inputClass, AsyncState } from '../ui';
 import CityStatusDot from './StatusDot';
 
 function AssignmentMessageSection() {
   const { token } = useAuth();
-  const { config: fetchedConfig, refresh } = useAssignmentMessageConfig();
+  const { config: fetchedConfig, status, refresh } = useAssignmentMessageConfig();
   const { agents } = useAgentsAdmin(true);
   const { channels } = useChannels(true);
   const [editing, setEditing] = useState(false);
@@ -159,30 +159,30 @@ function AssignmentMessageSection() {
     );
   }
 
-  if (config.id === null) {
-    return (
-      <div className="flex items-center justify-between rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-        <p className="text-sm text-wa-muted">Nenhuma configuração criada ainda.</p>
-        <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
-          Criar atribuição
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-wa-muted">
-          {config.agentIds.length} atendentes, {config.channelIds.length} canais
-        </p>
-        <div className="flex items-center gap-3">
-          <CityStatusDot enabled={config.enabled} />
-          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
-            Editar
-          </button>
-        </div>
-      </div>
+      <AsyncState status={status} skeletonLines={2}>
+        {config.id === null ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-wa-muted">Nenhuma configuração criada ainda.</p>
+            <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+              Criar atribuição
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-wa-muted">
+              {config.agentIds.length} atendentes, {config.channelIds.length} canais
+            </p>
+            <div className="flex items-center gap-3">
+              <CityStatusDot enabled={config.enabled} />
+              <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+                Editar
+              </button>
+            </div>
+          </div>
+        )}
+      </AsyncState>
     </div>
   );
 }

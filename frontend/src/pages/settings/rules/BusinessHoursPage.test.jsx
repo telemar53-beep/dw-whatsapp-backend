@@ -19,7 +19,7 @@ beforeEach(() => {
 describe('BusinessHoursPage', () => {
   test('distingue horário humano da janela noturna da IA', () => {
     useBusinessHoursConfig.mockReturnValue({
-      config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' },
+      config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -29,7 +29,7 @@ describe('BusinessHoursPage', () => {
 
   test('shows a "Criar" button when no config exists yet', () => {
     useBusinessHoursConfig.mockReturnValue({
-      config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' },
+      config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -40,7 +40,7 @@ describe('BusinessHoursPage', () => {
   test('fills the form, saves and shows the closed summary', async () => {
     const refresh = vi.fn();
     useBusinessHoursConfig.mockReturnValue({
-      config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' },
+      config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' }, status: 'ready',
       loading: false,
       refresh,
     });
@@ -73,7 +73,7 @@ describe('BusinessHoursPage', () => {
 
   test('canceling while creating does not leave a stale draft on reopen', async () => {
     useBusinessHoursConfig.mockReturnValue({
-      config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' },
+      config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -89,7 +89,7 @@ describe('BusinessHoursPage', () => {
 
   test('shows the closed-state summary with the configured window when a config already exists', () => {
     useBusinessHoursConfig.mockReturnValue({
-      config: { id: 'config-1', enabled: true, startTime: '08:00', endTime: '18:00', message: 'aviso' },
+      config: { id: 'config-1', enabled: true, startTime: '08:00', endTime: '18:00', message: 'aviso' }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -99,7 +99,7 @@ describe('BusinessHoursPage', () => {
 
   test('editing an existing config pre-fills the form fields', async () => {
     useBusinessHoursConfig.mockReturnValue({
-      config: { id: 'config-1', enabled: true, startTime: '09:00', endTime: '17:00', message: 'Texto do aviso' },
+      config: { id: 'config-1', enabled: true, startTime: '09:00', endTime: '17:00', message: 'Texto do aviso' }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -110,5 +110,18 @@ describe('BusinessHoursPage', () => {
     expect(screen.getByLabelText(/hora de início/i)).toHaveValue('09:00');
     expect(screen.getByLabelText(/hora de fim/i)).toHaveValue('17:00');
     expect(screen.getByLabelText(/mensagem/i)).toHaveValue('Texto do aviso');
+  });
+
+  test('em carregamento não mostra "Nenhum horário configurado ainda"', () => {
+    useBusinessHoursConfig.mockReturnValue({
+      config: { id: null, enabled: false, startTime: '08:00', endTime: '18:00', message: '' },
+      status: 'loading',
+      loading: true,
+      refresh: vi.fn(),
+    });
+    renderInShell(<BusinessHoursPage />, { path: '/configuracoes/regras/horario' });
+
+    expect(screen.queryByRole('button', { name: 'Criar horário de atendimento' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

@@ -18,6 +18,7 @@ beforeEach(() => {
       { id: 'city-1', name: 'Bahia' },
       { id: 'city-2', name: 'São Luís' },
     ],
+    status: 'ready',
     refresh: vi.fn(),
   });
 });
@@ -107,5 +108,13 @@ describe('EditContactModal', () => {
 
     expect(onClose).toHaveBeenCalled();
     expect(api.updateContact).not.toHaveBeenCalled();
+  });
+
+  test('em carregamento, o seletor de cidade mostra "Carregando…" e fica desabilitado', () => {
+    useCities.mockReturnValue({ cities: [], status: 'loading', refresh: vi.fn() });
+    render(<EditContactModal conversation={CONVERSATION} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(screen.getByLabelText(/cidade/i)).toBeDisabled();
+    expect(screen.queryByText('Nenhuma')).not.toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAiConfig } from '../hooks/useAiConfig';
 import { updateAiConfig, testAiConnection } from '../services/api';
+import { AsyncState } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
@@ -34,7 +35,7 @@ export function computeStatus({ mode, configured, hasError }) {
 
 function OpenAiConfigCard() {
   const { token } = useAuth();
-  const { config, refresh } = useAiConfig();
+  const { config, status: loadStatus, refresh } = useAiConfig();
   const [changingKey, setChangingKey] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
@@ -105,69 +106,73 @@ function OpenAiConfigCard() {
     <form onSubmit={handleSave} className={cardClass}>
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-display text-base font-semibold text-wa-text">Integração com OpenAI</h3>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE_CLASS[status]}`}>{status}</span>
-      </div>
-      <div>
-        {!showKeyInput ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-wa-muted">Chave terminando em ...{config.apiKeyLast4}</span>
-            <button
-              type="button"
-              onClick={() => setChangingKey(true)}
-              className="text-sm font-medium text-wa-link underline"
-            >
-              Trocar chave
-            </button>
-          </div>
-        ) : (
-          <>
-            <label htmlFor="ai-api-key" className={labelClass}>Chave da API</label>
-            <input
-              id="ai-api-key"
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className={inputClass}
-            />
-          </>
+        {loadStatus === 'ready' && (
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE_CLASS[status]}`}>{status}</span>
         )}
       </div>
-      <div>
-        <label htmlFor="ai-model" className={labelClass}>Modelo</label>
-        <select id="ai-model" value={model} onChange={(e) => setModel(e.target.value)} className={inputClass}>
-          <option value="">Selecione um modelo</option>
-          {modelOptions.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label htmlFor="ai-mode" className={labelClass}>Modo</label>
-        <select id="ai-mode" value={mode} onChange={(e) => setMode(e.target.value)} className={inputClass}>
-          {MODE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </div>
-      {testError && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{testError}</p>}
-      {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={handleTestConnection}
-          disabled={testing}
-          className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Testar conexão
-        </button>
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Salvar OpenAI
-        </button>
-      </div>
+      <AsyncState status={loadStatus} skeletonLines={3}>
+        <div>
+          {!showKeyInput ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-wa-muted">Chave terminando em ...{config.apiKeyLast4}</span>
+              <button
+                type="button"
+                onClick={() => setChangingKey(true)}
+                className="text-sm font-medium text-wa-link underline"
+              >
+                Trocar chave
+              </button>
+            </div>
+          ) : (
+            <>
+              <label htmlFor="ai-api-key" className={labelClass}>Chave da API</label>
+              <input
+                id="ai-api-key"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className={inputClass}
+              />
+            </>
+          )}
+        </div>
+        <div>
+          <label htmlFor="ai-model" className={labelClass}>Modelo</label>
+          <select id="ai-model" value={model} onChange={(e) => setModel(e.target.value)} className={inputClass}>
+            <option value="">Selecione um modelo</option>
+            {modelOptions.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="ai-mode" className={labelClass}>Modo</label>
+          <select id="ai-mode" value={mode} onChange={(e) => setMode(e.target.value)} className={inputClass}>
+            {MODE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+        {testError && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{testError}</p>}
+        {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleTestConnection}
+            disabled={testing}
+            className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Testar conexão
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Salvar OpenAI
+          </button>
+        </div>
+      </AsyncState>
     </form>
   );
 }

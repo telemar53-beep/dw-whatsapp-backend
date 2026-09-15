@@ -107,10 +107,10 @@ function HeaderIconButton({ label, onClick, children }) {
 function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
   const { messages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
-  const { quickReplies } = useQuickReplies();
+  const { quickReplies, status: quickRepliesStatus } = useQuickReplies();
   // O nome do provedor é configuração: o sistema roda em mais de uma empresa.
   // Pela rota pública, e não pela de admin: esta tela é do atendente comum.
-  const { name: companyName } = useCompanyName();
+  const { name: companyName, status: companyNameStatus } = useCompanyName();
   const isMine = conversation.assignedAgentId === agent.id && conversation.status !== 'closed';
   // Sem este guard, toda conversa aberta disparava GET /:id/ai-suggestion — mesmo
   // quando o atendente não é o dono (um 403 nos logs) e mesmo com a IA desligada.
@@ -334,7 +334,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           <span className="shrink-0 text-chat-faint">
             <IconLock size={13} />
           </span>
-          Este atendimento fica registrado no sistema da {companyName || 'empresa'}.
+          Este atendimento fica registrado no sistema da {companyNameStatus === 'ready' ? companyName || 'empresa' : ''}.
         </div>
 
         {timeline.map((row) => {
@@ -473,6 +473,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           <MessageInput
             onSend={handleSend}
             quickReplies={quickReplies}
+            quickRepliesStatus={quickRepliesStatus}
             replyingTo={replyingTo}
             onCancelReply={() => setReplyingTo(null)}
             draftContent={editedSuggestion ? editedSuggestion.content : undefined}

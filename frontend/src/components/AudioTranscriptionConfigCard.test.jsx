@@ -103,12 +103,14 @@ describe('AudioTranscriptionConfigCard', () => {
     expect(buscar).toHaveAttribute('title', 'Salve a chave da OpenAI primeiro');
   });
 
-  test('desabilita o botão Salvar enquanto a configuração ainda está carregando', async () => {
+  test('em carregamento mostra um esqueleto em vez do formulário, sem o botão Salvar', async () => {
     // Uma promise que nunca resolve simula a janela de carregamento em que
-    // `loading` do useAiConfig ainda é true e os states carregam os defaults.
+    // `status` do useAiConfig ainda é 'loading' e os campos ainda não existem —
+    // evita gravar um default por engano no lugar do valor real ao carregar.
     getAiConfig.mockReturnValue(new Promise(() => {}));
     render(<AudioTranscriptionConfigCard />);
 
-    expect(screen.getByRole('button', { name: /salvar/i })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /salvar/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

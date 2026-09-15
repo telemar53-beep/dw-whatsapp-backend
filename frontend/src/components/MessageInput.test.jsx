@@ -139,6 +139,15 @@ describe('MessageInput', () => {
     expect(screen.getByText(/nenhuma resposta cadastrada/i)).toBeInTheDocument();
   });
 
+  test('em carregamento não mostra "Nenhuma resposta cadastrada"', async () => {
+    render(<MessageInput onSend={vi.fn()} quickReplies={[]} quickRepliesStatus="loading" />);
+
+    await userEvent.click(screen.getByRole('button', { name: /respostas rápidas/i }));
+
+    expect(screen.queryByText(/nenhuma resposta cadastrada/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
   test('shows a reply preview bar when replyingTo is set', () => {
     render(<MessageInput onSend={vi.fn()} replyingTo={{ id: 'msg-1', content: 'Qual o valor da fatura?', direction: 'inbound' }} onCancelReply={vi.fn()} />);
     expect(screen.getByText('Qual o valor da fatura?')).toBeInTheDocument();

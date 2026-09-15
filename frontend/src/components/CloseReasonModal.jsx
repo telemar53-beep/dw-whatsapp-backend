@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
 import { useReasons } from '../hooks/useReasons';
+import { AsyncState } from './ui';
 
 function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
-  const { reasons } = useReasons();
+  const { reasons, status } = useReasons();
   // Pré-seleciona o motivo que a IA classificou, mas o atendente pode trocar:
   // a escolha final continua sendo dele. O modal é montado do zero a cada
   // "Fechar", então o valor inicial já nasce certo, sem precisar de efeito.
@@ -26,13 +27,12 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
   return (
     <WaDialog title="Motivo do contato" description="Escolha o motivo antes de encerrar o atendimento." onClose={onClose}>
       <div className="wa-scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-6 py-4">
-        {reasons.length === 0 ? (
-          <p className="text-[14.5px] text-wa-muted">
-            Nenhum motivo de contato cadastrado ainda. Peça a um administrador para cadastrar ao menos um motivo em
-            Administração → Motivos antes de encerrar este atendimento.
-          </p>
-        ) : (
-          reasons.map((reason) => (
+        <AsyncState
+          status={status}
+          isEmpty={reasons.length === 0}
+          emptyMessage="Nenhum motivo de contato cadastrado ainda. Peça a um administrador para cadastrar ao menos um motivo em Administração → Motivos antes de encerrar este atendimento."
+        >
+          {reasons.map((reason) => (
             <label key={reason.id} className="flex items-center gap-2 text-[14.5px] text-wa-text">
               <input
                 type="radio"
@@ -43,8 +43,8 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
               />
               {reason.name}
             </label>
-          ))
-        )}
+          ))}
+        </AsyncState>
         {error && <p className={waErrorClass}>{error}</p>}
       </div>
       <div className="flex shrink-0 justify-end gap-2 px-4 py-3">

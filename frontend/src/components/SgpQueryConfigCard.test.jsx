@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe('SgpQueryConfigCard', () => {
   test('shows a create button when nothing is configured yet', () => {
-    useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
+    useSgpQueryConfig.mockReturnValue({ config: { configured: false }, status: 'ready', refresh: vi.fn() });
     render(<SgpQueryConfigCard />);
 
     expect(screen.getByRole('button', { name: /criar integração/i })).toBeInTheDocument();
@@ -25,7 +25,7 @@ describe('SgpQueryConfigCard', () => {
   });
 
   test('requires a token when creating a new configuration', async () => {
-    useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
+    useSgpQueryConfig.mockReturnValue({ config: { configured: false }, status: 'ready', refresh: vi.fn() });
     render(<SgpQueryConfigCard />);
 
     await userEvent.click(screen.getByRole('button', { name: /criar integração/i }));
@@ -39,7 +39,7 @@ describe('SgpQueryConfigCard', () => {
 
   test('shows a closed summary with the base URL and status when already configured', () => {
     useSgpQueryConfig.mockReturnValue({
-      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true },
+      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true }, status: 'ready',
       refresh: vi.fn(),
     });
     render(<SgpQueryConfigCard />);
@@ -51,7 +51,7 @@ describe('SgpQueryConfigCard', () => {
 
   test('shows only the last 4 characters of an already-saved token, once editing', async () => {
     useSgpQueryConfig.mockReturnValue({
-      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true },
+      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true }, status: 'ready',
       refresh: vi.fn(),
     });
     render(<SgpQueryConfigCard />);
@@ -65,7 +65,7 @@ describe('SgpQueryConfigCard', () => {
   test('saves without a token when already configured', async () => {
     const refresh = vi.fn();
     useSgpQueryConfig.mockReturnValue({
-      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true },
+      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true }, status: 'ready',
       refresh,
     });
     api.updateSgpQueryConfig.mockResolvedValue({});
@@ -90,7 +90,7 @@ describe('SgpQueryConfigCard', () => {
 
   test('lets the attendant reveal the token field to replace it', async () => {
     useSgpQueryConfig.mockReturnValue({
-      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true },
+      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true }, status: 'ready',
       refresh: vi.fn(),
     });
     render(<SgpQueryConfigCard />);
@@ -103,7 +103,7 @@ describe('SgpQueryConfigCard', () => {
 
   test('canceling the edit form discards unsaved changes and returns to the closed summary', async () => {
     useSgpQueryConfig.mockReturnValue({
-      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true },
+      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true }, status: 'ready',
       refresh: vi.fn(),
     });
     render(<SgpQueryConfigCard />);
@@ -119,7 +119,7 @@ describe('SgpQueryConfigCard', () => {
   });
 
   test('canceling while creating discards the draft, so reopening starts blank', async () => {
-    useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
+    useSgpQueryConfig.mockReturnValue({ config: { configured: false }, status: 'ready', refresh: vi.fn() });
     render(<SgpQueryConfigCard />);
 
     await userEvent.click(screen.getByRole('button', { name: /criar integração/i }));
@@ -130,12 +130,20 @@ describe('SgpQueryConfigCard', () => {
 
     expect(screen.getByLabelText(/url de acesso ao sgp/i)).toHaveValue('');
   });
+
+  test('em carregamento não mostra o botão de criar integração', () => {
+    useSgpQueryConfig.mockReturnValue({ config: { configured: false }, status: 'loading', refresh: vi.fn() });
+    render(<SgpQueryConfigCard />);
+
+    expect(screen.queryByRole('button', { name: /criar integração/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
 });
 
 describe('SgpQueryConfigCard — sem cadastro de recebedor Pix', () => {
   test('o cartão não tem mais campo nenhum de recebedor Pix: ele sai do código do boleto', async () => {
     useSgpQueryConfig.mockReturnValue({
-      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true },
+      config: { configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true }, status: 'ready',
       refresh: vi.fn(),
     });
     render(<SgpQueryConfigCard />);

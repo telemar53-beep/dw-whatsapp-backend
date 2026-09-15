@@ -13,6 +13,7 @@ beforeEach(() => {
       { id: 'r1', name: 'Troca de senha', active: true },
       { id: 'r2', name: 'Pagamento - sem conexão', active: true },
     ],
+    status: 'ready',
     loading: false,
     refresh: vi.fn(),
   });
@@ -66,11 +67,19 @@ describe('CloseReasonModal', () => {
   });
 
   test('shows an empty-state message and keeps confirm disabled when there are no reasons', () => {
-    useReasons.mockReturnValue({ reasons: [], loading: false, refresh: vi.fn() });
+    useReasons.mockReturnValue({ reasons: [], status: 'ready', loading: false, refresh: vi.fn() });
     render(<CloseReasonModal onConfirm={vi.fn()} onClose={vi.fn()} />);
 
     expect(screen.getByText(/nenhum motivo de contato cadastrado ainda/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /confirmar encerramento/i })).toBeDisabled();
+  });
+
+  test('em carregamento não mostra "Nenhum motivo de contato cadastrado"', () => {
+    useReasons.mockReturnValue({ reasons: [], status: 'loading', loading: true, refresh: vi.fn() });
+    render(<CloseReasonModal onConfirm={vi.fn()} onClose={vi.fn()} />);
+
+    expect(screen.queryByText(/nenhum motivo de contato cadastrado/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   test('pre-selects the reason the AI suggested', () => {

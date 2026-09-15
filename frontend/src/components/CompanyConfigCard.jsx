@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCompanyConfig } from '../hooks/useCompanyConfig';
 import { updateCompanyConfig } from '../services/api';
+import { AsyncState } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
@@ -18,7 +19,7 @@ function linhasParaNomes(texto) {
 
 function CompanyConfigCard() {
   const { token } = useAuth();
-  const { config, refresh } = useCompanyConfig();
+  const { config, status, refresh } = useCompanyConfig();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [payeeNames, setPayeeNames] = useState('');
@@ -62,25 +63,27 @@ function CompanyConfigCard() {
   if (!editing) {
     return (
       <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-medium text-wa-text">Empresa</p>
-            <p className="text-sm text-wa-muted">{config.name ? config.name : 'Empresa não cadastrada'}</p>
-            <p className="text-sm text-wa-muted">
-              Nomes aceitos no comprovante:{' '}
-              {(config.acceptedPayeeNames || []).length > 0 ? config.acceptedPayeeNames.join(' · ') : 'nenhum'}
-            </p>
+        <AsyncState status={status} skeletonLines={2}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-wa-text">Empresa</p>
+              <p className="text-sm text-wa-muted">{config.name ? config.name : 'Empresa não cadastrada'}</p>
+              <p className="text-sm text-wa-muted">
+                Nomes aceitos no comprovante:{' '}
+                {(config.acceptedPayeeNames || []).length > 0 ? config.acceptedPayeeNames.join(' · ') : 'nenhum'}
+              </p>
+            </div>
+            {/* A aba tem vários "Editar": o rótulo acessível diz qual é este. */}
+            <button
+              type="button"
+              onClick={handleEditClick}
+              aria-label="Editar dados da empresa"
+              className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
+            >
+              Editar
+            </button>
           </div>
-          {/* A aba tem vários "Editar": o rótulo acessível diz qual é este. */}
-          <button
-            type="button"
-            onClick={handleEditClick}
-            aria-label="Editar dados da empresa"
-            className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
-          >
-            Editar
-          </button>
-        </div>
+        </AsyncState>
       </div>
     );
   }

@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBusinessHoursConfig } from '../../hooks/useBusinessHoursConfig';
 import { updateBusinessHoursConfig } from '../../services/api';
-import { inputClass } from '../ui';
+import { inputClass, AsyncState } from '../ui';
 import CityStatusDot from './StatusDot';
 
 function BusinessHoursSection() {
   const { token } = useAuth();
-  const { config: fetchedConfig, refresh } = useBusinessHoursConfig();
+  const { config: fetchedConfig, status, refresh } = useBusinessHoursConfig();
   const [editing, setEditing] = useState(false);
   const [savedConfig, setSavedConfig] = useState(null);
   const config = savedConfig || fetchedConfig;
@@ -124,30 +124,30 @@ function BusinessHoursSection() {
     );
   }
 
-  if (config.id === null) {
-    return (
-      <div className="flex items-center justify-between rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-        <p className="text-sm text-wa-muted">Nenhum horário configurado ainda.</p>
-        <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
-          Criar horário de atendimento
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-wa-muted">
-          Das {config.startTime} às {config.endTime}, segunda a sexta
-        </p>
-        <div className="flex items-center gap-3">
-          <CityStatusDot enabled={config.enabled} />
-          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
-            Editar
-          </button>
-        </div>
-      </div>
+      <AsyncState status={status} skeletonLines={2}>
+        {config.id === null ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-wa-muted">Nenhum horário configurado ainda.</p>
+            <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+              Criar horário de atendimento
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-wa-muted">
+              Das {config.startTime} às {config.endTime}, segunda a sexta
+            </p>
+            <div className="flex items-center gap-3">
+              <CityStatusDot enabled={config.enabled} />
+              <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+                Editar
+              </button>
+            </div>
+          </div>
+        )}
+      </AsyncState>
     </div>
   );
 }

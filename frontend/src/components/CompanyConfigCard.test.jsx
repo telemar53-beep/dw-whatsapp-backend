@@ -15,7 +15,7 @@ const CONFIG = { id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: ['Provedor
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123' });
-  useCompanyConfig.mockReturnValue({ config: CONFIG, loading: false, refresh: vi.fn() });
+  useCompanyConfig.mockReturnValue({ config: CONFIG, status: 'ready', loading: false, refresh: vi.fn() });
 });
 
 describe('CompanyConfigCard', () => {
@@ -28,7 +28,7 @@ describe('CompanyConfigCard', () => {
   });
 
   test('sem nome cadastrado, avisa que a empresa não está configurada', () => {
-    useCompanyConfig.mockReturnValue({ config: { id: null, name: '', acceptedPayeeNames: [] }, loading: false, refresh: vi.fn() });
+    useCompanyConfig.mockReturnValue({ config: { id: null, name: '', acceptedPayeeNames: [] }, status: 'ready', loading: false, refresh: vi.fn() });
     render(<CompanyConfigCard />);
     expect(screen.getByText(/não cadastrada/i)).toBeInTheDocument();
   });
@@ -52,7 +52,7 @@ describe('CompanyConfigCard', () => {
 
   test('salvar envia o nome e a lista, uma linha por nome, sem linhas vazias', async () => {
     const refresh = vi.fn();
-    useCompanyConfig.mockReturnValue({ config: CONFIG, loading: false, refresh });
+    useCompanyConfig.mockReturnValue({ config: CONFIG, status: 'ready', loading: false, refresh });
     api.updateCompanyConfig.mockResolvedValue(CONFIG);
     render(<CompanyConfigCard />);
     await userEvent.click(screen.getByRole('button', { name: /editar/i }));
@@ -81,6 +81,14 @@ describe('CompanyConfigCard', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /editar/i }));
     expect(screen.getByLabelText(/nome da empresa/i)).toHaveValue('Provedor X');
+  });
+
+  test('em carregamento não mostra o nome da empresa', () => {
+    useCompanyConfig.mockReturnValue({ config: CONFIG, status: 'loading', loading: true, refresh: vi.fn() });
+    render(<CompanyConfigCard />);
+
+    expect(screen.queryByText('Provedor X')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   test('erro do backend aparece no cartão e o formulário continua aberto', async () => {

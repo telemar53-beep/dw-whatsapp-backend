@@ -28,6 +28,7 @@ beforeEach(() => {
     items: [CLOSED_CONVERSATION],
     hasMore: false,
     loading: false,
+    status: 'ready',
     loadMore: vi.fn(),
     refresh: vi.fn(),
   });
@@ -64,6 +65,7 @@ describe('ClosedConversationsModal', () => {
       items: [CLOSED_CONVERSATION],
       hasMore: true,
       loading: false,
+      status: 'ready',
       loadMore,
       refresh: vi.fn(),
     });
@@ -72,5 +74,20 @@ describe('ClosedConversationsModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /carregar mais/i }));
 
     expect(loadMore).toHaveBeenCalled();
+  });
+
+  test('em carregamento não mostra "Nenhum atendimento encerrado"', () => {
+    useMyClosedConversations.mockReturnValue({
+      items: [],
+      hasMore: false,
+      loading: false,
+      status: 'loading',
+      loadMore: vi.fn(),
+      refresh: vi.fn(),
+    });
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+
+    expect(screen.queryByText(/nenhum atendimento encerrado/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

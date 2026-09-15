@@ -20,6 +20,7 @@ describe('TranscriptionPage', () => {
   test('mostra o cartão de transcrição com o botão certo', () => {
     useAiConfig.mockReturnValue({
       config: { configured: true, transcriptionEnabled: false, transcriptionModel: '', transcriptionMaxSeconds: 300, transcriptionMaxBytes: 26214400, transcriptionPrompt: '', transcriptionFeedAi: true },
+      status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
@@ -31,6 +32,7 @@ describe('TranscriptionPage', () => {
   test('desabilita Buscar modelos com a OpenAI ainda não configurada', () => {
     useAiConfig.mockReturnValue({
       config: { configured: false, transcriptionEnabled: false, transcriptionModel: '', transcriptionMaxSeconds: 300, transcriptionMaxBytes: 26214400, transcriptionPrompt: '', transcriptionFeedAi: true },
+      status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });

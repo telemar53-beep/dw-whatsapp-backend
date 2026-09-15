@@ -4,17 +4,25 @@ import { getConversationHistory, getMessages } from '../services/api';
 import MessageAttachment from './MessageAttachment';
 import WaDialog, { waGhostButtonClass } from './WaDialog';
 import { IconArrowLeft, IconHistory } from './icons/WaIcons';
+import { AsyncState } from './ui';
 
 function ConversationHistoryModal({ contactId, onClose }) {
   const { token } = useAuth();
   const [history, setHistory] = useState([]);
+  const [historyStatus, setHistoryStatus] = useState('loading');
   const [selected, setSelected] = useState(null);
   const [messages, setMessages] = useState([]);
 
   useEffect(() => {
+    setHistoryStatus('loading');
     getConversationHistory(contactId, token)
-      .then(setHistory)
-      .catch(() => {});
+      .then((data) => {
+        setHistory(data);
+        setHistoryStatus('ready');
+      })
+      .catch((err) => {
+        setHistoryStatus(err && err.status === 403 ? 'forbidden' : 'error');
+      });
   }, [contactId, token]);
 
   function openConversation(conversation) {
@@ -66,16 +74,14 @@ function ConversationHistoryModal({ contactId, onClose }) {
           <div className="shrink-0 px-6 pb-2 pt-5">
             <h2 className="text-[19px] leading-[26px] text-wa-text">Atendimentos anteriores</h2>
           </div>
-          <div className="wa-scroll min-h-0 flex-1 overflow-y-auto py-1">
-            {history.length === 0 ? (
-              <p className="px-6 py-4 text-[14px] text-wa-muted">Nenhum atendimento anterior encontrado.</p>
-            ) : (
+          <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-1">
+            <AsyncState status={historyStatus} isEmpty={history.length === 0} emptyMessage="Nenhum atendimento anterior encontrado.">
               <ul>
                 {history.map((conversation) => (
                   <li key={conversation.id}>
                     <button
                       onClick={() => openConversation(conversation)}
-                      className="flex w-full items-center gap-3 px-6 py-2.5 text-left transition-colors hover:bg-wa-hover"
+                      className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-wa-hover"
                     >
                       <span
                         aria-hidden="true"
@@ -95,7 +101,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
                   </li>
                 ))}
               </ul>
-            )}
+            </AsyncState>
           </div>
         </>
       )}

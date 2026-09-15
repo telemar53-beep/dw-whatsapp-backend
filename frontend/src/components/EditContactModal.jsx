@@ -6,7 +6,7 @@ import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButt
 
 function EditContactModal({ conversation, onClose, onSaved }) {
   const { token } = useAuth();
-  const { cities } = useCities();
+  const { cities, status: citiesStatus } = useCities();
   const [displayName, setDisplayName] = useState(conversation.contactDisplayName || '');
   const [cityId, setCityId] = useState(conversation.contactCityId || '');
   const [internalNote, setInternalNote] = useState(conversation.contactInternalNote || '');
@@ -57,8 +57,9 @@ function EditContactModal({ conversation, onClose, onSaved }) {
               value={cityId}
               onChange={(e) => setCityId(e.target.value)}
               className={waInputClass}
+              disabled={citiesStatus === 'loading'}
             >
-              <option value="">Nenhuma</option>
+              <option value="">{citiesStatus === 'loading' ? 'Carregando…' : 'Nenhuma'}</option>
               {cities.map((city) => (
                 <option key={city.id} value={city.id}>
                   {city.name}

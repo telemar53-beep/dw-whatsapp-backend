@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSgpQueryConfig } from '../hooks/useSgpQueryConfig';
 import { updateSgpQueryConfig } from '../services/api';
+import { AsyncState } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
@@ -10,7 +11,7 @@ const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-sur
 
 function SgpQueryConfigCard() {
   const { token } = useAuth();
-  const { config, refresh } = useSgpQueryConfig();
+  const { config, status, refresh } = useSgpQueryConfig();
   const [editing, setEditing] = useState(false);
   const [baseUrl, setBaseUrl] = useState('');
   const [app, setApp] = useState('');
@@ -89,37 +90,38 @@ function SgpQueryConfigCard() {
   }
 
   if (!editing) {
-    if (!config.configured) {
-      return (
-        <div className="flex items-center justify-between rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-          <p className="font-medium text-wa-text">Consulta ao SGP (cliente/boleto)</p>
-          <button
-            type="button"
-            onClick={handleEditClick}
-            className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
-          >
-            Criar integração
-          </button>
-        </div>
-      );
-    }
     return (
       <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-medium text-wa-text">Consulta ao SGP (cliente/boleto)</p>
-            <p className="text-sm text-wa-muted">
-              {config.baseUrl} — {config.enabled ? 'Ativo' : 'Inativo'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleEditClick}
-            className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
-          >
-            Editar
-          </button>
-        </div>
+        <AsyncState status={status} skeletonLines={2}>
+          {!config.configured ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-medium text-wa-text">Consulta ao SGP (cliente/boleto)</p>
+              <button
+                type="button"
+                onClick={handleEditClick}
+                className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
+              >
+                Criar integração
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-medium text-wa-text">Consulta ao SGP (cliente/boleto)</p>
+                <p className="text-sm text-wa-muted">
+                  {config.baseUrl} — {config.enabled ? 'Ativo' : 'Inativo'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleEditClick}
+                className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
+              >
+                Editar
+              </button>
+            </div>
+          )}
+        </AsyncState>
       </div>
     );
   }

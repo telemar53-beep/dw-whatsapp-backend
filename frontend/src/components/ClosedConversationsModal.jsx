@@ -5,7 +5,7 @@ import ConversationModal from './ConversationModal';
 import WaDialog from './WaDialog';
 
 function ClosedConversationsModal({ onClose }) {
-  const { items, hasMore, loading, loadMore } = useMyClosedConversations();
+  const { items, hasMore, loading, status, loadMore } = useMyClosedConversations();
   const [selectedConversation, setSelectedConversation] = useState(null);
 
   return (
@@ -14,6 +14,7 @@ function ClosedConversationsModal({ onClose }) {
         <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-1">
           <ClosedConversationsList
             conversations={items}
+            status={status}
             onSelect={setSelectedConversation}
             selectedId={selectedConversation?.id}
             hasMore={hasMore}

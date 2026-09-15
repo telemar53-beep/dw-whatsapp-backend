@@ -61,6 +61,14 @@ describe('ConversationHistoryModal', () => {
     expect(screen.getByText('Atendimentos anteriores')).toBeInTheDocument();
   });
 
+  test('em carregamento não mostra "Nenhum atendimento anterior"', () => {
+    api.getConversationHistory.mockReturnValue(new Promise(() => {}));
+    render(<ConversationHistoryModal contactId="contact-1" onClose={vi.fn()} />);
+
+    expect(screen.queryByText(/nenhum atendimento anterior/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
   test('calls onClose when Fechar is clicked', async () => {
     api.getConversationHistory.mockResolvedValue([]);
     const onClose = vi.fn();

@@ -27,10 +27,9 @@ function AudioTranscriptionConfigCard() {
 
   // A tela trabalha em minutos e MB; o banco guarda segundos e bytes. A conversão
   // acontece só nas duas bordas: aqui ao carregar, e no handleSave ao gravar.
-  // Enquanto `loading` for true este efeito ainda não rodou (ou está rodando de
-  // novo após um refresh) e os states acima ainda carregam os defaults do
-  // useState — o botão Salvar fica desabilitado nesse intervalo (ver `loading`
-  // no JSX) para nunca gravar um default por engano no lugar do valor real.
+  // Enquanto `status` não for 'ready' este efeito ainda não rodou e o formulário
+  // nem chega a renderizar (AsyncState mostra um esqueleto no lugar dele) — não
+  // há como gravar um default por engano no lugar do valor real.
   useEffect(() => {
     setEnabled(Boolean(config.transcriptionEnabled));
     setModel(config.transcriptionModel || '');

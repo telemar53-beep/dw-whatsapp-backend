@@ -30,7 +30,7 @@ const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFail
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
-const { emitToAgent } = require('../realtime/socket-server');
+const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { lerRecebedorDoPix, resolverRecebedorPix } = require('../payments/pix-emv');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { cartaoPix } = require('../payments/payment-card');
@@ -224,6 +224,70 @@ describe('startOutboundWorker', () => {
       conversationId: 'conv-1',
       message: { id: 'msg-2', status: 'failed' },
     });
+  });
+
+  // Teste real 2026-09-15: em Automação/Espera (sem atendente) a resposta da
+  // IA, o boleto e a linha digitável só apareciam no F5 — o worker só avisava
+  // o atendente atribuído, e ali não há nenhum. Sem dono, a mensagem vai a
+  // todos os conectados como message:new (a tela filtra pela conversa aberta).
+  test('sem atendente atribuído, emite message:new para todos no sucesso', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      contactPhoneNumber: '5511999998888',
+      assignedAgentId: null,
+    });
+    findChannelById.mockResolvedValue({
+      id: 'channel-1',
+      type: 'meta_cloud',
+      config: { phoneNumberId: '123', accessToken: 'tok' },
+    });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' });
+    recordMessageSent.mockResolvedValue({ id: 'msg-1', status: 'sent', whatsappMessageId: 'wamid.OUT1' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola cliente' });
+
+    expect(broadcast).toHaveBeenCalledWith('message:new', {
+      conversation: { id: 'conv-1', contactPhoneNumber: '5511999998888', assignedAgentId: null },
+      message: { id: 'msg-1', status: 'sent', whatsappMessageId: 'wamid.OUT1' },
+    });
+    expect(emitToAgent).not.toHaveBeenCalled();
+  });
+
+  test('sem atendente atribuído, emite message:new para todos na falha', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      contactPhoneNumber: '5511999998888',
+      assignedAgentId: null,
+    });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    metaCloudAdapter.sendTextMessage.mockRejectedValue(new Error('network error'));
+    markMessageFailed.mockResolvedValue({ id: 'msg-2', status: 'failed' });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      handler({ messageId: 'msg-2', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+    ).rejects.toThrow('network error');
+
+    expect(broadcast).toHaveBeenCalledWith('message:new', {
+      conversation: { id: 'conv-1', contactPhoneNumber: '5511999998888', assignedAgentId: null },
+      message: { id: 'msg-2', status: 'failed' },
+    });
+    expect(emitToAgent).not.toHaveBeenCalled();
+  });
+
+  test('com atendente atribuído, não faz broadcast', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      contactPhoneNumber: '5511999998888',
+      assignedAgentId: 'agent-1',
+    });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: { phoneNumberId: '123', accessToken: 'tok' } });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' });
+    recordMessageSent.mockResolvedValue({ id: 'msg-1', status: 'sent', whatsappMessageId: 'wamid.OUT1' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola cliente' });
+
+    expect(broadcast).not.toHaveBeenCalled();
   });
 
   test('falls back to findMessageById for the emit when markMessageFailed returns null (status webhook already recorded the real motivo)', async () => {

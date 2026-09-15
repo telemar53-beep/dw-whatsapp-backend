@@ -5,7 +5,7 @@ const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFail
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
-const { emitToAgent } = require('../realtime/socket-server');
+const { emitToAgent, broadcast } = require('../realtime/socket-server');
 const { lerRecebedorDoPix, resolverRecebedorPix } = require('../payments/pix-emv');
 const { isOfficialChannelType } = require('../channels/channel-types');
 const { getCompanyConfig } = require('../company/company-config.repository');
@@ -195,6 +195,21 @@ async function sendPixOrFallback({ adapter, channel, to, pixCode, metadata }) {
   return { whatsappMessageId, viaCartao: false, motivoTexto };
 }
 
+// Teste real 2026-09-15: em Automação/Espera a resposta da IA, o boleto e a
+// linha digitável só apareciam no F5. O worker avisava só o atendente
+// atribuído — e uma conversa em triagem não tem nenhum. Sem dono, a mensagem
+// vai a todos os conectados como message:new (quem está com a conversa
+// aberta acrescenta a bolha; a tela filtra pela conversa). Com dono, continua
+// message:updated só para ele, como sempre.
+function avisarTela(conversation, conversationId, message) {
+  if (!message) return;
+  if (conversation.assignedAgentId) {
+    emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
+  } else {
+    broadcast('message:new', { conversation, message });
+  }
+}
+
 function startOutboundWorker() {
   processOutboundQueue(async ({ messageId, conversationId, channelId, content, messageType, metadata, mediaPath, mediaMimeType, mediaFilename, isVoiceNote, templateName, templateLanguage, templateVariables, headerType, headerLink, repliedToMessageId }) => {
     const existingMessage = await findMessageById(messageId);
@@ -252,9 +267,7 @@ function startOutboundWorker() {
         await markPixFallbackSent(messageId, motivoTexto);
       }
       const message = await recordMessageSent(messageId, whatsappMessageId);
-      if (conversation.assignedAgentId) {
-        emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
-      }
+      avisarTela(conversation, conversationId, message);
       if (channel.type === 'baileys' && messageType === 'audio' && whatsappMessageId) {
         scheduleAudioDeliveryCheck({ channel, whatsappMessageId, conversation, mediaPath, mediaMimeType, mediaFilename, isVoiceNote });
       }
@@ -272,9 +285,7 @@ function startOutboundWorker() {
       // motivoFalha antes (ver a guarda em message.repository) - busca a linha atual
       // para o emit não sair sem mensagem nenhuma.
       const message = (await markMessageFailed(messageId, motivo)) || (await findMessageById(messageId));
-      if (conversation.assignedAgentId && message) {
-        emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
-      }
+      avisarTela(conversation, conversationId, message);
       throw err;
     }
   });

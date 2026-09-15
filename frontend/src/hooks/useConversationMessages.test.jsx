@@ -52,6 +52,54 @@ describe('useConversationMessages', () => {
     expect(result.current.messages).toEqual([{ id: 'm1', content: 'Oi' }]);
   });
 
+  // Teste real 2026-09-15: em Automação/Espera (sem atendente) a mensagem do
+  // cliente chega só como queue:new — a lista atualizava e o som tocava, mas
+  // a conversa aberta só mostrava a bolha no F5.
+  test('queue:new with a message for this conversation appends it', async () => {
+    api.getMessages.mockResolvedValue([]);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toEqual([]));
+
+    act(() => {
+      fakeSocket.trigger('queue:new', {
+        conversation: { id: 'conv-1' },
+        message: { id: 'm1', content: 'Tem carutapera?' },
+      });
+    });
+
+    expect(result.current.messages).toEqual([{ id: 'm1', content: 'Tem carutapera?' }]);
+  });
+
+  test('queue:new without a message, or for another conversation, changes nothing', async () => {
+    api.getMessages.mockResolvedValue([{ id: 'm0', content: 'Oi' }]);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toEqual([{ id: 'm0', content: 'Oi' }]));
+
+    act(() => {
+      fakeSocket.trigger('queue:new', { conversation: { id: 'conv-1' }, message: null });
+      fakeSocket.trigger('queue:new', { conversation: { id: 'conv-2' }, message: { id: 'm9', content: 'Outra' } });
+    });
+
+    expect(result.current.messages).toEqual([{ id: 'm0', content: 'Oi' }]);
+  });
+
+  // A mesma mensagem pode chegar duas vezes (o próprio envio pelo GET e o
+  // message:new do servidor, ou queue:new + message:new): nunca duplica.
+  test('message:new with an id already on screen merges instead of duplicating', async () => {
+    api.getMessages.mockResolvedValue([{ id: 'm1', content: 'Oi', status: 'sent' }]);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    act(() => {
+      fakeSocket.trigger('message:new', {
+        conversation: { id: 'conv-1' },
+        message: { id: 'm1', content: 'Oi', whatsappMessageId: 'wamid.1' },
+      });
+    });
+
+    expect(result.current.messages).toEqual([{ id: 'm1', content: 'Oi', status: 'sent', whatsappMessageId: 'wamid.1' }]);
+  });
+
   test('message:new for a different conversation is ignored', async () => {
     api.getMessages.mockResolvedValue([]);
     const { result } = renderHook(() => useConversationMessages('conv-1'));

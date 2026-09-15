@@ -5,13 +5,16 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AppShell from './components/AppShell';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-import AdminChannelsPage from './pages/AdminChannelsPage';
 import ReportsPage from './pages/ReportsPage';
 import SupervisionPage from './pages/SupervisionPage';
 import CampaignsPage from './pages/CampaignsPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import SettingsLayout from './pages/settings/SettingsLayout';
 import SettingsIndex from './pages/settings/SettingsIndex';
+import ChannelsListPage from './pages/settings/channels/ChannelsListPage';
+import ChannelDetailPage from './pages/settings/channels/ChannelDetailPage';
+import ChannelConnectionTab from './pages/settings/channels/ChannelConnectionTab';
+import ChannelBehaviorTab from './pages/settings/channels/ChannelBehaviorTab';
 import UsersPage from './pages/settings/team/UsersPage';
 import SectorsPage from './pages/settings/team/SectorsPage';
 import RolesPage from './pages/settings/team/RolesPage';
@@ -84,6 +87,12 @@ function App() {
                 }
               >
                 <Route index element={<SettingsIndex />} />
+                <Route path="canais" element={<ChannelsListPage />} />
+                <Route path="canais/:id" element={<ChannelDetailPage />}>
+                  <Route index element={<Navigate to="conexao" replace />} />
+                  <Route path="conexao" element={<ChannelConnectionTab />} />
+                  <Route path="atendimento" element={<ChannelBehaviorTab />} />
+                </Route>
                 <Route path="equipe/usuarios" element={<UsersPage />} />
                 <Route path="equipe/setores" element={<SectorsPage />} />
                 <Route path="equipe/perfis" element={<RolesPage />} />
@@ -105,8 +114,6 @@ function App() {
                 <Route path="integracoes/sgp-consulta" element={<SgpQueryPage />} />
                 <Route path="integracoes/sgp-canal" element={<SgpChannelPage />} />
                 <Route path="integracoes/openai" element={<OpenAiPage />} />
-                {/* Provisório até a Task 18: o resto cai na página antiga. */}
-                <Route path="*" element={<AdminChannelsPage />} />
               </Route>
             </Route>
 

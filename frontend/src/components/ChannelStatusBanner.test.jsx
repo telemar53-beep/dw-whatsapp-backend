@@ -46,6 +46,19 @@ describe('ChannelStatusBanner', () => {
     expect(screen.getByText(/desconectado/i)).toBeInTheDocument();
   });
 
+  // AdminChannelsPage (e o link "administração de canais") se aposentaram na
+  // Task 17: a tela de canais agora mora em Configurações.
+  test('o link leva para Configurações › Canais', () => {
+    useAuth.mockReturnValue({ agent: { role: 'admin' } });
+    useChannels.mockReturnValue({
+      channels: [{ id: 'ch1', name: 'Berg', status: 'disconnected' }],
+      loading: false,
+    });
+    renderBanner();
+    const link = screen.getByRole('link', { name: /ver em configurações › canais/i });
+    expect(link).toHaveAttribute('href', '/configuracoes/canais');
+  });
+
   test('warns an admin about a channel awaiting QR', () => {
     useAuth.mockReturnValue({ agent: { role: 'admin' } });
     useChannels.mockReturnValue({

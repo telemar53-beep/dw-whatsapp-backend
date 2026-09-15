@@ -9,7 +9,7 @@ import ClosedConversationsModal from './ClosedConversationsModal';
 import AgentAvatar from './AgentAvatar';
 import { IconBellOn, IconBellOff, IconUser, IconLogout, IconCheckCircle, IconChats, IconChevronDown } from './icons/WaIcons';
 
-// Copiada de NavRail.jsx (que some na Task 18).
+// Copiada de NavRail.jsx, que se aposentou na Task 17.
 export function iniciaisDaEmpresa(nome) {
   const palavras = String(nome || '').trim().split(/\s+/).filter(Boolean);
   if (palavras.length === 0) return '';

@@ -22,6 +22,10 @@ beforeEach(() => {
   api.listChannels.mockResolvedValue([]);
   api.listAgents.mockResolvedValue([]);
   api.listSectors.mockResolvedValue([]);
+  // A rota padrão de /configuracoes agora é a lista de Canais (Task 17), que
+  // busca a config de triagem e de IA para montar os avisos de cada canal.
+  api.getTriage.mockResolvedValue({ questionText: '', confirmationText: '', maxAttempts: 2, options: [] });
+  api.getAiConfig.mockResolvedValue({ configured: false, mode: 'disabled', model: '', nightStartTime: null, nightEndTime: null });
   api.getDashboardConversations.mockResolvedValue({ inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0 });
   api.getDashboardClosedToday.mockResolvedValue({ items: [], hasMore: false });
   api.listCampaigns.mockResolvedValue([]);
@@ -59,9 +63,6 @@ describe('rotas', () => {
     loginAs({ id: 'a1', role: 'admin' });
     window.history.pushState({}, '', '/configuracoes');
     render(<App />);
-    // Duas cascas coexistem nesta task (SideNav do AppShell + NavRail da
-    // página antiga por trás do "*" provisório de /configuracoes/*), então
-    // pode haver mais de um <nav> com o mesmo aria-label até as Tasks 8-10.
     const navs = await screen.findAllByRole('navigation', { name: /navegação principal/i });
     expect(navs.length).toBeGreaterThan(0);
     expect(window.location.pathname).toBe('/configuracoes/canais');

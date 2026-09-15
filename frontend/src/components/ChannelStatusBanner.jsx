@@ -27,8 +27,8 @@ function ChannelStatusBanner() {
           </span>
           Canal <strong className="font-semibold text-chat-text">{channel.name}</strong> está{' '}
           {channel.status === 'awaiting_qr' ? 'aguardando leitura do QR code' : 'desconectado'} —{' '}
-          <Link to="/admin/channels" className="font-medium text-chat-text underline underline-offset-2 hover:text-chat-orange">
-            ver na administração de canais
+          <Link to="/configuracoes/canais" className="font-medium text-chat-text underline underline-offset-2 hover:text-chat-orange">
+            ver em Configurações › Canais
           </Link>
         </p>
       ))}

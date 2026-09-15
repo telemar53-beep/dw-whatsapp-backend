@@ -1,12 +1,13 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { SETTINGS_SECTIONS, hasLevel } from '../../navigation/navItems';
+import { SETTINGS_SECTIONS, hasLevel, findSettingsItem } from '../../navigation/navItems';
 import { IconLock } from '../../components/icons/WaIcons';
 
 function SettingsLayout() {
   const { agent } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const selectValue = findSettingsItem(location.pathname)?.item.to ?? '';
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:flex-row">
@@ -18,10 +19,11 @@ function SettingsLayout() {
           <label htmlFor="settings-section" className="sr-only">Seção</label>
           <select
             id="settings-section"
-            value={location.pathname}
+            value={selectValue}
             onChange={(e) => navigate(e.target.value)}
             className="w-full rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-[14px] text-chat-text"
           >
+            {selectValue === '' && <option value="" disabled>Seção</option>}
             {SETTINGS_SECTIONS.map((group) => (
               <optgroup key={group.groupKey} label={group.group}>
                 {group.items.map((item) => (

@@ -14,7 +14,7 @@ function renderAt(path, agent) {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/configuracoes" element={<SettingsLayout />}>
-          <Route path="equipe/setores" element={<SettingsPage title="Setores" description="Os times" scope="global"><p>corpo setores</p></SettingsPage>} />
+          <Route path="equipe/setores/*" element={<SettingsPage title="Setores" description="Os times" scope="global"><p>corpo setores</p></SettingsPage>} />
           <Route path="integracoes/openai" element={<SettingsPage title="OpenAI" level="integrations" scope="global"><p>corpo openai</p></SettingsPage>} />
         </Route>
       </Routes>
@@ -48,5 +48,10 @@ describe('SettingsLayout', () => {
     renderAt('/configuracoes/equipe/setores', { role: 'admin' });
     await userEvent.selectOptions(screen.getByRole('combobox', { name: /seção/i }), '/configuracoes/integracoes/openai');
     expect(await screen.findByText('corpo openai')).toBeInTheDocument();
+  });
+
+  test('o select de seção mostra o item certo selecionado numa sub-rota', () => {
+    renderAt('/configuracoes/equipe/setores/algum-sub-caminho', { role: 'admin' });
+    expect(screen.getByRole('combobox', { name: /seção/i })).toHaveValue('/configuracoes/equipe/setores');
   });
 });

@@ -159,7 +159,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Maria')).not.toBeInTheDocument();
   });
 
-  test('separates conversations still in automatic triage into the IA tab', async () => {
+  test('separates conversations still in automatic triage into the Automação tab', async () => {
     useQueue.mockReturnValue({ queue: [
       { id: 'c1', contactDisplayName: 'Aguardando', triageState: null },
       { id: 'c2', contactDisplayName: 'Em Triagem', triageState: 'pending' },
@@ -171,7 +171,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Aguardando')).toBeInTheDocument();
     expect(screen.queryByText('Em Triagem')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('tab', { name: /^ia/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /automação/i }));
     expect(screen.getByText('Em Triagem')).toBeInTheDocument();
     expect(screen.queryByText('Aguardando')).not.toBeInTheDocument();
   });
@@ -195,7 +195,7 @@ describe('DashboardPage', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderDashboard();
 
-    await userEvent.click(screen.getByRole('tab', { name: /^ia/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /automação/i }));
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
 
     expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
@@ -220,7 +220,7 @@ describe('DashboardPage', () => {
 
     expect(screen.getByRole('tab', { name: /andamento/i }).textContent).toContain('1');
     expect(screen.getByRole('tab', { name: /espera/i }).textContent).toContain('1');
-    expect(screen.getByRole('tab', { name: /^ia/i }).textContent).toContain('1');
+    expect(screen.getByRole('tab', { name: /automação/i }).textContent).toContain('1');
   });
 
   test('does not show a badge on a tab with no items', () => {
@@ -229,7 +229,7 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     // Só o rótulo: nenhum número de contagem junto (o traço laranja da aba ativa não tem texto).
-    expect(screen.getByRole('tab', { name: /andamento/i }).textContent).toBe('Em andamento');
+    expect(screen.getByRole('tab', { name: /andamento/i }).textContent).toBe('Andamento');
   });
 
   test('selecting a conversation from the Espera tab opens the conversation view', async () => {

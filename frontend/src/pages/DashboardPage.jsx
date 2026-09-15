@@ -17,9 +17,9 @@ import { Tabs } from '../components/ui/Tabs';
 import { IconNewChat, IconSearch, IconLock, IconEmptyChat } from '../components/icons/WaIcons';
 
 const TABS = [
-  { value: 'inProgress', label: 'Em andamento' },
-  { value: 'waiting', label: 'Em espera' },
-  { value: 'automation', label: 'IA' },
+  { value: 'inProgress', label: 'Andamento' },
+  { value: 'waiting', label: 'Espera' },
+  { value: 'automation', label: 'Automação' },
 ];
 
 function matchesSearch(conversation, term) {
@@ -142,11 +142,9 @@ function DashboardPage() {
             </label>
           </div>
 
-          <div className="shrink-0">
+          <div className="shrink-0 px-4 pb-3 pt-1">
             <Tabs
-              look="underline"
-              size="lg"
-              align="center"
+              look="segmented"
               label="Filas"
               active={activeTab}
               onChange={setActiveTab}
@@ -186,7 +184,7 @@ function DashboardPage() {
                 onSelect={setSelectedId}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
-                emptyMessage="Nenhum atendimento com a IA."
+                emptyMessage="Nenhum atendimento em automação."
               />
             )}
           </div>

@@ -18,7 +18,14 @@ const LINE_BASE_LG = `relative flex shrink-0 items-center gap-1.5 whitespace-now
 const LINE_ACTIVE = 'font-medium text-chat-text';
 const LINE_IDLE = 'text-chat-muted hover:text-chat-text';
 
+// Segmentado: um trilho arredondado onde a aba ativa vira uma pílula laranja cheia
+// e a contagem fica na quina de cada segmento — a faixa do Atendimento.
+const SEG_BASE = `relative flex min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-full px-3 py-2 text-[14px] leading-5 transition ${FOCUS}`;
+const SEG_ACTIVE = 'bg-chat-orange font-semibold text-white shadow-[0_6px_16px_-8px_rgba(244,83,31,0.9)]';
+const SEG_IDLE = 'text-chat-muted hover:text-chat-text';
+
 function tabClass(look, active, size) {
+  if (look === 'segmented') return `${SEG_BASE} ${active ? SEG_ACTIVE : SEG_IDLE}`;
   if (look === 'underline') return `${size === 'lg' ? LINE_BASE_LG : LINE_BASE} ${active ? LINE_ACTIVE : LINE_IDLE}`;
   return `${PILL_BASE} ${active ? PILL_ACTIVE : PILL_IDLE}`;
 }
@@ -29,6 +36,17 @@ function tabClass(look, active, size) {
 // transbordo de poucos px). Quando não cabe, a faixa quebra linha em vez de rolar.
 function Count({ value, look, active, size }) {
   if (!value) return null;
+  if (look === 'segmented') {
+    return (
+      <span
+        className={`absolute -right-1 -top-1.5 flex h-[20px] min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11.5px] font-bold leading-none shadow-[0_2px_6px_rgba(0,0,0,0.35)] ${
+          active ? 'bg-white text-chat-orange' : 'bg-chat-orange text-white'
+        }`}
+      >
+        {value}
+      </span>
+    );
+  }
   if (look === 'underline') {
     const dims = size === 'lg' ? 'h-[22px] min-w-[22px] px-1.5 text-[12px]' : 'h-[18px] min-w-[18px] px-1 text-[10.5px]';
     return (
@@ -54,6 +72,7 @@ function Underline() {
 }
 
 function stripClass(look, align, size) {
+  if (look === 'segmented') return 'flex w-full gap-1 rounded-full border border-white/[0.06] bg-white/[0.08] p-1';
   if (look === 'underline') {
     return `flex min-w-0 flex-wrap ${size === 'lg' ? 'gap-x-5' : 'gap-x-2.5'} gap-y-1 border-b border-white/[0.08] px-3 ${align === 'center' ? 'justify-center' : ''}`;
   }

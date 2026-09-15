@@ -29,6 +29,8 @@ import QuickRepliesPage from './pages/settings/messages/QuickRepliesPage';
 import TemplatesPage from './pages/settings/messages/TemplatesPage';
 import AssignmentPage from './pages/settings/rules/AssignmentPage';
 import BusinessHoursPage from './pages/settings/rules/BusinessHoursPage';
+import IntegrationsLayout from './pages/settings/integrations/IntegrationsLayout';
+import SgpIntegrationLayout from './pages/settings/integrations/SgpIntegrationLayout';
 import SgpQueryPage from './pages/settings/integrations/SgpQueryPage';
 import SgpChannelPage from './pages/settings/integrations/SgpChannelPage';
 import OpenAiPage from './pages/settings/integrations/OpenAiPage';
@@ -119,9 +121,15 @@ function App() {
                 <Route path="automacao/transcricao" element={<TranscriptionPage />} />
                 <Route path="automacao/noturno" element={<NightModePage />} />
                 <Route path="automacao/ferramentas" element={<AiToolsPage />} />
-                <Route path="integracoes/sgp-consulta" element={<SgpQueryPage />} />
-                <Route path="integracoes/sgp-canal" element={<SgpChannelPage />} />
-                <Route path="integracoes/openai" element={<OpenAiPage />} />
+                <Route path="integracoes" element={<IntegrationsLayout />}>
+                  <Route index element={<Navigate to="sgp/consultas" replace />} />
+                  <Route path="sgp" element={<SgpIntegrationLayout />}>
+                    <Route index element={<Navigate to="consultas" replace />} />
+                    <Route path="consultas" element={<SgpQueryPage />} />
+                    <Route path="envios" element={<SgpChannelPage />} />
+                  </Route>
+                  <Route path="openai" element={<OpenAiPage />} />
+                </Route>
               </Route>
             </Route>
 

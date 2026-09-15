@@ -68,10 +68,9 @@ export const SETTINGS_SECTIONS = [
   },
   {
     group: 'Integrações', groupKey: 'integracoes', icon: IconPlug,
+    // Uma entrada só: SGP (consultas e envios) e OpenAI são cartões dentro da página.
     items: [
-      { key: 'sgp-consulta', label: 'Consulta ao SGP', to: s('integracoes/sgp-consulta'), level: 'integrations', description: 'O chat consulta cliente, contrato e fatura no SGP.' },
-      { key: 'sgp-canal', label: 'SGP por canal', to: s('integracoes/sgp-canal'), level: 'integrations', description: 'O SGP dispara mensagens pelo chat com uma chave por canal.' },
-      { key: 'openai', label: 'OpenAI', to: s('integracoes/openai'), level: 'integrations', description: 'Credencial, modelo e teste de conexão da IA.' },
+      { key: 'integracoes', label: 'Integrações', to: s('integracoes'), level: 'integrations', description: 'SGP (consultas e envios por canal) e OpenAI.' },
     ],
   },
   {
@@ -96,6 +95,8 @@ export const LEGACY_REDIRECTS = [
   { from: '/campaigns', to: '/campanhas' },
   { from: '/campaigns/:id', to: '/campanhas/:id' },
   { from: s('regras/atribuicao'), to: s('mensagens/abertura-encerramento') },
+  { from: s('integracoes/sgp-consulta'), to: s('integracoes/sgp/consultas') },
+  { from: s('integracoes/sgp-canal'), to: s('integracoes/sgp/envios') },
 ];
 
 export function firstAllowedSettingsPath(agent) {

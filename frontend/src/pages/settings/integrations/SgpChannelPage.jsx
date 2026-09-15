@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import SettingsPage from '../SettingsPage';
+import ProtectedRoute from '../../../components/ProtectedRoute';
 import { Button, Card, AsyncState } from '../../../components/ui';
 import { useSgpIntegrations } from '../../../hooks/useSgpIntegrations';
 import { useChannels } from '../../../hooks/useChannels';
@@ -20,38 +20,62 @@ function SgpChannelPage() {
   const consultaDesligada = queryStatus === 'ready' && query.config.configured && !query.config.enabled;
 
   return (
-    <SettingsPage
-      title="SGP por canal"
-      description="O SGP dispara mensagens pelo chat com uma chave de API por canal."
-      scope="channel"
-      level="integrations"
-      action={!creating && <Button onClick={() => setCreating(true)}>Nova integração SGP</Button>}
-    >
-      {consultaDesligada && (
-        <Card tone="warn" title="A Consulta ao SGP está desativada">
-          <p className="text-[13.5px] text-wa-text">
-            O painel na conversa e a IA não consultam o SGP enquanto ela estiver desligada. Ative em{' '}
-            <Link to="/configuracoes/integracoes/sgp-consulta" className="font-medium text-wa-link underline">Consulta ao SGP</Link>.
+    <ProtectedRoute level="integrations" areaLabel="SGP por canal">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-[60ch] text-[13.5px] leading-[19px] text-wa-muted">
+            O SGP dispara mensagens pelo chat com uma chave de API por canal.
           </p>
-        </Card>
-      )}
-      {creating && (
-        <CreateSgpIntegrationForm
-          channels={channels}
-          integrations={integrations}
-          templates={approvedTemplates}
-          onCreated={() => { setCreating(false); refresh(); }}
-          onCancel={() => setCreating(false)}
-        />
-      )}
-      <AsyncState status={status} error={error} onRetry={refresh} isEmpty={integrations.length === 0} emptyMessage="Nenhuma integração SGP por canal ainda.">
-        <div className="space-y-3">
-          {integrations.map((integration) => (
-            <SgpIntegrationCard key={integration.id} integration={integration} channels={channels} templates={approvedTemplates} onChanged={refresh} />
-          ))}
+          {!creating && (
+            <Button onClick={() => setCreating(true)} className="!py-2">
+              Nova integração SGP
+            </Button>
+          )}
         </div>
-      </AsyncState>
-    </SettingsPage>
+        {consultaDesligada && (
+          <Card tone="warn" title="A Consulta ao SGP está desativada">
+            <p className="text-[13.5px] text-wa-text">
+              O painel na conversa e a IA não consultam o SGP enquanto ela estiver desligada. Ative em{' '}
+              <Link to="/configuracoes/integracoes/sgp/consultas" className="font-medium text-wa-link underline">
+                Consulta ao SGP
+              </Link>
+              .
+            </p>
+          </Card>
+        )}
+        {creating && (
+          <CreateSgpIntegrationForm
+            channels={channels}
+            integrations={integrations}
+            templates={approvedTemplates}
+            onCreated={() => {
+              setCreating(false);
+              refresh();
+            }}
+            onCancel={() => setCreating(false)}
+          />
+        )}
+        <AsyncState
+          status={status}
+          error={error}
+          onRetry={refresh}
+          isEmpty={integrations.length === 0}
+          emptyMessage="Nenhuma integração SGP por canal ainda."
+        >
+          <div className="space-y-3">
+            {integrations.map((integration) => (
+              <SgpIntegrationCard
+                key={integration.id}
+                integration={integration}
+                channels={channels}
+                templates={approvedTemplates}
+                onChanged={refresh}
+              />
+            ))}
+          </div>
+        </AsyncState>
+      </div>
+    </ProtectedRoute>
   );
 }
 

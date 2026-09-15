@@ -45,7 +45,7 @@ describe('SgpQueryConfigCard', () => {
     render(<SgpQueryConfigCard />);
 
     expect(screen.getByText('https://x.example', { exact: false })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^editar$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^editar conexão$/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/url de acesso ao sgp/i)).not.toBeInTheDocument();
   });
 
@@ -56,7 +56,7 @@ describe('SgpQueryConfigCard', () => {
     });
     render(<SgpQueryConfigCard />);
 
-    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^editar conexão$/i }));
 
     expect(screen.getByText(/5c7a/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/^token$/i)).not.toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('SgpQueryConfigCard', () => {
     api.updateSgpQueryConfig.mockResolvedValue({});
     render(<SgpQueryConfigCard />);
 
-    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^editar conexão$/i }));
     await userEvent.click(screen.getByRole('button', { name: /^salvar consulta ao sgp$/i }));
 
     await waitFor(() =>
@@ -95,7 +95,7 @@ describe('SgpQueryConfigCard', () => {
     });
     render(<SgpQueryConfigCard />);
 
-    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^editar conexão$/i }));
     await userEvent.click(screen.getByRole('button', { name: /trocar token/i }));
 
     expect(screen.getByLabelText(/^token$/i)).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe('SgpQueryConfigCard', () => {
     });
     render(<SgpQueryConfigCard />);
 
-    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^editar conexão$/i }));
     const urlInput = screen.getByLabelText(/url de acesso ao sgp/i);
     await userEvent.clear(urlInput);
     await userEvent.type(urlInput, 'https://rascunho.example');
@@ -150,7 +150,7 @@ describe('SgpQueryConfigCard — sem cadastro de recebedor Pix', () => {
 
     expect(screen.queryByText(/recebedor pix/i)).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^editar conexão$/i }));
 
     expect(screen.queryByLabelText(/nome do recebedor/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/chave pix da empresa/i)).not.toBeInTheDocument();

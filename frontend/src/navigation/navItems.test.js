@@ -36,7 +36,7 @@ describe('NAV_ITEMS', () => {
 describe('SETTINGS_SECTIONS', () => {
   test('cada página tem rota sob /configuracoes e um nível válido', () => {
     const items = SETTINGS_SECTIONS.flatMap((g) => g.items);
-    expect(items.length).toBe(16);
+    expect(items.length).toBe(14);
     items.forEach((item) => {
       expect(item.to.startsWith('/configuracoes/')).toBe(true);
       expect(['admin', 'integrations']).toContain(item.level);
@@ -61,9 +61,9 @@ describe('firstAllowedSettingsPath', () => {
 });
 
 describe('LEGACY_REDIRECTS', () => {
-  test('cobre as seis rotas antigas', () => {
+  test('cobre as oito rotas antigas', () => {
     expect(LEGACY_REDIRECTS.map((r) => r.from).sort()).toEqual(
-      ['/admin/channels', '/admin/dashboard', '/campaigns', '/campaigns/:id', '/metrics', '/configuracoes/regras/atribuicao'].sort()
+      ['/admin/channels', '/admin/dashboard', '/campaigns', '/campaigns/:id', '/metrics', '/configuracoes/regras/atribuicao', '/configuracoes/integracoes/sgp-consulta', '/configuracoes/integracoes/sgp-canal'].sort()
     );
   });
 });

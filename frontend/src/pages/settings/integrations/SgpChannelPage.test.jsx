@@ -234,7 +234,7 @@ describe('SgpChannelPage', () => {
     useSgpQueryConfig.mockReturnValue({ config: { configured: true, enabled: false }, status: 'ready', refresh: vi.fn() });
     renderInShell(<SgpChannelPage />, { path: PATH });
     expect(screen.getByText(/consulta ao sgp está desativada/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /consulta ao sgp/i })).toHaveAttribute('href', '/configuracoes/integracoes/sgp-consulta');
+    expect(screen.getByRole('link', { name: /consulta ao sgp/i })).toHaveAttribute('href', '/configuracoes/integracoes/sgp/consultas');
   });
 
   test('gerente sem a flag vê acesso negado', () => {

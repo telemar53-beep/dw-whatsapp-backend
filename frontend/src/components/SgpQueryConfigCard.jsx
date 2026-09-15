@@ -7,7 +7,7 @@ import { AsyncState } from './ui';
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
-const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+const cardClass = 'space-y-3 rounded-[14px] border border-wa-border bg-black/[0.12] px-4 py-4 sm:px-5';
 
 function SgpQueryConfigCard() {
   const { token } = useAuth();
@@ -91,44 +91,69 @@ function SgpQueryConfigCard() {
 
   if (!editing) {
     return (
-      <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+      <section className="rounded-[14px] border border-wa-border bg-black/[0.12] px-4 py-4 sm:px-5">
+        <h3 className="text-[15px] font-semibold text-wa-text">Conexão para consultas</h3>
         <AsyncState status={status} skeletonLines={2}>
           {!config.configured ? (
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-medium text-wa-text">Consulta ao SGP (cliente/boleto)</p>
+            <div className="mt-3 space-y-3">
+              <p className="text-[13.5px] text-wa-muted">
+                O chat ainda não consulta o SGP. Informe o endereço, o app e o token para o painel da conversa e a IA
+                buscarem cliente, contrato e fatura.
+              </p>
               <button
                 type="button"
                 onClick={handleEditClick}
-                className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
+                className="inline-flex h-9 items-center rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[13.5px] font-medium text-wa-text transition hover:bg-wa-panel"
               >
                 Criar integração
               </button>
             </div>
           ) : (
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-medium text-wa-text">Consulta ao SGP (cliente/boleto)</p>
-                <p className="text-sm text-wa-muted">
-                  {config.baseUrl} — {config.enabled ? 'Ativo' : 'Inativo'}
-                </p>
-              </div>
+            <>
+              <dl className="mt-2 divide-y divide-wa-border">
+                <div className="flex items-center justify-between gap-3 py-2.5">
+                  <dt className="w-[38%] shrink-0 text-[13px] text-wa-muted">Endereço do SGP</dt>
+                  <dd className="min-w-0 flex-1 truncate text-[13.5px] text-wa-text" title={config.baseUrl}>
+                    {config.baseUrl}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2.5">
+                  <dt className="w-[38%] shrink-0 text-[13px] text-wa-muted">App</dt>
+                  <dd className="min-w-0 flex-1 truncate text-[13.5px] text-wa-text">{config.app}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-2.5">
+                  <dt className="w-[38%] shrink-0 text-[13px] text-wa-muted">Situação</dt>
+                  <dd className="flex min-w-0 flex-1 items-center gap-2 text-[13.5px] text-wa-text">
+                    <span aria-hidden="true" className={`h-2 w-2 rounded-full ${config.enabled ? 'bg-wa-chip-text' : 'bg-wa-border-strong'}`} />
+                    {config.enabled ? 'Ativa' : 'Inativa'}
+                  </dd>
+                </div>
+                <div className="flex items-start justify-between gap-3 py-2.5">
+                  <dt className="w-[38%] shrink-0 text-[13px] text-wa-muted">Credencial</dt>
+                  <dd className="min-w-0 flex-1 text-[13.5px] text-wa-text">
+                    <span className="tracking-[0.2em]">••••••••••</span>
+                    {config.tokenLast4 ? <span className="tracking-normal">{config.tokenLast4}</span> : null}
+                    <span className="block text-[12.5px] text-wa-muted">Configurada</span>
+                  </dd>
+                </div>
+              </dl>
               <button
                 type="button"
                 onClick={handleEditClick}
-                className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
+                className="mt-3 inline-flex h-9 items-center rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[13.5px] font-medium text-wa-text transition hover:bg-wa-panel"
               >
-                Editar
+                Editar conexão
               </button>
-            </div>
+            </>
           )}
         </AsyncState>
-      </div>
+      </section>
     );
   }
 
   return (
     <form onSubmit={handleSave} className={cardClass}>
-      <h3 className="font-display text-base font-semibold text-wa-text">Consulta ao SGP (cliente/boleto)</h3>
+      <h3 className="text-[15px] font-semibold text-wa-text">Conexão para consultas</h3>
       <div>
         <label htmlFor="sgp-query-base-url" className={labelClass}>URL de acesso ao SGP</label>
         <input id="sgp-query-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className={inputClass} />

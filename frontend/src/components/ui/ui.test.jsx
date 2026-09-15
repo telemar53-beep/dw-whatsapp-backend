@@ -89,4 +89,23 @@ describe('ui primitives', () => {
     render(<DangerZone><Button variant="danger">Excluir</Button></DangerZone>);
     expect(screen.getByRole('heading', { name: /ações com cuidado/i })).toBeInTheDocument();
   });
+
+  test('Múltiplas DangerZones têm ids distintos e aria-labelledby correto', () => {
+    render(
+      <>
+        <DangerZone><Button variant="danger">Excluir</Button></DangerZone>
+        <DangerZone title="Outra ação"><Button variant="danger">Reset</Button></DangerZone>
+      </>
+    );
+    const headings = screen.getAllByRole('heading', { level: 2 });
+    expect(headings).toHaveLength(2);
+    const id1 = headings[0].id;
+    const id2 = headings[1].id;
+    expect(id1).toBeTruthy();
+    expect(id2).toBeTruthy();
+    expect(id1).not.toBe(id2);
+    const sections = screen.getAllByRole('region');
+    expect(sections[0]).toHaveAttribute('aria-labelledby', id1);
+    expect(sections[1]).toHaveAttribute('aria-labelledby', id2);
+  });
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
@@ -11,16 +11,14 @@ import MyConversationsList from '../components/MyConversationsList';
 import ConversationView from '../components/ConversationView';
 import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
-import ProfileModal from '../components/ProfileModal';
 import StartConversationModal from '../components/StartConversationModal';
 import TeamPanel from '../components/TeamPanel';
-import NavRail from '../components/NavRail';
 import { IconNewChat, IconSearch, IconLock, IconEmptyChat } from '../components/icons/WaIcons';
 
 const TABS = [
-  { value: 'inProgress', label: 'Andamento' },
-  { value: 'waiting', label: 'Espera' },
-  { value: 'automation', label: 'Automação' },
+  { value: 'inProgress', label: 'Em andamento' },
+  { value: 'waiting', label: 'Em espera' },
+  { value: 'automation', label: 'Em automação' },
 ];
 
 function matchesSearch(conversation, term) {
@@ -40,6 +38,7 @@ function DashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { profileVersion, setConversationOpen } = useOutletContext();
   const queue = useQueue();
   const myConversations = useMyConversations();
   const { name: companyName } = useCompanyName();
@@ -58,8 +57,6 @@ function DashboardPage() {
   }
 
   const [transferringId, setTransferringId] = useState(null);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [teamPanelKey, setTeamPanelKey] = useState(0);
   const [startingConversation, setStartingConversation] = useState(false);
   const [pendingConversation, setPendingConversation] = useState(null);
 
@@ -82,6 +79,11 @@ function DashboardPage() {
     (pendingConversation && pendingConversation.id === selectedId ? pendingConversation : null);
 
   useEffect(() => {
+    setConversationOpen(Boolean(selectedConversation));
+    return () => setConversationOpen(false);
+  }, [Boolean(selectedConversation), setConversationOpen]);
+
+  useEffect(() => {
     if (pendingConversation && [...queue, ...myConversations].some((c) => c.id === pendingConversation.id)) {
       setPendingConversation(null);
     }
@@ -99,28 +101,12 @@ function DashboardPage() {
   }, []);
 
   return (
-    <div className="chat-theme relative flex h-dvh flex-col overflow-hidden bg-chat-canvas font-sans text-chat-text">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[44%] top-[2%] h-[38rem] w-[40rem] rounded-full bg-chat-copper/55 blur-[150px]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-[36%] top-[40%] h-[30rem] w-[32rem] rounded-full bg-chat-copper/35 blur-[150px]"
-      />
-
+    <div className="flex min-h-0 flex-1 flex-col">
       <div data-testid="channel-banner-wrapper" className={`relative ${selectedConversation ? 'hidden md:block' : ''}`}>
         <ChannelStatusBanner />
       </div>
 
-      <div className="relative z-10 flex min-h-0 flex-1 gap-0 p-0 md:gap-3 md:p-3">
-        <NavRail
-          active="conversas"
-          onConversasClick={() => setSelectedId(null)}
-          onProfileClick={() => setProfileOpen(true)}
-          mobileHidden={Boolean(selectedConversation)}
-        />
-
+      <div className="flex min-h-0 flex-1 gap-0 md:gap-3">
         <aside
           className={`${
             selectedConversation ? 'hidden' : 'flex'
@@ -195,7 +181,7 @@ function DashboardPage() {
                 onSelect={setSelectedId}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
-                emptyMessage="Nenhuma conversa aguardando."
+                emptyMessage="Nenhum atendimento em espera."
               />
             )}
             {activeTab === 'automation' && (
@@ -204,12 +190,12 @@ function DashboardPage() {
                 onSelect={setSelectedId}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
-                emptyMessage="Nenhuma conversa em triagem automática."
+                emptyMessage="Nenhum atendimento em automação."
               />
             )}
           </div>
 
-          <TeamPanel key={teamPanelKey} />
+          <TeamPanel key={profileVersion} />
         </aside>
 
         <main
@@ -244,9 +230,6 @@ function DashboardPage() {
       </div>
 
       {transferringId && <TransferModal conversationId={transferringId} onClose={() => setTransferringId(null)} />}
-      {profileOpen && (
-        <ProfileModal onClose={() => setProfileOpen(false)} onProfileUpdated={() => setTeamPanelKey((k) => k + 1)} />
-      )}
       {startingConversation && (
         <StartConversationModal
           onClose={() => setStartingConversation(false)}

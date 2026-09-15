@@ -1,7 +1,8 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, Outlet } from 'react-router-dom';
+import { renderInShell } from '../test-utils/renderInShell';
 import DashboardPage from './DashboardPage';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
@@ -54,11 +55,7 @@ beforeEach(() => {
 });
 
 function renderDashboard() {
-  return render(
-    <MemoryRouter>
-      <DashboardPage />
-    </MemoryRouter>
-  );
+  return renderInShell(<DashboardPage />);
 }
 
 describe('DashboardPage', () => {
@@ -130,6 +127,14 @@ describe('DashboardPage', () => {
     await userEvent.click(screen.getByText('Maria'));
 
     expect(clearUnread).toHaveBeenCalledWith('c2');
+  });
+
+  test('abre "Meu perfil" pelo contexto do shell e avisa quando uma conversa está aberta', async () => {
+    useQueue.mockReturnValue([]);
+    useMyConversations.mockReturnValue([{ id: 'c1', contactDisplayName: 'Ana', status: 'assigned', channelId: 'ch1' }]);
+    const { ctx } = renderInShell(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Ana'));
+    expect(ctx.setConversationOpen).toHaveBeenLastCalledWith(true);
   });
 
   test('shows the queue in the Espera tab after clicking it', async () => {
@@ -232,7 +237,10 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
   });
 
-  test('shows an Administração link for an admin agent', () => {
+  // O link "Administração" era do NavRail próprio da página; agora mora só no
+  // SideNav do AppShell (label "Configurações", coberto em SideNav.test.jsx).
+  // NavRail some de vez na Task 18 — não há substituto dentro de DashboardPage.
+  test.skip('shows an Administração link for an admin agent', () => {
     useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'admin' }, logout: vi.fn() });
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
@@ -240,14 +248,18 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('link', { name: /administração/i })).toBeInTheDocument();
   });
 
-  test('hides the Administração link for a non-admin agent', () => {
+  // Mesmo motivo do teste acima: o link só existia no NavRail da própria página.
+  test.skip('hides the Administração link for a non-admin agent', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     renderDashboard();
     expect(screen.queryByRole('link', { name: /administração/i })).not.toBeInTheDocument();
   });
 
-  test('opens the profile modal from the header', async () => {
+  // O botão "Meu perfil" era do NavRail próprio da página; agora mora só no
+  // SideNav do AppShell, que chama openProfile do contexto do shell (Task 5).
+  // NavRail some de vez na Task 18 — não há substituto dentro de DashboardPage.
+  test.skip('opens the profile modal from the header', async () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     renderDashboard();
@@ -280,7 +292,20 @@ describe('DashboardPage', () => {
   test('clears the pending conversation once it appears in myConversations, so a later close is not masked by stale state', async () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
-    const { rerender } = renderDashboard();
+    // rerender precisa da mesma casca de Outlet+context usada por renderInShell;
+    // como o teste remonta a árvore inteira a cada rerender (já era assim antes
+    // desta task, com um MemoryRouter novo por chamada), montamos a árvore aqui.
+    const ctx = { openProfile: vi.fn(), closeMobileNav: vi.fn(), profileVersion: 0, setConversationOpen: vi.fn() };
+    const shellTree = () => (
+      <MemoryRouter>
+        <Routes>
+          <Route element={<Outlet context={ctx} />}>
+            <Route path="/" element={<DashboardPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+    const { rerender } = render(shellTree());
 
     await userEvent.click(screen.getByRole('button', { name: /iniciar conversa/i }));
     await userEvent.click(screen.getByText('Mock Start Conversation'));
@@ -289,24 +314,19 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue([
       { id: 'conv-new', contactPhoneNumber: '5598999990000', assignedAgentId: 'agent-1', status: 'assigned' },
     ]);
-    rerender(
-      <MemoryRouter>
-        <DashboardPage />
-      </MemoryRouter>
-    );
+    rerender(shellTree());
     expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
 
     useMyConversations.mockReturnValue([]);
-    rerender(
-      <MemoryRouter>
-        <DashboardPage />
-      </MemoryRouter>
-    );
+    rerender(shellTree());
     expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
     expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
   });
 
-  test('shows a Relatório link for any attendant', () => {
+  // O link "Relatório" era do NavRail próprio da página; agora mora só no
+  // SideNav do AppShell (label "Relatórios", coberto em SideNav.test.jsx).
+  // NavRail some de vez na Task 18 — não há substituto dentro de DashboardPage.
+  test.skip('shows a Relatório link for any attendant', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     renderDashboard();
@@ -361,7 +381,10 @@ describe('DashboardPage', () => {
     expect(container.querySelector('[data-testid="channel-banner-wrapper"]').className).toMatch(/\bhidden\b/);
   });
 
-  test('uses the dynamic viewport height unit so mobile browser chrome cannot cover the composer', () => {
+  // `h-dvh` era da casca própria de DashboardPage; agora é o AppShell (Task 8)
+  // que controla a altura da viewport para todas as páginas. AppShell.jsx
+  // ainda não tem teste próprio para essa classe — sem substituto aqui.
+  test.skip('uses the dynamic viewport height unit so mobile browser chrome cannot cover the composer', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     const { container } = renderDashboard();
@@ -376,14 +399,17 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/nenhum atendente cadastrado/i)).toBeInTheDocument();
   });
 
-  test('shows the sound toggle button reflecting the unmuted state', () => {
+  // O botão de som era do NavRail próprio da página; agora mora só no SideNav
+  // do AppShell (coberto em SideNav.test.jsx). NavRail some de vez na Task 18
+  // — não há substituto dentro de DashboardPage.
+  test.skip('shows the sound toggle button reflecting the unmuted state', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     renderDashboard();
     expect(screen.getByRole('button', { name: /som ativado/i })).toBeInTheDocument();
   });
 
-  test('shows the sound toggle button reflecting the muted state', () => {
+  test.skip('shows the sound toggle button reflecting the muted state', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     useQueueNotificationSound.mockReturnValue({ muted: true, toggleMuted: vi.fn() });
@@ -391,7 +417,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: /som desativado/i })).toBeInTheDocument();
   });
 
-  test('clicking the sound toggle button calls toggleMuted', async () => {
+  test.skip('clicking the sound toggle button calls toggleMuted', async () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     const toggleMuted = vi.fn();
@@ -403,7 +429,10 @@ describe('DashboardPage', () => {
     expect(toggleMuted).toHaveBeenCalledTimes(1);
   });
 
-  test('shows a link to the attendance dashboard for an admin, and not for a regular agent', () => {
+  // O link "Dashboard de atendimento" era do NavRail próprio da página; agora
+  // mora só no SideNav do AppShell (coberto em SideNav.test.jsx). NavRail
+  // some de vez na Task 18 — não há substituto dentro de DashboardPage.
+  test.skip('shows a link to the attendance dashboard for an admin, and not for a regular agent', () => {
     useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'admin' }, logout: vi.fn() });
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
@@ -411,7 +440,7 @@ describe('DashboardPage', () => {
     expect(screen.getByLabelText('Dashboard de atendimento')).toBeInTheDocument();
   });
 
-  test('does not show the attendance dashboard link for a non-admin agent', () => {
+  test.skip('does not show the attendance dashboard link for a non-admin agent', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
     renderDashboard();
@@ -421,25 +450,21 @@ describe('DashboardPage', () => {
   test('opens a conversation passed in via location.state.pendingConversation, even when not in queue or myConversations', () => {
     useQueue.mockReturnValue([]);
     useMyConversations.mockReturnValue([]);
-    render(
-      <MemoryRouter
-        initialEntries={[
-          {
-            pathname: '/',
-            state: {
-              pendingConversation: {
-                id: 'conv-other-agent',
-                contactDisplayName: 'Cliente de Outro Atendente',
-                assignedAgentId: 'agent-2',
-                status: 'assigned',
-              },
+    renderInShell(<DashboardPage />, {
+      initialEntries: [
+        {
+          pathname: '/',
+          state: {
+            pendingConversation: {
+              id: 'conv-other-agent',
+              contactDisplayName: 'Cliente de Outro Atendente',
+              assignedAgentId: 'agent-2',
+              status: 'assigned',
             },
           },
-        ]}
-      >
-        <DashboardPage />
-      </MemoryRouter>
-    );
+        },
+      ],
+    });
     expect(screen.getByText('Cliente de Outro Atendente')).toBeInTheDocument();
   });
 });

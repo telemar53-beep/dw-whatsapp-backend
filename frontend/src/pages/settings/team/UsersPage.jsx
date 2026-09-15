@@ -1,20 +1,9 @@
-import { useState } from 'react';
-import SettingsPage from '../SettingsPage';
-import { Button } from '../../../components/ui';
 import AgentsAdminTab from '../../../components/AgentsAdminTab';
 
+// O cartão é dono do botão "Adicionar usuário" e dos filtros; o título e as
+// abas vêm do TeamLayout.
 function UsersPage() {
-  const [creating, setCreating] = useState(false);
-  return (
-    <SettingsPage
-      title="Usuários"
-      description="Quem entra no sistema: atendentes, gerentes e administradores."
-      scope="global"
-      action={!creating && <Button onClick={() => setCreating(true)}>Criar usuário</Button>}
-    >
-      <AgentsAdminTab creating={creating} onCreatingChange={setCreating} />
-    </SettingsPage>
-  );
+  return <AgentsAdminTab />;
 }
 
 export default UsersPage;

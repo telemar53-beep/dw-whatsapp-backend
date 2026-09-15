@@ -41,16 +41,19 @@ function SettingsLayout() {
         <nav aria-label="Seções de configurações" className="chat-scroll hidden min-h-0 flex-1 overflow-y-auto px-2 pb-4 lg:block">
           {SETTINGS_SECTIONS.map((group) => {
             const GroupIcon = group.icon;
+            // Grupo de um item só com o mesmo nome (Equipe e acesso, Empresa): o
+            // item vira a própria entrada, com o ícone do grupo, sem repetir o título.
+            const single = group.items.length === 1 && group.items[0].label === group.group;
             return (
               <div key={group.groupKey} className="mt-4 first:mt-1">
-                <p className="flex items-center gap-2 px-2.5 pb-1.5 text-[12.5px] font-medium text-chat-muted">
+                {!single && <p className="flex items-center gap-2 px-2.5 pb-1.5 text-[12.5px] font-medium text-chat-muted">
                   {GroupIcon && (
                     <span aria-hidden="true" className="shrink-0 text-chat-copper">
                       <GroupIcon size={15} />
                     </span>
                   )}
                   <span className="min-w-0 truncate">{group.group}</span>
-                </p>
+                </p>}
                 {group.items.map((item) => {
                   const allowed = hasLevel(agent, item.level);
                   return (
@@ -68,6 +71,11 @@ function SettingsLayout() {
                       {({ isActive }) => (
                         <>
                           {isActive && <span aria-hidden="true" className="absolute left-0 h-4 w-[3px] rounded-full bg-chat-orange" />}
+                          {single && GroupIcon && (
+                            <span aria-hidden="true" className="shrink-0 text-chat-copper">
+                              <GroupIcon size={15} />
+                            </span>
+                          )}
                           <span className="min-w-0 truncate">{item.label}</span>
                           {!allowed && <span className="ml-auto shrink-0 text-chat-muted"><IconLock size={13} /></span>}
                         </>

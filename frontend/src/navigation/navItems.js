@@ -64,10 +64,9 @@ export const SETTINGS_SECTIONS = [
   },
   {
     group: 'Equipe e acesso', groupKey: 'equipe', icon: IconTeam,
+    // Uma entrada só: Usuários, Setores e Perfis são abas dentro da página.
     items: [
-      { key: 'usuarios', label: 'Usuários', to: s('equipe/usuarios'), level: 'admin', description: 'Quem entra no sistema: atendentes, gerentes e administradores.' },
-      { key: 'setores', label: 'Setores', to: s('equipe/setores'), level: 'admin', description: 'Os times para onde um atendimento pode ir.' },
-      { key: 'perfis', label: 'Perfis de acesso', to: s('equipe/perfis'), level: 'admin', description: 'O que cada perfil pode ver e fazer.' },
+      { key: 'equipe', label: 'Equipe e acesso', to: s('equipe'), level: 'admin', description: 'Usuários, setores e perfis de acesso.' },
     ],
   },
   {

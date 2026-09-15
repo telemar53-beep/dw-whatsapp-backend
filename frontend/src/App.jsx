@@ -15,6 +15,7 @@ import ChannelsListPage from './pages/settings/channels/ChannelsListPage';
 import ChannelDetailPage from './pages/settings/channels/ChannelDetailPage';
 import ChannelConnectionTab from './pages/settings/channels/ChannelConnectionTab';
 import ChannelBehaviorTab from './pages/settings/channels/ChannelBehaviorTab';
+import TeamLayout from './pages/settings/team/TeamLayout';
 import UsersPage from './pages/settings/team/UsersPage';
 import SectorsPage from './pages/settings/team/SectorsPage';
 import RolesPage from './pages/settings/team/RolesPage';
@@ -93,9 +94,12 @@ function App() {
                   <Route path="conexao" element={<ChannelConnectionTab />} />
                   <Route path="atendimento" element={<ChannelBehaviorTab />} />
                 </Route>
-                <Route path="equipe/usuarios" element={<UsersPage />} />
-                <Route path="equipe/setores" element={<SectorsPage />} />
-                <Route path="equipe/perfis" element={<RolesPage />} />
+                <Route path="equipe" element={<TeamLayout />}>
+                  <Route index element={<Navigate to="usuarios" replace />} />
+                  <Route path="usuarios" element={<UsersPage />} />
+                  <Route path="setores" element={<SectorsPage />} />
+                  <Route path="perfis" element={<RolesPage />} />
+                </Route>
                 <Route path="cadastros/motivos" element={<ReasonsPage />} />
                 <Route path="cadastros/cidades" element={<CitiesPage />} />
                 <Route path="empresa" element={<CompanyPage />} />

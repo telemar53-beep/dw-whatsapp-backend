@@ -4,10 +4,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { updateSector, deleteSector } from '../services/api';
 import CreateSectorForm from './CreateSectorForm';
-import { AsyncState } from './ui';
+import WaDialog, { waErrorClass } from './WaDialog';
+import { AsyncState, Button, inputClass } from './ui';
 
-const inputClass =
-  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+// Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
+const CELL = 'px-3 py-3 align-middle';
+const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
+const SMALL_BTN =
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border px-3 text-[13px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:opacity-50';
 
 function SectorRow({ sector, onSaved, onDeleted }) {
   const { token } = useAuth();
@@ -50,7 +54,8 @@ function SectorRow({ sector, onSaved, onDeleted }) {
   }
 
   async function handleDelete() {
-    const ok = await confirm(`Excluir o setor "${sector.name}"?`, { danger: true, confirmLabel: 'Excluir' });
+    const question = 'Excluir o setor "' + sector.name + '"?';
+    const ok = await confirm(question, { danger: true, confirmLabel: 'Excluir' });
     if (!ok) {
       return;
     }
@@ -67,69 +72,83 @@ function SectorRow({ sector, onSaved, onDeleted }) {
 
   if (editing) {
     return (
-      <form
-        onSubmit={handleSave}
-        className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
-      >
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
-        <div>
-          <label htmlFor={`sector-ai-hint-${sector.id}`} className="mb-1.5 block text-sm font-medium text-wa-muted">
-            Orientação para a IA
-          </label>
-          <textarea
-            id={`sector-ai-hint-${sector.id}`}
-            rows={3}
-            value={aiHint}
-            onChange={(e) => setAiHint(e.target.value)}
-            className={inputClass}
-          />
-        </div>
-        {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
-            Cancelar
-          </button>
-        </div>
-      </form>
+      <tr className="border-t border-wa-border bg-black/[0.12]">
+        <td colSpan={3} className="px-4 pb-4 pt-3">
+          <form onSubmit={handleSave} className="max-w-[640px] space-y-3">
+            <div>
+              <label htmlFor={`sector-name-${sector.id}`} className="mb-1.5 block text-[13px] font-medium text-wa-muted">
+                Nome
+              </label>
+              <input
+                id={`sector-name-${sector.id}`}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputClass}
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor={`sector-ai-hint-${sector.id}`} className="mb-1.5 block text-[13px] font-medium text-wa-muted">
+                Orientação para a IA
+              </label>
+              <textarea
+                id={`sector-ai-hint-${sector.id}`}
+                rows={3}
+                value={aiHint}
+                onChange={(e) => setAiHint(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            {error && <p className={waErrorClass}>{error}</p>}
+            <div className="flex gap-2">
+              <Button type="submit" loading={submitting} className="!py-1.5">
+                Salvar
+              </Button>
+              <Button variant="secondary" onClick={handleCancel} className="!py-1.5">
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </td>
+      </tr>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center justify-between">
-        <p className="font-medium text-wa-text">{sector.name}</p>
-        <div className="flex items-center gap-3">
-          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+    <tr className="border-t border-wa-border">
+      <td className={`${CELL} whitespace-nowrap font-medium text-wa-text`}>{sector.name}</td>
+      <td className={`${CELL} max-w-[380px] text-wa-muted`}>
+        <span className="block truncate" title={sector.aiHint || undefined}>
+          {sector.aiHint || <span className="text-wa-meta">Sem orientação</span>}
+        </span>
+        {deleteError && <p className={`mt-2 ${waErrorClass}`}>{deleteError}</p>}
+      </td>
+      <td className={`${CELL} whitespace-nowrap`}>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={handleEditClick}
+            className={`${SMALL_BTN} border-wa-border bg-wa-field text-wa-text hover:bg-wa-panel`}
+          >
             Editar
           </button>
           <button
+            type="button"
             onClick={handleDelete}
             disabled={deleting}
-            className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
+            className={`${SMALL_BTN} border-wa-error-text/30 bg-wa-error-bg text-wa-error-text hover:brightness-110`}
           >
             Excluir
           </button>
         </div>
-      </div>
-      {deleteError && (
-        <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
-      )}
-      {confirmDialog}
-    </div>
+        {confirmDialog}
+      </td>
+    </tr>
   );
 }
 
+// Controlado (a página passa `creating`): o cartão tem o botão "Adicionar setor"
+// e o formulário abre num pop-up. Sem controle: o formulário fica inline embaixo.
 function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const { sectors, status, refresh } = useSectors();
   const [internalCreating, setInternalCreating] = useState(false);
@@ -138,24 +157,82 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const setCreating = controlled ? onCreatingChange : setInternalCreating;
 
   return (
-    <div className="space-y-6">
-      <AsyncState status={status} isEmpty={sectors.length === 0} emptyMessage="Nenhum setor cadastrado ainda.">
-        <div className="space-y-3">
-          {sectors.map((sector) => (
-            <SectorRow key={sector.id} sector={sector} onSaved={refresh} onDeleted={refresh} />
-          ))}
+    <>
+      <section
+        aria-labelledby="sectors-card-title"
+        className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-4 pt-5 sm:px-5">
+          <div className="min-w-0">
+            <h2 id="sectors-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
+              Setores
+            </h2>
+            <p className="mt-1 max-w-[60ch] text-[13.5px] leading-[19px] text-wa-muted">
+              Os times para onde um atendimento pode ir. A orientação ajuda a IA a escolher o setor certo na triagem.
+            </p>
+          </div>
+          {controlled && (
+            <Button onClick={() => setCreating(true)} className="!py-2">
+              Adicionar setor
+            </Button>
+          )}
         </div>
-      </AsyncState>
-      {(!controlled || creating) && (
+
+        <div className="px-4 pb-1 sm:px-5">
+          <AsyncState status={status} isEmpty={sectors.length === 0} emptyMessage="Nenhum setor cadastrado ainda.">
+            <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
+              <table className="w-full min-w-[560px] border-collapse text-[13.5px]">
+                <thead>
+                  <tr className="bg-black/[0.16]">
+                    <th scope="col" className={HEAD}>
+                      Nome
+                    </th>
+                    <th scope="col" className={HEAD}>
+                      Orientação para a IA
+                    </th>
+                    <th scope="col" className={`${HEAD} text-right`}>
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sectors.map((sector) => (
+                    <SectorRow key={sector.id} sector={sector} onSaved={refresh} onDeleted={refresh} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </AsyncState>
+        </div>
+
+        <div className="border-t border-wa-border px-4 py-3 text-[12.5px] text-wa-muted sm:px-5">
+          {sectors.length} {sectors.length === 1 ? 'setor' : 'setores'}
+        </div>
+      </section>
+
+      {controlled && creating && (
+        <WaDialog title="Adicionar setor" onClose={() => setCreating(false)} size="max-w-md">
+          <div className="px-6 pb-5 pt-2">
+            <CreateSectorForm
+              embedded
+              onCreated={() => {
+                refresh();
+                setCreating(false);
+              }}
+              onCancel={() => setCreating(false)}
+            />
+          </div>
+        </WaDialog>
+      )}
+      {!controlled && (
         <CreateSectorForm
           onCreated={() => {
             refresh();
             setCreating(false);
           }}
-          onCancel={() => setCreating(false)}
         />
       )}
-    </div>
+    </>
   );
 }
 

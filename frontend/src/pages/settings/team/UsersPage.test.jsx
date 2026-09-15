@@ -29,7 +29,7 @@ describe('UsersPage', () => {
     useAgentsAdmin.mockReturnValue({ agents: [], status: 'ready', refresh: vi.fn() });
     renderInShell(<UsersPage />, { path: '/configuracoes/equipe/usuarios' });
     expect(screen.getByText('Nenhum usuário cadastrado ainda.')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /criar usuário/i }));
-    expect(screen.getByRole('heading', { name: /cadastrar novo/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /adicionar usuário/i }));
+    expect(screen.getByRole('heading', { name: /adicionar usuário/i })).toBeInTheDocument();
   });
 });

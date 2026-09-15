@@ -30,7 +30,7 @@ describe('SettingsLayout', () => {
     const nav = screen.getByRole('navigation', { name: /seções de configurações/i });
     expect(nav).toBeInTheDocument();
     expect(within(nav).getByText('Equipe e acesso')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Setores' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Equipe e acesso' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('heading', { level: 1, name: 'Setores' })).toBeInTheDocument();
     expect(screen.getByText('Toda a operação')).toBeInTheDocument();
     expect(screen.getByText('corpo setores')).toBeInTheDocument();
@@ -52,6 +52,6 @@ describe('SettingsLayout', () => {
 
   test('o select de seção mostra o item certo selecionado numa sub-rota', () => {
     renderAt('/configuracoes/equipe/setores/algum-sub-caminho', { role: 'admin' });
-    expect(screen.getByRole('combobox', { name: /seção/i })).toHaveValue('/configuracoes/equipe/setores');
+    expect(screen.getByRole('combobox', { name: /seção/i })).toHaveValue('/configuracoes/equipe');
   });
 });

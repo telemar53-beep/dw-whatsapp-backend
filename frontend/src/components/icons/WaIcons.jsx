@@ -351,3 +351,19 @@ export function IconBuilding(props) {
     </Svg>
   );
 }
+
+export function IconUserPlus(props) {
+  return (
+    <Svg {...props}>
+      <path d="M10 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.4 0-9 2.2-9 5.5V22h13.5a6.5 6.5 0 01-1.3-8A17 17 0 0010 14zm9-1v3h3v2h-3v3h-2v-3h-3v-2h3v-3z" />
+    </Svg>
+  );
+}
+
+export function IconMore(props) {
+  return (
+    <Svg {...props}>
+      <path d="M6 10a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z" />
+    </Svg>
+  );
+}

@@ -1,4 +1,3 @@
-import SettingsPage from '../SettingsPage';
 import { Card } from '../../../components/ui';
 import { NAV_ITEMS, SETTINGS_SECTIONS, hasLevel } from '../../../navigation/navItems';
 
@@ -32,8 +31,8 @@ function RolesPage() {
     ...EXTRA_ROWS,
   ];
   return (
-    <SettingsPage title="Perfis de acesso" description="O que cada perfil pode ver e fazer. Esta tabela é gerada da mesma lista que controla o menu e as rotas." scope="global" wide>
-      <Card title="Páginas e ações">
+    <>
+      <Card title="Páginas e ações" description="O que cada perfil pode ver e fazer. Esta tabela é gerada da mesma lista que controla o menu e as rotas.">
         <div className="chat-scroll -mx-1 overflow-x-auto px-1 pb-1">
           <table className="w-full min-w-[560px] text-[13.5px]">
             <thead>
@@ -61,7 +60,7 @@ function RolesPage() {
           {FIXED_RULES.map((rule) => <li key={rule}>{rule}</li>)}
         </ul>
       </Card>
-    </SettingsPage>
+    </>
   );
 }
 

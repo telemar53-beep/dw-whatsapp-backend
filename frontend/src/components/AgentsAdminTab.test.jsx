@@ -32,7 +32,7 @@ describe('AgentsAdminTab', () => {
     expect(screen.getByText(/ana@dw.com/)).toBeInTheDocument();
     expect(screen.getByText('Beto')).toBeInTheDocument();
     expect(screen.getByText('Ativo')).toBeInTheDocument();
-    expect(screen.getByText('Desativado')).toBeInTheDocument();
+    expect(screen.getByText('Inativo')).toBeInTheDocument();
   });
 
   test('shows Gerente as the role label for a manager', () => {
@@ -41,7 +41,7 @@ describe('AgentsAdminTab', () => {
       refresh: vi.fn(),
     });
     render(<AgentsAdminTab />);
-    expect(screen.getByText(/Gerente/)).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Gerente' })).toBeInTheDocument();
   });
 
   test('deactivates an active agent', async () => {
@@ -53,6 +53,7 @@ describe('AgentsAdminTab', () => {
     api.setAgentActive.mockResolvedValue({});
     render(<AgentsAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /mais ações/i }));
     await userEvent.click(screen.getByRole('button', { name: /desativar/i }));
 
     await waitFor(() => expect(api.setAgentActive).toHaveBeenCalledWith('a1', false, 'tok-123'));
@@ -68,6 +69,7 @@ describe('AgentsAdminTab', () => {
     api.setAgentActive.mockResolvedValue({});
     render(<AgentsAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /mais ações/i }));
     await userEvent.click(screen.getByRole('button', { name: /reativar/i }));
 
     await waitFor(() => expect(api.setAgentActive).toHaveBeenCalledWith('a1', true, 'tok-123'));
@@ -90,6 +92,7 @@ describe('AgentsAdminTab', () => {
     api.resetAgentPassword.mockResolvedValue({ newPassword: 'Xy9kFpQr2z' });
     render(<AgentsAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /mais ações/i }));
     await userEvent.click(screen.getByRole('button', { name: /gerar nova senha/i }));
 
     await waitFor(() => expect(api.resetAgentPassword).toHaveBeenCalledWith('a1', 'tok-123'));
@@ -115,6 +118,7 @@ describe('AgentsAdminTab', () => {
     api.resetAgentPassword.mockResolvedValue({ newPassword: 'Xy9kFpQr2z' });
     render(<AgentsAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /mais ações/i }));
     await userEvent.click(screen.getByRole('button', { name: /gerar nova senha/i }));
     await screen.findByText('Xy9kFpQr2z');
     await userEvent.click(screen.getByRole('button', { name: /copiar/i }));
@@ -130,6 +134,7 @@ describe('AgentsAdminTab', () => {
     api.resetAgentPassword.mockResolvedValue({ newPassword: 'Xy9kFpQr2z' });
     render(<AgentsAdminTab />);
 
+    await userEvent.click(screen.getByRole('button', { name: /mais ações/i }));
     await userEvent.click(screen.getByRole('button', { name: /gerar nova senha/i }));
     await screen.findByText('Xy9kFpQr2z');
     await userEvent.click(screen.getByRole('button', { name: /^fechar$/i }));
@@ -141,28 +146,28 @@ describe('AgentsAdminTab', () => {
     useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
     render(<AgentsAdminTab />);
 
-    expect(screen.queryByText(/Cadastrar novo usuário/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /criar usuário/i })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /adicionar usuário/i })).toBeInTheDocument();
   });
 
   test('clicking Criar usuário reveals the create-agent form', async () => {
     useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
     render(<AgentsAdminTab />);
 
-    await userEvent.click(screen.getByRole('button', { name: /criar usuário/i }));
+    await userEvent.click(screen.getByRole('button', { name: /adicionar usuário/i }));
 
-    expect(screen.getByText(/Cadastrar novo usuário/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /adicionar usuário/i })).toBeInTheDocument();
   });
 
   test('canceling the create-agent form hides it again', async () => {
     useAgentsAdmin.mockReturnValue({ agents: [], refresh: vi.fn() });
     render(<AgentsAdminTab />);
 
-    await userEvent.click(screen.getByRole('button', { name: /criar usuário/i }));
+    await userEvent.click(screen.getByRole('button', { name: /adicionar usuário/i }));
     await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
 
-    expect(screen.queryByText(/Cadastrar novo usuário/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /criar usuário/i })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /adicionar usuário/i })).toBeInTheDocument();
   });
 
   test('shows each agent\'s assigned sectors', () => {

@@ -6,7 +6,8 @@ const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 
-function CreateAgentForm({ onCreated, onCancel }) {
+// `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
+function CreateAgentForm({ onCreated, onCancel, embedded = false }) {
   const { token } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -42,9 +43,9 @@ function CreateAgentForm({ onCreated, onCancel }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-[16px] border border-wa-border bg-wa-surface p-5"
+      className={embedded ? 'space-y-3' : 'space-y-3 rounded-[16px] border border-wa-border bg-wa-surface p-5'}
     >
-      <h3 className="text-[15px] font-medium text-wa-text">Cadastrar novo usuário</h3>
+      {!embedded && <h3 className="text-[15px] font-medium text-wa-text">Cadastrar novo usuário</h3>}
       <div>
         <label htmlFor="agent-name" className={labelClass}>
           Nome

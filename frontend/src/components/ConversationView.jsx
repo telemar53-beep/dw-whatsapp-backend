@@ -83,6 +83,14 @@ function channelLine(conversation) {
   return conversation.channelName ? `WhatsApp · ${conversation.channelName}` : null;
 }
 
+// "5598999991002" vira "+55 (98) 99999-1002"; número fora do padrão BR sai como veio.
+function formatPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  const match = digits.match(/^55(\d{2})(\d{4,5})(\d{4})$/);
+  if (!match) return phone;
+  return `+55 (${match[1]}) ${match[2]}-${match[3]}`;
+}
+
 function conversationStatus(conversation) {
   if (conversation.status === 'closed') return { label: 'Encerrado', dot: 'bg-chat-faint' };
   if (conversation.assignedAgentId) return { label: 'Em atendimento', dot: 'bg-chat-online' };
@@ -174,6 +182,9 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   // Só vale repetir o telefone embaixo quando o título é o nome do contato.
   const phoneLine = displayName && conversation.contactPhoneNumber ? conversation.contactPhoneNumber : null;
   const secondLine = channelLine(conversation) || phoneLine;
+  // O telefone acompanha o status quando a 2ª linha ficou com o canal; se ele já
+  // é a 2ª linha (conversa sem canal na carga), não repete.
+  const statusPhone = phoneLine && secondLine !== phoneLine ? formatPhone(phoneLine) : null;
   const status = conversationStatus(conversation);
 
   async function handleSend(content, file, repliedToMessageId, isVoiceNote) {
@@ -315,6 +326,12 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             <span className="mt-[3px] flex items-center gap-1.5 whitespace-nowrap text-[12.5px] leading-[17px] text-chat-muted">
               <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${status.dot}`} />
               {status.label}
+              {statusPhone && (
+                <>
+                  <span aria-hidden="true" className="text-chat-faint">·</span>
+                  <span className="tabular-nums text-chat-text/90">{statusPhone}</span>
+                </>
+              )}
             </span>
           </span>
         </button>

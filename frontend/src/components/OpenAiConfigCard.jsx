@@ -25,7 +25,7 @@ const STATUS_BADGE_CLASS = {
   Conectada: 'bg-wa-green/15 text-wa-green',
 };
 
-function computeStatus({ mode, configured, hasError }) {
+export function computeStatus({ mode, configured, hasError }) {
   if (mode === 'disabled') return 'Desativada';
   if (hasError) return 'Erro';
   if (configured) return 'Conectada';

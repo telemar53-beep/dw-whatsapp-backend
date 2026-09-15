@@ -1,3 +1,7 @@
+// Rede-nenhuma como rede de segurança: os testes de Pix dinâmico já
+// sobrescrevem resolverRecebedorPix caso a caso, mas se um teste futuro
+// esquecer disso isso evita uma chamada HTTPS real saindo do CI.
+jest.mock('axios');
 jest.mock('./outbound-queue');
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/conversation.repository');

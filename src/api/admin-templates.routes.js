@@ -6,7 +6,19 @@ const { createTemplate, deleteTemplate, syncTemplatesForWaba, registerExistingTe
 const router = express.Router();
 
 function metaErrorMessage(err) {
-  return err.response && err.response.data && err.response.data.error && err.response.data.error.message;
+  const error = err.response && err.response.data && err.response.data.error;
+  if (!error) {
+    return null;
+  }
+  let detail = null;
+  if (error.error_user_msg) {
+    detail = error.error_user_title ? `${error.error_user_title}: ${error.error_user_msg}` : error.error_user_msg;
+  } else if (error.error_data && error.error_data.details) {
+    detail = error.error_data.details;
+  } else if (error.message) {
+    detail = error.message;
+  }
+  return detail ? `A Meta recusou: ${detail}` : null;
 }
 
 router.get('/', requireAuth, requireRole('admin'), async (req, res) => {

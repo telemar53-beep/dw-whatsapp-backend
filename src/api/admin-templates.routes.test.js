@@ -97,7 +97,55 @@ describe('POST /api/admin/templates', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
       .send({ channelId: 'ch-1', name: 'x', category: 'UTILITY', language: 'pt_BR', bodyText: 'Y' });
     expect(res.status).toBe(502);
-    expect(res.body.error).toBe('Invalid parameter');
+    expect(res.body.error).toBe('A Meta recusou: Invalid parameter');
+  });
+
+  test('returns 502 with error_user_title and error_user_msg combined when both are present', async () => {
+    createTemplate.mockRejectedValue({
+      response: {
+        data: {
+          error: {
+            message: 'Invalid parameter',
+            error_user_title: 'Idioma inválido',
+            error_user_msg: 'Use o código do idioma, como pt_BR.',
+          },
+        },
+      },
+    });
+    const res = await request(buildApp())
+      .post('/api/admin/templates')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ channelId: 'ch-1', name: 'x', category: 'UTILITY', language: 'pt_BR', bodyText: 'Y' });
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe('A Meta recusou: Idioma inválido: Use o código do idioma, como pt_BR.');
+  });
+
+  test('returns 502 with error_data.details when error_user_msg is absent', async () => {
+    createTemplate.mockRejectedValue({
+      response: {
+        data: {
+          error: {
+            message: 'Invalid parameter',
+            error_data: { details: 'Param language must be a valid language code' },
+          },
+        },
+      },
+    });
+    const res = await request(buildApp())
+      .post('/api/admin/templates')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ channelId: 'ch-1', name: 'x', category: 'UTILITY', language: 'pt_BR', bodyText: 'Y' });
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe('A Meta recusou: Param language must be a valid language code');
+  });
+
+  test('propagates a non-Meta error instead of masking it as a 502', async () => {
+    createTemplate.mockRejectedValue(new Error('database connection lost'));
+    const res = await request(buildApp())
+      .post('/api/admin/templates')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ channelId: 'ch-1', name: 'x', category: 'UTILITY', language: 'pt_BR', bodyText: 'Y' });
+    expect(res.status).toBe(500);
   });
 });
 

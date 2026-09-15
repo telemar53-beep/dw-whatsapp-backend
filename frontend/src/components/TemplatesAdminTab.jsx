@@ -74,7 +74,7 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
 
   const [channelId, setChannelId] = useState('');
   const [name, setName] = useState('');
-  const [language, setLanguage] = useState('');
+  const [language, setLanguage] = useState('pt_BR');
   const [headerType, setHeaderType] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -86,7 +86,7 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
     try {
       await registerExistingTemplateAdmin({ channelId, name, language, headerType: headerType || null }, token);
       setName('');
-      setLanguage('');
+      setLanguage('pt_BR');
       setHeaderType('');
       onRegistered();
     } catch (err) {
@@ -133,13 +133,17 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
       </div>
       <div>
         <label htmlFor="existing-template-language" className="mb-1.5 block text-sm font-medium text-wa-muted">Idioma</label>
-        <input
+        <select
           id="existing-template-language"
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
           className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
           required
-        />
+        >
+          <option value="pt_BR">Português (BR)</option>
+          <option value="en_US">Inglês (EUA)</option>
+          <option value="es">Espanhol</option>
+        </select>
       </div>
       <div>
         <label htmlFor="existing-template-header" className="mb-1.5 block text-sm font-medium text-wa-muted">Cabeçalho</label>
@@ -193,7 +197,7 @@ function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const [channelId, setChannelId] = useState('');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('UTILITY');
-  const [language, setLanguage] = useState('');
+  const [language, setLanguage] = useState('pt_BR');
   const [bodyText, setBodyText] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -217,6 +221,7 @@ function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
       await createTemplateAdmin({ channelId, name, category, language, bodyText }, token);
       setName('');
       setBodyText('');
+      setLanguage('pt_BR');
       setCreatingTemplate(false);
       refresh();
     } catch (err) {
@@ -229,6 +234,7 @@ function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   function handleCancelCreate() {
     setName('');
     setBodyText('');
+    setLanguage('pt_BR');
     setError(null);
     setCreatingTemplate(false);
   }
@@ -327,10 +333,11 @@ function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
             id="template-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="fatura_vencida"
+            placeholder="saudacao_inicial"
             className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
             required
           />
+          <p className="mt-1 text-xs text-wa-muted">Só letras minúsculas, números e _ (ex.: saudacao_inicial)</p>
         </div>
         <div>
           <label htmlFor="template-category" className="mb-1.5 block text-sm font-medium text-wa-muted">
@@ -350,13 +357,17 @@ function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           <label htmlFor="template-language" className="mb-1.5 block text-sm font-medium text-wa-muted">
             Idioma
           </label>
-          <input
+          <select
             id="template-language"
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             className="w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25"
             required
-          />
+          >
+            <option value="pt_BR">Português (BR)</option>
+            <option value="en_US">Inglês (EUA)</option>
+            <option value="es">Espanhol</option>
+          </select>
         </div>
         <div>
           <label htmlFor="template-body" className="mb-1.5 block text-sm font-medium text-wa-muted">

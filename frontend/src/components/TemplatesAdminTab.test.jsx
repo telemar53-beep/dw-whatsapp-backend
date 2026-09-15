@@ -53,7 +53,38 @@ describe('TemplatesAdminTab', () => {
     await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
     await userEvent.type(form.getByLabelText(/^nome$/i), 'boas_vindas');
     await userEvent.selectOptions(form.getByLabelText(/categoria/i), 'UTILITY');
-    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.selectOptions(form.getByLabelText(/idioma/i), 'en_US');
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createTemplateAdmin).toHaveBeenCalledWith(
+        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'en_US', bodyText: 'Olá, bem-vindo!' },
+        'tok-123'
+      )
+    );
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  test('shows the name hint text explaining the allowed characters', async () => {
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
+    const form = within(screen.getByRole('form', { name: /cadastrar novo template/i }));
+
+    expect(form.getByText(/só letras minúsculas, números e _/i)).toBeInTheDocument();
+  });
+
+  test('defaults the create-template language to pt_BR without touching the dropdown', async () => {
+    const refresh = vi.fn();
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh });
+    api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-2', name: 'boas_vindas', status: 'PENDING' });
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
+    const form = within(screen.getByRole('form', { name: /cadastrar novo template/i }));
+
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'boas_vindas');
     await userEvent.type(form.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
     await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
 
@@ -79,7 +110,7 @@ describe('TemplatesAdminTab', () => {
 
     api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-2', name: 'boas_vindas', status: 'PENDING' });
     await userEvent.type(form.getByLabelText(/^nome$/i), 'boas_vindas');
-    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.selectOptions(form.getByLabelText(/idioma/i), 'pt_BR');
     await userEvent.type(form.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
     await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
 
@@ -121,7 +152,7 @@ describe('TemplatesAdminTab', () => {
     await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
     await userEvent.type(form.getByLabelText(/^nome$/i), 'x');
     await userEvent.selectOptions(form.getByLabelText(/categoria/i), 'UTILITY');
-    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.selectOptions(form.getByLabelText(/idioma/i), 'pt_BR');
     await userEvent.type(form.getByLabelText(/corpo/i), 'Y');
     await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
 
@@ -172,7 +203,7 @@ describe('TemplatesAdminTab', () => {
 
     await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
     await userEvent.type(form.getByLabelText(/nome exato na meta/i), 'aviso_cobranca');
-    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.selectOptions(form.getByLabelText(/idioma/i), 'pt_BR');
     await userEvent.selectOptions(form.getByLabelText(/cabeçalho/i), 'document');
     await userEvent.click(form.getByRole('button', { name: /^registrar$/i }));
 
@@ -194,7 +225,7 @@ describe('TemplatesAdminTab', () => {
 
     await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
     await userEvent.type(form.getByLabelText(/nome exato na meta/i), 'x');
-    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.selectOptions(form.getByLabelText(/idioma/i), 'pt_BR');
     await userEvent.click(form.getByRole('button', { name: /^registrar$/i }));
 
     await waitFor(() => expect(screen.getByText('No template found')).toBeInTheDocument());
@@ -273,7 +304,7 @@ describe('TemplatesAdminTab', () => {
     await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
     await userEvent.type(form.getByLabelText(/^nome$/i), 'boas_vindas');
     await userEvent.selectOptions(form.getByLabelText(/categoria/i), 'UTILITY');
-    await userEvent.type(form.getByLabelText(/idioma/i), 'pt_BR');
+    await userEvent.selectOptions(form.getByLabelText(/idioma/i), 'pt_BR');
     await userEvent.type(form.getByLabelText(/corpo/i), 'Olá, bem-vindo!');
     await userEvent.click(form.getByRole('button', { name: /^cadastrar$/i }));
 

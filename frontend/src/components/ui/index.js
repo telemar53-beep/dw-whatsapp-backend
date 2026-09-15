@@ -10,5 +10,6 @@ export { DangerZone } from './DangerZone';
 export { AsyncState } from './AsyncState';
 export { ConfirmDialog } from './ConfirmDialog';
 
+// Raio 12px: o controle é o nível mais interno da escala (painel 22 > cartão 16 > controle 12).
 export const inputClass =
-  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+  'w-full rounded-[12px] border border-wa-border bg-wa-field px-3.5 py-2.5 text-[14px] text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25 disabled:cursor-not-allowed disabled:opacity-60';

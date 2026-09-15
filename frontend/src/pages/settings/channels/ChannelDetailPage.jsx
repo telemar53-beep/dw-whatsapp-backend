@@ -48,7 +48,7 @@ function ChannelDetailPage() {
                   description={`${channelTypeLabel(channel.type)} · ${channel.phoneNumber}`}
                   action={<ScopeBadge scope="channel" />}
                 />
-                <div className="pb-4">
+                <div className="px-2 pb-4">
                   <Tabs
                     tabs={[
                       { key: 'conexao', label: 'Conexão', to: `/configuracoes/canais/${id}/conexao` },
@@ -57,8 +57,8 @@ function ChannelDetailPage() {
                   />
                 </div>
               </div>
-              <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-6 py-6">
-                <div className="max-w-3xl space-y-6">
+              <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-6 sm:px-6">
+                <div className="max-w-[720px] space-y-5">
                   <Outlet context={{ channel, refresh, actions, canManage }} />
                 </div>
               </div>

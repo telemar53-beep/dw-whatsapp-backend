@@ -78,8 +78,8 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
               </span>
             )}
           </span>
-          <span className="flex items-center justify-between gap-2">
-            <span className="flex min-w-0 items-center gap-1 text-[14px] leading-[20px] text-chat-muted">
+          <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <span className="flex min-w-0 flex-1 basis-[7rem] items-center gap-1 text-[14px] leading-[20px] text-chat-muted">
               {conversation.lastMessageDirection === 'outbound' && (
                 <MessageStatusTicks status={conversation.lastMessageStatus} />
               )}

@@ -51,9 +51,9 @@ function CampaignsPage() {
               <li key={campaign.id}>
                 <Link
                   to={`/campanhas/${campaign.id}`}
-                  className="block rounded-[16px] border border-white/[0.08] bg-white/[0.04] px-4 py-3 transition hover:bg-white/[0.07]"
+                  className="block rounded-[16px] border border-white/[0.08] bg-white/[0.04] px-4 py-3.5 transition hover:border-white/[0.16] hover:bg-white/[0.07] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
                 >
-                  <p className="text-[15px] font-medium text-chat-text">{campaign.name || 'Sem nome'}</p>
+                  <p className="truncate font-display text-[15px] font-semibold text-chat-text">{campaign.name || 'Sem nome'}</p>
                   <p className="mt-1 text-[13px] text-chat-muted">
                     Canal: {campaign.channelName || channelNameById[campaign.channelId] || '—'}
                   </p>

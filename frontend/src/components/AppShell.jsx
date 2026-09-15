@@ -15,7 +15,9 @@ function AppShell({ dense = false }) {
   const [profileVersion, setProfileVersion] = useState(0);
   const openProfile = useCallback(() => setProfileOpen(true), []);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
-  const glow = dense ? ['bg-chat-copper/15', 'bg-chat-copper/10'] : ['bg-chat-copper/45', 'bg-chat-copper/25'];
+  // Telas densas ficam com 40% do brilho do chat (45%->18%, 25%->10%): o texto
+  // sobre painel de vidro precisa de um fundo mais parado que o do Atendimento.
+  const glow = dense ? ['bg-chat-copper/[0.18]', 'bg-chat-copper/10'] : ['bg-chat-copper/45', 'bg-chat-copper/25'];
 
   return (
     <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
@@ -31,7 +33,7 @@ function AppShell({ dense = false }) {
             aria-controls="sidenav"
             aria-expanded={mobileNavOpen}
             data-testid="open-mobile-nav"
-            className={`m-2 flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.10] text-chat-text ${conversationOpen ? 'hidden' : 'md:hidden'}`}
+            className={`m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.10] text-chat-text transition hover:bg-white/[0.16] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${conversationOpen ? 'hidden' : 'md:hidden'}`}
           >
             <IconChats size={22} />
           </button>

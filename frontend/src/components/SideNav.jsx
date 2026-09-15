@@ -98,7 +98,7 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
             onClick={toggle}
             aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
             title={collapsed ? 'Expandir menu' : 'Recolher menu'}
-            className={`${ITEM_BASE} mb-2 hidden text-chat-faint hover:text-chat-text md:flex ${compact ? 'justify-center px-0' : ''}`}
+            className={`${ITEM_BASE} mb-2 hidden text-chat-muted hover:bg-white/[0.08] hover:text-chat-text md:flex ${compact ? 'justify-center px-0' : ''}`}
           >
             <span className={`transition ${collapsed ? '-rotate-90' : 'rotate-90'}`}><IconChevronDown size={18} /></span>
             <span className={compact ? 'sr-only' : ''}>{collapsed ? 'Expandir' : 'Recolher'}</span>

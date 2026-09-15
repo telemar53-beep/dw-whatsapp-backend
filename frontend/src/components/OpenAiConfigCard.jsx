@@ -23,7 +23,7 @@ const STATUS_BADGE_CLASS = {
   Desativada: 'bg-wa-surface-soft text-wa-muted',
   'Não configurada': 'bg-wa-surface-soft text-wa-muted',
   Erro: 'border border-wa-error-text/30 bg-wa-error-bg text-wa-error-text',
-  Conectada: 'bg-wa-green/15 text-wa-green',
+  Conectada: 'bg-wa-chip text-wa-chip-text',
 };
 
 export function computeStatus({ mode, configured, hasError }) {

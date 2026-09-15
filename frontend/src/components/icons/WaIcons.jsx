@@ -288,3 +288,66 @@ export function IconMegaphone(props) {
     </Svg>
   );
 }
+
+/* ---------- Grupos do menu de Configurações ----------
+   Um ícone por grupo de SETTINGS_SECTIONS: o grupo passa a ser reconhecido
+   pela forma, não pela leitura de oito frases parecidas. Mesmo traço dos
+   demais: 24x24, preenchido, currentColor. */
+
+export function IconChannel(props) {
+  return (
+    <Svg {...props}>
+      <path d="M16.5 2h-9A1.6 1.6 0 006 3.6v16.8A1.6 1.6 0 007.5 22h9a1.6 1.6 0 001.5-1.6V3.6A1.6 1.6 0 0016.5 2zm-4.5 19a1.2 1.2 0 110-2.4 1.2 1.2 0 010 2.4zm4.2-4H7.8V4.8h8.4z" />
+    </Svg>
+  );
+}
+
+export function IconSpark(props) {
+  return (
+    <Svg {...props}>
+      <path d="M10 2.4l1.6 4.4 4.4 1.6-4.4 1.6L10 14.4 8.4 10 4 8.4 8.4 6.8z" />
+      <path d="M17.6 12.6l.9 2.5 2.5.9-2.5.9-.9 2.5-.9-2.5-2.5-.9 2.5-.9z" />
+      <path d="M6.4 16l.6 1.8 1.8.6-1.8.6-.6 1.8-.6-1.8L4 18.4l1.8-.6z" />
+    </Svg>
+  );
+}
+
+export function IconRules(props) {
+  return (
+    <Svg {...props}>
+      <path d="M6.2 3.6a1.7 1.7 0 100 3.4 1.7 1.7 0 000-3.4z" />
+      <path d="M9.8 4.3H20v2.1H9.8z" />
+      <path d="M6.2 10.3a1.7 1.7 0 100 3.4 1.7 1.7 0 000-3.4z" />
+      <path d="M9.8 11H20v2.1H9.8z" />
+      <path d="M6.2 17a1.7 1.7 0 100 3.4 1.7 1.7 0 000-3.4z" />
+      <path d="M9.8 17.7H20v2.1H9.8z" />
+    </Svg>
+  );
+}
+
+export function IconPlug(props) {
+  return (
+    <Svg {...props}>
+      <path d="M9.1 2v6H7.2v3.3a4.9 4.9 0 003.7 4.7V22h2.2v-6a4.9 4.9 0 003.7-4.7V8h-1.9V2h-1.9v6h-2v-6z" />
+    </Svg>
+  );
+}
+
+export function IconTags(props) {
+  return (
+    <Svg {...props}>
+      <path d="M11.6 3H5.4A2.4 2.4 0 003 5.4v6.2a2.4 2.4 0 00.7 1.7l7.3 7.3a2.4 2.4 0 003.4 0l6.2-6.2a2.4 2.4 0 000-3.4L13.3 3.7a2.4 2.4 0 00-1.7-.7zM7.5 9a1.6 1.6 0 110-3.2 1.6 1.6 0 010 3.2z" />
+    </Svg>
+  );
+}
+
+export function IconBuilding(props) {
+  return (
+    <Svg {...props}>
+      <path
+        fillRule="evenodd"
+        d="M4 21V4.8A1.8 1.8 0 015.8 3h5.4A1.8 1.8 0 0113 4.8V9h3.2A1.8 1.8 0 0118 10.8V21zm2.6-13.8h1.9V5.3H6.6zm3.8 0h1.9V5.3h-1.9zm-3.8 4h1.9V9.3H6.6zm3.8 0h1.9V9.3h-1.9zm-3.8 4h1.9v-1.9H6.6zm3.8 0h1.9v-1.9h-1.9zm4.1 0h1.9v-1.9h-1.9zm-7.9 4h1.9v-1.9H6.6zm3.8 0h1.9v-1.9h-1.9zm4.1 0h1.9v-1.9h-1.9z"
+      />
+    </Svg>
+  );
+}

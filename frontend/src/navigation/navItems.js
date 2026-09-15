@@ -1,5 +1,6 @@
 import {
   IconChats, IconTeam, IconMegaphone, IconChart, IconSettings,
+  IconChannel, IconSpark, IconRules, IconQuickReply, IconPlug, IconTags, IconBuilding,
 } from '../components/icons/WaIcons';
 
 // Os três níveis espelham src/auth/auth.middleware.js: requireAuth,
@@ -29,13 +30,13 @@ const s = (path) => `${SETTINGS_BASE}/${path}`;
 
 export const SETTINGS_SECTIONS = [
   {
-    group: 'Canais WhatsApp', groupKey: 'canais',
+    group: 'Canais WhatsApp', groupKey: 'canais', icon: IconChannel,
     items: [
       { key: 'canais', label: 'Canais', to: s('canais'), level: 'admin', description: 'Os números de WhatsApp ligados ao atendimento.' },
     ],
   },
   {
-    group: 'Automação e IA', groupKey: 'automacao',
+    group: 'Automação e IA', groupKey: 'automacao', icon: IconSpark,
     items: [
       { key: 'triagem-menu', label: 'Triagem por menu', to: s('automacao/triagem-menu'), level: 'admin', description: 'O menu numerado que o cliente recebe antes de falar com um atendente.' },
       { key: 'ia', label: 'Atendimento e triagem com IA', to: s('automacao/ia'), level: 'admin', description: 'Quando a IA responde sozinha e quantas perguntas pode fazer.' },
@@ -46,14 +47,14 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
-    group: 'Regras de atendimento', groupKey: 'regras',
+    group: 'Regras de atendimento', groupKey: 'regras', icon: IconRules,
     items: [
       { key: 'atribuicao', label: 'Atribuição', to: s('regras/atribuicao'), level: 'admin', description: 'Mensagens automáticas ao assumir e ao encerrar um atendimento.' },
       { key: 'horario', label: 'Horário de atendimento', to: s('regras/horario'), level: 'admin', description: 'Quando há atendente humano e o aviso fora do expediente.' },
     ],
   },
   {
-    group: 'Mensagens e templates', groupKey: 'mensagens',
+    group: 'Mensagens e templates', groupKey: 'mensagens', icon: IconQuickReply,
     items: [
       { key: 'boas-vindas', label: 'Boas-vindas', to: s('mensagens/boas-vindas'), level: 'admin', description: 'A primeira mensagem que cada canal envia ao cliente.' },
       { key: 'avisos-cidade', label: 'Avisos por cidade', to: s('mensagens/avisos-cidade'), level: 'admin', description: 'Avisos de instabilidade ou manutenção por região.' },
@@ -62,7 +63,7 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
-    group: 'Equipe e acesso', groupKey: 'equipe',
+    group: 'Equipe e acesso', groupKey: 'equipe', icon: IconTeam,
     items: [
       { key: 'usuarios', label: 'Usuários', to: s('equipe/usuarios'), level: 'admin', description: 'Quem entra no sistema: atendentes, gerentes e administradores.' },
       { key: 'setores', label: 'Setores', to: s('equipe/setores'), level: 'admin', description: 'Os times para onde um atendimento pode ir.' },
@@ -70,7 +71,7 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
-    group: 'Integrações', groupKey: 'integracoes',
+    group: 'Integrações', groupKey: 'integracoes', icon: IconPlug,
     items: [
       { key: 'sgp-consulta', label: 'Consulta ao SGP', to: s('integracoes/sgp-consulta'), level: 'integrations', description: 'O chat consulta cliente, contrato e fatura no SGP.' },
       { key: 'sgp-canal', label: 'SGP por canal', to: s('integracoes/sgp-canal'), level: 'integrations', description: 'O SGP dispara mensagens pelo chat com uma chave por canal.' },
@@ -78,14 +79,14 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
-    group: 'Cadastros auxiliares', groupKey: 'cadastros',
+    group: 'Cadastros auxiliares', groupKey: 'cadastros', icon: IconTags,
     items: [
       { key: 'motivos', label: 'Motivos de atendimento', to: s('cadastros/motivos'), level: 'admin', description: 'O motivo escolhido ao encerrar um atendimento.' },
       { key: 'cidades', label: 'Cidades', to: s('cadastros/cidades'), level: 'admin', description: 'As cidades do cadastro do cliente e dos avisos por região.' },
     ],
   },
   {
-    group: 'Empresa', groupKey: 'empresa',
+    group: 'Empresa', groupKey: 'empresa', icon: IconBuilding,
     items: [
       { key: 'empresa', label: 'Empresa', to: s('empresa'), level: 'admin', description: 'Nome da empresa e nomes aceitos na conferência de comprovantes.' },
     ],

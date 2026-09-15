@@ -3,6 +3,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { SETTINGS_SECTIONS, hasLevel, findSettingsItem } from '../../navigation/navItems';
 import { IconLock } from '../../components/icons/WaIcons';
 
+// O raio diz a profundidade: casca 26 > painel 22 > cartão 16 > controle 12.
+const PANEL = 'overflow-clip rounded-[22px] border border-white/[0.07] backdrop-blur-2xl';
+const ITEM =
+  'relative flex items-center gap-2 rounded-[12px] px-2.5 py-[7px] text-[14px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70';
+
 function SettingsLayout() {
   const { agent } = useAuth();
   const navigate = useNavigate();
@@ -10,18 +15,18 @@ function SettingsLayout() {
   const selectValue = findSettingsItem(location.pathname)?.item.to ?? '';
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:flex-row">
-      <aside className="flex min-w-0 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.09] backdrop-blur-2xl md:w-[220px] md:shrink-0">
-        <div className="shrink-0 px-3.5 pb-2 pt-4 md:pt-5">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row">
+      <aside className={`${PANEL} flex min-w-0 flex-col bg-white/[0.09] lg:w-[244px] lg:shrink-0`}>
+        <div className="shrink-0 px-4 pb-2 pt-4 lg:pt-5">
           <h2 className="font-display text-[18px] font-semibold leading-tight text-chat-text">Configurações</h2>
         </div>
-        <div className="px-3 pb-3 md:hidden">
+        <div className="px-3 pb-3 lg:hidden">
           <label htmlFor="settings-section" className="sr-only">Seção</label>
           <select
             id="settings-section"
             value={selectValue}
             onChange={(e) => navigate(e.target.value)}
-            className="w-full rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-[14px] text-chat-text"
+            className="w-full rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 py-2.5 text-[14px] text-chat-text outline-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
           >
             {selectValue === '' && <option value="" disabled>Seção</option>}
             {SETTINGS_SECTIONS.map((group) => (
@@ -33,39 +38,49 @@ function SettingsLayout() {
             ))}
           </select>
         </div>
-        <nav aria-label="Seções de configurações" className="chat-scroll hidden min-h-0 flex-1 overflow-y-auto px-1.5 pb-4 md:block">
-          {SETTINGS_SECTIONS.map((group) => (
-            <div key={group.groupKey}>
-              <p className="px-2.5 pb-1 pt-3.5 text-[11.5px] font-medium uppercase tracking-wide text-chat-faint">{group.group}</p>
-              {group.items.map((item) => {
-                const allowed = hasLevel(agent, item.level);
-                return (
-                  <NavLink
-                    key={item.key}
-                    to={item.to}
-                    aria-disabled={allowed ? undefined : 'true'}
-                    title={allowed ? item.description : 'Requer permissão de Canais e Integrações'}
-                    className={({ isActive }) =>
-                      `relative flex items-center gap-2 rounded-[12px] px-2.5 py-[7px] text-[14px] transition ${
-                        isActive ? 'bg-white/[0.10] font-medium text-chat-text' : 'text-chat-muted hover:bg-white/[0.05] hover:text-chat-text'
-                      } ${allowed ? '' : 'opacity-60'}`
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {isActive && <span aria-hidden="true" className="absolute left-0 h-4 w-[3px] rounded-full bg-chat-orange" />}
-                        <span className="truncate">{item.label}</span>
-                        {!allowed && <span className="ml-auto shrink-0 text-chat-faint"><IconLock size={13} /></span>}
-                      </>
-                    )}
-                  </NavLink>
-                );
-              })}
-            </div>
-          ))}
+        <nav aria-label="Seções de configurações" className="chat-scroll hidden min-h-0 flex-1 overflow-y-auto px-2 pb-4 lg:block">
+          {SETTINGS_SECTIONS.map((group) => {
+            const GroupIcon = group.icon;
+            return (
+              <div key={group.groupKey} className="mt-4 first:mt-1">
+                <p className="flex items-center gap-2 px-2.5 pb-1.5 text-[12.5px] font-medium text-chat-muted">
+                  {GroupIcon && (
+                    <span aria-hidden="true" className="shrink-0 text-chat-copper">
+                      <GroupIcon size={15} />
+                    </span>
+                  )}
+                  <span className="min-w-0 truncate">{group.group}</span>
+                </p>
+                {group.items.map((item) => {
+                  const allowed = hasLevel(agent, item.level);
+                  return (
+                    <NavLink
+                      key={item.key}
+                      to={item.to}
+                      aria-disabled={allowed ? undefined : 'true'}
+                      title={allowed ? item.description : 'Requer permissão de Canais e Integrações'}
+                      className={({ isActive }) =>
+                        `${ITEM} ${
+                          isActive ? 'bg-white/[0.10] font-medium text-chat-text' : 'text-chat-muted hover:bg-white/[0.05] hover:text-chat-text'
+                        } ${allowed ? '' : 'opacity-70'}`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {isActive && <span aria-hidden="true" className="absolute left-0 h-4 w-[3px] rounded-full bg-chat-orange" />}
+                          <span className="min-w-0 truncate">{item.label}</span>
+                          {!allowed && <span className="ml-auto shrink-0 text-chat-muted"><IconLock size={13} /></span>}
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            );
+          })}
         </nav>
       </aside>
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl">
+      <section className={`${PANEL} flex min-h-0 min-w-0 flex-1 flex-col bg-white/[0.08]`}>
         <Outlet />
       </section>
     </div>

@@ -18,11 +18,11 @@ function ChannelCard({ channel, triageOptionsCount, nightWindowSet, openAiReady 
   return (
     <Link
       to={`/configuracoes/canais/${channel.id}/conexao`}
-      className="block rounded-2xl border border-wa-border bg-wa-surface p-5 transition hover:bg-wa-hover"
+      className="block rounded-2xl border border-wa-border bg-wa-surface p-4 transition hover:border-wa-border-strong hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green sm:p-5"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-[16px] font-medium text-wa-text">{channel.name}</p>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0 flex-1 basis-[12rem]">
+          <p className="truncate font-display text-[16px] font-semibold text-wa-text">{channel.name}</p>
           <p className="mt-0.5 truncate text-[13.5px] text-wa-muted">
             {channelTypeLabel(channel.type)} — {channel.phoneNumber}
           </p>
@@ -44,7 +44,7 @@ function ChannelCard({ channel, triageOptionsCount, nightWindowSet, openAiReady 
       {warnings.length > 0 && (
         <div className="mt-2 space-y-1">
           {warnings.map((warning) => (
-            <p key={warning} className="text-[12.5px] text-wa-warn-text">
+            <p key={warning} className="text-[12.5px] leading-[17px] text-wa-warn-text">
               {warning}
             </p>
           ))}

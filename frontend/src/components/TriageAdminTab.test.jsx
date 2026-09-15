@@ -98,6 +98,34 @@ describe('TriageAdminTab', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  test('edits an existing option and calls onSaved', async () => {
+    const refresh = vi.fn();
+    useTriage.mockReturnValue({
+      config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
+      options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: ['fatura'] }],
+      status: 'ready',
+      refresh,
+    });
+    api.updateTriageOption.mockResolvedValue({ id: 'opt-1', optionNumber: 3, sectorId: 's2', sectorName: 'Suporte', keywords: ['internet'] });
+    render(<TriageAdminTab />);
+
+    await userEvent.click(screen.getByRole('button', { name: /editar/i }));
+    const numberInput = screen.getByDisplayValue('1');
+    await userEvent.clear(numberInput);
+    await userEvent.type(numberInput, '3');
+    await userEvent.selectOptions(screen.getByDisplayValue('Financeiro'), 's2');
+    const keywordsInput = screen.getByDisplayValue('fatura');
+    await userEvent.clear(keywordsInput);
+    await userEvent.type(keywordsInput, 'internet');
+    const salvarButtons = screen.getAllByRole('button', { name: /^salvar$/i });
+    await userEvent.click(salvarButtons[salvarButtons.length - 1]);
+
+    await waitFor(() =>
+      expect(api.updateTriageOption).toHaveBeenCalledWith('opt-1', { optionNumber: 3, sectorId: 's2', keywords: ['internet'] }, 'tok-123')
+    );
+    expect(refresh).toHaveBeenCalled();
+  });
+
   test('deletes an option after confirmation', async () => {
     const refresh = vi.fn();
     useTriage.mockReturnValue({

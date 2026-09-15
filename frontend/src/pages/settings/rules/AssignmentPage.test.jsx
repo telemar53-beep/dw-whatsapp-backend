@@ -79,11 +79,13 @@ describe('AssignmentPage', () => {
 
     await waitFor(() =>
       expect(api.updateAssignmentMessageConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
+        {
+          enabled: false,
           openingMessage: 'Olá @chat_atendente',
           closingMessage: 'Tchau @chat_protocolo',
           agentIds: ['agent-1'],
-        }),
+          channelIds: [],
+        },
         'tok-123'
       )
     );

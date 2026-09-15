@@ -246,25 +246,6 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
   });
 
-  // O link "Administração" era do NavRail próprio da página; agora mora só no
-  // SideNav do AppShell (label "Configurações", coberto em SideNav.test.jsx).
-  // NavRail some de vez na Task 18 — não há substituto dentro de DashboardPage.
-  test.skip('shows an Administração link for an admin agent', () => {
-    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'agent-1', role: 'admin' }, logout: vi.fn() });
-    useQueue.mockReturnValue({ queue: [], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    renderDashboard();
-    expect(screen.getByRole('link', { name: /administração/i })).toBeInTheDocument();
-  });
-
-  // Mesmo motivo do teste acima: o link só existia no NavRail da própria página.
-  test.skip('hides the Administração link for a non-admin agent', () => {
-    useQueue.mockReturnValue({ queue: [], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    renderDashboard();
-    expect(screen.queryByRole('link', { name: /administração/i })).not.toBeInTheDocument();
-  });
-
   // Equivalente real: SideNav.test.jsx > 'clica em "Meu perfil" chama onProfileClick'.
   test.skip('opens the profile modal from the header', async () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });

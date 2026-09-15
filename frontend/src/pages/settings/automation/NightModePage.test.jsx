@@ -38,6 +38,31 @@ describe('NightModePage', () => {
     expect(screen.getByRole('button', { name: 'Salvar janela noturna' })).toBeInTheDocument();
   });
 
+  // Contrato de gravação (spec regra 8): esta página divide o PUT /triage com
+  // AiTriagePage e IdentificationPage; o backend trata campo ausente como
+  // "desligado", então salvar aqui precisa mandar os nove campos sempre, com
+  // os valores das outras duas páginas preservados tal como vieram do GET.
+  test('contrato: salva os nove campos do PUT /triage, mesmo mexendo só na janela', async () => {
+    renderInShell(<NightModePage />, { path: PATH });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar janela noturna' }));
+
+    await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
+      {
+        triageConfidenceThreshold: 0.65,
+        triageMaxQuestions: 4,
+        triageTimeoutMinutes: 12,
+        triageExtraInstructions: 'Pergunte o CPF antes de tudo',
+        triageResolvedReasonId: null,
+        nightStartTime: '20:00',
+        nightEndTime: '08:00',
+        triageRequireBirthdate: false,
+        triageReadReceiptsDaytime: false,
+      },
+      't'
+    ));
+  });
+
   test('carrega a janela salva e a manda de volta ao gravar', async () => {
     useAiConfig.mockReturnValue({ config: { ...saved, nightStartTime: '20:00', nightEndTime: '08:00' }, status: 'ready', loading: false, refresh: vi.fn() });
     renderInShell(<NightModePage />, { path: PATH });

@@ -43,6 +43,17 @@ describe('LoginPage: nome da empresa', () => {
     expect(await screen.findByRole('heading', { name: 'Atendimento' })).toBeInTheDocument();
   });
 
+  test('em carregamento não mostra "Atendimento" genérico', () => {
+    api.getPublicCompany.mockReturnValue(new Promise(() => {}));
+    useAuth.mockReturnValue({ login: vi.fn() });
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>
+    );
+    expect(screen.queryByRole('heading', { name: 'Atendimento' })).not.toBeInTheDocument();
+  });
+
   test('a rota publica fora do ar nao quebra a tela', async () => {
     api.getPublicCompany.mockRejectedValue(new Error('offline'));
     useAuth.mockReturnValue({ login: vi.fn() });

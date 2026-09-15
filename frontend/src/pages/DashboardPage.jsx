@@ -218,7 +218,7 @@ function DashboardPage() {
                 <IconEmptyChat width={320} height={190} />
               </span>
               <p className="mt-6 font-display text-[32px] font-light leading-tight text-chat-text/90">
-                {companyNameStatus === 'ready' ? (companyName ? `${companyName} · Atendimento` : 'Atendimento') : ''}
+                {companyNameStatus === 'loading' ? '' : companyName ? `${companyName} · Atendimento` : 'Atendimento'}
               </p>
               <p className="mt-3 max-w-[38ch] text-[14px] leading-[20px] text-chat-muted">
                 Selecione uma conversa na lista ao lado para ler o histórico e responder ao cliente.

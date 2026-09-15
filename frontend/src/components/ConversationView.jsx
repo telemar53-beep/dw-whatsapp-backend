@@ -334,7 +334,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           <span className="shrink-0 text-chat-faint">
             <IconLock size={13} />
           </span>
-          Este atendimento fica registrado no sistema da {companyNameStatus === 'ready' ? companyName || 'empresa' : ''}.
+          Este atendimento fica registrado no sistema da {companyNameStatus === 'loading' ? '' : companyName || 'empresa'}.
         </div>
 
         {timeline.map((row) => {

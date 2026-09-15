@@ -19,16 +19,18 @@ beforeEach(() => {
 });
 
 describe('TriageAdminTab', () => {
-  test('shows a loading message before the config arrives', () => {
-    useTriage.mockReturnValue({ config: null, options: [], refresh: vi.fn() });
+  test('em carregamento mostra um esqueleto em vez da pergunta de triagem', () => {
+    useTriage.mockReturnValue({ config: null, options: [], status: 'loading', refresh: vi.fn() });
     render(<TriageAdminTab />);
-    expect(screen.getByText(/carregando/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/tentativas/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   test('renders the config form fields with the current values', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Escolha uma opção', confirmationText: 'Obrigado', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TriageAdminTab />);
@@ -42,6 +44,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh,
     });
     api.updateTriageConfig.mockResolvedValue({ questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 3 });
@@ -64,6 +67,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: ['fatura', 'boleto'] }],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TriageAdminTab />);
@@ -76,6 +80,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh,
     });
     api.createTriageOption.mockResolvedValue({ id: 'opt-2', optionNumber: 2, sectorId: 's2', sectorName: 'Suporte', keywords: ['internet'] });
@@ -98,6 +103,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: [] }],
+      status: 'ready',
       refresh,
     });
     api.deleteTriageOption.mockResolvedValue(undefined);
@@ -115,6 +121,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: [] }],
+      status: 'ready',
       refresh,
     });
     render(<TriageAdminTab />);
@@ -129,6 +136,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TriageAdminTab />);
@@ -140,6 +148,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: [] }],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TriageAdminTab />);
@@ -150,6 +159,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TriageAdminTab creating={false} onCreatingChange={vi.fn()} />);
@@ -160,6 +170,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TriageAdminTab creating onCreatingChange={vi.fn()} />);
@@ -170,6 +181,7 @@ describe('TriageAdminTab', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TriageAdminTab />);

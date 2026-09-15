@@ -22,16 +22,18 @@ beforeEach(() => {
 });
 
 describe('MenuTriagePage', () => {
-  test('shows a loading message before the config arrives', () => {
-    useTriage.mockReturnValue({ config: null, options: [], refresh: vi.fn() });
+  test('em carregamento mostra um esqueleto em vez da pergunta de triagem', () => {
+    useTriage.mockReturnValue({ config: null, options: [], status: 'loading', refresh: vi.fn() });
     renderInShell(<MenuTriagePage />, { path: PATH });
-    expect(screen.getByText(/carregando/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/tentativas/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   test('renders the config form fields with the current values', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Escolha uma opção', confirmationText: 'Obrigado', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh: vi.fn(),
     });
     renderInShell(<MenuTriagePage />, { path: PATH });
@@ -45,6 +47,7 @@ describe('MenuTriagePage', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh,
     });
     api.updateTriageConfig.mockResolvedValue({ questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 3 });
@@ -67,6 +70,7 @@ describe('MenuTriagePage', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: ['fatura', 'boleto'] }],
+      status: 'ready',
       refresh: vi.fn(),
     });
     renderInShell(<MenuTriagePage />, { path: PATH });
@@ -82,6 +86,7 @@ describe('MenuTriagePage', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh,
     });
     api.createTriageOption.mockResolvedValue({ id: 'opt-2', optionNumber: 2, sectorId: 's2', sectorName: 'Suporte', keywords: ['internet'] });
@@ -107,6 +112,7 @@ describe('MenuTriagePage', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: [] }],
+      status: 'ready',
       refresh,
     });
     api.deleteTriageOption.mockResolvedValue(undefined);
@@ -123,6 +129,7 @@ describe('MenuTriagePage', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: [] }],
+      status: 'ready',
       refresh: vi.fn(),
     });
     renderInShell(<MenuTriagePage />, { path: PATH });
@@ -137,6 +144,7 @@ describe('MenuTriagePage', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh: vi.fn(),
     });
     renderInShell(<MenuTriagePage />, { path: PATH });
@@ -150,6 +158,7 @@ describe('MenuTriagePage', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [{ id: 'opt-1', optionNumber: 1, sectorId: 's1', sectorName: 'Financeiro', keywords: [] }],
+      status: 'ready',
       refresh: vi.fn(),
     });
     renderInShell(<MenuTriagePage />, { path: PATH });
@@ -160,6 +169,7 @@ describe('MenuTriagePage', () => {
     useTriage.mockReturnValue({
       config: { questionText: 'Pergunta', confirmationText: 'Confirmação', maxAttempts: 2 },
       options: [],
+      status: 'ready',
       refresh: vi.fn(),
     });
     renderInShell(<MenuTriagePage />, { path: PATH });

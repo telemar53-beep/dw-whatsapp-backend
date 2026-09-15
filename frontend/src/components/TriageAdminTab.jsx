@@ -7,6 +7,7 @@ import { updateTriageOption, deleteTriageOption } from '../services/api';
 import TriageConfigForm from './TriageConfigForm';
 import CreateTriageOptionForm from './CreateTriageOptionForm';
 import SectionHelp from './SectionHelp';
+import { AsyncState } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
@@ -151,63 +152,63 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
 }
 
 function TriageAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
-  const { config, options, refresh } = useTriage();
+  const { config, options, status, refresh } = useTriage();
   const [internalCreatingOption, setInternalCreatingOption] = useState(false);
   const controlled = creatingProp !== undefined;
   const creatingOption = controlled ? creatingProp : internalCreatingOption;
   const setCreatingOption = controlled ? onCreatingChange : setInternalCreatingOption;
 
-  if (!config) {
-    return <p className="text-sm text-wa-muted">Carregando...</p>;
-  }
-
   return (
-    <div className="space-y-6">
-      {options.length === 0 && (
-        <p className="rounded-lg border border-wa-warn-text/30 bg-wa-warn-bg px-3 py-2 text-sm text-wa-warn-text">
-          Nenhuma opção cadastrada: a triagem por menu não roda em nenhum canal, mesmo com o interruptor ligado.
-        </p>
-      )}
-      <TriageConfigForm config={config} onSaved={refresh} />
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          {!controlled && (
-            <button
-              type="button"
-              onClick={() => setCreatingOption(true)}
-              className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
-            >
-              Criar opção
-            </button>
+    <AsyncState status={status} skeletonLines={4}>
+      {config && (
+        <div className="space-y-6">
+          {options.length === 0 && (
+            <p className="rounded-lg border border-wa-warn-text/30 bg-wa-warn-bg px-3 py-2 text-sm text-wa-warn-text">
+              Nenhuma opção cadastrada: a triagem por menu não roda em nenhum canal, mesmo com o interruptor ligado.
+            </p>
           )}
-          <SectionHelp label="Triagem" title="Triagem">
-            <p>
-              Cada opção é um item do menu automático mostrado ao cliente na primeira
-              mensagem. Ele escolhe pelo número ou digitando uma palavra-chave, e a
-              conversa entra direto na fila do setor certo.
-            </p>
-            <p className="mt-2 italic">
-              Exemplo: opção 1 → Financeiro, palavras-chave: fatura, boleto, conta,
-              pagamento.
-            </p>
-          </SectionHelp>
+          <TriageConfigForm config={config} onSaved={refresh} />
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              {!controlled && (
+                <button
+                  type="button"
+                  onClick={() => setCreatingOption(true)}
+                  className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
+                >
+                  Criar opção
+                </button>
+              )}
+              <SectionHelp label="Triagem" title="Triagem">
+                <p>
+                  Cada opção é um item do menu automático mostrado ao cliente na primeira
+                  mensagem. Ele escolhe pelo número ou digitando uma palavra-chave, e a
+                  conversa entra direto na fila do setor certo.
+                </p>
+                <p className="mt-2 italic">
+                  Exemplo: opção 1 → Financeiro, palavras-chave: fatura, boleto, conta,
+                  pagamento.
+                </p>
+              </SectionHelp>
+            </div>
+            {creatingOption && (
+              <CreateTriageOptionForm
+                onCreated={() => {
+                  refresh();
+                  setCreatingOption(false);
+                }}
+                onCancel={() => setCreatingOption(false)}
+              />
+            )}
+          </div>
+          <div className="space-y-3">
+            {options.map((option) => (
+              <TriageOptionRow key={option.id} option={option} onSaved={refresh} onDeleted={refresh} />
+            ))}
+          </div>
         </div>
-        {creatingOption && (
-          <CreateTriageOptionForm
-            onCreated={() => {
-              refresh();
-              setCreatingOption(false);
-            }}
-            onCancel={() => setCreatingOption(false)}
-          />
-        )}
-      </div>
-      <div className="space-y-3">
-        {options.map((option) => (
-          <TriageOptionRow key={option.id} option={option} onSaved={refresh} onDeleted={refresh} />
-        ))}
-      </div>
-    </div>
+      )}
+    </AsyncState>
   );
 }
 

@@ -34,7 +34,7 @@ function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   // O nome da empresa vem da rota pública: aqui ainda não existe token. Sem
   // nome cadastrado (ou com a rota fora do ar) a tela continua de pé.
-  const { name: companyName } = useCompanyName();
+  const { name: companyName, status: companyNameStatus } = useCompanyName();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -72,7 +72,7 @@ function LoginPage() {
               <SignalMark />
             </span>
             <h1 className="font-display text-[22px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
-              {companyName || 'Atendimento'}
+              {companyNameStatus === 'loading' ? '' : companyName || 'Atendimento'}
             </h1>
             <p className="mt-1.5 text-[14px] text-chat-muted">Painel de atendimento</p>
           </div>

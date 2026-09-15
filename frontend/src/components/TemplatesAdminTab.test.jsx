@@ -22,6 +22,7 @@ describe('TemplatesAdminTab', () => {
   test('lists templates with their status', async () => {
     useTemplates.mockReturnValue({
       templates: [{ id: 'tpl-1', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejectionReason: null }],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TemplatesAdminTab />);
@@ -33,6 +34,7 @@ describe('TemplatesAdminTab', () => {
   test('shows the rejection reason for a rejected template', async () => {
     useTemplates.mockReturnValue({
       templates: [{ id: 'tpl-1', name: 'x', language: 'pt_BR', category: 'UTILITY', status: 'REJECTED', rejectionReason: 'Invalid format' }],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TemplatesAdminTab />);
@@ -42,7 +44,7 @@ describe('TemplatesAdminTab', () => {
 
   test('creates a new template and calls refresh', async () => {
     const refresh = vi.fn();
-    useTemplates.mockReturnValue({ templates: [], refresh });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh });
     api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-2', name: 'boas_vindas', status: 'PENDING' });
     render(<TemplatesAdminTab />);
     await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
@@ -66,7 +68,7 @@ describe('TemplatesAdminTab', () => {
 
   test('selects the first meta_cloud channel automatically once channels finish loading, without touching the dropdown', async () => {
     const refresh = vi.fn();
-    useTemplates.mockReturnValue({ templates: [], refresh });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh });
     useChannels.mockReturnValue({ channels: [] });
     const { rerender } = render(<TemplatesAdminTab />);
     await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
@@ -90,7 +92,7 @@ describe('TemplatesAdminTab', () => {
   });
 
   test('offers a 360dialog channel as a selectable option in the create-template channel select', async () => {
-    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
     useChannels.mockReturnValue({ channels: [{ id: 'ch-2', type: '360dialog', name: '360 Oficial', wabaId: 'waba-2' }] });
     render(<TemplatesAdminTab />);
     await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
@@ -100,7 +102,7 @@ describe('TemplatesAdminTab', () => {
   });
 
   test('offers a 360dialog channel as a selectable option in the register-existing-template channel select', async () => {
-    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
     useChannels.mockReturnValue({ channels: [{ id: 'ch-2', type: '360dialog', name: '360 Oficial', wabaId: 'waba-2' }] });
     render(<TemplatesAdminTab />);
     await userEvent.click(screen.getByRole('button', { name: /registrar template existente/i }));
@@ -110,7 +112,7 @@ describe('TemplatesAdminTab', () => {
   });
 
   test('shows the Meta error message when creation fails', async () => {
-    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
     api.createTemplateAdmin.mockRejectedValue({ body: { error: 'Invalid parameter' } });
     render(<TemplatesAdminTab />);
     await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
@@ -130,6 +132,7 @@ describe('TemplatesAdminTab', () => {
     const refresh = vi.fn();
     useTemplates.mockReturnValue({
       templates: [{ id: 'tpl-1', name: 'x', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejectionReason: null }],
+      status: 'ready',
       refresh,
     });
     api.deleteTemplateAdmin.mockResolvedValue(undefined);
@@ -147,6 +150,7 @@ describe('TemplatesAdminTab', () => {
     const refresh = vi.fn();
     useTemplates.mockReturnValue({
       templates: [{ id: 'tpl-1', name: 'x', language: 'pt_BR', category: 'UTILITY', status: 'PENDING', rejectionReason: null }],
+      status: 'ready',
       refresh,
     });
     api.syncTemplatesAdmin.mockResolvedValue([]);
@@ -160,7 +164,7 @@ describe('TemplatesAdminTab', () => {
 
   test('registers an existing template by name and language', async () => {
     const refresh = vi.fn();
-    useTemplates.mockReturnValue({ templates: [], refresh });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh });
     api.registerExistingTemplateAdmin.mockResolvedValue({ id: 'tpl-3', name: 'aviso_cobranca' });
     render(<TemplatesAdminTab />);
     await userEvent.click(screen.getByRole('button', { name: /registrar template existente/i }));
@@ -182,7 +186,7 @@ describe('TemplatesAdminTab', () => {
   });
 
   test('shows an error message when registering an existing template fails', async () => {
-    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
     api.registerExistingTemplateAdmin.mockRejectedValue({ body: { error: 'No template found' } });
     render(<TemplatesAdminTab />);
     await userEvent.click(screen.getByRole('button', { name: /registrar template existente/i }));
@@ -199,6 +203,7 @@ describe('TemplatesAdminTab', () => {
   test('does not show the template list, create form, or register form until their buttons are clicked', () => {
     useTemplates.mockReturnValue({
       templates: [{ id: 'tpl-1', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejectionReason: null }],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TemplatesAdminTab />);
@@ -217,6 +222,7 @@ describe('TemplatesAdminTab', () => {
         { id: 'tpl-1', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', rejectionReason: null },
         { id: 'tpl-2', name: 'promocao', language: 'pt_BR', category: 'MARKETING', status: 'REJECTED', rejectionReason: 'Formato inválido' },
       ],
+      status: 'ready',
       refresh: vi.fn(),
     });
     render(<TemplatesAdminTab />);
@@ -231,7 +237,7 @@ describe('TemplatesAdminTab', () => {
   });
 
   test('canceling the create-template form hides it without creating anything', async () => {
-    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
     render(<TemplatesAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
@@ -244,7 +250,7 @@ describe('TemplatesAdminTab', () => {
   });
 
   test('canceling the register-existing-template form hides it without registering anything', async () => {
-    useTemplates.mockReturnValue({ templates: [], refresh: vi.fn() });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
     render(<TemplatesAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: /registrar template existente/i }));
@@ -258,7 +264,7 @@ describe('TemplatesAdminTab', () => {
 
   test('creating a template closes the create form afterward', async () => {
     const refresh = vi.fn();
-    useTemplates.mockReturnValue({ templates: [], refresh });
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh });
     api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-2', name: 'boas_vindas', status: 'PENDING' });
     render(<TemplatesAdminTab />);
     await userEvent.click(screen.getByRole('button', { name: /cadastrar novo template/i }));
@@ -273,5 +279,14 @@ describe('TemplatesAdminTab', () => {
 
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(screen.queryByRole('form', { name: /cadastrar novo template/i })).not.toBeInTheDocument();
+  });
+
+  test('em carregamento não mostra "Nenhum template cadastrado"', async () => {
+    useTemplates.mockReturnValue({ templates: [], status: 'loading', refresh: vi.fn() });
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /ver templates/i }));
+
+    expect(screen.queryByText(/nenhum template cadastrado/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

@@ -68,6 +68,15 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Net Fibra · Atendimento')).toBeInTheDocument();
   });
 
+  test('em carregamento não mostra "Atendimento" genérico', () => {
+    useCompanyName.mockReturnValue({ name: '', status: 'loading' });
+    useQueue.mockReturnValue({ queue: [], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+    renderDashboard();
+    expect(screen.queryByText('Atendimento')).not.toBeInTheDocument();
+    expect(screen.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
+  });
+
   test('sem empresa cadastrada, a tela vazia mostra só Atendimento', () => {
     useCompanyName.mockReturnValue({ name: '', status: 'ready' });
     useQueue.mockReturnValue({ queue: [], status: 'ready' });

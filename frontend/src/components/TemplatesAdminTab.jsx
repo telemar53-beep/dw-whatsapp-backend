@@ -6,6 +6,7 @@ import { useChannels } from '../hooks/useChannels';
 import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
 import WaDialog from './WaDialog';
+import { AsyncState } from './ui';
 
 function TemplateRow({ template, onDeleted }) {
   const { token } = useAuth();
@@ -54,15 +55,13 @@ function TemplateRow({ template, onDeleted }) {
   );
 }
 
-function TemplatesModal({ templates, onClose, onDeleted }) {
+function TemplatesModal({ templates, status, onClose, onDeleted }) {
   return (
     <WaDialog title="Templates cadastrados" onClose={onClose} size="max-w-lg">
       <div className="wa-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-4">
-        {templates.length === 0 ? (
-          <p className="text-sm text-wa-muted">Nenhum template cadastrado ainda.</p>
-        ) : (
-          templates.map((template) => <TemplateRow key={template.id} template={template} onDeleted={onDeleted} />)
-        )}
+        <AsyncState status={status} isEmpty={templates.length === 0} emptyMessage="Nenhum template cadastrado ainda.">
+          {templates.map((template) => <TemplateRow key={template.id} template={template} onDeleted={onDeleted} />)}
+        </AsyncState>
       </div>
     </WaDialog>
   );
@@ -181,7 +180,7 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
 
 function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const { token } = useAuth();
-  const { templates, refresh } = useTemplates();
+  const { templates, status, refresh } = useTemplates();
   const { channels } = useChannels();
   const officialChannels = channels.filter((channel) => isOfficialChannelType(channel.type));
 
@@ -292,7 +291,7 @@ function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
       </div>
 
       {viewingTemplates && (
-        <TemplatesModal templates={templates} onClose={() => setViewingTemplates(false)} onDeleted={refresh} />
+        <TemplatesModal templates={templates} status={status} onClose={() => setViewingTemplates(false)} onDeleted={refresh} />
       )}
 
       {creatingTemplate && (

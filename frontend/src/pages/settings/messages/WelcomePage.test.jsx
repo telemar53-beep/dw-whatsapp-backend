@@ -15,14 +15,15 @@ beforeEach(() => {
 });
 
 describe('WelcomePage', () => {
-  // Adaptado do antigo popup "O que é isso: boas-vindas por canal" (SectionHelp) do
-  // MessagesAdminTab: a explicação agora é a descrição da própria página, sempre visível
-  // no cabeçalho — sem precisar clicar em nada para revelá-la.
-  test('shows the explanation for the welcome-message feature directly, without a popup', () => {
+  // Restaura o antigo popup "O que é isso: boas-vindas por canal" (SectionHelp) do
+  // MessagesAdminTab como um Card sempre visível no topo da página — mesmo texto
+  // e mesmo exemplo, sem precisar clicar em nada para revelá-los.
+  test('shows the explanation and example for the welcome-message feature directly, without a popup', () => {
     useChannels.mockReturnValue({ channels: [], status: 'ready', refresh: vi.fn() });
     renderInShell(<WelcomePage />, { path: '/configuracoes/mensagens/boas-vindas' });
 
-    expect(screen.getByText(/a primeira mensagem que cada canal envia ao cliente/i)).toBeInTheDocument();
+    expect(screen.getByText(/enviada automaticamente para o cliente assim que ele manda/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bem-vindo à nossa empresa/i)).toBeInTheDocument();
   });
 
   test('gerente sem a flag vê a boas-vindas mas não pode editar, com a explicação', () => {

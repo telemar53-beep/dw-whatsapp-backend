@@ -15,14 +15,15 @@ beforeEach(() => {
 });
 
 describe('CityNoticesPage', () => {
-  // Adaptado do antigo popup "O que é isso: avisos por cidade" (SectionHelp) do
-  // MessagesAdminTab: a explicação agora é a descrição da própria página, sempre
-  // visível no cabeçalho — sem precisar clicar em nada para revelá-la.
-  test('shows the explanation for the city-notice feature directly, without a popup', () => {
+  // Restaura o antigo popup "O que é isso: avisos por cidade" (SectionHelp) do
+  // MessagesAdminTab como um Card sempre visível no topo da página — mesmo texto
+  // e mesmo exemplo, sem precisar clicar em nada para revelá-los.
+  test('shows the explanation and example for the city-notice feature directly, without a popup', () => {
     useCityNotices.mockReturnValue({ cityNotices: [], status: 'ready', refresh: vi.fn() });
     renderInShell(<CityNoticesPage />, { path: '/configuracoes/mensagens/avisos-cidade' });
 
-    expect(screen.getByText(/avisos de instabilidade ou manutenção por região/i)).toBeInTheDocument();
+    expect(screen.getByText(/enviado automaticamente para clientes daquela cidade/i)).toBeInTheDocument();
+    expect(screen.getByText(/nossa rede está passando por uma instabilidade/i)).toBeInTheDocument();
   });
 
   test('shows a message inviting the admin to register cities when none exist yet, linking to Cadastros › Cidades', () => {

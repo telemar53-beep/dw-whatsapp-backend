@@ -9,6 +9,16 @@ function CityNoticesPage() {
   const status = hookStatus || (loading ? 'loading' : 'ready');
   return (
     <SettingsPage title="Avisos por cidade" description="Avisos de instabilidade ou manutenção por região." scope="global">
+      <Card title="Como funciona">
+        <p>
+          Enviado automaticamente para clientes daquela cidade quando entram em contato, além
+          da boas-vindas normal — use para avisos de instabilidade ou manutenção pontual.
+        </p>
+        <p className="mt-2 italic">
+          Exemplo: "Nesse momento nossa rede está passando por uma instabilidade na sua
+          região. Nossa equipe já está trabalhando na correção."
+        </p>
+      </Card>
       <Card title="Por cidade">
         <AsyncState
           status={status}

@@ -16,6 +16,16 @@ function QuickRepliesPage() {
       scope="global"
       action={!creating && <Button onClick={() => setCreating(true)}>Criar resposta rápida</Button>}
     >
+      <Card title="Como funciona">
+        <p>
+          Mensagens prontas que o atendente pode inserir com um clique durante o
+          atendimento, pra agilizar respostas repetitivas.
+        </p>
+        <p className="mt-2 italic">
+          Exemplo: "Olá! Para agilizar seu atendimento, poderia me informar seu
+          CPF ou número de contrato?"
+        </p>
+      </Card>
       {creating && (
         <CreateQuickReplyForm
           onCreated={() => {

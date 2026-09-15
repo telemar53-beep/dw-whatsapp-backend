@@ -33,6 +33,9 @@ function motivoDaResposta(data) {
     const { http_code: httpCode, developer_message: developerMessage } = data.meta;
     return httpCode !== undefined && httpCode !== null ? `(${httpCode}) ${developerMessage}` : developerMessage;
   }
+  if (typeof data.error === 'string' && data.error.trim()) {
+    return data.error.trim().slice(0, 300);
+  }
   if (typeof data === 'string' && data.trim()) {
     return data.trim().slice(0, 300);
   }

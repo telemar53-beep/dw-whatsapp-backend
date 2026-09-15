@@ -19,8 +19,18 @@ const EXPLICACOES_POR_CODIGO = {
 
 const CODIGO_NO_INICIO = /^\((\d+)\)/;
 
+// O 360dialog não usa o formato "(código) texto" da Meta: quando o número
+// está bloqueado por falta de pagamento, o corpo do erro vem como uma frase
+// solta em inglês (ex.: "This number is blocked due to lack of payment on
+// client side."). Como não há código para mapear, detectamos pelo trecho
+// característico da frase, sem distinguir maiúsculas/minúsculas.
+const LACK_OF_PAYMENT = /lack of payment/i;
+
 export function descreverFalha(motivo) {
   if (!motivo) return null;
+  if (LACK_OF_PAYMENT.test(motivo)) {
+    return `Número bloqueado no 360dialog por falta de pagamento — regularize a cobrança no Hub do 360dialog (${motivo})`;
+  }
   const match = motivo.match(CODIGO_NO_INICIO);
   if (!match) return motivo;
   const explicacao = EXPLICACOES_POR_CODIGO[match[1]];

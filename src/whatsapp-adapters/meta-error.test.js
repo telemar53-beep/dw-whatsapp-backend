@@ -57,6 +57,11 @@ describe('motivoDaResposta', () => {
     expect(motivoDaResposta(data)).toBe('Forbidden');
   });
 
+  test('reads the 360dialog plain-string error shape ({ error: "..." })', () => {
+    const data = { error: 'This number is blocked due to lack of payment on client side.' };
+    expect(motivoDaResposta(data)).toBe('This number is blocked due to lack of payment on client side.');
+  });
+
   test('falls back to a plain string body, trimmed to 300 chars', () => {
     expect(motivoDaResposta('  plain text error  ')).toBe('plain text error');
     expect(motivoDaResposta('x'.repeat(400))).toBe('x'.repeat(300));

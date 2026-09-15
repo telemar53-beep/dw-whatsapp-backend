@@ -20,6 +20,12 @@ describe('descreverFalha', () => {
     expect(descreverFalha('network error')).toBe('network error');
   });
 
+  test('um motivo do 360dialog por falta de pagamento vira explicação em português, com a frase original entre parênteses', () => {
+    expect(descreverFalha('This number is blocked due to lack of payment on client side.')).toBe(
+      'Número bloqueado no 360dialog por falta de pagamento — regularize a cobrança no Hub do 360dialog (This number is blocked due to lack of payment on client side.)'
+    );
+  });
+
   test('nulo ou vazio devolve nulo', () => {
     expect(descreverFalha(null)).toBeNull();
     expect(descreverFalha(undefined)).toBeNull();

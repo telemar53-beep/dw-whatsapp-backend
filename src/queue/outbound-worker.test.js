@@ -161,6 +161,28 @@ describe('startOutboundWorker', () => {
     erro.mockRestore();
   });
 
+  test('marks the message failed with the 360dialog plain-string motivo when error is a string, not an object', async () => {
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: '360dialog', config: {} });
+    const err = new Error('Request failed with status code 403');
+    err.response = {
+      status: 403,
+      data: { error: 'This number is blocked due to lack of payment on client side.' },
+    };
+    threeSixtyDialogAdapter.sendTextMessage.mockRejectedValue(err);
+    const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      handler({ messageId: 'msg-3', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+    ).rejects.toThrow('Request failed with status code 403');
+
+    expect(markMessageFailed).toHaveBeenCalledWith(
+      'msg-3',
+      'This number is blocked due to lack of payment on client side.'
+    );
+    erro.mockRestore();
+  });
+
   test('emits message:updated to the assigned agent on success', async () => {
     getConversationWithContact.mockResolvedValue({
       id: 'conv-1',

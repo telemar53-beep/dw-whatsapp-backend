@@ -40,8 +40,7 @@ describe('StartConversationModal', () => {
     render(<StartConversationModal onClose={vi.fn()} onCreated={onCreated} />);
 
     await screen.findByText('Berg');
-    await userEvent.clear(screen.getByLabelText(/telefone/i));
-    await userEvent.type(screen.getByLabelText(/telefone/i), '5598999990000');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '98999990000');
     await userEvent.type(screen.getByLabelText(/mensagem/i), 'Oi, tudo bem?');
     await userEvent.click(screen.getByRole('button', { name: /iniciar/i }));
 
@@ -54,11 +53,54 @@ describe('StartConversationModal', () => {
     expect(onCreated).toHaveBeenCalledWith({ id: 'conv-new' });
   });
 
-  test('pre-fills the phone field with the "55" country code', async () => {
+  test('pre-fills the country select with Brazil and leaves the phone field empty', async () => {
     api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
     render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
-    expect(screen.getByLabelText(/telefone/i)).toHaveValue('55');
+    expect(screen.getByLabelText(/país/i)).toHaveValue('55');
+    expect(screen.getByText('Brasil (+55)')).toBeInTheDocument();
+    expect(screen.getByLabelText(/telefone/i)).toHaveValue('');
+  });
+
+  test('shows a live preview of the full phone number as it is typed', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    await screen.findByText('Berg');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '98 98500-4187');
+
+    expect(screen.getByText('Número completo: 5598985004187')).toBeInTheDocument();
+  });
+
+  test('builds the phone number with the selected country code', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    api.startConversation.mockResolvedValue({ id: 'conv-new' });
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    await screen.findByText('Berg');
+    await userEvent.selectOptions(screen.getByLabelText(/país/i), '351');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '912345678');
+    await userEvent.type(screen.getByLabelText(/mensagem/i), 'Oi');
+    await userEvent.click(screen.getByRole('button', { name: /iniciar/i }));
+
+    await waitFor(() =>
+      expect(api.startConversation).toHaveBeenCalledWith(
+        { channelId: 'ch-1', phoneNumber: '351912345678', content: 'Oi' },
+        'tok-123'
+      )
+    );
+  });
+
+  test('shows a field error and does not call the API when the phone is left empty', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    await screen.findByText('Berg');
+    await userEvent.type(screen.getByLabelText(/mensagem/i), 'Oi');
+    await userEvent.click(screen.getByRole('button', { name: /iniciar/i }));
+
+    expect(await screen.findByText('Informe o telefone com DDD.')).toBeInTheDocument();
+    expect(api.startConversation).not.toHaveBeenCalled();
   });
 
   test('shows an error and keeps the modal open when the API rejects', async () => {
@@ -68,7 +110,7 @@ describe('StartConversationModal', () => {
     render(<StartConversationModal onClose={onClose} onCreated={vi.fn()} />);
 
     await screen.findByText('Berg');
-    await userEvent.type(screen.getByLabelText(/telefone/i), '5598999990000');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '98999990000');
     await userEvent.type(screen.getByLabelText(/mensagem/i), 'Oi');
     await userEvent.click(screen.getByRole('button', { name: /iniciar/i }));
 
@@ -128,8 +170,7 @@ describe('StartConversationModal', () => {
     expect(variableInputs).toHaveLength(2);
     await userEvent.type(variableInputs[0], 'João');
     await userEvent.type(variableInputs[1], 'R$150,00');
-    await userEvent.clear(screen.getByLabelText(/telefone/i));
-    await userEvent.type(screen.getByLabelText(/telefone/i), '5511999990000');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '11999990000');
     await userEvent.click(screen.getByRole('button', { name: /iniciar/i }));
 
     await waitFor(() =>

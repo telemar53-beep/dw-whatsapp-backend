@@ -10,11 +10,23 @@ import WaDialog, {
   waErrorClass,
 } from './WaDialog';
 
+const COUNTRY_CODES = [
+  { code: '55', label: 'Brasil (+55)' },
+  { code: '351', label: 'Portugal (+351)' },
+  { code: '1', label: 'EUA/Canadá (+1)' },
+  { code: '54', label: 'Argentina (+54)' },
+  { code: '595', label: 'Paraguai (+595)' },
+  { code: '598', label: 'Uruguai (+598)' },
+  { code: '34', label: 'Espanha (+34)' },
+];
+
 function StartConversationModal({ onClose, onCreated }) {
   const { token } = useAuth();
   const [channels, setChannels] = useState([]);
   const [channelId, setChannelId] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('55');
+  const [ddi, setDdi] = useState('55');
+  const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState(null);
   const [content, setContent] = useState('');
   const [templates, setTemplates] = useState([]);
   const [templateId, setTemplateId] = useState('');
@@ -23,6 +35,8 @@ function StartConversationModal({ onClose, onCreated }) {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+
+  const phoneDigits = phone.replace(/\D/g, '');
 
   useEffect(() => {
     listChannelsForAgent(token)
@@ -72,6 +86,12 @@ function StartConversationModal({ onClose, onCreated }) {
   async function handleSubmit(event) {
     event.preventDefault();
     setError(null);
+    setPhoneError(null);
+    if (phoneDigits.length < 8) {
+      setPhoneError('Informe o telefone com DDD.');
+      return;
+    }
+    const phoneNumber = `${ddi}${phoneDigits}`;
     setSubmitting(true);
     try {
       const conversation = isOfficialChannel
@@ -115,16 +135,49 @@ function StartConversationModal({ onClose, onCreated }) {
             )}
           </div>
           <div>
+            <label htmlFor="start-conversation-ddi" className={waLabelClass}>
+              País
+            </label>
+            <select
+              id="start-conversation-ddi"
+              value={ddi}
+              onChange={(e) => setDdi(e.target.value)}
+              className={waInputClass}
+            >
+              {COUNTRY_CODES.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label htmlFor="start-conversation-phone" className={waLabelClass}>
               Telefone
             </label>
             <input
               id="start-conversation-phone"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="98 98500-4187"
+              inputMode="tel"
               className={waInputClass}
-              required
+              aria-invalid={phoneError ? 'true' : 'false'}
+              aria-describedby={phoneError ? 'start-conversation-phone-error' : undefined}
             />
+            <p className="text-[12.5px] leading-[17px] text-wa-muted">
+              Digite com DDD. Com ou sem o 9, o sistema confere no WhatsApp qual forma existe.
+            </p>
+            {phoneDigits.length > 0 && (
+              <p className="text-[12.5px] leading-[17px] text-wa-muted">
+                Número completo: {ddi}{phoneDigits}
+              </p>
+            )}
+            {phoneError && (
+              <p id="start-conversation-phone-error" className={waErrorClass}>
+                {phoneError}
+              </p>
+            )}
           </div>
           {isOfficialChannel ? (
             <>

@@ -133,11 +133,11 @@ describe('TemplatesAdminTab', () => {
       refresh,
     });
     api.deleteTemplateAdmin.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<TemplatesAdminTab />);
 
     await userEvent.click(screen.getByRole('button', { name: /ver templates/i }));
     await userEvent.click(screen.getByRole('button', { name: /excluir/i }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Excluir' }));
 
     await waitFor(() => expect(api.deleteTemplateAdmin).toHaveBeenCalledWith('tpl-1', 'tok-123'));
     expect(refresh).toHaveBeenCalled();

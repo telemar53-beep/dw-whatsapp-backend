@@ -18,6 +18,12 @@ import RolesPage from './pages/settings/team/RolesPage';
 import ReasonsPage from './pages/settings/registers/ReasonsPage';
 import CitiesPage from './pages/settings/registers/CitiesPage';
 import CompanyPage from './pages/settings/CompanyPage';
+import WelcomePage from './pages/settings/messages/WelcomePage';
+import CityNoticesPage from './pages/settings/messages/CityNoticesPage';
+import QuickRepliesPage from './pages/settings/messages/QuickRepliesPage';
+import TemplatesPage from './pages/settings/messages/TemplatesPage';
+import AssignmentPage from './pages/settings/rules/AssignmentPage';
+import BusinessHoursPage from './pages/settings/rules/BusinessHoursPage';
 import { LEGACY_REDIRECTS } from './navigation/navItems';
 
 // Rota antiga → nova, trocando :params e mantendo ?query.
@@ -75,6 +81,12 @@ function App() {
                 <Route path="cadastros/motivos" element={<ReasonsPage />} />
                 <Route path="cadastros/cidades" element={<CitiesPage />} />
                 <Route path="empresa" element={<CompanyPage />} />
+                <Route path="mensagens/boas-vindas" element={<WelcomePage />} />
+                <Route path="mensagens/avisos-cidade" element={<CityNoticesPage />} />
+                <Route path="mensagens/respostas-rapidas" element={<QuickRepliesPage />} />
+                <Route path="mensagens/templates" element={<TemplatesPage />} />
+                <Route path="regras/atribuicao" element={<AssignmentPage />} />
+                <Route path="regras/horario" element={<BusinessHoursPage />} />
                 {/* Provisório até a Task 18: o resto cai na página antiga. */}
                 <Route path="*" element={<AdminChannelsPage />} />
               </Route>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useConfirm } from '../hooks/useConfirm';
 import { useTemplates } from '../hooks/useTemplates';
 import { useChannels } from '../hooks/useChannels';
 import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin } from '../services/api';
@@ -8,11 +9,12 @@ import WaDialog from './WaDialog';
 
 function TemplateRow({ template, onDeleted }) {
   const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirm();
   const [deleteError, setDeleteError] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
-    if (!window.confirm(`Excluir o template ${template.name}?`)) {
+    if (!(await confirm(`Excluir o template "${template.name}"?`, { danger: true, confirmLabel: 'Excluir' }))) {
       return;
     }
     setDeleteError(null);
@@ -47,6 +49,7 @@ function TemplateRow({ template, onDeleted }) {
       {deleteError && (
         <p className="mt-2 rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{deleteError}</p>
       )}
+      {confirmDialog}
     </div>
   );
 }
@@ -176,14 +179,17 @@ function RegisterExistingTemplateForm({ onRegistered, onCancel }) {
   );
 }
 
-function TemplatesAdminTab() {
+function TemplatesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   const { token } = useAuth();
   const { templates, refresh } = useTemplates();
   const { channels } = useChannels();
   const officialChannels = channels.filter((channel) => isOfficialChannelType(channel.type));
 
   const [viewingTemplates, setViewingTemplates] = useState(false);
-  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [internalCreatingTemplate, setInternalCreatingTemplate] = useState(false);
+  const controlled = creatingProp !== undefined;
+  const creatingTemplate = controlled ? creatingProp : internalCreatingTemplate;
+  const setCreatingTemplate = controlled ? onCreatingChange : setInternalCreatingTemplate;
   const [registeringTemplate, setRegisteringTemplate] = useState(false);
   const [channelId, setChannelId] = useState('');
   const [name, setName] = useState('');
@@ -265,7 +271,7 @@ function TemplatesAdminTab() {
         >
           Ver templates ({templates.length})
         </button>
-        {!creatingTemplate && (
+        {!controlled && !creatingTemplate && (
           <button
             type="button"
             onClick={() => setCreatingTemplate(true)}

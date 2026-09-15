@@ -1,0 +1,145 @@
+import { useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useConfirm } from '../../hooks/useConfirm';
+import { setCityNotice, deleteCityNotice } from '../../services/api';
+import CityStatusDot from './StatusDot';
+
+function CityNoticeRow({ city, onSaved }) {
+  const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirm();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState((city.notice && city.notice.message) || '');
+  const [enabled, setEnabled] = useState(Boolean(city.notice && city.notice.enabled));
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  function handleEditClick() {
+    setText((city.notice && city.notice.message) || '');
+    setEnabled(Boolean(city.notice && city.notice.enabled));
+    setError(null);
+    setEditing(true);
+  }
+
+  function handleCancel() {
+    setText((city.notice && city.notice.message) || '');
+    setEnabled(Boolean(city.notice && city.notice.enabled));
+    setError(null);
+    setEditing(false);
+  }
+
+  async function handleSave(event) {
+    event.preventDefault();
+    setError(null);
+    setSaving(true);
+    try {
+      await setCityNotice(city.id, text, enabled, token);
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      setError((err.body && err.body.error) || 'Falha ao salvar');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!(await confirm(`Remover o aviso da cidade "${city.name}"?`, { danger: true, confirmLabel: 'Remover' }))) {
+      return;
+    }
+    setDeleteError(null);
+    setDeleting(true);
+    try {
+      await deleteCityNotice(city.id, token);
+      onSaved();
+    } catch (err) {
+      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleting(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <li className="p-3.5">
+        <form onSubmit={handleSave} className="space-y-2">
+          <p className="text-[13.5px] font-medium text-wa-text">{city.name}</p>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={2}
+            className="w-full rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-[13.5px] text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60"
+            required
+          />
+          <label className="flex items-center gap-2 text-[13px] text-wa-muted">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              className="h-4 w-4 accent-wa-green"
+            />
+            Ativo
+          </label>
+          {error && <p className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-[10px] bg-wa-green px-3 py-1.5 text-[13px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Salvar
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="rounded-[10px] border border-wa-border bg-wa-surface px-3 py-1.5 text-[13px] font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </li>
+    );
+  }
+
+  if (!city.notice) {
+    return (
+      <li className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+        <p className="truncate text-[13.5px] text-wa-text">{city.name}</p>
+        <button onClick={handleEditClick} className="shrink-0 text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+          Criar aviso
+        </button>
+      </li>
+    );
+  }
+
+  return (
+    <li className="px-3.5 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[13.5px] font-medium text-wa-text">{city.name}</p>
+          <p className="truncate text-[12.5px] text-wa-muted">{city.notice.message}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <CityStatusDot enabled={city.notice.enabled} />
+          <button onClick={handleEditClick} className="text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+            Editar
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-[13px] font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
+          >
+            Excluir
+          </button>
+        </div>
+      </div>
+      {deleteError && (
+        <p className="mt-2 rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[12.5px] text-wa-error-text">{deleteError}</p>
+      )}
+      {confirmDialog}
+    </li>
+  );
+}
+
+export default CityNoticeRow;

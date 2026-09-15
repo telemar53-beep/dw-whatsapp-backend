@@ -124,8 +124,12 @@ describe('resolverRecebedorPix', () => {
     expect(axios.get).not.toHaveBeenCalled();
   });
 
-  test('código dinâmico: busca a URL da cobrança e resolve a chave da resposta', async () => {
-    axios.get.mockResolvedValue({ data: { chave: 'financeiro@example.com' } });
+  test('código dinâmico: busca a URL da cobrança e resolve a chave do payload do JWS', async () => {
+    const jws =
+      'eyJhbGciOiJSUzI1NiJ9.' +
+      Buffer.from(JSON.stringify({ chave: 'financeiro@example.com', txid: 'abc' })).toString('base64url') +
+      '.assinatura';
+    axios.get.mockResolvedValue({ data: jws });
     await expect(resolverRecebedorPix(DINAMICO)).resolves.toEqual({
       name: 'DW TELECOM',
       key: 'financeiro@example.com',
@@ -136,7 +140,25 @@ describe('resolverRecebedorPix', () => {
       signal: expect.any(AbortSignal),
       maxRedirects: 0,
       maxContentLength: 64 * 1024,
-      responseType: 'json',
+      responseType: 'text',
+    });
+  });
+
+  test('código dinâmico: PSP que devolve JSON puro como texto também é lido', async () => {
+    axios.get.mockResolvedValue({ data: '{"chave":"12345678000199"}' });
+    await expect(resolverRecebedorPix(DINAMICO)).resolves.toEqual({
+      name: 'DW TELECOM',
+      key: '12345678000199',
+      keyType: 'CNPJ',
+    });
+  });
+
+  test('código dinâmico: PSP que devolve objeto JSON já decodificado (formato antigo) continua funcionando', async () => {
+    axios.get.mockResolvedValue({ data: { chave: 'financeiro@example.com' } });
+    await expect(resolverRecebedorPix(DINAMICO)).resolves.toEqual({
+      name: 'DW TELECOM',
+      key: 'financeiro@example.com',
+      keyType: 'EMAIL',
     });
   });
 
@@ -151,6 +173,34 @@ describe('resolverRecebedorPix', () => {
 
   test('código dinâmico: resposta sem o campo chave devolve o resultado original', async () => {
     axios.get.mockResolvedValue({ data: {} });
+    await expect(resolverRecebedorPix(DINAMICO)).resolves.toEqual({
+      name: 'DW TELECOM',
+      key: null,
+      keyType: null,
+    });
+  });
+
+  test('código dinâmico: JWS cujo payload não tem chave devolve o resultado original, e o aviso não carrega corpo nem URL', async () => {
+    const aviso = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const jws =
+      'eyJhbGciOiJSUzI1NiJ9.' + Buffer.from(JSON.stringify({ txid: 'abc' })).toString('base64url') + '.assinatura';
+    axios.get.mockResolvedValue({ data: jws });
+
+    await expect(resolverRecebedorPix(DINAMICO)).resolves.toEqual({
+      name: 'DW TELECOM',
+      key: null,
+      keyType: null,
+    });
+
+    expect(aviso).toHaveBeenCalledWith('Pix charge lookup returned no key');
+    const logado = aviso.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(logado).not.toContain(jws);
+    expect(logado).not.toContain('pix.example.com');
+    aviso.mockRestore();
+  });
+
+  test('código dinâmico: corpo que não é JSON nem JWS de 3 blocos devolve key null, sem lançar', async () => {
+    axios.get.mockResolvedValue({ data: '<html>não é isso</html>' });
     await expect(resolverRecebedorPix(DINAMICO)).resolves.toEqual({
       name: 'DW TELECOM',
       key: null,

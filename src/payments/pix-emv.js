@@ -119,11 +119,34 @@ function acharUrlDaCobranca(codigo) {
   return null;
 }
 
+// A location de um Pix dinâmico devolve um JWS (application/jose): três blocos
+// base64url separados por ponto, e a cobrança — com a `chave` — é o bloco do meio.
+// Alguns PSPs devolvem o JSON puro; os dois formatos são aceitos. A assinatura não
+// é conferida: o destino já é o host do PSP em HTTPS, e a chave só monta o cartão.
+function lerChaveDaResposta(corpo) {
+  if (corpo && typeof corpo === 'object') return corpo.chave;
+  if (typeof corpo !== 'string') return null;
+  const texto = corpo.trim();
+  try {
+    return JSON.parse(texto).chave;
+  } catch (_) {
+    // não é JSON puro: tenta como JWS
+  }
+  const partes = texto.split('.');
+  if (partes.length !== 3) return null;
+  try {
+    return JSON.parse(Buffer.from(partes[1], 'base64url').toString('utf8')).chave;
+  } catch (_) {
+    return null;
+  }
+}
+
 /**
  * Igual a `lerRecebedorDoPix`, mas resolve códigos dinâmicos: quando a chave
  * não vem embutida no código (só a URL da cobrança, subtag 25), busca essa
  * URL — um endpoint público do BCB, sem autenticação — e lê a chave da
- * resposta. Nunca lança: qualquer falha de rede (timeout, 4xx/5xx, resposta
+ * resposta, que chega como um JWS (application/jose) cujo payload traz a
+ * cobrança. Nunca lança: qualquer falha de rede (timeout, 4xx/5xx, resposta
  * sem `chave`) devolve o resultado original, com `key: null`.
  */
 async function resolverRecebedorPix(codigo) {
@@ -154,12 +177,13 @@ async function resolverRecebedorPix(codigo) {
       signal: AbortSignal.timeout(5000),
       maxRedirects: 0,
       maxContentLength: 64 * 1024,
-      responseType: 'json',
+      responseType: 'text',
     });
-    const chave = response.data && response.data.chave;
+    const chave = lerChaveDaResposta(response.data);
     if (typeof chave === 'string' && chave.trim()) {
       return { name: resultado.name, key: chave.trim(), keyType: tipoDaChave(chave.trim()) };
     }
+    console.warn('Pix charge lookup returned no key');
     return resultado;
   } catch (err) {
     console.warn(`Pix charge lookup failed (${err && err.code ? err.code : 'unknown'})`);

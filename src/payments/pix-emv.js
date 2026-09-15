@@ -11,6 +11,8 @@
 // caractere a mais ou a menos invalidaria o CRC, e o código que sai ao cliente
 // é sempre o original, byte a byte.
 
+const axios = require('axios');
+
 const GUI_PIX = 'br.gov.bcb.pix';
 
 // Faixa das "Merchant Account Information" no padrão EMV. Na prática o Pix
@@ -94,4 +96,52 @@ function lerRecebedorDoPix(codigo) {
   return { name, key: chave, keyType: chave ? tipoDaChave(chave) : null };
 }
 
-module.exports = { lerRecebedorDoPix };
+/**
+ * Acha a URL de localização (subtag 25) dentro do mesmo bloco de conta do
+ * comerciante (26–51, GUI do Pix) que `lerRecebedorDoPix` já varre. Devolve
+ * null se o bloco Pix não tiver subtag 25 (código estático, por exemplo).
+ */
+function acharUrlDaCobranca(codigo) {
+  const itens = lerTlvs(codigo);
+  if (!itens) return null;
+  for (const item of itens) {
+    const id = Number(item.id);
+    if (id < MAI_PRIMEIRA || id > MAI_ULTIMA) continue;
+    const subtags = lerTlvs(item.valor);
+    if (!subtags) continue;
+    const gui = valorDaTag(subtags, '00');
+    if (!gui || gui.trim().toLowerCase() !== GUI_PIX) continue;
+    const url = valorDaTag(subtags, '25');
+    if (url && url.trim()) return url.trim();
+  }
+  return null;
+}
+
+/**
+ * Igual a `lerRecebedorDoPix`, mas resolve códigos dinâmicos: quando a chave
+ * não vem embutida no código (só a URL da cobrança, subtag 25), busca essa
+ * URL — um endpoint público do BCB, sem autenticação — e lê a chave da
+ * resposta. Nunca lança: qualquer falha de rede (timeout, 4xx/5xx, resposta
+ * sem `chave`) devolve o resultado original, com `key: null`.
+ */
+async function resolverRecebedorPix(codigo) {
+  const resultado = lerRecebedorDoPix(codigo);
+  if (!resultado) return null;
+  if (resultado.key) return resultado;
+
+  const url = acharUrlDaCobranca(codigo);
+  if (!url) return resultado;
+
+  try {
+    const response = await axios.get('https://' + url, { timeout: 5000 });
+    const chave = response.data && response.data.chave;
+    if (typeof chave === 'string' && chave.trim()) {
+      return { name: resultado.name, key: chave.trim(), keyType: tipoDaChave(chave.trim()) };
+    }
+    return resultado;
+  } catch (err) {
+    return resultado;
+  }
+}
+
+module.exports = { lerRecebedorDoPix, resolverRecebedorPix };

@@ -1,4 +1,6 @@
-const { lerRecebedorDoPix } = require('./pix-emv');
+jest.mock('axios');
+const axios = require('axios');
+const { lerRecebedorDoPix, resolverRecebedorPix } = require('./pix-emv');
 
 // Códigos montados no padrão EMV/BR Code (TLV: 2 dígitos de id, 2 de tamanho,
 // valor). São códigos de teste, nunca de cliente.
@@ -82,5 +84,54 @@ describe('lerRecebedorDoPix', () => {
     expect(lerRecebedorDoPix('00020126580014BR.GOV.BCB.PIX01')).toBeNull();
     expect(lerRecebedorDoPix('0002012699')).toBeNull();
     expect(lerRecebedorDoPix('000201' + '26xx0014BR.GOV.BCB.PIX')).toBeNull();
+  });
+});
+
+describe('resolverRecebedorPix', () => {
+  beforeEach(() => {
+    axios.get.mockReset();
+  });
+
+  test('código estático: devolve o mesmo resultado de lerRecebedorDoPix sem chamar a rede', async () => {
+    await expect(resolverRecebedorPix(EVP)).resolves.toEqual(lerRecebedorDoPix(EVP));
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  test('código dinâmico: busca a URL da cobrança e resolve a chave da resposta', async () => {
+    axios.get.mockResolvedValue({ data: { chave: 'financeiro@example.com' } });
+    await expect(resolverRecebedorPix(DINAMICO)).resolves.toEqual({
+      name: 'DW TELECOM',
+      key: 'financeiro@example.com',
+      keyType: 'EMAIL',
+    });
+    expect(axios.get).toHaveBeenCalledWith('https://pix.example.com/qr/v2/abc123', { timeout: 5000 });
+  });
+
+  test('código dinâmico: erro de rede devolve o resultado original, sem lançar', async () => {
+    axios.get.mockRejectedValue(new Error('network error'));
+    await expect(resolverRecebedorPix(DINAMICO)).resolves.toEqual({
+      name: 'DW TELECOM',
+      key: null,
+      keyType: null,
+    });
+  });
+
+  test('código dinâmico: resposta sem o campo chave devolve o resultado original', async () => {
+    axios.get.mockResolvedValue({ data: {} });
+    await expect(resolverRecebedorPix(DINAMICO)).resolves.toEqual({
+      name: 'DW TELECOM',
+      key: null,
+      keyType: null,
+    });
+  });
+
+  test('texto que não é código Pix EMV devolve null sem chamar a rede', async () => {
+    await expect(resolverRecebedorPix('boleto 34191.79001 01043.510047')).resolves.toBeNull();
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  test('código estático com chave CNPJ também evita a rede (fixture realista reaproveitada)', async () => {
+    await expect(resolverRecebedorPix(CNPJ)).resolves.toEqual(lerRecebedorDoPix(CNPJ));
+    expect(axios.get).not.toHaveBeenCalled();
   });
 });

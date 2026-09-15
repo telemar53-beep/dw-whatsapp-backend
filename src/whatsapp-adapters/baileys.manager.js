@@ -692,6 +692,8 @@ function getQrForChannel(channelId) {
 // Brazilian mobiles gained a ninth digit, but plenty of WhatsApp accounts are still
 // registered under the old 8-digit form (or vice versa). Given the digits the attendant
 // typed, return the candidate forms to ask WhatsApp about, typed form first.
+// [6-9] is safe here: Brazilian landlines start with 2-5, so an 8-digit landline never
+// matches the "add a 9" branch and is left untouched.
 function brazilianNumberVariants(digits) {
   const withNine = digits.match(/^55(\d{2})9(\d{8})$/);
   if (withNine) {

@@ -1210,6 +1210,21 @@ describe('baileys.manager', () => {
       expect(result).toBe('5598985120338');
     });
 
+    test('skips a result explicitly marked as not existing and resolves the one that does', async () => {
+      const sock = createMockSock();
+      sock.onWhatsApp.mockResolvedValue([
+        { jid: '5598985120338@s.whatsapp.net', exists: false },
+        { jid: '559885120338@s.whatsapp.net', exists: true },
+      ]);
+      baileysLib.default.mockReturnValue(sock);
+      const channel = { id: 'channel-onwa-6', type: 'baileys' };
+      await manager.startBaileysConnection(channel);
+
+      const result = await manager.resolveWhatsAppJid(channel, '5598985120338');
+
+      expect(result).toBe('559885120338');
+    });
+
     test('does not try a ninth-digit variant for a landline number', async () => {
       const sock = createMockSock();
       sock.onWhatsApp.mockResolvedValue([{ jid: '551133334444@s.whatsapp.net', exists: true }]);

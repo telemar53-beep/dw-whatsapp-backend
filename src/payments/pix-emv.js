@@ -1,5 +1,7 @@
-// Módulo puro (sem I/O): lê o recebedor de dentro do próprio código Pix copia
-// e cola que vem do Financeiro do SGP.
+// Lê o recebedor de dentro do próprio código Pix copia e cola que vem do
+// Financeiro do SGP. `lerRecebedorDoPix` é pura (sem I/O); a única exceção é
+// `resolverRecebedorPix`, que busca a chave via HTTP quando o código é
+// dinâmico e não traz a chave embutida.
 //
 // O cartão nativo de Pix da API oficial (Meta/360dialog) exige, junto do
 // código, o nome do recebedor, a chave e o tipo da chave. Esses três dados já

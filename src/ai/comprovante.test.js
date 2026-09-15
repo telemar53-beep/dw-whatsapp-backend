@@ -130,7 +130,7 @@ describe('fix round 1: valor não lido nunca vira zero', () => {
 
 // Fix round 1, achado 3: "DW" como substring aceitava qualquer favorecido que
 // contivesse essas duas letras. Nome de até 3 letras passa a casar por palavra
-// inteira; nome maior (o pixMerchantName cadastrado) segue por substring.
+// inteira; nome maior (outro nome aceito da empresa) segue por substring.
 describe('fix round 1: nome curto casa por palavra inteira', () => {
   const favorecidoConfere = (favorecido, nomesAceitos) => conferirComprovante({
     leitura: { ...LEITURA, favorecido }, faturas: FATURAS, nomesAceitos, hoje: HOJE,

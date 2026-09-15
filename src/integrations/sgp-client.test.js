@@ -10,7 +10,6 @@ const {
   listInvoices,
   requestTrustUnlock,
   findClientRecord,
-  getPixMerchant,
   SgpNotConfiguredError,
   SgpDisabledError,
   SgpClientNotFoundError,
@@ -546,42 +545,3 @@ describe('findClientRecord', () => {
   });
 });
 
-describe('getPixMerchant', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  test('devolve nome, chave e tipo quando os tres estao cadastrados', async () => {
-    getSgpQueryConfig.mockResolvedValue({
-      ...CONFIG,
-      pixMerchantName: 'DW TELECOM LTDA',
-      pixMerchantKey: '12345678000199',
-      pixMerchantKeyType: 'CNPJ',
-    });
-    expect(await getPixMerchant()).toEqual({ name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' });
-  });
-
-  test('devolve null quando nao ha config', async () => {
-    getSgpQueryConfig.mockResolvedValue(null);
-    expect(await getPixMerchant()).toBeNull();
-  });
-
-  test('devolve null quando falta qualquer um dos tres', async () => {
-    getSgpQueryConfig.mockResolvedValue({ ...CONFIG, pixMerchantName: 'DW TELECOM LTDA', pixMerchantKey: null, pixMerchantKeyType: 'CNPJ' });
-    expect(await getPixMerchant()).toBeNull();
-    getSgpQueryConfig.mockResolvedValue({ ...CONFIG, pixMerchantName: null, pixMerchantKey: '123', pixMerchantKeyType: 'CNPJ' });
-    expect(await getPixMerchant()).toBeNull();
-    getSgpQueryConfig.mockResolvedValue({ ...CONFIG, pixMerchantName: 'DW', pixMerchantKey: '123', pixMerchantKeyType: null });
-    expect(await getPixMerchant()).toBeNull();
-  });
-
-  test('nao exige integracao habilitada: e so leitura da config', async () => {
-    getSgpQueryConfig.mockResolvedValue({
-      ...CONFIG,
-      enabled: false,
-      token: null,
-      pixMerchantName: 'DW TELECOM LTDA',
-      pixMerchantKey: '12345678000199',
-      pixMerchantKeyType: 'CNPJ',
-    });
-    expect(await getPixMerchant()).toEqual({ name: 'DW TELECOM LTDA', key: '12345678000199', keyType: 'CNPJ' });
-  });
-});

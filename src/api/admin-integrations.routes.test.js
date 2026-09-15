@@ -297,29 +297,14 @@ describe('GET /api/admin/integrations/sgp-query-config', () => {
   });
 
   test('returns the config with only the last 4 characters of the token', async () => {
-    getSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: '4c3b1ec5-1308-4120-88be-cf83debe5c7a', enabled: true, pixMerchantName: null, pixMerchantKey: null, pixMerchantKeyType: null });
+    getSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: '4c3b1ec5-1308-4120-88be-cf83debe5c7a', enabled: true });
     const res = await request(buildApp())
       .get('/api/admin/integrations/sgp-query-config')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: '5c7a', enabled: true,
-      pixMerchantName: null, pixMerchantKey: null, pixMerchantKeyType: null,
     });
-  });
-
-  test('devolve a chave Pix inteira: nao e segredo, e o que vai impresso no cartao', async () => {
-    getSgpQueryConfig.mockResolvedValue({
-      id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: 'tok-abcd', enabled: true,
-      pixMerchantName: 'DW TELECOM LTDA', pixMerchantKey: '12345678000199', pixMerchantKeyType: 'CNPJ',
-    });
-    const res = await request(buildApp())
-      .get('/api/admin/integrations/sgp-query-config')
-      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
-    expect(res.status).toBe(200);
-    expect(res.body.pixMerchantName).toBe('DW TELECOM LTDA');
-    expect(res.body.pixMerchantKey).toBe('12345678000199');
-    expect(res.body.pixMerchantKeyType).toBe('CNPJ');
   });
 
   test('returns 403 for a non-admin agent', async () => {
@@ -362,7 +347,7 @@ describe('PUT /api/admin/integrations/sgp-query-config', () => {
 
   test('saves the config and returns it masked', async () => {
     getSgpQueryConfig.mockResolvedValue(null);
-    upsertSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: 'brand-new-token', enabled: true, pixMerchantName: null, pixMerchantKey: null, pixMerchantKeyType: null });
+    upsertSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: 'brand-new-token', enabled: true });
 
     const res = await request(buildApp())
       .put('/api/admin/integrations/sgp-query-config')
@@ -371,12 +356,10 @@ describe('PUT /api/admin/integrations/sgp-query-config', () => {
 
     expect(upsertSgpQueryConfig).toHaveBeenCalledWith({
       baseUrl: 'https://x.example', app: 'chatmix', token: 'brand-new-token', enabled: true,
-      pixMerchantName: null, pixMerchantKey: null, pixMerchantKeyType: null,
     });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       configured: true, baseUrl: 'https://x.example', app: 'chatmix', tokenLast4: 'oken', enabled: true,
-      pixMerchantName: null, pixMerchantKey: null, pixMerchantKeyType: null,
     });
   });
 
@@ -391,56 +374,8 @@ describe('PUT /api/admin/integrations/sgp-query-config', () => {
 
     expect(upsertSgpQueryConfig).toHaveBeenCalledWith({
       baseUrl: 'https://new.example', app: 'chatmix', token: null, enabled: false,
-      pixMerchantName: null, pixMerchantKey: null, pixMerchantKeyType: null,
     });
     expect(res.status).toBe(200);
-  });
-
-  test('grava o recebedor Pix quando os tres campos vem juntos', async () => {
-    getSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: 'kept', enabled: true });
-    upsertSgpQueryConfig.mockResolvedValue({
-      id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: 'kept', enabled: true,
-      pixMerchantName: 'DW TELECOM LTDA', pixMerchantKey: '12345678000199', pixMerchantKeyType: 'CNPJ',
-    });
-
-    const res = await request(buildApp())
-      .put('/api/admin/integrations/sgp-query-config')
-      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({
-        baseUrl: 'https://x.example', app: 'chatmix', enabled: true,
-        pixMerchantName: '  DW TELECOM LTDA  ', pixMerchantKey: ' 12345678000199 ', pixMerchantKeyType: 'CNPJ',
-      });
-
-    expect(res.status).toBe(200);
-    expect(upsertSgpQueryConfig).toHaveBeenCalledWith({
-      baseUrl: 'https://x.example', app: 'chatmix', token: null, enabled: true,
-      pixMerchantName: 'DW TELECOM LTDA', pixMerchantKey: '12345678000199', pixMerchantKeyType: 'CNPJ',
-    });
-    expect(res.body.pixMerchantKey).toBe('12345678000199');
-  });
-
-  test('400 quando so parte do recebedor Pix vem preenchida', async () => {
-    getSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: 'kept', enabled: true });
-    const res = await request(buildApp())
-      .put('/api/admin/integrations/sgp-query-config')
-      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({ baseUrl: 'https://x.example', app: 'chatmix', enabled: true, pixMerchantName: 'DW TELECOM LTDA' });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('pixMerchantName, pixMerchantKey and pixMerchantKeyType must be provided together');
-    expect(upsertSgpQueryConfig).not.toHaveBeenCalled();
-  });
-
-  test('400 quando pixMerchantKeyType nao e um tipo de chave conhecido', async () => {
-    getSgpQueryConfig.mockResolvedValue({ id: 'cfg-1', baseUrl: 'https://x.example', app: 'chatmix', token: 'kept', enabled: true });
-    const res = await request(buildApp())
-      .put('/api/admin/integrations/sgp-query-config')
-      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
-      .send({
-        baseUrl: 'https://x.example', app: 'chatmix', enabled: true,
-        pixMerchantName: 'DW TELECOM LTDA', pixMerchantKey: '12345678000199', pixMerchantKeyType: 'PIX',
-      });
-    expect(res.status).toBe(400);
-    expect(upsertSgpQueryConfig).not.toHaveBeenCalled();
   });
 
   test('returns 403 for a non-admin agent', async () => {

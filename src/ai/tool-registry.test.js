@@ -2449,7 +2449,6 @@ describe('analisar_comprovante', () => {
     getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x' });
     analyzeImage.mockResolvedValue({ ...LEITURA });
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '4321', value: 135, dueDate: '2026-09-16' }] });
-    sgpClient.getPixMerchant.mockResolvedValue({ name: 'PROVEDOR X LTDA', key: '12345', keyType: 'cnpj' });
     getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: ['Provedor X Ltda'] });
     // Padrão: o comprovante nunca tinha sido usado antes.
     findReceiptUsage.mockResolvedValue(null);
@@ -2689,46 +2688,14 @@ describe('analisar_comprovante', () => {
     expect(c.comprovante.valido).toBe(false);
   });
 
-  test('sem recebedor PIX cadastrado em Integrações, os nomes de Empresa ainda conferem', async () => {
-    sgpClient.getPixMerchant.mockResolvedValue(null);
-    const r = await findTool('analisar_comprovante').executar({}, ctx());
-    expect(r.favorecidoConfere).toBe(true);
-  });
-
-  test('o recebedor PIX cadastrado entra na lista junto com os nomes de Empresa', async () => {
-    getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor X', acceptedPayeeNames: [] });
-    sgpClient.getPixMerchant.mockResolvedValue({ name: 'PROVEDOR X LTDA', key: '12345', keyType: 'cnpj' });
-    const r = await findTool('analisar_comprovante').executar({}, ctx());
-    expect(r.favorecidoConfere).toBe(true);
-  });
-
   // Sem nenhum nome cadastrado nada pode conferir: a recusa sai ANTES da
   // visão, que é paga por imagem.
   test('sem nenhum nome de favorecido cadastrado, recusa antes de gastar a visão', async () => {
     getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
-    sgpClient.getPixMerchant.mockResolvedValue(null);
     const c = ctx();
     const r = await findTool('analisar_comprovante').executar({}, c);
     expect(r).toEqual({ analisado: false, motivo: 'Nenhum nome de favorecido cadastrado em Empresa; não é possível conferir comprovantes.' });
     expect(analyzeImage).not.toHaveBeenCalled();
     expect(c.comprovante).toBeUndefined();
-  });
-
-  // Fix round 1, achado 2: getPixMerchant ficava fora de qualquer proteção.
-  // Uma rejeição derrubava executar — hoje ela acontece antes da visão, mas
-  // continua não podendo derrubar a conferência: os nomes de Empresa bastam.
-  test('recebedor PIX indisponível no SGP não derruba a conferência', async () => {
-    sgpClient.getPixMerchant.mockRejectedValue(new Error('SGP fora do ar'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = ctx();
-
-    const r = await findTool('analisar_comprovante').executar({}, c);
-
-    expect(r.analisado).toBe(true);
-    expect(r.faturaId).toBe('4321');
-    // Sem o nome cadastrado, sobra o 'DW' — que ainda confere este favorecido.
-    expect(r.favorecidoConfere).toBe(true);
-    expect(c.comprovante).toBeDefined();
-    erroSpy.mockRestore();
   });
 });

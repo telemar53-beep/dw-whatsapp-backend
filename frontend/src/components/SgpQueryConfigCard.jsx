@@ -8,14 +8,6 @@ const inputClass =
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
 
-const PIX_KEY_TYPE_LABELS = {
-  CNPJ: 'CNPJ',
-  CPF: 'CPF',
-  EMAIL: 'E-mail',
-  PHONE: 'Telefone',
-  EVP: 'Chave aleatória',
-};
-
 function SgpQueryConfigCard() {
   const { token } = useAuth();
   const { config, refresh } = useSgpQueryConfig();
@@ -25,9 +17,6 @@ function SgpQueryConfigCard() {
   const [newToken, setNewToken] = useState('');
   const [changingToken, setChangingToken] = useState(false);
   const [enabled, setEnabled] = useState(true);
-  const [pixMerchantName, setPixMerchantName] = useState('');
-  const [pixMerchantKey, setPixMerchantKey] = useState('');
-  const [pixMerchantKeyType, setPixMerchantKeyType] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -36,9 +25,6 @@ function SgpQueryConfigCard() {
       setBaseUrl(config.baseUrl);
       setApp(config.app);
       setEnabled(config.enabled);
-      setPixMerchantName(config.pixMerchantName || '');
-      setPixMerchantKey(config.pixMerchantKey || '');
-      setPixMerchantKeyType(config.pixMerchantKeyType || '');
     }
   }, [config]);
 
@@ -54,16 +40,10 @@ function SgpQueryConfigCard() {
       setBaseUrl(config.baseUrl);
       setApp(config.app);
       setEnabled(config.enabled);
-      setPixMerchantName(config.pixMerchantName || '');
-      setPixMerchantKey(config.pixMerchantKey || '');
-      setPixMerchantKeyType(config.pixMerchantKeyType || '');
     } else {
       setBaseUrl('');
       setApp('');
       setEnabled(true);
-      setPixMerchantName('');
-      setPixMerchantKey('');
-      setPixMerchantKeyType('');
     }
     setChangingToken(false);
     setNewToken('');
@@ -86,15 +66,6 @@ function SgpQueryConfigCard() {
       setError('Token é obrigatório');
       return;
     }
-    // Os três campos do recebedor Pix são tudo ou nada: com só um preenchido, o
-    // backend rejeitaria a chamada — melhor travar aqui e mostrar a mensagem certa.
-    const pixFields = [pixMerchantName, pixMerchantKey, pixMerchantKeyType];
-    const anyPixFilled = pixFields.some((value) => value.trim());
-    const allPixFilled = pixFields.every((value) => value.trim());
-    if (anyPixFilled && !allPixFilled) {
-      setError('Preencha nome, chave e tipo da chave Pix, ou deixe os três vazios');
-      return;
-    }
     setSaving(true);
     try {
       await updateSgpQueryConfig(
@@ -103,9 +74,6 @@ function SgpQueryConfigCard() {
           app: app.trim(),
           token: newToken.trim() || undefined,
           enabled,
-          pixMerchantName: pixMerchantName.trim(),
-          pixMerchantKey: pixMerchantKey.trim(),
-          pixMerchantKeyType: pixMerchantKeyType.trim(),
         },
         token
       );
@@ -142,12 +110,6 @@ function SgpQueryConfigCard() {
             <p className="font-medium text-wa-text">Consulta ao SGP (cliente/boleto)</p>
             <p className="text-sm text-wa-muted">
               {config.baseUrl} — {config.enabled ? 'Ativo' : 'Inativo'}
-            </p>
-            <p className="text-sm text-wa-muted">
-              Recebedor Pix:{' '}
-              {config.pixMerchantName
-                ? `${config.pixMerchantName} · ${PIX_KEY_TYPE_LABELS[config.pixMerchantKeyType] || config.pixMerchantKeyType} · ${config.pixMerchantKey}`
-                : 'não cadastrado'}
             </p>
           </div>
           <button
@@ -192,47 +154,6 @@ function SgpQueryConfigCard() {
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
         Ativo
       </label>
-      <div className="space-y-3 border-t border-wa-surface-line pt-3">
-        <h4 className="text-sm font-semibold text-wa-text">Recebedor Pix (cartão de Pix nos canais oficiais)</h4>
-        <div>
-          <label htmlFor="sgp-pix-merchant-name" className={labelClass}>Nome do recebedor</label>
-          <input
-            id="sgp-pix-merchant-name"
-            value={pixMerchantName}
-            onChange={(e) => setPixMerchantName(e.target.value)}
-            placeholder="Nome do recebedor"
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label htmlFor="sgp-pix-merchant-key" className={labelClass}>Chave Pix da empresa</label>
-          <input
-            id="sgp-pix-merchant-key"
-            value={pixMerchantKey}
-            onChange={(e) => setPixMerchantKey(e.target.value)}
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label htmlFor="sgp-pix-merchant-key-type" className={labelClass}>Tipo da chave</label>
-          <select
-            id="sgp-pix-merchant-key-type"
-            value={pixMerchantKeyType}
-            onChange={(e) => setPixMerchantKeyType(e.target.value)}
-            className={inputClass}
-          >
-            <option value="">Selecione</option>
-            <option value="CNPJ">CNPJ</option>
-            <option value="CPF">CPF</option>
-            <option value="EMAIL">E-mail</option>
-            <option value="PHONE">Telefone</option>
-            <option value="EVP">Chave aleatória</option>
-          </select>
-        </div>
-        <p className="text-[12px] text-wa-muted">
-          Sem isso, os canais oficiais mandam o Pix como texto. O canal WhatsApp normal não precisa.
-        </p>
-      </div>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">
         <button

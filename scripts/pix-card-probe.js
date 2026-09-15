@@ -8,12 +8,14 @@
  *
  * Uso (360dialog):
  *   D360_API_KEY=... node scripts/pix-card-probe.js 360dialog <telefone> <arquivo-com-o-codigo-pix> \
- *     --merchant-name "DW TELECOM LTDA" --merchant-key 12345678000199 --key-type CNPJ \
  *     [--value 135.00] [--due 2026-09-30] [--fatura 4321]
  *
  * Uso (Meta Cloud):
  *   META_ACCESS_TOKEN=... node scripts/pix-card-probe.js meta_cloud <telefone> <arquivo-com-o-codigo-pix> \
- *     --phone-number-id <id> --merchant-name ... --merchant-key ... --key-type CNPJ
+ *     --phone-number-id <id>
+ *
+ * O recebedor (nome, chave e tipo) sai de dentro do próprio código Pix, como no
+ * envio de verdade — não há nada para informar na linha de comando.
  *
  * O código Pix vem de um arquivo (cole o copia e cola do Financeiro do SGP num
  * .txt) porque na linha de comando ele quebra. A chave/token vem do ambiente e
@@ -22,6 +24,7 @@
 const fs = require('fs');
 const axios = require('axios');
 const { buildPixOrderDetailsBody } = require('../src/whatsapp-adapters/meta-cloud.adapter');
+const { lerRecebedorDoPix } = require('../src/payments/pix-emv');
 
 function lerOpcoes(argv) {
   const opcoes = {};
@@ -37,18 +40,27 @@ function lerOpcoes(argv) {
 async function main() {
   const [, , tipo, telefone, arquivoCodigo, ...resto] = process.argv;
   const o = lerOpcoes(resto);
-  if (!tipo || !telefone || !arquivoCodigo || !o['merchant-name'] || !o['merchant-key'] || !o['key-type']) {
-    console.error('Uso: node scripts/pix-card-probe.js <360dialog|meta_cloud> <telefone> <arquivo-codigo-pix> --merchant-name N --merchant-key K --key-type CNPJ [--value 135.00] [--due AAAA-MM-DD] [--fatura ID] [--phone-number-id ID]');
+  if (!tipo || !telefone || !arquivoCodigo) {
+    console.error('Uso: node scripts/pix-card-probe.js <360dialog|meta_cloud> <telefone> <arquivo-codigo-pix> [--value 135.00] [--due AAAA-MM-DD] [--fatura ID] [--phone-number-id ID]');
     process.exitCode = 1;
     return;
   }
   const pixCode = fs.readFileSync(arquivoCodigo, 'utf8').trim();
+  // Mesmo caminho do envio: o recebedor é lido de dentro do código.
+  const merchant = lerRecebedorDoPix(pixCode);
+  if (!merchant || !merchant.key) {
+    console.error('O código do arquivo não traz a chave do recebedor: o cartão oficial não pode ser montado com ele.');
+    process.exitCode = 1;
+    return;
+  }
+  // Nome e tipo da chave saem impressos — a chave e o código, nunca.
+  console.log(`Recebedor lido do código: ${merchant.name || '(sem nome no código)'} · ${merchant.keyType}`);
   const card = {
     pixCode,
     value: o.value || '1.00',
     dueDate: o.due || new Date().toISOString().slice(0, 10),
     faturaId: o.fatura || `PROBE${Date.now()}`,
-    merchant: { name: o['merchant-name'], key: o['merchant-key'], keyType: o['key-type'] },
+    merchant,
   };
   const body = buildPixOrderDetailsBody(telefone.replace(/\D/g, ''), card);
 

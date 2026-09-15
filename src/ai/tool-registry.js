@@ -1063,20 +1063,10 @@ const TOOLS = [
       }
 
       // Os nomes aceitos como favorecido são configuração da empresa (cartão
-      // "Empresa"), mais o recebedor PIX cadastrado em Integrações quando
-      // existir. O SGP fora do ar aqui não pode derrubar a ferramenta: sem o
-      // nome cadastrado a conferência ainda funciona, só fica mais estrita.
-      let merchant = null;
-      try {
-        merchant = await sgpClient.getPixMerchant();
-      } catch (err) {
-        console.error(`analisar_comprovante: recebedor PIX indisponível na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
-      }
+      // "Empresa") e nada mais: não existe mais recebedor Pix cadastrado em
+      // Integrações para somar aqui.
       const empresa = await getCompanyConfig();
-      const nomesAceitos = [
-        ...(empresa.acceptedPayeeNames || []),
-        ...(merchant && merchant.name ? [merchant.name] : []),
-      ];
+      const nomesAceitos = [...(empresa.acceptedPayeeNames || [])];
       // Sem nenhum nome não há conferência possível — e a recusa sai ANTES da
       // visão, que é paga por imagem.
       if (nomesAceitos.length === 0) {

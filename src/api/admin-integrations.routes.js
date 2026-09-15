@@ -110,20 +110,7 @@ function toQueryConfigResponse(config) {
     app: config.app,
     tokenLast4: config.token.slice(-4),
     enabled: config.enabled,
-    // A chave vai inteira: não é segredo, é o dado de recebimento que sai
-    // impresso no cartão de Pix do cliente. Mascará-la só atrapalharia a
-    // conferência pelo admin.
-    pixMerchantName: config.pixMerchantName || null,
-    pixMerchantKey: config.pixMerchantKey || null,
-    pixMerchantKeyType: config.pixMerchantKeyType || null,
   };
-}
-
-const PIX_KEY_TYPES = ['CPF', 'CNPJ', 'EMAIL', 'PHONE', 'EVP'];
-
-/** Texto útil ou null: string vazia/só espaços é "não informado". */
-function textoOuNulo(valor) {
-  return typeof valor === 'string' && valor.trim() ? valor.trim() : null;
 }
 
 router.get('/sgp-query-config', requireAuth, requireIntegrationsAccess, async (req, res) => {
@@ -132,7 +119,7 @@ router.get('/sgp-query-config', requireAuth, requireIntegrationsAccess, async (r
 });
 
 router.put('/sgp-query-config', requireAuth, requireIntegrationsAccess, async (req, res) => {
-  const { baseUrl, app, token, enabled, pixMerchantName, pixMerchantKey, pixMerchantKeyType } = req.body || {};
+  const { baseUrl, app, token, enabled } = req.body || {};
   if (typeof baseUrl !== 'string' || !baseUrl.trim()) {
     return res.status(400).json({ error: 'baseUrl is required' });
   }
@@ -141,18 +128,6 @@ router.put('/sgp-query-config', requireAuth, requireIntegrationsAccess, async (r
   }
   if (typeof enabled !== 'boolean') {
     return res.status(400).json({ error: 'enabled must be a boolean' });
-  }
-  const pixNome = textoOuNulo(pixMerchantName);
-  const pixChave = textoOuNulo(pixMerchantKey);
-  const pixTipo = textoOuNulo(pixMerchantKeyType);
-  const pixInformados = [pixNome, pixChave, pixTipo].filter(Boolean).length;
-  // Meio cadastro não serve para nada: o cartão oficial exige os três juntos,
-  // então ou vem tudo, ou os três ficam null (recebedor não cadastrado).
-  if (pixInformados > 0 && pixInformados < 3) {
-    return res.status(400).json({ error: 'pixMerchantName, pixMerchantKey and pixMerchantKeyType must be provided together' });
-  }
-  if (pixTipo && !PIX_KEY_TYPES.includes(pixTipo)) {
-    return res.status(400).json({ error: `pixMerchantKeyType must be one of ${PIX_KEY_TYPES.join(', ')}` });
   }
   const existing = await getSgpQueryConfig();
   const hasToken = typeof token === 'string' && token.trim().length > 0;
@@ -164,9 +139,6 @@ router.put('/sgp-query-config', requireAuth, requireIntegrationsAccess, async (r
     app: app.trim(),
     token: hasToken ? token.trim() : null,
     enabled,
-    pixMerchantName: pixNome,
-    pixMerchantKey: pixChave,
-    pixMerchantKeyType: pixTipo,
   });
   res.json(toQueryConfigResponse(config));
 });

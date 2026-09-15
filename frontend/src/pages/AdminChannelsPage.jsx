@@ -10,7 +10,6 @@ import SectorsAdminTab from '../components/SectorsAdminTab';
 import ReasonsAdminTab from '../components/ReasonsAdminTab';
 import CitiesAdminTab from '../components/CitiesAdminTab';
 import TriageAdminTab from '../components/TriageAdminTab';
-import IntegrationsAdminTab from '../components/IntegrationsAdminTab';
 import {
   setChannelTriageEnabled,
   setChannelWabaId,
@@ -476,7 +475,7 @@ function AdminChannelsPage() {
               ) : activeTab === 'triage' ? (
                 <TriageAdminTab />
               ) : (
-                <IntegrationsAdminTab />
+                <p>Movido para Integrações.</p>
               )}
             </div>
           </div>

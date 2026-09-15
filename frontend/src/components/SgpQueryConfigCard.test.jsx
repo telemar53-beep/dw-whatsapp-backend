@@ -31,7 +31,7 @@ describe('SgpQueryConfigCard', () => {
     await userEvent.click(screen.getByRole('button', { name: /criar integração/i }));
     await userEvent.type(screen.getByLabelText(/url de acesso ao sgp/i), 'https://x.example');
     await userEvent.type(screen.getByLabelText(/^app$/i), 'chatmix');
-    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^salvar consulta ao sgp$/i }));
 
     expect(api.updateSgpQueryConfig).not.toHaveBeenCalled();
     expect(screen.getByText(/token é obrigatório/i)).toBeInTheDocument();
@@ -72,7 +72,7 @@ describe('SgpQueryConfigCard', () => {
     render(<SgpQueryConfigCard />);
 
     await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
-    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^salvar consulta ao sgp$/i }));
 
     await waitFor(() =>
       expect(api.updateSgpQueryConfig).toHaveBeenCalledWith(

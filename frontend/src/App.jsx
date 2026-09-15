@@ -24,6 +24,9 @@ import QuickRepliesPage from './pages/settings/messages/QuickRepliesPage';
 import TemplatesPage from './pages/settings/messages/TemplatesPage';
 import AssignmentPage from './pages/settings/rules/AssignmentPage';
 import BusinessHoursPage from './pages/settings/rules/BusinessHoursPage';
+import SgpQueryPage from './pages/settings/integrations/SgpQueryPage';
+import SgpChannelPage from './pages/settings/integrations/SgpChannelPage';
+import OpenAiPage from './pages/settings/integrations/OpenAiPage';
 import { LEGACY_REDIRECTS } from './navigation/navItems';
 
 // Rota antiga → nova, trocando :params e mantendo ?query.
@@ -87,6 +90,9 @@ function App() {
                 <Route path="mensagens/templates" element={<TemplatesPage />} />
                 <Route path="regras/atribuicao" element={<AssignmentPage />} />
                 <Route path="regras/horario" element={<BusinessHoursPage />} />
+                <Route path="integracoes/sgp-consulta" element={<SgpQueryPage />} />
+                <Route path="integracoes/sgp-canal" element={<SgpChannelPage />} />
+                <Route path="integracoes/openai" element={<OpenAiPage />} />
                 {/* Provisório até a Task 18: o resto cai na página antiga. */}
                 <Route path="*" element={<AdminChannelsPage />} />
               </Route>

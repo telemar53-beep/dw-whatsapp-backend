@@ -1,72 +1,61 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import IntegrationsAdminTab from './IntegrationsAdminTab';
-import { useSgpIntegrations } from '../hooks/useSgpIntegrations';
-import { useChannels } from '../hooks/useChannels';
-import { useTemplates } from '../hooks/useTemplates';
-import { useSgpQueryConfig } from '../hooks/useSgpQueryConfig';
-import { useAuth } from '../contexts/AuthContext';
-import * as api from '../services/api';
+import { renderInShell } from '../../../test-utils/renderInShell';
+import SgpChannelPage from './SgpChannelPage';
+import { useSgpIntegrations } from '../../../hooks/useSgpIntegrations';
+import { useChannels } from '../../../hooks/useChannels';
+import { useTemplates } from '../../../hooks/useTemplates';
+import { useSgpQueryConfig } from '../../../hooks/useSgpQueryConfig';
+import { useAuth } from '../../../contexts/AuthContext';
+import * as api from '../../../services/api';
 
-vi.mock('../hooks/useSgpIntegrations');
-vi.mock('../hooks/useChannels');
-vi.mock('../hooks/useTemplates');
-vi.mock('../hooks/useSgpQueryConfig');
-vi.mock('../contexts/AuthContext');
-vi.mock('../services/api');
+vi.mock('../../../hooks/useSgpIntegrations');
+vi.mock('../../../hooks/useChannels');
+vi.mock('../../../hooks/useTemplates');
+vi.mock('../../../hooks/useSgpQueryConfig');
+vi.mock('../../../contexts/AuthContext');
+vi.mock('../../../services/api');
 
 const BAILEYS_CHANNEL = { id: 'channel-1', type: 'baileys', name: 'Berg' };
 const META_CHANNEL = { id: 'channel-2', type: 'meta_cloud', name: 'Oficial' };
 const DIALOG360_CHANNEL = { id: 'channel-3', type: '360dialog', name: '360 Oficial' };
 const APPROVED_TEMPLATE = { id: 'tpl-1', name: 'aviso_cobranca', status: 'APPROVED' };
 
+const PATH = '/configuracoes/integracoes/sgp-canal';
+
 beforeEach(() => {
   vi.clearAllMocks();
-  useAuth.mockReturnValue({ token: 'tok-123' });
+  useAuth.mockReturnValue({ token: 'tok-123', agent: { role: 'admin' } });
   useChannels.mockReturnValue({ channels: [BAILEYS_CHANNEL, META_CHANNEL] });
   useTemplates.mockReturnValue({ templates: [APPROVED_TEMPLATE] });
-  useSgpQueryConfig.mockReturnValue({ config: { configured: false }, refresh: vi.fn() });
-  api.getAiConfig.mockResolvedValue({ configured: false, mode: 'disabled', model: '' });
-  api.listAiTools.mockResolvedValue([]);
-  // AiTriageConfigCard (renderizado por esta aba) lista os motivos para o
-  // select de encerramento pela IA; sem o mock, o hook recebe undefined.
-  api.listReasons.mockResolvedValue([]);
-  // CompanyConfigCard (o primeiro cartão da aba) busca a configuração da empresa.
-  api.getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
+  useSgpQueryConfig.mockReturnValue({ config: { configured: false }, status: 'ready', refresh: vi.fn() });
 });
 
-describe('IntegrationsAdminTab', () => {
-  // A empresa é a primeira configuração da aba: sem ela, nenhum comprovante
-  // confere e o nome do provedor não aparece para o cliente.
-  test('mostra o cartão da empresa no topo da aba', () => {
-    useSgpIntegrations.mockReturnValue({ integrations: [], refresh: vi.fn() });
-    render(<IntegrationsAdminTab />);
-    expect(screen.getByText('Empresa')).toBeInTheDocument();
-  });
-
+describe('SgpChannelPage', () => {
   test('lists existing integrations with their channel name and mode label', () => {
     useSgpIntegrations.mockReturnValue({
       integrations: [{ id: 'int-1', description: 'Baileys principal', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true }],
+      status: 'ready',
       refresh: vi.fn(),
     });
-    render(<IntegrationsAdminTab />);
+    renderInShell(<SgpChannelPage />, { path: PATH });
     expect(screen.getByText('Baileys principal')).toBeInTheDocument();
     expect(screen.getByText(/Berg/)).toBeInTheDocument();
     expect(screen.getByText(/Texto livre/)).toBeInTheDocument();
   });
 
   test('does not show the create-integration form until its button is clicked', () => {
-    useSgpIntegrations.mockReturnValue({ integrations: [], refresh: vi.fn() });
-    render(<IntegrationsAdminTab />);
+    useSgpIntegrations.mockReturnValue({ integrations: [], status: 'ready', refresh: vi.fn() });
+    renderInShell(<SgpChannelPage />, { path: PATH });
 
     expect(screen.queryByLabelText(/^canal$/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /nova integração sgp/i })).toBeInTheDocument();
   });
 
   test('the template selector only appears after choosing a meta_cloud channel', async () => {
-    useSgpIntegrations.mockReturnValue({ integrations: [], refresh: vi.fn() });
-    render(<IntegrationsAdminTab />);
+    useSgpIntegrations.mockReturnValue({ integrations: [], status: 'ready', refresh: vi.fn() });
+    renderInShell(<SgpChannelPage />, { path: PATH });
     await userEvent.click(screen.getByRole('button', { name: /nova integração sgp/i }));
 
     expect(screen.queryByLabelText(/template padrão/i)).not.toBeInTheDocument();
@@ -78,8 +67,8 @@ describe('IntegrationsAdminTab', () => {
 
   test('offers a 360dialog channel as eligible and switches the form to template mode when selected', async () => {
     useChannels.mockReturnValue({ channels: [BAILEYS_CHANNEL, DIALOG360_CHANNEL] });
-    useSgpIntegrations.mockReturnValue({ integrations: [], refresh: vi.fn() });
-    render(<IntegrationsAdminTab />);
+    useSgpIntegrations.mockReturnValue({ integrations: [], status: 'ready', refresh: vi.fn() });
+    renderInShell(<SgpChannelPage />, { path: PATH });
     await userEvent.click(screen.getByRole('button', { name: /nova integração sgp/i }));
 
     expect(screen.getByRole('option', { name: '360 Oficial' })).toBeInTheDocument();
@@ -92,9 +81,9 @@ describe('IntegrationsAdminTab', () => {
 
   test('creates a new freetext integration for a baileys channel', async () => {
     const refresh = vi.fn();
-    useSgpIntegrations.mockReturnValue({ integrations: [], refresh });
+    useSgpIntegrations.mockReturnValue({ integrations: [], status: 'ready', refresh });
     api.createSgpIntegration.mockResolvedValue({ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: false });
-    render(<IntegrationsAdminTab />);
+    renderInShell(<SgpChannelPage />, { path: PATH });
     await userEvent.click(screen.getByRole('button', { name: /nova integração sgp/i }));
 
     await userEvent.type(screen.getByLabelText(/descrição/i), 'Baileys');
@@ -109,9 +98,9 @@ describe('IntegrationsAdminTab', () => {
 
   test('creates a new template integration for a meta_cloud channel with a chosen default template', async () => {
     const refresh = vi.fn();
-    useSgpIntegrations.mockReturnValue({ integrations: [], refresh });
+    useSgpIntegrations.mockReturnValue({ integrations: [], status: 'ready', refresh });
     api.createSgpIntegration.mockResolvedValue({ id: 'int-2', description: 'Oficial', channelId: 'channel-2', mode: 'template', defaultTemplateId: 'tpl-1', enabled: true, hasApiKey: false });
-    render(<IntegrationsAdminTab />);
+    renderInShell(<SgpChannelPage />, { path: PATH });
     await userEvent.click(screen.getByRole('button', { name: /nova integração sgp/i }));
 
     await userEvent.type(screen.getByLabelText(/descrição/i), 'Oficial');
@@ -128,10 +117,11 @@ describe('IntegrationsAdminTab', () => {
     const refresh = vi.fn();
     useSgpIntegrations.mockReturnValue({
       integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true }],
+      status: 'ready',
       refresh,
     });
     api.updateSgpIntegration.mockResolvedValue({});
-    render(<IntegrationsAdminTab />);
+    renderInShell(<SgpChannelPage />, { path: PATH });
 
     await userEvent.click(screen.getByLabelText('Ativo: Baileys'));
 
@@ -144,9 +134,10 @@ describe('IntegrationsAdminTab', () => {
   test('clicking Editar reveals the edit fields prefilled with the card current values', async () => {
     useSgpIntegrations.mockReturnValue({
       integrations: [{ id: 'int-2', description: 'Oficial', channelId: 'channel-2', mode: 'template', defaultTemplateId: 'tpl-1', enabled: true, hasApiKey: true }],
+      status: 'ready',
       refresh: vi.fn(),
     });
-    render(<IntegrationsAdminTab />);
+    renderInShell(<SgpChannelPage />, { path: PATH });
 
     expect(screen.queryByRole('form', { name: /editar integração/i })).not.toBeInTheDocument();
 
@@ -162,10 +153,11 @@ describe('IntegrationsAdminTab', () => {
     const refresh = vi.fn();
     useSgpIntegrations.mockReturnValue({
       integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: false, hasApiKey: true }],
+      status: 'ready',
       refresh,
     });
     api.updateSgpIntegration.mockResolvedValue({});
-    render(<IntegrationsAdminTab />);
+    renderInShell(<SgpChannelPage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
     const editForm = within(screen.getByRole('form', { name: /editar integração/i }));
@@ -189,9 +181,10 @@ describe('IntegrationsAdminTab', () => {
   test('the edit form template selector follows the edit form own channel selection', async () => {
     useSgpIntegrations.mockReturnValue({
       integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true }],
+      status: 'ready',
       refresh: vi.fn(),
     });
-    render(<IntegrationsAdminTab />);
+    renderInShell(<SgpChannelPage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
     const editForm = within(screen.getByRole('form', { name: /editar integração/i }));
@@ -205,9 +198,10 @@ describe('IntegrationsAdminTab', () => {
   test('cancelling the edit form closes it without calling the API', async () => {
     useSgpIntegrations.mockReturnValue({
       integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: true }],
+      status: 'ready',
       refresh: vi.fn(),
     });
-    render(<IntegrationsAdminTab />);
+    renderInShell(<SgpChannelPage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: /^editar$/i }));
     const editForm = within(screen.getByRole('form', { name: /editar integração/i }));
@@ -224,13 +218,29 @@ describe('IntegrationsAdminTab', () => {
   test('generating a key shows it once', async () => {
     useSgpIntegrations.mockReturnValue({
       integrations: [{ id: 'int-1', description: 'Baileys', channelId: 'channel-1', mode: 'freetext', defaultTemplateId: null, enabled: true, hasApiKey: false }],
+      status: 'ready',
       refresh: vi.fn(),
     });
     api.rotateSgpIntegrationKey.mockResolvedValue({ apiKey: 'plain-key-abc' });
-    render(<IntegrationsAdminTab />);
+    renderInShell(<SgpChannelPage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: /gerar nova chave/i }));
 
     expect(await screen.findByText('plain-key-abc')).toBeInTheDocument();
+  });
+
+  test('avisa quando a Consulta ao SGP está desativada', () => {
+    useSgpIntegrations.mockReturnValue({ integrations: [], status: 'ready', refresh: vi.fn() });
+    useSgpQueryConfig.mockReturnValue({ config: { configured: true, enabled: false }, status: 'ready', refresh: vi.fn() });
+    renderInShell(<SgpChannelPage />, { path: PATH });
+    expect(screen.getByText(/consulta ao sgp está desativada/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /consulta ao sgp/i })).toHaveAttribute('href', '/configuracoes/integracoes/sgp-consulta');
+  });
+
+  test('gerente sem a flag vê acesso negado', () => {
+    useSgpIntegrations.mockReturnValue({ integrations: [], status: 'ready', refresh: vi.fn() });
+    useAuth.mockReturnValue({ token: 'tok', agent: { role: 'manager', canManageIntegrations: false } });
+    renderInShell(<SgpChannelPage />, { path: PATH });
+    expect(screen.getByRole('heading', { name: /sem acesso a sgp por canal/i })).toBeInTheDocument();
   });
 });

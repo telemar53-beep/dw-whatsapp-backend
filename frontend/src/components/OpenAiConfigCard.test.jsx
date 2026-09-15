@@ -75,7 +75,7 @@ describe('OpenAiConfigCard', () => {
     await userEvent.click(screen.getByRole('button', { name: /testar conexão/i }));
     await waitFor(() => expect(screen.getByRole('option', { name: 'gpt-a' })).toBeInTheDocument());
     await userEvent.selectOptions(screen.getByLabelText(/modelo/i), 'gpt-a');
-    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^salvar openai$/i }));
 
     await waitFor(() =>
       expect(updateAiConfig).toHaveBeenCalledWith({ apiKey: 'sk-fresh-key', model: 'gpt-a', mode: 'disabled' }, 't')
@@ -91,7 +91,7 @@ describe('OpenAiConfigCard', () => {
     expect(await screen.findByText(/falhou/)).toBeInTheDocument();
     expect(screen.getByText('Erro')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^salvar openai$/i }));
 
     await waitFor(() => expect(updateAiConfig).toHaveBeenCalled());
     expect(screen.queryByText(/falhou/)).not.toBeInTheDocument();

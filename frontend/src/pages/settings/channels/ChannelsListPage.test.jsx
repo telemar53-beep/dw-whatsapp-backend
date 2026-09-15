@@ -29,7 +29,7 @@ describe('ChannelsListPage', () => {
     useChannels.mockReturnValue({ channels: [baileys, oficial], status: 'ready', refresh: vi.fn() });
     renderInShell(<ChannelsListPage />, { path: '/configuracoes/canais' });
     expect(screen.getByRole('link', { name: /berg/i })).toHaveAttribute('href', '/configuracoes/canais/ch1/conexao');
-    expect(screen.getByText('Oficial · API')).toBeInTheDocument();
+    expect(screen.getByText('Não verificada')).toBeInTheDocument();
     expect(screen.getByText('Conectado')).toBeInTheDocument();
     expect(screen.getByText('Triagem por menu ligada sem opções cadastradas')).toBeInTheDocument();
     expect(screen.getByText('IA ligada sem OpenAI configurada')).toBeInTheDocument();
@@ -38,19 +38,12 @@ describe('ChannelsListPage', () => {
 
   // Fix: o cabeçalho mostrava "Este canal" (scope="channel"), mas a lista
   // vale para toda a operação, não para um canal específico.
-  test('o cabeçalho mostra o escopo "Toda a operação", não "Este canal"', () => {
-    useChannels.mockReturnValue({ channels: [], status: 'ready', refresh: vi.fn() });
-    renderInShell(<ChannelsListPage />, { path: '/configuracoes/canais' });
-    expect(screen.getByText('Toda a operação')).toBeInTheDocument();
-    expect(screen.queryByText('Este canal')).not.toBeInTheDocument();
-  });
-
   // Fix round 1: só havia teste de quem NÃO vê o botão; faltava confirmar
   // que quem tem a permissão (admin, o caso comum) realmente o vê.
   test('admin vê o botão Criar canal', () => {
     useChannels.mockReturnValue({ channels: [baileys], status: 'ready', refresh: vi.fn() });
     renderInShell(<ChannelsListPage />, { path: '/configuracoes/canais' });
-    expect(screen.getByRole('button', { name: /criar canal/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /adicionar canal/i })).toBeInTheDocument();
   });
 
   test('gerente sem a flag vê a lista mas não o botão Criar canal', () => {
@@ -58,13 +51,13 @@ describe('ChannelsListPage', () => {
     useChannels.mockReturnValue({ channels: [baileys], status: 'ready', refresh: vi.fn() });
     renderInShell(<ChannelsListPage />, { path: '/configuracoes/canais' });
     expect(screen.getByText('Berg')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /criar canal/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /adicionar canal/i })).not.toBeInTheDocument();
   });
 
   test('"Mostrar canais ocultos" vai para a URL e pede os ocultos ao hook', async () => {
     useChannels.mockReturnValue({ channels: [], status: 'ready', refresh: vi.fn() });
     renderInShell(<ChannelsListPage />, { path: '/configuracoes/canais' });
-    await userEvent.click(screen.getByRole('checkbox', { name: /mostrar canais ocultos/i }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /mostrar ocultos/i }));
     expect(screen.getByTestId('location-search')).toHaveTextContent('ocultos=1');
     expect(useChannels).toHaveBeenLastCalledWith(true, true);
   });

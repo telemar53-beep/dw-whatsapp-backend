@@ -1,34 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Button, DangerZone, Field, inputClass } from '../../../components/ui';
+import { Button, DangerZone, inputClass } from '../../../components/ui';
 import QrCodeView from '../../../components/QrCodeView';
+import { IconInfo, IconChevronDown } from '../../../components/icons/WaIcons';
 import { isOfficialChannelType } from '../../../utils/channelTypes';
+import { formatPhone } from '../../../utils/phone';
+import { ConnectionStatus, providerLabel } from './ChannelsTable';
 
-// Movidos de AdminChannelsPage.jsx (Tasks 1-16), sem mudança de lógica:
-// canal oficial (meta_cloud/360dialog) não tem conexão para cair — quem
-// responde é a API da Meta/BSP — então o selo mostra o que ele é em vez de
-// um "Conectado/Desconectado" que ninguém atualiza.
-export const STATUS_LABELS = {
-  connected: 'Conectado',
-  awaiting_qr: 'Aguardando QR code',
-  disconnected: 'Desconectado',
-};
-
-export function StatusDot({ status, type }) {
-  const official = isOfficialChannelType(type);
-  const color =
-    official || status === 'connected'
-      ? 'bg-wa-chip-text'
-      : status === 'awaiting_qr'
-        ? 'bg-wa-warn-text'
-        : 'bg-wa-border-strong';
-  return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-wa-border bg-wa-surface-soft px-2.5 py-[3px] text-[12.5px] font-medium text-wa-muted">
-      <span className={`h-1.5 w-1.5 rounded-full ${color}`} aria-hidden="true" />
-      {official ? 'Oficial · API' : STATUS_LABELS[status] || status}
-    </span>
-  );
-}
+export { STATUS_LABELS } from './channelStatus';
+export { ConnectionStatus as StatusDot } from './ChannelsTable';
 
 const PERMISSION_REASON = 'Requer permissão de Canais e Integrações';
 
@@ -37,8 +17,22 @@ function ErrorNote({ children }) {
   return <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text">{children}</p>;
 }
 
+function DataRow({ label, children, action }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5">
+      <dt className="w-[46%] shrink-0 text-[13px] text-wa-muted">{label}</dt>
+      <dd className="flex min-w-0 flex-1 items-center justify-between gap-3 text-[13.5px] text-wa-text">
+        <span className="min-w-0 truncate">{children}</span>
+        {action}
+      </dd>
+    </div>
+  );
+}
+
 function ChannelConnectionTab() {
   const { channel, refresh, actions, canManage } = useOutletContext();
+  const official = isOfficialChannelType(channel.type);
+  const [editingWaba, setEditingWaba] = useState(false);
   const [wabaIdDraft, setWabaIdDraft] = useState(channel.wabaId || '');
 
   // Trocar de canal (mesma aba, id novo na URL) não remonta o componente —
@@ -46,72 +40,144 @@ function ChannelConnectionTab() {
   // canal anterior.
   useEffect(() => {
     setWabaIdDraft(channel.wabaId || '');
+    setEditingWaba(false);
   }, [channel.id, channel.wabaId]);
 
   const busy = actions.busyChannelId === channel.id;
 
+  async function handleSaveWaba() {
+    await actions.saveWabaId(channel.id, wabaIdDraft);
+    setEditingWaba(false);
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {!canManage && (
         <p className="rounded-[12px] bg-wa-warn-bg px-3 py-2.5 text-[13.5px] text-wa-warn-text">{PERMISSION_REASON}</p>
       )}
-
-      <StatusDot status={channel.status} type={channel.type} />
-
       <ErrorNote>{actions.errors.wabaId}</ErrorNote>
       <ErrorNote>{actions.errors.action}</ErrorNote>
 
-      {isOfficialChannelType(channel.type) && (
-        <div className="flex flex-wrap items-end gap-2">
-          <Field id="waba-id" label="WABA ID">
-            <input
-              id="waba-id"
-              value={wabaIdDraft}
-              disabled={!canManage}
-              onChange={(e) => setWabaIdDraft(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <Button
-            onClick={() => actions.saveWabaId(channel.id, wabaIdDraft)}
-            disabled={!canManage}
-            title={!canManage ? PERMISSION_REASON : undefined}
-          >
-            Salvar WABA ID
-          </Button>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <section aria-labelledby="connection-data-title" className="rounded-[14px] border border-wa-border bg-black/[0.12] px-4 pb-2 pt-4 sm:px-5">
+          <h3 id="connection-data-title" className="text-[15px] font-semibold text-wa-text">
+            Dados da conexão
+          </h3>
+          <dl className="mt-2 divide-y divide-wa-border">
+            <DataRow label="Provedor">{providerLabel(channel.type)}</DataRow>
+            <DataRow label="Tipo">{official ? 'API oficial' : 'Não oficial'}</DataRow>
+            <DataRow label="Número">{formatPhone(channel.phoneNumber)}</DataRow>
+            {!official && (
+              <DataRow label="Situação">
+                <ConnectionStatus channel={channel} />
+              </DataRow>
+            )}
+            {official && !editingWaba && (
+              <DataRow
+                label="Identificador da conta (WABA)"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setEditingWaba(true)}
+                    disabled={!canManage}
+                    title={!canManage ? PERMISSION_REASON : undefined}
+                    className="shrink-0 text-[13px] font-medium text-wa-link hover:underline disabled:opacity-50"
+                  >
+                    Editar
+                  </button>
+                }
+              >
+                {channel.wabaId || <span className="text-wa-meta">não informado</span>}
+              </DataRow>
+            )}
+          </dl>
+          {official && editingWaba && (
+            <div className="border-t border-wa-border py-3">
+              <label htmlFor="waba-id" className="mb-1.5 block text-[13px] font-medium text-wa-muted">
+                Identificador da conta (WABA ID)
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="waba-id"
+                  value={wabaIdDraft}
+                  disabled={!canManage}
+                  onChange={(e) => setWabaIdDraft(e.target.value)}
+                  className={`${inputClass} max-w-[320px]`}
+                />
+                <Button onClick={handleSaveWaba} disabled={!canManage} className="!py-2">
+                  Salvar WABA ID
+                </Button>
+                <Button variant="secondary" onClick={() => { setWabaIdDraft(channel.wabaId || ''); setEditingWaba(false); }} className="!py-2">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-[14px] border border-wa-border bg-black/[0.12] px-4 py-4 sm:px-5">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 shrink-0 text-wa-muted">
+              <IconInfo size={18} />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-[15px] font-semibold text-wa-text">Sobre o status</h3>
+              <p className="mt-1 text-[13px] leading-[19px] text-wa-muted">
+                {official
+                  ? 'API oficial identifica o tipo de conexão. O status operacional é confirmado pelo provedor, não por este sistema.'
+                  : channel.status === 'awaiting_qr'
+                    ? 'Leia o QR code abaixo no WhatsApp do número deste canal. A situação muda para "Conectado" sozinha assim que o celular terminar.'
+                    : channel.status === 'connected'
+                      ? 'O WhatsApp deste número está ligado a este sistema. Se cair, use "Reconectar" em Ações avançadas.'
+                      : 'O WhatsApp deste número não está ligado. Use "Reconectar" em Ações avançadas para gerar um novo QR code.'}
+              </p>
+            </div>
+          </div>
+          <QrCodeView channel={channel} onRefresh={refresh} />
+        </section>
+      </div>
+
+      <details className="group rounded-[14px] border border-wa-border bg-black/[0.08]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[13.5px] text-wa-text sm:px-5 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2">
+            <span aria-hidden="true" className="text-wa-muted transition-transform group-open:rotate-180">
+              <IconChevronDown size={16} />
+            </span>
+            Ações avançadas
+          </span>
+          <span className="text-[12.5px] text-wa-muted">Ocultar ou excluir este canal</span>
+        </summary>
+        <div className="px-4 pb-4 sm:px-5">
+          <DangerZone description="Reconectar gera um novo QR code; ocultar tira o canal da lista sem apagar nada; excluir só é possível se o canal nunca teve conversas.">
+            {channel.type === 'baileys' && (
+              <Button
+                variant="secondary"
+                onClick={() => actions.reconnect(channel)}
+                disabled={!canManage || busy}
+                title={!canManage ? PERMISSION_REASON : undefined}
+              >
+                Reconectar
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={() => actions.toggleHidden(channel)}
+              disabled={!canManage || busy}
+              title={!canManage ? PERMISSION_REASON : undefined}
+            >
+              {channel.hidden ? 'Reexibir' : 'Ocultar'}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => actions.remove(channel)}
+              disabled={!canManage || busy}
+              title={!canManage ? PERMISSION_REASON : undefined}
+            >
+              Excluir
+            </Button>
+          </DangerZone>
         </div>
-      )}
-
-      <QrCodeView channel={channel} onRefresh={refresh} />
-
-      <DangerZone>
-        {channel.type === 'baileys' && (
-          <Button
-            variant="secondary"
-            onClick={() => actions.reconnect(channel)}
-            disabled={!canManage || busy}
-            title={!canManage ? PERMISSION_REASON : undefined}
-          >
-            Reconectar
-          </Button>
-        )}
-        <Button
-          variant="secondary"
-          onClick={() => actions.toggleHidden(channel)}
-          disabled={!canManage || busy}
-          title={!canManage ? PERMISSION_REASON : undefined}
-        >
-          {channel.hidden ? 'Reexibir' : 'Ocultar'}
-        </Button>
-        <Button
-          variant="danger"
-          onClick={() => actions.remove(channel)}
-          disabled={!canManage || busy}
-          title={!canManage ? PERMISSION_REASON : undefined}
-        >
-          Excluir
-        </Button>
-      </DangerZone>
+      </details>
     </div>
   );
 }

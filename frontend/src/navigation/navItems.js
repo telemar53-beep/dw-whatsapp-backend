@@ -32,7 +32,7 @@ export const SETTINGS_SECTIONS = [
   {
     group: 'Canais WhatsApp', groupKey: 'canais', icon: IconChannel,
     items: [
-      { key: 'canais', label: 'Canais', to: s('canais'), level: 'admin', description: 'Os números de WhatsApp ligados ao atendimento.' },
+      { key: 'canais', label: 'Canais WhatsApp', to: s('canais'), level: 'admin', description: 'Os números de WhatsApp ligados ao atendimento.' },
     ],
   },
   {

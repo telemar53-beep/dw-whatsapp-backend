@@ -83,13 +83,7 @@ function channelLine(conversation) {
   return conversation.channelName ? `WhatsApp · ${conversation.channelName}` : null;
 }
 
-// "5598999991002" vira "+55 (98) 99999-1002"; número fora do padrão BR sai como veio.
-function formatPhone(phone) {
-  const digits = String(phone || '').replace(/\D/g, '');
-  const match = digits.match(/^55(\d{2})(\d{4,5})(\d{4})$/);
-  if (!match) return phone;
-  return `+55 (${match[1]}) ${match[2]}-${match[3]}`;
-}
+import { formatPhone } from '../utils/phone';
 
 function conversationStatus(conversation) {
   if (conversation.status === 'closed') return { label: 'Encerrado', dot: 'bg-chat-faint' };

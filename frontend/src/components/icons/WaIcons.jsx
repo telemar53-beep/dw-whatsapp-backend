@@ -391,3 +391,11 @@ export function IconFile(props) {
     </Svg>
   );
 }
+
+export function IconClock(props) {
+  return (
+    <Svg {...props}>
+      <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm.5-13h-1.5v6l5.2 3.1.8-1.2-4.5-2.7z" />
+    </Svg>
+  );
+}

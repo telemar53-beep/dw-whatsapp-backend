@@ -54,7 +54,7 @@ beforeEach(() => {
 describe('ChannelDetailPage', () => {
   test('aba Conexão mostra o QR de um baileys aguardando e as ações de cuidado', () => {
     renderDetail('/configuracoes/canais/ch1/conexao');
-    expect(screen.getByRole('heading', { level: 1, name: 'Berg' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Berg' })).toBeInTheDocument();
     expect(screen.getByTitle('QR - Berg')).toBeInTheDocument();
     const zone = screen.getByRole('heading', { name: /ações com cuidado/i }).closest('section');
     expect(within(zone).getByRole('button', { name: /reconectar/i })).toBeInTheDocument();

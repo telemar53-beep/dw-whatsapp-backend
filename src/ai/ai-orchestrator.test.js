@@ -1205,7 +1205,7 @@ describe('perfil de triagem', () => {
     test('pedido de dado de outra pessoa é recusado na hora e nunca vira chamado', async () => {
       const sys = (await contexto()).messages[0].content;
       expect(sys).toMatch(/DADOS DE OUTRA PESSOA/);
-      expect(sys).toMatch(/NUNCA vira chamado/);
+      expect(sys).toMatch(/NUNCA são passados e NUNCA viram chamado/);
       expect(sys).toMatch(/Não consigo passar dados de outro cliente, nem a senha da rede dele/);
       expect(sys).toMatch(/Posso te ajudar com alguma coisa do seu contrato\?/);
       expect(sys).toMatch(/Pedido de dado de outra pessoa; recusado na triagem/);
@@ -1275,6 +1275,34 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/Fim de roteiro NÃO é automático/);
       expect(sys).toMatch(/só conclua quando não houver mais nada para responder/);
       expect(sys).not.toMatch(/Depois da resposta dele, conclua para o Suporte com o relato no resumo\./);
+    });
+  });
+
+  // Três prints 2026-09-16 (já com o roteiro do dia no ar): onde não existe
+  // roteiro, a IA encaminha seco ou cai no modelo errado.
+  describe('roteiros que faltavam', () => {
+    test('mudança de endereço tem roteiro no Comercial', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/MUDANÇA DE ENDEREÇO/);
+      expect(sys).toMatch(/transferência do ponto/);
+      expect(sys).toMatch(/me diz o novo endereço \(cidade, bairro e rua\) e a data prevista da mudança/);
+      expect(sys).toMatch(/NÃO encaminhe sem pedir isso/);
+    });
+
+    test('problema sem roteiro específico não cai na lista fixa de diagnóstico', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/PROBLEMA JÁ RELATADO SEM ROTEIRO PRÓPRIO/);
+      expect(sys).toMatch(/repita o problema com as palavras dele/);
+      expect(sys).toMatch(/UMA pergunta que faça sentido para AQUELE problema/);
+      expect(sys).toMatch(/vídeo travando ou não carregando/);
+      expect(sys).toMatch(/só nesse aplicativo ou em tudo/);
+    });
+
+    test('fatura de outra pessoa: entrega com o CPF do titular, sem virar dona do contato', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/FATURA, BOLETO OU PIX DE OUTRA PESSOA/);
+      expect(sys).toMatch(/chame buscar_cliente com titularEOutraPessoa: true/);
+      expect(sys).toMatch(/NUNCA diga "seu contrato"/);
     });
   });
 

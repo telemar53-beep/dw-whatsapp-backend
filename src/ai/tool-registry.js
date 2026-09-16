@@ -196,13 +196,23 @@ const TOOLS = [
     isentoDeProprietario: true,
     parametros: {
       type: 'object',
-      properties: { cpf: { type: 'string', description: 'CPF ou CNPJ do cliente, com ou sem pontuação.' } },
+      properties: {
+        cpf: { type: 'string', description: 'CPF ou CNPJ do cliente, com ou sem pontuação.' },
+        // Print 2026-09-16: "quero a fatura de Jureildson" + o CPF dele fez o
+        // contato de quem pediu ficar vinculado ao cadastro do titular.
+        titularEOutraPessoa: {
+          type: 'boolean',
+          description: 'true quando quem está falando disse que o CPF é de OUTRA pessoa (fatura do amigo, do marido, do pai). Nesse caso o cadastro do titular não passa a ser o de quem fala.',
+        },
+      },
       required: ['cpf'],
     },
     validar(args) {
       const cpf = String((args && args.cpf) || '').replace(/\D/g, '');
       if (!cpf) return erro('cpf is required');
-      return { ok: true, args: { cpf } };
+      // Só o booleano puro conta: uma string "sim" vinda do modelo não pode
+      // desligar a persistência do vínculo por acidente (nem ligar).
+      return { ok: true, args: { cpf, titularEOutraPessoa: (args && args.titularEOutraPessoa) === true } };
     },
     async executar(args, contexto) {
       // No perfil de triagem, um CPF errado é esperado (o cliente pode digitar
@@ -236,6 +246,29 @@ const TOOLS = [
         // antigo (identidade fraca até a data bater) volta inteiro.
         if (!(configIa && configIa.triageRequireBirthdate)) {
           const nome = primeiroNome(client.name);
+          // Fatura de outra pessoa (print 2026-09-16): o CPF do titular abre o
+          // contrato dele — igual à segunda via do site do SGP —, mas o
+          // contato de quem está falando NÃO vira o titular: nada é
+          // persistido, a cidade não é sobrescrita e quem fala continua sendo
+          // chamado pelo próprio nome.
+          if (args.titularEOutraPessoa) {
+            const nomeDeQuemFala = (contexto.identidade && contexto.identidade.primeiroNome) || null;
+            contexto.identidade = {
+              nivel: 'forte', origem: (contexto.identidade && contexto.identidade.origem) || 'cpf',
+              primeiroNome: nomeDeQuemFala, contracts,
+              client: { id: client.id, document: args.cpf }, dataNascimento: null,
+              contestado: false, nascimentoTentado: false,
+              titular: { nome, terceiro: true },
+            };
+            return {
+              cliente: { nome },
+              contratos: contracts.map((c) => {
+                const n = normalizeContract(c);
+                return { id: c.id, status: n.status, endereco: n.endereco };
+              }),
+              instrucao: `O CPF é de OUTRA pessoa (${nome}), não de quem está falando. Pode seguir com fatura, boleto ou PIX desse contrato normalmente, mas NUNCA diga "seu contrato" nem "sua fatura": diga "localizei o contrato no CPF informado" e, ao entregar, diga de quem é ("o boleto do contrato de ${nome}"). Continue chamando quem fala pelo nome dela. Ao concluir, registre no resumo que quem pediu não é o titular.`,
+            };
+          }
           contexto.identidade = {
             nivel: 'forte', origem: 'cpf', primeiroNome: nome, contracts,
             client: { id: client.id, document: args.cpf }, dataNascimento: null,

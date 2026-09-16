@@ -160,7 +160,9 @@ describe('tool-registry', () => {
 
   test('buscar_cliente validar strips non-digits and rejects an empty document', () => {
     const tool = findTool('buscar_cliente');
-    expect(tool.validar({ cpf: '529.982.247-25' })).toEqual({ ok: true, args: { cpf: '52998224725' } });
+    // titularEOutraPessoa entra sempre normalizado (2026-09-16): o default é
+    // false, então o vínculo do contato continua sendo gravado como antes.
+    expect(tool.validar({ cpf: '529.982.247-25' })).toEqual({ ok: true, args: { cpf: '52998224725', titularEOutraPessoa: false } });
     expect(tool.validar({ cpf: 'abc' }).ok).toBe(false);
   });
 
@@ -1360,6 +1362,66 @@ describe('esquecer_identificacao', () => {
     expect(r).toEqual({ ok: false, erro: 'esquecer_identificacao is only available during AI triage' });
     expect(setContactSgpLink).not.toHaveBeenCalled();
     expect(markPhoneContested).not.toHaveBeenCalled();
+  });
+});
+
+// Print 2026-09-16: "quero a fatura de Jureildson" + CPF dele → a IA disse
+// "SEU contrato tem uma fatura em aberto" e o código gravou o vínculo do
+// contato da Agnieska com o cadastro do Jureildson (nome, contratos, cidade).
+// No próximo atendimento ela seria tratada como ele. Entregar o boleto é
+// certo (o site do SGP faz o mesmo só com o CPF); o que não pode é o contato
+// mudar de dono.
+describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getAiConfig.mockResolvedValue({ triageRequireBirthdate: false });
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 77, name: 'JUREILDSON SOUZA', document: '90460835315' },
+      contracts: [{ id: 51, login: 'l', plan: 'p', statusCode: 1, address: 'RUA B, 2' }],
+    });
+  });
+
+  const ctxTerceiro = () => ({
+    conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' },
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'Agnieska', contracts: [] },
+  });
+
+  test('não grava o vínculo do contato nem a cidade, e mantém o primeiro nome de quem fala', async () => {
+    const c = ctxTerceiro();
+    await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, c);
+    expect(setContactSgpLink).not.toHaveBeenCalled();
+    expect(preencherCidadePeloSgp).not.toHaveBeenCalled();
+    expect(c.contact.sgpDocument).toBeUndefined();
+    expect(c.identidade.primeiroNome).toBe('Agnieska');
+  });
+
+  test('a identidade fica forte com os contratos do titular, para o boleto poder ser entregue', async () => {
+    const c = ctxTerceiro();
+    await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, c);
+    expect(c.identidade.nivel).toBe('forte');
+    expect(c.identidade.contracts).toEqual([{ id: 51, login: 'l', plan: 'p', statusCode: 1, address: 'RUA B, 2' }]);
+    expect(c.contracts).toEqual(c.identidade.contracts);
+  });
+
+  test('a instrução proíbe "seu contrato" e manda dizer de quem é', async () => {
+    const r = await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, ctxTerceiro());
+    expect(r.instrucao).toMatch(/NUNCA diga "seu contrato"/);
+    expect(r.instrucao).toMatch(/Jureildson/);
+    expect(r.instrucao).toMatch(/registre no resumo que quem pediu não é o titular/);
+  });
+
+  test('sem o parâmetro, nada muda: o vínculo continua sendo gravado', async () => {
+    const c = { conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
+    await findTool('buscar_cliente').executar({ cpf: '90460835315' }, c);
+    expect(setContactSgpLink).toHaveBeenCalled();
+    expect(c.identidade.primeiroNome).toBe('Jureildson');
+  });
+
+  test('validar aceita o booleano e ignora lixo', () => {
+    const v = findTool('buscar_cliente').validar;
+    expect(v({ cpf: '90460835315', titularEOutraPessoa: true }).args).toEqual({ cpf: '90460835315', titularEOutraPessoa: true });
+    expect(v({ cpf: '90460835315' }).args).toEqual({ cpf: '90460835315', titularEOutraPessoa: false });
+    expect(v({ cpf: '90460835315', titularEOutraPessoa: 'sim' }).args).toEqual({ cpf: '90460835315', titularEOutraPessoa: false });
   });
 });
 

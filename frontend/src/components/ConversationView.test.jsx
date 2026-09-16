@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationView from './ConversationView';
 import { useAuth } from '../contexts/AuthContext';
@@ -235,7 +235,7 @@ describe('ConversationView', () => {
 
     expect(screen.getByText('Motivo do contato')).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText('Troca de senha'));
-    await userEvent.click(screen.getByRole('button', { name: /confirmar encerramento/i }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i }));
 
     await waitFor(() => expect(api.closeConversation).toHaveBeenCalledWith('c1', 'r1', 'tok-123'));
   });
@@ -333,7 +333,7 @@ describe('ConversationView', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
     await userEvent.click(screen.getByLabelText('Troca de senha'));
-    await userEvent.click(screen.getByRole('button', { name: /confirmar encerramento/i }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i }));
 
     await waitFor(() => expect(api.closeConversation).toHaveBeenCalledWith('c1', 'r1', 'tok-123'));
   });
@@ -349,7 +349,7 @@ describe('ConversationView', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
     await userEvent.click(screen.getByLabelText('Troca de senha'));
-    await userEvent.click(screen.getByRole('button', { name: /confirmar encerramento/i }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i }));
 
     expect(await screen.findByText('Conversation is not currently assigned to you, or is closed')).toBeInTheDocument();
     expect(alertSpy).not.toHaveBeenCalled();
@@ -961,7 +961,7 @@ describe('AI suggestion card', () => {
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
     expect(screen.getByLabelText('Troca de senha')).not.toBeChecked();
-    expect(screen.getByRole('button', { name: /confirmar encerramento/i })).toBeDisabled();
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i })).toBeDisabled();
   });
 
   // These four tests use mockImplementation with a mutable closure variable, instead of a

@@ -266,7 +266,7 @@ const TOOLS = [
                 const n = normalizeContract(c);
                 return { id: c.id, status: n.status, endereco: n.endereco };
               }),
-              instrucao: `O CPF é de OUTRA pessoa (${nome}), não de quem está falando. Pode seguir com fatura, boleto ou PIX desse contrato normalmente, mas NUNCA diga "seu contrato" nem "sua fatura": diga "localizei o contrato no CPF informado" e, ao entregar, diga de quem é ("o boleto do contrato de ${nome}"). Continue chamando quem fala pelo nome dela. Ao concluir, registre no resumo que quem pediu não é o titular.`,
+              instrucao: `O CPF é de OUTRA pessoa (${nome}), não de quem está falando. Pode seguir com fatura, boleto ou PIX desse contrato normalmente, mas NUNCA diga "seu contrato" nem "sua fatura": diga "localizei o contrato no CPF informado" e, ao entregar, diga de quem é ("o boleto do contrato de ${nome}"). Continue chamando quem fala pelo nome dela. Ao concluir, registre no resumo que quem pediu não é o titular. Este cadastro NÃO fica guardado no contato: se precisar dele de novo no próximo turno, chame buscar_cliente de novo com o mesmo CPF e titularEOutraPessoa: true.`,
             };
           }
           contexto.identidade = {

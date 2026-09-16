@@ -1408,6 +1408,10 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     expect(r.instrucao).toMatch(/NUNCA diga "seu contrato"/);
     expect(r.instrucao).toMatch(/Jureildson/);
     expect(r.instrucao).toMatch(/registre no resumo que quem pediu não é o titular/);
+    // Print 2026-09-16: o cadastro do terceiro não é guardado, então no turno
+    // seguinte a IA pedia o CPF de novo. Ela precisa saber que basta rechamar.
+    expect(r.instrucao).toMatch(/Este cadastro NÃO fica guardado/);
+    expect(r.instrucao).toMatch(/chame buscar_cliente de novo com o mesmo CPF/);
   });
 
   test('sem o parâmetro, nada muda: o vínculo continua sendo gravado', async () => {

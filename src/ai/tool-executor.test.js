@@ -92,6 +92,25 @@ describe('tool-executor', () => {
     expect(outro.motivo).toBe('client_already_identified');
   });
 
+  // Print 2026-09-16: a cliente mandou o CPF do vizinho e a IA respondeu
+  // "preciso do CPF do titular novamente", em looping — era esta trava
+  // recusando, sem o modelo saber o motivo. Consultar o CPF de outra pessoa
+  // (fatura do amigo, problema do vizinho) é pedido legítimo.
+  test('buscar_cliente com titularEOutraPessoa passa mesmo com outro cliente já identificado', async () => {
+    const tool = toolFake({
+      nome: 'buscar_cliente',
+      validar: (args) => ({ ok: true, args: { cpf: args.cpf, titularEOutraPessoa: args.titularEOutraPessoa === true } }),
+      executar: jest.fn().mockResolvedValue({ cliente: { nome: 'Vizinho' } }),
+    });
+    findTool.mockReturnValue(tool);
+    isToolEnabled.mockResolvedValue(true);
+
+    const r = await executeTool('buscar_cliente', { cpf: '11122233344', titularEOutraPessoa: true }, CONTEXTO);
+
+    expect(r.ok).toBe(true);
+    expect(tool.executar).toHaveBeenCalled();
+  });
+
   test('buscar_cliente is allowed freely when no client is identified yet', async () => {
     const tool = toolFake({ nome: 'buscar_cliente', executar: jest.fn().mockResolvedValue({ ok: 1 }) });
     findTool.mockReturnValue(tool);

@@ -36,7 +36,18 @@ function comecaComSaudacao(texto) {
 function garantirSaudacao(texto, primeiroNome, agora = new Date()) {
   if (!texto || comecaComSaudacao(texto)) return texto;
   const nome = primeiroNome ? `, ${primeiroNome}` : '';
-  return `${saudacaoDaHora(agora)}${nome}! ${texto}`;
+  // Print 2026-09-16: "Boa tarde, Agnieska! Agnieska, vou encaminhar..." — o
+  // modelo já tinha começado chamando pela pessoa e o prefixo dobrou o nome.
+  let corpo = String(texto);
+  if (primeiroNome) {
+    const escapado = primeiroNome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const comecaComNome = new RegExp(`^${escapado},\\s*`, 'i');
+    if (comecaComNome.test(corpo)) {
+      corpo = corpo.replace(comecaComNome, '');
+      corpo = corpo.charAt(0).toUpperCase() + corpo.slice(1);
+    }
+  }
+  return `${saudacaoDaHora(agora)}${nome}! ${corpo}`;
 }
 
 // "Bom dia" às 14:56 (teste real 2026-09-13): o modelo sabia a hora pelo

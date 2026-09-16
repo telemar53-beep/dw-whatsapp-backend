@@ -49,6 +49,18 @@ describe('garantirSaudacao', () => {
     expect(garantirSaudacao('Olá! Como posso ajudar?', 'Ana', TARDE)).toBe('Olá! Como posso ajudar?');
   });
 
+  // Print 2026-09-16: "Boa tarde, Agnieska! Agnieska, vou encaminhar..." — o
+  // modelo começou chamando pelo nome e a saudação foi prefixada por cima.
+  test('não duplica o nome quando o modelo já começou chamando a pessoa', () => {
+    expect(garantirSaudacao('Agnieska, vou verificar isso para você.', 'Agnieska', MANHA))
+      .toBe('Bom dia, Agnieska! Vou verificar isso para você.');
+    expect(garantirSaudacao('Willemberg, seu contrato está ativo.', 'Willemberg', NOITE))
+      .toBe('Boa noite, Willemberg! Seu contrato está ativo.');
+    // Nome diferente do começo do texto não é tocado.
+    expect(garantirSaudacao('Maria pediu o boleto.', 'Ana', MANHA))
+      .toBe('Bom dia, Ana! Maria pediu o boleto.');
+  });
+
   test('texto vazio volta como veio', () => {
     expect(garantirSaudacao(null, 'Ana', MANHA)).toBeNull();
     expect(garantirSaudacao('', 'Ana', MANHA)).toBe('');

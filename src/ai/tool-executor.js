@@ -73,8 +73,13 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       // estabelece a identificação, então não há contrato para conferir. Em
       // troca, trocar de cliente no meio da conversa é proibido — isso exige
       // um atendente humano.
+      // Print 2026-09-16: a cliente mandou o CPF do vizinho e a IA respondeu
+      // "preciso do CPF do titular novamente" em looping — era esta trava
+      // recusando sem o modelo saber por quê. Consultar o CPF de OUTRA pessoa
+      // (fatura do amigo, problema do vizinho) é pedido legítimo e não troca
+      // o dono da conversa: com a marcação, buscar_cliente não persiste nada.
       const jaIdentificado = contexto.contact && contexto.contact.sgpDocument;
-      if (jaIdentificado && jaIdentificado !== argsValidados.cpf) {
+      if (jaIdentificado && jaIdentificado !== argsValidados.cpf && argsValidados.titularEOutraPessoa !== true) {
         return recusa('client_already_identified', null);
       }
     } else if (!tool.isentoDeProprietario) {

@@ -1306,6 +1306,68 @@ describe('perfil de triagem', () => {
     });
   });
 
+  // Lote de prints 2026-09-16 (15:01–15:41), todos já com os roteiros do dia
+  // no ar: gatilho cego da regra de terceiros, conclusão junto com pergunta,
+  // funcionamento interno exposto e roteiros que ainda faltavam.
+  describe('lote de correções da tarde', () => {
+    test('a recusa de dado de terceiro só vale para PEDIDO de dado, não para relato', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/só quando ele PEDIR um dado de outra pessoa/);
+      expect(sys).toMatch(/Relatar problema do vizinho .* NÃO é pedido de dado/);
+      expect(sys).toMatch(/a senha da rede DELE mesmo, do contrato dele, é pedido legítimo/);
+    });
+
+    test('nunca concluir no mesmo turno em que pede algo ao cliente', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/NUNCA chame concluir_triagem no mesmo turno em que você pede alguma coisa ao cliente/);
+      expect(sys).toMatch(/depois que ele responder/);
+    });
+
+    test('nunca expor funcionamento interno', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/NUNCA cite o funcionamento interno/);
+      expect(sys).toMatch(/"aqui na triagem"/);
+    });
+
+    test('Reativação a partir de dois meses de atraso', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/REATIVAÇÃO/);
+      expect(sys).toMatch(/DOIS meses ou mais em atraso/);
+      expect(sys).toMatch(/nunca invente promoção, desconto ou valor/);
+    });
+
+    test('pode dizer há quanto tempo a fatura está em atraso, com identidade confirmada', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/pode dizer há quantos dias\/meses a fatura está vencida/);
+      expect(sys).toMatch(/Hoje é /);
+    });
+
+    test('quitando o débito a internet volta, sem prazo prometido', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/assim que o pagamento for confirmado, o acesso é liberado automaticamente/);
+      expect(sys).toMatch(/NUNCA prometa prazo/);
+    });
+
+    test('senha e QR code do Wi-Fi do próprio cliente: explica e encaminha', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/SENHA OU QR CODE DO WI-FI DO PRÓPRIO CLIENTE/);
+      expect(sys).toMatch(/a senha fica no equipamento/);
+    });
+
+    test('lentidão em horário de pico tem roteiro', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/PIORA EM HORÁRIO CERTO/);
+      expect(sys).toMatch(/quantos aparelhos costumam estar usando nesse horário/);
+    });
+
+    test('equipamento na casa de outra pessoa e dados móveis', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/EQUIPAMENTO NA CASA DE OUTRA PESSOA/);
+      expect(sys).toMatch(/DADOS MÓVEIS \(2G, 3G, 4G, 5G\)/);
+      expect(sys).toMatch(/não está usando a internet da casa/);
+    });
+  });
+
   // Print 2026-09-16: "Bom dia!" em toda resposta da mesma conversa.
   test('o prompt manda cumprimentar só na primeira resposta', async () => {
     const sys = (await contexto()).messages[0].content;
@@ -1773,7 +1835,10 @@ describe('perfil de triagem', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-09-13T13:05:00-03:00'));
     try {
       const sys = (await contexto()).messages[0].content;
-      expect(sys).toContain('Agora são 13:05');
+      // A data entrou junto (2026-09-16): sem ela o modelo não conta os dias
+      // de atraso da fatura.
+      expect(sys).toContain('e agora são 13:05');
+      expect(sys).toMatch(/Hoje é \d{2}\/\d{2}\/\d{4} e agora são 13:05/);
       expect(sys).toMatch(/Boa tarde/);
     } finally {
       jest.useRealTimers();

@@ -56,4 +56,18 @@ function corrigirPeriodoDaSaudacao(texto, agora = new Date()) {
   });
 }
 
-module.exports = { saudacaoDaHora, comecaComSaudacao, garantirSaudacao, corrigirPeriodoDaSaudacao };
+// Print 2026-09-16: "Bom dia! Como posso ajudar você hoje?" em toda resposta
+// da mesma conversa — o modelo cumprimenta de novo mesmo com o prompt
+// mandando cumprimentar só na primeira. Da segunda resposta em diante o
+// worker tira a saudação de período (com ou sem nome) do começo. "Olá"/"Oi"
+// ficam; um texto que fosse só a saudação volta como veio.
+const SAUDACAO_INICIAL = /^([\s\p{Extended_Pictographic}*_~]*)(bom dia|boa tarde|boa noite)(,?\s*[^!.,\n]{0,40})?[!.,]*\s*/iu;
+
+function removerSaudacao(texto) {
+  if (!texto) return texto;
+  const sem = String(texto).replace(SAUDACAO_INICIAL, '');
+  if (!sem.trim() || sem === texto) return texto;
+  return sem.charAt(0).toUpperCase() + sem.slice(1);
+}
+
+module.exports = { saudacaoDaHora, comecaComSaudacao, garantirSaudacao, corrigirPeriodoDaSaudacao, removerSaudacao };

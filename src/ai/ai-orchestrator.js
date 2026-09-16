@@ -307,7 +307,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     `NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo: a ${empresa || NOME_GENERICO_EMPRESA} é o suporte. Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica.`,
     // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
     // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
-    `Agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois.`,
+    `Agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois. Cumprimente só na primeira resposta da conversa; nas seguintes, não repita a saudação: vá direto ao assunto.`,
   ];
   // A empresa já sabe da falha: mandar o cliente reiniciar o roteador é perder
   // o tempo dele e o nosso. O aviso entra cedo no contexto, antes de qualquer

@@ -24,7 +24,7 @@ const {
   closeConversationByAi, getTriagePendingDocument,
 } = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
-const { findLatestInboundMessageId, findMessageById } = require('../conversations/message.repository');
+const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation } = require('../conversations/message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { resolverIdentidade } = require('../ai/identity-resolver');
 const { findChannelById } = require('../channels/channel.repository');
@@ -196,6 +196,79 @@ describe('ai-worker — triagem', () => {
     findCityById.mockReset().mockResolvedValue(null);
   });
 
+  // Print 2026-09-16: "Ah" e "Pai!" em rajada → duas respostas idênticas
+  // ("Bom dia! Como posso ajudar você hoje?"). A checagem "ainda é a última
+  // mensagem?" só existia ANTES do turno; a mensagem que chega DURANTE o turno
+  // gerava um segundo job e uma segunda resposta.
+  describe('mensagem nova durante o turno e resposta repetida', () => {
+    // mockReset: os testes abaixo empilham "once" que nem sempre são
+    // consumidos (a reconferência é pulada quando o turno teve efeito), e
+    // clearAllMocks não esvazia a fila de once — vazaria para o teste seguinte.
+    beforeEach(() => {
+      findLatestInboundMessageId.mockReset().mockResolvedValue('m-1');
+      listRecentMessagesByConversation.mockReset().mockResolvedValue([]);
+    });
+
+    test('chegou mensagem nova durante o turno: descarta a resposta e não conta pergunta', async () => {
+      findLatestInboundMessageId
+        .mockResolvedValueOnce('m-1') // antes do turno: este job é o mais novo
+        .mockResolvedValueOnce('m-2'); // depois do turno: chegou "Pai!"
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(runAiTurn).toHaveBeenCalledTimes(1);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      expect(incrementTriageAttempts).not.toHaveBeenCalled();
+    });
+
+    test('mensagem nova durante o turno, mas o turno concluiu a triagem: a resposta sai', async () => {
+      findLatestInboundMessageId.mockResolvedValueOnce('m-1').mockResolvedValueOnce('m-2');
+      runAiTurn.mockResolvedValue({ texto: 'Vou encaminhar você para o Comercial.', toolsExecutadas: [{ nome: 'concluir_triagem' }], erro: null, triagemConcluida: { setor: 'Comercial' } });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('Vou encaminhar') }));
+    });
+
+    test('mensagem nova durante o turno, mas o turno enviou o boleto: a resposta sai', async () => {
+      findLatestInboundMessageId.mockResolvedValueOnce('m-1').mockResolvedValueOnce('m-2');
+      runAiTurn.mockResolvedValue({ texto: 'Enviei acima o boleto em PDF.', toolsExecutadas: [{ nome: 'enviar_boleto' }], erro: null, triagemConcluida: null });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('Enviei acima o boleto') }));
+    });
+
+    test('resposta igual à última mensagem da IA nesta conversa: não envia de novo', async () => {
+      getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 1 });
+      findLatestInboundMessageId.mockResolvedValue('m-2');
+      listRecentMessagesByConversation.mockResolvedValue([
+        { id: 'm-2', direction: 'inbound', content: 'Pai!' },
+        { id: 'o-1', direction: 'outbound', sentBy: 'ai', content: 'Bom dia! Como posso ajudar você hoje?' },
+      ]);
+      runAiTurn.mockResolvedValue({ texto: 'Bom dia! Como posso ajudar você hoje?', toolsExecutadas: [], erro: null, triagemConcluida: null });
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-2' });
+        expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+        expect(incrementTriageAttempts).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    test('da segunda resposta em diante, a saudação de período do começo é removida', async () => {
+      getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 1 });
+      findLatestInboundMessageId.mockResolvedValue('m-2');
+      listRecentMessagesByConversation.mockResolvedValue([]);
+      runAiTurn.mockResolvedValue({ texto: 'Bom dia! Verifiquei seu contrato e está ativo.', toolsExecutadas: [], erro: null, triagemConcluida: null });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-2' });
+
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'Verifiquei seu contrato e está ativo.' }));
+    });
+  });
+
   describe('aviso de cidade', () => {
     const AVISO = { id: 'notice-1', cityId: 'city-1', message: 'Falha na fibra em Cândido Mendes.' };
     const CONTATO_COM_CIDADE = { id: 'ct-1', phoneNumber: '55989', sgpDocument: null, cityId: 'city-1' };
@@ -292,12 +365,15 @@ describe('ai-worker — triagem', () => {
     }));
   });
 
-  test('saudação do período errado é corrigida em qualquer turno ("Bom dia" às 14h)', async () => {
+  // Desde 2026-09-16 a saudação só existe na primeira resposta (da segunda
+  // em diante ela é removida), então a correção de período é testada no
+  // primeiro turno, com o modelo cumprimentando pelo período errado.
+  test('saudação do período errado é corrigida ("Bom dia" às 14h)', async () => {
     const { saudacaoDaHora } = jest.requireActual('../ai/saudacao');
     const certa = saudacaoDaHora();
     const errada = certa === 'Bom dia' ? 'Boa noite' : 'Bom dia';
     resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
-    getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 1 });
+    getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 0 });
     runAiTurn.mockResolvedValue({ texto: `${errada}, Willemberg! Verifiquei aqui que sua conexão está offline.`, toolsExecutadas: [], erro: null, triagemConcluida: null });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: `${certa}, Willemberg! Verifiquei aqui que sua conexão está offline.` }));

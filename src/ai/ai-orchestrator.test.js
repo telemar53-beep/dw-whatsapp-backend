@@ -1186,6 +1186,12 @@ describe('perfil de triagem', () => {
     expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
   });
 
+  // Print 2026-09-16: "Bom dia!" em toda resposta da mesma conversa.
+  test('o prompt manda cumprimentar só na primeira resposta', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/Cumprimente só na primeira resposta da conversa; nas seguintes, não repita a saudação/);
+  });
+
   test('o fluxo de Comercial traz os dois roteiros do dono e a regra de listar os planos das instruções', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).toMatch(/COMERCIAL \(cobertura, planos, contratar, mudar de plano\)/);

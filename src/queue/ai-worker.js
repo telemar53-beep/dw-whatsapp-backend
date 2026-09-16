@@ -7,14 +7,14 @@ const {
   closeConversationByAi, getTriagePendingDocument,
 } = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
-const { findLatestInboundMessageId, findMessageById } = require('../conversations/message.repository');
+const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation } = require('../conversations/message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { resolverIdentidade } = require('../ai/identity-resolver');
 const { findChannelById } = require('../channels/channel.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { mensagemSegura } = require('../ai/safe-error-log');
 const { paraWhatsApp } = require('../ai/whatsapp-format');
-const { garantirSaudacao, corrigirPeriodoDaSaudacao } = require('../ai/saudacao');
+const { garantirSaudacao, corrigirPeriodoDaSaudacao, removerSaudacao } = require('../ai/saudacao');
 const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
 const { isNightModeActive } = require('../ai/night-mode');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
@@ -119,6 +119,37 @@ async function handleTriageTimeout(conversationId) {
   await concluirEmCodigo(conversationId, 'Triagem não concluída: IA indisponível. Atender normalmente.');
 }
 
+// Print 2026-09-16: "Ah" e "Pai!" em rajada → duas respostas idênticas. A
+// checagem "ainda é a última mensagem?" só existia ANTES do turno; a mensagem
+// que chega DURANTE o turno (segundos de OpenAI) gerava um segundo job e uma
+// segunda resposta. Agora o worker reconfere DEPOIS do turno e descarta a
+// resposta velha — o job da mensagem nova responde com o histórico inteiro.
+// Exceção: turno que já fez algo com efeito (concluiu, encerrou, entregou,
+// desbloqueou) precisa falar, senão o cliente não ouve o resultado — e o job
+// seguinte, vendo a triagem concluída, sairia calado.
+const FERRAMENTAS_COM_EFEITO = ['enviar_boleto', 'gerar_pix', 'desbloqueio_confianca', 'concluir_triagem', 'encerrar_atendimento'];
+
+function turnoTeveEfeito(turno) {
+  return Boolean(
+    turno.triagemConcluida || turno.atendimentoEncerrado || turno.desbloqueioRealizado
+    || (turno.toolsExecutadas || []).some((t) => FERRAMENTAS_COM_EFEITO.includes(t && t.nome))
+  );
+}
+
+// Mesmo print: a segunda resposta era cópia da primeira. Comparação sem a
+// saudação e sem caixa — "Bom dia! Como posso ajudar?" e "Como posso ajudar?"
+// são a mesma resposta para o cliente.
+function normalizarResposta(texto) {
+  return removerSaudacao(String(texto || '')).trim().toLowerCase();
+}
+
+async function repeteUltimaRespostaDaIa(conversationId, texto) {
+  const recentes = (await listRecentMessagesByConversation(conversationId, 10)) || [];
+  const ultimaDaIa = recentes.find((m) => m && m.direction === 'outbound' && m.sentBy === 'ai' && m.content);
+  if (!ultimaDaIa) return false;
+  return normalizarResposta(ultimaDaIa.content) === normalizarResposta(texto);
+}
+
 async function handleTriageTurn({ conversation, config, messageId }) {
   const channel = await findChannelById(conversation.channelId);
   if (!channel || !channel.aiEnabled || !channel.aiTriageEnabled) {
@@ -217,10 +248,23 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // === 0 identifica o primeiro turno: só depois de responder é que o worker
   // incrementa triage_attempts.
   const primeiroTurno = attempts === 0;
+  // Reconfere DEPOIS do turno (ver turnoTeveEfeito): se chegou mensagem nova
+  // enquanto a IA pensava, esta resposta morre aqui, sem contar pergunta.
+  if (!turnoTeveEfeito(turno)) {
+    const ultimaAgora = await findLatestInboundMessageId(conversation.id, { tiposTriagem: true });
+    if (ultimaAgora !== messageId) return;
+  }
   // Em qualquer turno, "Bom dia" às 14h vira "Boa tarde" (o modelo erra mesmo
-  // sabendo a hora); no primeiro turno, além disso, a saudação é garantida.
+  // sabendo a hora); no primeiro turno, além disso, a saudação é garantida —
+  // e da segunda resposta em diante ela é REMOVIDA (print 2026-09-16).
   const textoDoModelo = corrigirPeriodoDaSaudacao(paraWhatsApp(turno.texto));
-  const texto = primeiroTurno ? garantirSaudacao(textoDoModelo, identidade && identidade.primeiroNome) : textoDoModelo;
+  const texto = primeiroTurno ? garantirSaudacao(textoDoModelo, identidade && identidade.primeiroNome) : removerSaudacao(textoDoModelo);
+  // Nunca a mesma resposta duas vezes seguidas (sem efeito por trás): melhor
+  // o silêncio de um "Ah"/"Pai!" do que a IA parecendo travada.
+  if (texto && !turnoTeveEfeito(turno) && await repeteUltimaRespostaDaIa(conversation.id, texto)) {
+    console.warn(`AI reply repeated the previous AI message in conversation ${conversation.id}; not sent`);
+    return;
+  }
   if (texto) {
     await enqueueOutboundMessage({ conversationId: conversation.id, channelId: conversation.channelId, content: texto, sentBy: 'ai' });
   } else if (noturnoAtivo && turno.desbloqueioRealizado && !concluiuAqui && !encerrouAqui) {

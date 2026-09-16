@@ -1,4 +1,4 @@
-const { saudacaoDaHora, comecaComSaudacao, garantirSaudacao, corrigirPeriodoDaSaudacao } = require('./saudacao');
+const { saudacaoDaHora, comecaComSaudacao, garantirSaudacao, corrigirPeriodoDaSaudacao, removerSaudacao } = require('./saudacao');
 
 // Instantes em UTC escolhidos para cair nas faixas certas em São Paulo (UTC-3).
 const MANHA = new Date('2026-09-13T11:30:00-03:00');
@@ -69,5 +69,23 @@ describe('corrigirPeriodoDaSaudacao', () => {
     expect(corrigirPeriodoDaSaudacao('Olá! Bom dia para você também.', TARDE)).toBe('Olá! Bom dia para você também.');
     expect(corrigirPeriodoDaSaudacao('Tenha um bom dia!', TARDE)).toBe('Tenha um bom dia!');
     expect(corrigirPeriodoDaSaudacao(null, TARDE)).toBeNull();
+  });
+});
+
+// Print 2026-09-16: "Bom dia! Como posso ajudar você hoje?" três vezes na
+// mesma conversa — o modelo cumprimenta de novo a cada resposta. Da segunda
+// resposta em diante o worker tira a saudação de período do começo.
+describe('removerSaudacao', () => {
+  test('tira a saudação de período do começo, com ou sem nome, e recapitaliza', () => {
+    expect(removerSaudacao('Bom dia! Como posso ajudar você hoje?')).toBe('Como posso ajudar você hoje?');
+    expect(removerSaudacao('Boa noite, Willemberg! Verifiquei seu contrato.')).toBe('Verifiquei seu contrato.');
+    expect(removerSaudacao('😊 Boa tarde, Ana! tudo certo por aqui.')).toBe('Tudo certo por aqui.');
+  });
+
+  test('não mexe em Olá/Oi, em saudação no meio do texto, nem deixa o texto vazio', () => {
+    expect(removerSaudacao('Olá! Como posso ajudar?')).toBe('Olá! Como posso ajudar?');
+    expect(removerSaudacao('Tenha um bom dia!')).toBe('Tenha um bom dia!');
+    expect(removerSaudacao('Bom dia!')).toBe('Bom dia!');
+    expect(removerSaudacao(null)).toBeNull();
   });
 });

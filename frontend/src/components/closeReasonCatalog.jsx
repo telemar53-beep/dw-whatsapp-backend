@@ -7,7 +7,7 @@ const STROKE = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLin
 
 function Svg({ children, ...rest }) {
   return (
-    <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" {...STROKE} strokeWidth={2.1} {...rest}>
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" {...STROKE} strokeWidth={2.1} {...rest}>
       {children}
     </svg>
   );
@@ -165,7 +165,7 @@ export function describeReason(name) {
 }
 
 export const closeReasonHeaderIcon = (
-  <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true" {...STROKE} strokeWidth={1.8}>
+  <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true" {...STROKE} strokeWidth={1.8}>
     <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h7A2.5 2.5 0 0 1 16 5.5v4A2.5 2.5 0 0 1 13.5 12H9l-3.5 3v-3H6.5A2.5 2.5 0 0 1 4 9.5z" />
     <path d="M8 7h5M8 9.5h3" />
     <path d="M18 9h.5A2.5 2.5 0 0 1 21 11.5v4a2.5 2.5 0 0 1-2.5 2.5H18v3l-3.5-3h-3A2.5 2.5 0 0 1 9 15.5" />
@@ -173,14 +173,14 @@ export const closeReasonHeaderIcon = (
 );
 
 export const checkCircleIcon = (
-  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" {...STROKE}>
+  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" {...STROKE}>
     <circle cx="12" cy="12" r="9" />
     <path d="M8.5 12.5l2.3 2.3 4.7-5" />
   </svg>
 );
 
 export const closeIcon = (
-  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" {...STROKE} strokeWidth={2.2}>
+  <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" {...STROKE} strokeWidth={2.2}>
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 );

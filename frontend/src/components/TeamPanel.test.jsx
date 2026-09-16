@@ -17,7 +17,7 @@ function agentsReady(agents, extra = {}) {
 }
 
 async function openPanel() {
-  await userEvent.click(screen.getByRole('button', { name: /equipe/i }));
+  await userEvent.click(screen.getByRole('button', { name: /^equipe/i }));
 }
 
 beforeEach(() => {
@@ -32,7 +32,7 @@ describe('TeamPanel', () => {
     usePresence.mockReturnValue(new Set(['a1']));
     render(<TeamPanel />);
 
-    expect(screen.getByRole('button', { name: /equipe/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: /^equipe/i })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
     expect(screen.getByText('1 online')).toBeInTheDocument();
   });
@@ -45,7 +45,9 @@ describe('TeamPanel', () => {
 
     await openPanel();
 
-    expect(screen.getByRole('button', { name: /equipe/i })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /^equipe/i })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Nossa equipe' })).toBeInTheDocument();
     expect(screen.getByRole('listitem')).toBeInTheDocument();
     expect(refresh).toHaveBeenCalled();
   });
@@ -93,9 +95,11 @@ describe('TeamPanel', () => {
     await openPanel();
 
     expect(screen.getByRole('heading', { name: 'Online (2)' })).toBeInTheDocument();
-    expect(screen.getByText('1 disponível')).toBeInTheDocument();
+    expect(screen.getByText('Disponíveis para atender')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Offline (2)' })).toBeInTheDocument();
-    expect(screen.getByText('2 indisponíveis')).toBeInTheDocument();
+    expect(screen.getByText('Não disponíveis no momento')).toBeInTheDocument();
+    expect(screen.getByText('4 integrantes na equipe')).toBeInTheDocument();
+    expect(screen.getByText('2 online • 1 em atendimento • 2 offline')).toBeInTheDocument();
   });
 
   test('atendente online mostra a contagem de atendimentos e o chip certo', async () => {
@@ -107,11 +111,11 @@ describe('TeamPanel', () => {
     render(<TeamPanel />);
     await openPanel();
 
-    expect(screen.getByText('1 atendimento')).toBeInTheDocument();
-    expect(screen.getByText('0 atendimentos')).toBeInTheDocument();
-    expect(screen.getByText('Em atendimento')).toBeInTheDocument();
-    // "Disponível" aparece na linha de status dos dois e no chip do Bruno.
-    expect(screen.getAllByText('Disponível')).toHaveLength(3);
+    expect(screen.getByText('Atendendo 1 conversa')).toBeInTheDocument();
+    expect(screen.getByText('Disponível para atender')).toBeInTheDocument();
+    // "Em atendimento" aparece no chip da Ana e no botão de filtro.
+    expect(screen.getAllByText('Em atendimento')).toHaveLength(2);
+    expect(screen.getByText('Disponível')).toBeInTheDocument();
   });
 
   test('atendente offline mostra a última atividade', async () => {
@@ -127,18 +131,67 @@ describe('TeamPanel', () => {
 
     expect(screen.getByText('Última atividade: hoje às 08:37')).toBeInTheDocument();
     expect(screen.getByText('Última atividade: sem registro')).toBeInTheDocument();
-    expect(screen.queryByText('Em atendimento')).not.toBeInTheDocument();
+    expect(screen.queryByText('Disponível')).not.toBeInTheDocument();
   });
 
-  test('mostra só o primeiro nome, com o nome completo no title', async () => {
+  test('o popup mostra o nome completo', async () => {
     agentsReady([{ id: 'a1', name: 'Agnieska Amorim Cutrim', avatarPath: null }]);
     usePresence.mockReturnValue(new Set(['a1']));
     render(<TeamPanel />);
     await openPanel();
 
-    expect(screen.getByText('Agnieska')).toBeInTheDocument();
-    expect(screen.queryByText('Agnieska Amorim Cutrim')).not.toBeInTheDocument();
-    expect(screen.getByTitle('Agnieska Amorim Cutrim')).toBeInTheDocument();
+    expect(screen.getByText('Agnieska Amorim Cutrim')).toBeInTheDocument();
+  });
+
+  test('a busca filtra por nome, sem acento', async () => {
+    agentsReady([
+      { id: 'a1', name: 'Agnieska Amorim', avatarPath: null },
+      { id: 'a2', name: 'José', avatarPath: null },
+    ]);
+    usePresence.mockReturnValue(new Set(['a1', 'a2']));
+    render(<TeamPanel />);
+    await openPanel();
+
+    await userEvent.type(screen.getByRole('searchbox', { name: /buscar um integrante/i }), 'jose');
+
+    expect(screen.getByText('José')).toBeInTheDocument();
+    expect(screen.queryByText('Agnieska Amorim')).not.toBeInTheDocument();
+  });
+
+  test('os filtros mostram a contagem e restringem a lista', async () => {
+    agentsReady([
+      { id: 'a1', name: 'Ana', avatarPath: null, activeConversations: 1 },
+      { id: 'a2', name: 'Bruno', avatarPath: null, activeConversations: 0 },
+      { id: 'a3', name: 'Carla', avatarPath: null },
+    ]);
+    usePresence.mockReturnValue(new Set(['a1', 'a2']));
+    render(<TeamPanel />);
+    await openPanel();
+
+    expect(screen.getByRole('button', { name: 'Todos 3' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Online 2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Offline 1' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Em atendimento 1' }));
+
+    expect(screen.getByText('Ana')).toBeInTheDocument();
+    expect(screen.queryByText('Bruno')).not.toBeInTheDocument();
+    expect(screen.queryByText('Carla')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /offline/i })).not.toBeInTheDocument();
+  });
+
+  test('"Fechar" e o X fecham o popup', async () => {
+    agentsReady([{ id: 'a1', name: 'Ana', avatarPath: null }]);
+    usePresence.mockReturnValue(new Set());
+    render(<TeamPanel />);
+    await openPanel();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await openPanel();
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar o popup da equipe' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   test('shows an online dot for a connected agent and an offline dot for a disconnected one', async () => {

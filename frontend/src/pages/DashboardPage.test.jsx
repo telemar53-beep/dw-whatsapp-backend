@@ -375,7 +375,7 @@ describe('DashboardPage', () => {
     renderDashboard();
     expect(screen.getByText('Equipe')).toBeInTheDocument();
     expect(screen.queryByText(/nenhum atendente cadastrado/i)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /equipe/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^equipe/i }));
     expect(screen.getByText(/nenhum atendente cadastrado/i)).toBeInTheDocument();
   });
 

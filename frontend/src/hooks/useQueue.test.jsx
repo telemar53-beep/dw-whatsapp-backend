@@ -102,4 +102,33 @@ describe('useQueue', () => {
 
     expect(result.current.queue).toEqual([{ id: 'c2' }]);
   });
+  // Print 2026-09-16: em Espera/Automação a prévia parava na mensagem do
+  // cliente — a resposta da IA chega como message:new (broadcast, sem
+  // atendente) e a fila não escutava.
+  test('message:new de conversa da fila troca o item pela conversa atualizada', async () => {
+    api.getQueue.mockResolvedValue([{ id: 'c1', lastMessageContent: 'Quero pagar' }]);
+    const { result } = renderHook(() => useQueue());
+    await waitFor(() => expect(result.current.queue).toHaveLength(1));
+
+    act(() => {
+      fakeSocket.trigger('message:new', {
+        conversation: { id: 'c1', lastMessageContent: 'Enviei acima o boleto', lastMessageDirection: 'outbound' },
+        message: { id: 'm2', content: 'Enviei acima o boleto' },
+      });
+    });
+
+    expect(result.current.queue).toEqual([{ id: 'c1', lastMessageContent: 'Enviei acima o boleto', lastMessageDirection: 'outbound' }]);
+  });
+
+  test('message:new de conversa fora da fila (atribuída a alguém) não entra na fila', async () => {
+    api.getQueue.mockResolvedValue([{ id: 'c1' }]);
+    const { result } = renderHook(() => useQueue());
+    await waitFor(() => expect(result.current.queue).toHaveLength(1));
+
+    act(() => {
+      fakeSocket.trigger('message:new', { conversation: { id: 'c7', assignedAgentId: 'a1' }, message: { id: 'm' } });
+    });
+
+    expect(result.current.queue).toEqual([{ id: 'c1' }]);
+  });
 });

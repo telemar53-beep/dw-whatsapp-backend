@@ -44,13 +44,30 @@ export function useQueue() {
       setQueue((prev) => applyContactAvatarUpdate(prev, payload));
     }
 
+    // Print 2026-09-16: a resposta da IA em Espera/Automação chega como
+    // message:new (broadcast, conversa sem atendente) e a prévia parava na
+    // mensagem do cliente. Só troca o item se a conversa já está na fila:
+    // entrar nela é papel de queue:new.
+    function onMessageNew({ conversation }) {
+      if (!conversation) return;
+      setQueue((prev) => {
+        const index = prev.findIndex((c) => c.id === conversation.id);
+        if (index === -1) return prev;
+        const next = [...prev];
+        next[index] = conversation;
+        return next;
+      });
+    }
+
     socket.on('queue:new', onNew);
     socket.on('queue:removed', onRemoved);
     socket.on('contact:avatar-updated', onAvatarUpdated);
+    socket.on('message:new', onMessageNew);
     return () => {
       socket.off('queue:new', onNew);
       socket.off('queue:removed', onRemoved);
       socket.off('contact:avatar-updated', onAvatarUpdated);
+      socket.off('message:new', onMessageNew);
     };
   }, [socket]);
 

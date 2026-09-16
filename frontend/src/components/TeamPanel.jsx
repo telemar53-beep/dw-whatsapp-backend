@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAgents } from '../hooks/useAgents';
 import { usePresence } from '../hooks/usePresence';
 import { useSocket } from '../contexts/SocketContext';
@@ -20,6 +21,9 @@ const REFRESH_EVENTS = ['conversation:assigned', 'conversation:closed', 'queue:r
 
 // Barra "Equipe · N online" no rodapé da lista de conversas. Clicar abre o
 // popup "Nossa equipe" no meio da tela (TeamModal); nada se expande aqui.
+// O popup vai por portal para o body: a coluna da lista tem backdrop-blur e
+// overflow-clip, e um `position: fixed` dentro dela fica preso à coluna em
+// vez de à tela. O wrapper .chat-theme mantém os tokens escuros do chat.
 function TeamPanel() {
   const { agents, status, refresh } = useAgents();
   const onlineIds = usePresence(agents);
@@ -63,7 +67,13 @@ function TeamPanel() {
           <IconChevronDown size={20} />
         </span>
       </button>
-      {open && <TeamModal agents={sorted} onlineIds={onlineIds} status={status} onClose={() => setOpen(false)} />}
+      {open &&
+        createPortal(
+          <div className="chat-theme">
+            <TeamModal agents={sorted} onlineIds={onlineIds} status={status} onClose={() => setOpen(false)} />
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

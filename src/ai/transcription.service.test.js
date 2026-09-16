@@ -2,6 +2,7 @@ jest.mock('./ai-config.repository');
 jest.mock('./openai-client');
 jest.mock('../conversations/message.repository');
 jest.mock('../media/media-storage');
+jest.mock('../cities/city.repository');
 
 const fs = require('fs');
 const { getAiConfig } = require('./ai-config.repository');
@@ -10,6 +11,7 @@ const {
   findMessageById, markTranscriptionProcessing, saveTranscription, markTranscriptionFailed,
 } = require('../conversations/message.repository');
 const { getMediaFilePath } = require('../media/media-storage');
+const { listCities } = require('../cities/city.repository');
 const { transcribeMessage } = require('./transcription.service');
 
 const CONFIG = {
@@ -50,6 +52,60 @@ describe('transcribeMessage', () => {
       transcription: 'minha internet caiu', model: 'modelo-x',
     }));
     expect(result.ok).toBe(true);
+  });
+
+  // Teste real 2026-09-15: "Centro de Godofredo Viana" virou "Tengo do Fredo"
+  // e a triagem gastou uma pergunta pedindo de novo. As cidades do cadastro
+  // vão como vocabulário do Whisper, somadas ao prompt configurado.
+  describe('cidades do cadastro como vocabulário da transcrição', () => {
+    test('soma os nomes das cidades ao prompt configurado', async () => {
+      listCities.mockResolvedValue([{ id: 'c1', name: 'Godofredo Viana' }, { id: 'c2', name: 'Carutapera' }]);
+      findMessageById.mockResolvedValue(AUDIO);
+      transcribeAudio.mockResolvedValue({ texto: 'Centro de Godofredo Viana' });
+      saveTranscription.mockResolvedValue({});
+
+      await transcribeMessage('m-1');
+
+      expect(transcribeAudio).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'PPPoE, ONU, Godofredo Viana, Carutapera' }));
+    });
+
+    test('sem prompt configurado, vai só a lista de cidades', async () => {
+      getAiConfig.mockResolvedValue({ ...CONFIG, transcriptionPrompt: null });
+      listCities.mockResolvedValue([{ id: 'c1', name: 'Godofredo Viana' }]);
+      findMessageById.mockResolvedValue(AUDIO);
+      transcribeAudio.mockResolvedValue({ texto: 'ok' });
+      saveTranscription.mockResolvedValue({});
+
+      await transcribeMessage('m-1');
+
+      expect(transcribeAudio).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'Godofredo Viana' }));
+    });
+
+    test('sem cidades e sem prompt, não manda prompt nenhum', async () => {
+      getAiConfig.mockResolvedValue({ ...CONFIG, transcriptionPrompt: '' });
+      listCities.mockResolvedValue([]);
+      findMessageById.mockResolvedValue(AUDIO);
+      transcribeAudio.mockResolvedValue({ texto: 'ok' });
+      saveTranscription.mockResolvedValue({});
+
+      await transcribeMessage('m-1');
+
+      expect(transcribeAudio).toHaveBeenCalledWith(expect.objectContaining({ prompt: undefined }));
+    });
+
+    test('falha ao ler as cidades não derruba a transcrição', async () => {
+      listCities.mockRejectedValue(new Error('db down'));
+      findMessageById.mockResolvedValue(AUDIO);
+      transcribeAudio.mockResolvedValue({ texto: 'ok' });
+      saveTranscription.mockResolvedValue({});
+      const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await transcribeMessage('m-1');
+
+      expect(result.ok).toBe(true);
+      expect(transcribeAudio).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'PPPoE, ONU' }));
+      erroSpy.mockRestore();
+    });
   });
 
   test('Finding 2: manda o filename com a extensão real do arquivo em disco, não sempre .ogg', async () => {

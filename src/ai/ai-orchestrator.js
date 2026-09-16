@@ -296,7 +296,9 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // Tom pedido pelo dono depois dos testes reais (2026-09-13): recepcionista
     // simpática, frases completas, um emoji leve — não telegramas.
     'Tom: caloroso e direto, como uma recepcionista simpática. Frases completas e educadas.',
-    'Emoji: no máximo um 😊 por mensagem, e SÓ nos fluxos do PIX e do COMERCIAL (na saudação ou no agradecimento). No BOLETO, no SUPORTE e em qualquer outro assunto, NENHUM emoji — nem na saudação.',
+    // Emoji do COMERCIAL ampliado pelo dono (2026-09-15): ícone por plano
+    // (como vier nas instruções) e 👍 ao confirmar o endereço.
+    'Emoji SÓ nos fluxos do PIX e do COMERCIAL. No PIX: no máximo um 😊 por mensagem (na saudação ou no agradecimento). No COMERCIAL: um 😊 na saudação ou no encaminhamento, um ícone por plano se as instruções trouxerem, e 👍 ao confirmar o endereço. No BOLETO, no SUPORTE e em qualquer outro assunto, NENHUM emoji — nem na saudação.',
     'Escreva UMA mensagem por resposta. Os modelos de frase abaixo são base para adaptar (nome, endereço, PIX ou boleto), não texto para colar: nunca escreva uma frase sua e depois o modelo com o mesmo sentido.',
     // Teste real (2026-09-13): estourado o teto de ferramentas, o modelo
     // escreveu "não consegui confirmar aqui o status da conexão... posso
@@ -428,19 +430,27 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // Roteiros de COMERCIAL ditados pelo dono (2026-09-13) depois do teste real
     // em que a IA confirmou a cobertura, engoliu os planos que estavam nas
     // instruções adicionais e encaminhou. Planos e cidades vêm SÓ de lá.
-    'COMERCIAL (cobertura, planos, contratar, mudar de plano): responda com o que estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO, listando os planos em linhas com "•" no formato "• 500 Mega por R$ 100/mês". Nunca peça CPF de cliente novo. Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma a cobertura e conclua para o Comercial, sem inventar. Modelos:',
+    // Teste real 2026-09-15 (print do dono): a IA pediu bairro/rua três vezes
+    // e, quando o cliente perguntou "qual é o melhor?", encaminhou sem
+    // responder (era o turno forçado pelo limite). Roteiro ditado pelo dono:
+    // endereço é UMA pergunta, confirma o que veio e pede só o que falta uma
+    // vez, responde antes de encaminhar, frases de encaminhamento de dia e de
+    // noite. Planos e cidades continuam vindo SÓ das instruções.
+    'COMERCIAL (cobertura, planos, contratar, mudar de plano): responda com o que estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO. Planos: copie o bloco de planos EXATAMENTE como está escrito nas instruções (mesmas linhas, mesmos ícones, mesmos preços); se lá não houver um bloco pronto, liste um plano por linha no formato "• 500 Mega por R$ 100/mês". Nunca peça CPF de cliente novo. Cobertura: se a cidade estiver nas instruções, atendemos em TODOS os bairros e ruas dela — diga "atendemos em X" e siga. Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma a cobertura e conclua para o Comercial, sem inventar. Modelos:',
     // Print 1 (teste real 2026-09-14): quem já é cliente e queria outro ponto
     // caía no roteiro de cliente novo, e a IA despejava a lista inteira de
     // cidades atendidas em vez de confirmar a dele.
     `Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF${eDataDeNascimento}) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.`,
     [
-      '- Cliente NOVO (não identificado): "Boa tarde! Que bom ter você por aqui 😊 Atendemos em Godofredo Viana e temos estas opções de internet 100% fibra óptica:',
+      '- Cliente NOVO (não identificado): "Boa noite! 😊 Temos planos de internet 100% fibra óptica:',
       '',
-      '• 500 Mega por R$ 100/mês',
-      '• 600 Mega por R$ 135/mês',
-      '• 800 Mega por R$ 185/mês',
+      '[bloco de planos copiado das instruções]',
       '',
-      'A instalação é gratuita! Me passa seu bairro e a rua onde deseja instalar? Assim podemos confirmar a cobertura no seu endereço. Algum desses planos chamou sua atenção?" (troque a cidade e os planos pelos das instruções). Depois da resposta dele, conclua para o Comercial com cidade, bairro/rua e plano no resumo.',
+      'Instalação grátis.',
+      '',
+      'Para verificar a disponibilidade no seu endereço, me informe seu bairro e sua rua." (saudação da hora; "Que bom ter você por aqui 😊" pode entrar depois da saudação).',
+      'Endereço é UMA pergunta só (bairro e rua juntos). Se ele responder só uma parte, confirme o que veio e peça só o que falta, UMA vez: "Perfeito, Centro de Godofredo Viana 👍 Qual é a rua onde deseja instalar?" Nunca peça a mesma coisa uma terceira vez. Se ele mudar de assunto ou perguntar algo, responda e siga sem voltar a cobrar o endereço. Não é preciso ter o endereço completo para encaminhar.',
+      'Se ele perguntar qual plano é o melhor ou pedir indicação: se as instruções trouxerem critério de recomendação, recomende um plano com uma frase de motivo; se não trouxerem, explique que a diferença é só a velocidade (todos fibra) e pergunte quantas pessoas ou aparelhos vão usar, para o Comercial já receber isso. Nunca encaminhe deixando uma pergunta dele sem resposta: responda primeiro, na mesma mensagem.',
     ].join('\n'),
     [
       '- Cliente JÁ identificado: "Boa tarde, Willemberg! Claro, vou te ajudar a conhecer nossos planos 😊 Temos estas opções:',
@@ -451,6 +461,11 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
       '',
       'Qual deles você tem interesse em contratar? Com sua escolha, encaminho para o Comercial verificar a alteração no seu contrato e continuar o atendimento por aqui." Depois da escolha, conclua para o Comercial com o plano escolhido no resumo.',
     ].join('\n'),
+    // Frases de encaminhamento ao Comercial ditadas pelo dono (2026-09-15);
+    // a da noite não cita hora de retorno de propósito.
+    (triagem && triagem.noturno && triagem.noturno.ativo)
+      ? 'Ao encaminhar para o Comercial (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar seu atendimento para nossa equipe Comercial. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem. Resumo: plano de interesse, cidade, bairro/rua se tiver, e o que ele contou.'
+      : 'Ao encaminhar para o Comercial (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar você para o Comercial. Um atendente continuará o atendimento por aqui." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem. Resumo: plano de interesse, cidade, bairro/rua se tiver, e o que ele contou.',
     'Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou.',
   );
   if (triagem && triagem.forcarConclusao) {
@@ -461,8 +476,8 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     linhas.push(
       '',
       config.triageResolvedReasonId
-        ? 'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA e chame encerrar_atendimento, dizendo que qualquer outra coisa é só chamar de novo. Se não tem, chame concluir_triagem com o que apurou.'
-        : 'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA (enviar_boleto ou gerar_pix) e em seguida chame concluir_triagem. Se não tem, chame concluir_triagem com o que apurou.'
+        ? 'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA e chame encerrar_atendimento, dizendo que qualquer outra coisa é só chamar de novo. Se não tem, chame concluir_triagem com o que apurou. Se ele fez uma pergunta nesta mensagem, responda-a ANTES de dizer que está encaminhando, na mesma mensagem.'
+        : 'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA (enviar_boleto ou gerar_pix) e em seguida chame concluir_triagem. Se não tem, chame concluir_triagem com o que apurou. Se ele fez uma pergunta nesta mensagem, responda-a ANTES de dizer que está encaminhando, na mesma mensagem.'
     );
   }
   if (config.triageExtraInstructions) {
@@ -697,7 +712,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           exigiuConclusaoPorLimite = true;
           messages.push({
             role: 'system',
-            content: 'Limite de consultas deste turno. Chame concluir_triagem AGORA, com o setor adequado e o resumo do que apurou (inclua o que não pôde consultar no resumo, para o atendente). Ao cliente, diga apenas que está encaminhando para o setor — NUNCA que não conseguiu verificar algo.',
+            content: 'Limite de consultas deste turno. Chame concluir_triagem AGORA, com o setor adequado e o resumo do que apurou (inclua o que não pôde consultar no resumo, para o atendente). Ao cliente, responda a pergunta dele se houver (com o que já sabe) e diga que está encaminhando para o setor — NUNCA que não conseguiu verificar algo.',
           });
           proximoToolChoice = 'concluir_triagem';
           continue;

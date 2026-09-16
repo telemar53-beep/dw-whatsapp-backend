@@ -1191,13 +1191,69 @@ describe('perfil de triagem', () => {
     expect(sys).toMatch(/COMERCIAL \(cobertura, planos, contratar, mudar de plano\)/);
     expect(sys).toMatch(/Que bom ter você por aqui 😊/);
     expect(sys).toMatch(/• 500 Mega por R\$ 100\/mês/);
-    expect(sys).toMatch(/Me passa seu bairro e a rua onde deseja instalar\?/);
+    expect(sys).toMatch(/Para verificar a disponibilidade no seu endereço, me informe seu bairro e sua rua\./);
     expect(sys).toMatch(/vou te ajudar a conhecer nossos planos 😊/);
     expect(sys).toMatch(/encaminho para o Comercial verificar a alteração no seu contrato/);
     expect(sys).toMatch(/Nunca peça CPF de cliente novo/);
     expect(sys).toMatch(/Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma/);
     // Emoji liberado no PIX e no Comercial; boleto e Suporte seguem sem.
     expect(sys).toMatch(/SÓ nos fluxos do PIX e do COMERCIAL/);
+  });
+
+  // Teste real 2026-09-15 (print do dono): a IA pediu bairro/rua três vezes,
+  // e quando o cliente perguntou "qual é o melhor?" encaminhou sem responder.
+  // Roteiro ditado pelo dono: endereço é UMA pergunta (bairro e rua juntos),
+  // confirma o que veio e pede só o que falta uma vez; pergunta pendente é
+  // respondida antes de encaminhar; frases de encaminhamento de dia e de noite.
+  describe('roteiro COMERCIAL de cliente novo (2026-09-15)', () => {
+    test('abertura no modelo do dono, planos copiados das instruções, endereço numa pergunta só', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/copie o bloco de planos EXATAMENTE como está escrito nas instruções/);
+      expect(sys).toMatch(/Temos planos de internet 100% fibra óptica:/);
+      expect(sys).toMatch(/Instalação grátis\./);
+      expect(sys).toMatch(/atendemos em TODOS os bairros e ruas dela/);
+      expect(sys).toMatch(/Endereço é UMA pergunta só \(bairro e rua juntos\)/);
+      expect(sys).toMatch(/Perfeito, Centro de Godofredo Viana 👍 Qual é a rua onde deseja instalar\?/);
+      expect(sys).toMatch(/Nunca peça a mesma coisa uma terceira vez/);
+      expect(sys).toMatch(/Não é preciso ter o endereço completo para encaminhar/);
+      // O antigo modelo com a lista fixa de planos do cliente NOVO saiu: os
+      // planos são só os das instruções.
+      expect(sys).not.toMatch(/Atendemos em Godofredo Viana e temos estas opções/);
+      expect(sys).not.toMatch(/Algum desses planos chamou sua atenção\?/);
+    });
+
+    test('"qual é o melhor?": recomenda pelo critério das instruções ou explica e pergunta o uso; nunca encaminha sem responder', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/Se ele perguntar qual plano é o melhor ou pedir indicação/);
+      expect(sys).toMatch(/recomende um plano com uma frase de motivo/);
+      expect(sys).toMatch(/a diferença é só a velocidade/);
+      expect(sys).toMatch(/Nunca encaminhe deixando uma pergunta dele sem resposta/);
+    });
+
+    test('de dia, o encaminhamento ao Comercial usa a frase do dia', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toContain('"Certo! 😊 Vou encaminhar você para o Comercial. Um atendente continuará o atendimento por aqui."');
+      expect(sys).not.toMatch(/fora do horário de atendimento, mas sua conversa ficará registrada/);
+    });
+
+    test('à noite, o encaminhamento ao Comercial usa a frase da noite', async () => {
+      const sys = (await contexto({ triagem: { ...TRIAGEM, noturno: { ativo: true, retornoAs: '08:00' } } })).messages[0].content;
+      expect(sys).toContain('"Certo! 😊 Vou encaminhar seu atendimento para nossa equipe Comercial. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar."');
+      expect(sys).not.toMatch(/Um atendente continuará o atendimento por aqui/);
+    });
+
+    test('emoji no Comercial: ícone por plano e 👍 liberados; boleto e Suporte seguem sem', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/SÓ nos fluxos do PIX e do COMERCIAL/);
+      expect(sys).toMatch(/No COMERCIAL.*um ícone por plano.*👍/);
+      expect(sys).toMatch(/NENHUM emoji — nem na saudação/);
+    });
+
+    test('conclusão forçada pelo limite responde a pergunta pendente antes de encaminhar', async () => {
+      const sys = (await contexto({ triagem: { ...TRIAGEM, attempts: 5, forcarConclusao: true } })).messages[0].content;
+      expect(sys).toMatch(/LIMITE DE PERGUNTAS ATINGIDO/);
+      expect(sys).toMatch(/Se ele fez uma pergunta nesta mensagem, responda-a ANTES de dizer que está encaminhando/);
+    });
   });
 
   test('o fluxo de Suporte traz os três roteiros do dono e manda consultar o status antes de responder', async () => {
@@ -1277,7 +1333,7 @@ describe('perfil de triagem', () => {
       // O array de mensagens é o mesmo objeto ao longo do turno (o mock guarda a
       // referência), então checa-se a presença, não a posição final.
       expect(segunda.messages).toEqual(expect.arrayContaining([
-        expect.objectContaining({ role: 'system', content: expect.stringMatching(/Limite de consultas deste turno\. Chame concluir_triagem AGORA/) }),
+        expect.objectContaining({ role: 'system', content: expect.stringMatching(/Limite de consultas deste turno\. Chame concluir_triagem AGORA.*responda a pergunta dele se houver/) }),
         expect.objectContaining({ role: 'system', content: expect.stringMatching(/NUNCA que não conseguiu verificar algo/) }),
       ]));
       // A conclusão forçada não pode cair no mesmo limite que a provocou.

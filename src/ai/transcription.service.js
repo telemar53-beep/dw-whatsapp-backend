@@ -9,6 +9,7 @@ const {
   markTranscriptionFailed,
 } = require('../conversations/message.repository');
 const { getMediaFilePath } = require('../media/media-storage');
+const { listCities } = require('../cities/city.repository');
 const { mensagemSegura } = require('./safe-error-log');
 
 // O WhatsApp manda nota de voz como 'audio/ogg; codecs=opus' — o parâmetro depois
@@ -28,6 +29,22 @@ function recusa(motivo) {
  * Transcreve o áudio de uma mensagem já persistida. O arquivo NÃO é temporário:
  * é o mesmo que o player do atendente usa, então nunca é apagado aqui.
  */
+// Teste real 2026-09-15: "Centro de Godofredo Viana" virou "Tengo do Fredo" e a
+// triagem gastou uma pergunta pedindo de novo. Os nomes das cidades do
+// cadastro vão como vocabulário do Whisper (o campo `prompt` da API), somados
+// ao prompt configurado em Integrações. Falha ao ler as cidades não derruba a
+// transcrição: fica só o prompt configurado.
+async function promptDaTranscricao(config) {
+  let cidades = [];
+  try {
+    cidades = ((await listCities()) || []).map((c) => c && c.name).filter(Boolean);
+  } catch (err) {
+    console.error(`Failed to list cities for the transcription prompt: ${mensagemSegura(err)}`);
+  }
+  const partes = [config.transcriptionPrompt, ...cidades].filter((p) => typeof p === 'string' && p.trim());
+  return partes.length > 0 ? partes.join(', ') : undefined;
+}
+
 async function transcribeMessage(messageId) {
   const message = await findMessageById(messageId);
   if (!message || message.messageType !== 'audio') return recusa('not_audio');
@@ -104,7 +121,7 @@ async function transcribeMessage(messageId) {
       model: config.transcriptionModel,
       filePath,
       mimeType: message.mediaMimeType,
-      prompt: config.transcriptionPrompt || undefined,
+      prompt: await promptDaTranscricao(config),
       filename: 'audio' + (extensao || '.ogg'),
     });
   } catch (err) {

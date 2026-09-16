@@ -369,11 +369,13 @@ describe('DashboardPage', () => {
     expect(container.firstChild.className).toContain('h-dvh');
   });
 
-  test('renders the team panel', () => {
+  test('renders the team panel, closed by default, and opens it on click', async () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
     expect(screen.getByText('Equipe')).toBeInTheDocument();
+    expect(screen.queryByText(/nenhum atendente cadastrado/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /equipe/i }));
     expect(screen.getByText(/nenhum atendente cadastrado/i)).toBeInTheDocument();
   });
 

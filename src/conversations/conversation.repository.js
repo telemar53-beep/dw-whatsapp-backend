@@ -520,6 +520,19 @@ async function listInProgressConversations() {
   return result.rows.map(toConversationSummary);
 }
 
+// { [agentId]: quantidade de atendimentos abertos } — alimenta o painel Equipe.
+async function countAssignedConversationsByAgent() {
+  const result = await getPool().query(
+    `SELECT assigned_agent_id, COUNT(*)::int AS count
+     FROM conversations
+     WHERE status = 'assigned' AND assigned_agent_id IS NOT NULL
+     GROUP BY assigned_agent_id`
+  );
+  const counts = {};
+  for (const row of result.rows) counts[row.assigned_agent_id] = row.count;
+  return counts;
+}
+
 async function listWaitingForAgentConversations() {
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
@@ -737,6 +750,7 @@ async function listClosedConversationsByContact(contactId) {
 }
 
 module.exports = {
+  countAssignedConversationsByAgent,
   findOpenConversation,
   createConversation,
   claimConversation,

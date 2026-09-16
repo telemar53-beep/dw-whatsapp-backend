@@ -2,9 +2,18 @@ const { Server } = require('socket.io');
 const { verifyToken } = require('../auth/auth.service');
 const { getAllowedOrigins } = require('../config/cors-origins');
 const { markAgentOnline, markAgentOffline } = require('./presence');
+const { touchAgentLastSeen } = require('../agents/agent.repository');
 const { hasAdminLevelAccess } = require('../auth/auth.middleware');
 
 let io;
+
+// "Visto por ultimo" do painel Equipe. Fire-and-forget: banco fora do ar nao
+// pode impedir a conexao nem a presenca.
+function touchLastSeen(agentId) {
+  Promise.resolve()
+    .then(() => touchAgentLastSeen(agentId))
+    .catch(() => {});
+}
 
 function initSocketServer(httpServer) {
   io = new Server(httpServer, { cors: { origin: getAllowedOrigins() } });
@@ -19,6 +28,7 @@ function initSocketServer(httpServer) {
   });
   io.on('connection', (socket) => {
     socket.join(`agent:${socket.agent.agentId}`);
+    touchLastSeen(socket.agent.agentId);
     if (hasAdminLevelAccess(socket.agent)) {
       socket.join('dashboard');
     }
@@ -33,6 +43,7 @@ function initSocketServer(httpServer) {
       socket.broadcast.emit('presence:online', { agentId: socket.agent.agentId });
     }
     socket.on('disconnect', () => {
+      touchLastSeen(socket.agent.agentId);
       if (markAgentOffline(socket.agent.agentId)) {
         broadcast('presence:offline', { agentId: socket.agent.agentId });
       }

@@ -13,6 +13,7 @@ function toPublicAgent(row) {
     canManageIntegrations: row.can_manage_integrations,
     phone: row.phone,
     avatarPath: row.avatar_path,
+    lastSeenAt: row.last_seen_at || null,
     createdAt: row.created_at,
   };
 }
@@ -76,7 +77,7 @@ async function findAgentById(id) {
 
 async function listAgents() {
   const result = await getPool().query(`
-    SELECT a.id, a.name, a.email, a.role, a.active, a.can_manage_integrations, a.phone, a.avatar_path, a.created_at,
+    SELECT a.id, a.name, a.email, a.role, a.active, a.can_manage_integrations, a.phone, a.avatar_path, a.last_seen_at, a.created_at,
            COALESCE(
              json_agg(json_build_object('id', s.id, 'name', s.name) ORDER BY s.name) FILTER (WHERE s.id IS NOT NULL),
              '[]'
@@ -99,6 +100,12 @@ async function setAgentActive(id, active) {
   return toPublicAgent(result.rows[0]);
 }
 
+// Chamada a cada conexao/desconexao de socket: e o "visto por ultimo" do
+// painel Equipe. Fire-and-forget nos chamadores; nunca deve derrubar o socket.
+async function touchAgentLastSeen(id) {
+  await getPool().query('UPDATE agents SET last_seen_at = now() WHERE id = $1', [id]);
+}
+
 async function updateAgentPassword(id, passwordHash) {
   await getPool().query('UPDATE agents SET password_hash = $2 WHERE id = $1', [id, passwordHash]);
 }
@@ -118,6 +125,7 @@ async function setAgentAvatarPath(id, avatarPath) {
 }
 
 module.exports = {
+  touchAgentLastSeen,
   createAgent,
   findAgentByEmail,
   findAgentById,

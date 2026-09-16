@@ -1,3 +1,4 @@
+jest.mock('../agents/agent.repository');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const { io: ioClient } = require('socket.io-client');

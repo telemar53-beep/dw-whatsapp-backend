@@ -1,5 +1,6 @@
 jest.mock('../agents/agent.repository');
 jest.mock('../realtime/presence');
+jest.mock('../conversations/conversation.repository');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
   saveMediaFile: jest.fn(),
@@ -13,6 +14,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { listAgents, findAgentById, updateAgentProfile, setAgentAvatarPath } = require('../agents/agent.repository');
 const { isAgentOnline } = require('../realtime/presence');
+const { countAssignedConversationsByAgent } = require('../conversations/conversation.repository');
 const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
 const agentsRoutes = require('./agents.routes');
 
@@ -27,7 +29,10 @@ function tokenFor(agentId, role) {
   return jwt.sign({ agentId, role }, process.env.JWT_SECRET);
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  countAssignedConversationsByAgent.mockResolvedValue({});
+});
 
 describe('GET /api/agents', () => {
   test('includes avatarPath for each agent', async () => {
@@ -42,12 +47,13 @@ describe('GET /api/agents', () => {
     expect(res.body[0].avatarPath).toBe('avatars/a1.jpg');
   });
 
-  test('returns id, name, email, role and online status for every agent', async () => {
+  test('returns id, name, email, role, online status, last activity and open-conversation count for every agent', async () => {
     listAgents.mockResolvedValue([
-      { id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: null },
-      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.com', role: 'admin', avatarPath: null },
+      { id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: null, lastSeenAt: '2026-09-16T11:37:00.000Z' },
+      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.com', role: 'admin', avatarPath: null, lastSeenAt: null },
     ]);
     isAgentOnline.mockImplementation((id) => id === 'agent-1');
+    countAssignedConversationsByAgent.mockResolvedValue({ 'agent-1': 2 });
 
     const res = await request(buildApp())
       .get('/api/agents')
@@ -55,8 +61,8 @@ describe('GET /api/agents', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
-      { id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: null, online: true },
-      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.com', role: 'admin', avatarPath: null, online: false },
+      { id: 'agent-1', name: 'Ana', email: 'ana@dw.com', role: 'agent', avatarPath: null, online: true, lastSeenAt: '2026-09-16T11:37:00.000Z', activeConversations: 2 },
+      { id: 'agent-2', name: 'Bruno', email: 'bruno@dw.com', role: 'admin', avatarPath: null, online: false, lastSeenAt: null, activeConversations: 0 },
     ]);
   });
 

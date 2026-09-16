@@ -4,6 +4,7 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { verifyToken } = require('../auth/auth.service');
 const { listAgents, findAgentById, updateAgentProfile, setAgentAvatarPath } = require('../agents/agent.repository');
 const { isAgentOnline } = require('../realtime/presence');
+const { countAssignedConversationsByAgent } = require('../conversations/conversation.repository');
 const { saveMediaFile, getMediaFilePath, extensionForMimeType } = require('../media/media-storage');
 
 const router = express.Router();
@@ -26,7 +27,7 @@ function authenticateAgentAvatarRoute(req, res, next) {
 }
 
 router.get('/', requireAuth, async (req, res) => {
-  const agents = await listAgents();
+  const [agents, activeCounts] = await Promise.all([listAgents(), countAssignedConversationsByAgent()]);
   res.json(
     agents.map((agent) => ({
       id: agent.id,
@@ -35,6 +36,8 @@ router.get('/', requireAuth, async (req, res) => {
       role: agent.role,
       avatarPath: agent.avatarPath,
       online: isAgentOnline(agent.id),
+      lastSeenAt: agent.lastSeenAt || null,
+      activeConversations: activeCounts[agent.id] || 0,
     }))
   );
 });

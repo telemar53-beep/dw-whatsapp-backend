@@ -160,7 +160,7 @@ describe('SupervisionPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /transferir atendimento/i }));
 
-    expect(screen.getByText('Transferir para')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Transferir atendimento' })).toBeInTheDocument();
   });
 
   test('opening a closed conversation from the Encerrados hoje tab also uses the popup, not navigation', async () => {

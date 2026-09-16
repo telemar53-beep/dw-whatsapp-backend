@@ -1230,6 +1230,18 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/Nunca encaminhe deixando uma pergunta dele sem resposta/);
     });
 
+    // Print 2026-09-15 (21:16): "vocês tem internet em Viseu?" → "Atendemos em
+    // Viseu. Certo! Vou encaminhar você para o Comercial." Confirmou e
+    // encaminhou na primeira resposta, sem planos nem endereço — e com um
+    // "Certo!" que não respondia a pedido nenhum.
+    test('pergunta de cobertura de cliente novo: confirma e emenda a venda; encaminha só no momento certo', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/Pergunta de cobertura de cliente novo \("tem internet em X\?"\): responda "Atendemos em X!" e, NA MESMA mensagem, emende a abertura/);
+      expect(sys).toMatch(/NUNCA encaminhe um cliente novo na primeira resposta/);
+      expect(sys).toMatch(/Encaminhe ao Comercial SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço; ou pedir para falar com um atendente; ou a cidade não estiver na lista/);
+      expect(sys).toMatch(/O "Certo!" do modelo é só quando ele pediu algo \(contratar, falar com atendente\); senão comece direto em "Vou encaminhar/);
+    });
+
     test('de dia, o encaminhamento ao Comercial usa a frase do dia', async () => {
       const sys = (await contexto()).messages[0].content;
       expect(sys).toContain('"Certo! 😊 Vou encaminhar você para o Comercial. Um atendente continuará o atendimento por aqui."');

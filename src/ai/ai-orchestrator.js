@@ -436,7 +436,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // endereço é UMA pergunta, confirma o que veio e pede só o que falta uma
     // vez, responde antes de encaminhar, frases de encaminhamento de dia e de
     // noite. Planos e cidades continuam vindo SÓ das instruções.
-    'COMERCIAL (cobertura, planos, contratar, mudar de plano): responda com o que estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO. Planos: copie o bloco de planos EXATAMENTE como está escrito nas instruções (mesmas linhas, mesmos ícones, mesmos preços); se lá não houver um bloco pronto, liste um plano por linha no formato "• 500 Mega por R$ 100/mês". Nunca peça CPF de cliente novo. Cobertura: se a cidade estiver nas instruções, atendemos em TODOS os bairros e ruas dela — diga "atendemos em X" e siga. Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma a cobertura e conclua para o Comercial, sem inventar. Modelos:',
+    'COMERCIAL (cobertura, planos, contratar, mudar de plano): responda com o que estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO. Planos: copie o bloco de planos EXATAMENTE como está escrito nas instruções (mesmas linhas, mesmos ícones, mesmos preços); se lá não houver um bloco pronto, liste um plano por linha no formato "• 500 Mega por R$ 100/mês". Nunca peça CPF de cliente novo. Cobertura: se a cidade estiver nas instruções, atendemos em TODOS os bairros e ruas dela. Pergunta de cobertura de cliente novo ("tem internet em X?"): responda "Atendemos em X!" e, NA MESMA mensagem, emende a abertura de cliente novo (planos e a pergunta de endereço) — a pergunta de cobertura é o começo da venda, não o fim. NUNCA encaminhe um cliente novo na primeira resposta se a cidade estiver na lista. Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma a cobertura e conclua para o Comercial, sem inventar. Modelos:',
     // Print 1 (teste real 2026-09-14): quem já é cliente e queria outro ponto
     // caía no roteiro de cliente novo, e a IA despejava a lista inteira de
     // cidades atendidas em vez de confirmar a dele.
@@ -461,6 +461,11 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
       '',
       'Qual deles você tem interesse em contratar? Com sua escolha, encaminho para o Comercial verificar a alteração no seu contrato e continuar o atendimento por aqui." Depois da escolha, conclua para o Comercial com o plano escolhido no resumo.',
     ].join('\n'),
+    // Print 2026-09-15 (21:16): "tem internet em Viseu?" → "Atendemos em Viseu.
+    // Certo! Vou encaminhar você para o Comercial." — encaminhou na primeira
+    // resposta, sem planos nem endereço, e com um "Certo!" solto. O momento de
+    // encaminhar fica explícito, e o "Certo!" só responde a um pedido.
+    'Encaminhe ao Comercial SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço; ou pedir para falar com um atendente; ou a cidade não estiver na lista. Antes disso, continue a venda (planos, endereço, dúvidas). O "Certo!" do modelo é só quando ele pediu algo (contratar, falar com atendente); senão comece direto em "Vou encaminhar...".',
     // Frases de encaminhamento ao Comercial ditadas pelo dono (2026-09-15);
     // a da noite não cita hora de retorno de propósito.
     (triagem && triagem.noturno && triagem.noturno.ativo)

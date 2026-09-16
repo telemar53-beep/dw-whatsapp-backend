@@ -77,9 +77,23 @@ async function sendPixCardMessage(channel, toPhoneNumber, card) {
   return { whatsappMessageId: response.data.messages[0].id };
 }
 
+// Teste real 2026-09-16: canal 360dialog só recebia texto — áudio, foto e PDF
+// sumiam. A URL que GET /{media-id} devolve começa com
+// https://lookaside.fbsbx.com (CDN da Meta, válida por 5 minutos) e a chave
+// D360 não vale lá: pela documentação da 360dialog, o host precisa ser
+// trocado por https://waba-v2.360dialog.io, mantendo caminho e parâmetros,
+// antes de baixar com a D360-API-KEY.
+function urlDeDownload(urlDaMeta) {
+  if (!urlDaMeta) throw new Error('360dialog media URL missing');
+  const original = new URL(urlDaMeta);
+  const base = new URL(BASE_URL);
+  if (original.host === base.host) return urlDaMeta;
+  return `${BASE_URL}${original.pathname}${original.search}`;
+}
+
 async function downloadMedia(mediaId, channel) {
   const metaResponse = await axios.get(`${BASE_URL}/${mediaId}`, { headers: authHeaders(channel) });
-  const fileResponse = await axios.get(metaResponse.data.url, {
+  const fileResponse = await axios.get(urlDeDownload(metaResponse.data && metaResponse.data.url), {
     headers: authHeaders(channel),
     responseType: 'arraybuffer',
   });

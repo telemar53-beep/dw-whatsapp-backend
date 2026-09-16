@@ -126,6 +126,31 @@ describe('downloadMedia', () => {
     });
     expect(buffer).toEqual(Buffer.from('fake-bytes'));
   });
+
+  // Teste real 2026-09-16: canal 360dialog só recebia texto — áudio, foto e
+  // PDF sumiam. A URL que GET /{media-id} devolve começa com
+  // https://lookaside.fbsbx.com (CDN da Meta) e, pela documentação da
+  // 360dialog, precisa ter o host trocado por https://waba-v2.360dialog.io,
+  // mantendo caminho e parâmetros, antes de baixar com a D360-API-KEY.
+  test('troca o host lookaside.fbsbx.com pelo da 360dialog antes de baixar, mantendo caminho e parâmetros', async () => {
+    axios.get
+      .mockResolvedValueOnce({ data: { url: 'https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=123&ext=456&hash=abc%3D' } })
+      .mockResolvedValueOnce({ data: Buffer.from('pdf-bytes') });
+
+    const buffer = await downloadMedia('media-360-2', CHANNEL);
+
+    expect(axios.get).toHaveBeenNthCalledWith(2, 'https://waba-v2.360dialog.io/whatsapp_business/attachments/?mid=123&ext=456&hash=abc%3D', {
+      headers: { 'D360-API-KEY': 'd360-key-abc' },
+      responseType: 'arraybuffer',
+    });
+    expect(buffer).toEqual(Buffer.from('pdf-bytes'));
+  });
+
+  test('resposta sem url falha com erro claro, sem tentar baixar', async () => {
+    axios.get.mockResolvedValueOnce({ data: {} });
+    await expect(downloadMedia('media-360-3', CHANNEL)).rejects.toThrow('360dialog media URL missing');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('createMetaTemplate', () => {

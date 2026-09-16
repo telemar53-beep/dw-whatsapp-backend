@@ -5,6 +5,7 @@ const { ingestInboundMessage } = require('../conversations/inbound-message.servi
 const { applyTemplateStatusUpdates } = require('../templates/template.service');
 const { applyMessageStatusUpdates } = require('../conversations/message-status.service');
 const { saveMediaFile, extensionForMimeType } = require('../media/media-storage');
+const { mensagemSegura } = require('../ai/safe-error-log');
 
 const router = express.Router();
 
@@ -37,7 +38,10 @@ router.post('/360dialog/:webhookToken', async (req, res) => {
         repliedToWhatsappMessageId: inboundMessage.repliedToWhatsappMessageId,
       });
     } catch (err) {
-      console.error('Failed to process inbound 360dialog message', err);
+      // Só a mensagem e o status HTTP: o erro cru do axios carrega os
+      // cabeçalhos da requisição, com a D360-API-KEY dentro.
+      const status = err && err.response && err.response.status;
+      console.error(`Failed to process inbound 360dialog message: ${mensagemSegura(err)}${status ? ` status=${status}` : ''}`);
     }
   }
   try {

@@ -29,6 +29,35 @@ function buildApp() {
 describe('POST /webhooks/360dialog/:webhookToken', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  // Teste real 2026-09-16: mídia da 360dialog sumia e o log trazia o erro
+  // cru do axios — com os cabeçalhos da requisição (D360-API-KEY) dentro.
+  test('download de mídia falhando: responde 200, não ingere a mensagem e loga sem a chave da API', async () => {
+    findChannelByWebhookToken.mockResolvedValue({ id: 'channel-1', hidden: false, config: { apiKey: 'key-secreta-1' } });
+    const err = new Error('Request failed with status code 401');
+    err.response = { status: 401, data: { error: 'unauthorized' } };
+    err.config = { headers: { 'D360-API-KEY': 'key-secreta-1' } };
+    downloadMedia.mockRejectedValue(err);
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const payload = {
+      entry: [{ changes: [{ value: {
+        metadata: { phone_number_id: '1234567890' },
+        contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
+        messages: [{ from: '5511999998888', id: 'wamid.IMG', type: 'image', image: { id: 'media-1', mime_type: 'image/jpeg' } }],
+      } }] }],
+    };
+
+    const res = await request(buildApp()).post('/webhooks/360dialog/valid-token').send(payload);
+
+    expect(res.status).toBe(200);
+    expect(ingestInboundMessage).not.toHaveBeenCalled();
+    const logado = erroSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(logado).toContain('Failed to process inbound 360dialog message');
+    expect(logado).toContain('status=401');
+    expect(logado).not.toContain('key-secreta-1');
+    erroSpy.mockRestore();
+  });
+
   test('processes a valid webhook payload for a matching channel', async () => {
     findChannelByWebhookToken.mockResolvedValue({ id: 'channel-1', hidden: false, config: { apiKey: 'key-1' } });
     ingestInboundMessage.mockResolvedValue({});

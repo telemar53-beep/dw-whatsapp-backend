@@ -1198,7 +1198,7 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/NÃO é falha de conexão/);
       expect(sys).toMatch(/O Wi-Fi tem alcance limitado/);
       expect(sys).toMatch(/Dentro de casa, perto do equipamento, a internet está funcionando bem\?/);
-      expect(sys).toMatch(/sem prometer visita técnica nem equipamento/);
+      expect(sys).toMatch(/Nunca prometa visita técnica nem equipamento/);
       expect(sys).toMatch(/siga exatamente o que está lá; se não disserem nada, não ofereça nada/);
     });
 
@@ -1221,6 +1221,60 @@ describe('perfil de triagem', () => {
       const sys = (await contexto()).messages[0].content;
       expect(sys).toMatch(/pergunte direto o que você precisa saber/);
       expect(sys).toMatch(/nunca "me diga qual problema para eu encaminhar ao setor correto"/);
+    });
+  });
+
+  // Quatro prints 2026-09-16: o roteiro de Suporte disparava para tudo
+  // ("posso mudar o roteador de lugar?" abriu com "contrato ativo e conexão
+  // online") e atropelava o relato ("contratei 500 mega e aparece 20" recebeu
+  // "está sem acesso, com lentidão ou caindo?").
+  describe('Suporte: dúvida não é falha, e nunca repetir o que o cliente já disse', () => {
+    test('dúvida não consulta nem cita status', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/DÚVIDA não é falha/);
+      expect(sys).toMatch(/NÃO chame status, NÃO cite status/);
+    });
+
+    test('problema já relatado pula a pergunta de diagnóstico', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/Se o cliente JÁ disse qual é o problema/);
+      expect(sys).toMatch(/Perguntar o que ele acabou de dizer é o pior erro de atendimento/);
+    });
+
+    test('velocidade abaixo da contratada tem roteiro próprio, com teste de velocidade', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/VELOCIDADE ABAIXO DA CONTRATADA/);
+      expect(sys).toMatch(/entregue até o equipamento e medida por cabo/);
+      expect(sys).toMatch(/você consegue fazer um teste de velocidade perto do equipamento\?/);
+      expect(sys).toMatch(/NUNCA diga que a velocidade está correta sem teste/);
+    });
+
+    test('reembolso e desconto não são prometidos nem recusados pela IA', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/REEMBOLSO, DESCONTO OU ABATIMENTO: nunca prometa e nunca recuse/);
+      expect(sys).toMatch(/Cliente pediu reembolso\/desconto/);
+    });
+
+    test('mudar o equipamento de lugar é respondido direto, sem status', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/MUDAR O EQUIPAMENTO DE LUGAR: responda direto, sem consultar status/);
+      expect(sys).toMatch(/Pode sim, e você mesma pode fazer/);
+      expect(sys).toMatch(/se ela só queria saber se pode, não encaminhe/);
+    });
+
+    test('alcance de Wi-Fi normal não abre chamado', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/está tudo normal: NÃO abra chamado/);
+      expect(sys).toMatch(/Só conclua para o Suporte se ele quiser melhorar o alcance/);
+      // O fecho antigo, que mandava concluir sempre, saiu.
+      expect(sys).not.toMatch(/conclua para o Suporte com "alcance de Wi-Fi" no resumo, sem prometer/);
+    });
+
+    test('fim de roteiro não é automático', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/Fim de roteiro NÃO é automático/);
+      expect(sys).toMatch(/só conclua quando não houver mais nada para responder/);
+      expect(sys).not.toMatch(/Depois da resposta dele, conclua para o Suporte com o relato no resumo\./);
     });
   });
 

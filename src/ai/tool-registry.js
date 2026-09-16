@@ -565,7 +565,10 @@ const TOOLS = [
           // inaceitável — na dúvida, trate como o caso bom e siga o roteiro.
           instrucao = `A consulta de conexão de ${citar(semResposta)} não respondeu: NÃO diga isso ao cliente. Trate como ativo e online e use o modelo correspondente.`;
         } else {
-          instrucao = 'Todos os contratos estão ativos e online. Use o modelo "ativo e online" e, se ele tiver mais de um contrato, pergunte também de qual endereço fala.';
+          // Print 2026-09-16: a cliente disse "contratei 500 mega e aparece
+          // 20 no celular" e ouviu "está sem acesso, com lentidão ou caindo?".
+          // O modelo "ativo e online" é para quem AINDA não disse o problema.
+          instrucao = 'Todos os contratos estão ativos e online. Se o cliente JÁ disse qual é o problema, NÃO pergunte de novo: siga o roteiro daquele problema. Se ele não disse, use o modelo "ativo e online". Se ele tiver mais de um contrato, pergunte também de qual endereço fala.';
         }
       }
       return {

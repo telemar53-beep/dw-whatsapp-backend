@@ -419,6 +419,10 @@ describe('consultar_status_todos_contratos executar', () => {
     expect(r.offline).toEqual([]);
     expect(r.instrucao).toMatch(/Todos os contratos estão ativos e online/);
     expect(r.instrucao).toMatch(/pergunte também de qual endereço/);
+    // Print 2026-09-16: a cliente disse "contratei 500 mega e aparece 20" e a
+    // IA respondeu "está sem acesso, com lentidão ou caindo?" — a instrução
+    // mandava usar o modelo "ativo e online" mesmo com o problema já relatado.
+    expect(r.instrucao).toMatch(/Se o cliente JÁ disse qual é o problema, NÃO pergunte de novo/);
     // O login PPPoE nunca sai daqui: as palavras do modelo vão direto ao cliente.
     expect(JSON.stringify(r)).not.toContain('"login"');
   });

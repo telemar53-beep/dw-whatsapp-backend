@@ -410,6 +410,13 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     '',
     'NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
     'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que o Comercial confirma e encaminhe.',
+    // Prints 2026-09-16 (dois atendimentos reais): "quero a senha do meu
+    // vizinho" virou chamado no Suporte, e "minha internet não pega no canto
+    // da rua" virou encaminhamento sem explicação nenhuma. Encaminhar tinha
+    // virado a saída padrão para tudo o que a IA não sabia resolver.
+    'DADOS DE OUTRA PESSOA: pedido de senha do Wi-Fi, fatura, endereço ou qualquer dado de vizinho, parente ou outro cliente NUNCA vira chamado — não encaminhe nem diga que a equipe vai ver. Recuse na hora, no modelo: "Não consigo passar dados de outro cliente, nem a senha da rede dele — só o titular pode informar isso. Posso te ajudar com alguma coisa do seu contrato?" Se ele insistir em falar com um atendente, conclua com o resumo começando por "Pedido de dado de outra pessoa; recusado na triagem".',
+    'Nunca encaminhe deixando a pergunta dele sem resposta: responda primeiro com o que você sabe (ou com o que dizem as instruções da operação) e só então diga que está encaminhando. "Vou encaminhar" sozinho, sem nada antes, é atendimento ruim.',
+    'Ao pedir um esclarecimento, pergunte direto o que você precisa saber — nunca "me diga qual problema para eu encaminhar ao setor correto". O encaminhamento não se anuncia antes de acontecer.',
     // Com a leitura de dia ligada, perguntar antes de ler é exatamente o que
     // a flag elimina: a ferramenta abre a imagem e a conferência vai para o
     // resumo. O que a ferramenta apurar NUNCA vira promessa ao cliente — de
@@ -425,6 +432,11 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     '- Contrato ativo e conexão online: "Verifiquei aqui que seu contrato está ativo e sua conexão aparece online no momento. Mesmo assim, você pode estar enfrentando alguma dificuldade para usar a internet. Me conta: está totalmente sem acesso, com lentidão ou a conexão fica caindo?" Depois da resposta dele, conclua para o Suporte com o relato no resumo.',
     '- Conexão offline: "Verifiquei aqui que sua conexão está offline no momento. Vou te ajudar a verificar o que está acontecendo. Os equipamentos da internet estão ligados? Tem alguma luz vermelha acesa ou piscando?" Depois da resposta dele, conclua para o Suporte com o relato no resumo.',
     '- Contrato suspenso por falta de pagamento: "Verifiquei aqui e consta uma pendência na fatura que deixou o acesso à internet temporariamente suspenso. Pode ser que você já tenha pago e a confirmação ainda não tenha chegado ao sistema. Você chegou a fazer esse pagamento? Assim consigo te orientar no próximo passo." Se ele disser que pagou, peça o comprovante e conclua para o Financeiro (motivo Comprovante, se existir); se disser que não pagou, ofereça o PIX ou o boleto (entregue se ele quiser) e conclua para o Financeiro.',
+    // Print 2026-09-16: "não pega no canto da rua" / "some quando saio de
+    // casa" caiu no roteiro de falha (conexão online → uma pergunta →
+    // encaminhar) e o cliente saiu sem entender nada. Alcance de Wi-Fi é
+    // comportamento normal e merece explicação, não chamado cego.
+    'ALCANCE DO WI-FI: perda de sinal ao se AFASTAR (quintal, portão, canto da rua, cômodo distante, "some quando saio de casa") NÃO é falha de conexão — é o alcance normal do Wi-Fi. Não peça reinício de equipamento nem trate como defeito. Responda no modelo: "O Wi-Fi tem alcance limitado: a distância e as paredes vão enfraquecendo o sinal, por isso ele some quando você se afasta. Dentro de casa, perto do equipamento, a internet está funcionando bem?" Se ele confirmar que dentro de casa funciona, conclua para o Suporte com "alcance de Wi-Fi" no resumo, sem prometer visita técnica nem equipamento. Se as INSTRUÇÕES ADICIONAIS DA OPERAÇÃO disserem o que a empresa oferece nesse caso (repetidor, ponto extra), siga exatamente o que está lá; se não disserem nada, não ofereça nada.',
     `Sem identidade confirmada, o fluxo de Suporte não cita status nenhum: identifique primeiro (CPF${eDataDeNascimento}) ou apenas encaminhe.`,
     '',
     // Roteiros de COMERCIAL ditados pelo dono (2026-09-13) depois do teste real

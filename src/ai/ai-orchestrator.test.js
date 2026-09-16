@@ -1186,6 +1186,44 @@ describe('perfil de triagem', () => {
     expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
   });
 
+  // Prints 2026-09-16 (dois atendimentos reais): "minha internet não pega no
+  // canto da rua" virou roteiro de falha + encaminhamento sem explicar nada, e
+  // "quero a senha do meu vizinho" virou chamado no Suporte. Encaminhar tinha
+  // virado a saída padrão para tudo.
+  describe('atender em vez de encaminhar', () => {
+    test('alcance do Wi-Fi não é falha de conexão e tem roteiro próprio', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/ALCANCE DO WI-FI/);
+      expect(sys).toMatch(/perda de sinal ao se AFASTAR/);
+      expect(sys).toMatch(/NÃO é falha de conexão/);
+      expect(sys).toMatch(/O Wi-Fi tem alcance limitado/);
+      expect(sys).toMatch(/Dentro de casa, perto do equipamento, a internet está funcionando bem\?/);
+      expect(sys).toMatch(/sem prometer visita técnica nem equipamento/);
+      expect(sys).toMatch(/siga exatamente o que está lá; se não disserem nada, não ofereça nada/);
+    });
+
+    test('pedido de dado de outra pessoa é recusado na hora e nunca vira chamado', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/DADOS DE OUTRA PESSOA/);
+      expect(sys).toMatch(/NUNCA vira chamado/);
+      expect(sys).toMatch(/Não consigo passar dados de outro cliente, nem a senha da rede dele/);
+      expect(sys).toMatch(/Posso te ajudar com alguma coisa do seu contrato\?/);
+      expect(sys).toMatch(/Pedido de dado de outra pessoa; recusado na triagem/);
+    });
+
+    test('a regra de responder antes de encaminhar vale para todos os fluxos', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/Nunca encaminhe deixando a pergunta dele sem resposta/);
+      expect(sys).toMatch(/"Vou encaminhar" sozinho, sem nada antes, é atendimento ruim/);
+    });
+
+    test('o esclarecimento não anuncia o encaminhamento', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/pergunte direto o que você precisa saber/);
+      expect(sys).toMatch(/nunca "me diga qual problema para eu encaminhar ao setor correto"/);
+    });
+  });
+
   // Print 2026-09-16: "Bom dia!" em toda resposta da mesma conversa.
   test('o prompt manda cumprimentar só na primeira resposta', async () => {
     const sys = (await contexto()).messages[0].content;

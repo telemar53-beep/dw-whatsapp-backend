@@ -136,6 +136,22 @@ export function createChannel(payload, token) {
   return apiFetch('/api/admin/channels', { method: 'POST', body: payload, token });
 }
 
+// A mesma análise que a triagem faz, pedida pelo atendente sobre a imagem que
+// ele escolheu. A conferência acontece no servidor, em código.
+export function analyzeReceipt(conversationId, messageId, token) {
+  return apiFetch(`/api/conversations/${conversationId}/messages/${messageId}/analyze-receipt`, { method: 'POST', token });
+}
+
+// Com a janela de 24h fechada, template aprovado é a única coisa que o WhatsApp
+// entrega numa conversa já aberta.
+export function sendConversationTemplate(conversationId, templateId, templateVariables, token) {
+  return apiFetch(`/api/conversations/${conversationId}/messages/template`, {
+    method: 'POST',
+    body: { templateId, templateVariables },
+    token,
+  });
+}
+
 export function mediaUrl(messageId, token) {
   return `${API_BASE_URL}/api/media/${messageId}?token=${token}`;
 }
@@ -488,6 +504,12 @@ export function getCampaign(id, token) {
 
 export function getAiConfig(token) {
   return apiFetch('/api/admin/ai/config', { token });
+}
+
+// Separada do `mode`: desligar a IA pelo modo levaria junto a triagem e a
+// transcrição de áudio, que continuam desejadas.
+export function setAssistantSuggestionsEnabled(enabled, token) {
+  return apiFetch('/api/admin/ai/assistant-suggestions', { method: 'PUT', body: { enabled }, token });
 }
 
 export function updateAiConfig(payload, token) {

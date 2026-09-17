@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth, requireRole, requireIntegrationsAccess } = require('../auth/auth.middleware');
-const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
+const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, updateAssistantSuggestionsEnabled, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listTools, findTool } = require('../ai/tool-registry');
 const { listModels } = require('../ai/openai-client');
 const { findReasonById } = require('../reasons/reason.repository');
@@ -30,6 +30,7 @@ function toConfigResponse(config) {
     triageTimeoutMinutes: config.triageTimeoutMinutes,
     triageExtraInstructions: config.triageExtraInstructions,
     triageResolvedReasonId: config.triageResolvedReasonId || null,
+    assistantSuggestionsEnabled: Boolean(config.assistantSuggestionsEnabled),
     triageRequireBirthdate: Boolean(config.triageRequireBirthdate),
     triageReadReceiptsDaytime: Boolean(config.triageReadReceiptsDaytime),
     nightStartTime: config.nightStartTime || null,
@@ -168,6 +169,17 @@ router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
     return res.status(400).json({ error: 'triageReadReceiptsDaytime must be a boolean' });
   }
   const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido, nightStartTime: inicioNoturno, nightEndTime: fimNoturno, triageRequireBirthdate: triageRequireBirthdate === true, triageReadReceiptsDaytime: triageReadReceiptsDaytime === true });
+  res.json(toConfigResponse(config));
+});
+
+// Separada do `mode` de proposito: desligar a IA pelo modo levaria junto a
+// triagem e a transcricao de audio, que continuam desejadas. Nasce desligada.
+router.put('/assistant-suggestions', requireAuth, requireIntegrationsAccess, async (req, res) => {
+  const { enabled } = req.body || {};
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be a boolean' });
+  }
+  const config = await updateAssistantSuggestionsEnabled(enabled);
   res.json(toConfigResponse(config));
 });
 

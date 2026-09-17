@@ -14,6 +14,9 @@ jest.mock('../assignment-messages/assignment-message.service');
 jest.mock('../reasons/reason.repository');
 jest.mock('../ai/ai-suggestion.repository');
 jest.mock('../sectors/sector.repository');
+jest.mock('../ai/receipt-analysis');
+jest.mock('../ai/ai-config.repository');
+jest.mock('../integrations/sgp-client');
 jest.mock('../agents/agent.repository');
 const request = require('supertest');
 const express = require('express');
@@ -39,6 +42,9 @@ const { listMessagesByConversation, findMessageById } = require('../conversation
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { findAgentById } = require('../agents/agent.repository');
+const { analisarComprovante } = require('../ai/receipt-analysis');
+const { getAiConfig } = require('../ai/ai-config.repository');
+const { lookupClientByCpf } = require('../integrations/sgp-client');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const { findTemplateById } = require('../templates/template.repository');
@@ -66,6 +72,7 @@ function tokenFor(agentId, role) {
 // one standing in for a real conversation reached by the route handler, and one
 // standing in for a conversation the mocked repository reports as not found.
 const CONVERSATION_ID = '11111111-1111-1111-1111-111111111111';
+const MESSAGE_ID = '22222222-2222-2222-2222-222222222222';
 const NON_EXISTENT_ID = '22222222-2222-2222-2222-222222222222';
 
 describe('GET /api/conversations/queue', () => {
@@ -1854,5 +1861,199 @@ describe('PUT /api/conversations/:id/sector', () => {
 
     expect(broadcast).toHaveBeenCalledWith('queue:new', { conversation: expect.objectContaining({ id: CONVERSATION_ID }), message: null });
     expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', { conversation: expect.objectContaining({ id: CONVERSATION_ID }) });
+  });
+});
+
+// A triagem ja analisava comprovante; o atendente humano nao tinha como pedir a
+// mesma coisa. A analise e a mesma (receipt-analysis), com uma diferenca: sem o
+// cliente identificado no SGP nao ha fatura para casar, mas o aviso de
+// comprovante ja usado continua valendo — ele vem do id da transacao.
+describe('POST /api/conversations/:id/messages/:messageId/analyze-receipt', () => {
+  const CONVERSA = { id: CONVERSATION_ID, assignedAgentId: 'agent-1', status: 'assigned', contactId: 'contact-1', contactSgpDocument: null };
+  const IMAGEM = { id: MESSAGE_ID, conversationId: CONVERSATION_ID, direction: 'inbound', messageType: 'image', mediaPath: 'c.jpg', mediaMimeType: 'image/jpeg' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getConversationWithContact.mockResolvedValue(CONVERSA);
+    findMessageById.mockResolvedValue(IMAGEM);
+    getAiConfig.mockResolvedValue({ apiKey: 'sk-1', model: 'gpt-x' });
+    analisarComprovante.mockResolvedValue({ analisado: true, valido: true, valor: 100, jaUtilizado: false, motivos: [] });
+  });
+
+  function analisar(role = 'agent', agentId = 'agent-1') {
+    return request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages/${MESSAGE_ID}/analyze-receipt`)
+      .set('Authorization', `Bearer ${tokenFor(agentId, role)}`);
+  }
+
+  test('analisa a imagem e devolve o veredito', async () => {
+    const res = await analisar();
+
+    expect(res.status).toBe(200);
+    expect(res.body.valido).toBe(true);
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ imagem: IMAGEM }));
+  });
+
+  test('sem cliente identificado no SGP, analisa sem faturas', async () => {
+    await analisar();
+
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [] }));
+  });
+
+  test('com CPF vinculado, busca os contratos para casar a fatura', async () => {
+    getConversationWithContact.mockResolvedValue({ ...CONVERSA, contactSgpDocument: '12345678900' });
+    lookupClientByCpf.mockResolvedValue({ contratos: [{ id: 'ctr-1' }] });
+
+    await analisar();
+
+    expect(lookupClientByCpf).toHaveBeenCalledWith('12345678900');
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [{ id: 'ctr-1' }] }));
+  });
+
+  // O SGP fora do ar nao pode impedir a analise: sem fatura ela ainda diz se e
+  // comprovante, se o favorecido confere e se ja foi usado.
+  test('SGP fora do ar nao derruba a analise', async () => {
+    getConversationWithContact.mockResolvedValue({ ...CONVERSA, contactSgpDocument: '12345678900' });
+    lookupClientByCpf.mockRejectedValue(new Error('sgp fora'));
+
+    const res = await analisar();
+
+    expect(res.status).toBe(200);
+    expect(analisarComprovante).toHaveBeenCalledWith(expect.objectContaining({ contratos: [] }));
+  });
+
+  test('recusa uma mensagem que nao e imagem', async () => {
+    findMessageById.mockResolvedValue({ ...IMAGEM, messageType: 'document', mediaMimeType: 'application/pdf' });
+
+    const res = await analisar();
+
+    expect(res.status).toBe(400);
+    expect(analisarComprovante).not.toHaveBeenCalled();
+  });
+
+  test('recusa uma mensagem de outra conversa', async () => {
+    findMessageById.mockResolvedValue({ ...IMAGEM, conversationId: 'outra-conversa' });
+
+    const res = await analisar();
+
+    expect(res.status).toBe(404);
+    expect(analisarComprovante).not.toHaveBeenCalled();
+  });
+
+  test('404 quando a mensagem nao existe', async () => {
+    findMessageById.mockResolvedValue(null);
+
+    expect((await analisar()).status).toBe(404);
+  });
+
+  test('avisa quando a IA nao esta configurada, em vez de falhar calado', async () => {
+    getAiConfig.mockResolvedValue({ apiKey: null, model: null });
+
+    const res = await analisar();
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/OpenAI/i);
+    expect(analisarComprovante).not.toHaveBeenCalled();
+  });
+
+  test('403 para quem nao e dono da conversa nem admin', async () => {
+    const res = await analisar('agent', 'outro-agente');
+
+    expect(res.status).toBe(403);
+    expect(analisarComprovante).not.toHaveBeenCalled();
+  });
+});
+
+// Com a janela de 24 h fechada, template aprovado e a UNICA coisa que a Meta
+// entrega. Isso so existia em "Iniciar conversa": o aviso no chat mandava usar
+// template sem haver botao para isso.
+describe('POST /api/conversations/:id/messages/template', () => {
+  const CANAL = { id: 'channel-1', type: 'meta_cloud', config: { wabaId: 'waba-1' }, status: 'connected' };
+  const TEMPLATE = { id: 'tpl-1', name: 'retorno', language: 'pt_BR', status: 'APPROVED', wabaId: 'waba-1', bodyText: 'Olá {{1}}, tudo bem?', variableCount: 1 };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, assignedAgentId: 'agent-1', status: 'assigned', channelId: 'channel-1', contactPhoneNumber: '5511999998888' });
+    findChannelById.mockResolvedValue(CANAL);
+    findTemplateById.mockResolvedValue(TEMPLATE);
+    enqueueOutboundMessage.mockResolvedValue({ id: 'msg-1', content: 'Olá Maria, tudo bem?' });
+  });
+
+  function enviar(body = { templateId: 'tpl-1', templateVariables: ['Maria'] }, agentId = 'agent-1') {
+    return request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/messages/template`)
+      .set('Authorization', `Bearer ${tokenFor(agentId, 'agent')}`)
+      .send(body);
+  }
+
+  test('envia o template com as variaveis substituidas', async () => {
+    const res = await enviar();
+
+    expect(res.status).toBe(201);
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Olá Maria, tudo bem?',
+        templateName: 'retorno',
+        templateLanguage: 'pt_BR',
+        templateVariables: ['Maria'],
+      })
+    );
+  });
+
+  test('recusa template que nao esta aprovado', async () => {
+    findTemplateById.mockResolvedValue({ ...TEMPLATE, status: 'PENDING' });
+
+    const res = await enviar();
+
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  // Template de outra WABA e recusado pela propria Meta; recusar aqui da um
+  // recado util em vez de uma falha em vermelho na bolha.
+  test('recusa template de outra WABA', async () => {
+    findTemplateById.mockResolvedValue({ ...TEMPLATE, wabaId: 'outra-waba' });
+
+    expect((await enviar()).status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('recusa quando falta variavel', async () => {
+    const res = await enviar({ templateId: 'tpl-1', templateVariables: [] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/1 variable/);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('recusa variavel vazia', async () => {
+    const res = await enviar({ templateId: 'tpl-1', templateVariables: ['   '] });
+
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('404 quando o template nao existe', async () => {
+    findTemplateById.mockResolvedValue(null);
+
+    expect((await enviar()).status).toBe(404);
+  });
+
+  // Canal nao oficial nao tem janela de 24 h nem template: mandar texto livre
+  // sempre funciona, e oferecer template ali so confundiria.
+  test('recusa num canal que nao e oficial', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'baileys', config: {}, status: 'connected' });
+
+    const res = await enviar();
+
+    expect(res.status).toBe(400);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('403 para quem nao esta com a conversa', async () => {
+    const res = await enviar({ templateId: 'tpl-1', templateVariables: ['Maria'] }, 'outro-agente');
+
+    expect(res.status).toBe(403);
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 });

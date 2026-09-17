@@ -222,3 +222,93 @@ describe('visualizador de imagem com zoom', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
+
+// A triagem ja analisava comprovante; o atendente humano nao tinha como pedir a
+// mesma coisa sem devolver a conversa para a IA.
+describe('analisar comprovante pelo chat', () => {
+  const IMAGEM = { id: 'm-1', messageType: 'image', mediaPath: 'c.jpg', mediaFilename: 'comprovante.jpg', direction: 'inbound' };
+
+  test('nao oferece o botao sem a acao disponivel', () => {
+    render(<MessageAttachment message={IMAGEM} />);
+    expect(screen.queryByRole('button', { name: /analisar comprovante/i })).not.toBeInTheDocument();
+  });
+
+  test('oferece o botao numa imagem recebida do cliente', () => {
+    render(<MessageAttachment message={IMAGEM} onAnalyzeReceipt={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /analisar comprovante/i })).toBeInTheDocument();
+  });
+
+  // Comprovante e o que o CLIENTE manda; analisar o que nos enviamos nao faz
+  // sentido e so poluiria a conversa.
+  test('nao oferece numa imagem que nos enviamos', () => {
+    render(<MessageAttachment message={{ ...IMAGEM, direction: 'outbound' }} onAnalyzeReceipt={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /analisar comprovante/i })).not.toBeInTheDocument();
+  });
+
+  // Em PDF o botao nem aparece: melhor ausente do que presente e sem resposta.
+  test('nao oferece num documento', () => {
+    render(
+      <MessageAttachment
+        message={{ id: 'm-2', messageType: 'document', mediaPath: 'c.pdf', mediaFilename: 'c.pdf', direction: 'inbound' }}
+        onAnalyzeReceipt={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('button', { name: /analisar comprovante/i })).not.toBeInTheDocument();
+  });
+
+  test('mostra o veredito depois de analisar', async () => {
+    const onAnalyzeReceipt = vi.fn().mockResolvedValue({ analisado: true, valido: true, valor: 100, motivos: [] });
+    render(<MessageAttachment message={IMAGEM} onAnalyzeReceipt={onAnalyzeReceipt} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /analisar comprovante/i }));
+
+    expect(onAnalyzeReceipt).toHaveBeenCalledWith('m-1');
+    expect(await screen.findByText(/o comprovante confere/i)).toBeInTheDocument();
+  });
+
+  test('destaca o comprovante ja usado', async () => {
+    const onAnalyzeReceipt = vi.fn().mockResolvedValue({ analisado: true, valido: true, jaUtilizado: true, motivos: [] });
+    render(<MessageAttachment message={IMAGEM} onAnalyzeReceipt={onAnalyzeReceipt} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /analisar comprovante/i }));
+
+    expect(await screen.findByText(/ja foi usado antes|já foi usado antes/i)).toBeInTheDocument();
+  });
+
+  test('mostra o motivo quando a analise falha', async () => {
+    const onAnalyzeReceipt = vi.fn().mockRejectedValue({ body: { error: 'A OpenAI não está configurada; não é possível ler o comprovante.' } });
+    render(<MessageAttachment message={IMAGEM} onAnalyzeReceipt={onAnalyzeReceipt} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /analisar comprovante/i }));
+
+    expect(await screen.findByText(/OpenAI não está configurada/i)).toBeInTheDocument();
+  });
+});
+
+// Arquivo com mais de 12 meses e apagado, mas a MENSAGEM fica. Sem este aviso a
+// bolha sumiria sem explicacao e o historico ficaria com buracos.
+describe('arquivo removido pela retencao', () => {
+  test('imagem sem arquivo vira aviso, nao bolha vazia', () => {
+    render(<MessageAttachment message={{ id: 'm-1', messageType: 'image', mediaPath: null, direction: 'inbound' }} />);
+
+    expect(screen.getByText(/arquivo removido/i)).toBeInTheDocument();
+  });
+
+  test('video sem arquivo tambem avisa', () => {
+    render(<MessageAttachment message={{ id: 'm-2', messageType: 'video', mediaPath: null, direction: 'inbound' }} />);
+
+    expect(screen.getByText(/arquivo removido/i)).toBeInTheDocument();
+  });
+
+  test('mensagem de texto nao mostra aviso nenhum', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm-3', messageType: 'text', mediaPath: null }} />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  test('nao oferece analisar comprovante num arquivo que ja saiu', () => {
+    render(<MessageAttachment message={{ id: 'm-4', messageType: 'image', mediaPath: null, direction: 'inbound' }} onAnalyzeReceipt={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /analisar comprovante/i })).not.toBeInTheDocument();
+  });
+});

@@ -1,6 +1,7 @@
 const { getPool, closePool } = require('../db/pool');
 const {
   getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission, isToolEnabled,
+  updateAssistantSuggestionsEnabled,
 } = require('./ai-config.repository');
 
 describe('ai config repository', () => {
@@ -191,5 +192,41 @@ describe('ai config repository', () => {
       triageExtraInstructions: '', triageResolvedReasonId: null,
     });
     expect(semMotivo.triageResolvedReasonId).toBeNull();
+  });
+});
+
+// A IA sugerindo resposta ao atendente e um comportamento separado da triagem
+// e da transcricao. Desligar pelo `mode` levava os tres juntos, entao a chave e
+// propria — e nasce desligada, que e o estado pedido.
+describe('assistantSuggestionsEnabled', () => {
+  // ai_config e uma linha unica (id = 1) compartilhada pela suite inteira, e o
+  // jest roda os arquivos em paralelo: sem devolver a coluna ao DEFAULT aqui,
+  // este teste lia o valor que outro arquivo tinha acabado de ligar.
+  beforeEach(async () => {
+    await getPool().query('UPDATE ai_config SET assistant_suggestions_enabled = DEFAULT WHERE id = 1');
+  });
+
+  test('o padrao da coluna e desligada', async () => {
+    const config = await getAiConfig();
+    expect(config.assistantSuggestionsEnabled).toBe(false);
+  });
+
+  test('pode ser ligada e desligada', async () => {
+    const ligada = await updateAssistantSuggestionsEnabled(true);
+    expect(ligada.assistantSuggestionsEnabled).toBe(true);
+    expect((await getAiConfig()).assistantSuggestionsEnabled).toBe(true);
+
+    const desligada = await updateAssistantSuggestionsEnabled(false);
+    expect(desligada.assistantSuggestionsEnabled).toBe(false);
+  });
+
+  test('ligar a sugestao nao mexe no modo nem na transcricao', async () => {
+    const antes = await getAiConfig();
+
+    const depois = await updateAssistantSuggestionsEnabled(true);
+
+    expect(depois.mode).toBe(antes.mode);
+    expect(depois.transcriptionEnabled).toBe(antes.transcriptionEnabled);
+    expect(depois.triageMaxQuestions).toBe(antes.triageMaxQuestions);
   });
 });

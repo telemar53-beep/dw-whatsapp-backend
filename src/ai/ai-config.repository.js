@@ -19,6 +19,9 @@ function toConfig(row) {
     triageTimeoutMinutes: row.triage_timeout_minutes,
     triageExtraInstructions: row.triage_extra_instructions,
     triageResolvedReasonId: row.triage_resolved_reason_id || null,
+    // Desligada (padrao): a IA sugerindo resposta ao atendente e separado da
+    // triagem e da transcricao — desligar pelo `mode` levava os tres juntos.
+    assistantSuggestionsEnabled: Boolean(row.assistant_suggestions_enabled),
     // Desligada (padrao): o CPF digitado ja identifica o cliente.
     triageRequireBirthdate: Boolean(row.triage_require_birthdate),
     // Desligada (padrao): de dia a triagem nem abre a imagem. Ligada, ela le
@@ -73,6 +76,14 @@ async function updateTranscriptionConfig({
 
 // triageResolvedReasonId não usa COALESCE de propósito: null aqui é o admin
 // DESLIGANDO o encerramento pela IA, não "mantenha o que estava".
+async function updateAssistantSuggestionsEnabled(enabled) {
+  const result = await getPool().query(
+    'UPDATE ai_config SET assistant_suggestions_enabled = $1, updated_at = now() WHERE id = 1 RETURNING *',
+    [Boolean(enabled)]
+  );
+  return toConfig(result.rows[0]);
+}
+
 async function updateTriageConfig({ triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId, nightStartTime, nightEndTime, triageRequireBirthdate, triageReadReceiptsDaytime }) {
   const result = await getPool().query(
     `UPDATE ai_config SET triage_confidence_threshold = $1, triage_max_questions = $2,
@@ -114,4 +125,4 @@ async function isToolEnabled(toolName) {
   return result.rows[0].enabled;
 }
 
-module.exports = { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission, isToolEnabled };
+module.exports = { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, updateAssistantSuggestionsEnabled, listToolPermissions, setToolPermission, isToolEnabled };

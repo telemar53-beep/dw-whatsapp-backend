@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom';
 import SettingsPage from '../SettingsPage';
-import { Card, Field, Button, AsyncState, inputClass } from '../../../components/ui';
+import { Card, Field, Button, Toggle, AsyncState, inputClass } from '../../../components/ui';
 import { useAiTriageForm } from './useAiTriageForm';
 import { useAiConfig } from '../../../hooks/useAiConfig';
 import { useReasons } from '../../../hooks/useReasons';
 import { useChannels } from '../../../hooks/useChannels';
 import { computeStatus } from '../../../components/OpenAiConfigCard';
+import { useAuth } from '../../../contexts/AuthContext';
+import { setAssistantSuggestionsEnabled } from '../../../services/api';
 
 const STATUS_BADGE_CLASS = {
   Desativada: 'bg-wa-surface-soft text-wa-muted',
@@ -16,7 +18,8 @@ const STATUS_BADGE_CLASS = {
 
 function AiTriagePage() {
   const form = useAiTriageForm();
-  const { config } = useAiConfig();
+  const { token } = useAuth();
+  const { config, refresh: refreshAiConfig } = useAiConfig();
   const { reasons, status: reasonsStatus } = useReasons();
   const { channels, status: channelsStatus } = useChannels(true);
 
@@ -33,6 +36,21 @@ function AiTriagePage() {
       description="Quando a IA responde sozinha e quantas perguntas pode fazer."
       scope="global"
     >
+      {/* Chave própria, e não um quarto "modo": desligar a IA pelo modo levaria
+          junto a triagem e a transcrição de áudio, que continuam desejadas. */}
+      <Card title="Durante o atendimento humano">
+        <Toggle
+          id="assistant-suggestions"
+          checked={Boolean(config.assistantSuggestionsEnabled)}
+          onChange={async (e) => {
+            await setAssistantSuggestionsEnabled(e.target.checked, token);
+            refreshAiConfig();
+          }}
+          label="Sugerir respostas ao atendente"
+          description="Desmarcado, a IA não escreve sugestões depois que um atendente assume a conversa. A triagem antes do atendimento e a transcrição de áudio continuam funcionando normalmente."
+        />
+      </Card>
+
       <Card title="Situação">
         <div className="flex items-center justify-between gap-3">
           <Link to="/configuracoes/integracoes/openai" className="text-wa-link hover:underline">OpenAI</Link>

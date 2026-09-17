@@ -5,7 +5,7 @@ jest.mock('../reasons/reason.repository');
 const express = require('express');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
-const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
+const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, updateAssistantSuggestionsEnabled, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listModels, OpenAiAuthError } = require('../ai/openai-client');
 const { findReasonById } = require('../reasons/reason.repository');
 const adminAiRoutes = require('./admin-ai.routes');
@@ -473,5 +473,53 @@ describe('admin ai routes', () => {
 
       expect(updateTriageConfig).not.toHaveBeenCalled();
     });
+  });
+});
+
+// A chave e separada do `mode`: desligar a IA pelo modo levaria junto a triagem
+// e a transcricao de audio, que continuam desejadas.
+describe('PUT /api/admin/ai/assistant-suggestions', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function chamar(body, role = 'admin') {
+    return request(buildApp())
+      .put('/api/admin/ai/assistant-suggestions')
+      .set('Authorization', `Bearer ${tokenFor(role, true)}`)
+      .send(body);
+  }
+
+  test('liga a sugestao para o atendente', async () => {
+    updateAssistantSuggestionsEnabled.mockResolvedValue({ mode: 'assistant', assistantSuggestionsEnabled: true });
+
+    const res = await chamar({ enabled: true });
+
+    expect(res.status).toBe(200);
+    expect(updateAssistantSuggestionsEnabled).toHaveBeenCalledWith(true);
+    expect(res.body.assistantSuggestionsEnabled).toBe(true);
+  });
+
+  test('desliga a sugestao', async () => {
+    updateAssistantSuggestionsEnabled.mockResolvedValue({ mode: 'assistant', assistantSuggestionsEnabled: false });
+
+    await chamar({ enabled: false });
+
+    expect(updateAssistantSuggestionsEnabled).toHaveBeenCalledWith(false);
+  });
+
+  test('recusa um valor que nao e booleano', async () => {
+    const res = await chamar({ enabled: 'sim' });
+
+    expect(res.status).toBe(400);
+    expect(updateAssistantSuggestionsEnabled).not.toHaveBeenCalled();
+  });
+
+  test('403 para quem nao gerencia integracoes', async () => {
+    const res = await request(buildApp())
+      .put('/api/admin/ai/assistant-suggestions')
+      .set('Authorization', `Bearer ${tokenFor('agent')}`)
+      .send({ enabled: true });
+
+    expect(res.status).toBe(403);
+    expect(updateAssistantSuggestionsEnabled).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,10 @@
 const express = require('express');
 const multer = require('multer');
 const { findAgentById } = require('../agents/agent.repository');
+const { analisarComprovante } = require('../ai/receipt-analysis');
+const { getAiConfig } = require('../ai/ai-config.repository');
+const { lookupClientByCpf } = require('../integrations/sgp-client');
+const { mensagemSegura } = require('../ai/safe-error-log');
 const { requireAuth, hasAdminLevelAccess } = require('../auth/auth.middleware');
 const {
   listWaitingConversations,
@@ -325,6 +329,108 @@ router.use('/:id/messages', (err, req, res, next) => {
     return res.status(400).json({ error: 'File exceeds the 100MB upload limit' });
   }
   next(err);
+});
+
+// A triagem já analisava comprovante por ferramenta da IA; aqui o atendente
+// humano pede a mesma análise, sobre a imagem que ele escolheu. Mesmo código
+// (receipt-analysis): a conferência é feita EM CÓDIGO, e a visão só lê a imagem.
+//
+// Sem o cliente identificado no SGP não há fatura para casar, mas a análise
+// continua valendo — inclusive o aviso de comprovante já usado, que vem do id
+// da transação e não do SGP.
+// Com a janela de 24 h fechada, template aprovado e a unica coisa que a Meta
+// entrega. Isto existia so em "Iniciar conversa": o aviso no chat mandava usar
+// template sem haver botao para isso em nenhum lugar.
+//
+// Nao contorna a regra da Meta — o texto continua sendo o pre-aprovado, com
+// variaveis. O que muda e o atendente conseguir fazer, pela tela, a unica coisa
+// permitida naquele momento.
+router.post('/:id/messages/template', async (req, res) => {
+  const conversation = await getConversationWithContact(req.params.id);
+  if (!conversation) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+  if (conversation.assignedAgentId !== req.agent.agentId && !hasAdminLevelAccess(req.agent)) {
+    return res.status(403).json({ error: 'This conversation is not assigned to you' });
+  }
+
+  const channel = await findChannelById(conversation.channelId);
+  // Canal nao oficial nao tem janela de 24 h nem template: texto livre sempre
+  // funciona la, e oferecer template so confundiria.
+  if (!channel || !isOfficialChannelType(channel.type)) {
+    return res.status(400).json({ error: 'Só canal oficial (Meta Cloud ou 360dialog) envia template.' });
+  }
+
+  const { templateId, templateVariables } = req.body || {};
+  if (!templateId) {
+    return res.status(400).json({ error: 'templateId is required' });
+  }
+  const template = await findTemplateById(templateId);
+  if (!template) {
+    return res.status(404).json({ error: 'Template not found' });
+  }
+  if (template.status !== 'APPROVED') {
+    return res.status(400).json({ error: 'This template is not approved' });
+  }
+  if (template.wabaId !== channel.config.wabaId) {
+    return res.status(400).json({ error: "This template does not belong to this channel's WABA" });
+  }
+  const variables = Array.isArray(templateVariables) ? templateVariables : [];
+  if (variables.length !== template.variableCount) {
+    return res.status(400).json({ error: `This template requires exactly ${template.variableCount} variable(s)` });
+  }
+  if (variables.some((v) => typeof v !== 'string' || !v.trim())) {
+    return res.status(400).json({ error: 'Each template variable must be a non-empty string' });
+  }
+
+  const message = await enqueueOutboundMessage({
+    conversationId: conversation.id,
+    channelId: channel.id,
+    content: substituteVariables(template.bodyText, variables),
+    templateName: template.name,
+    templateLanguage: template.language,
+    templateVariables: variables,
+    sentBy: req.agent.agentId,
+  });
+  res.status(201).json(message);
+});
+
+router.post('/:id/messages/:messageId/analyze-receipt', async (req, res) => {
+  const conversation = await getConversationWithContact(req.params.id);
+  if (!conversation) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+  if (conversation.assignedAgentId !== req.agent.agentId && !hasAdminLevelAccess(req.agent)) {
+    return res.status(403).json({ error: 'This conversation is not assigned to you' });
+  }
+
+  const message = await findMessageById(req.params.messageId);
+  if (!message || message.conversationId !== conversation.id) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+  if (message.messageType !== 'image') {
+    return res.status(400).json({ error: 'Só dá para analisar imagem (JPG, PNG ou WEBP).' });
+  }
+
+  const config = await getAiConfig();
+  if (!config || !config.apiKey || !config.model) {
+    return res.status(400).json({ error: 'A OpenAI não está configurada; não é possível ler o comprovante.' });
+  }
+
+  // O SGP fora do ar não pode impedir a análise: sem fatura ela ainda diz se é
+  // comprovante, se o favorecido confere e se já foi usado antes.
+  let contratos = [];
+  if (conversation.contactSgpDocument) {
+    try {
+      const cliente = await lookupClientByCpf(conversation.contactSgpDocument);
+      contratos = (cliente && cliente.contratos) || [];
+    } catch (err) {
+      console.error(`analyze-receipt: SGP indisponível na conversa ${conversation.id}: ${mensagemSegura(err)}`);
+    }
+  }
+
+  const analise = await analisarComprovante({ conversationId: conversation.id, imagem: message, contratos, config });
+  res.json(analise);
 });
 
 router.post('/:id/transfer', async (req, res) => {

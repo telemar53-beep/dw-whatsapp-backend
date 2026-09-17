@@ -138,3 +138,53 @@ describe('AiTriagePage', () => {
     expect(screen.getByRole('button', { name: 'Salvar triagem com IA' })).toBeInTheDocument();
   });
 });
+
+// Quando um atendente assume, a IA passava a sugerir respostas para ele. Isso
+// agora e uma chave propria: desligar pelo `mode` levaria junto a triagem e a
+// transcricao de audio, que continuam desejadas.
+describe('sugestao de resposta ao atendente', () => {
+  function renderPage() {
+    return renderInShell(<AiTriagePage />, { path: PATH });
+  }
+
+  test('mostra a chave com o estado atual', () => {
+    useAiConfig.mockReturnValue({
+      config: { configured: true, mode: 'assistant', assistantSuggestionsEnabled: true },
+      status: 'ready',
+      loading: false,
+      refresh: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByRole('checkbox', { name: /sugerir respostas/i })).toBeChecked();
+  });
+
+  test('desmarcada quando a sugestao esta desligada', () => {
+    useAiConfig.mockReturnValue({
+      config: { configured: true, mode: 'assistant', assistantSuggestionsEnabled: false },
+      status: 'ready',
+      loading: false,
+      refresh: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByRole('checkbox', { name: /sugerir respostas/i })).not.toBeChecked();
+  });
+
+  test('ligar chama a API e recarrega', async () => {
+    const refresh = vi.fn();
+    useAiConfig.mockReturnValue({
+      config: { configured: true, mode: 'assistant', assistantSuggestionsEnabled: false },
+      status: 'ready',
+      loading: false,
+      refresh,
+    });
+    api.setAssistantSuggestionsEnabled.mockResolvedValue({});
+    renderPage();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /sugerir respostas/i }));
+
+    await waitFor(() => expect(api.setAssistantSuggestionsEnabled).toHaveBeenCalledWith(true, 't'));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+});

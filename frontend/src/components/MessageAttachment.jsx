@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { mediaUrl } from '../services/api';
-import { IconPlay, IconPause, IconMic, IconDownload, IconPin } from './icons/WaIcons';
+import { receiptVerdict } from '../utils/receiptVerdict';
+import { IconPlay, IconPause, IconMic, IconDownload, IconPin, IconAttach } from './icons/WaIcons';
 import PixCardMessage from './PixCardMessage';
+
+// Tipos que guardam arquivo no disco — os únicos que a retenção pode esvaziar.
+const MEDIA_TYPES_COM_ARQUIVO = ['image', 'video', 'audio', 'document', 'sticker'];
 
 const BAR_COUNT = 38;
 const SPEEDS = [1, 1.5, 2];
@@ -502,7 +506,62 @@ function TranscriptionBlock({ message, dark }) {
   );
 }
 
-function MessageAttachment({ message, avatar, dark = false }) {
+// O atendente pede a mesma análise que a triagem já fazia, sobre a imagem que
+// ele escolheu. A conferência acontece no servidor, em código — aqui é só o
+// pedido e a leitura do veredito.
+function ReceiptAnalysis({ messageId, onAnalyze }) {
+  const [state, setState] = useState('idle');
+  const [verdict, setVerdict] = useState(null);
+  const [error, setError] = useState(null);
+
+  async function analisar() {
+    setState('loading');
+    setError(null);
+    try {
+      setVerdict(receiptVerdict(await onAnalyze(messageId)));
+      setState('done');
+    } catch (err) {
+      setError((err.body && err.body.error) || 'Não foi possível analisar o comprovante.');
+      setState('idle');
+    }
+  }
+
+  const TONES = {
+    ok: 'border-wa-chip-text/30 bg-wa-chip text-wa-chip-text',
+    warn: 'border-wa-warn-text/30 bg-wa-warn-bg text-wa-warn-text',
+    error: 'border-wa-error-text/30 bg-wa-error-bg text-wa-error-text',
+  };
+
+  return (
+    <div className="mt-1.5">
+      {state !== 'done' && (
+        <button
+          type="button"
+          onClick={analisar}
+          disabled={state === 'loading'}
+          className="rounded-[10px] border border-white/15 bg-white/[0.08] px-2.5 py-1 text-[12.5px] font-medium text-chat-text transition hover:bg-white/[0.16] disabled:opacity-60"
+        >
+          {state === 'loading' ? 'Analisando…' : 'Analisar comprovante'}
+        </button>
+      )}
+      {error && <p className="mt-1 text-[12.5px] text-wa-error-text">{error}</p>}
+      {verdict && (
+        <div className={`mt-1 rounded-[10px] border px-2.5 py-1.5 text-[12.5px] ${TONES[verdict.tone]}`}>
+          <p className="font-semibold">{verdict.title}</p>
+          {verdict.details.length > 0 && (
+            <ul className="mt-0.5 space-y-0.5 opacity-90">
+              {verdict.details.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) {
   const { token } = useAuth();
   const outbound = message.direction === 'outbound';
 
@@ -535,19 +594,37 @@ function MessageAttachment({ message, avatar, dark = false }) {
     );
   }
 
-  if (!message.mediaPath) return null;
+  // Mídia sem arquivo só acontece por um motivo: a retenção apagou o arquivo
+  // depois de 12 meses e manteve a mensagem. Sem este aviso a bolha sumiria sem
+  // explicação e o histórico ficaria com buracos.
+  if (!message.mediaPath) {
+    if (!MEDIA_TYPES_COM_ARQUIVO.includes(message.messageType)) return null;
+    return (
+      <p className="inline-flex items-center gap-1.5 rounded-[10px] border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-[13px] italic text-chat-muted">
+        <IconAttach size={15} />
+        Arquivo removido (mais de 12 meses)
+      </p>
+    );
+  }
 
   const url = mediaUrl(message.id, token);
 
   if (message.messageType === 'image') {
     return (
-      <ImageBubble
-        url={url}
-        alt={message.mediaFilename || 'Imagem'}
-        filename={message.mediaFilename}
-        hasCaption={Boolean(message.content)}
-        dark={dark}
-      />
+      <>
+        <ImageBubble
+          url={url}
+          alt={message.mediaFilename || 'Imagem'}
+          filename={message.mediaFilename}
+          hasCaption={Boolean(message.content)}
+          dark={dark}
+        />
+        {/* Comprovante é o que o CLIENTE manda: analisar o que nós enviamos não
+            faz sentido e só poluiria a conversa. */}
+        {onAnalyzeReceipt && !outbound && (
+          <ReceiptAnalysis messageId={message.id} onAnalyze={onAnalyzeReceipt} />
+        )}
+      </>
     );
   }
 

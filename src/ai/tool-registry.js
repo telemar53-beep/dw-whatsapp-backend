@@ -25,7 +25,7 @@ const { mensagemSegura } = require('./safe-error-log');
 const { findLatestInboundImage } = require('../conversations/message.repository');
 const { analyzeImage } = require('./openai-client');
 const { getAiConfig } = require('./ai-config.repository');
-const { conferirComprovante, PROMPT_VISAO } = require('./comprovante');
+const { analisarComprovante } = require('./receipt-analysis');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const { descreverUsoAnterior } = require('./receipt-usage-text');
@@ -1099,79 +1099,35 @@ const TOOLS = [
 
       const imagem = await findLatestInboundImage(contexto.conversationId, { withinMs: 24 * 60 * 60 * 1000 });
       if (!imagem) return { analisado: false, motivo: 'Nenhuma imagem recebida do cliente nas últimas 24 horas.' };
-      // MIME e tamanho são conferidos ANTES de qualquer leitura do disco: o que
-      // sai daqui para a OpenAI é só imagem, e só imagem pequena.
-      if (!MIMES_COMPROVANTE.includes(imagem.mediaMimeType)) {
-        return { analisado: false, motivo: 'A última imagem não está num formato que dá para ler (use JPG, PNG ou WEBP).' };
-      }
-      let buffer;
-      try {
-        const caminho = getMediaFilePath(imagem.mediaPath);
-        const info = await fs.promises.stat(caminho);
-        if (info.size > TAMANHO_MAXIMO_COMPROVANTE) return { analisado: false, motivo: 'A imagem é grande demais para ler (limite 5 MB).' };
-        buffer = await fs.promises.readFile(caminho);
-      } catch (err) {
-        // O caminho do arquivo não entra no log nem na resposta.
-        console.error(`analisar_comprovante: arquivo indisponível na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
-        return { analisado: false, motivo: 'Não foi possível abrir a imagem.' };
-      }
 
-      // Os nomes aceitos como favorecido são configuração da empresa (cartão
-      // "Empresa") e nada mais: não existe mais recebedor Pix cadastrado em
-      // Integrações para somar aqui.
-      const empresa = await getCompanyConfig();
-      const nomesAceitos = [...(empresa.acceptedPayeeNames || [])];
-      // Sem nenhum nome não há conferência possível — e a recusa sai ANTES da
-      // visão, que é paga por imagem.
-      if (nomesAceitos.length === 0) {
-        return { analisado: false, motivo: 'Nenhum nome de favorecido cadastrado em Empresa; não é possível conferir comprovantes.' };
-      }
-
-      let leitura;
-      try {
-        leitura = await analyzeImage({ apiKey: config.apiKey, model: config.model, imageBuffer: buffer, mimeType: imagem.mediaMimeType, prompt: PROMPT_VISAO });
-      } catch (err) {
-        console.error(`analisar_comprovante: visão falhou na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
-        return { analisado: false, motivo: 'Não foi possível ler a imagem agora.' };
-      }
-
-      // Faturas em aberto de TODOS os contratos: o comprovante pode ser do outro ponto.
-      const contratos = contexto.contracts || [];
-      const segundasVias = await Promise.allSettled(contratos.map((c) => sgpClient.getDuplicateInvoice(c.id)));
-      const faturas = [];
-      segundasVias.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value && r.value.hasOpenInvoice) {
-          for (const d of r.value.duplicates) faturas.push({ id: d.id, value: d.value, dueDate: d.dueDate, contratoId: contratos[i].id });
-        }
+      // A leitura e a conferência vivem em receipt-analysis: o atendente humano
+      // pede a mesma análise pelo botão do chat, e duplicar a conferência é
+      // como as duas versões passam a discordar sem ninguém notar.
+      const analise = await analisarComprovante({
+        conversationId: contexto.conversationId,
+        imagem,
+        contratos: contexto.contracts || [],
+        config,
       });
-      const conferencia = conferirComprovante({ leitura, faturas, nomesAceitos });
-      const fatura = conferencia.faturaId ? faturas.find((f) => f.id === conferencia.faturaId) : null;
-      const resultado = { analisado: true, ...conferencia, contratoId: fatura ? fatura.contratoId : null };
+      if (!analise.analisado) return { analisado: false, motivo: analise.motivo };
 
-      // Toda leitura, de dia ou de noite, diz se este id de transação já foi
-      // usado antes: é a única forma de o mesmo comprovante, emprestado ou
-      // reenviado, não passar duas vezes. Sem id não há o que procurar. O
-      // banco fora do ar aqui não pode derrubar a leitura inteira — sem a
-      // consulta, a conferência ainda vale, só fica sem o aviso.
-      let usoAnterior = null;
-      if (conferencia.idTransacao) {
-        try {
-          const uso = await findReceiptUsage(conferencia.idTransacao);
-          if (uso) usoAnterior = { contractId: uso.contractId, usedAt: uso.usedAt, descricao: descreverUsoAnterior(uso) };
-        } catch (err) {
-          console.error(`analisar_comprovante: uso anterior indisponível na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
-        }
-      }
-      // O resultado é serializado para a OpenAI: o que entra aqui o modelo lê e
-      // pode repetir ao cliente. O contrato e a hora são de OUTRA pessoa, então
-      // atravessa só o fato — e o roteiro do prompt manda nem esse fato ser
-      // contado. A descrição fica no contexto do turno, que não vai ao modelo:
-      // é de lá que o resumo e a recusa do desbloqueio a pegam.
-      resultado.jaUtilizado = Boolean(usoAnterior);
+      const { usoAnterior, ...resultado } = analise;
 
       // O veredito fica no contexto do turno para o desbloqueio em confiança
-      // poder consultá-lo sem reler a imagem.
-      contexto.comprovante = { valido: conferencia.valido, contratoId: resultado.contratoId, faturaId: conferencia.faturaId, valor: conferencia.valor, data: conferencia.data, tipo: conferencia.tipo, idTransacao: conferencia.idTransacao, motivos: conferencia.motivos, usoAnterior };
+      // poder consultá-lo sem reler a imagem. O contrato e a hora do uso
+      // anterior são de OUTRA pessoa: ficam no contexto, que não vai ao modelo,
+      // e só o fato (jaUtilizado) atravessa para ele.
+      contexto.comprovante = {
+        valido: resultado.valido,
+        contratoId: resultado.contratoId,
+        faturaId: resultado.faturaId,
+        valor: resultado.valor,
+        data: resultado.data,
+        tipo: resultado.tipo,
+        idTransacao: resultado.idTransacao,
+        motivos: resultado.motivos,
+        usoAnterior,
+      };
       return resultado;
     },
   },

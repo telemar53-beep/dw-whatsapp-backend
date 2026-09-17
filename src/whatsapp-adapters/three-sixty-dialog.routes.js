@@ -11,7 +11,16 @@ const router = express.Router();
 
 router.post('/360dialog/:webhookToken', async (req, res) => {
   const channel = await findChannelByWebhookToken(req.params.webhookToken);
-  if (!channel || channel.hidden) {
+  // O 404 mudo daqui e o mesmo tipo de armadilha que o webhook da Meta tinha:
+  // um token perdido ou um canal ocultado sem querer derrubam todas as
+  // mensagens sem deixar rastro. O token nao entra no log — e ele que
+  // autentica a chamada.
+  if (!channel) {
+    console.warn('Webhook 360dialog descartado: nenhum canal corresponde ao token recebido.');
+    return res.sendStatus(404);
+  }
+  if (channel.hidden) {
+    console.warn(`Webhook 360dialog descartado: o canal "${channel.name}" esta oculto.`);
     return res.sendStatus(404);
   }
 

@@ -129,3 +129,90 @@ describe('loadConfig', () => {
     expect(config.publicBaseUrl).toBe('http://localhost:3000');
   });
 });
+
+// Ate 2026-09-16 a checagem so olhava se a variavel EXISTIA. Foi por esse
+// buraco que META_APP_SECRET=producao-app-secret-trocar-depois subiu para a
+// producao e derrubou 100% das mensagens do canal oficial, em silencio, por
+// semanas. Em producao o processo agora se recusa a subir.
+describe('loadConfig — conteudo das variaveis em producao', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    process.env.NODE_ENV = 'production';
+    process.env.DATABASE_URL = 'postgresql://user:pass@host/db';
+    process.env.JWT_SECRET = 'eaf84e75960169653f9e1530ef8ad38dd6d471f5ce273c8760da1b7f6248ab04';
+    process.env.REDIS_URL = 'redis://red-dae80fgu01pc73df9vh0:6379';
+    process.env.META_VERIFY_TOKEN = 'f12d98931e78124cedc72f95348c8047a184aef835389514';
+    process.env.META_APP_SECRET = '3f8b1c2d4e5a6b7c8d9e0f1a2b3c4d5e';
+    process.env.BAILEYS_SESSIONS_DIR = '/var/data/baileys-sessions';
+    process.env.MEDIA_STORAGE_DIR = '/var/data/media';
+    process.env.PUBLIC_BASE_URL = 'https://dw-whatsapp-backend.onrender.com';
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  test('aceita uma configuracao de producao valida', () => {
+    expect(() => loadConfig()).not.toThrow();
+  });
+
+  test('recusa META_APP_SECRET que nao tem a cara de uma chave de app da Meta', () => {
+    process.env.META_APP_SECRET = 'producao-app-secret-trocar-depois';
+    expect(() => loadConfig()).toThrow(/META_APP_SECRET/);
+  });
+
+  test('recusa META_APP_SECRET hexadecimal de tamanho errado', () => {
+    process.env.META_APP_SECRET = '3f8b1c2d4e5a6b7c';
+    expect(() => loadConfig()).toThrow(/META_APP_SECRET/);
+  });
+
+  test('recusa um valor que sobrou do modelo, em qualquer variavel', () => {
+    process.env.META_VERIFY_TOKEN = 'troque-este-valor-antes-do-deploy';
+    expect(() => loadConfig()).toThrow(/META_VERIFY_TOKEN/);
+  });
+
+  test('recusa PUBLIC_BASE_URL apontando para a maquina local', () => {
+    process.env.PUBLIC_BASE_URL = 'http://localhost:3000';
+    expect(() => loadConfig()).toThrow(/PUBLIC_BASE_URL/);
+  });
+
+  test('recusa JWT_SECRET curto demais', () => {
+    process.env.JWT_SECRET = 'segredo';
+    expect(() => loadConfig()).toThrow(/JWT_SECRET/);
+  });
+
+  test('reclama de todos os problemas de uma vez', () => {
+    process.env.META_APP_SECRET = 'producao-app-secret-trocar-depois';
+    process.env.PUBLIC_BASE_URL = 'http://localhost:3000';
+    let mensagem = '';
+    try {
+      loadConfig();
+    } catch (err) {
+      mensagem = err.message;
+    }
+    expect(mensagem).toMatch(/META_APP_SECRET/);
+    expect(mensagem).toMatch(/PUBLIC_BASE_URL/);
+  });
+
+  test('nunca imprime o valor da variavel no erro', () => {
+    process.env.JWT_SECRET = 'troque-este-segredo-de-verdade-aqui';
+    let mensagem = '';
+    try {
+      loadConfig();
+    } catch (err) {
+      mensagem = err.message;
+    }
+    expect(mensagem).toMatch(/JWT_SECRET/);
+    expect(mensagem).not.toContain('troque-este-segredo-de-verdade-aqui');
+  });
+
+  test('fora de producao nao barra nada, para nao travar dev e teste', () => {
+    process.env.NODE_ENV = 'test';
+    process.env.META_APP_SECRET = 'app-secret';
+    process.env.JWT_SECRET = 'secret';
+    process.env.PUBLIC_BASE_URL = 'http://localhost:3000';
+    expect(() => loadConfig()).not.toThrow();
+  });
+});

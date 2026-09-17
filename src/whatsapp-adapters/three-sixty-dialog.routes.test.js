@@ -143,3 +143,57 @@ describe('POST /webhooks/360dialog/:webhookToken', () => {
     expect(res.status).toBe(200);
   });
 });
+
+// Mesmo silencio que o webhook da Meta tinha: o 404 nao deixava rastro, entao
+// um webhookToken perdido ou um canal ocultado sem querer derrubavam todas as
+// mensagens sem uma linha no log. O token NAO entra no aviso — ele e o que
+// autentica a chamada.
+describe('POST /webhooks/360dialog/:webhookToken — avisos no log de descarte', () => {
+  let warnSpy;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  function warnings() {
+    return warnSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+  }
+
+  test('avisa quando nenhum canal corresponde ao token recebido', async () => {
+    findChannelByWebhookToken.mockResolvedValue(null);
+
+    await request(buildApp()).post('/webhooks/360dialog/token-que-nao-existe').send({ entry: [] });
+
+    expect(warnSpy).toHaveBeenCalled();
+    expect(warnings()).toMatch(/360dialog/i);
+  });
+
+  test('nao repete o webhookToken no aviso, porque ele autentica a chamada', async () => {
+    findChannelByWebhookToken.mockResolvedValue(null);
+
+    await request(buildApp()).post('/webhooks/360dialog/token-que-nao-existe').send({ entry: [] });
+
+    expect(warnings()).not.toContain('token-que-nao-existe');
+  });
+
+  test('avisa que o canal esta oculto em vez de dizer que nao existe', async () => {
+    findChannelByWebhookToken.mockResolvedValue({ id: 'channel-1', name: 'DW Telcom 3', hidden: true, config: {} });
+
+    await request(buildApp()).post('/webhooks/360dialog/token-valido').send({ entry: [] });
+
+    expect(warnings()).toMatch(/oculto/i);
+  });
+
+  test('nao avisa nada quando a mensagem e processada normalmente', async () => {
+    findChannelByWebhookToken.mockResolvedValue({ id: 'channel-1', hidden: false, config: { apiKey: 'key-1' } });
+
+    await request(buildApp()).post('/webhooks/360dialog/token-valido').send({ entry: [] });
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});

@@ -42,6 +42,34 @@ describe('channel repository', () => {
     expect(channel.config).toEqual({ phoneNumberId: '1234567890', accessToken: 'token-abc' });
   });
 
+  // O roteamento de entrada acha o canal pelo phoneNumberId e usa rows[0]. Com
+  // dois canais no mesmo ID, quem recebe as mensagens viraria sorteio do
+  // Postgres, entao o banco recusa a duplicata em vez de escolher no escuro.
+  test('recusa dois canais meta_cloud com o mesmo Phone Number ID', async () => {
+    await createChannel({
+      type: 'meta_cloud',
+      name: 'Primeiro',
+      phoneNumber: '+5598984454546',
+      config: { phoneNumberId: '530351070168344', accessToken: 'tok' },
+    });
+
+    await expect(
+      createChannel({
+        type: 'meta_cloud',
+        name: 'Duplicado',
+        phoneNumber: '+5598984454547',
+        config: { phoneNumberId: '530351070168344', accessToken: 'tok' },
+      })
+    ).rejects.toMatchObject({ code: '23505' });
+  });
+
+  test('deixa dois canais de tipos diferentes conviverem sem phoneNumberId', async () => {
+    await createChannel({ type: 'baileys', name: 'Um', phoneNumber: '+5511900000001', config: {} });
+    await expect(
+      createChannel({ type: 'baileys', name: 'Dois', phoneNumber: '+5511900000002', config: {} })
+    ).resolves.toBeDefined();
+  });
+
   test('createChannel aceita um status inicial explicito', async () => {
     // Canal oficial (meta_cloud/360dialog) nao tem handshake para nos avisar:
     // ele ja nasce conectado, senao ficaria "Desconectado" para sempre.
@@ -323,11 +351,13 @@ describe('updateChannelWabaId', () => {
   test('updates the wabaId of an existing meta_cloud channel', async () => {
     const created = await createChannel({
       type: 'meta_cloud', name: 'Oficial', phoneNumber: '+5511999992222',
-      config: { phoneNumberId: '1234567890', accessToken: 'tok', wabaId: 'old-waba' },
+      // Valor proprio: este describe e irmao do 'channel repository', entao nao
+      // passa pelo TRUNCATE do beforeEach dele, e o phoneNumberId agora e unico.
+      config: { phoneNumberId: '1234567891', accessToken: 'tok', wabaId: 'old-waba' },
     });
     const updated = await updateChannelWabaId(created.id, 'new-waba');
     expect(updated.config.wabaId).toBe('new-waba');
-    expect(updated.config.phoneNumberId).toBe('1234567890');
+    expect(updated.config.phoneNumberId).toBe('1234567891');
   });
 
   test('returns null for a baileys channel', async () => {

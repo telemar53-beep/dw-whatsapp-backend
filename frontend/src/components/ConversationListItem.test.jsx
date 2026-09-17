@@ -138,7 +138,9 @@ describe('ConversationListItem', () => {
         />
       </ul>
     );
-    expect(screen.getByText('Carlos - Bahia')).toBeInTheDocument();
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.getByText('Bahia')).toBeInTheDocument();
+    expect(screen.queryByText('Carlos - Bahia')).not.toBeInTheDocument();
   });
 
   test('shows just the name when the contact has no city', () => {
@@ -173,7 +175,8 @@ describe('ConversationListItem', () => {
         />
       </ul>
     );
-    expect(screen.getByText('Conversa - Bahia')).toBeInTheDocument();
+    expect(screen.getByText('Conversa')).toBeInTheDocument();
+    expect(screen.getByText('Bahia')).toBeInTheDocument();
     expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
   });
 
@@ -523,5 +526,56 @@ describe('ConversationListItem', () => {
     );
     await userEvent.click(screen.getByText('Carlos'));
     expect(onSelect).toHaveBeenCalledWith('c1');
+  });
+});
+
+// A cidade vinha colada no nome, dentro do mesmo truncate: nome comprido comia
+// a cidade inteira. Com vários atendentes puxando cidades diferentes, era
+// justamente o dado que sumia. Agora ela é um chip próprio na segunda linha.
+describe('a cidade não some atrás de um nome comprido', () => {
+  function renderItem(conversation) {
+    render(
+      <ul>
+        <ConversationListItem conversation={{ id: 'c1', ...conversation }} onSelect={vi.fn()} />
+      </ul>
+    );
+  }
+
+  test('a cidade fica fora do elemento do nome', () => {
+    renderItem({
+      contactDisplayName: 'Margareth Ramos de Sousa Albuquerque',
+      contactPhoneNumber: '+5598855204044',
+      contactCityName: 'Candido Mendes',
+    });
+
+    const nome = screen.getByText('Margareth Ramos de Sousa Albuquerque');
+    const cidade = screen.getByText('Candido Mendes');
+    expect(cidade).toBeInTheDocument();
+    expect(nome).not.toContainElement(cidade);
+  });
+
+  test('o nome nao carrega mais a cidade junto', () => {
+    renderItem({ contactDisplayName: 'Carlos', contactPhoneNumber: '+551199', contactCityName: 'Candido Mendes' });
+
+    expect(screen.queryByText(/Carlos\s*-\s*Candido Mendes/)).not.toBeInTheDocument();
+  });
+
+  test('sem cidade cadastrada, nao aparece chip nenhum de cidade', () => {
+    renderItem({ contactDisplayName: 'Carlos', contactPhoneNumber: '+551199', contactCityName: null });
+
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.queryByText('Candido Mendes')).not.toBeInTheDocument();
+  });
+
+  test('a cidade convive com o setor na mesma linha', () => {
+    renderItem({
+      contactDisplayName: 'Carlos',
+      contactPhoneNumber: '+551199',
+      contactCityName: 'Candido Mendes',
+      sectorName: 'Suporte',
+    });
+
+    expect(screen.getByText('Candido Mendes')).toBeInTheDocument();
+    expect(screen.getByText('Suporte')).toBeInTheDocument();
   });
 });

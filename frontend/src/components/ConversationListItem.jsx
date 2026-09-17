@@ -27,8 +27,11 @@ function formatMessageTime(lastMessageAt) {
 }
 
 function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected, divided = true }) {
+  // A cidade já foi colada no nome ("Fulano - Cidade"), mas os dois dividiam um
+  // `truncate` só: nome comprido comia a cidade inteira. Com cada atendente
+  // puxando uma cidade diferente, era justamente o dado que sumia — então ela
+  // virou um chip próprio na segunda linha, que não disputa espaço com o nome.
   const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
-  const displayLabel = conversation.contactCityName ? `${nameLabel} - ${conversation.contactCityName}` : nameLabel;
   const previewText = getPreviewText(conversation);
   const messageTime = formatMessageTime(conversation.lastMessageAt);
 
@@ -71,7 +74,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
         />
         <span className="flex min-w-0 flex-1 flex-col justify-center gap-[3px]">
           <span className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-[16px] leading-[22px] text-chat-text">{displayLabel}</span>
+            <span className="truncate text-[16px] leading-[22px] text-chat-text">{nameLabel}</span>
             {messageTime && (
               <span className={`shrink-0 text-[12.5px] leading-[16px] ${unread ? 'font-medium text-chat-orange' : 'text-chat-faint'}`}>
                 {messageTime}
@@ -86,6 +89,11 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
               <span className="truncate">{previewText}</span>
             </span>
             <span className="flex shrink-0 items-center gap-1.5">
+              {conversation.contactCityName && (
+                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-[1px] text-[11px] font-medium text-chat-muted">
+                  {conversation.contactCityName}
+                </span>
+              )}
               {conversation.assignedAgentName && (
                 <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-[1px] text-[11px] font-medium text-chat-muted">
                   {conversation.assignedAgentName}

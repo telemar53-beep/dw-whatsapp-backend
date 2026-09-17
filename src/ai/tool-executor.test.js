@@ -246,7 +246,7 @@ describe('tool-executor — perfil com lista fixa e identidade', () => {
     findTool.mockReturnValue(toolFake({ exigeIdentidadeForte: true }));
     isToolEnabled.mockResolvedValue(true);
     const r = await executeTool('consultar_plano', { contratoId: 17402 }, { ...CONTEXTO, identidade: { nivel: 'fraca' } });
-    expect(r.instrucao).toBe('Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.');
+    expect(r.instrucao).toBe('Ainda não sei quem é o cliente. Peça o CPF ou CNPJ e chame buscar_cliente; depois chame esta ferramenta de novo.');
     // O nome da ferramenta continua na auditoria, separado da instrução.
     expect(r.detalhe).toBe('consultar_plano');
   });
@@ -274,6 +274,23 @@ describe('tool-executor — perfil com lista fixa e identidade', () => {
     const resultado = await executeTool('consultar_plano', { contratoId: 17402 }, ctx);
     expect(resultado.motivo).toBe('identity_not_confirmed');
     expect(tool.executar).not.toHaveBeenCalled();
+  });
+
+  test('a recusa por identidade não confirmada nunca manda pedir data de nascimento', async () => {
+    findTool.mockReturnValue(toolFake({ nome: 'enviar_boleto', exigeIdentidadeForte: true }));
+    isToolEnabled.mockResolvedValue(true);
+    const contexto = {
+      ferramentasPermitidas: ['enviar_boleto'],
+      identidade: { nivel: 'none' },
+      contracts: [{ id: 1 }],
+      contact: {},
+    };
+    const r = await executeTool('enviar_boleto', { contratoId: 1 }, contexto);
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('identity_not_confirmed');
+    expect(r.instrucao).not.toMatch(/nascimento/i);
+    expect(r.instrucao).not.toMatch(/confirmar_nascimento/);
+    expect(r.instrucao).toMatch(/CPF ou CNPJ/);
   });
 });
 

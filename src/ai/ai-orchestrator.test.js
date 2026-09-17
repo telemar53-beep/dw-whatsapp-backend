@@ -1371,6 +1371,23 @@ describe('perfil de triagem', () => {
     });
   });
 
+  // Print 2026-09-17 (16:32): "quero pagar minha internet" + CPF → a IA
+  // respondeu com o roteiro do contrato suspenso e perguntou "você chegou a
+  // fazer esse pagamento?". Ela acabou de dizer que QUER pagar.
+  describe('pedido de pagamento tem prioridade', () => {
+    test('quem pede para pagar recebe a entrega, não o roteiro do suspenso', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/PEDIDO DE PAGAMENTO .* tem prioridade sobre qualquer roteiro de diagnóstico/);
+      expect(sys).toMatch(/entregue o boleto ou o PIX AGORA/);
+      expect(sys).toMatch(/NUNCA pergunte "você chegou a fazer esse pagamento\?" a quem acabou de dizer que quer pagar/);
+    });
+
+    test('o roteiro do suspenso fica restrito a quem relata falta de acesso', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/só quando ele RELATAR falta de acesso/);
+    });
+  });
+
   // Print 2026-09-17 (16:05–16:06): a mesma pergunta de diagnóstico saiu três
   // vezes seguidas, mesmo com o cliente respondendo "Lentidão" no meio.
   describe('nunca repetir a mesma mensagem', () => {

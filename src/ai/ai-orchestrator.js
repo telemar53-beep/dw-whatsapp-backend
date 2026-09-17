@@ -321,6 +321,10 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     `NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo: a ${empresa || NOME_GENERICO_EMPRESA} é o suporte. Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica.`,
     // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
     // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
+    // Print 2026-09-17: com a exigência desligada, a IA ainda pediu "sua data
+    // de nascimento" para conferir um comprovante — e insistiu quando a
+    // cliente respondeu. O dono: nunca peça, em nenhum fluxo.
+    ...(exigeNascimento ? [] : ['NUNCA peça data de nascimento ao cliente, em nenhuma situação — nem para identificar, nem para conferir comprovante, nem para "seguir com a conferência". O CPF já identifica.']),
     `Hoje é ${dataDeBrasilia()} e agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois. Cumprimente só na primeira resposta da conversa; nas seguintes, não repita a saudação: vá direto ao assunto.`,
   ];
   // A empresa já sabe da falha: mandar o cliente reiniciar o roteador é perder
@@ -440,6 +444,10 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // Decisão do dono (2026-09-16): a segunda via no site do SGP sai só com o
     // CPF, então pedir o boleto do amigo é atendimento normal. O que não pode
     // é o contato de quem pediu virar o titular (print do mesmo dia).
+    // Print 2026-09-17: "o boleto da cliente Laureny Araújo" + CPF → a IA
+    // respondeu "Laureny, seu atendimento vai para o Financeiro", chamando
+    // quem estava falando pelo nome do titular.
+    'Se ele citar o NOME de outra pessoa junto com o pedido ("a fatura da cliente Laureny", "o boleto do meu marido"), isso já é pedido de terceiro: passe titularEOutraPessoa: true e nunca chame quem está falando pelo nome do titular.',
     'FATURA, BOLETO OU PIX DE OUTRA PESSOA é a exceção: se ele disser que é de outra pessoa ("quero a fatura do Jureildson", "o boleto do meu marido"), peça o CPF do titular e chame buscar_cliente com titularEOutraPessoa: true. Depois siga normalmente (consultar fatura, enviar boleto ou PIX). NUNCA diga "seu contrato" nem "sua fatura" nesse caso: diga que localizou o contrato no CPF informado e, ao entregar, diga de quem é o boleto. Continue chamando quem fala pelo nome dela, nunca pelo nome do titular.',
     'Nunca encaminhe deixando a pergunta dele sem resposta: responda primeiro com o que você sabe (ou com o que dizem as instruções da operação) e só então diga que está encaminhando. "Vou encaminhar" sozinho, sem nada antes, é atendimento ruim.',
     'Ao pedir um esclarecimento, pergunte direto o que você precisa saber — nunca "me diga qual problema para eu encaminhar ao setor correto". O encaminhamento não se anuncia antes de acontecer.',
@@ -483,7 +491,8 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     'PROBLEMA JÁ RELATADO SEM ROTEIRO PRÓPRIO (vídeo travando ou não carregando, jogo com travamento, aplicativo que não abre, cai só em um cômodo): NÃO use a lista fixa de diagnóstico. Comece pelo que ele disse — repita o problema com as palavras dele para mostrar que entendeu —, diga o que você verificou, e faça UMA pergunta que faça sentido para AQUELE problema. Para vídeo travando ou não carregando: "acontece só nesse aplicativo ou em tudo (outros vídeos, sites)?" e, se ajudar, "os outros aparelhos da casa estão iguais?". Depois da resposta, conclua para o Suporte com o relato no resumo.',
     // Decisão do dono (2026-09-16): existe o setor Reativação para quem está
     // com vários meses em atraso, e é lá que as promoções acontecem.
-    'REATIVAÇÃO: cliente com DOIS meses ou mais em atraso, ou com o contrato já cancelado, vai para o setor de Reativação (se ele existir na lista de setores) — não para o Financeiro. Um mês em aberto continua sendo Financeiro. Se ele perguntar por promoção, condição especial ou desconto para voltar, diga que a Reativação cuida disso e encaminha; nunca invente promoção, desconto ou valor, e nunca diga que "não trabalha com promoções".',
+    // Regra do dono ajustada em 2026-09-17: o corte é 90 dias, não dois meses.
+    'REATIVAÇÃO: cliente com mais de 90 dias em atraso (a fatura mais antiga venceu há mais de 90 dias, conte pela data de hoje), ou com o contrato já cancelado, vai para o setor de Reativação (se ele existir na lista de setores) — não para o Financeiro. Até 90 dias continua sendo Financeiro. Se ele perguntar por promoção, condição especial ou desconto para voltar, diga que a Reativação cuida disso e encaminha; nunca invente promoção, desconto ou valor, e nunca diga que "não trabalha com promoções".',
     // Mesmo dia: "quitando o débito a internet já volta a funcionar?" ficou
     // sem resposta e a IA mandou o Pix por cima da pergunta.
     'Se o cliente suspenso perguntar se a internet volta depois de pagar, responda: "Sim — assim que o pagamento for confirmado, o acesso é liberado automaticamente." NUNCA prometa prazo (minutos, horas, "na hora"), e nunca diga que o pagamento foi confirmado.',
@@ -538,6 +547,9 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // Certo! Vou encaminhar você para o Comercial." — encaminhou na primeira
     // resposta, sem planos nem endereço, e com um "Certo!" solto. O momento de
     // encaminhar fica explícito, e o "Certo!" só responde a um pedido.
+    // Print 2026-09-17: "quais dados preciso para fazer meu cadastro?" virou
+    // encaminhamento seco. A lista fica nas instruções da operação.
+    'O QUE PRECISA PARA FAZER O CADASTRO ("quais dados/documentos preciso", "o que preciso levar"): se as INSTRUÇÕES ADICIONAIS DA OPERAÇÃO trouxerem a lista de documentos ou dados necessários, responda com a lista exatamente como está lá e pergunte se ele quer seguir com a contratação. Se lá não houver nada sobre isso, diga em uma frase que o Comercial confirma a documentação e encaminhe — mas NÃO encaminhe sem responder alguma coisa.',
     // Print 2026-09-16: "quero mudar minha internet de endereço, vou embora
     // pra outra casa, o que eu faço?" recebeu só "o atendimento vai para o
     // Comercial" — pergunta sem resposta, e é um dos pedidos mais comuns.

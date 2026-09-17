@@ -1037,9 +1037,12 @@ describe('perfil de triagem', () => {
       expect(nomes).toEqual(FERRAMENTAS_TRIAGEM.filter((n) => n !== 'confirmar_nascimento').sort());
     });
 
-    test('o prompt não fala em data de nascimento em lugar nenhum', async () => {
+    test('o prompt só fala em data de nascimento para PROIBIR que ela seja pedida', async () => {
       const sys = (await contexto()).messages[0].content;
-      expect(sys).not.toMatch(/data de nascimento/i);
+      // Print 2026-09-17: a IA pediu a data mesmo com a exigência desligada,
+      // então a única menção que sobrou é a proibição explícita.
+      expect(sys).toMatch(/NUNCA peça data de nascimento/);
+      expect(sys.replace(/NUNCA peça data de nascimento[^\n]*/g, '')).not.toMatch(/data de nascimento/i);
       // A linha do cliente ainda não identificado continua: o CPF segue sendo
       // o que identifica.
       const semIdentidade = (await (async () => {
@@ -1047,7 +1050,7 @@ describe('perfil de triagem', () => {
         return contexto({ identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] } });
       })()).messages[0].content;
       expect(semIdentidade).toContain('Cliente NÃO identificado.');
-      expect(semIdentidade).not.toMatch(/data de nascimento/i);
+      expect(semIdentidade.replace(/NUNCA peça data de nascimento[^\n]*/g, '')).not.toMatch(/data de nascimento/i);
     });
   });
 
@@ -1329,10 +1332,10 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/"aqui na triagem"/);
     });
 
-    test('Reativação a partir de dois meses de atraso', async () => {
+    test('Reativação a partir de mais de 90 dias de atraso', async () => {
       const sys = (await contexto()).messages[0].content;
       expect(sys).toMatch(/REATIVAÇÃO/);
-      expect(sys).toMatch(/DOIS meses ou mais em atraso/);
+      expect(sys).toMatch(/mais de 90 dias em atraso/);
       expect(sys).toMatch(/nunca invente promoção, desconto ou valor/);
     });
 
@@ -1365,6 +1368,44 @@ describe('perfil de triagem', () => {
       expect(sys).toMatch(/EQUIPAMENTO NA CASA DE OUTRA PESSOA/);
       expect(sys).toMatch(/DADOS MÓVEIS \(2G, 3G, 4G, 5G\)/);
       expect(sys).toMatch(/não está usando a internet da casa/);
+    });
+  });
+
+  // Prints 2026-09-17, três correções pedidas pelo dono.
+  describe('correções de 2026-09-17', () => {
+    test('com a exigência desligada (padrão da operação), o prompt PROÍBE pedir data de nascimento', async () => {
+      getAiConfig.mockResolvedValue({
+        apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
+        maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8,
+        triageMaxQuestions: 2, triageResolvedReasonId: null, triageRequireBirthdate: false,
+      });
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/NUNCA peça data de nascimento/);
+      expect(sys).toMatch(/nem para conferir comprovante/);
+    });
+
+    test('com a exigência ligada, a proibição não aparece', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).not.toMatch(/NUNCA peça data de nascimento/);
+    });
+
+    test('Reativação passa a ser mais de 90 dias de atraso', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/mais de 90 dias em atraso/);
+      expect(sys).not.toMatch(/DOIS meses ou mais em atraso/);
+    });
+
+    test('documentos para fazer o cadastro saem das instruções da operação', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/O QUE PRECISA PARA FAZER O CADASTRO/);
+      expect(sys).toMatch(/responda com a lista exatamente como está lá/);
+      expect(sys).toMatch(/NÃO encaminhe sem responder/);
+    });
+
+    test('nome de outra pessoa citado pelo cliente exige titularEOutraPessoa', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/Se ele citar o NOME de outra pessoa/);
+      expect(sys).toMatch(/nunca chame quem está falando pelo nome do titular/);
     });
   });
 

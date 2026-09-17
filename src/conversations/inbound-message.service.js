@@ -44,6 +44,8 @@ async function ingestInboundMessage({
   locationLongitude,
   audioDurationSeconds,
   repliedToWhatsappMessageId,
+  // A hora que o provedor informou. Ausente cai no now() da gravacao.
+  sentAt,
 }) {
   const { wasCreated, ...contact } = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   const contactJustCreated = Boolean(wasCreated);
@@ -83,6 +85,7 @@ async function ingestInboundMessage({
           mediaPath,
           mediaMimeType,
           mediaFilename,
+          sentAt,
         });
       } catch (err) {
         if (err.code !== UNIQUE_VIOLATION) throw err;
@@ -153,6 +156,7 @@ async function ingestInboundMessage({
       locationLatitude,
       locationLongitude,
       repliedToMessageId: repliedTo ? repliedTo.id : null,
+      sentAt,
     });
   } catch (err) {
     if (err.code !== UNIQUE_VIOLATION) throw err;

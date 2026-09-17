@@ -95,6 +95,7 @@ describe('POST /webhooks/360dialog/:webhookToken', () => {
       locationLatitude: undefined,
       locationLongitude: undefined,
       repliedToWhatsappMessageId: null,
+      sentAt: null,
     });
   });
 
@@ -195,5 +196,35 @@ describe('POST /webhooks/360dialog/:webhookToken — avisos no log de descarte',
     await request(buildApp()).post('/webhooks/360dialog/token-valido').send({ entry: [] });
 
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+// O 360dialog reusa o parser da Meta, entao o horario ja vem pronto — falta so
+// a rota repassar. E ele que define a ordem no historico e a janela de 24 h.
+describe('POST /webhooks/360dialog — hora informada pelo provedor', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('repassa o horario do webhook para o ingest', async () => {
+    findChannelByWebhookToken.mockResolvedValue({ id: 'channel-1', hidden: false, config: { apiKey: 'k' } });
+    ingestInboundMessage.mockResolvedValue({});
+
+    await request(buildApp())
+      .post('/webhooks/360dialog/token-valido')
+      .send({
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  metadata: { phone_number_id: '1' },
+                  messages: [{ from: '5511999998888', id: 'wamid.H', type: 'text', text: { body: 'Ok' }, timestamp: '1758000000' }],
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+    expect(ingestInboundMessage).toHaveBeenCalledWith(expect.objectContaining({ sentAt: new Date(1758000000 * 1000) }));
   });
 });

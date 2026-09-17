@@ -70,6 +70,7 @@ describe('parseInboundMessages', () => {
         messageType: 'text',
         content: 'Ola',
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       },
     ]);
   });
@@ -108,6 +109,7 @@ describe('parseInboundMessages', () => {
         messageType: 'text',
         content: 'Isso mesmo',
         repliedToWhatsappMessageId: 'wamid.ORIGINAL',
+        sentAt: null,
       },
     ]);
   });
@@ -148,6 +150,7 @@ describe('parseInboundMessages', () => {
         mediaFilename: null,
         content: 'Comprovante',
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       },
     ]);
   });
@@ -188,6 +191,7 @@ describe('parseInboundMessages', () => {
         mediaFilename: 'comprovante.pdf',
         content: null,
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       },
     ]);
   });
@@ -221,6 +225,7 @@ describe('parseInboundMessages', () => {
         mediaFilename: null,
         content: null,
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       },
     ]);
   });
@@ -259,6 +264,7 @@ describe('parseInboundMessages', () => {
         latitude: -3.119,
         longitude: -60.021,
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       },
     ]);
   });
@@ -295,6 +301,7 @@ describe('parseInboundMessages', () => {
         messageType: 'text',
         content: 'Ola',
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       },
     ]);
   });
@@ -331,6 +338,7 @@ describe('parseInboundMessages', () => {
         messageType: 'text',
         content: 'Ola',
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       },
     ]);
   });
@@ -506,6 +514,7 @@ describe('sendMediaMessage', () => {
       mediaFilename: null,
       caption: 'Segue o comprovante',
       repliedToWhatsappMessageId: 'wamid.ORIG2',
+      sentAt: null,
     });
 
     expect(axios.post).toHaveBeenNthCalledWith(
@@ -955,5 +964,48 @@ describe('listWabaSubscribedApps', () => {
     axios.get.mockResolvedValue({ data: { data: [] } });
 
     expect(await listWabaSubscribedApps('waba-1', 'tok')).toEqual([]);
+  });
+});
+
+// O created_at da mensagem vinha do now() do banco — a hora em que NOS
+// gravamos, nao a hora em que o cliente enviou. Quando o webhook atrasa ou e
+// reentregue (indisponibilidade nossa, timeout, deploy no meio), o historico
+// fica com a hora errada, e a janela de 24 h que o atendente ve na tela deixa
+// de ser a janela que a Meta esta contando.
+describe('parseInboundMessages — horario informado pela Meta', () => {
+  function webhook(message) {
+    return { entry: [{ changes: [{ value: { metadata: { phone_number_id: '1' }, messages: [message] } }] }] };
+  }
+
+  test('devolve o instante que a Meta informou, e nao a hora atual', () => {
+    const [parsed] = parseInboundMessages(
+      webhook({ from: '5511999998888', id: 'wamid.A', type: 'text', text: { body: 'Ola' }, timestamp: '1758000000' })
+    );
+
+    expect(parsed.sentAt).toEqual(new Date(1758000000 * 1000));
+  });
+
+  test('fica sem horario quando a Meta nao manda o timestamp', () => {
+    const [parsed] = parseInboundMessages(
+      webhook({ from: '5511999998888', id: 'wamid.B', type: 'text', text: { body: 'Ola' } })
+    );
+
+    expect(parsed.sentAt).toBeNull();
+  });
+
+  test('ignora um timestamp que nao da para ler', () => {
+    const [parsed] = parseInboundMessages(
+      webhook({ from: '5511999998888', id: 'wamid.C', type: 'text', text: { body: 'Ola' }, timestamp: 'ontem' })
+    );
+
+    expect(parsed.sentAt).toBeNull();
+  });
+
+  test('vale tambem para mensagem de midia', () => {
+    const [parsed] = parseInboundMessages(
+      webhook({ from: '5511999998888', id: 'wamid.D', type: 'image', image: { id: 'MEDIA1', mime_type: 'image/jpeg' }, timestamp: '1758000000' })
+    );
+
+    expect(parsed.sentAt).toEqual(new Date(1758000000 * 1000));
   });
 });

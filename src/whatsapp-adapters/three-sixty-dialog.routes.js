@@ -45,6 +45,7 @@ router.post('/360dialog/:webhookToken', async (req, res) => {
         locationLatitude: inboundMessage.latitude,
         locationLongitude: inboundMessage.longitude,
         repliedToWhatsappMessageId: inboundMessage.repliedToWhatsappMessageId,
+        sentAt: inboundMessage.sentAt,
       });
     } catch (err) {
       // Só a mensagem e o status HTTP: o erro cru do axios carrega os

@@ -57,14 +57,15 @@ async function createMessage({
   repliedToMessageId,
   sentBy,
   metadata,
+  sentAt,
 }) {
   const result = await getPool().query(
     `INSERT INTO messages (
        conversation_id, direction, content, whatsapp_message_id, status,
        message_type, media_path, media_mime_type, media_filename,
-       location_latitude, location_longitude, replied_to_message_id, sent_by, metadata
+       location_latitude, location_longitude, replied_to_message_id, sent_by, metadata, created_at
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15, now()))
      RETURNING ${MESSAGE_COLUMNS}`,
     [
       conversationId,
@@ -83,6 +84,9 @@ async function createMessage({
       // JSONB: serializamos aqui em vez de entregar o objeto ao pg, para não
       // depender do palpite do driver sobre o tipo do parâmetro.
       metadata ? JSON.stringify(metadata) : null,
+      // A hora que o provedor informou. Ausente cai no now(): melhor a hora da
+      // gravacao do que uma data inventada.
+      sentAt || null,
     ]
   );
   return toMessage(result.rows[0]);

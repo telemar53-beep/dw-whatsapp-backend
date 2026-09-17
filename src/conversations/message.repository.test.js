@@ -782,3 +782,64 @@ describe('message repository', () => {
     expect(naRecente.transcription).toBe('texto relido');
   });
 });
+
+// A hora da mensagem recebida tem que ser a que o provedor informou, nao a hora
+// em que nos gravamos: quando o webhook atrasa ou e reentregue, o now() do
+// banco poe no historico uma hora que nunca existiu — e e por essa hora que o
+// atendente calcula a janela de 24 h da Meta.
+describe('createMessage com a hora informada pelo provedor', () => {
+  let conversationId;
+
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE conversations, contacts, channels, messages CASCADE');
+    const contact = await findOrCreateContactByPhoneNumber('+5511966665556', 'Rosanira');
+    const channel = await createChannel({
+      type: 'meta_cloud',
+      name: 'Canal Hora',
+      phoneNumber: '+5511999990011',
+      config: { phoneNumberId: '333', accessToken: 'tok3' },
+    });
+    const conversation = await createConversation(contact.id, channel.id);
+    conversationId = conversation.id;
+  });
+
+  test('grava a mensagem com a hora que veio no webhook', async () => {
+    const enviadaEm = new Date('2026-09-16T23:31:00.000Z');
+
+    const message = await createMessage({
+      conversationId,
+      direction: 'inbound',
+      content: 'Ok',
+      status: 'received',
+      sentAt: enviadaEm,
+    });
+
+    expect(message.createdAt).toEqual(enviadaEm);
+  });
+
+  test('sem hora do provedor, usa a hora da gravacao', async () => {
+    const antes = new Date();
+
+    const message = await createMessage({
+      conversationId,
+      direction: 'inbound',
+      content: 'Ok',
+      status: 'received',
+    });
+
+    expect(message.createdAt.getTime()).toBeGreaterThanOrEqual(antes.getTime() - 1000);
+  });
+
+  test('a ordem das mensagens segue a hora do provedor, nao a da gravacao', async () => {
+    const primeira = await createMessage({
+      conversationId, direction: 'inbound', content: 'primeira', status: 'received',
+      sentAt: new Date('2026-09-16T21:32:00.000Z'),
+    });
+    const segunda = await createMessage({
+      conversationId, direction: 'inbound', content: 'segunda', status: 'received',
+      sentAt: new Date('2026-09-16T23:31:00.000Z'),
+    });
+
+    expect(primeira.createdAt.getTime()).toBeLessThan(segunda.createdAt.getTime());
+  });
+});

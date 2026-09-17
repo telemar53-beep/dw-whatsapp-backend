@@ -107,6 +107,7 @@ describe('POST /webhooks/meta', () => {
       locationLatitude: undefined,
       locationLongitude: undefined,
       repliedToWhatsappMessageId: null,
+      sentAt: null,
     });
   });
 
@@ -253,6 +254,7 @@ describe('POST /webhooks/meta', () => {
       locationLatitude: undefined,
       locationLongitude: undefined,
       repliedToWhatsappMessageId: null,
+      sentAt: null,
     });
   });
 
@@ -300,6 +302,7 @@ describe('POST /webhooks/meta', () => {
       locationLatitude: -3.1,
       locationLongitude: -60.0,
       repliedToWhatsappMessageId: null,
+      sentAt: null,
     });
   });
 });
@@ -519,5 +522,44 @@ describe('POST /webhooks/meta — avisos no log de descarte silencioso', () => {
       .send(bodyString);
 
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+// O horario que a Meta informa precisa chegar ate a gravacao: e ele que define
+// a ordem no historico e a janela de 24 h que o atendente enxerga.
+describe('POST /webhooks/meta — hora informada pela Meta', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.META_APP_SECRET = 'app-secret';
+  });
+
+  test('repassa o horario do webhook para o ingest', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1', hidden: false });
+    ingestInboundMessage.mockResolvedValue({});
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                messages: [{ from: '5511999998888', id: 'wamid.HORA', type: 'text', text: { body: 'Ok' }, timestamp: '1758000000' }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', sign(bodyString, 'app-secret'))
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(ingestInboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ sentAt: new Date(1758000000 * 1000) })
+    );
   });
 });

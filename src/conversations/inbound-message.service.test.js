@@ -1542,3 +1542,37 @@ describe('ingestInboundMessage', () => {
     });
   });
 });
+
+// A hora da mensagem tem que ser a que o provedor informou. Sem isso, o
+// historico e a janela de 24 h da Meta passam a se basear na hora em que NOS
+// gravamos — que diverge sempre que o webhook atrasa ou e reentregue.
+describe('ingestInboundMessage — hora informada pelo provedor', () => {
+  test('repassa a hora do webhook para a gravacao da mensagem', async () => {
+    const enviadaEm = new Date('2026-09-16T23:31:00.000Z');
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      contactDisplayName: 'Rosanira',
+      whatsappMessageId: 'wamid.HORA',
+      content: 'Ok',
+      messageType: 'text',
+      sentAt: enviadaEm,
+    });
+
+    expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ sentAt: enviadaEm }));
+  });
+
+  test('sem hora do provedor, deixa a gravacao decidir', async () => {
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      contactDisplayName: 'Rosanira',
+      whatsappMessageId: 'wamid.SEMHORA',
+      content: 'Ok',
+      messageType: 'text',
+    });
+
+    expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ sentAt: undefined }));
+  });
+});

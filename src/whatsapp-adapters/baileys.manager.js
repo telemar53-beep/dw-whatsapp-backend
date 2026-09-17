@@ -321,6 +321,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         locationLatitude: location.latitude,
         locationLongitude: location.longitude,
         repliedToWhatsappMessageId,
+        sentAt: sentAtFromBaileys(msg.messageTimestamp),
       });
       scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
       continue;
@@ -343,6 +344,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         mediaFilename: mediaInfo.filename,
         audioDurationSeconds: mediaInfo.durationSeconds || null,
         repliedToWhatsappMessageId,
+        sentAt: sentAtFromBaileys(msg.messageTimestamp),
       });
       scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
       continue;
@@ -365,6 +367,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       messageType: 'text',
       content,
       repliedToWhatsappMessageId,
+      sentAt: sentAtFromBaileys(msg.messageTimestamp),
     });
     scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
   }
@@ -723,6 +726,23 @@ async function resolveWhatsAppJid(channel, phoneNumber) {
   return jidToPhoneNumber((typedMatch || found[0]).jid);
 }
 
+// O Baileys entrega a hora em messageTimestamp, que o protobuf pode devolver
+// como number, como texto ou como Long ({ low, high }). Sem isso o historico
+// usa a hora em que NOS gravamos — e quando a sessao reconecta e recebe um lote
+// atrasado, todas as mensagens ficam com a mesma hora, fora de ordem.
+// Qualquer coisa ilegivel vira null: melhor a hora da gravacao do que uma data
+// inventada.
+function sentAtFromBaileys(messageTimestamp) {
+  if (messageTimestamp === undefined || messageTimestamp === null) return null;
+  const raw =
+    typeof messageTimestamp === 'object' && messageTimestamp !== null && 'low' in messageTimestamp
+      ? messageTimestamp.low
+      : messageTimestamp;
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return new Date(seconds * 1000);
+}
+
 module.exports = {
   startAllBaileysConnections,
   startBaileysConnection,
@@ -739,6 +759,7 @@ module.exports = {
   getQrForChannel,
   fetchContactAvatarForChannel,
   parseBaileysStatusUpdates,
+  sentAtFromBaileys,
   extractQuotedMessageId,
   AVATAR_REFRESH_INTERVAL_MS,
 };

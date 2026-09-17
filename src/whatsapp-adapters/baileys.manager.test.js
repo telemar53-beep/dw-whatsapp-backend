@@ -168,6 +168,7 @@ describe('baileys.manager', () => {
         messageType: 'text',
         content: 'Oi, preciso de ajuda',
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -196,6 +197,7 @@ describe('baileys.manager', () => {
         messageType: 'text',
         content: 'Respondendo aqui',
         repliedToWhatsappMessageId: 'BAILEYS_ORIGINAL_1',
+        sentAt: null,
       });
     });
 
@@ -225,6 +227,7 @@ describe('baileys.manager', () => {
         messageType: 'text',
         content: 'Seu cartao foi aprovado. Toque no botao abaixo para ativar.',
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -255,6 +258,7 @@ describe('baileys.manager', () => {
         messageType: 'text',
         content: 'Sua fatura vence em 3 dias.',
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -283,6 +287,7 @@ describe('baileys.manager', () => {
         messageType: 'text',
         content: 'Seu treino de hoje esta liberado.',
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -374,6 +379,7 @@ describe('baileys.manager', () => {
         messageType: 'text',
         content: 'Oi, preciso de suporte',
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -427,6 +433,7 @@ describe('baileys.manager', () => {
         mediaFilename: null,
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -458,6 +465,7 @@ describe('baileys.manager', () => {
         mediaFilename: 'comprovante.pdf',
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -492,6 +500,7 @@ describe('baileys.manager', () => {
         mediaFilename: null,
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -569,6 +578,7 @@ describe('baileys.manager', () => {
         mediaFilename: null,
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -604,6 +614,7 @@ describe('baileys.manager', () => {
         mediaFilename: null,
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
 
@@ -670,6 +681,7 @@ describe('baileys.manager', () => {
         locationLatitude: -3.119,
         locationLongitude: -60.021,
         repliedToWhatsappMessageId: null,
+        sentAt: null,
       });
     });
   });
@@ -1116,6 +1128,7 @@ describe('baileys.manager', () => {
 
       await manager.sendTextMessage(channel, '5511999993333', 'R$150,00', {
         repliedToWhatsappMessageId: 'wamid.ORIG1',
+        sentAt: null,
         repliedToDirection: 'inbound',
         repliedToContent: 'Qual o valor?',
       });
@@ -1135,6 +1148,7 @@ describe('baileys.manager', () => {
 
       await manager.sendTextMessage(channel, '5511999993333', 'R$150,00', {
         repliedToWhatsappMessageId: 'wamid.ORIG1',
+        sentAt: null,
         repliedToDirection: 'inbound',
         repliedToContent: null,
       });
@@ -1150,6 +1164,7 @@ describe('baileys.manager', () => {
 
       await manager.sendTextMessage(channel, '5511999993333', 'Confirmado', {
         repliedToWhatsappMessageId: 'wamid.ORIG2',
+        sentAt: null,
         repliedToDirection: 'outbound',
         repliedToContent: 'Já registramos o pagamento',
       });
@@ -1529,6 +1544,7 @@ describe('baileys.manager', () => {
         mediaMimeType: 'image/jpeg',
         caption: 'Segue o comprovante',
         repliedToWhatsappMessageId: 'wamid.ORIG3',
+        sentAt: null,
         repliedToDirection: 'inbound',
         repliedToContent: 'Manda o comprovante',
       });
@@ -1741,5 +1757,35 @@ describe('baileys.manager', () => {
       });
       expect(baileysLib.default).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// O Baileys entrega a hora em messageTimestamp, que o protobuf pode devolver
+// como number ou como Long ({ low, high }). O Baileys nao tem janela de 24 h,
+// mas a ordem e a hora no historico valem para os tres canais igual.
+describe('sentAtFromBaileys', () => {
+  test('entende um timestamp numerico em segundos', () => {
+    expect(manager.sentAtFromBaileys(1758000000)).toEqual(new Date(1758000000 * 1000));
+  });
+
+  test('entende o Long do protobuf', () => {
+    expect(manager.sentAtFromBaileys({ low: 1758000000, high: 0, unsigned: false })).toEqual(
+      new Date(1758000000 * 1000)
+    );
+  });
+
+  test('entende um timestamp que veio como texto', () => {
+    expect(manager.sentAtFromBaileys('1758000000')).toEqual(new Date(1758000000 * 1000));
+  });
+
+  test('devolve null quando nao ha timestamp', () => {
+    expect(manager.sentAtFromBaileys(undefined)).toBeNull();
+    expect(manager.sentAtFromBaileys(null)).toBeNull();
+    expect(manager.sentAtFromBaileys(0)).toBeNull();
+  });
+
+  test('devolve null para lixo, em vez de uma data inventada', () => {
+    expect(manager.sentAtFromBaileys('ontem')).toBeNull();
+    expect(manager.sentAtFromBaileys({})).toBeNull();
   });
 });

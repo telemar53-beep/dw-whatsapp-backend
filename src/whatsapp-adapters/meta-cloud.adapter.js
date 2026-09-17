@@ -29,6 +29,18 @@ function verifySignature(rawBody, signatureHeader, appSecret) {
 
 const MEDIA_MESSAGE_TYPES = ['image', 'document', 'audio', 'video', 'sticker'];
 
+// O horario que a Meta informa (epoch em segundos), e nao a hora em que nos
+// gravamos: quando o webhook atrasa ou e reentregue, o now() do banco poe no
+// historico uma hora que nunca existiu, e a janela de 24 h mostrada na tela
+// deixa de ser a que a Meta esta contando. Um valor ilegivel vira null, e ai o
+// banco usa o DEFAULT — melhor a hora da gravacao do que uma data inventada.
+function sentAtFrom(timestamp) {
+  if (timestamp === undefined || timestamp === null) return null;
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return new Date(seconds * 1000);
+}
+
 function parseInboundMessages(webhookBody) {
   const messages = [];
   const entries = webhookBody.entry || [];
@@ -47,6 +59,7 @@ function parseInboundMessages(webhookBody) {
           contactDisplayName: contactsById[message.from] || null,
           whatsappMessageId: message.id,
           repliedToWhatsappMessageId: (message.context && message.context.id) || null,
+          sentAt: sentAtFrom(message.timestamp),
         };
         if (message.type === 'text') {
           messages.push({ ...base, messageType: 'text', content: message.text.body });

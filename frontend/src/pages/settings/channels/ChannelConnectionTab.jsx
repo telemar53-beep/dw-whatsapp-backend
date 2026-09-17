@@ -112,6 +112,35 @@ function MigrateToMetaCloud({ channel, canManage, onMigrated }) {
   );
 }
 
+// As duas frases de Ações avançadas eram fixas e anunciavam ações que o canal
+// não tem: num Meta Cloud prometiam "Migrar" e "reconectar" sem nenhum dos dois
+// botões na tela. Agora saem da mesma condição que decide quais botões existem.
+function joinPt(items) {
+  if (items.length === 1) return items[0];
+  return `${items.slice(0, -1).join(', ')} ou ${items[items.length - 1]}`;
+}
+
+function advancedActions(type) {
+  const verbs = [];
+  const notes = [];
+  if (type !== 'meta_cloud') {
+    verbs.push('migrar');
+    notes.push('migrar troca o provedor deste número sem perder o histórico');
+  }
+  if (type === 'baileys') {
+    verbs.push('reconectar');
+    notes.push('reconectar gera um novo QR code');
+  }
+  verbs.push('ocultar', 'excluir');
+  notes.push('ocultar tira o canal da lista sem apagar nada');
+  notes.push('excluir só é possível se o canal nunca teve conversas');
+  const summary = joinPt(verbs);
+  return {
+    summary: `${summary.charAt(0).toUpperCase()}${summary.slice(1)} este canal`,
+    description: `${notes.join('; ').replace(/^./, (c) => c.toUpperCase())}.`,
+  };
+}
+
 function DataRow({ label, children, action }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2.5">
@@ -240,10 +269,10 @@ function ChannelConnectionTab() {
             </span>
             Ações avançadas
           </span>
-          <span className="text-[12.5px] text-wa-muted">Migrar, ocultar ou excluir este canal</span>
+          <span className="text-[12.5px] text-wa-muted">{advancedActions(channel.type).summary}</span>
         </summary>
         <div className="px-4 pb-4 sm:px-5">
-          <DangerZone description="Migrar troca o provedor deste número sem perder o histórico; reconectar gera um novo QR code; ocultar tira o canal da lista sem apagar nada; excluir só é possível se o canal nunca teve conversas.">
+          <DangerZone description={advancedActions(channel.type).description}>
             {channel.type !== 'meta_cloud' && (
               <MigrateToMetaCloud
                 channel={channel}

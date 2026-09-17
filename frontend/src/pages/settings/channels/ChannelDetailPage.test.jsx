@@ -289,3 +289,42 @@ describe('Migrar para Meta Cloud', () => {
     expect(screen.getByText(/precisa estar no Cloud API/i)).toBeInTheDocument();
   });
 });
+
+// As duas frases de Ações avançadas eram fixas e anunciavam ações que o canal
+// não tem: num Meta Cloud prometiam "Migrar" e "reconectar" sem nenhum dos dois
+// botões na tela, e o admin ficava procurando um botão que não existe.
+describe('Ações avançadas descrevem só o que está na tela', () => {
+  const base = { id: 'ch1', name: 'Canal', phoneNumber: '+5598970285660', status: 'connected', triageEnabled: false, aiEnabled: false, aiTriageEnabled: false, aiNightModeEnabled: false, welcomeMessage: null };
+
+  function renderTipo(type) {
+    useChannels.mockReturnValue({ channels: [{ ...base, type }], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+  }
+
+  test('num Meta Cloud não promete migrar nem reconectar', () => {
+    renderTipo('meta_cloud');
+
+    expect(screen.getByText('Ocultar ou excluir este canal')).toBeInTheDocument();
+    const zone = screen.getByRole('heading', { name: /ações com cuidado/i }).closest('section');
+    expect(zone).not.toHaveTextContent(/migrar/i);
+    expect(zone).not.toHaveTextContent(/reconectar/i);
+  });
+
+  test('num 360dialog promete migrar, mas não reconectar', () => {
+    renderTipo('360dialog');
+
+    expect(screen.getByText('Migrar, ocultar ou excluir este canal')).toBeInTheDocument();
+    const zone = screen.getByRole('heading', { name: /ações com cuidado/i }).closest('section');
+    expect(zone).toHaveTextContent(/migrar/i);
+    expect(zone).not.toHaveTextContent(/reconectar/i);
+  });
+
+  test('num Baileys promete as duas', () => {
+    renderTipo('baileys');
+
+    expect(screen.getByText('Migrar, reconectar, ocultar ou excluir este canal')).toBeInTheDocument();
+    const zone = screen.getByRole('heading', { name: /ações com cuidado/i }).closest('section');
+    expect(zone).toHaveTextContent(/migrar/i);
+    expect(zone).toHaveTextContent(/reconectar/i);
+  });
+});

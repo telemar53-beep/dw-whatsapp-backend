@@ -1371,6 +1371,43 @@ describe('perfil de triagem', () => {
     });
   });
 
+  // Print 2026-09-17 (18:25): cliente COM contrato perguntou "normalizou o
+  // sinal da internet? estou perguntando pq não estou em Cândido Mendes" e
+  // recebeu a tabela de planos inteira — a IA leu a cidade como pergunta de
+  // cobertura e disparou o roteiro de cliente novo.
+  describe('acompanhamento de falha não é pergunta de cobertura', () => {
+    test('a tabela de planos é só para cliente não identificado', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/A tabela de planos é SÓ para cliente NÃO identificado/);
+      expect(sys).toMatch(/Cliente com contrato nunca recebe a lista de planos/);
+    });
+
+    test('perguntar se o sinal normalizou é acompanhamento de falha', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/JÁ NORMALIZOU\?/);
+      expect(sys).toMatch(/não é pergunta de cobertura/);
+      expect(sys).toMatch(/consultar_status_todos_contratos/);
+      expect(sys).toMatch(/citar a cidade não transforma o assunto em cobertura/);
+    });
+  });
+
+  test('o pedido de CPF acolhe antes de pedir o documento', async () => {
+    const sys = (await contexto({ identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] } })).messages[0].content;
+    expect(sys).toContain('"Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor."');
+  });
+
+  // Print 2026-09-17 (18:11): o dono reescreveu o modelo de "ativo e online" —
+  // a versão antiga tinha virado uma frase decorada, longa e impessoal.
+  test('o modelo de contrato ativo e conexão online usa a redação do dono, em três parágrafos', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toContain('Entendi. Vou verificar isso com você.');
+    expect(sys).toContain('Consultei seu cadastro e, neste momento, seu contrato está ativo e sua conexão aparece online.');
+    expect(sys).toContain('Me diz só uma coisa: você está sem internet, com lentidão ou a conexão está caindo?');
+    // A redação antiga saiu inteira.
+    expect(sys).not.toMatch(/Mesmo assim, você pode estar enfrentando alguma dificuldade/);
+    expect(sys).not.toMatch(/está totalmente sem acesso/);
+  });
+
   // Print 2026-09-17 (17:53): cliente mandou o comprovante e a IA respondeu
   // "Para seguir com a conferência, preciso confirmar a titularidade com a
   // data de nascimento" — com a confirmação por data DESLIGADA, ou seja, sem
@@ -1605,8 +1642,9 @@ describe('perfil de triagem', () => {
   test('o fluxo de Suporte traz os três roteiros do dono e manda consultar o status antes de responder', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).toMatch(/ANTES de responder, chame consultar_status_todos_contratos \(UMA chamada, cobre todos os contratos\) e siga a instrução que ela devolver/);
-    expect(sys).toMatch(/seu contrato está ativo e sua conexão aparece online no momento/);
-    expect(sys).toMatch(/está totalmente sem acesso, com lentidão ou a conexão fica caindo\?/);
+    // Redação reescrita pelo dono em 2026-09-17.
+    expect(sys).toMatch(/seu contrato está ativo e sua conexão aparece online\./);
+    expect(sys).toMatch(/você está sem internet, com lentidão ou a conexão está caindo\?/);
     expect(sys).toMatch(/sua conexão está offline no momento/);
     expect(sys).toMatch(/Tem alguma luz vermelha acesa ou piscando\?/);
     expect(sys).toMatch(/pendência na fatura que deixou o acesso à internet temporariamente suspenso/);

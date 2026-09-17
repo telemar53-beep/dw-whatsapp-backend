@@ -418,7 +418,9 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // único caminho é cumprimentar, avisar e encaminhar.
     linhas.push(`Cliente identificado pela memória (primeiro nome ${identidade.primeiroNome || 'cliente'}), mas o sistema do SGP NÃO respondeu agora. NÃO peça CPF${nemDataDeNascimento} e NÃO tente boleto, PIX nem status de conexão. Cumprimente pelo primeiro nome, diga em uma frase que o sistema de consulta está instável neste momento, e chame concluir_triagem para o setor adequado ao que ele pediu, com o resumo começando por "SGP indisponível na triagem".`);
   } else if (identidade.nivel === 'none') {
-    linhas.push('Cliente NÃO identificado. Peça o CPF/CNPJ só se o setor exigir identificação (Financeiro, Suporte, Reativação): "Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Comercial de cliente novo nunca exige CPF. Depois de buscar_cliente, continue a triagem.');
+    // Redação reescrita pelo dono em 2026-09-17: a frase seca virou padrão e
+    // soava impessoal; acolher antes de pedir o documento.
+    linhas.push('Cliente NÃO identificado. Peça o CPF/CNPJ só se o setor exigir identificação (Financeiro, Suporte, Reativação), no modelo: "Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Comercial de cliente novo nunca exige CPF. Depois de buscar_cliente, continue a triagem.');
     if (identidade.contestado) linhas.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');
   } else {
     // Minor (revisão final do branch inteiro): identidade.primeiroNome pode
@@ -521,6 +523,11 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // Print 2026-09-17 (16:32): "quero pagar minha internet" + CPF recebeu o
     // roteiro do contrato suspenso, com "você chegou a fazer esse pagamento?"
     // — a cliente acabou de dizer que QUER pagar, não que pagou.
+    // Print 2026-09-17 (18:25): cliente COM contrato perguntou "normalizou o
+    // sinal da internet? estou perguntando pq não estou em Cândido Mendes" e
+    // recebeu a tabela de planos — a IA leu a cidade como pergunta de
+    // cobertura e disparou o roteiro de cliente novo.
+    'JÁ NORMALIZOU? ("normalizou o sinal?", "o sinal voltou?", "já resolveram?", "ainda está fora?") é ACOMPANHAMENTO de falha, não é pergunta de cobertura nem de contratação. Chame consultar_status_todos_contratos e responda pelo que ela devolver; se houver aviso ativo na cidade dele, use o aviso. O cliente citar a cidade não transforma o assunto em cobertura — ele está falando do ponto que já tem.',
     'PEDIDO DE PAGAMENTO ("quero pagar", "quero o boleto", "quero o PIX", "quero quitar", "como faço para pagar") tem prioridade sobre qualquer roteiro de diagnóstico: entregue o boleto ou o PIX AGORA (enviar_boleto ou gerar_pix), mesmo com o contrato suspenso — a pendência é justamente o que ele está resolvendo. NUNCA pergunte "você chegou a fazer esse pagamento?" a quem acabou de dizer que quer pagar.',
     'SUPORTE — RELATO DE FALHA (internet lenta, caindo, sem acesso, velocidade abaixo da contratada, "está com problema"), cliente com identidade confirmada: ANTES de responder, chame consultar_status_todos_contratos (UMA chamada, cobre todos os contratos) e siga a instrução que ela devolver. Sem emoji. Depois responda por UM destes modelos, adaptando o nome:',
     // Print 2026-09-16: "posso mudar o roteador de lugar?" abriu com
@@ -529,8 +536,21 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     'DÚVIDA não é falha ("posso mudar o equipamento de lugar?", "quantos aparelhos aguenta?", "como troco a senha?", "o que é X?"): NÃO chame status, NÃO cite status ("contrato ativo", "conexão online") e responda a dúvida direto. Explicação geral de como o serviço funciona você pode dar; qualquer coisa específica da operação (preço, prazo, política, equipamento fornecido) só se estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO.',
     // Mesmo dia: a cliente disse "contratei 500 mega e aparece 20" e a IA
     // perguntou "está sem acesso, com lentidão ou caindo?".
-    'Se o cliente JÁ disse qual é o problema (lentidão, velocidade menor que a contratada, cai à noite, sem acesso em um cômodo), NÃO pergunte "está totalmente sem acesso, com lentidão ou a conexão fica caindo?": vá direto ao roteiro daquele problema. Perguntar o que ele acabou de dizer é o pior erro de atendimento.',
-    '- Contrato ativo e conexão online: "Verifiquei aqui que seu contrato está ativo e sua conexão aparece online no momento. Mesmo assim, você pode estar enfrentando alguma dificuldade para usar a internet. Me conta: está totalmente sem acesso, com lentidão ou a conexão fica caindo?" Depois da resposta dele, se não houver mais nada para responder, conclua para o Suporte com o relato no resumo.',
+    'Se o cliente JÁ disse qual é o problema (lentidão, velocidade menor que a contratada, cai à noite, sem acesso em um cômodo), NÃO repita a pergunta de diagnóstico ("você está sem internet, com lentidão ou a conexão está caindo?"): vá direto ao roteiro daquele problema. Perguntar o que ele acabou de dizer é o pior erro de atendimento.',
+    // Redação reescrita pelo dono em 2026-09-17: a anterior tinha virado uma
+    // frase decorada, longa e impessoal. Três parágrafos: acolher, contar o
+    // que foi consultado, perguntar.
+    [
+      '- Contrato ativo e conexão online, responda EXATAMENTE neste modelo, com as quebras de linha:',
+      '',
+      '"Entendi. Vou verificar isso com você.',
+      '',
+      'Consultei seu cadastro e, neste momento, seu contrato está ativo e sua conexão aparece online.',
+      '',
+      'Me diz só uma coisa: você está sem internet, com lentidão ou a conexão está caindo?"',
+      '',
+      'Depois da resposta dele, se não houver mais nada para responder, conclua para o Suporte com o relato no resumo.',
+    ].join('\n'),
     '- Conexão offline: "Verifiquei aqui que sua conexão está offline no momento. Vou te ajudar a verificar o que está acontecendo. Os equipamentos da internet estão ligados? Tem alguma luz vermelha acesa ou piscando?" Depois da resposta dele, se não houver mais nada para responder, conclua para o Suporte com o relato no resumo.',
     '- Contrato suspenso por falta de pagamento, só quando ele RELATAR falta de acesso (nunca quando ele pediu para pagar): "Verifiquei aqui e consta uma pendência na fatura que deixou o acesso à internet temporariamente suspenso. Pode ser que você já tenha pago e a confirmação ainda não tenha chegado ao sistema. Você chegou a fazer esse pagamento? Assim consigo te orientar no próximo passo." Se ele disser que pagou, peça o comprovante e conclua para o Financeiro (motivo Comprovante, se existir); se disser que não pagou, ofereça o PIX ou o boleto (entregue se ele quiser) e conclua para o Financeiro.',
     // Print 2026-09-16: "não pega no canto da rua" / "some quando saio de
@@ -580,6 +600,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // endereço é UMA pergunta, confirma o que veio e pede só o que falta uma
     // vez, responde antes de encaminhar, frases de encaminhamento de dia e de
     // noite. Planos e cidades continuam vindo SÓ das instruções.
+    'A tabela de planos é SÓ para cliente NÃO identificado que pergunta sobre contratar, preço ou cobertura. Cliente com contrato nunca recebe a lista de planos, a menos que peça preço ou upgrade com todas as letras — para ele, cidade e endereço são o ponto que ele já tem, não cobertura nova.',
     'COMERCIAL (cobertura, planos, contratar, mudar de plano): responda com o que estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO. Planos: copie o bloco de planos EXATAMENTE como está escrito nas instruções (mesmas linhas, mesmos ícones, mesmos preços); se lá não houver um bloco pronto, liste um plano por linha no formato "• 500 Mega por R$ 100/mês". Nunca peça CPF de cliente novo. Cobertura: se a cidade estiver nas instruções, atendemos em TODOS os bairros e ruas dela. Pergunta de cobertura de cliente novo ("tem internet em X?"): responda "Atendemos em X!" e, NA MESMA mensagem, emende a abertura de cliente novo (planos e a pergunta de endereço) — a pergunta de cobertura é o começo da venda, não o fim. NUNCA encaminhe um cliente novo na primeira resposta se a cidade estiver na lista. Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma a cobertura e conclua para o Comercial, sem inventar. Modelos:',
     // Print 1 (teste real 2026-09-14): quem já é cliente e queria outro ponto
     // caía no roteiro de cliente novo, e a IA despejava a lista inteira de

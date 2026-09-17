@@ -37,7 +37,9 @@ const { handleAiJob } = require('./ai-worker');
 
 beforeEach(() => {
   jest.clearAllMocks();
-  getAiConfig.mockResolvedValue({ mode: 'assistant' });
+  // O padrao do arquivo e o assistente COM sugestao ligada: a maioria dos
+  // testes daqui exercita justamente esse caminho.
+  getAiConfig.mockResolvedValue({ mode: 'assistant', assistantSuggestionsEnabled: true });
   getConversationWithContact.mockResolvedValue({
     id: 'c-1', channelId: 'ch-1', status: 'assigned', assignedAgentId: 'a-1', contactId: 'ct-1',
   });
@@ -172,7 +174,7 @@ describe('ai-worker — triagem', () => {
     // antes do mockResolvedValue "default" abaixo.
     getConversationWithContact.mockReset().mockResolvedValue(PENDING);
     runAiTurn.mockReset().mockResolvedValue({ texto: 'Para localizar seu cadastro, me informe seu CPF.', toolsExecutadas: [], erro: null, triagemConcluida: null });
-    getAiConfig.mockResolvedValue({ mode: 'assistant', apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3, transcriptionFeedAi: true });
+    getAiConfig.mockResolvedValue({ mode: 'assistant', assistantSuggestionsEnabled: true, apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3, transcriptionFeedAi: true });
     findChannelById.mockResolvedValue({ id: 'ch-1', aiEnabled: true, aiTriageEnabled: true });
     findContactById.mockResolvedValue({ id: 'ct-1', phoneNumber: '55989', sgpDocument: null });
     resolverIdentidade.mockResolvedValue({ nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] });
@@ -696,5 +698,55 @@ describe('ai-worker — triagem', () => {
       expect(broadcast).not.toHaveBeenCalledWith('queue:new', expect.any(Object));
       expect(broadcastToDashboard).not.toHaveBeenCalledWith('dashboard:conversation', expect.any(Object));
     });
+  });
+});
+
+// A IA passou a nao sugerir resposta quando um atendente assume: e a chave
+// assistantSuggestionsEnabled, separada do `mode` porque desligar pelo modo
+// levaria junto a triagem e a transcricao.
+describe('sugestao para o atendente e opcional', () => {
+  const CONVERSA = {
+    id: 'conv-1',
+    contactId: 'contact-1',
+    channelId: 'channel-1',
+    status: 'assigned',
+    assignedAgentId: 'agent-1',
+    triageState: 'completed',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getConversationWithContact.mockResolvedValue(CONVERSA);
+    findContactById.mockResolvedValue({ id: 'contact-1' });
+    findLatestInboundMessageId.mockResolvedValue('msg-1');
+    runAiTurn.mockResolvedValue({ texto: 'Posso ajudar com a segunda via.', toolsExecutadas: [] });
+  });
+
+  test('nao cria sugestao quando a chave esta desligada', async () => {
+    getAiConfig.mockResolvedValue({ mode: 'assistant', assistantSuggestionsEnabled: false });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'msg-1' });
+
+    expect(createSuggestion).not.toHaveBeenCalled();
+    expect(emitToAgent).not.toHaveBeenCalledWith('agent-1', 'ai:suggestion', expect.anything());
+  });
+
+  test('cria sugestao quando a chave esta ligada', async () => {
+    getAiConfig.mockResolvedValue({ mode: 'assistant', assistantSuggestionsEnabled: true });
+    createSuggestion.mockResolvedValue({ id: 'sug-1', content: 'Posso ajudar com a segunda via.' });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'msg-1' });
+
+    expect(createSuggestion).toHaveBeenCalled();
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'ai:suggestion', expect.anything());
+  });
+
+  // Config antiga (sem o campo) nao pode virar sugestao ligada por acidente.
+  test('config sem a chave nao sugere', async () => {
+    getAiConfig.mockResolvedValue({ mode: 'assistant' });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'msg-1' });
+
+    expect(createSuggestion).not.toHaveBeenCalled();
   });
 });

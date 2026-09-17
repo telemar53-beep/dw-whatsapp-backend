@@ -65,7 +65,9 @@ async function handleAiJob(data) {
   const texto = paraWhatsApp(turno.texto);
   if (!texto) return;
 
-  if (config.mode === 'assistant') {
+  // A chave é separada do `mode` de propósito: desligar pelo modo levaria junto
+  // a triagem e a transcrição de áudio, que continuam sendo desejadas.
+  if (config.mode === 'assistant' && config.assistantSuggestionsEnabled) {
     // As ações executadas ficam gravadas NA sugestão: uma ferramenta sensível
     // (liberação em confiança) age no serviço do cliente no turno, antes de o
     // atendente ver o texto — ele precisa saber que aconteceu, e precisa

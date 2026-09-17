@@ -367,3 +367,157 @@ describe('POST /webhooks/meta (message status updates)', () => {
     expect(res.status).toBe(200);
   });
 });
+
+// O webhook oficial descartava em silencio nos dois pontos abaixo: um
+// META_APP_SECRET errado derrubava 100% das mensagens sem escrever uma linha
+// no log, e um phoneNumberId cadastrado errado fazia o mesmo. Os avisos nunca
+// carregam o corpo da requisicao, que traz mensagem e telefone do cliente.
+describe('POST /webhooks/meta — avisos no log de descarte silencioso', () => {
+  let warnSpy;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.META_APP_SECRET = 'app-secret';
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  function warnings() {
+    return warnSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+  }
+
+  test('avisa que a assinatura nao confere quando o segredo esta errado', async () => {
+    const bodyString = JSON.stringify({ entry: [] });
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', sign(bodyString, 'segredo-errado'))
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(warnSpy).toHaveBeenCalled();
+    expect(warnings()).toMatch(/META_APP_SECRET/);
+  });
+
+  test('avisa quando falta o cabecalho de assinatura', async () => {
+    const bodyString = JSON.stringify({ entry: [] });
+
+    await request(buildApp()).post('/webhooks/meta').set('Content-Type', 'application/json').send(bodyString);
+
+    expect(warnSpy).toHaveBeenCalled();
+    expect(warnings()).toMatch(/META_APP_SECRET/);
+  });
+
+  test('nao inclui o corpo da requisicao no aviso de assinatura', async () => {
+    const bodyString = JSON.stringify({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'segredo do cliente' } }],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', sign(bodyString, 'segredo-errado'))
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(warnings()).not.toMatch(/segredo do cliente/);
+    expect(warnings()).not.toMatch(/5511999998888/);
+  });
+
+  test('avisa com o phone number id quando nenhum canal corresponde', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue(null);
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '530351070168344' },
+                messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', sign(bodyString, 'app-secret'))
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(warnings()).toMatch(/530351070168344/);
+    expect(ingestInboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('avisa que o canal esta oculto em vez de dizer que nao existe', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1', name: 'DW Telecom', hidden: true });
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '530351070168344' },
+                messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', sign(bodyString, 'app-secret'))
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(warnings()).toMatch(/oculto/i);
+    expect(ingestInboundMessage).not.toHaveBeenCalled();
+  });
+
+  test('nao avisa nada quando a mensagem e processada normalmente', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1', hidden: false });
+    ingestInboundMessage.mockResolvedValue({});
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '530351070168344' },
+                messages: [{ from: '5511999998888', id: 'wamid.ABC', type: 'text', text: { body: 'Ola' } }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+
+    await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', sign(bodyString, 'app-secret'))
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+});

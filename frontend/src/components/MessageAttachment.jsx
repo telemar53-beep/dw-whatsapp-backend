@@ -253,16 +253,76 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
   );
 }
 
-function ImageBubble({ url, alt, hasCaption, dark }) {
+// Comprovante de banco e print de erro chegam altos e estreitos. O visualizador
+// encolhia tudo para caber na tela, e a atendente precisava baixar o arquivo só
+// para conseguir ler. Daí o zoom — e o arrasto junto, porque ampliar um
+// comprovante longo sem poder navegar deixa a pessoa presa no meio dele.
+const ZOOM_STEP = 0.25;
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 6;
+
+function clampZoom(value) {
+  return Math.min(Math.max(value, ZOOM_MIN), ZOOM_MAX);
+}
+
+function ImageBubble({ url, alt, filename, hasCaption, dark }) {
   const [open, setOpen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const dragRef = useRef(null);
+  const draggedRef = useRef(false);
+
+  function resetView() {
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  }
+
+  function closeViewer() {
+    setOpen(false);
+    resetView();
+  }
+
+  // Sempre a partir do valor atual: zoom e offset andam juntos, e voltar ao
+  // ajuste tem que recentralizar, senão a imagem some para fora da tela.
+  function applyZoom(next) {
+    const alvo = clampZoom(next);
+    setZoom(alvo);
+    if (alvo === ZOOM_MIN) setOffset({ x: 0, y: 0 });
+  }
 
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') closeViewer();
+      if (event.key === '+' || event.key === '=') applyZoom(zoom + ZOOM_STEP);
+      if (event.key === '-') applyZoom(zoom - ZOOM_STEP);
+      if (event.key === '0') resetView();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
+  }, [open, zoom]);
+
+  // O arrasto escuta na janela: o ponteiro sai da imagem no meio do movimento,
+  // e sem isso a imagem "gruda" quando o mouse passa da borda.
+  useEffect(() => {
+    if (!open) return undefined;
+    function onMove(event) {
+      if (!dragRef.current) return;
+      draggedRef.current = true;
+      setOffset({
+        x: dragRef.current.offsetX + (event.clientX - dragRef.current.startX),
+        y: dragRef.current.offsetY + (event.clientY - dragRef.current.startY),
+      });
+    }
+    function onUp() {
+      dragRef.current = null;
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
   }, [open]);
 
   return (
@@ -278,7 +338,7 @@ function ImageBubble({ url, alt, hasCaption, dark }) {
         <img
           src={url}
           alt={alt || 'Imagem'}
-          className="max-w-full rounded-[6px] object-cover transition-[filter] hover:brightness-[.97]"
+          className="max-w-full rounded-[6px] object-contain transition-[filter] hover:brightness-[.97]"
           style={{ maxHeight: 340, maxWidth: 330, minWidth: 120 }}
         />
       </button>
@@ -287,21 +347,93 @@ function ImageBubble({ url, alt, hasCaption, dark }) {
           role="dialog"
           aria-modal="true"
           aria-label="Visualizar imagem"
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b141a]/95 p-4"
+          onClick={() => {
+            // Soltar o mouse fora da imagem depois de arrastar não pode fechar:
+            // seria fechar sem querer no meio da navegação.
+            if (draggedRef.current) {
+              draggedRef.current = false;
+              return;
+            }
+            closeViewer();
+          }}
+          onWheel={(event) => applyZoom(zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP))}
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#0b141a]/95 p-4"
         >
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={closeViewer}
             aria-label="Fechar imagem"
-            className="absolute right-5 top-4 rounded-full p-2 text-2xl leading-none text-white/80 hover:bg-white/10 hover:text-white"
+            className="absolute right-5 top-4 z-10 rounded-full p-2 text-2xl leading-none text-white/80 hover:bg-white/10 hover:text-white"
           >
             ✕
           </button>
-          <img src={url} alt={alt || 'Imagem'} className="max-h-full max-w-full object-contain" />
+
+          <img
+            src={url}
+            alt={alt || 'Imagem'}
+            draggable={false}
+            onClick={(event) => event.stopPropagation()}
+            onDoubleClick={() => (zoom > ZOOM_MIN ? resetView() : applyZoom(2))}
+            onMouseDown={(event) => {
+              if (zoom <= ZOOM_MIN) return;
+              event.preventDefault();
+              draggedRef.current = false;
+              dragRef.current = { startX: event.clientX, startY: event.clientY, offsetX: offset.x, offsetY: offset.y };
+            }}
+            style={{
+              transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+              cursor: zoom > ZOOM_MIN ? 'grab' : 'zoom-in',
+            }}
+            className="max-h-full max-w-full select-none object-contain transition-transform duration-75"
+          />
+
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur"
+          >
+            <ViewerButton label="Diminuir zoom" onClick={() => applyZoom(zoom - ZOOM_STEP)} disabled={zoom <= ZOOM_MIN}>
+              −
+            </ViewerButton>
+            <span className="min-w-[3.5rem] text-center text-[13px] tabular-nums text-white/90">
+              {Math.round(zoom * 100)}%
+            </span>
+            <ViewerButton label="Aumentar zoom" onClick={() => applyZoom(zoom + ZOOM_STEP)} disabled={zoom >= ZOOM_MAX}>
+              +
+            </ViewerButton>
+            <button
+              type="button"
+              onClick={resetView}
+              className="ml-1 rounded-full px-3 py-1 text-[13px] text-white/80 transition hover:bg-white/10 hover:text-white"
+            >
+              Ajustar
+            </button>
+            <a
+              href={url}
+              download={filename || 'imagem'}
+              onClick={(event) => event.stopPropagation()}
+              className="rounded-full px-3 py-1 text-[13px] text-white/80 transition hover:bg-white/10 hover:text-white"
+            >
+              Baixar
+            </a>
+          </div>
         </div>
       )}
     </>
+  );
+}
+
+function ViewerButton({ label, onClick, disabled, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="flex h-8 w-8 items-center justify-center rounded-full text-[18px] leading-none text-white/85 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -409,7 +541,13 @@ function MessageAttachment({ message, avatar, dark = false }) {
 
   if (message.messageType === 'image') {
     return (
-      <ImageBubble url={url} alt={message.mediaFilename || 'Imagem'} hasCaption={Boolean(message.content)} dark={dark} />
+      <ImageBubble
+        url={url}
+        alt={message.mediaFilename || 'Imagem'}
+        filename={message.mediaFilename}
+        hasCaption={Boolean(message.content)}
+        dark={dark}
+      />
     );
   }
 

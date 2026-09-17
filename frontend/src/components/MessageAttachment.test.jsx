@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import MessageAttachment from './MessageAttachment';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -115,5 +116,109 @@ describe('MessageAttachment', () => {
     // O atendente precisa poder ouvir o áudio enquanto a máquina ainda transcreve.
     const { container } = render(<MessageAttachment message={{ id: 'm1', messageType: 'audio', mediaPath: 'a.ogg', transcriptionStatus: 'processing' }} />);
     expect(container.querySelector('audio')).toBeInTheDocument();
+  });
+});
+
+// Comprovante do banco e print de erro chegam altos e estreitos: cabiam
+// inteiros na tela e ficavam ilegiveis, e a atendente tinha que baixar o
+// arquivo so para conseguir ler.
+describe('visualizador de imagem com zoom', () => {
+  const MENSAGEM = { id: 'm-zoom', messageType: 'image', mediaPath: 'comprovante.jpg', mediaFilename: 'comprovante.jpg' };
+
+  async function abrirVisualizador() {
+    render(<MessageAttachment message={MENSAGEM} />);
+    await userEvent.click(screen.getByRole('button', { name: /abrir imagem em tela cheia/i }));
+    return screen.getByRole('dialog');
+  }
+
+  test('a miniatura na conversa mostra a imagem inteira, sem cortar', () => {
+    render(<MessageAttachment message={MENSAGEM} />);
+    expect(screen.getByAltText('comprovante.jpg')).toHaveClass('object-contain');
+  });
+
+  test('abre com a imagem ajustada a tela', async () => {
+    await abrirVisualizador();
+    expect(screen.getByText('100%')).toBeInTheDocument();
+  });
+
+  test('aumenta e diminui o zoom pelos botoes', async () => {
+    await abrirVisualizador();
+
+    await userEvent.click(screen.getByRole('button', { name: /aumentar zoom/i }));
+    expect(screen.getByText('125%')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /diminuir zoom/i }));
+    expect(screen.getByText('100%')).toBeInTheDocument();
+  });
+
+  test('nao diminui abaixo do tamanho ajustado', async () => {
+    await abrirVisualizador();
+
+    await userEvent.click(screen.getByRole('button', { name: /diminuir zoom/i }));
+    await userEvent.click(screen.getByRole('button', { name: /diminuir zoom/i }));
+
+    expect(screen.getByText('100%')).toBeInTheDocument();
+  });
+
+  test('ajustar volta a imagem ao tamanho da tela', async () => {
+    await abrirVisualizador();
+    await userEvent.click(screen.getByRole('button', { name: /aumentar zoom/i }));
+    await userEvent.click(screen.getByRole('button', { name: /aumentar zoom/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /^ajustar$/i }));
+
+    expect(screen.getByText('100%')).toBeInTheDocument();
+  });
+
+  test('a roda do mouse amplia sem precisar de tecla nenhuma', async () => {
+    const dialog = await abrirVisualizador();
+
+    fireEvent.wheel(dialog, { deltaY: -100 });
+
+    expect(screen.getByText('125%')).toBeInTheDocument();
+  });
+
+  test('oferece baixar a imagem', async () => {
+    await abrirVisualizador();
+    const baixar = screen.getByRole('link', { name: /baixar/i });
+    expect(baixar).toHaveAttribute('download', 'comprovante.jpg');
+  });
+
+  // Sem isto, dar zoom num comprovante longo nao serve para nada: a pessoa
+  // fica presa no meio da imagem, sem alcancar o topo nem o rodape.
+  test('permite arrastar a imagem quando ela esta ampliada', async () => {
+    const dialog = await abrirVisualizador();
+    await userEvent.click(screen.getByRole('button', { name: /aumentar zoom/i }));
+    const imagem = within(dialog).getByAltText('comprovante.jpg');
+
+    fireEvent.mouseDown(imagem, { clientX: 200, clientY: 200 });
+    fireEvent.mouseMove(window, { clientX: 200, clientY: 120 });
+    fireEvent.mouseUp(window);
+
+    expect(imagem.style.transform).toContain('translate');
+    expect(imagem.style.transform).not.toContain('translate(0px, 0px)');
+  });
+
+  test('fechar e abrir de novo comeca do tamanho ajustado', async () => {
+    await abrirVisualizador();
+    await userEvent.click(screen.getByRole('button', { name: /aumentar zoom/i }));
+    await userEvent.click(screen.getByRole('button', { name: /fechar imagem/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /abrir imagem em tela cheia/i }));
+
+    expect(screen.getByText('100%')).toBeInTheDocument();
+  });
+
+  test('clicar no fundo fecha, mas arrastar a imagem nao', async () => {
+    const dialog = await abrirVisualizador();
+    await userEvent.click(screen.getByRole('button', { name: /aumentar zoom/i }));
+    const imagem = within(dialog).getByAltText('comprovante.jpg');
+
+    fireEvent.mouseDown(imagem, { clientX: 200, clientY: 200 });
+    fireEvent.mouseMove(window, { clientX: 300, clientY: 300 });
+    fireEvent.mouseUp(window);
+    fireEvent.click(dialog);
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

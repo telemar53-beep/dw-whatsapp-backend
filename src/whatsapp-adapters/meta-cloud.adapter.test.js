@@ -380,6 +380,7 @@ describe('downloadMetaMedia', () => {
 
 jest.mock('axios');
 const axios = require('axios');
+const { fetchNumberHealth } = require('./meta-cloud.adapter');
 const { sendTextMessage, downloadMetaMedia, sendMediaMessage, createMetaTemplate, listMetaTemplates, deleteMetaTemplate, sendTemplateMessage, parseTemplateStatusUpdates, sendPixCardMessage, buildPixOrderDetailsBody } = require('./meta-cloud.adapter');
 
 describe('sendTextMessage', () => {
@@ -855,5 +856,59 @@ describe('sendPixCardMessage (meta cloud)', () => {
       sendPixCardMessage(channel, '5511999998888', { pixCode: 'x', value: 10, dueDate: '2026-09-15', faturaId: 1, merchant: null })
     ).rejects.toThrow('Pix code has no merchant key');
     expect(axios.post).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchNumberHealth', () => {
+  const channel = { id: 'channel-1', config: { phoneNumberId: '530351070168344', accessToken: 'tok-meta' } };
+
+  test('devolve o estado e a qualidade que a Meta reporta para o numero', async () => {
+    axios.get.mockResolvedValue({ data: { status: 'CONNECTED', quality_rating: 'GREEN', name_status: 'APPROVED' } });
+
+    const result = await fetchNumberHealth(channel);
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/530351070168344',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer tok-meta' },
+        params: { fields: 'status,quality_rating,name_status' },
+      })
+    );
+    expect(result).toEqual({ ok: true, status: 'CONNECTED', qualityRating: 'GREEN' });
+  });
+
+  test('usa um timeout curto para nao segurar a tela de Canais', async () => {
+    axios.get.mockResolvedValue({ data: { status: 'CONNECTED', quality_rating: 'GREEN' } });
+
+    await fetchNumberHealth(channel);
+
+    expect(axios.get.mock.calls[0][1].timeout).toBeGreaterThan(0);
+  });
+
+  test('devolve o motivo da Meta quando o token foi revogado, sem lancar', async () => {
+    axios.get.mockRejectedValue({
+      response: { data: { error: { code: 190, message: 'Error validating access token: Session has expired' } } },
+    });
+
+    const result = await fetchNumberHealth(channel);
+
+    expect(result.ok).toBe(false);
+    expect(result.motivo).toMatch(/^\(190\)/);
+  });
+
+  test('nao lanca quando a Meta nao responde e devolve motivo nulo', async () => {
+    axios.get.mockRejectedValue(new Error('timeout of 5000ms exceeded'));
+
+    const result = await fetchNumberHealth(channel);
+
+    expect(result).toEqual({ ok: false, motivo: null });
+  });
+
+  test('reporta um numero que a Meta nao considera conectado', async () => {
+    axios.get.mockResolvedValue({ data: { status: 'DISCONNECTED', quality_rating: 'UNKNOWN' } });
+
+    const result = await fetchNumberHealth(channel);
+
+    expect(result).toEqual({ ok: true, status: 'DISCONNECTED', qualityRating: 'UNKNOWN' });
   });
 });

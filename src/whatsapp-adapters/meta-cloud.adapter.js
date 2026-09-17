@@ -299,7 +299,33 @@ async function sendPixCardMessage(channel, toPhoneNumber, card) {
   return { whatsappMessageId: response.data.messages[0].id };
 }
 
+// O canal oficial nao tem handshake: a unica forma de saber se ele esta de pe
+// e perguntar para a Meta. Serve a coluna Conexao da tela de Canais, entao
+// nunca lanca (a lista tem que carregar mesmo com a Graph API fora do ar) e usa
+// timeout curto (a tela espera por isso).
+const NUMBER_HEALTH_TIMEOUT_MS = 5000;
+
+async function fetchNumberHealth(channel) {
+  const { phoneNumberId, accessToken } = channel.config;
+  try {
+    const response = await axios.get(`https://graph.facebook.com/v20.0/${phoneNumberId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params: { fields: 'status,quality_rating,name_status' },
+      timeout: NUMBER_HEALTH_TIMEOUT_MS,
+    });
+    return {
+      ok: true,
+      status: response.data.status,
+      qualityRating: response.data.quality_rating,
+    };
+  } catch (err) {
+    // Token revogado/expirado chega aqui como (190); rede fora chega sem corpo.
+    return { ok: false, motivo: motivoDaMeta(err.response && err.response.data && err.response.data.error) };
+  }
+}
+
 module.exports = {
+  fetchNumberHealth,
   verifyWebhookChallenge,
   verifySignature,
   parseInboundMessages,

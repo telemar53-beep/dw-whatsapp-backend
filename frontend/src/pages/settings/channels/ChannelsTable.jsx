@@ -49,14 +49,54 @@ export function ChannelIcon({ size = 36 }) {
   );
 }
 
-// Conexão: canal oficial não tem status vigiado (quem responde é a API da
-// Meta/BSP), então o selo diz isso em vez de um "Conectado" que ninguém atualiza.
+// A qualidade que a Meta atribui ao número: é o aviso que vem ANTES de ela
+// limitar ou bloquear o envio. UNKNOWN (número novo, sem histórico) não vira
+// chip — não há o que dizer.
+const QUALITY_LABELS = { GREEN: 'Qualidade alta', YELLOW: 'Qualidade média', RED: 'Qualidade baixa' };
+const QUALITY_TONES = {
+  GREEN: 'border-wa-chip-text/30 bg-wa-chip text-wa-chip-text',
+  YELLOW: 'border-wa-warn-text/30 bg-wa-warn-bg text-wa-warn-text',
+  RED: 'border-wa-error-text/30 bg-wa-error-bg text-wa-error-text',
+};
+
+function NotVerified() {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13.5px] text-wa-muted">
+      <IconClock size={15} />
+      Não verificada
+    </span>
+  );
+}
+
+// Conexão: o Baileys tem handshake próprio e o status vem do banco. O oficial
+// não tem — quem sabe é a Meta, e o backend pergunta a ela ao montar a lista
+// (só meta_cloud; o 360dialog continua sem verificação). Sem resposta dela, o
+// selo volta a ser o "Não verificada" de sempre, que é honesto: não sabemos.
 export function ConnectionStatus({ channel }) {
   if (isOfficialChannelType(channel.type)) {
+    const { connection } = channel;
+    if (!connection || connection.state === 'unknown') {
+      return <NotVerified />;
+    }
+    if (connection.state === 'connected') {
+      const quality = QUALITY_LABELS[connection.quality];
+      return (
+        <span className="inline-flex items-center gap-2 whitespace-nowrap text-[13.5px] text-wa-text">
+          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-wa-chip-text" />
+          Conectado
+          {quality && (
+            <span className={`rounded-full border px-2 py-0.5 text-[12px] font-medium ${QUALITY_TONES[connection.quality]}`}>
+              {quality}
+            </span>
+          )}
+        </span>
+      );
+    }
+    const motivo = connection.state === 'disconnected' ? 'Desconectado' : connection.motivo;
     return (
-      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13.5px] text-wa-muted">
-        <IconClock size={15} />
-        Não verificada
+      <span className="inline-flex items-center gap-2 text-[13.5px] text-wa-text" title={motivo}>
+        <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-wa-error-text" />
+        <span className="max-w-[22ch] truncate">{motivo}</span>
       </span>
     );
   }

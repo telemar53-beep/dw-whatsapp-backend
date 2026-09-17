@@ -1,4 +1,5 @@
 jest.mock('../channels/channel.repository');
+jest.mock('../channels/channel-connection');
 jest.mock('../ai/ai-config.repository');
 jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -24,6 +25,7 @@ const {
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { getAiConfig } = require('../ai/ai-config.repository');
+const { getChannelConnection } = require('../channels/channel-connection');
 const adminChannelsRoutes = require('./admin-channels.routes');
 
 function buildApp() {
@@ -36,6 +38,12 @@ function buildApp() {
 function tokenFor(agentId, role, canManageIntegrations = false) {
   return jwt.sign({ agentId, role, canManageIntegrations }, process.env.JWT_SECRET);
 }
+
+// Padrao para todos os testes da rota: nenhum canal reporta conexao. Quem quer
+// testar o selo da coluna Conexao sobrescreve isso no proprio teste.
+beforeEach(() => {
+  getChannelConnection.mockResolvedValue(null);
+});
 
 describe('GET /api/admin/channels', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -1076,5 +1084,83 @@ describe('DELETE /api/admin/channels/:id', () => {
       .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
     expect(res.status).toBe(403);
     expect(deleteChannel).not.toHaveBeenCalled();
+  });
+});
+
+// A coluna Conexao da tela de Canais so tem o que mostrar para o canal oficial
+// se alguem perguntar para a Meta; quem pergunta (e quem guarda o cache) e o
+// channel-connection, aqui mockado. A rota so decide a quem isso se aplica.
+describe('GET /api/admin/channels — estado da conexao do canal oficial', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getChannelConnection.mockResolvedValue(null);
+  });
+
+  test('inclui o estado da conexao de um canal meta_cloud', async () => {
+    listChannels.mockResolvedValue([
+      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5598984454546', config: { phoneNumberId: '530351070168344', wabaId: '510099572194362' }, status: 'connected' },
+    ]);
+    getChannelConnection.mockResolvedValue({ state: 'connected', quality: 'GREEN' });
+
+    const res = await request(buildApp())
+      .get('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].connection).toEqual({ state: 'connected', quality: 'GREEN' });
+  });
+
+  test('repassa o motivo quando o token do canal caiu', async () => {
+    listChannels.mockResolvedValue([
+      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5598984454546', config: { phoneNumberId: '530351070168344', wabaId: 'w1' }, status: 'connected' },
+    ]);
+    getChannelConnection.mockResolvedValue({ state: 'error', motivo: '(190) Session has expired' });
+
+    const res = await request(buildApp())
+      .get('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+
+    expect(res.body[0].connection).toEqual({ state: 'error', motivo: '(190) Session has expired' });
+  });
+
+  test('omite o campo quando o canal nao e meta_cloud', async () => {
+    listChannels.mockResolvedValue([
+      { id: 'channel-1', type: 'baileys', name: 'automação', phoneNumber: '+5598984129046', config: {}, status: 'connected' },
+      { id: 'channel-2', type: '360dialog', name: 'DW Telcom 3', phoneNumber: '+5598970285660', config: { wabaId: 'w2' }, status: 'connected' },
+    ]);
+
+    const res = await request(buildApp())
+      .get('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+
+    expect(res.body[0]).not.toHaveProperty('connection');
+    expect(res.body[1]).not.toHaveProperty('connection');
+  });
+
+  test('consulta cada canal oficial da lista', async () => {
+    listChannels.mockResolvedValue([
+      { id: 'channel-1', type: 'meta_cloud', name: 'Um', phoneNumber: '+5511999990001', config: { phoneNumberId: '1', wabaId: 'w1' }, status: 'connected' },
+      { id: 'channel-2', type: 'meta_cloud', name: 'Dois', phoneNumber: '+5511999990002', config: { phoneNumberId: '2', wabaId: 'w2' }, status: 'connected' },
+    ]);
+    getChannelConnection.mockResolvedValue({ state: 'connected', quality: 'GREEN' });
+
+    await request(buildApp()).get('/api/admin/channels').set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+
+    expect(getChannelConnection).toHaveBeenCalledTimes(2);
+  });
+
+  test('a lista carrega mesmo se a consulta de conexao falhar', async () => {
+    listChannels.mockResolvedValue([
+      { id: 'channel-1', type: 'meta_cloud', name: 'DW Telcom 1', phoneNumber: '+5598984454546', config: { phoneNumberId: '1', wabaId: 'w1' }, status: 'connected' },
+    ]);
+    getChannelConnection.mockRejectedValue(new Error('graph api fora do ar'));
+
+    const res = await request(buildApp())
+      .get('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).not.toHaveProperty('connection');
   });
 });

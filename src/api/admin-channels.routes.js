@@ -19,6 +19,7 @@ const {
   deleteChannel,
 } = require('../channels/channel.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
+const { getChannelConnection } = require('../channels/channel-connection');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { isOfficialChannelType } = require('../channels/channel-types');
@@ -54,8 +55,9 @@ function authenticateQrRoute(req, res, next) {
   next();
 }
 
-function toChannelResponse(channel) {
+function toChannelResponse(channel, connection) {
   return {
+    connection: connection || undefined,
     id: channel.id,
     type: channel.type,
     name: channel.name,
@@ -73,7 +75,11 @@ function toChannelResponse(channel) {
 
 router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
   const channels = await listChannels({ includeHidden: req.query.includeHidden === 'true' });
-  res.json(channels.map(toChannelResponse));
+  // Em paralelo e com o erro engolido de proposito: a tela de Canais nao pode
+  // deixar de carregar porque a Graph API esta fora do ar. Sem resposta, o
+  // canal volta ao selo "Nao verificada" de antes.
+  const connections = await Promise.all(channels.map((channel) => getChannelConnection(channel).catch(() => null)));
+  res.json(channels.map((channel, index) => toChannelResponse(channel, connections[index])));
 });
 
 router.post('/', requireAuth, requireIntegrationsAccess, async (req, res) => {

@@ -1009,3 +1009,109 @@ describe('parseInboundMessages — horario informado pela Meta', () => {
     expect(parsed.sentAt).toEqual(new Date(1758000000 * 1000));
   });
 });
+
+// Resposta de botao era DESCARTADA em silencio: o parser so entendia texto,
+// midia e localizacao. O efeito era o pior possivel — a Meta considerava o
+// cliente respondido (janela de 24 h aberta), e no chat nao aparecia nada.
+describe('parseInboundMessages — resposta de botao', () => {
+  function webhook(message) {
+    return { entry: [{ changes: [{ value: { metadata: { phone_number_id: '1' }, messages: [message] } }] }] };
+  }
+
+  test('entende o botao de resposta rapida de um template', () => {
+    const [parsed] = parseInboundMessages(
+      webhook({ from: '5511999998888', id: 'wamid.B1', type: 'button', button: { text: 'Sim, pode agendar', payload: 'AGENDAR' } })
+    );
+
+    expect(parsed.messageType).toBe('text');
+    expect(parsed.content).toBe('Sim, pode agendar');
+  });
+
+  test('entende o botao de uma mensagem interativa', () => {
+    const [parsed] = parseInboundMessages(
+      webhook({
+        from: '5511999998888', id: 'wamid.B2', type: 'interactive',
+        interactive: { type: 'button_reply', button_reply: { id: 'sim', title: 'Confirmar' } },
+      })
+    );
+
+    expect(parsed.messageType).toBe('text');
+    expect(parsed.content).toBe('Confirmar');
+  });
+
+  test('entende a escolha de uma lista', () => {
+    const [parsed] = parseInboundMessages(
+      webhook({
+        from: '5511999998888', id: 'wamid.B3', type: 'interactive',
+        interactive: { type: 'list_reply', list_reply: { id: 'manha', title: 'Manhã', description: '08h às 12h' } },
+      })
+    );
+
+    expect(parsed.content).toBe('Manhã');
+  });
+
+  test('a resposta de botao carrega o horario informado pela Meta', () => {
+    const [parsed] = parseInboundMessages(
+      webhook({ from: '5511999998888', id: 'wamid.B4', type: 'button', button: { text: 'Sim' }, timestamp: '1758000000' })
+    );
+
+    expect(parsed.sentAt).toEqual(new Date(1758000000 * 1000));
+  });
+
+  // Botao sem texto nao vira mensagem vazia no chat: melhor nao registrar do
+  // que registrar uma bolha em branco que ninguem entende.
+  test('ignora um botao sem texto', () => {
+    expect(parseInboundMessages(webhook({ from: '5511999998888', id: 'wamid.B5', type: 'button', button: {} }))).toEqual([]);
+  });
+
+  test('ignora um tipo interativo desconhecido', () => {
+    const parsed = parseInboundMessages(
+      webhook({ from: '5511999998888', id: 'wamid.B6', type: 'interactive', interactive: { type: 'nps_reply' } })
+    );
+    expect(parsed).toEqual([]);
+  });
+});
+
+describe('createMetaTemplate — botoes de resposta rapida', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('envia os botoes junto do corpo', async () => {
+    axios.post.mockResolvedValue({ data: { id: 'meta-tpl-2', status: 'PENDING' } });
+    const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
+
+    await createMetaTemplate(channel, {
+      name: 'agendar_instalacao',
+      category: 'UTILITY',
+      language: 'pt_BR',
+      bodyText: 'Olá {{1}}, podemos agendar sua instalação?',
+      buttons: ['Sim, pode agendar', 'Prefiro outro dia'],
+    });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/waba-1/message_templates',
+      expect.objectContaining({
+        components: [
+          { type: 'BODY', text: 'Olá {{1}}, podemos agendar sua instalação?' },
+          {
+            type: 'BUTTONS',
+            buttons: [
+              { type: 'QUICK_REPLY', text: 'Sim, pode agendar' },
+              { type: 'QUICK_REPLY', text: 'Prefiro outro dia' },
+            ],
+          },
+        ],
+      }),
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+  });
+
+  // Componente BUTTONS vazio faz a Meta recusar o template inteiro.
+  test('sem botoes, o componente nem aparece', async () => {
+    axios.post.mockResolvedValue({ data: { id: 'meta-tpl-3', status: 'PENDING' } });
+    const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
+
+    await createMetaTemplate(channel, { name: 'aviso', category: 'UTILITY', language: 'pt_BR', bodyText: 'Aviso', buttons: [] });
+
+    expect(axios.post.mock.calls[0][1].components).toEqual([{ type: 'BODY', text: 'Aviso' }]);
+  });
+});

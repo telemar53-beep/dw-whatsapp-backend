@@ -205,6 +205,26 @@ function StartConversationModal({ onClose, onCreated }) {
                   </select>
                 )}
               </div>
+              {/* Template não abre a janela de 24h — só a resposta do cliente
+                  abre. Botão é o caminho de um toque para ele responder; sem
+                  botão, a conversa fica esperando ele escrever por conta. */}
+              {selectedTemplate && (
+                <div>
+                  {(selectedTemplate.buttons || []).map((texto) => (
+                    <div
+                      key={texto}
+                      className="mt-[3px] rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-center text-[13.5px] font-medium text-[#53bdeb]"
+                    >
+                      {texto}
+                    </div>
+                  ))}
+                  <p className="mt-2 text-[12.5px] leading-[17px] text-wa-muted">
+                    {(selectedTemplate.buttons || []).length > 0
+                      ? 'O cliente responde com um toque no botão — e é essa resposta que abre a conversa para você escrever.'
+                      : 'Este template não tem botões: a conversa só continua depois que o cliente responder.'}
+                  </p>
+                </div>
+              )}
               {templateVariableValues.map((value, index) => (
                 <div key={index}>
                   <label htmlFor={`start-conversation-variable-${index}`} className={waLabelClass}>

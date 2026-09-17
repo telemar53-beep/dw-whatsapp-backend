@@ -77,7 +77,7 @@ describe('createTemplate', () => {
       { name: 'fatura_vencida', category: 'UTILITY', language: 'pt_BR', bodyText: validInput.bodyText }
     );
     expect(createTemplateRecord).toHaveBeenCalledWith({
-      wabaId: 'waba-1', metaTemplateId: 'meta-tpl-9', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', bodyText: validInput.bodyText, variableCount: 1,
+      wabaId: 'waba-1', metaTemplateId: 'meta-tpl-9', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', bodyText: validInput.bodyText, variableCount: 1, buttons: [],
     });
     expect(result.id).toBe('local-1');
   });
@@ -325,7 +325,7 @@ describe('registerExistingTemplate', () => {
     expect(metaCloudAdapter.createMetaTemplate).not.toHaveBeenCalled();
     expect(createTemplateRecord).toHaveBeenCalledWith({
       wabaId: 'waba-1', metaTemplateId: '984', name: 'aviso_cobranca', language: 'pt_BR',
-      category: 'UTILITY', bodyText: 'Olá {{1}}, valor {{2}}', variableCount: 2, headerType: 'document',
+      category: 'UTILITY', bodyText: 'Olá {{1}}, valor {{2}}', variableCount: 2, headerType: 'document', buttons: [],
     });
     expect(updateTemplateStatusByMetaTemplateId).toHaveBeenCalledWith('984', { status: 'APPROVED', rejectionReason: null });
     expect(result.id).toBe('local-1');
@@ -360,5 +360,64 @@ describe('registerExistingTemplate', () => {
       { id: 1, name: 'aviso_cobranca', language: 'pt_BR', category: 'UTILITY', components: [{ type: 'HEADER', format: 'DOCUMENT' }] },
     ]);
     await expect(registerExistingTemplate(validInput)).rejects.toThrow(TemplateValidationError);
+  });
+});
+
+describe('createTemplate — botoes de resposta rapida', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    metaCloudAdapter.createMetaTemplate.mockResolvedValue({ metaTemplateId: 'meta-tpl-1', status: 'PENDING' });
+    createTemplateRecord.mockResolvedValue({ id: 'tpl-1' });
+  });
+
+  test('leva os botoes para a Meta e para o registro local', async () => {
+    await createTemplate({
+      channelId: 'channel-1', name: 'agendar_instalacao', category: 'UTILITY', language: 'pt_BR',
+      bodyText: 'Podemos agendar?', buttons: ['Sim', 'Outro dia'],
+    });
+
+    expect(metaCloudAdapter.createMetaTemplate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ buttons: ['Sim', 'Outro dia'] })
+    );
+    expect(createTemplateRecord).toHaveBeenCalledWith(expect.objectContaining({ buttons: ['Sim', 'Outro dia'] }));
+  });
+
+  // Recusar antes de chamar a Meta: template rejeitado por ela nao volta atras,
+  // e o nome fica ocupado.
+  test('recusa botoes invalidos sem chamar a Meta', async () => {
+    await expect(
+      createTemplate({
+        channelId: 'channel-1', name: 'agendar', category: 'UTILITY', language: 'pt_BR',
+        bodyText: 'Podemos agendar?', buttons: ['a', 'b', 'c', 'd'],
+      })
+    ).rejects.toThrow(TemplateValidationError);
+
+    expect(metaCloudAdapter.createMetaTemplate).not.toHaveBeenCalled();
+  });
+});
+
+// Template com botoes criado direto no painel da Meta e registrado por aqui
+// tem que chegar com os botoes: senao a previa mente sobre o que o cliente ve.
+describe('registerExistingTemplate — botoes', () => {
+  test('adota os botoes de resposta rapida que ja existem na Meta', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1', accessToken: 'tok' } });
+    metaCloudAdapter.listMetaTemplates.mockResolvedValue([
+      {
+        id: 'meta-tpl-5', name: 'agendar', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED',
+        components: [
+          { type: 'BODY', text: 'Podemos agendar?' },
+          { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'Sim' }, { type: 'URL', text: 'Site', url: 'https://x' }] },
+        ],
+      },
+    ]);
+    createTemplateRecord.mockResolvedValue({ id: 'local-5', metaTemplateId: 'meta-tpl-5' });
+    updateTemplateStatusByMetaTemplateId.mockResolvedValue({ id: 'local-5' });
+
+    await registerExistingTemplate({ channelId: 'ch-1', name: 'agendar', language: 'pt_BR' });
+
+    // Só QUICK_REPLY: botao de URL nao e resposta e nao abre a janela de 24 h.
+    expect(createTemplateRecord).toHaveBeenCalledWith(expect.objectContaining({ buttons: ['Sim'] }));
   });
 });

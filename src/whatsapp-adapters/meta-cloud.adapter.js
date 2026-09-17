@@ -41,6 +41,20 @@ function sentAtFrom(timestamp) {
   return new Date(seconds * 1000);
 }
 
+// Quando o cliente toca num botao de um template, a Meta nao manda 'text': manda
+// 'button' (botao de template) ou 'interactive' (botao/lista de uma mensagem
+// que nos enviamos). Para o atendente e para a janela de 24 h isso e uma
+// resposta como outra qualquer, entao entra no chat como texto — exatamente o
+// que o cliente leu no botao.
+function buttonReplyText(message) {
+  if (message.type === 'button') {
+    return (message.button && message.button.text) || null;
+  }
+  const interactive = message.interactive || {};
+  const reply = interactive.button_reply || interactive.list_reply;
+  return (reply && reply.title) || null;
+}
+
 function parseInboundMessages(webhookBody) {
   const messages = [];
   const entries = webhookBody.entry || [];
@@ -74,6 +88,11 @@ function parseInboundMessages(webhookBody) {
               mediaFilename: media.filename || null,
               content: media.caption || null,
             });
+          }
+        } else if (message.type === 'button' || message.type === 'interactive') {
+          const content = buttonReplyText(message);
+          if (content) {
+            messages.push({ ...base, messageType: 'text', content });
           }
         } else if (message.type === 'location') {
           if (message.location) {
@@ -148,11 +167,21 @@ async function downloadMetaMedia(mediaId, accessToken) {
   return Buffer.from(fileResponse.data);
 }
 
-async function createMetaTemplate(channel, { name, category, language, bodyText }) {
+// Sem botao nenhum o componente BUTTONS nao pode ir: a Meta recusa o template
+// inteiro quando ele chega vazio.
+function templateComponents(bodyText, buttons) {
+  const components = [{ type: 'BODY', text: bodyText }];
+  if (buttons && buttons.length > 0) {
+    components.push({ type: 'BUTTONS', buttons: buttons.map((text) => ({ type: 'QUICK_REPLY', text })) });
+  }
+  return components;
+}
+
+async function createMetaTemplate(channel, { name, category, language, bodyText, buttons }) {
   const { accessToken, wabaId } = channel.config;
   const response = await axios.post(
     `https://graph.facebook.com/v20.0/${wabaId}/message_templates`,
-    { name, category, language, components: [{ type: 'BODY', text: bodyText }] },
+    { name, category, language, components: templateComponents(bodyText, buttons) },
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   return { metaTemplateId: response.data.id, status: response.data.status };

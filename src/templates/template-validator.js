@@ -16,6 +16,36 @@ function extractVariableCount(bodyText) {
   return uniqueSorted.length;
 }
 
+const MAX_BUTTONS = 3;
+const MAX_BUTTON_TEXT = 25;
+
+// Limites da Meta, nao nossos. Barrar aqui e o que separa um erro imediato na
+// tela de um template que fica PENDING e volta REJECTED horas depois, sem
+// motivo legivel — e o atendente descobre isso no meio de um atendimento.
+function validateQuickReplyButtons(buttons) {
+  if (!buttons || buttons.length === 0) return;
+  if (buttons.length > MAX_BUTTONS) {
+    throw new Error(`Um template aceita no maximo ${MAX_BUTTONS} botoes de resposta rapida`);
+  }
+  const vistos = new Set();
+  for (const texto of buttons) {
+    if (typeof texto !== 'string' || !texto.trim()) {
+      throw new Error('Todo botao precisa de um texto');
+    }
+    if (texto.length > MAX_BUTTON_TEXT) {
+      throw new Error(`O texto do botao deve ter no maximo ${MAX_BUTTON_TEXT} caracteres`);
+    }
+    if (/\{\{\d+\}\}/.test(texto)) {
+      throw new Error('O texto do botao nao aceita variaveis');
+    }
+    const chave = texto.trim().toLowerCase();
+    if (vistos.has(chave)) {
+      throw new Error('Os botoes nao podem ter textos repetidos');
+    }
+    vistos.add(chave);
+  }
+}
+
 function substituteVariables(bodyText, variables) {
   return bodyText.replace(/\{\{(\d+)\}\}/g, (match, indexStr) => {
     const index = Number(indexStr) - 1;
@@ -23,4 +53,4 @@ function substituteVariables(bodyText, variables) {
   });
 }
 
-module.exports = { isValidTemplateName, extractVariableCount, substituteVariables };
+module.exports = { validateQuickReplyButtons, isValidTemplateName, extractVariableCount, substituteVariables };

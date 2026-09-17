@@ -219,3 +219,43 @@ describe('StartConversationModal — finalidade dos templates', () => {
     await waitFor(() => expect(api.listTemplatesForChannel).toHaveBeenCalledWith('ch-1', 'tok-123', 'atendimento'));
   });
 });
+
+// A dor real: iniciar a conversa entrega o template e para ali. A janela de 24h
+// não abre com o template — só com a resposta do cliente. O atendente tem que
+// saber disso ANTES de escolher, porque a escolha decide se vai dar para
+// combinar o agendamento ou se a mensagem morre sem resposta.
+describe('StartConversationModal — o que acontece depois do template', () => {
+  const CANAL = [{ id: 'ch-1', type: 'meta_cloud', name: 'Oficial', status: 'connected' }];
+
+  test('mostra os botões do template escolhido', async () => {
+    api.listChannelsForAgent.mockResolvedValue(CANAL);
+    api.listTemplatesForChannel.mockResolvedValue([
+      { id: 'tpl-1', name: 'agendar_instalacao', bodyText: 'Podemos agendar?', variableCount: 0, buttons: ['Sim, pode agendar', 'Prefiro outro dia'] },
+    ]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(await screen.findByText('Sim, pode agendar')).toBeInTheDocument();
+    expect(screen.getByText('Prefiro outro dia')).toBeInTheDocument();
+  });
+
+  test('avisa que sem botão a conversa só continua quando o cliente responder', async () => {
+    api.listChannelsForAgent.mockResolvedValue(CANAL);
+    api.listTemplatesForChannel.mockResolvedValue([
+      { id: 'tpl-1', name: 'aviso', bodyText: 'Aviso', variableCount: 0, buttons: [] },
+    ]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(await screen.findByText(/só continua depois que o cliente responder/i)).toBeInTheDocument();
+  });
+
+  test('com botão, o aviso é o de que a resposta abre a conversa', async () => {
+    api.listChannelsForAgent.mockResolvedValue(CANAL);
+    api.listTemplatesForChannel.mockResolvedValue([
+      { id: 'tpl-1', name: 'agendar', bodyText: 'Podemos agendar?', variableCount: 0, buttons: ['Sim'] },
+    ]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    expect(await screen.findByText(/um toque/i)).toBeInTheDocument();
+    expect(screen.queryByText(/só continua depois que o cliente responder/i)).not.toBeInTheDocument();
+  });
+});

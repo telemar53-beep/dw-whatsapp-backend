@@ -55,7 +55,7 @@ describe('TemplatesAdminTab', () => {
 
     await waitFor(() =>
       expect(api.createTemplateAdmin).toHaveBeenCalledWith(
-        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'en_US', bodyText: 'Olá, bem-vindo!', purpose: 'atendimento' },
+        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'en_US', bodyText: 'Olá, bem-vindo!', purpose: 'atendimento', buttons: [] },
         'tok-123'
       )
     );
@@ -86,7 +86,7 @@ describe('TemplatesAdminTab', () => {
 
     await waitFor(() =>
       expect(api.createTemplateAdmin).toHaveBeenCalledWith(
-        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá, bem-vindo!', purpose: 'atendimento' },
+        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá, bem-vindo!', purpose: 'atendimento', buttons: [] },
         'tok-123'
       )
     );
@@ -112,7 +112,7 @@ describe('TemplatesAdminTab', () => {
 
     await waitFor(() =>
       expect(api.createTemplateAdmin).toHaveBeenCalledWith(
-        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá, bem-vindo!', purpose: 'atendimento' },
+        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá, bem-vindo!', purpose: 'atendimento', buttons: [] },
         'tok-123'
       )
     );
@@ -400,5 +400,120 @@ describe('escolher a finalidade ao criar o template', () => {
     await waitFor(() =>
       expect(api.createTemplateAdmin).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'disparo' }), 'tok-123')
     );
+  });
+});
+
+// Sem botão, iniciar uma conversa entrega o template e para ali: a janela de
+// 24h só abre quando o cliente responde, e template não conta como resposta.
+// O botão é o caminho de um toque — e é a diferença entre conseguir e não
+// conseguir combinar uma instalação pelo chat.
+describe('TemplatesAdminTab — botões de resposta rápida', () => {
+  beforeEach(() => {
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
+  });
+
+  async function abrirFormulario() {
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /novo template/i }));
+    return within(screen.getByRole('form', { name: /cadastrar novo template/i }));
+  }
+
+  async function preencherBasico(form) {
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'agendar_instalacao');
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Podemos agendar sua instalação?');
+  }
+
+  test('envia os botões preenchidos', async () => {
+    api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-btn' });
+    const form = await abrirFormulario();
+    await preencherBasico(form);
+
+    await userEvent.type(form.getByLabelText(/botão 1/i), 'Sim, pode agendar');
+    await userEvent.type(form.getByLabelText(/botão 2/i), 'Prefiro outro dia');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createTemplateAdmin).toHaveBeenCalledWith(
+        expect.objectContaining({ buttons: ['Sim, pode agendar', 'Prefiro outro dia'] }),
+        'tok-123'
+      )
+    );
+  });
+
+  // Campo em branco não pode virar botão vazio: a Meta rejeita o template.
+  test('botão em branco não entra na lista', async () => {
+    api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-btn' });
+    const form = await abrirFormulario();
+    await preencherBasico(form);
+
+    await userEvent.type(form.getByLabelText(/botão 1/i), '   ');
+    await userEvent.type(form.getByLabelText(/botão 3/i), 'Falar com atendente');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createTemplateAdmin).toHaveBeenCalledWith(expect.objectContaining({ buttons: ['Falar com atendente'] }), 'tok-123')
+    );
+  });
+
+  test('sem botão nenhum, envia lista vazia', async () => {
+    api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-btn' });
+    const form = await abrirFormulario();
+    await preencherBasico(form);
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() => expect(api.createTemplateAdmin).toHaveBeenCalledWith(expect.objectContaining({ buttons: [] }), 'tok-123'));
+  });
+
+  test('explica para que serve o botão', async () => {
+    const form = await abrirFormulario();
+    expect(form.getByText(/24h/i)).toBeInTheDocument();
+  });
+
+  // 25 caracteres é limite da Meta: barrar no campo evita descobrir o erro
+  // horas depois, com o template já REJECTED e o nome ocupado.
+  test('o campo do botão não deixa passar de 25 caracteres', async () => {
+    const form = await abrirFormulario();
+    expect(form.getByLabelText(/botão 1/i)).toHaveAttribute('maxLength', '25');
+  });
+
+  test('a prévia mostra os botões como o cliente vai ver', async () => {
+    const form = await abrirFormulario();
+    await userEvent.type(form.getByLabelText(/botão 1/i), 'Sim, pode agendar');
+
+    expect(screen.getByText('Sim, pode agendar')).toBeInTheDocument();
+  });
+});
+
+describe('TemplatesAdminTab — prévia mostra os botões do template', () => {
+  test('o template selecionado exibe seus botões no balão', async () => {
+    useTemplates.mockReturnValue({
+      templates: [
+        {
+          id: 'tpl-1', name: 'agendar_instalacao', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED',
+          bodyText: 'Podemos agendar?', purpose: 'atendimento', buttons: ['Sim, pode agendar', 'Prefiro outro dia'],
+        },
+      ],
+      status: 'ready',
+      refresh: vi.fn(),
+    });
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: 'agendar_instalacao' }));
+
+    const previa = within(screen.getByRole('region', { name: /prévia da mensagem/i }));
+    expect(previa.getByText('Sim, pode agendar')).toBeInTheDocument();
+    expect(previa.getByText('Prefiro outro dia')).toBeInTheDocument();
+  });
+
+  test('template sem botões não muda a prévia', async () => {
+    useTemplates.mockReturnValue({
+      templates: [{ id: 'tpl-1', name: 'aviso', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', bodyText: 'Aviso', purpose: 'atendimento', buttons: [] }],
+      status: 'ready',
+      refresh: vi.fn(),
+    });
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: 'aviso' }));
+
+    expect(within(screen.getByRole('region', { name: /prévia da mensagem/i })).getByText('Aviso')).toBeInTheDocument();
   });
 });

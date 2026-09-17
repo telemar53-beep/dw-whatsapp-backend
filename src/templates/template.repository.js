@@ -1,6 +1,6 @@
 const { getPool } = require('../db/pool');
 
-const COLUMNS = `id, waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type, status, rejection_reason, purpose, created_at`;
+const COLUMNS = `id, waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type, status, rejection_reason, purpose, buttons, created_at`;
 
 function toTemplate(row) {
   return {
@@ -16,6 +16,7 @@ function toTemplate(row) {
     status: row.status,
     rejectionReason: row.rejection_reason,
     purpose: row.purpose,
+    buttons: row.buttons || [],
     createdAt: row.created_at,
   };
 }
@@ -58,12 +59,12 @@ async function findTemplateByNameAndWaba(name, wabaId) {
   return toTemplate(result.rows[0]);
 }
 
-async function createTemplateRecord({ wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType, purpose }) {
+async function createTemplateRecord({ wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType, purpose, buttons }) {
   const result = await getPool().query(
-    `INSERT INTO message_templates (waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type, purpose)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'atendimento'))
+    `INSERT INTO message_templates (waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type, purpose, buttons)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'atendimento'), $10)
      RETURNING ${COLUMNS}`,
-    [wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType || null, purpose || null]
+    [wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType || null, purpose || null, JSON.stringify(buttons || [])]
   );
   return toTemplate(result.rows[0]);
 }

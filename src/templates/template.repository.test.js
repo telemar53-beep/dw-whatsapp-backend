@@ -41,6 +41,7 @@ describe('createTemplateRecord', () => {
       bodyText: 'Olá {{1}}, sua fatura de {{2}} venceu.',
       variableCount: 2,
       headerType: null,
+      buttons: [],
       status: 'PENDING',
       rejectionReason: null,
       purpose: 'atendimento',
@@ -266,5 +267,28 @@ describe('finalidade do template (atendimento x disparo)', () => {
   test('o banco recusa uma finalidade desconhecida', async () => {
     const template = await criar('cobranca_sgp', 'atendimento');
     await expect(updateTemplatePurpose(template.id, 'qualquer_coisa')).rejects.toMatchObject({ code: '23514' });
+  });
+});
+
+describe('botoes de resposta rapida', () => {
+  test('guarda e devolve os botoes do template', async () => {
+    const created = await createTemplateRecord({
+      wabaId: 'waba-btn', metaTemplateId: 'meta-btn-1', name: 'agendar_instalacao',
+      language: 'pt_BR', category: 'UTILITY', bodyText: 'Podemos agendar?', variableCount: 0,
+      buttons: ['Sim, pode agendar', 'Prefiro outro dia'],
+    });
+
+    expect(created.buttons).toEqual(['Sim, pode agendar', 'Prefiro outro dia']);
+    expect((await findTemplateById(created.id)).buttons).toEqual(['Sim, pode agendar', 'Prefiro outro dia']);
+  });
+
+  // Todo template criado antes desta coluna existir tem que continuar legivel.
+  test('template sem botoes devolve lista vazia', async () => {
+    const created = await createTemplateRecord({
+      wabaId: 'waba-btn', metaTemplateId: 'meta-btn-2', name: 'aviso_simples',
+      language: 'pt_BR', category: 'UTILITY', bodyText: 'Aviso', variableCount: 0,
+    });
+
+    expect(created.buttons).toEqual([]);
   });
 });

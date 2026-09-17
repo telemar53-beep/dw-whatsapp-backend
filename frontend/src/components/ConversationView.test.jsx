@@ -1120,3 +1120,61 @@ describe('aviso da janela de 24 horas', () => {
     expect(screen.getByPlaceholderText('Digite uma mensagem...')).not.toBeDisabled();
   });
 });
+
+// O aviso mandava "use um template aprovado", mas nao havia botao para isso em
+// conversa aberta — so em "Iniciar conversa". O atendente lia a instrucao e
+// ficava sem acao.
+describe('enviar template com a janela fechada', () => {
+  const MINHA = { id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', channelType: 'meta_cloud', channelId: 'ch-1' };
+  const TEMPLATE = { id: 'tpl-1', name: 'retorno', language: 'pt_BR', bodyText: 'Olá {{1}}, tudo bem?', variableCount: 1, status: 'APPROVED' };
+
+  function janelaFechada() {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'inbound', content: 'Oi', createdAt: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString() }],
+      sendMessage: vi.fn(),
+    });
+  }
+
+  test('oferece enviar template quando a janela esta fechada', () => {
+    janelaFechada();
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /enviar template/i })).toBeInTheDocument();
+  });
+
+  test('nao oferece com a janela aberta', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'inbound', content: 'Oi', createdAt: new Date().toISOString() }],
+      sendMessage: vi.fn(),
+    });
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /enviar template/i })).not.toBeInTheDocument();
+  });
+
+  // A separacao de finalidade feita hoje serve exatamente aqui: template de
+  // disparo nao e para conversa individual.
+  test('lista so os templates de atendimento do canal', async () => {
+    janelaFechada();
+    api.listTemplatesForChannel.mockResolvedValue([TEMPLATE]);
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /enviar template/i }));
+
+    await waitFor(() => expect(api.listTemplatesForChannel).toHaveBeenCalledWith('ch-1', 'tok-123', 'atendimento'));
+  });
+
+  test('envia o template com a variavel preenchida', async () => {
+    janelaFechada();
+    api.listTemplatesForChannel.mockResolvedValue([TEMPLATE]);
+    api.sendConversationTemplate.mockResolvedValue({ id: 'msg-1' });
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /enviar template/i }));
+    await userEvent.click(await screen.findByText('retorno'));
+    await userEvent.type(screen.getByLabelText(/variável 1/i), 'Maria');
+    await userEvent.click(screen.getByRole('button', { name: /^enviar$/i }));
+
+    await waitFor(() => expect(api.sendConversationTemplate).toHaveBeenCalledWith('c1', 'tpl-1', ['Maria'], 'tok-123'));
+  });
+});

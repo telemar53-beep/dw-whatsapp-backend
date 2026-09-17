@@ -4,7 +4,7 @@ import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useAiSuggestion } from '../hooks/useAiSuggestion';
 import { useCompanyName } from '../hooks/useCompanyName';
-import { claimConversation, closeConversation, sendSgpBoletoPdf, sendSgpPix, sendSgpPixQr, sendSgpBarcode } from '../services/api';
+import { claimConversation, closeConversation, sendSgpBoletoPdf, sendSgpPix, sendSgpPixQr, sendSgpBarcode, analyzeReceipt } from '../services/api';
 import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
 import MessageStatusTicks from './MessageStatusTicks';
@@ -15,6 +15,7 @@ import ContactAvatar from './ContactAvatar';
 import EditContactModal from './EditContactModal';
 import SgpLookupPanel from './SgpLookupPanel';
 import AiSuggestionCard from './AiSuggestionCard';
+import SendTemplateModal from './SendTemplateModal';
 import {
   IconArrowLeft,
   IconChevronDown,
@@ -153,7 +154,14 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   // está no campo de digitação, ou null. Enquanto ela existir, o próximo envio de
   // texto simples é atribuído a essa sugestão (rota de IA) em vez do envio comum.
   const [editedSuggestion, setEditedSuggestion] = useState(null);
+  const [sendingTemplate, setSendingTemplate] = useState(false);
   const bottomRef = useRef(null);
+
+  // A mesma análise que a triagem faz, pedida pelo atendente sobre a imagem que
+  // ele escolheu. Só para quem está com a conversa: a rota também confere isso.
+  function analisarComprovanteDaMensagem(messageId) {
+    return analyzeReceipt(conversation.id, messageId, token);
+  }
 
   useEffect(() => {
     setContactOverride(null);
@@ -461,6 +469,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 <MessageAttachment
                   message={message}
                   dark
+                  onAnalyzeReceipt={isMine ? analisarComprovanteDaMensagem : undefined}
                   avatar={
                     !outbound ? (
                       <ContactAvatar
@@ -540,6 +549,13 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 <strong className="font-semibold text-chat-text">Janela de 24h fechada.</strong> O WhatsApp só entrega
                 texto livre até 24h depois da última mensagem do cliente — e template não reabre essa contagem, só a
                 resposta dele. Enviar agora provavelmente vai falhar; use um template aprovado.
+                <button
+                  type="button"
+                  onClick={() => setSendingTemplate(true)}
+                  className="ml-1 font-semibold text-chat-orange underline underline-offset-2 hover:brightness-110"
+                >
+                  Enviar template
+                </button>
               </span>
             </p>
           )}
@@ -554,6 +570,14 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             draftKey={editedSuggestion ? editedSuggestion.id : undefined}
           />
         </>
+      )}
+      {sendingTemplate && (
+        <SendTemplateModal
+          conversationId={conversation.id}
+          channelId={conversation.channelId}
+          onClose={() => setSendingTemplate(false)}
+          onSent={() => setSendingTemplate(false)}
+        />
       )}
       {showingHistory && (
         <ConversationHistoryModal contactId={conversation.contactId} onClose={() => setShowingHistory(false)} />

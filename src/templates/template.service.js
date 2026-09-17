@@ -8,7 +8,7 @@ const {
   updateTemplateStatusByMetaTemplateId,
   deleteTemplateRecord,
 } = require('./template.repository');
-const { isValidTemplateName, extractVariableCount } = require('./template-validator');
+const { isValidTemplateName, extractVariableCount, validateQuickReplyButtons } = require('./template-validator');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { isOfficialChannelType } = require('../channels/channel-types');
@@ -24,7 +24,7 @@ const KNOWN_STATUSES = new Set(['PENDING', 'APPROVED', 'REJECTED', 'PAUSED', 'DI
 
 class TemplateValidationError extends Error {}
 
-async function createTemplate({ channelId, name, category, language, bodyText, purpose }) {
+async function createTemplate({ channelId, name, category, language, bodyText, purpose, buttons }) {
   if (!isValidTemplateName(name)) {
     throw new TemplateValidationError('Template name must contain only lowercase letters, numbers, and underscores');
   }
@@ -36,6 +36,11 @@ async function createTemplate({ channelId, name, category, language, bodyText, p
   }
   if (!bodyText) {
     throw new TemplateValidationError('bodyText is required');
+  }
+  try {
+    validateQuickReplyButtons(buttons);
+  } catch (err) {
+    throw new TemplateValidationError(err.message);
   }
   let variableCount;
   try {
@@ -52,10 +57,10 @@ async function createTemplate({ channelId, name, category, language, bodyText, p
     throw new TemplateValidationError('This channel has no WABA configured yet');
   }
 
-  const { metaTemplateId } = await ADAPTERS_BY_CHANNEL_TYPE[channel.type].createMetaTemplate(channel, { name, category, language, bodyText });
+  const { metaTemplateId } = await ADAPTERS_BY_CHANNEL_TYPE[channel.type].createMetaTemplate(channel, { name, category, language, bodyText, buttons });
 
   try {
-    return await createTemplateRecord({ wabaId: channel.config.wabaId, metaTemplateId, name, language, category, bodyText, variableCount, purpose });
+    return await createTemplateRecord({ wabaId: channel.config.wabaId, metaTemplateId, name, language, category, bodyText, variableCount, purpose, buttons: buttons || [] });
   } catch (err) {
     try {
       await ADAPTERS_BY_CHANNEL_TYPE[channel.type].deleteMetaTemplate(channel, { name, metaTemplateId });
@@ -64,6 +69,15 @@ async function createTemplate({ channelId, name, category, language, bodyText, p
     }
     throw err;
   }
+}
+
+// Botao de URL ou de telefone tambem vive no componente BUTTONS, mas so o de
+// resposta rapida devolve uma mensagem do cliente — e e a resposta que reabre a
+// janela de 24 h. Guardar os outros faria a previa prometer o que nao acontece.
+function quickReplyTextsFrom(components) {
+  const bloco = (components || []).find((c) => c.type === 'BUTTONS');
+  if (!bloco) return [];
+  return (bloco.buttons || []).filter((b) => b.type === 'QUICK_REPLY').map((b) => b.text);
 }
 
 async function registerExistingTemplate({ channelId, name, language, headerType }) {
@@ -112,6 +126,7 @@ async function registerExistingTemplate({ channelId, name, language, headerType 
     bodyText: bodyComponent.text,
     variableCount,
     headerType: headerType || null,
+    buttons: quickReplyTextsFrom(match.components),
   });
   // The row lands on the DB default 'PENDING'; adopt the real Meta status so an already-approved
   // template is immediately usable by the approved-template pickers and by POST /conversations/start.

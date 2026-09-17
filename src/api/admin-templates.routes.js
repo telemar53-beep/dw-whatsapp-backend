@@ -36,15 +36,18 @@ function invalidPurpose(purpose) {
 }
 
 router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
-  const { channelId, name, category, language, bodyText, purpose } = req.body || {};
+  const { channelId, name, category, language, bodyText, purpose, buttons } = req.body || {};
   if (!channelId || !name || !category || !language || !bodyText) {
     return res.status(400).json({ error: 'channelId, name, category, language and bodyText are required' });
   }
   if (invalidPurpose(purpose)) {
     return res.status(400).json({ error: `purpose must be one of: ${PURPOSES.join(', ')}` });
   }
+  if (buttons !== undefined && !Array.isArray(buttons)) {
+    return res.status(400).json({ error: 'buttons must be a list of texts' });
+  }
   try {
-    const template = await createTemplate({ channelId, name, category, language, bodyText, purpose });
+    const template = await createTemplate({ channelId, name, category, language, bodyText, purpose, buttons });
     res.status(201).json(template);
   } catch (err) {
     if (err instanceof TemplateValidationError) {

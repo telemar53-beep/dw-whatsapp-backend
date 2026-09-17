@@ -214,6 +214,8 @@ function ChannelSelect({ id, value, onChange, channels, placeholder }) {
   );
 }
 
+const BUTTON_PLACEHOLDERS = ['Ex.: Sim, pode agendar', 'Ex.: Prefiro outro dia', 'Ex.: Falar com atendente'];
+
 function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onCancel }) {
   const { token } = useAuth();
   const [channelId, setChannelId] = useState(initialChannelId || '');
@@ -222,9 +224,11 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
   const [purpose, setPurpose] = useState('atendimento');
   const [language, setLanguage] = useState('pt_BR');
   const [bodyText, setBodyText] = useState('');
+  const [buttons, setButtons] = useState(['', '', '']);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const firstOfficialChannelId = officialChannels[0]?.id;
+  const botoesPreenchidos = buttons.map((b) => b.trim()).filter(Boolean);
 
   // Os canais podem chegar depois do formulário abrir: preenche o primeiro
   // oficial assim que existir, sem obrigar o admin a mexer no select.
@@ -239,7 +243,7 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
     setError(null);
     setSubmitting(true);
     try {
-      await createTemplateAdmin({ channelId, name, category, language, bodyText, purpose }, token);
+      await createTemplateAdmin({ channelId, name, category, language, bodyText, purpose, buttons: botoesPreenchidos }, token);
       onCreated();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao criar template');
@@ -319,6 +323,43 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
           required
         />
       </div>
+
+      {/* Template não abre a janela de 24h: só a resposta do cliente abre. O
+          botão é o caminho de um toque para ele responder — sem isso, iniciar
+          uma conversa entrega a mensagem e para ali, sem como continuar. */}
+      <fieldset className="space-y-2">
+        <legend className={LABEL}>Botões de resposta rápida (opcional)</legend>
+        <p className="text-[12.5px] leading-[17px] text-wa-muted">
+          Quando o cliente toca num botão, a resposta chega no chat e reabre a janela de 24h — aí o atendente pode
+          conversar normalmente. Até 3 botões, de 25 caracteres cada.
+        </p>
+        {buttons.map((valor, i) => (
+          <div key={i}>
+            <label htmlFor={`template-button-${i}`} className="sr-only">{`Botão ${i + 1}`}</label>
+            <input
+              id={`template-button-${i}`}
+              value={valor}
+              maxLength={25}
+              onChange={(e) => setButtons(buttons.map((b, j) => (j === i ? e.target.value : b)))}
+              placeholder={BUTTON_PLACEHOLDERS[i]}
+              className={inputClass}
+            />
+          </div>
+        ))}
+        {botoesPreenchidos.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {botoesPreenchidos.map((texto) => (
+              <span
+                key={texto}
+                className="rounded-[8px] border border-[#1d9bf0]/30 bg-white/[0.06] px-2.5 py-1 text-[12.5px] text-[#53bdeb]"
+              >
+                {texto}
+              </span>
+            ))}
+          </div>
+        )}
+      </fieldset>
+
       {error && <p className={waErrorClass}>{error}</p>}
       <div className="flex gap-2">
         <Button type="submit" loading={submitting}>
@@ -464,9 +505,25 @@ function TemplatePreview({ template, channel }) {
           </div>
           <div className="min-h-[150px] bg-[#0e1a20] px-4 py-5">
             {template ? (
-              <div className="relative max-w-[88%] rounded-[10px] rounded-tl-none bg-[#f4f1ed] px-3 pb-5 pt-2 text-[14px] leading-[20px] text-[#111b21] shadow-sm">
-                <p className="whitespace-pre-wrap break-words">{template.bodyText || 'Corpo do template não informado.'}</p>
-                <span className="absolute bottom-1 right-2 text-[11px] text-[#667781]">{hora}</span>
+              <div className="max-w-[88%]">
+                <div
+                  className={`relative rounded-[10px] rounded-tl-none bg-[#f4f1ed] px-3 pb-5 pt-2 text-[14px] leading-[20px] text-[#111b21] shadow-sm ${
+                    (template.buttons || []).length > 0 ? 'rounded-b-none' : ''
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap break-words">{template.bodyText || 'Corpo do template não informado.'}</p>
+                  <span className="absolute bottom-1 right-2 text-[11px] text-[#667781]">{hora}</span>
+                </div>
+                {/* Os botões ficam colados embaixo do balão, como no WhatsApp:
+                    é a resposta a um toque que reabre a janela de 24h. */}
+                {(template.buttons || []).map((texto) => (
+                  <div
+                    key={texto}
+                    className="mt-[2px] rounded-[10px] bg-[#f4f1ed] px-3 py-2 text-center text-[14px] font-medium text-[#0b8bd6]"
+                  >
+                    {texto}
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="text-center text-[13px] text-[#8696a0]">Selecione um template na lista para ver a prévia.</p>

@@ -322,3 +322,29 @@ describe('finalidade do template', () => {
     expect(updateTemplatePurpose).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/admin/templates — botoes de resposta rapida', () => {
+  test('repassa os botoes para a criacao do template', async () => {
+    createTemplate.mockResolvedValue({ id: 'tpl-btn' });
+
+    const res = await request(buildApp())
+      .post('/api/admin/templates')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({
+        channelId: 'ch-1', name: 'agendar_instalacao', category: 'UTILITY', language: 'pt_BR',
+        bodyText: 'Podemos agendar?', buttons: ['Sim', 'Outro dia'],
+      });
+
+    expect(res.status).toBe(201);
+    expect(createTemplate).toHaveBeenCalledWith(expect.objectContaining({ buttons: ['Sim', 'Outro dia'] }));
+  });
+
+  test('recusa buttons que nao seja uma lista', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/templates')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ channelId: 'ch-1', name: 'agendar', category: 'UTILITY', language: 'pt_BR', bodyText: 'Oi', buttons: 'Sim' });
+
+    expect(res.status).toBe(400);
+  });
+});

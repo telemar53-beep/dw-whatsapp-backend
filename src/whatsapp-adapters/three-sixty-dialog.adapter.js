@@ -100,10 +100,20 @@ async function downloadMedia(mediaId, channel) {
   return Buffer.from(fileResponse.data);
 }
 
-async function createMetaTemplate(channel, { name, category, language, bodyText }) {
+// Sem botao nenhum o componente BUTTONS nao pode ir: a Meta recusa o template
+// inteiro quando ele chega vazio.
+function templateComponents(bodyText, buttons) {
+  const components = [{ type: 'BODY', text: bodyText }];
+  if (buttons && buttons.length > 0) {
+    components.push({ type: 'BUTTONS', buttons: buttons.map((text) => ({ type: 'QUICK_REPLY', text })) });
+  }
+  return components;
+}
+
+async function createMetaTemplate(channel, { name, category, language, bodyText, buttons }) {
   const response = await axios.post(
     `${BASE_URL}/message_templates`,
-    { name, category, language, components: [{ type: 'BODY', text: bodyText }] },
+    { name, category, language, components: templateComponents(bodyText, buttons) },
     { headers: authHeaders(channel) }
   );
   return { metaTemplateId: response.data.id, status: response.data.status };

@@ -5,6 +5,7 @@ jest.mock('../conversations/message-status.service');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
   saveMediaFile: jest.fn(),
+  saveInboundMedia: jest.fn(),
 }));
 jest.mock('./meta-cloud.adapter', () => ({
   ...jest.requireActual('./meta-cloud.adapter'),
@@ -17,7 +18,7 @@ const { findChannelByMetaPhoneNumberId } = require('../channels/channel.reposito
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
 const { applyTemplateStatusUpdates } = require('../templates/template.service');
 const { applyMessageStatusUpdates } = require('../conversations/message-status.service');
-const { saveMediaFile } = require('../media/media-storage');
+const { saveInboundMedia } = require('../media/media-storage');
 const { downloadMetaMedia } = require('./meta-cloud.adapter');
 const metaCloudRoutes = require('./meta-cloud.routes');
 
@@ -205,7 +206,7 @@ describe('POST /webhooks/meta', () => {
     findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1', config: { accessToken: 'tok-meta' } });
     ingestInboundMessage.mockResolvedValue({});
     downloadMetaMedia.mockResolvedValue(Buffer.from('fake-image-bytes'));
-    saveMediaFile.mockResolvedValue('generated-name.jpg');
+    saveInboundMedia.mockResolvedValue({ mediaPath: 'generated-name.jpg' });
 
     const payload = {
       entry: [
@@ -240,7 +241,7 @@ describe('POST /webhooks/meta', () => {
 
     expect(res.status).toBe(200);
     expect(downloadMetaMedia).toHaveBeenCalledWith('MEDIA123', 'tok-meta');
-    expect(saveMediaFile).toHaveBeenCalledWith(Buffer.from('fake-image-bytes'), '.jpg');
+    expect(saveInboundMedia).toHaveBeenCalledWith(Buffer.from('fake-image-bytes'), 'image/jpeg');
     expect(ingestInboundMessage).toHaveBeenCalledWith({
       channelId: 'channel-1',
       fromPhoneNumber: '5511999998888',
@@ -560,6 +561,63 @@ describe('POST /webhooks/meta — hora informada pela Meta', () => {
 
     expect(ingestInboundMessage).toHaveBeenCalledWith(
       expect.objectContaining({ sentAt: new Date(1758000000 * 1000) })
+    );
+  });
+});
+
+// Ponta a ponta: o que importa nao e o parser entender o botao, e sim a
+// resposta chegar ao chat. Enquanto ela caia no vazio, a Meta considera o
+// cliente respondido (janela de 24 h aberta) e o atendente nao ve nada —
+// o pior dos dois mundos.
+describe('POST /webhooks/meta — resposta de botao de template', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.META_APP_SECRET = 'app-secret';
+  });
+
+  test('registra a resposta do botao como mensagem do cliente', async () => {
+    findChannelByMetaPhoneNumberId.mockResolvedValue({ id: 'channel-1' });
+    ingestInboundMessage.mockResolvedValue({});
+
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '1234567890' },
+                contacts: [{ profile: { name: 'Carlos' }, wa_id: '5511999998888' }],
+                messages: [
+                  {
+                    from: '5511999998888',
+                    id: 'wamid.BTN',
+                    type: 'button',
+                    button: { text: 'Pode agendar', payload: 'AGENDAR' },
+                    context: { id: 'wamid.TEMPLATE' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const bodyString = JSON.stringify(payload);
+
+    const res = await request(buildApp())
+      .post('/webhooks/meta')
+      .set('X-Hub-Signature-256', sign(bodyString, 'app-secret'))
+      .set('Content-Type', 'application/json')
+      .send(bodyString);
+
+    expect(res.status).toBe(200);
+    expect(ingestInboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: 'channel-1',
+        messageType: 'text',
+        content: 'Pode agendar',
+        repliedToWhatsappMessageId: 'wamid.TEMPLATE',
+      })
     );
   });
 });

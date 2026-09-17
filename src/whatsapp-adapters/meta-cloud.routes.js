@@ -5,7 +5,7 @@ const { findChannelByMetaPhoneNumberId } = require('../channels/channel.reposito
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
 const { applyTemplateStatusUpdates } = require('../templates/template.service');
 const { applyMessageStatusUpdates } = require('../conversations/message-status.service');
-const { saveMediaFile, extensionForMimeType } = require('../media/media-storage');
+const { saveInboundMedia, extensionForMimeType } = require('../media/media-storage');
 
 const router = express.Router();
 
@@ -50,7 +50,7 @@ router.post('/meta', async (req, res) => {
       let mediaPath;
       if (inboundMessage.mediaId) {
         const buffer = await downloadMetaMedia(inboundMessage.mediaId, channel.config.accessToken);
-        mediaPath = await saveMediaFile(buffer, extensionForMimeType(inboundMessage.mediaMimeType));
+        ({ mediaPath } = await saveInboundMedia(buffer, inboundMessage.mediaMimeType));
       }
       await ingestInboundMessage({
         channelId: channel.id,

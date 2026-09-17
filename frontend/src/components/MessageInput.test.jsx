@@ -324,3 +324,200 @@ describe('colar imagem no campo de mensagem', () => {
     await waitFor(() => expect(screen.getAllByAltText(/pré-visualização/i)).toHaveLength(1));
   });
 });
+
+// Bug relatado pelas atendentes (2026-09-17): o que ficava escrito para um
+// cliente aparecia na conversa do próximo, e enviar mandava para a pessoa
+// errada. O ConversationView não remonta ao trocar de conversa — só troca a
+// prop —, então o estado do campo sobrevivia à troca.
+describe('rascunho por conversa', () => {
+  test('o campo abre vazio ao trocar de conversa', async () => {
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Olá Maria, tudo bem?');
+
+    rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
+
+    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('');
+  });
+
+  test('voltar para a conversa devolve o que estava escrito nela', async () => {
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Olá Maria');
+
+    rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
+    rerender(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+
+    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('Olá Maria');
+  });
+
+  test('cada conversa guarda o seu proprio texto', async () => {
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Para Maria');
+    rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Para Berg');
+
+    rerender(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('Para Maria');
+
+    rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
+    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('Para Berg');
+  });
+
+  // O anexo é o que mais arrisca ir para o cliente errado, então ele nunca
+  // sobrevive à troca — nem volta depois.
+  test('o anexo e descartado ao trocar de conversa', async () => {
+    global.URL.createObjectURL = vi.fn(() => 'blob:x');
+    global.URL.revokeObjectURL = vi.fn();
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), {
+      clipboardData: {
+        items: [{ kind: 'file', type: 'image/png', getAsFile: () => new File(['x'], 'p.png', { type: 'image/png' }) }],
+        getData: () => '',
+      },
+    });
+    await screen.findByRole('button', { name: /remover/i });
+
+    rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /remover/i })).not.toBeInTheDocument();
+  });
+
+  test('o anexo nao volta ao reabrir a conversa de origem', async () => {
+    global.URL.createObjectURL = vi.fn(() => 'blob:x');
+    global.URL.revokeObjectURL = vi.fn();
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), {
+      clipboardData: {
+        items: [{ kind: 'file', type: 'image/png', getAsFile: () => new File(['x'], 'p.png', { type: 'image/png' }) }],
+        getData: () => '',
+      },
+    });
+    await screen.findByRole('button', { name: /remover/i });
+
+    rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
+    rerender(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /remover/i })).not.toBeInTheDocument();
+  });
+
+  test('depois de enviar, o texto nao reaparece ao voltar para a conversa', async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={onSend} />);
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Olá Maria');
+    await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
+    await waitFor(() => expect(onSend).toHaveBeenCalled());
+
+    rerender(<MessageInput conversationId="c2" onSend={onSend} />);
+    rerender(<MessageInput conversationId="c1" onSend={onSend} />);
+
+    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('');
+  });
+});
+
+// O caso que a atendente descreveu com áudio: grava para um cliente, esquece de
+// enviar e abre outra conversa. A gravação não pode sobreviver à troca nem
+// virar anexo da conversa nova.
+describe('gravação em andamento na hora da troca', () => {
+  test('a gravação é descartada e não vira anexo da outra conversa', async () => {
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /gravar áudio/i }));
+    await screen.findByRole('button', { name: /parar gravação/i });
+
+    rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /parar gravação/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/gravação de áudio/i)).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toBeInTheDocument();
+  });
+
+  test('o microfone é liberado ao descartar a gravação', async () => {
+    const fakeTrack = { stop: vi.fn() };
+    global.navigator.mediaDevices.getUserMedia = vi.fn().mockResolvedValue({ getTracks: () => [fakeTrack] });
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /gravar áudio/i }));
+    await screen.findByRole('button', { name: /parar gravação/i });
+
+    rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
+
+    await waitFor(() => expect(fakeTrack.stop).toHaveBeenCalled());
+  });
+});
+
+// O campo tinha altura fixa e rolava por dentro: para reler um texto longo
+// antes de enviar, a atendente precisava rolar dentro de uma caixa de 4 linhas.
+// Agora ele cresce com o conteúdo, como o WhatsApp.
+describe('o campo cresce com o texto', () => {
+  const UMA_LINHA = 48;
+  const CONTEUDO_ALTO = 900;
+  let alturaDescritor;
+
+  beforeEach(() => {
+    alturaDescritor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'scrollHeight');
+    // O jsdom não faz layout: scrollHeight é sempre 0. Aqui ele responde pelo
+    // tamanho do texto, que é o que o componente usa para decidir a altura.
+    Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get() {
+        return this.value.length > 40 ? CONTEUDO_ALTO : UMA_LINHA;
+      },
+    });
+  });
+
+  afterEach(() => {
+    if (alturaDescritor) {
+      Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollHeight', alturaDescritor);
+    } else {
+      delete HTMLTextAreaElement.prototype.scrollHeight;
+    }
+  });
+
+  test('texto curto mantém o campo do tamanho de uma linha', async () => {
+    render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+
+    await userEvent.type(campo, 'Oi');
+
+    expect(parseInt(campo.style.height, 10)).toBe(UMA_LINHA);
+  });
+
+  test('texto longo faz o campo crescer', async () => {
+    render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+
+    await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
+
+    expect(parseInt(campo.style.height, 10)).toBeGreaterThan(UMA_LINHA);
+  });
+
+  // Sem teto, um texto muito longo empurraria a conversa inteira para fora.
+  test('para de crescer no teto e passa a rolar por dentro', async () => {
+    render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+
+    await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
+
+    expect(parseInt(campo.style.height, 10)).toBeLessThan(CONTEUDO_ALTO);
+  });
+
+  test('depois de enviar, o campo volta ao tamanho de uma linha', async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    render(<MessageInput conversationId="c1" onSend={onSend} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+    await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
+
+    await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
+
+    await waitFor(() => expect(parseInt(campo.style.height, 10)).toBe(UMA_LINHA));
+  });
+
+  test('trocar de conversa ajusta o campo ao rascunho da nova', async () => {
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+    await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
+
+    rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
+
+    await waitFor(() =>
+      expect(parseInt(screen.getByPlaceholderText('Digite uma mensagem...').style.height, 10)).toBe(UMA_LINHA)
+    );
+  });
+});

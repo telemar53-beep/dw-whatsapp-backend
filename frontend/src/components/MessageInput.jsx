@@ -2,6 +2,22 @@ import { useState, useRef, useEffect } from 'react';
 import { IconEmoji, IconAttach, IconQuickReply, IconMic, IconSend, IconTrash, IconStop } from './icons/WaIcons';
 import { AsyncState } from './ui';
 
+// O campo cresce com o conteúdo, como o WhatsApp: com altura fixa, reler um
+// texto longo antes de enviar virava rolar dentro de uma caixa de 4 linhas.
+// O teto existe para o campo não engolir a conversa — passando dele, rola por
+// dentro como antes.
+const COMPOSER_MIN_HEIGHT = 48;
+const COMPOSER_MAX_HEIGHT = 320;
+
+function fitComposerHeight(element) {
+  if (!element) return;
+  // Zerar primeiro é o que permite ENCOLHER: sem isso o scrollHeight nunca
+  // diminui, e o campo só cresceria.
+  element.style.height = 'auto';
+  const desejada = Math.max(element.scrollHeight || 0, COMPOSER_MIN_HEIGHT);
+  element.style.height = `${Math.min(desejada, COMPOSER_MAX_HEIGHT)}px`;
+}
+
 const AUDIO_MIME_CANDIDATES = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm'];
 
 const EMOJIS = [
@@ -39,7 +55,7 @@ function ComposerButton({ label, onClick, disabled, active, children, as = 'butt
   );
 }
 
-function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready', replyingTo = null, onCancelReply, draftContent, draftKey }) {
+function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesStatus = 'ready', replyingTo = null, onCancelReply, draftContent, draftKey }) {
   const [content, setContent] = useState('');
   const [file, setFile] = useState(null);
   // A microphone recording is a voice note; a file picked from disk is an attachment.
@@ -57,6 +73,13 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
   const popoverRef = useRef(null);
+  // O rascunho de texto de cada conversa. O componente não remonta ao trocar de
+  // conversa — só muda a prop —, então sem isto o que ficou escrito para um
+  // cliente aparecia na conversa do próximo, e enviar mandava para a pessoa
+  // errada (relatado pelas atendentes em 2026-09-17).
+  const contentRef = useRef('');
+  const draftsRef = useRef(new Map());
+  const currentConversationRef = useRef(conversationId);
 
   useEffect(() => {
     // Carrega o texto de uma sugestão da IA que o atendente escolheu editar.
@@ -102,6 +125,31 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
+  useEffect(() => {
+    contentRef.current = content;
+    fitComposerHeight(textInputRef.current);
+  }, [content]);
+
+  useEffect(() => {
+    const anterior = currentConversationRef.current;
+    if (anterior === conversationId) return;
+    if (anterior !== undefined && anterior !== null) {
+      draftsRef.current.set(anterior, contentRef.current);
+    }
+    currentConversationRef.current = conversationId;
+    setContent(draftsRef.current.get(conversationId) || '');
+    // Anexo e gravação NUNCA atravessam a troca, nem voltam depois: é o que
+    // mais arrisca ir para o cliente errado, e um áudio gravado pela metade não
+    // tem valor guardado. Uma gravação em andamento é encerrada e descartada.
+    if (mediaRecorderRef.current && recording) {
+      stopRecordingAndDiscard();
+    }
+    setFile(null);
+    setFileIsRecording(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
 
   function clearAttachment() {
     setFile(null);
@@ -159,6 +207,26 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
     }
   }
 
+  // O stop normal guarda o áudio como anexo. Este descarta: a gravação é da
+  // conversa que acabou de sair da tela, e guardá-la seria exatamente o bug que
+  // estamos corrigindo. As trilhas do microfone são encerradas do mesmo jeito.
+  function stopRecordingAndDiscard() {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    const recorder = mediaRecorderRef.current;
+    if (recorder) {
+      recorder.onstop = () => {
+        if (recorder.stream) recorder.stream.getTracks().forEach((track) => track.stop());
+      };
+      recorder.stop();
+    }
+    mediaRecorderRef.current = null;
+    setRecording(false);
+    setRecordingSeconds(0);
+  }
+
   function stopRecording() {
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
@@ -181,6 +249,7 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
     setError(null);
     try {
       await onSend(content, file, replyingTo ? replyingTo.id : null, fileIsRecording);
+      draftsRef.current.delete(conversationId);
       setContent('');
       clearAttachment();
     } catch (err) {
@@ -291,7 +360,7 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
           <>
             <div
               ref={popoverRef}
-              className="relative flex h-[60px] min-w-0 flex-1 items-center gap-3 rounded-full border border-white/[0.06] bg-white/[0.07] pl-3 pr-1.5"
+              className="relative flex min-h-[60px] min-w-0 flex-1 items-end gap-3 rounded-[30px] border border-white/[0.06] bg-white/[0.07] py-2 pl-3 pr-1.5"
             >
               <ComposerButton label="Anexar arquivo" as="label" htmlFor="message-file-input">
                 <IconAttach size={24} />
@@ -325,7 +394,8 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
                 onPaste={handlePaste}
                 placeholder="Digite uma mensagem..."
                 rows={1}
-                className="max-h-[120px] min-h-[48px] min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
+                style={{ minHeight: COMPOSER_MIN_HEIGHT, maxHeight: COMPOSER_MAX_HEIGHT }}
+                className="min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
               />
 
               {showingEmojis && (

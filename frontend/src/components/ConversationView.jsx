@@ -544,6 +544,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             </p>
           )}
           <MessageInput
+            conversationId={conversation.id}
             onSend={handleSend}
             quickReplies={quickReplies}
             quickRepliesStatus={quickRepliesStatus}

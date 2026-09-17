@@ -19,6 +19,7 @@ const {
   countChannelDependents,
   deleteChannel,
   convertChannelToMetaCloud,
+  updateChannelName,
 } = require('./channel.repository');
 
 describe('channel repository', () => {
@@ -529,5 +530,42 @@ describe('convertChannelToMetaCloud', () => {
 
   test('devolve null para um canal que nao existe', async () => {
     expect(await convertChannelToMetaCloud('00000000-0000-0000-0000-000000000000', CONFIG_NOVA)).toBeNull();
+  });
+});
+
+// Renomear o canal é seguro: tudo no sistema referencia o canal pelo id, nunca
+// pelo nome — conversas, campanhas e a integração SGP seguem intactas.
+describe('updateChannelName', () => {
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE channels CASCADE');
+  });
+
+  test('troca o nome e devolve o canal', async () => {
+    const canal = await createChannel({ type: 'baileys', name: 'automação', phoneNumber: '+5598984129046', config: {} });
+
+    const renomeado = await updateChannelName(canal.id, 'Suporte Técnico');
+
+    expect(renomeado.name).toBe('Suporte Técnico');
+    expect(renomeado.id).toBe(canal.id);
+    expect((await findChannelById(canal.id)).name).toBe('Suporte Técnico');
+  });
+
+  test('nao mexe em mais nada do canal', async () => {
+    const canal = await createChannel({
+      type: 'meta_cloud',
+      name: 'DW Telcom 1',
+      phoneNumber: '+5598984454546',
+      config: { phoneNumberId: '530351070168344', accessToken: 'tok', wabaId: 'w1' },
+    });
+
+    const renomeado = await updateChannelName(canal.id, 'Comercial');
+
+    expect(renomeado.phoneNumber).toBe('+5598984454546');
+    expect(renomeado.config).toEqual({ phoneNumberId: '530351070168344', accessToken: 'tok', wabaId: 'w1' });
+    expect(renomeado.type).toBe('meta_cloud');
+  });
+
+  test('devolve null para um canal que nao existe', async () => {
+    expect(await updateChannelName('00000000-0000-0000-0000-000000000000', 'X')).toBeNull();
   });
 });

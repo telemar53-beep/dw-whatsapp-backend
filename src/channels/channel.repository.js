@@ -202,8 +202,22 @@ async function convertChannelToMetaCloud(id, config) {
   return toChannel(result.rows[0]);
 }
 
+// Renomear e seguro: tudo referencia o canal pelo id, nunca pelo nome, entao
+// conversas, campanhas e a integracao SGP seguem intactas — muda so o que
+// aparece na tela.
+async function updateChannelName(id, name) {
+  const result = await getPool().query(
+    `UPDATE channels SET name = $2 WHERE id = $1
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, ai_triage_enabled, ai_night_mode_enabled, created_at`,
+    [id, name]
+  );
+  if (result.rowCount === 0) return null;
+  return toChannel(result.rows[0]);
+}
+
 module.exports = {
   convertChannelToMetaCloud,
+  updateChannelName,
   createChannel,
   findChannelById,
   findChannelByMetaPhoneNumberId,

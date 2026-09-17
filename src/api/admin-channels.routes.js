@@ -18,6 +18,7 @@ const {
   countChannelDependents,
   deleteChannel,
   convertChannelToMetaCloud,
+  updateChannelName,
 } = require('../channels/channel.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { getChannelConnection } = require('../channels/channel-connection');
@@ -188,8 +189,9 @@ router.post('/:id/meta-cloud-credentials', requireAuth, requireIntegrationsAcces
 });
 
 router.patch('/:id', requireAuth, requireIntegrationsAccess, async (req, res) => {
-  const { triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled, aiTriageEnabled, aiNightModeEnabled } = req.body || {};
+  const { name, triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled, aiTriageEnabled, aiNightModeEnabled } = req.body || {};
   if (
+    name === undefined &&
     triageEnabled === undefined &&
     wabaId === undefined &&
     hidden === undefined &&
@@ -198,7 +200,15 @@ router.patch('/:id', requireAuth, requireIntegrationsAccess, async (req, res) =>
     aiTriageEnabled === undefined &&
     aiNightModeEnabled === undefined
   ) {
-    return res.status(400).json({ error: 'triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled, aiTriageEnabled or aiNightModeEnabled is required' });
+    return res.status(400).json({ error: 'name, triageEnabled, wabaId, hidden, welcomeMessage, aiEnabled, aiTriageEnabled or aiNightModeEnabled is required' });
+  }
+  // Canal sem nome fica impossivel de distinguir na lista e no cabecalho da
+  // conversa, entao vazio (ou so espacos) e recusado em vez de gravado.
+  if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
+    return res.status(400).json({ error: 'name must be a non-empty string' });
+  }
+  if (typeof name === 'string' && name.trim().length > 120) {
+    return res.status(400).json({ error: 'name must be 120 characters or fewer' });
   }
   if (hidden !== undefined && typeof hidden !== 'boolean') {
     return res.status(400).json({ error: 'hidden must be a boolean' });
@@ -248,6 +258,12 @@ router.patch('/:id', requireAuth, requireIntegrationsAccess, async (req, res) =>
       await baileysManager.stopBaileysChannel(existing.id);
     }
     channel = await updateChannelHidden(req.params.id, hidden);
+    if (!channel) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+  }
+  if (name !== undefined) {
+    channel = await updateChannelName(req.params.id, name.trim());
     if (!channel) {
       return res.status(404).json({ error: 'Channel not found' });
     }

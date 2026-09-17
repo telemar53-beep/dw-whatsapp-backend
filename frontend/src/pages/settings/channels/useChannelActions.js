@@ -11,9 +11,10 @@ import {
   setChannelAiTriageEnabled,
   setChannelAiNightModeEnabled,
   setMetaCloudCredentials,
+  setChannelName,
 } from '../../../services/api';
 
-const EMPTY_ERRORS = { triage: null, ai: null, aiTriage: null, aiNightMode: null, wabaId: null, action: null };
+const EMPTY_ERRORS = { triage: null, ai: null, aiTriage: null, aiNightMode: null, wabaId: null, name: null, action: null };
 
 // Handlers vindos de AdminChannelsPage.jsx (Tasks 1-16), sem alteração de
 // lógica: só o estado virou um objeto único (`errors`) e os `window.confirm`
@@ -125,6 +126,16 @@ export function useChannelActions(refresh) {
     }
   }
 
+  async function saveChannelName(channelId, value) {
+    setFieldError('name', null);
+    try {
+      await setChannelName(channelId, value, token);
+      refresh();
+    } catch (err) {
+      setFieldError('name', (err.body && err.body.error) || 'Falha ao renomear o canal');
+    }
+  }
+
   async function saveWabaId(channelId, value) {
     setFieldError('wabaId', null);
     try {
@@ -148,6 +159,7 @@ export function useChannelActions(refresh) {
     errors,
     busyChannelId,
     saveMetaCloudCredentials,
+    saveChannelName,
     toggleTriage,
     toggleAi,
     toggleAiTriage,

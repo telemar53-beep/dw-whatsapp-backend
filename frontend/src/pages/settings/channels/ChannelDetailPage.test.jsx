@@ -351,3 +351,51 @@ describe('Ações avançadas descrevem só o que está na tela', () => {
     expect(zone).toHaveTextContent(/reconectar/i);
   });
 });
+
+// Renomear o canal é seguro: tudo referencia o canal pelo id, nunca pelo nome.
+describe('renomear o canal', () => {
+  const canal = { id: 'ch1', type: 'baileys', name: 'automação', phoneNumber: '+5598984129046', status: 'connected', triageEnabled: false, aiEnabled: false, aiTriageEnabled: false, aiNightModeEnabled: false, welcomeMessage: null };
+
+  beforeEach(() => {
+    useChannels.mockReturnValue({ channels: [canal], status: 'ready', refresh });
+    api.setChannelName.mockResolvedValue({ ...canal, name: 'Suporte Técnico' });
+  });
+
+  test('oferece editar o nome do canal', () => {
+    renderDetail('/configuracoes/canais/ch1/conexao');
+    expect(screen.getByRole('button', { name: /editar nome/i })).toBeInTheDocument();
+  });
+
+  test('salvar envia o nome novo e recarrega a lista', async () => {
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await userEvent.click(screen.getByRole('button', { name: /editar nome/i }));
+    const campo = screen.getByLabelText('Nome do canal');
+    await userEvent.clear(campo);
+    await userEvent.type(campo, 'Suporte Técnico');
+    await userEvent.click(screen.getByRole('button', { name: /^salvar nome$/i }));
+
+    await waitFor(() => expect(api.setChannelName).toHaveBeenCalledWith('ch1', 'Suporte Técnico', 'tok'));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  test('cancelar não chama a API e volta ao nome atual', async () => {
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await userEvent.click(screen.getByRole('button', { name: /editar nome/i }));
+    await userEvent.type(screen.getByLabelText('Nome do canal'), 'xxx');
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(api.setChannelName).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /editar nome/i })).toBeInTheDocument();
+  });
+
+  test('não deixa salvar um nome vazio', async () => {
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await userEvent.click(screen.getByRole('button', { name: /editar nome/i }));
+    await userEvent.clear(screen.getByLabelText('Nome do canal'));
+
+    expect(screen.getByRole('button', { name: /^salvar nome$/i })).toBeDisabled();
+  });
+});

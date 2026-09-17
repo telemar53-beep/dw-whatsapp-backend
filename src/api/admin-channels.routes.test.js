@@ -23,6 +23,7 @@ const {
   countChannelDependents,
   deleteChannel,
   convertChannelToMetaCloud,
+  updateChannelName,
 } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -1384,5 +1385,75 @@ describe('POST /api/admin/channels/:id/meta-cloud-credentials', () => {
 
     expect(res.status).toBe(403);
     expect(convertChannelToMetaCloud).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/admin/channels/:id — renomear o canal', () => {
+  const CANAL = { id: 'channel-1', type: 'baileys', name: 'automação', phoneNumber: '+5598984129046', config: {}, status: 'connected' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getChannelConnection.mockResolvedValue(null);
+    checkMetaCloudSetup.mockResolvedValue({ ok: true });
+    findChannelById.mockResolvedValue(CANAL);
+  });
+
+  function renomear(body, role = 'admin') {
+    return request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', role, true)}`)
+      .send(body);
+  }
+
+  test('troca o nome do canal', async () => {
+    updateChannelName.mockResolvedValue({ ...CANAL, name: 'Suporte Técnico' });
+
+    const res = await renomear({ name: 'Suporte Técnico' });
+
+    expect(res.status).toBe(200);
+    expect(updateChannelName).toHaveBeenCalledWith('channel-1', 'Suporte Técnico');
+    expect(res.body.name).toBe('Suporte Técnico');
+  });
+
+  test('apara espacos das pontas antes de gravar', async () => {
+    updateChannelName.mockResolvedValue({ ...CANAL, name: 'Comercial' });
+
+    await renomear({ name: '  Comercial  ' });
+
+    expect(updateChannelName).toHaveBeenCalledWith('channel-1', 'Comercial');
+  });
+
+  test('recusa nome vazio', async () => {
+    const res = await renomear({ name: '' });
+
+    expect(res.status).toBe(400);
+    expect(updateChannelName).not.toHaveBeenCalled();
+  });
+
+  test('recusa nome so com espacos', async () => {
+    const res = await renomear({ name: '   ' });
+
+    expect(res.status).toBe(400);
+    expect(updateChannelName).not.toHaveBeenCalled();
+  });
+
+  test('renomear nao mexe nas outras configuracoes do canal', async () => {
+    updateChannelName.mockResolvedValue({ ...CANAL, name: 'Comercial' });
+
+    await renomear({ name: 'Comercial' });
+
+    expect(updateChannelTriageEnabled).not.toHaveBeenCalled();
+    expect(updateChannelWelcomeMessage).not.toHaveBeenCalled();
+    expect(updateChannelHidden).not.toHaveBeenCalled();
+  });
+
+  test('403 para quem nao gerencia integracoes', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/channels/channel-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ name: 'Comercial' });
+
+    expect(res.status).toBe(403);
+    expect(updateChannelName).not.toHaveBeenCalled();
   });
 });

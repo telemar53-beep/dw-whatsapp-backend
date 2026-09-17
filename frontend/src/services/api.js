@@ -199,8 +199,11 @@ export function startConversation({ channelId, phoneNumber, content, templateId,
   });
 }
 
-export function listTemplatesForChannel(channelId, token) {
-  return apiFetch(`/api/templates?channelId=${channelId}`, { token });
+// `purpose` separa o que o atendente vê ao iniciar uma conversa ('atendimento')
+// do que vai para campanha e para os disparos do SGP ('disparo').
+export function listTemplatesForChannel(channelId, token, purpose) {
+  const query = purpose ? `?channelId=${channelId}&purpose=${purpose}` : `?channelId=${channelId}`;
+  return apiFetch(`/api/templates${query}`, { token });
 }
 
 export function listQuickReplies(token) {
@@ -300,12 +303,20 @@ export function setChannelWabaId(id, wabaId, token) {
   return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { wabaId }, token });
 }
 
+export function setChannelName(id, name, token) {
+  return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { name }, token });
+}
+
 export function setChannelWelcomeMessage(id, welcomeMessage, token) {
   return apiFetch(`/api/admin/channels/${id}`, { method: 'PATCH', body: { welcomeMessage }, token });
 }
 
 export function listTemplatesAdmin(token) {
   return apiFetch('/api/admin/templates', { token });
+}
+
+export function setTemplatePurpose(id, purpose, token) {
+  return apiFetch(`/api/admin/templates/${id}`, { method: 'PATCH', body: { purpose }, token });
 }
 
 export function createTemplateAdmin(data, token) {

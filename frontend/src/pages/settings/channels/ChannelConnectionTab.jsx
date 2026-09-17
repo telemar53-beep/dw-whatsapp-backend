@@ -162,6 +162,8 @@ function ChannelConnectionTab() {
   const official = isOfficialChannelType(channel.type);
   const [editingWaba, setEditingWaba] = useState(false);
   const [wabaIdDraft, setWabaIdDraft] = useState(channel.wabaId || '');
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(channel.name);
 
   // Trocar de canal (mesma aba, id novo na URL) não remonta o componente —
   // sincroniza o rascunho com o canal atual em vez de arrastar o valor do
@@ -171,6 +173,11 @@ function ChannelConnectionTab() {
     setEditingWaba(false);
   }, [channel.id, channel.wabaId]);
 
+  useEffect(() => {
+    setNameDraft(channel.name);
+    setEditingName(false);
+  }, [channel.id, channel.name]);
+
   const busy = actions.busyChannelId === channel.id;
 
   async function handleSaveWaba() {
@@ -178,11 +185,17 @@ function ChannelConnectionTab() {
     setEditingWaba(false);
   }
 
+  async function handleSaveName() {
+    await actions.saveChannelName(channel.id, nameDraft.trim());
+    setEditingName(false);
+  }
+
   return (
     <div className="space-y-5">
       {!canManage && (
         <p className="rounded-[12px] bg-wa-warn-bg px-3 py-2.5 text-[13.5px] text-wa-warn-text">{PERMISSION_REASON}</p>
       )}
+      <ErrorNote>{actions.errors.name}</ErrorNote>
       <ErrorNote>{actions.errors.wabaId}</ErrorNote>
       <ErrorNote>{actions.errors.action}</ErrorNote>
 
@@ -192,6 +205,24 @@ function ChannelConnectionTab() {
             Dados da conexão
           </h3>
           <dl className="mt-2 divide-y divide-wa-border">
+            {!editingName && (
+              <DataRow
+                label="Nome"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => setEditingName(true)}
+                    disabled={!canManage}
+                    title={!canManage ? PERMISSION_REASON : undefined}
+                    className="shrink-0 text-[13px] font-medium text-wa-link hover:underline disabled:opacity-50"
+                  >
+                    Editar nome
+                  </button>
+                }
+              >
+                {channel.name}
+              </DataRow>
+            )}
             <DataRow label="Provedor">{providerLabel(channel.type)}</DataRow>
             <DataRow label="Tipo">{official ? 'API oficial' : 'Não oficial'}</DataRow>
             <DataRow label="Número">{formatPhone(channel.phoneNumber)}</DataRow>
@@ -219,6 +250,35 @@ function ChannelConnectionTab() {
               </DataRow>
             )}
           </dl>
+          {editingName && (
+            <div className="border-t border-wa-border py-3">
+              <label htmlFor="channel-name" className="mb-1.5 block text-[13px] font-medium text-wa-muted">
+                Nome do canal
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="channel-name"
+                  value={nameDraft}
+                  disabled={!canManage}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  className={`${inputClass} max-w-[320px]`}
+                />
+                <Button onClick={handleSaveName} disabled={!canManage || !nameDraft.trim()} className="!py-2">
+                  Salvar nome
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setNameDraft(channel.name);
+                    setEditingName(false);
+                  }}
+                  className="!py-2"
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
           {official && editingWaba && (
             <div className="border-t border-wa-border py-3">
               <label htmlFor="waba-id" className="mb-1.5 block text-[13px] font-medium text-wa-muted">

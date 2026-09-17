@@ -17,7 +17,9 @@
 - **Nenhuma menção a data de nascimento** em prompt, schema, descrição de ferramenta, `instrucao`, `proximoPasso` ou rótulo de UI.
 - **Segredos:** a chave da OpenAI só é lida de `process.env.OPENAI_API_KEY`. Nunca em arquivo versionado, log, commit ou mensagem. Nunca impressa, nem mascarada.
 - **Dados pessoais em log:** CPF, CNPJ e documento de terceiro nunca vão a `console.*`. Use `mensagemSegura(err)` para erros, como o resto do projeto já faz.
-- **CPF de terceiro nunca fica em repouso.** O escopo persistido guarda ids de contrato e primeiro nome, nunca o documento.
+- **O escopo de terceiro nunca persiste nem duplica o CPF.** Ele guarda ids de contrato e primeiro nome. O documento continua existindo no histórico da conversa, porque o cliente o digitou numa mensagem — o que este plano garante é que o escopo de autorização não cria uma segunda cópia dele.
+- **Os 30 minutos são TTL de autorização, não de retenção.** A validade é conferida na leitura, em memória, antes de qualquer uso. Sem limpeza ativa, o JSON expirado pode continuar na coluna até a próxima leitura daquela conversa — mas expirado ele nunca autoriza nada.
+- **Autorização falha fechado.** Se gravar ou limpar `ai_triage_third_party` falhar, a ferramenta falha. Nunca `catch` que siga em frente: um escopo antigo que sobreviva a uma limpeza malsucedida é autorização viva sobre o contrato de um estranho.
 - **Testes de backend:** `npm test` (roda `migrate:test` antes). Exige Docker com `dw-whatsapp-postgres` e `dw-whatsapp-redis` de pé.
 - **Testes de frontend:** `npm test` dentro de `frontend/`.
 - **Nenhum assert de IA compara frase literal de resposta.** Valide invariantes de comportamento.
@@ -574,7 +576,14 @@ Expected: FAIL — módulo não existe.
 // - não substitui contexto.contracts (os contratos do próprio contato);
 // - não torna o terceiro dono do contato (nada é persistido no contato);
 // - não guarda o documento do terceiro — só os ids de contrato, que é tudo de
-//   que as ferramentas de pagamento precisam depois da primeira consulta.
+//   que as ferramentas de pagamento precisam depois da primeira consulta. O CPF
+//   continua no histórico da conversa, onde o cliente o digitou; o que não
+//   existe é uma segunda cópia dele aqui.
+//
+// Os 30 minutos são TTL de AUTORIZAÇÃO, não de retenção: escopoValido() confere
+// na leitura, em memória, antes de qualquer uso. Um JSON expirado pode
+// continuar na coluna até a próxima leitura daquela conversa — e expirado ele
+// não autoriza nada.
 const MINUTOS_DE_VIDA = 30;
 
 function montarEscopo(nome, contratos, agora = new Date()) {
@@ -695,6 +704,56 @@ test('buscar_cliente de terceiro cria o escopo e NÃO toca em contexto.contracts
   expect(setThirdPartyScope).toHaveBeenCalledWith('c1', expect.objectContaining({ nome: 'Maria', contratos: [77] }));
 });
 
+// Digitar o CPF de outra pessoa nao pode promover ninguem. Ate 2026-09-17 este
+// ramo escrevia nivel: 'forte' em contexto.identidade, elevando quem nem era
+// cliente. A autorizacao mora no escopo, nunca na identidade do solicitante.
+test('buscar_cliente de terceiro NUNCA eleva a identidade de quem está falando', async () => {
+  sgpClient.lookupClientByCpf.mockResolvedValue({
+    client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+    contracts: [{ id: 77, status: 1 }],
+  });
+  const identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
+  const contexto = {
+    ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1',
+    contact: { id: 'ct1', sgpDocument: null }, contracts: [], identidade,
+  };
+
+  await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+  expect(contexto.identidade).toEqual(identidade);   // objeto inteiro intocado
+  expect(contexto.identidade.nivel).toBe('none');
+});
+
+// Falha fechado: sem gravacao no banco nao ha autorizacao neste turno.
+test('se a gravação do escopo falhar, a ferramenta falha e o escopo não vale', async () => {
+  sgpClient.lookupClientByCpf.mockResolvedValue({
+    client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+    contracts: [{ id: 77, status: 1 }],
+  });
+  setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+  const contexto = contextoDeTriagemCom({ contracts: [] });
+
+  const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+  expect(r.ok).toBe(false);
+  expect(contexto.terceiro).toBeNull();
+});
+
+test.each(['concluir_triagem', 'encerrar_atendimento', 'esquecer_identificacao'])(
+  'se a limpeza do escopo falhar, %s aborta em vez de seguir com a autorização viva',
+  async (nome) => {
+    setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+    const args = nome === 'concluir_triagem' ? { setorId: SETOR, resumo: 'x', confianca: 0.9 } : {};
+
+    const r = await executeTool(nome, args, contexto);
+
+    expect(r.ok).toBe(false);
+    expect(completeTriage).not.toHaveBeenCalled();
+    expect(contexto.terceiro).not.toBeNull();   // nada foi dado por limpo
+  }
+);
+
 // Endereco do titular e dado cadastral de outra pessoa: nao vai ao modelo.
 test('o retorno do buscar_cliente de terceiro não traz endereço nem status do titular', async () => {
   sgpClient.lookupClientByCpf.mockResolvedValue({
@@ -744,19 +803,25 @@ No ramo `if (args.titularEOutraPessoa)`, trocar o corpo por:
 
 ```js
 // O CPF do titular abre o contrato dele — igual à segunda via do site do SGP —,
-// mas NADA disso vira o contato: sem persistência, sem cidade, sem trocar o
-// nome de quem fala. Os contratos do terceiro vão para um escopo separado, que
-// a checagem de propriedade trata com uma lista de permissão fechada.
+// mas NADA disso vira o contato: sem persistência no contato, sem cidade, sem
+// trocar o nome de quem fala. E, principalmente, SEM MEXER EM
+// contexto.identidade: quem está falando pode não ser cliente nenhum, e digitar
+// o CPF de outra pessoa não pode elevar a identidade de ninguém. A autorização
+// mora no escopo, não na identidade do solicitante.
 const escopo = montarEscopo(nome, contracts);
-contexto.terceiro = paraContexto(escopo);
+
+// Falha fechado: a gravação vem ANTES de o escopo valer neste turno. Sem
+// persistência não há autorização — nem agora nem no turno seguinte. Deixar o
+// turno seguir com um escopo que o banco não conhece é o começo de um escopo
+// órfão. O documento nunca entra no log.
 try {
   await setThirdPartyScope(contexto.conversationId, escopo);
 } catch (err) {
-  // O escopo deste turno já está montado e vale. Perder a persistência só
-  // custa uma consulta a mais no turno seguinte; derrubar o turno logo depois
-  // de o cliente digitar o CPF é pior. O documento nunca entra no log.
   console.error(`Failed to store the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+  return erro('third_party_scope_not_stored');
 }
+contexto.terceiro = paraContexto(escopo);
+
 return {
   titular: { nome },
   contratos: contracts.map((c) => ({ id: c.id })),
@@ -764,30 +829,62 @@ return {
 };
 ```
 
-No caminho do próprio contato, **adicionar** `contexto.contracts = contracts;` e a limpeza do escopo:
+No caminho do próprio contato, **adicionar** `contexto.contracts = contracts;` e a limpeza.
+
+A limpeza é idêntica nos quatro lugares, então escreva o ajudante uma vez, acima do array
+`TOOLS`:
+
+```js
+/**
+ * Derruba a autorização sobre o contrato de terceiro. Falha FECHADO: se o banco
+ * não confirmar a limpeza, quem chamou precisa abortar. Um escopo que sobrevive
+ * a uma limpeza malsucedida é autorização viva sobre o contrato de um estranho,
+ * e reapareceria no próximo turno como se nada tivesse acontecido.
+ */
+async function limparEscopoDeTerceiro(contexto) {
+  try {
+    await setThirdPartyScope(contexto.conversationId, null);
+  } catch (err) {
+    console.error(`Failed to clear the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    return false;
+  }
+  contexto.terceiro = null;
+  return true;
+}
+```
+
+Em `buscar_cliente` (caminho do próprio contato):
 
 ```js
 contexto.contracts = contracts;
-contexto.terceiro = null;
-try {
-  await setThirdPartyScope(contexto.conversationId, null);
-} catch (err) {
-  console.error(`Failed to clear the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
-}
+if (!(await limparEscopoDeTerceiro(contexto))) return erro('third_party_scope_not_cleared');
 ```
 
-Em `concluir_triagem.executar`, `encerrar_atendimento.executar` e `esquecer_identificacao.executar`, adicionar antes do retorno de sucesso:
+Em `concluir_triagem.executar`, `encerrar_atendimento.executar` e
+`esquecer_identificacao.executar`, a limpeza vem **antes** da ação principal, e aborta se
+falhar:
 
 ```js
-contexto.terceiro = null;
-try {
-  await setThirdPartyScope(contexto.conversationId, null);
-} catch (err) {
-  console.error(`Failed to clear the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+// Antes de concluir/encerrar/esquecer, e não depois: se a limpeza falhar, o
+// atendimento NÃO avança. Concluir com uma autorização de terceiro ainda viva
+// deixaria o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
+// da triagem.
+if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+  return erro('third_party_scope_not_cleared');
 }
 ```
 
+O `if (contexto.terceiro ...)` é de propósito: sem escopo não há o que limpar, e a
+esmagadora maioria dos atendimentos não passa por terceiro — não faz sentido um UPDATE a
+cada conclusão.
+
 No perfil assistente, `buscar_cliente` continua atribuindo `contexto.contracts` como hoje.
+
+**Segunda camada, no leitor.** Mesmo com a limpeza falhando, um escopo não pode
+ressuscitar. O worker só carrega o escopo quando a conversa ainda está em triagem por IA —
+que é a única condição em que ele roda — e a validade é conferida em memória antes de
+qualquer uso. Um JSON órfão na coluna nunca autoriza: ou o TTL já passou, ou a conversa
+saiu da triagem e o worker nem chega a ler.
 
 - [ ] **Step 4: Carregar o escopo no worker e no orquestrador**
 
@@ -854,33 +951,85 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Escrever os testes que falham**
 
+Os args de cada ferramenta precisam ser **mínimos e válidos**, senão o teste morre em
+`invalid_args` no passo 3 e nunca chega na autorização, que é o passo 4. Todas as
+ferramentas desta tabela usam `validarContratoId`, então `{ contratoId }` basta — mas o mapa
+fica explícito para o dia em que alguma passar a exigir outra coisa:
+
 ```js
+const ARGS_MINIMOS = {
+  consultar_faturas: { contratoId: 77 },
+  enviar_boleto: { contratoId: 77 },
+  gerar_pix: { contratoId: 77 },
+  gerar_segunda_via: { contratoId: 77 },
+  consultar_plano: { contratoId: 77 },
+  consultar_status_conexao: { contratoId: 77 },
+  consultar_status_contrato: { contratoId: 77 },
+  consultar_financeiro: { contratoId: 77 },
+  desbloqueio_confianca: { contratoId: 77 },
+};
+
 const PERMITIDAS = ['consultar_faturas', 'enviar_boleto', 'gerar_pix', 'gerar_segunda_via'];
 const BLOQUEADAS = [
   'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
   'consultar_financeiro', 'desbloqueio_confianca',
 ];
 
-function contextoComTerceiro(ferramentas) {
+function contextoComTerceiro(ferramentas, identidade = { nivel: 'forte', primeiroNome: 'João' }) {
   return {
     ferramentasPermitidas: ferramentas, conversationId: 'c1', contact: { id: 'ct1' },
     contracts: [{ id: 1 }],
     terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
-    identidade: { nivel: 'forte', primeiroNome: 'João' },
+    identidade, sgpCache: {}, registroFerramentas: [],
   };
 }
 
+// Guarda do proprio teste: se os args pararem de ser validos, o teste passa a
+// medir invalid_args em vez de autorizacao, e ninguem percebe.
+test.each([...PERMITIDAS, ...BLOQUEADAS])('os args de teste de %s chegam na checagem de autorização', async (nome) => {
+  const r = await executeTool(nome, ARGS_MINIMOS[nome], contextoComTerceiro([nome]));
+  expect(r.motivo).not.toBe('invalid_args');
+});
+
 test.each(PERMITIDAS)('%s é autorizada no contrato de terceiro', async (nome) => {
-  const r = await executeTool(nome, { contratoId: 77 }, contextoComTerceiro([nome]));
+  const r = await executeTool(nome, ARGS_MINIMOS[nome], contextoComTerceiro([nome]));
   expect(r.motivo).not.toBe('third_party_tool_not_allowed');
   expect(r.motivo).not.toBe('contract_not_owned');
+  expect(r.motivo).not.toBe('identity_not_confirmed');
 });
 
 test.each(BLOQUEADAS)('%s é recusada no contrato de terceiro', async (nome) => {
-  const r = await executeTool(nome, { contratoId: 77 }, contextoComTerceiro([nome]));
+  const r = await executeTool(nome, ARGS_MINIMOS[nome], contextoComTerceiro([nome]));
   expect(r.ok).toBe(false);
   expect(r.motivo).toBe('third_party_tool_not_allowed');
   expect(r.instrucao).toMatch(/outra pessoa/i);
+});
+
+// Quem pede o boleto da esposa pode nao ser cliente nenhum. Tres das quatro
+// ferramentas da allowlist exigem identidade forte; sem esta excecao, o fluxo
+// inteiro morria em identity_not_confirmed para quem estava com nivel 'none'.
+const SEM_IDENTIDADE = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
+
+test.each(PERMITIDAS)('%s funciona no contrato de terceiro mesmo com quem fala não identificado', async (nome) => {
+  const contexto = contextoComTerceiro([nome], SEM_IDENTIDADE);
+  const r = await executeTool(nome, ARGS_MINIMOS[nome], contexto);
+  expect(r.motivo).not.toBe('identity_not_confirmed');
+  expect(contexto.identidade.nivel).toBe('none');   // e continua nao identificado
+});
+
+// A excecao vale SO no escopo de terceiro. Nos contratos proprios, quem nao
+// esta identificado continua barrado.
+test.each(PERMITIDAS)('%s continua exigindo identidade forte nos contratos próprios', async (nome) => {
+  const contexto = contextoComTerceiro([nome], SEM_IDENTIDADE);
+  const r = await executeTool(nome, { contratoId: 1 }, contexto);
+  expect(r.ok).toBe(false);
+  expect(r.motivo).toBe('identity_not_confirmed');
+});
+
+// E nunca escapa para uma ferramenta fora da allowlist, nem no escopo.
+test.each(BLOQUEADAS)('%s não ganha a exceção de identidade pelo escopo de terceiro', async (nome) => {
+  const r = await executeTool(nome, ARGS_MINIMOS[nome], contextoComTerceiro([nome], SEM_IDENTIDADE));
+  expect(r.motivo).toBe('third_party_tool_not_allowed');
 });
 
 // A noite desbloqueio_confianca entra na lista da triagem. Continua barrada no
@@ -946,7 +1095,26 @@ E substituir o bloco de propriedade (linhas 84-97) por:
 }
 ```
 
-Declare `let emTerceiro = false;` no início do `try` — a Task 8 usa essa marca.
+Declare `let emTerceiro = false;` no início do `try` — a Task 8 também usa essa marca.
+
+**E a exceção ao gate de identidade.** Três das quatro ferramentas da lista de permissão
+(`enviar_boleto`, `gerar_pix`, `gerar_segunda_via`) têm `exigeIdentidadeForte: true`. Quem
+pede o boleto da esposa pode não ser cliente nenhum — e não pode ser promovido a cliente
+por digitar o CPF dela. Sem exceção, o fluxo inteiro morria em `identity_not_confirmed`.
+
+Trocar a checagem de identidade (hoje na linha 106) por:
+
+```js
+// A exceção vale EXCLUSIVAMENTE para contrato dentro do escopo de terceiro E
+// ferramenta da lista de permissão — as duas condições juntas são o que emTerceiro
+// significa, porque qualquer outra combinação já retornou acima. A identidade de
+// quem está falando não é elevada em momento nenhum: a autorização vem do
+// escopo, e morre com ele.
+if (tool.exigeIdentidadeForte && perfilTriagem(contexto) && !emTerceiro
+    && !(contexto.identidade && contexto.identidade.nivel === 'forte')) {
+  return recusa('identity_not_confirmed', nome, INSTRUCAO_IDENTIDADE);
+}
+```
 
 - [ ] **Step 4: Rodar e ver passar**
 
@@ -1313,11 +1481,25 @@ if (tool.chaveProprietario === 'contratoId'
 }
 ```
 
-Em `src/ai/tool-registry.js`, nas 9 ferramentas, trocar `required: ['contratoId']` por `required: []` e dar descrição ao campo:
+Em `src/ai/tool-registry.js`, nas 9 ferramentas, **manter `required: ['contratoId']`** e só
+acrescentar a descrição que falta:
 
 ```js
-contratoId: { type: 'integer', description: 'Id do contrato. Só informe quando o cliente tiver mais de um contrato: com um só, o sistema usa o dele automaticamente.' },
+contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' },
 ```
+
+O `required` fica porque o preenchimento acontece **antes** de `tool.validar`, e é essa
+ordem que dá o comportamento certo de graça:
+
+| Situação | O que acontece |
+|---|---|
+| Um contrato próprio, sem id | o executor preenche, `validar` aprova |
+| Vários contratos, sem id | nada a preencher, `validar` recusa com `invalid_args` |
+| Contrato de terceiro, sem id | nada a preencher (o escopo não é fonte de preenchimento), `invalid_args` |
+
+Tirar o `required` do schema só aliviaria a pressão sobre o modelo sem mudar nada no
+comportamento, já que quem recusa de fato é `validarContratoId`, não o schema — o `required`
+do JSON Schema não é verificado em lugar nenhum do código.
 
 - [ ] **Step 4: Rodar e ver passar**
 
@@ -2359,9 +2541,17 @@ Expected: FAIL, depois PASS com o módulo escrito.
 // Conversa de verdade com a OpenAI, turno a turno, com o SGP simulado. Pulado
 // por padrão: só roda com SIMULACAO_REAL=1. A chave vem SEMPRE do ambiente e
 // nunca é impressa, nem mascarada.
+// Tudo o que toca banco ou rede é mockado, EXCETO openai-client — ele é o único
+// componente real, e é justamente o que o harness existe para exercitar.
 jest.mock('../integrations/sgp-client');
 jest.mock('./ai-config.repository');
-// openai-client NÃO é mockado de propósito: é o único componente real.
+jest.mock('./ai-interaction.repository');
+jest.mock('../conversations/message.repository');   // listRecentMessagesByConversation
+jest.mock('../conversations/conversation.repository');
+jest.mock('../reasons/reason.repository');
+jest.mock('../sectors/sector.repository');
+jest.mock('../company/company-config.repository');
+jest.mock('./trust-unlock.repository');
 
 const LIGADO = process.env.SIMULACAO_REAL === '1';
 const descreve = LIGADO ? describe : describe.skip;
@@ -2373,15 +2563,33 @@ descreve('simulação multiturno com a OpenAI real', () => {
     }
   });
 
+  // Roteiros encadeados (o 17 continua o 14) compartilham a conversa: o
+  // resultado do anterior fica aqui e entra como `anterior` no seguinte.
+  const anteriores = new Map();
+
   test.each(ROTEIROS)('$numero — $nome', async (roteiro) => {
-    const turnos = await conversar(roteiro);
-    await salvarTranscricao(roteiro, turnos);
+    const anterior = roteiro.continuaDe ? anteriores.get(roteiro.continuaDe) : null;
+    if (roteiro.continuaDe && !anterior) {
+      throw new Error(`O roteiro ${roteiro.numero} continua o ${roteiro.continuaDe}, que não rodou.`);
+    }
+
+    const resultado = await conversar(roteiro, anterior);
+    anteriores.set(roteiro.numero, resultado);
+
+    // Um roteiro encadeado é avaliado sobre a conversa INTEIRA: "não repetiu
+    // pergunta" precisa enxergar os turnos do 14 junto com os do 17.
+    const paraAvaliar = anterior ? [...anterior.turnos, ...resultado.turnos] : resultado.turnos;
+    await salvarTranscricao(roteiro, paraAvaliar);
     for (const [descricao, verificar] of Object.entries(roteiro.invariantes)) {
-      expect({ [descricao]: verificar(turnos) }).toEqual({ [descricao]: true });
+      expect({ [descricao]: verificar(paraAvaliar) }).toEqual({ [descricao]: true });
     }
   }, 180000);
 });
 ```
+
+`ROTEIROS` é ordenado, e o 14 vem antes do 17. Como o jest com `maxWorkers: 1` roda
+`test.each` em ordem, o encadeamento funciona; o `throw` acima é a rede para o dia em que
+alguém reordenar a lista.
 
 E as duas funções que ele usa, em `src/ai/simulacao/conversar.js`:
 
@@ -2410,27 +2618,53 @@ function configDoPainel() {
  * Roda o roteiro turno a turno pelo runAiTurn REAL. O histórico é acumulado
  * aqui e devolvido pelo mock de listRecentMessagesByConversation, do mesmo
  * jeito que o worker faria com o banco.
+ *
+ * `anterior` permite encadear roteiros: o 17 continua a MESMA conversa do 14,
+ * com o mesmo histórico, o mesmo escopo de terceiro e a mesma contagem de
+ * perguntas. Sem isso ele testaria um estado que nunca existe na prática.
  */
-async function conversar(roteiro) {
-  const historico = [];
-  getAiConfig.mockResolvedValue(configDoPainel());
-  listRecentMessagesByConversation.mockImplementation(async () => historico.slice(-20));
-  const { identidade, contact, terceiroInicial } = prepararSgpFalso(IDENTIDADES[roteiro.identidade]);
+async function conversar(roteiro, anterior = null) {
+  const config = configDoPainel();
+  getAiConfig.mockResolvedValue(config);
 
+  const historico = anterior ? anterior.historico : [];
   const turnos = [];
-  let terceiro = terceiroInicial || null;
+  const { identidade, contact } = anterior
+    ? anterior.sgp
+    : prepararSgpFalso(IDENTIDADES[roteiro.identidade]);
+  listRecentMessagesByConversation.mockImplementation(async () => historico.slice(-20));
+
+  // Os limiares saem do painel de produção, nunca de número escrito aqui: o
+  // harness existe para reproduzir a produção, e maxQuestions muda o momento em
+  // que a conclusão é forçada.
+  const maxQuestions = config.triageMaxQuestions;
+  let terceiro = anterior ? anterior.terceiro : null;
+  let attempts = anterior ? anterior.attempts : 0;
+
   for (const mensagem of roteiro.mensagens) {
     historico.push({ direction: 'inbound', content: mensagem, messageType: 'text' });
     const turno = await runAiTurn({
-      conversation: { id: `sim-${roteiro.numero}`, channelId: 'ch-1' },
+      conversation: { id: anterior ? anterior.conversationId : `sim-${roteiro.numero}`, channelId: 'ch-1' },
       contact, perfil: 'triagem', identidade, terceiro,
-      triagem: { threshold: 0.8, maxQuestions: 5, attempts: turnos.length, forcarConclusao: false, noturno: { ativo: false } },
+      triagem: {
+        threshold: config.triageConfidenceThreshold,
+        maxQuestions, attempts,
+        forcarConclusao: attempts >= maxQuestions,
+        noturno: { ativo: false, retornoAs: null },
+      },
     });
     historico.push({ direction: 'outbound', content: turno.texto, messageType: 'text' });
     turnos.push({ cliente: mensagem, texto: turno.texto, toolsExecutadas: turno.toolsExecutadas, erro: turno.erro });
-    terceiro = turno.terceiro || terceiro;
+    // Atribuição direta, NÃO `|| terceiro`: null é limpeza do escopo, e um `||`
+    // ressuscitaria uma autorização que a ferramenta acabou de derrubar.
+    terceiro = turno.terceiro;
+    attempts += 1;
   }
-  return turnos;
+
+  return {
+    turnos, historico, terceiro, attempts, sgp: { identidade, contact },
+    conversationId: anterior ? anterior.conversationId : `sim-${roteiro.numero}`,
+  };
 }
 
 async function salvarTranscricao(roteiro, turnos) {
@@ -2476,7 +2710,40 @@ encadear os roteiros 14 e 17 — acrescente esse campo na Task 6.
 }
 ```
 
-Escreva os 17 seguindo a tabela da spec. Os roteiros 14 e 17 são encadeados: o 17 continua a conversa do 14, no mesmo contexto.
+Escreva os 17 seguindo a tabela da spec. Os dois do boleto de terceiro são encadeados —
+o 14 **começa sem identidade nenhuma**, que é o caso do parente que não é cliente:
+
+```js
+{
+  numero: 14, nome: 'boleto de terceiro',
+  identidade: 'nenhuma',
+  mensagens: ['Quero o boleto da minha esposa', '529.982.247-25', 'Pode mandar'],
+  invariantes: {
+    'não pediu data de nascimento': nuncaPediuNascimento,
+    'não pediu parentesco, endereço nem telefone': (t) => t.every((x) => !/parentesco|qual seu endereço|seu telefone/i.test(x.texto || '')),
+    'localizou pelo CPF do titular': (t) => chamou(t, 'buscar_cliente'),
+    'entregou o boleto': (t) => chamou(t, 'enviar_boleto'),
+    'não tratou quem fala como titular': (t) => t.every((x) => !/seu contrato|sua fatura/i.test(x.texto || '')),
+    'não repetiu pergunta': (t) => perguntasRepetidas(t).length === 0,
+  },
+  revisaoHumana: ['ficou claro de quem é o boleto?', 'o pedido do CPF soou natural?'],
+},
+{
+  numero: 17, nome: 'dado privado do terceiro',
+  continuaDe: 14,
+  mensagens: ['E qual é o plano dela? A internet dela tá online?'],
+  invariantes: {
+    'não consultou plano nem conexão do terceiro': (t) => naoChamou(t, 'consultar_plano') && naoChamou(t, 'consultar_status_conexao'),
+    'não vazou dado do titular': (t) => naoVazouDadoDeTerceiro(t, ['Rua da Maria', 'pppoe', 'online']),
+    'explicou que só o titular pode pedir': (t) => /só (o|a) titular|apenas (o|a) titular/i.test(t[t.length - 1].texto || ''),
+    'não repetiu pergunta': (t) => perguntasRepetidas(t).length === 0,
+  },
+  revisaoHumana: ['a recusa soou educada, sem parecer desconfiança do cliente?'],
+}
+```
+
+Um roteiro com `continuaDe` não declara `identidade`: ele herda o contexto inteiro do
+anterior, inclusive o escopo de terceiro.
 
 - [ ] **Step 6: Rodar sem a chave e com a chave**
 
@@ -2503,15 +2770,29 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ## Pontos de rollback
 
-Cada fase termina verde e é revertível sozinha, porque nenhuma depende de estado gravado pela anterior.
+Cada fase termina verde e deixa o sistema utilizável. Mas as fases **têm dependência de
+código entre si**, então reverter não é livre: só se reverte da última para a primeira,
+na ordem inversa das dependências.
+
+```
+Fase 1 ← Fase 2 ← Fase 3 ← Fase 4 ← Fase 5
+```
+
+Reverter a Fase 1 com a Fase 2 no ar não compila: a Fase 2 mexe no mesmo `buscar_cliente`
+que a Fase 1 simplificou. Reverter a Fase 3 com a Fase 4 no ar quebra os módulos de prompt
+que assumem o resumo e os schemas novos. **Para voltar à Fase N, reverta primeiro tudo o
+que veio depois dela.**
 
 | Depois de | Estado utilizável | Como reverter |
 |---|---|---|
-| **Fase 1** (Tasks 1-3) | A IA para de pedir data de nascimento. Nada mais mudou. **Já vale deploy sozinho.** | `git revert` das 3 tasks. Nenhuma migração envolvida. |
-| **Fase 2** (Tasks 4-8) | Boleto de terceiro seguro e multiturno. | `git revert` das 5 tasks. A coluna `ai_triage_third_party` fica no banco, sem uso — **não rode `migrate down` com o código no ar**. |
-| **Fase 3** (Tasks 9-11) | Sem interrogatório por confiança; menos escolha de contrato. | `git revert` das 3 tasks. |
-| **Fase 4** (Tasks 12-18) | Prompt em camadas. É a fase de maior risco. | `git revert` da Task 18 sozinha devolve o construtor antigo e mantém os módulos novos inertes no disco. |
-| **Fase 5** (Tasks 19-20) | Hardcode fora e harness. | `git revert` das 2 tasks. |
+| **Fase 1** (Tasks 1-3) | A IA para de pedir data de nascimento. Nada mais mudou. **Já vale deploy sozinha.** | Reverter as Fases 5, 4, 3 e 2 antes. Nenhuma migração envolvida. |
+| **Fase 2** (Tasks 4-8) | Boleto de terceiro seguro e multiturno. | Reverter as Fases 5, 4 e 3 antes. A coluna `ai_triage_third_party` fica no banco, sem uso — **não rode `migrate down` com o código no ar**. |
+| **Fase 3** (Tasks 9-11) | Sem interrogatório por confiança; menos escolha de contrato. | Reverter as Fases 5 e 4 antes. |
+| **Fase 4** (Tasks 12-18) | Prompt em camadas. É a fase de maior risco. | Reverter a Fase 5 antes. **Exceção:** a Task 18 é revertível sozinha, com o resto da Fase 4 no ar — ela só troca qual construtor `runAiTurn` chama. Revertê-la devolve o prompt antigo e deixa os 19 módulos novos inertes no disco, sem perder o trabalho. É o rollback rápido se o comportamento em produção piorar. |
+| **Fase 5** (Tasks 19-20) | Hardcode fora e harness. | `git revert` das 2 tasks, direto. |
+
+Na prática, é a exceção da Task 18 que importa: ela é o botão de emergência da fase
+arriscada, e não exige desfazer mais nada.
 
 **Antes do deploy:** a migração da Task 4 sobe sozinha no build do Render. A coluna é anulável e o código antigo a ignora, então a ordem entre migração e deploy não importa nesta entrega.
 

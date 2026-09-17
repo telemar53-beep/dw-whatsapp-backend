@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MessageInput from './MessageInput';
 
@@ -232,5 +232,95 @@ describe('MessageInput', () => {
     await userEvent.type(textbox, 'Texto digitado normalmente');
 
     expect(textbox).toHaveValue('Texto digitado normalmente');
+  });
+});
+
+// Colar print no chat, como no sistema antigo. Colar vira anexo — nunca envia
+// sozinho: um Ctrl+V sem querer não pode disparar imagem para o cliente.
+describe('colar imagem no campo de mensagem', () => {
+  function pasteEvent(files) {
+    return {
+      clipboardData: {
+        items: files.map((file) => ({
+          kind: 'file',
+          type: file.type,
+          getAsFile: () => file,
+        })),
+        getData: () => '',
+      },
+    };
+  }
+
+  function imagemFake(type = 'image/png') {
+    return new File(['bytes-da-imagem'], 'print.png', { type });
+  }
+
+  beforeEach(() => {
+    global.URL.createObjectURL = vi.fn(() => 'blob:miniatura');
+    global.URL.revokeObjectURL = vi.fn();
+  });
+
+  test('colar uma imagem vira anexo, sem enviar nada', async () => {
+    const onSend = vi.fn();
+    render(<MessageInput onSend={onSend} />);
+
+    await userEvent.click(screen.getByPlaceholderText('Digite uma mensagem...'));
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), pasteEvent([imagemFake()]));
+
+    expect(await screen.findByRole('button', { name: /remover/i })).toBeInTheDocument();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  test('mostra a miniatura da imagem colada', async () => {
+    render(<MessageInput onSend={vi.fn()} />);
+
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), pasteEvent([imagemFake()]));
+
+    expect(await screen.findByAltText(/pré-visualização/i)).toHaveAttribute('src', 'blob:miniatura');
+  });
+
+  test('colar texto não vira anexo', async () => {
+    render(<MessageInput onSend={vi.fn()} />);
+
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), {
+      clipboardData: { items: [{ kind: 'string', type: 'text/plain', getAsFile: () => null }], getData: () => 'oi' },
+    });
+
+    expect(screen.queryByRole('button', { name: /remover/i })).not.toBeInTheDocument();
+  });
+
+  test('a imagem colada é enviada como anexo quando o atendente manda', async () => {
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    render(<MessageInput onSend={onSend} />);
+
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), pasteEvent([imagemFake()]));
+    await screen.findByRole('button', { name: /remover/i });
+    await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalled());
+    const enviado = onSend.mock.calls[0][1];
+    expect(enviado).toBeInstanceOf(File);
+    expect(enviado.type).toBe('image/png');
+  });
+
+  test('remover limpa a imagem colada', async () => {
+    render(<MessageInput onSend={vi.fn()} />);
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), pasteEvent([imagemFake()]));
+    await screen.findByRole('button', { name: /remover/i });
+
+    await userEvent.click(screen.getByRole('button', { name: /remover/i }));
+
+    expect(screen.queryByAltText(/pré-visualização/i)).not.toBeInTheDocument();
+  });
+
+  test('colar de novo substitui a imagem anterior', async () => {
+    render(<MessageInput onSend={vi.fn()} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+
+    fireEvent.paste(campo, pasteEvent([imagemFake()]));
+    await screen.findByRole('button', { name: /remover/i });
+    fireEvent.paste(campo, pasteEvent([new File(['outra'], 'print2.png', { type: 'image/jpeg' })]));
+
+    await waitFor(() => expect(screen.getAllByAltText(/pré-visualização/i)).toHaveLength(1));
   });
 });

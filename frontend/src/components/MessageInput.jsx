@@ -44,6 +44,7 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
   const [file, setFile] = useState(null);
   // A microphone recording is a voice note; a file picked from disk is an attachment.
   const [fileIsRecording, setFileIsRecording] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const [recording, setRecording] = useState(false);
@@ -89,12 +90,43 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
     };
   }, [showingQuickReplies, showingEmojis]);
 
+  // Miniatura do anexo quando ele é imagem — vale para a colada e para a
+  // escolhida no botão. A URL é revogada ao trocar ou limpar: sem isso cada
+  // colagem deixa um blob preso na memória do navegador.
+  useEffect(() => {
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+      setPreviewUrl(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
   function clearAttachment() {
     setFile(null);
     setFileIsRecording(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  }
+
+  // Colar print direto no chat. Vira anexo, nunca envia sozinho: um Ctrl+V sem
+  // querer não pode disparar imagem para o cliente. Só intercepta quando há
+  // imagem na área de transferência — colar texto continua normal.
+  function handlePaste(event) {
+    const items = event.clipboardData ? Array.from(event.clipboardData.items || []) : [];
+    const imagem = items.find((item) => item.type && item.type.startsWith('image/'));
+    if (!imagem) return;
+    const arquivo = imagem.getAsFile();
+    if (!arquivo) return;
+    event.preventDefault();
+    // A área de transferência não dá um nome útil ao arquivo: o horário aqui é
+    // o que diferencia um print do outro na lista de mídias do cliente.
+    const extensao = (arquivo.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    const nome = `imagem-colada-${Date.now()}.${extensao}`;
+    setFile(new File([arquivo], nome, { type: arquivo.type }));
+    setFileIsRecording(false);
   }
 
   async function startRecording() {
@@ -200,9 +232,17 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
       {!recording && file && (
         <div className="px-3 pt-2 md:px-5">
           <p className="flex items-center gap-2 rounded-2xl bg-white/[0.10] px-3 py-2 text-[13px] text-chat-muted">
-            <span className="shrink-0 text-chat-copper">
-              <IconAttach size={17} />
-            </span>
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt="Pré-visualização do anexo"
+                className="h-10 w-10 shrink-0 rounded-[8px] border border-white/10 object-cover"
+              />
+            ) : (
+              <span className="shrink-0 text-chat-copper">
+                <IconAttach size={17} />
+              </span>
+            )}
             Anexo: {file.name === 'gravacao.webm' ? `gravação de áudio (${recordingSeconds}s)` : file.name}{' '}
             <button
               type="button"
@@ -282,6 +322,7 @@ function MessageInput({ onSend, quickReplies = [], quickRepliesStatus = 'ready',
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleComposerKeyDown}
+                onPaste={handlePaste}
                 placeholder="Digite uma mensagem..."
                 rows={1}
                 className="max-h-[120px] min-h-[48px] min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"

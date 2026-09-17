@@ -91,6 +91,52 @@ function afirmaEnvio(texto) { return AFIRMA_ENVIO.test(String(texto || '')); }
 // estranhas são cortadas: pior uma palavra a menos do que árabe no WhatsApp.
 const INSTRUCAO_PORTUGUES = 'Sua resposta contém palavras ou letras de outro idioma/alfabeto. Reescreva a MESMA resposta, com o mesmo sentido, inteiramente em português do Brasil, sem nenhuma palavra de outro idioma.';
 
+// Print 2026-09-17 (17:53): cliente mandou o comprovante e a IA respondeu
+// "Para seguir com a conferência, preciso confirmar a titularidade com a data
+// de nascimento" — com a confirmação por data desligada, ou seja, sem nem ter
+// a ferramenta para conferir. O prompt já proibia e foi ignorado duas vezes,
+// então a garantia é em código. O critério não é a flag e sim a ferramenta:
+// pedir um dado que você não tem como verificar é sempre erro.
+const PEDE_NASCIMENTO = /\bnascimento\b/i;
+const INSTRUCAO_SEM_NASCIMENTO = 'Você pediu a data de nascimento, e isso é proibido: não há como conferi-la. Reescreva a resposta sem pedir a data — se ainda precisar identificar o cliente, peça o CPF ou CNPJ.';
+
+function pedeDataDeNascimento(texto) {
+  return PEDE_NASCIMENTO.test(String(texto || ''));
+}
+
+/** Rede final: tira as frases que falam em nascimento, preservando o resto. */
+function semFraseDeNascimento(texto) {
+  const frases = String(texto || '').split(/(?<=[.!?])\s+/);
+  const limpas = frases.filter((f) => !PEDE_NASCIMENTO.test(f));
+  const junto = limpas.join(' ').replace(/\s{2,}/g, ' ').trim();
+  return junto || texto;
+}
+
+async function garantirSemDataDeNascimento({ texto, messages, config, tools, iniciadoEm, conversationId }) {
+  const tokens = { prompt: 0, completion: 0 };
+  // Com confirmar_nascimento na lista do turno, pedir a data é legítimo.
+  const podeConferir = Array.isArray(tools)
+    && tools.some((t) => t && t.function && t.function.name === 'confirmar_nascimento');
+  if (!texto || podeConferir || !pedeDataDeNascimento(texto)) return { texto, tokens };
+  if (Date.now() - iniciadoEm < TURNO_MAX_MS) {
+    try {
+      const r = await createChatCompletion({
+        apiKey: config.apiKey, model: config.model, tools: [],
+        messages: [...messages, { role: 'assistant', content: texto }, { role: 'system', content: INSTRUCAO_SEM_NASCIMENTO }],
+      });
+      tokens.prompt += (r.usage && r.usage.promptTokens) || 0;
+      tokens.completion += (r.usage && r.usage.completionTokens) || 0;
+      const reescrito = r.message && r.message.content;
+      if (reescrito && !pedeDataDeNascimento(reescrito)) return { texto: reescrito, tokens };
+      if (reescrito) return { texto: semFraseDeNascimento(reescrito), tokens };
+    } catch (err) {
+      console.error(`Reescrita sem data de nascimento falhou na conversa ${conversationId}: ${mensagemSegura(err)}`);
+    }
+  }
+  console.error(`Pedido de data de nascimento removido da resposta na conversa ${conversationId}`);
+  return { texto: semFraseDeNascimento(texto), tokens };
+}
+
 async function garantirPortugues({ texto, messages, config, iniciadoEm, conversationId }) {
   const tokens = { prompt: 0, completion: 0 };
   if (!texto || !temAlfabetoEstranho(texto)) return { texto, tokens };
@@ -464,6 +510,10 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     config.triageReadReceiptsDaytime && !(triagem && triagem.noturno && triagem.noturno.ativo)
       ? 'COMPROVANTE: se o cliente enviar uma imagem e disser (ou parecer) que é o pagamento, chame analisar_comprovante (sem perguntar nada antes). Qualquer que seja o resultado, NÃO confirme pagamento nem prometa liberação: agradeça, diga que a equipe confere e dá baixa, e conclua para o Financeiro (motivo "Comprovante" se existir). Se a ferramenta disser que o comprovante já foi utilizado, NÃO diga isso ao cliente: responda o mesmo acolhimento e conclua — a equipe trata.'
       : 'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
+    // Print 2026-09-17: comprovante de cliente não identificado virou pedido
+    // de data de nascimento; a cliente respondeu a data e só então ouviu
+    // "me informe seu CPF".
+    'COMPROVANTE DE CLIENTE NÃO IDENTIFICADO: peça o CPF ou CNPJ primeiro, nunca outro dado. Sem o cadastro localizado não há o que conferir.',
     '',
     // Roteiros de SUPORTE ditados pelo dono (2026-09-13) depois do teste real
     // em que a IA encaminhou sem consultar nada: primeiro o status, depois
@@ -904,6 +954,13 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
 
   // Depois do laço, antes da auditoria: vale para os dois perfis, e o que fica
   // gravado (finalResponse) é o que o cliente/atendente recebe de fato.
+  const semNascimento = await garantirSemDataDeNascimento({
+    texto, messages, config, tools, iniciadoEm, conversationId: conversation.id,
+  });
+  texto = semNascimento.texto;
+  promptTokens += semNascimento.tokens.prompt;
+  completionTokens += semNascimento.tokens.completion;
+
   const portugues = await garantirPortugues({ texto, messages, config, iniciadoEm, conversationId: conversation.id });
   texto = portugues.texto;
   promptTokens += portugues.tokens.prompt;

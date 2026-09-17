@@ -1371,6 +1371,69 @@ describe('perfil de triagem', () => {
     });
   });
 
+  // Print 2026-09-17 (17:53): cliente mandou o comprovante e a IA respondeu
+  // "Para seguir com a conferência, preciso confirmar a titularidade com a
+  // data de nascimento" — com a confirmação por data DESLIGADA, ou seja, sem
+  // nem ter como conferir a data. O prompt já proibia e foi ignorado.
+  test('comprovante de cliente não identificado pede o CPF primeiro', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/COMPROVANTE DE CLIENTE NÃO IDENTIFICADO: peça o CPF ou CNPJ primeiro/);
+    expect(sys).toMatch(/Sem o cadastro localizado não há o que conferir/);
+  });
+
+  describe('guarda contra pedir data de nascimento', () => {
+    const IDENT = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] };
+    const SEM_EXIGENCIA = {
+      apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
+      maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8,
+      triageMaxQuestions: 2, triageResolvedReasonId: null, triageRequireBirthdate: false,
+    };
+
+    test('pediu a data sem a ferramenta na lista: refaz a resposta', async () => {
+      getAiConfig.mockResolvedValue(SEM_EXIGENCIA);
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Boa tarde! Para seguir com a conferência, preciso confirmar a titularidade com a data de nascimento.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Boa tarde! Para localizar seu cadastro, me informe seu CPF, por favor.' }, usage: {} });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(r.texto).toBe('Boa tarde! Para localizar seu cadastro, me informe seu CPF, por favor.');
+      const segunda = createChatCompletion.mock.calls[1][0];
+      expect(segunda.tools).toEqual([]);
+      expect(segunda.messages[segunda.messages.length - 1].content).toMatch(/Você pediu a data de nascimento/);
+    });
+
+    test('se a reescrita ainda pedir, a frase da data é cortada', async () => {
+      getAiConfig.mockResolvedValue(SEM_EXIGENCIA);
+      createChatCompletion
+        .mockResolvedValueOnce({ message: { content: 'Boa tarde! Para seguir, preciso da data de nascimento. Me informe seu CPF, por favor.' }, usage: {} })
+        .mockResolvedValueOnce({ message: { content: 'Preciso da data de nascimento. Me informe seu CPF, por favor.' }, usage: {} });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(r.texto).toBe('Me informe seu CPF, por favor.');
+      expect(r.texto).not.toMatch(/nascimento/i);
+    });
+
+    test('com a exigência ligada (ferramenta na lista), pedir a data é legítimo', async () => {
+      createChatCompletion.mockResolvedValue({ message: { content: 'Me informe sua data de nascimento, por favor.' }, usage: {} });
+
+      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(r.texto).toBe('Me informe sua data de nascimento, por favor.');
+      expect(createChatCompletion).toHaveBeenCalledTimes(1);
+    });
+
+    test('texto sem menção à data não gera chamada extra', async () => {
+      getAiConfig.mockResolvedValue(SEM_EXIGENCIA);
+      createChatCompletion.mockResolvedValue({ message: { content: 'Me informe seu CPF, por favor.' }, usage: {} });
+
+      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
+
+      expect(createChatCompletion).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // Print 2026-09-17 (16:56): entrega de boleto inteira sem chamar a cliente
   // pelo nome, mesmo depois de identificar pelo CPF. "Está muito robô."
   test('depois de identificar, a IA trata o cliente pelo primeiro nome', async () => {

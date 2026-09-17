@@ -22,6 +22,7 @@ const {
   updateChannelAiNightModeEnabled,
   countChannelDependents,
   deleteChannel,
+  convertChannelToMetaCloud,
 } = require('../channels/channel.repository');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -1251,5 +1252,119 @@ describe('POST /api/admin/channels — conferencia do cadastro com a Meta', () =
       .send({ type: '360dialog', name: 'X', phoneNumber: '+5511900000000', apiKey: 'k', wabaId: 'w' });
 
     expect(checkMetaCloudSetup).not.toHaveBeenCalled();
+  });
+});
+
+// Levar um numero da 360dialog (ou do Baileys) para o Meta Cloud converte o
+// canal no lugar. Recriar nao e opcao: o telefone e unico na tabela e excluir
+// um canal com conversas e bloqueado — de proposito, para nao perder historico.
+describe('POST /api/admin/channels/:id/migrate-to-meta-cloud', () => {
+  const CREDENCIAIS = { phoneNumberId: '613336748527998', accessToken: 'tok-meta', wabaId: '3530350190603464' };
+  const CANAL_360 = {
+    id: 'channel-360',
+    type: '360dialog',
+    name: 'DW Telcom 3',
+    phoneNumber: '+5598970285660',
+    config: { apiKey: 'd360-key', wabaId: 'waba-antiga', webhookToken: 'tok-webhook' },
+    status: 'connected',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getChannelConnection.mockResolvedValue(null);
+    checkMetaCloudSetup.mockResolvedValue({ ok: true });
+  });
+
+  function migrar(body = CREDENCIAIS, role = 'admin') {
+    return request(buildApp())
+      .post('/api/admin/channels/channel-360/migrate-to-meta-cloud')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', role, true)}`)
+      .send(body);
+  }
+
+  test('confere as credenciais contra o telefone do proprio canal', async () => {
+    findChannelById.mockResolvedValue(CANAL_360);
+    convertChannelToMetaCloud.mockResolvedValue({ ...CANAL_360, type: 'meta_cloud', config: CREDENCIAIS });
+
+    await migrar();
+
+    expect(checkMetaCloudSetup).toHaveBeenCalledWith({
+      ...CREDENCIAIS,
+      phoneNumber: '+5598970285660',
+    });
+  });
+
+  test('converte o canal quando a Meta confirma os dados', async () => {
+    findChannelById.mockResolvedValue(CANAL_360);
+    convertChannelToMetaCloud.mockResolvedValue({ ...CANAL_360, type: 'meta_cloud', config: CREDENCIAIS });
+
+    const res = await migrar();
+
+    expect(res.status).toBe(200);
+    expect(convertChannelToMetaCloud).toHaveBeenCalledWith('channel-360', CREDENCIAIS);
+    expect(res.body.type).toBe('meta_cloud');
+  });
+
+  test('nao converte nada quando a Meta desmente os dados', async () => {
+    findChannelById.mockResolvedValue(CANAL_360);
+    checkMetaCloudSetup.mockResolvedValue({ ok: false, error: 'Nenhum app está inscrito no webhook dessa WABA' });
+
+    const res = await migrar();
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/inscrito/i);
+    expect(convertChannelToMetaCloud).not.toHaveBeenCalled();
+  });
+
+  test('para a sessao do Baileys antes de converter', async () => {
+    findChannelById.mockResolvedValue({ ...CANAL_360, type: 'baileys', config: {} });
+    convertChannelToMetaCloud.mockResolvedValue({ ...CANAL_360, type: 'meta_cloud', config: CREDENCIAIS });
+
+    await migrar();
+
+    expect(baileysManager.stopBaileysChannel).toHaveBeenCalledWith('channel-360');
+  });
+
+  test('nao mexe no Baileys quando o canal vem da 360dialog', async () => {
+    findChannelById.mockResolvedValue(CANAL_360);
+    convertChannelToMetaCloud.mockResolvedValue({ ...CANAL_360, type: 'meta_cloud', config: CREDENCIAIS });
+
+    await migrar();
+
+    expect(baileysManager.stopBaileysChannel).not.toHaveBeenCalled();
+  });
+
+  test('recusa um canal que ja e Meta Cloud', async () => {
+    findChannelById.mockResolvedValue({ ...CANAL_360, type: 'meta_cloud', config: CREDENCIAIS });
+
+    const res = await migrar();
+
+    expect(res.status).toBe(400);
+    expect(convertChannelToMetaCloud).not.toHaveBeenCalled();
+  });
+
+  test('404 quando o canal nao existe', async () => {
+    findChannelById.mockResolvedValue(null);
+
+    expect((await migrar()).status).toBe(404);
+  });
+
+  test('400 quando falta credencial no corpo', async () => {
+    findChannelById.mockResolvedValue(CANAL_360);
+
+    const res = await migrar({ phoneNumberId: '613336748527998' });
+
+    expect(res.status).toBe(400);
+    expect(checkMetaCloudSetup).not.toHaveBeenCalled();
+  });
+
+  test('403 para quem nao gerencia integracoes', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/channels/channel-360/migrate-to-meta-cloud')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send(CREDENCIAIS);
+
+    expect(res.status).toBe(403);
+    expect(convertChannelToMetaCloud).not.toHaveBeenCalled();
   });
 });

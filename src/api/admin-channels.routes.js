@@ -17,6 +17,7 @@ const {
   updateChannelAiNightModeEnabled,
   countChannelDependents,
   deleteChannel,
+  convertChannelToMetaCloud,
 } = require('../channels/channel.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { getChannelConnection } = require('../channels/channel-connection');
@@ -143,6 +144,36 @@ router.post('/', requireAuth, requireIntegrationsAccess, async (req, res) => {
   }
 
   return res.status(400).json({ error: 'type must be meta_cloud, baileys, or 360dialog' });
+});
+
+// Levar um numero de outro provedor para o Meta Cloud. Converte o canal no
+// lugar porque recriar nao e opcao: o telefone e unico na tabela, e excluir um
+// canal com conversas e bloqueado — de proposito, para nao perder o historico.
+// A conferencia usa o telefone do proprio canal, entao credencial de outro
+// numero e recusada antes de qualquer alteracao.
+router.post('/:id/migrate-to-meta-cloud', requireAuth, requireIntegrationsAccess, async (req, res) => {
+  const channel = await findChannelById(req.params.id);
+  if (!channel) {
+    return res.status(404).json({ error: 'Channel not found' });
+  }
+  if (channel.type === 'meta_cloud') {
+    return res.status(400).json({ error: 'Este canal já é Meta Cloud.' });
+  }
+  const { phoneNumberId, accessToken, wabaId } = req.body || {};
+  if (!phoneNumberId || !accessToken || !wabaId) {
+    return res.status(400).json({ error: 'phoneNumberId, accessToken and wabaId are required for meta_cloud channels' });
+  }
+
+  const check = await checkMetaCloudSetup({ phoneNumberId, accessToken, wabaId, phoneNumber: channel.phoneNumber });
+  if (!check.ok) {
+    return res.status(400).json({ error: check.error });
+  }
+
+  if (channel.type === 'baileys') {
+    await baileysManager.stopBaileysChannel(channel.id);
+  }
+  const converted = await convertChannelToMetaCloud(channel.id, { phoneNumberId, accessToken, wabaId });
+  res.json(toChannelResponse(converted));
 });
 
 router.patch('/:id', requireAuth, requireIntegrationsAccess, async (req, res) => {

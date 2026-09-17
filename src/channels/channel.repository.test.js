@@ -18,6 +18,7 @@ const {
   updateChannelAiNightModeEnabled,
   countChannelDependents,
   deleteChannel,
+  convertChannelToMetaCloud,
 } = require('./channel.repository');
 
 describe('channel repository', () => {
@@ -439,5 +440,94 @@ describe('hiding, dependents and deletion', () => {
 
   test('deleteChannel returns false for a non-existent id', async () => {
     expect(await deleteChannel('00000000-0000-0000-0000-000000000000')).toBe(false);
+  });
+});
+
+// Migrar um numero de provedor e converter o canal no lugar, nunca recriar: o
+// id e o telefone continuam os mesmos, entao conversas, campanhas, protocolos
+// e a integracao SGP daquele numero seguem apontando para ele.
+describe('convertChannelToMetaCloud', () => {
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE channels CASCADE');
+  });
+
+  const CONFIG_NOVA = { phoneNumberId: '613336748527998', accessToken: 'tok-meta', wabaId: '3530350190603464' };
+
+  test('converte um canal 360dialog mantendo id, telefone e nome', async () => {
+    const original = await createChannel({
+      type: '360dialog',
+      name: 'DW Telcom 3',
+      phoneNumber: '+5598970285660',
+      config: { apiKey: 'd360-key', wabaId: 'waba-antiga', webhookToken: 'tok-webhook' },
+    });
+
+    const convertido = await convertChannelToMetaCloud(original.id, CONFIG_NOVA);
+
+    expect(convertido.id).toBe(original.id);
+    expect(convertido.phoneNumber).toBe('+5598970285660');
+    expect(convertido.name).toBe('DW Telcom 3');
+    expect(convertido.type).toBe('meta_cloud');
+  });
+
+  test('apaga a apiKey e o webhookToken da 360dialog', async () => {
+    const original = await createChannel({
+      type: '360dialog',
+      name: 'DW Telcom 3',
+      phoneNumber: '+5598970285661',
+      config: { apiKey: 'd360-key', wabaId: 'waba-antiga', webhookToken: 'tok-webhook' },
+    });
+
+    const convertido = await convertChannelToMetaCloud(original.id, CONFIG_NOVA);
+
+    expect(convertido.config).toEqual(CONFIG_NOVA);
+    expect(convertido.config.apiKey).toBeUndefined();
+    expect(convertido.config.webhookToken).toBeUndefined();
+  });
+
+  test('o webhook do 360dialog deixa de achar o canal pelo token antigo', async () => {
+    const original = await createChannel({
+      type: '360dialog',
+      name: 'DW Telcom 3',
+      phoneNumber: '+5598970285662',
+      config: { apiKey: 'd360-key', wabaId: 'w', webhookToken: 'tok-orfao' },
+    });
+
+    await convertChannelToMetaCloud(original.id, CONFIG_NOVA);
+
+    expect(await findChannelByWebhookToken('tok-orfao')).toBeNull();
+  });
+
+  test('o webhook da Meta passa a achar o canal pelo phoneNumberId novo', async () => {
+    const original = await createChannel({
+      type: 'baileys',
+      name: 'automação',
+      phoneNumber: '+5598984129046',
+      config: {},
+    });
+
+    await convertChannelToMetaCloud(original.id, CONFIG_NOVA);
+
+    const achado = await findChannelByMetaPhoneNumberId('613336748527998');
+    expect(achado.id).toBe(original.id);
+  });
+
+  test('preserva as configuracoes de atendimento do canal', async () => {
+    const original = await createChannel({
+      type: '360dialog',
+      name: 'DW Telcom 3',
+      phoneNumber: '+5598970285663',
+      config: { apiKey: 'k', wabaId: 'w', webhookToken: 't' },
+    });
+    await updateChannelWelcomeMessage(original.id, 'Olá! Bem-vindo.');
+    await updateChannelAiEnabled(original.id, true);
+
+    const convertido = await convertChannelToMetaCloud(original.id, CONFIG_NOVA);
+
+    expect(convertido.welcomeMessage).toBe('Olá! Bem-vindo.');
+    expect(convertido.aiEnabled).toBe(true);
+  });
+
+  test('devolve null para um canal que nao existe', async () => {
+    expect(await convertChannelToMetaCloud('00000000-0000-0000-0000-000000000000', CONFIG_NOVA)).toBeNull();
   });
 });

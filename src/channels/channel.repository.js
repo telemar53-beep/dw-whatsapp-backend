@@ -184,7 +184,26 @@ async function deleteChannel(id) {
   return result.rowCount > 0;
 }
 
+// Migrar um numero de provedor converte o canal NO LUGAR, nunca recria: o id e
+// o phone_number continuam os mesmos, entao conversas, protocolos, campanhas e
+// a integracao SGP daquele numero seguem apontando para ele. Recriar perderia
+// tudo isso — e nem seria possivel, porque o telefone e unico na tabela.
+//
+// O config e substituido inteiro, de proposito: e assim que a apiKey e o
+// webhookToken da 360dialog somem. Se o webhookToken sobrevivesse, o webhook do
+// 360dialog continuaria achando este canal e o processaria com o adapter errado.
+async function convertChannelToMetaCloud(id, config) {
+  const result = await getPool().query(
+    `UPDATE channels SET type = 'meta_cloud', config = $2, status = 'connected' WHERE id = $1
+     RETURNING id, type, name, phone_number, config, status, triage_enabled, hidden, welcome_message, ai_enabled, ai_triage_enabled, ai_night_mode_enabled, created_at`,
+    [id, config]
+  );
+  if (result.rowCount === 0) return null;
+  return toChannel(result.rows[0]);
+}
+
 module.exports = {
+  convertChannelToMetaCloud,
   createChannel,
   findChannelById,
   findChannelByMetaPhoneNumberId,

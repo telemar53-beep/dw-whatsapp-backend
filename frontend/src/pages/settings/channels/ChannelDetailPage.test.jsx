@@ -198,3 +198,94 @@ describe('ChannelDetailPage', () => {
     expect(screen.getByRole('link', { name: /openai/i })).toHaveAttribute('href', '/configuracoes/integracoes/openai');
   });
 });
+
+// Levar um número da 360dialog (ou do Baileys) para o Meta Cloud converte o
+// canal no lugar: o histórico daquele número fica. Recriar não é opção — o
+// telefone é único e excluir canal com conversas é bloqueado.
+describe('Migrar para Meta Cloud', () => {
+  const via360 = {
+    id: 'ch1',
+    type: '360dialog',
+    name: 'DW Telcom 3',
+    phoneNumber: '+5598970285660',
+    status: 'connected',
+    triageEnabled: false,
+    aiEnabled: false,
+    aiTriageEnabled: false,
+    aiNightModeEnabled: false,
+    welcomeMessage: null,
+  };
+
+  async function abrirFormulario() {
+    await userEvent.click(screen.getByRole('button', { name: /migrar para meta cloud/i }));
+  }
+
+  async function preencher() {
+    await userEvent.type(screen.getByLabelText('Phone Number ID'), '613336748527998');
+    await userEvent.type(screen.getByLabelText('Access Token'), 'tok-meta');
+    await userEvent.type(screen.getByLabelText('WABA ID'), '3530350190603464');
+  }
+
+  test('oferece a migração para um canal 360dialog', () => {
+    useChannels.mockReturnValue({ channels: [via360], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    expect(screen.getByRole('button', { name: /migrar para meta cloud/i })).toBeInTheDocument();
+  });
+
+  test('não oferece para um canal que já é Meta Cloud', () => {
+    useChannels.mockReturnValue({ channels: [{ ...via360, type: 'meta_cloud' }], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    expect(screen.queryByRole('button', { name: /migrar para meta cloud/i })).not.toBeInTheDocument();
+  });
+
+  test('oferece também para um canal Baileys', () => {
+    useChannels.mockReturnValue({ channels: [berg], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    expect(screen.getByRole('button', { name: /migrar para meta cloud/i })).toBeInTheDocument();
+  });
+
+  test('envia as credenciais e recarrega a lista quando dá certo', async () => {
+    useChannels.mockReturnValue({ channels: [via360], status: 'ready', refresh });
+    api.migrateChannelToMetaCloud.mockResolvedValue({ ...via360, type: 'meta_cloud' });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await abrirFormulario();
+    await preencher();
+    await userEvent.click(screen.getByRole('button', { name: /^migrar$/i }));
+
+    await waitFor(() =>
+      expect(api.migrateChannelToMetaCloud).toHaveBeenCalledWith(
+        'ch1',
+        { phoneNumberId: '613336748527998', accessToken: 'tok-meta', wabaId: '3530350190603464' },
+        'tok'
+      )
+    );
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  test('mostra o motivo que a Meta deu quando a migração é recusada', async () => {
+    useChannels.mockReturnValue({ channels: [via360], status: 'ready', refresh });
+    api.migrateChannelToMetaCloud.mockRejectedValue({
+      body: { error: 'Nenhum app está inscrito no webhook dessa WABA, então as mensagens não chegariam.' },
+    });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await abrirFormulario();
+    await preencher();
+    await userEvent.click(screen.getByRole('button', { name: /^migrar$/i }));
+
+    expect(await screen.findByText(/nenhum app está inscrito/i)).toBeInTheDocument();
+  });
+
+  test('avisa que o número precisa sair do provedor antigo antes', async () => {
+    useChannels.mockReturnValue({ channels: [via360], status: 'ready', refresh });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await abrirFormulario();
+
+    expect(screen.getByText(/precisa estar no Cloud API/i)).toBeInTheDocument();
+  });
+});

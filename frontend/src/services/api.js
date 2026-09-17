@@ -125,6 +125,12 @@ export function deleteChannel(id, token) {
   return apiFetch(`/api/admin/channels/${id}`, { method: 'DELETE', token });
 }
 
+// Converte o canal no lugar: o id e o telefone não mudam, então o histórico
+// daquele número continua com ele.
+export function migrateChannelToMetaCloud(id, credentials, token) {
+  return apiFetch(`/api/admin/channels/${id}/migrate-to-meta-cloud`, { method: 'POST', body: credentials, token });
+}
+
 export function createChannel(payload, token) {
   return apiFetch('/api/admin/channels', { method: 'POST', body: payload, token });
 }

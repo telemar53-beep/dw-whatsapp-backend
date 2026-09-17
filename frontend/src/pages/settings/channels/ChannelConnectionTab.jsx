@@ -17,6 +17,101 @@ function ErrorNote({ children }) {
   return <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text">{children}</p>;
 }
 
+// Levar um número de outro provedor para o Meta Cloud. O canal é convertido no
+// lugar — mesmo id, mesmo telefone — porque recriar perderia as conversas, os
+// protocolos, as campanhas e a integração SGP daquele número. O backend confere
+// as credenciais com a Meta contra o telefone deste canal antes de mudar nada.
+function MigrateToMetaCloud({ channel, canManage, onMigrated }) {
+  const [open, setOpen] = useState(false);
+  const [phoneNumberId, setPhoneNumberId] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [wabaId, setWabaId] = useState('');
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await onMigrated({ phoneNumberId, accessToken, wabaId });
+      setOpen(false);
+    } catch (err) {
+      setError((err.body && err.body.error) || 'Não foi possível migrar este canal');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button
+        variant="secondary"
+        onClick={() => setOpen(true)}
+        disabled={!canManage}
+        title={!canManage ? PERMISSION_REASON : undefined}
+      >
+        Migrar para Meta Cloud
+      </Button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="w-full space-y-3">
+      <p className="rounded-[12px] bg-wa-panel-header px-3 py-2.5 text-[13px] text-wa-muted">
+        O número {formatPhone(channel.phoneNumber)} precisa estar no Cloud API da Meta antes disso — ou seja, já ter saído
+        do provedor atual — e o app precisa estar inscrito no webhook da conta do WhatsApp. O histórico deste canal é
+        preservado: conversas, protocolos e integrações continuam aqui.
+      </p>
+      <div>
+        <label htmlFor="migratePhoneNumberId" className="mb-1.5 block text-sm font-medium text-wa-muted">
+          Phone Number ID
+        </label>
+        <input
+          id="migratePhoneNumberId"
+          value={phoneNumberId}
+          onChange={(e) => setPhoneNumberId(e.target.value)}
+          className={inputClass}
+          required
+        />
+      </div>
+      <div>
+        <label htmlFor="migrateAccessToken" className="mb-1.5 block text-sm font-medium text-wa-muted">
+          Access Token
+        </label>
+        <input
+          id="migrateAccessToken"
+          value={accessToken}
+          onChange={(e) => setAccessToken(e.target.value)}
+          className={inputClass}
+          required
+        />
+      </div>
+      <div>
+        <label htmlFor="migrateWabaId" className="mb-1.5 block text-sm font-medium text-wa-muted">
+          WABA ID
+        </label>
+        <input
+          id="migrateWabaId"
+          value={wabaId}
+          onChange={(e) => setWabaId(e.target.value)}
+          className={inputClass}
+          required
+        />
+      </div>
+      <ErrorNote>{error}</ErrorNote>
+      <div className="flex gap-2">
+        <Button type="submit" disabled={submitting}>
+          Migrar
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={submitting}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function DataRow({ label, children, action }) {
   return (
     <div className="flex items-center justify-between gap-3 py-2.5">
@@ -145,10 +240,17 @@ function ChannelConnectionTab() {
             </span>
             Ações avançadas
           </span>
-          <span className="text-[12.5px] text-wa-muted">Ocultar ou excluir este canal</span>
+          <span className="text-[12.5px] text-wa-muted">Migrar, ocultar ou excluir este canal</span>
         </summary>
         <div className="px-4 pb-4 sm:px-5">
-          <DangerZone description="Reconectar gera um novo QR code; ocultar tira o canal da lista sem apagar nada; excluir só é possível se o canal nunca teve conversas.">
+          <DangerZone description="Migrar troca o provedor deste número sem perder o histórico; reconectar gera um novo QR code; ocultar tira o canal da lista sem apagar nada; excluir só é possível se o canal nunca teve conversas.">
+            {channel.type !== 'meta_cloud' && (
+              <MigrateToMetaCloud
+                channel={channel}
+                canManage={canManage}
+                onMigrated={(credentials) => actions.migrateToMetaCloud(channel.id, credentials)}
+              />
+            )}
             {channel.type === 'baileys' && (
               <Button
                 variant="secondary"

@@ -1,5 +1,6 @@
 jest.mock('../channels/channel.repository');
 jest.mock('../channels/channel-connection');
+jest.mock('../channels/meta-cloud-setup');
 jest.mock('../ai/ai-config.repository');
 jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -26,6 +27,7 @@ const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { getChannelConnection } = require('../channels/channel-connection');
+const { checkMetaCloudSetup } = require('../channels/meta-cloud-setup');
 const adminChannelsRoutes = require('./admin-channels.routes');
 
 function buildApp() {
@@ -39,10 +41,12 @@ function tokenFor(agentId, role, canManageIntegrations = false) {
   return jwt.sign({ agentId, role, canManageIntegrations }, process.env.JWT_SECRET);
 }
 
-// Padrao para todos os testes da rota: nenhum canal reporta conexao. Quem quer
-// testar o selo da coluna Conexao sobrescreve isso no proprio teste.
+// Padrao para todos os testes da rota: nenhum canal reporta conexao, e a
+// conferencia do cadastro com a Meta passa. Quem quer testar o selo da coluna
+// Conexao ou a recusa de um cadastro sobrescreve no proprio teste.
 beforeEach(() => {
   getChannelConnection.mockResolvedValue(null);
+  checkMetaCloudSetup.mockResolvedValue({ ok: true });
 });
 
 describe('GET /api/admin/channels', () => {
@@ -1162,5 +1166,90 @@ describe('GET /api/admin/channels — estado da conexao do canal oficial', () =>
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0]).not.toHaveProperty('connection');
+  });
+});
+
+// O 360dialog sempre conferiu a credencial ao cadastrar (registra o webhook e
+// apaga o canal se falhar). O meta_cloud nao conferia nada: nascia "conectado"
+// com qualquer dado e o erro so aparecia quando o cliente mandava mensagem.
+describe('POST /api/admin/channels — conferencia do cadastro com a Meta', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getChannelConnection.mockResolvedValue(null);
+    checkMetaCloudSetup.mockResolvedValue({ ok: true });
+  });
+
+  const cadastro = {
+    type: 'meta_cloud',
+    name: 'DW Telecom 0800',
+    phoneNumber: '+558004454546',
+    phoneNumberId: '613336748527998',
+    accessToken: 'tok-meta',
+    wabaId: '3530350190603464',
+  };
+
+  test('confere os dados com a Meta antes de gravar', async () => {
+    createChannel.mockResolvedValue({ id: 'channel-9', ...cadastro, config: {} });
+
+    await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send(cadastro);
+
+    expect(checkMetaCloudSetup).toHaveBeenCalledWith({
+      phoneNumberId: '613336748527998',
+      accessToken: 'tok-meta',
+      wabaId: '3530350190603464',
+      phoneNumber: '+558004454546',
+    });
+  });
+
+  test('recusa o cadastro e devolve o motivo quando a Meta desmente os dados', async () => {
+    checkMetaCloudSetup.mockResolvedValue({
+      ok: false,
+      error: 'Nenhum app está inscrito no webhook dessa WABA, então as mensagens não chegariam.',
+    });
+
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send(cadastro);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/inscrito/i);
+    expect(createChannel).not.toHaveBeenCalled();
+  });
+
+  test('nao chega a conferir quando falta credencial no formulario', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ type: 'meta_cloud', name: 'X', phoneNumber: '+5511900000000' });
+
+    expect(res.status).toBe(400);
+    expect(checkMetaCloudSetup).not.toHaveBeenCalled();
+  });
+
+  test('nao confere nada para um canal baileys', async () => {
+    baileysManager.addBaileysChannel.mockResolvedValue({ id: 'c', type: 'baileys', name: 'X', phoneNumber: '+5511900000000', config: {}, status: 'disconnected' });
+
+    await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ type: 'baileys', name: 'X', phoneNumber: '+5511900000000' });
+
+    expect(checkMetaCloudSetup).not.toHaveBeenCalled();
+  });
+
+  test('nao confere nada para um canal 360dialog, que tem validacao propria', async () => {
+    createChannel.mockResolvedValue({ id: 'c', type: '360dialog', name: 'X', phoneNumber: '+5511900000000', config: { webhookToken: 't' }, status: 'connected' });
+    threeSixtyDialogAdapter.registerWebhook.mockResolvedValue({});
+
+    await request(buildApp())
+      .post('/api/admin/channels')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`)
+      .send({ type: '360dialog', name: 'X', phoneNumber: '+5511900000000', apiKey: 'k', wabaId: 'w' });
+
+    expect(checkMetaCloudSetup).not.toHaveBeenCalled();
   });
 });

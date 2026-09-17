@@ -20,6 +20,7 @@ const {
 } = require('../channels/channel.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { getChannelConnection } = require('../channels/channel-connection');
+const { checkMetaCloudSetup } = require('../channels/meta-cloud-setup');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
 const { isOfficialChannelType } = require('../channels/channel-types');
@@ -93,6 +94,13 @@ router.post('/', requireAuth, requireIntegrationsAccess, async (req, res) => {
       const { phoneNumberId, accessToken, wabaId } = req.body;
       if (!phoneNumberId || !accessToken || !wabaId) {
         return res.status(400).json({ error: 'phoneNumberId, accessToken and wabaId are required for meta_cloud channels' });
+      }
+      // Confere com a Meta antes de gravar, como o 360dialog logo abaixo ja
+      // faz: sem isso o canal nasce "conectado" com qualquer dado e o erro so
+      // aparece quando o cliente manda mensagem e nada chega.
+      const check = await checkMetaCloudSetup({ phoneNumberId, accessToken, wabaId, phoneNumber });
+      if (!check.ok) {
+        return res.status(400).json({ error: check.error });
       }
       const channel = await createChannel({
         type,

@@ -380,6 +380,7 @@ describe('downloadMetaMedia', () => {
 
 jest.mock('axios');
 const axios = require('axios');
+const { listWabaPhoneNumbers, listWabaSubscribedApps } = require('./meta-cloud.adapter');
 const { fetchNumberHealth } = require('./meta-cloud.adapter');
 const { sendTextMessage, downloadMetaMedia, sendMediaMessage, createMetaTemplate, listMetaTemplates, deleteMetaTemplate, sendTemplateMessage, parseTemplateStatusUpdates, sendPixCardMessage, buildPixOrderDetailsBody } = require('./meta-cloud.adapter');
 
@@ -910,5 +911,49 @@ describe('fetchNumberHealth', () => {
     const result = await fetchNumberHealth(channel);
 
     expect(result).toEqual({ ok: true, status: 'DISCONNECTED', qualityRating: 'UNKNOWN' });
+  });
+});
+
+describe('listWabaPhoneNumbers', () => {
+  test('lista os numeros da WABA com id e telefone', async () => {
+    axios.get.mockResolvedValue({
+      data: { data: [{ id: '613336748527998', display_phone_number: '+55 800 445 4546' }] },
+    });
+
+    const result = await listWabaPhoneNumbers('3530350190603464', 'tok-meta');
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/3530350190603464/phone_numbers',
+      expect.objectContaining({ headers: { Authorization: 'Bearer tok-meta' } })
+    );
+    expect(result).toEqual([{ id: '613336748527998', display_phone_number: '+55 800 445 4546' }]);
+  });
+
+  test('devolve lista vazia quando a WABA nao tem numeros', async () => {
+    axios.get.mockResolvedValue({ data: {} });
+
+    expect(await listWabaPhoneNumbers('waba-1', 'tok')).toEqual([]);
+  });
+});
+
+describe('listWabaSubscribedApps', () => {
+  test('lista os apps inscritos no webhook da WABA', async () => {
+    axios.get.mockResolvedValue({
+      data: { data: [{ whatsapp_business_api_data: { id: '1090048386724471', name: 'DW Telecom' } }] },
+    });
+
+    const result = await listWabaSubscribedApps('3530350190603464', 'tok-meta');
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/3530350190603464/subscribed_apps',
+      expect.objectContaining({ headers: { Authorization: 'Bearer tok-meta' } })
+    );
+    expect(result).toHaveLength(1);
+  });
+
+  test('devolve lista vazia quando nenhum app esta inscrito', async () => {
+    axios.get.mockResolvedValue({ data: { data: [] } });
+
+    expect(await listWabaSubscribedApps('waba-1', 'tok')).toEqual([]);
   });
 });

@@ -324,8 +324,30 @@ async function fetchNumberHealth(channel) {
   }
 }
 
+// As duas consultas que conferem um cadastro de canal oficial antes de salvar.
+// Ao contrario de fetchNumberHealth, elas lancam: quem chama precisa distinguir
+// "a Meta disse que esta errado" de "nao consegui falar com a Meta".
+async function listWabaPhoneNumbers(wabaId, accessToken) {
+  const response = await axios.get(`https://graph.facebook.com/v20.0/${wabaId}/phone_numbers`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    params: { fields: 'id,display_phone_number', limit: 100 },
+    timeout: NUMBER_HEALTH_TIMEOUT_MS,
+  });
+  return response.data.data || [];
+}
+
+async function listWabaSubscribedApps(wabaId, accessToken) {
+  const response = await axios.get(`https://graph.facebook.com/v20.0/${wabaId}/subscribed_apps`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: NUMBER_HEALTH_TIMEOUT_MS,
+  });
+  return response.data.data || [];
+}
+
 module.exports = {
   fetchNumberHealth,
+  listWabaPhoneNumbers,
+  listWabaSubscribedApps,
   verifyWebhookChallenge,
   verifySignature,
   parseInboundMessages,

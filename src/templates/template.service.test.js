@@ -119,8 +119,17 @@ describe('listApprovedTemplatesForChannel', () => {
 
     const result = await listApprovedTemplatesForChannel('ch-1');
 
-    expect(listApprovedTemplatesByWabaId).toHaveBeenCalledWith('waba-1');
+    expect(listApprovedTemplatesByWabaId).toHaveBeenCalledWith('waba-1', undefined);
     expect(result).toEqual([{ id: 'tpl-1' }]);
+  });
+
+  test('repassa a finalidade pedida para a consulta', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { wabaId: 'waba-1' } });
+    listApprovedTemplatesByWabaId.mockResolvedValue([]);
+
+    await listApprovedTemplatesForChannel('ch-1', 'disparo');
+
+    expect(listApprovedTemplatesByWabaId).toHaveBeenCalledWith('waba-1', 'disparo');
   });
 
   test('returns an empty array when the channel has no wabaId', async () => {

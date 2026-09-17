@@ -8,6 +8,7 @@ const {
   updateTemplateStatusByMetaTemplateId,
   deleteTemplateRecord,
   findTemplateByNameAndWaba,
+  updateTemplatePurpose,
 } = require('./template.repository');
 
 beforeEach(async () => {
@@ -42,6 +43,7 @@ describe('createTemplateRecord', () => {
       headerType: null,
       status: 'PENDING',
       rejectionReason: null,
+      purpose: 'atendimento',
       createdAt: expect.any(Date),
     });
   });
@@ -170,5 +172,99 @@ describe('findTemplateByNameAndWaba', () => {
     });
     expect(await findTemplateByNameAndWaba('aviso_cobranca', 'waba-2')).toBeNull();
     expect(await findTemplateByNameAndWaba('outro_nome', 'waba-1')).toBeNull();
+  });
+});
+
+// Template de disparo (o que o SGP usa) nao pode aparecer para o atendente na
+// hora de iniciar uma conversa, e template de atendimento nao deve virar
+// campanha em massa. A finalidade e o que separa as duas listas.
+describe('finalidade do template (atendimento x disparo)', () => {
+  async function criar(name, purpose) {
+    const template = await createTemplateRecord({
+      wabaId: 'waba-1',
+      metaTemplateId: `meta-${name}`,
+      name,
+      language: 'pt_BR',
+      category: 'UTILITY',
+      bodyText: 'Olá {{1}}',
+      variableCount: 1,
+      purpose,
+    });
+    await updateTemplateStatusByMetaTemplateId(`meta-${name}`, { status: 'APPROVED' });
+    return template;
+  }
+
+  test('nasce como atendimento quando ninguem diz o contrario', async () => {
+    const template = await createTemplateRecord({
+      wabaId: 'waba-1', metaTemplateId: 'meta-x', name: 'sem_finalidade',
+      language: 'pt_BR', category: 'UTILITY', bodyText: 'Oi', variableCount: 0,
+    });
+    expect(template.purpose).toBe('atendimento');
+  });
+
+  test('aceita ser criado como disparo', async () => {
+    const template = await createTemplateRecord({
+      wabaId: 'waba-1', metaTemplateId: 'meta-y', name: 'cobranca_sgp',
+      language: 'pt_BR', category: 'UTILITY', bodyText: 'Oi', variableCount: 0,
+      purpose: 'disparo',
+    });
+    expect(template.purpose).toBe('disparo');
+  });
+
+  test('a lista do canal traz so os de atendimento quando e para atender', async () => {
+    await criar('saudacao', 'atendimento');
+    await criar('cobranca_sgp', 'disparo');
+
+    const lista = await listApprovedTemplatesByWabaId('waba-1', 'atendimento');
+
+    expect(lista.map((t) => t.name)).toEqual(['saudacao']);
+  });
+
+  test('a lista do canal traz so os de disparo quando e para campanha', async () => {
+    await criar('saudacao', 'atendimento');
+    await criar('cobranca_sgp', 'disparo');
+
+    const lista = await listApprovedTemplatesByWabaId('waba-1', 'disparo');
+
+    expect(lista.map((t) => t.name)).toEqual(['cobranca_sgp']);
+  });
+
+  test('sem finalidade pedida, a lista traz os dois', async () => {
+    await criar('saudacao', 'atendimento');
+    await criar('cobranca_sgp', 'disparo');
+
+    const lista = await listApprovedTemplatesByWabaId('waba-1');
+
+    expect(lista.map((t) => t.name).sort()).toEqual(['cobranca_sgp', 'saudacao']);
+  });
+
+  test('troca a finalidade de um template que ja existe', async () => {
+    const template = await criar('cobranca_sgp', 'atendimento');
+
+    const trocado = await updateTemplatePurpose(template.id, 'disparo');
+
+    expect(trocado.purpose).toBe('disparo');
+    expect((await findTemplateById(template.id)).purpose).toBe('disparo');
+  });
+
+  test('trocar a finalidade nao mexe em mais nada', async () => {
+    const template = await criar('cobranca_sgp', 'atendimento');
+
+    const trocado = await updateTemplatePurpose(template.id, 'disparo');
+
+    expect(trocado.name).toBe('cobranca_sgp');
+    expect(trocado.status).toBe('APPROVED');
+    expect(trocado.bodyText).toBe('Olá {{1}}');
+  });
+
+  test('devolve null ao trocar a finalidade de um template que nao existe', async () => {
+    expect(await updateTemplatePurpose('00000000-0000-0000-0000-000000000000', 'disparo')).toBeNull();
+  });
+
+  // O banco é a última linha de defesa: um valor fora dos dois esconderia o
+  // template de todas as telas, sem ninguém notar.
+  test('o banco recusa uma finalidade desconhecida', async () => {
+    const template = await criar('cobranca_sgp', 'atendimento');
+    await expect(updateTemplatePurpose(template.id, 'qualquer_coisa')).rejects.toMatchObject({ code: '23514' });
   });
 });

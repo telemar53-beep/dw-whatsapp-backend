@@ -65,7 +65,7 @@ function StartConversationModal({ onClose, onCreated }) {
       setTemplateId('');
       return;
     }
-    listTemplatesForChannel(channelId, token).then((data) => {
+    listTemplatesForChannel(channelId, token, 'atendimento').then((data) => {
       setTemplates(data);
       setTemplateId(data[0]?.id || '');
     });

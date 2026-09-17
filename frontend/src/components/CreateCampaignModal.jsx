@@ -55,7 +55,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
       setTemplateId('');
       return;
     }
-    listTemplatesForChannel(channelId, token).then((data) => {
+    listTemplatesForChannel(channelId, token, 'disparo').then((data) => {
       setTemplates(data);
       setTemplateId(data[0]?.id || '');
     });

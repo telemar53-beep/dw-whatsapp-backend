@@ -24,7 +24,7 @@ const KNOWN_STATUSES = new Set(['PENDING', 'APPROVED', 'REJECTED', 'PAUSED', 'DI
 
 class TemplateValidationError extends Error {}
 
-async function createTemplate({ channelId, name, category, language, bodyText }) {
+async function createTemplate({ channelId, name, category, language, bodyText, purpose }) {
   if (!isValidTemplateName(name)) {
     throw new TemplateValidationError('Template name must contain only lowercase letters, numbers, and underscores');
   }
@@ -55,7 +55,7 @@ async function createTemplate({ channelId, name, category, language, bodyText })
   const { metaTemplateId } = await ADAPTERS_BY_CHANNEL_TYPE[channel.type].createMetaTemplate(channel, { name, category, language, bodyText });
 
   try {
-    return await createTemplateRecord({ wabaId: channel.config.wabaId, metaTemplateId, name, language, category, bodyText, variableCount });
+    return await createTemplateRecord({ wabaId: channel.config.wabaId, metaTemplateId, name, language, category, bodyText, variableCount, purpose });
   } catch (err) {
     try {
       await ADAPTERS_BY_CHANNEL_TYPE[channel.type].deleteMetaTemplate(channel, { name, metaTemplateId });
@@ -122,10 +122,10 @@ async function registerExistingTemplate({ channelId, name, language, headerType 
   return created;
 }
 
-async function listApprovedTemplatesForChannel(channelId) {
+async function listApprovedTemplatesForChannel(channelId, purpose) {
   const channel = await findChannelById(channelId);
   if (!channel || !channel.config.wabaId) return [];
-  return listApprovedTemplatesByWabaId(channel.config.wabaId);
+  return listApprovedTemplatesByWabaId(channel.config.wabaId, purpose);
 }
 
 async function deleteTemplate(id) {

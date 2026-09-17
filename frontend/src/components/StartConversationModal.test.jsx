@@ -206,3 +206,16 @@ describe('StartConversationModal', () => {
     expect(screen.queryByRole('option', { name: 'Berg' })).not.toBeInTheDocument();
   });
 });
+
+// Template de disparo (o que o SGP usa) não é para aparecer aqui: o atendente
+// escolhe só os escritos para conversa individual.
+describe('StartConversationModal — finalidade dos templates', () => {
+  test('pede à API só os templates de atendimento', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', name: 'Oficial', type: 'meta_cloud', status: 'connected' }]);
+    api.listTemplatesForChannel.mockResolvedValue([]);
+
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    await waitFor(() => expect(api.listTemplatesForChannel).toHaveBeenCalledWith('ch-1', 'tok-123', 'atendimento'));
+  });
+});

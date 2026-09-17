@@ -1,6 +1,6 @@
 const { getPool } = require('../db/pool');
 
-const COLUMNS = `id, waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type, status, rejection_reason, created_at`;
+const COLUMNS = `id, waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type, status, rejection_reason, purpose, created_at`;
 
 function toTemplate(row) {
   return {
@@ -15,6 +15,7 @@ function toTemplate(row) {
     headerType: row.header_type,
     status: row.status,
     rejectionReason: row.rejection_reason,
+    purpose: row.purpose,
     createdAt: row.created_at,
   };
 }
@@ -24,10 +25,14 @@ async function listTemplates() {
   return result.rows.map(toTemplate);
 }
 
-async function listApprovedTemplatesByWabaId(wabaId) {
+// purpose ausente devolve as duas finalidades — quem chama e que decide qual
+// lista quer, e a tela de Templates quer todas.
+async function listApprovedTemplatesByWabaId(wabaId, purpose) {
   const result = await getPool().query(
-    `SELECT ${COLUMNS} FROM message_templates WHERE waba_id = $1 AND status = 'APPROVED' ORDER BY name ASC`,
-    [wabaId]
+    `SELECT ${COLUMNS} FROM message_templates
+     WHERE waba_id = $1 AND status = 'APPROVED' AND ($2::text IS NULL OR purpose = $2)
+     ORDER BY name ASC`,
+    [wabaId, purpose || null]
   );
   return result.rows.map(toTemplate);
 }
@@ -53,13 +58,24 @@ async function findTemplateByNameAndWaba(name, wabaId) {
   return toTemplate(result.rows[0]);
 }
 
-async function createTemplateRecord({ wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType }) {
+async function createTemplateRecord({ wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType, purpose }) {
   const result = await getPool().query(
-    `INSERT INTO message_templates (waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO message_templates (waba_id, meta_template_id, name, language, category, body_text, variable_count, header_type, purpose)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, 'atendimento'))
      RETURNING ${COLUMNS}`,
-    [wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType || null]
+    [wabaId, metaTemplateId, name, language, category, bodyText, variableCount, headerType || null, purpose || null]
   );
+  return toTemplate(result.rows[0]);
+}
+
+// Trocar a finalidade de um template que ja existe: o SGP e a campanha usam os
+// mesmos templates da Meta, e so aqui o sistema sabe para que serve cada um.
+async function updateTemplatePurpose(id, purpose) {
+  const result = await getPool().query(
+    `UPDATE message_templates SET purpose = $2, updated_at = now() WHERE id = $1 RETURNING ${COLUMNS}`,
+    [id, purpose]
+  );
+  if (result.rowCount === 0) return null;
   return toTemplate(result.rows[0]);
 }
 
@@ -87,5 +103,6 @@ module.exports = {
   findTemplateByNameAndWaba,
   createTemplateRecord,
   updateTemplateStatusByMetaTemplateId,
+  updateTemplatePurpose,
   deleteTemplateRecord,
 };

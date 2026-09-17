@@ -201,3 +201,16 @@ describe('CreateCampaignModal', () => {
     expect(screen.getByText(/variável 1: Maria/i)).toBeInTheDocument();
   });
 });
+
+// Campanha é disparo: mostrar um template escrito para conversa individual aqui
+// só convida a usar o template errado num envio em massa.
+describe('CreateCampaignModal — finalidade dos templates', () => {
+  test('pede à API só os templates de disparo', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', name: 'Oficial', type: 'meta_cloud', status: 'connected' }]);
+    api.listTemplatesForChannel.mockResolvedValue([]);
+
+    render(<CreateCampaignModal onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    await waitFor(() => expect(api.listTemplatesForChannel).toHaveBeenCalledWith('ch-1', 'tok-123', 'disparo'));
+  });
+});

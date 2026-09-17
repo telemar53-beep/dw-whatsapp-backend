@@ -55,7 +55,7 @@ describe('TemplatesAdminTab', () => {
 
     await waitFor(() =>
       expect(api.createTemplateAdmin).toHaveBeenCalledWith(
-        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'en_US', bodyText: 'Olá, bem-vindo!' },
+        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'en_US', bodyText: 'Olá, bem-vindo!', purpose: 'atendimento' },
         'tok-123'
       )
     );
@@ -86,7 +86,7 @@ describe('TemplatesAdminTab', () => {
 
     await waitFor(() =>
       expect(api.createTemplateAdmin).toHaveBeenCalledWith(
-        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá, bem-vindo!' },
+        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá, bem-vindo!', purpose: 'atendimento' },
         'tok-123'
       )
     );
@@ -112,7 +112,7 @@ describe('TemplatesAdminTab', () => {
 
     await waitFor(() =>
       expect(api.createTemplateAdmin).toHaveBeenCalledWith(
-        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá, bem-vindo!' },
+        { channelId: 'ch-1', name: 'boas_vindas', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá, bem-vindo!', purpose: 'atendimento' },
         'tok-123'
       )
     );
@@ -310,5 +310,95 @@ describe('TemplatesAdminTab', () => {
     render(<TemplatesAdminTab />);
     expect(screen.queryByText(/nenhum template cadastrado/i)).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+});
+
+// A finalidade separa o que o atendente vê ao iniciar uma conversa do que é
+// usado nos disparos do SGP. Como tudo nasceu como 'atendimento' na migração,
+// trocar depois é o caminho normal — não uma exceção.
+describe('finalidade do template', () => {
+  const TEMPLATES = [
+    { id: 'tpl-1', wabaId: 'waba-1', name: 'saudacao', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', bodyText: 'Oi', variableCount: 0, purpose: 'atendimento' },
+    { id: 'tpl-2', wabaId: 'waba-1', name: 'cobranca_sgp', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', bodyText: 'Oi', variableCount: 0, purpose: 'disparo' },
+  ];
+
+  const refresh = vi.fn();
+
+  function renderTab() {
+    useTemplates.mockReturnValue({ templates: TEMPLATES, status: 'ready', refresh });
+    return render(<TemplatesAdminTab />);
+  }
+
+  beforeEach(() => {
+    api.setTemplatePurpose.mockResolvedValue({ ...TEMPLATES[0], purpose: 'disparo' });
+  });
+
+  test('mostra a finalidade de cada template na tabela', async () => {
+    renderTab();
+
+    await screen.findByRole('button', { name: 'cobranca_sgp' });
+    const linha = screen.getByRole('button', { name: 'cobranca_sgp' }).closest('tr');
+    expect(within(linha).getByText('Disparo')).toBeInTheDocument();
+    const outra = screen.getByRole('button', { name: 'saudacao' }).closest('tr');
+    expect(within(outra).getByText('Atendimento')).toBeInTheDocument();
+  });
+
+  test('troca a finalidade pelo menu da linha', async () => {
+    renderTab();
+    await screen.findByRole('button', { name: 'saudacao' });
+
+    const linha = screen.getByRole('button', { name: 'saudacao' }).closest('tr');
+    await userEvent.click(within(linha).getByRole('button', { name: /mais ações/i }));
+    await userEvent.click(screen.getByRole('button', { name: /usar para disparo/i }));
+
+    await waitFor(() => expect(api.setTemplatePurpose).toHaveBeenCalledWith('tpl-1', 'disparo', 'tok-123'));
+  });
+
+  test('o menu do template de disparo oferece voltar para atendimento', async () => {
+    renderTab();
+    await screen.findByRole('button', { name: 'cobranca_sgp' });
+
+    const linha = screen.getByRole('button', { name: 'cobranca_sgp' }).closest('tr');
+    await userEvent.click(within(linha).getByRole('button', { name: /mais ações/i }));
+
+    expect(screen.getByRole('button', { name: /usar para atendimento/i })).toBeInTheDocument();
+  });
+});
+
+describe('escolher a finalidade ao criar o template', () => {
+  beforeEach(() => {
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
+    api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-novo' });
+  });
+
+  async function abrirFormulario() {
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /novo template/i }));
+    return within(screen.getByRole('form', { name: /cadastrar novo template/i }));
+  }
+
+  test('cria como atendimento por padrão', async () => {
+    const form = await abrirFormulario();
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'saudacao');
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Olá');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createTemplateAdmin).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'atendimento' }), 'tok-123')
+    );
+  });
+
+  test('permite criar já como disparo', async () => {
+    const form = await abrirFormulario();
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'cobranca_sgp');
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Olá');
+    await userEvent.selectOptions(form.getByLabelText(/finalidade/i), 'disparo');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createTemplateAdmin).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'disparo' }), 'tok-123')
+    );
   });
 });

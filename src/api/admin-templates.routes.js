@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth, requireRole } = require('../auth/auth.middleware');
-const { listTemplates } = require('../templates/template.repository');
+const { listTemplates, updateTemplatePurpose } = require('../templates/template.repository');
 const { createTemplate, deleteTemplate, syncTemplatesForWaba, registerExistingTemplate, TemplateValidationError } = require('../templates/template.service');
 
 const router = express.Router();
@@ -26,13 +26,25 @@ router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
   res.json(templates);
 });
 
+// A finalidade separa o que o atendente vê ao iniciar uma conversa do que é
+// usado em disparo (campanha e envios do SGP). Valor desconhecido é recusado:
+// aceitar esconderia o template de todas as telas sem ninguém notar.
+const PURPOSES = ['atendimento', 'disparo'];
+
+function invalidPurpose(purpose) {
+  return purpose !== undefined && !PURPOSES.includes(purpose);
+}
+
 router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
-  const { channelId, name, category, language, bodyText } = req.body || {};
+  const { channelId, name, category, language, bodyText, purpose } = req.body || {};
   if (!channelId || !name || !category || !language || !bodyText) {
     return res.status(400).json({ error: 'channelId, name, category, language and bodyText are required' });
   }
+  if (invalidPurpose(purpose)) {
+    return res.status(400).json({ error: `purpose must be one of: ${PURPOSES.join(', ')}` });
+  }
   try {
-    const template = await createTemplate({ channelId, name, category, language, bodyText });
+    const template = await createTemplate({ channelId, name, category, language, bodyText, purpose });
     res.status(201).json(template);
   } catch (err) {
     if (err instanceof TemplateValidationError) {
@@ -47,6 +59,21 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
     }
     throw err;
   }
+});
+
+router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const { purpose } = req.body || {};
+  if (purpose === undefined) {
+    return res.status(400).json({ error: 'purpose is required' });
+  }
+  if (invalidPurpose(purpose)) {
+    return res.status(400).json({ error: `purpose must be one of: ${PURPOSES.join(', ')}` });
+  }
+  const template = await updateTemplatePurpose(req.params.id, purpose);
+  if (!template) {
+    return res.status(404).json({ error: 'Template not found' });
+  }
+  res.json(template);
 });
 
 router.post('/register-existing', requireAuth, requireRole('admin'), async (req, res) => {

@@ -20,7 +20,7 @@ jest.mock('../templates/template.service', () => {
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { listTemplates } = require('../templates/template.repository');
+const { listTemplates, updateTemplatePurpose } = require('../templates/template.repository');
 const { createTemplate, deleteTemplate, syncTemplatesForWaba, registerExistingTemplate, TemplateValidationError } = require('../templates/template.service');
 const adminTemplatesRoutes = require('./admin-templates.routes');
 
@@ -244,5 +244,81 @@ describe('POST /api/admin/templates/register-existing', () => {
       .send({ channelId: 'ch-1', name: 'aviso_cobranca', language: 'pt_BR' });
     expect(res.status).toBe(403);
     expect(registerExistingTemplate).not.toHaveBeenCalled();
+  });
+});
+
+// A finalidade separa o que o atendente ve do que e usado em disparo pelo SGP.
+// Ela e escolhida na criacao e pode ser trocada depois: os templates ja
+// existentes nasceram todos como atendimento na migracao.
+describe('finalidade do template', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function comoAdmin(req) {
+    return req.set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+  }
+
+  test('cria um template ja marcado como disparo', async () => {
+    createTemplate.mockResolvedValue({ id: 'tpl-1', purpose: 'disparo' });
+
+    const res = await comoAdmin(request(buildApp()).post('/api/admin/templates')).send({
+      channelId: 'ch-1', name: 'cobranca_sgp', category: 'UTILITY', language: 'pt_BR', bodyText: 'Oi {{1}}', purpose: 'disparo',
+    });
+
+    expect(res.status).toBe(201);
+    expect(createTemplate).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'disparo' }));
+  });
+
+  test('sem finalidade, cria como atendimento', async () => {
+    createTemplate.mockResolvedValue({ id: 'tpl-1', purpose: 'atendimento' });
+
+    await comoAdmin(request(buildApp()).post('/api/admin/templates')).send({
+      channelId: 'ch-1', name: 'saudacao', category: 'UTILITY', language: 'pt_BR', bodyText: 'Oi',
+    });
+
+    expect(createTemplate).toHaveBeenCalledWith(expect.objectContaining({ purpose: undefined }));
+  });
+
+  test('recusa uma finalidade desconhecida na criacao', async () => {
+    const res = await comoAdmin(request(buildApp()).post('/api/admin/templates')).send({
+      channelId: 'ch-1', name: 'x', category: 'UTILITY', language: 'pt_BR', bodyText: 'Oi', purpose: 'qualquer',
+    });
+
+    expect(res.status).toBe(400);
+    expect(createTemplate).not.toHaveBeenCalled();
+  });
+
+  test('troca a finalidade de um template que ja existe', async () => {
+    updateTemplatePurpose.mockResolvedValue({ id: 'tpl-1', purpose: 'disparo' });
+
+    const res = await comoAdmin(request(buildApp()).patch('/api/admin/templates/tpl-1')).send({ purpose: 'disparo' });
+
+    expect(res.status).toBe(200);
+    expect(updateTemplatePurpose).toHaveBeenCalledWith('tpl-1', 'disparo');
+    expect(res.body.purpose).toBe('disparo');
+  });
+
+  test('404 ao trocar a finalidade de um template que nao existe', async () => {
+    updateTemplatePurpose.mockResolvedValue(null);
+
+    const res = await comoAdmin(request(buildApp()).patch('/api/admin/templates/sumido')).send({ purpose: 'disparo' });
+
+    expect(res.status).toBe(404);
+  });
+
+  test('recusa trocar para uma finalidade desconhecida', async () => {
+    const res = await comoAdmin(request(buildApp()).patch('/api/admin/templates/tpl-1')).send({ purpose: 'qualquer' });
+
+    expect(res.status).toBe(400);
+    expect(updateTemplatePurpose).not.toHaveBeenCalled();
+  });
+
+  test('403 para quem nao e admin', async () => {
+    const res = await request(buildApp())
+      .patch('/api/admin/templates/tpl-1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ purpose: 'disparo' });
+
+    expect(res.status).toBe(403);
+    expect(updateTemplatePurpose).not.toHaveBeenCalled();
   });
 });

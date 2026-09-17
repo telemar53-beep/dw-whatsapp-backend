@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { useTemplates } from '../hooks/useTemplates';
 import { useChannels } from '../hooks/useChannels';
-import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin } from '../services/api';
+import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin, setTemplatePurpose } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
 import WaDialog, { waErrorClass } from './WaDialog';
 import { AsyncState, Button, inputClass } from './ui';
@@ -28,6 +28,24 @@ const LANGUAGE_LABELS = { pt_BR: 'Português (Brasil)', en_US: 'Inglês (EUA)', 
 function statusMeta(status) {
   return STATUS_META[status] || { label: status || '—', chip: 'border-wa-border bg-white/[0.06] text-wa-muted' };
 }
+// A finalidade separa o que o atendente vê ao iniciar uma conversa do que é
+// usado nos disparos (campanha e SGP). Tudo nasceu como 'atendimento' na
+// migração, então trocar depois é o caminho normal, não uma exceção.
+const PURPOSE_LABELS = { atendimento: 'Atendimento', disparo: 'Disparo' };
+
+function PurposeChip({ purpose }) {
+  const disparo = purpose === 'disparo';
+  return (
+    <span
+      className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[12px] font-medium ${
+        disparo ? 'border-sgp-blue/30 bg-sgp-blue/10 text-sgp-blue' : 'border-wa-chip-text/30 bg-wa-chip text-wa-chip-text'
+      }`}
+    >
+      {PURPOSE_LABELS[purpose] || PURPOSE_LABELS.atendimento}
+    </span>
+  );
+}
+
 function categoryLabel(category) {
   return CATEGORY_LABELS[category] || category || '—';
 }
@@ -108,6 +126,7 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
   const { confirm, confirmDialog } = useConfirm();
   const [deleteError, setDeleteError] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [switching, setSwitching] = useState(false);
 
   async function handleDelete() {
     const question = 'Excluir o template "' + template.name + '"?';
@@ -122,6 +141,19 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
     } catch (err) {
       setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
       setDeleting(false);
+    }
+  }
+
+  async function handleTogglePurpose() {
+    setSwitching(true);
+    setDeleteError(null);
+    try {
+      await setTemplatePurpose(template.id, template.purpose === 'disparo' ? 'atendimento' : 'disparo', token);
+      onDeleted();
+    } catch (err) {
+      setDeleteError((err.body && err.body.error) || 'Falha ao trocar a finalidade');
+    } finally {
+      setSwitching(false);
     }
   }
 
@@ -147,11 +179,17 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
       </td>
       <td className={`${CELL} whitespace-nowrap text-wa-text`}>{categoryLabel(template.category)}</td>
       <td className={`${CELL} whitespace-nowrap`}>
+        <PurposeChip purpose={template.purpose} />
+      </td>
+      <td className={`${CELL} whitespace-nowrap`}>
         <StatusChip status={template.status} />
       </td>
       <td className={`${CELL} whitespace-nowrap`}>
         <div className="flex items-center justify-end">
           <RowMenu label={`Mais ações para ${template.name}`}>
+            <button type="button" onClick={handleTogglePurpose} disabled={switching} className={MENU_ITEM}>
+              {template.purpose === 'disparo' ? 'Usar para atendimento' : 'Usar para disparo'}
+            </button>
             <button type="button" onClick={handleDelete} disabled={deleting} className={`${MENU_ITEM} text-wa-error-text`}>
               Excluir
             </button>
@@ -181,6 +219,7 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
   const [channelId, setChannelId] = useState(initialChannelId || '');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('UTILITY');
+  const [purpose, setPurpose] = useState('atendimento');
   const [language, setLanguage] = useState('pt_BR');
   const [bodyText, setBodyText] = useState('');
   const [error, setError] = useState(null);
@@ -200,7 +239,7 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
     setError(null);
     setSubmitting(true);
     try {
-      await createTemplateAdmin({ channelId, name, category, language, bodyText }, token);
+      await createTemplateAdmin({ channelId, name, category, language, bodyText, purpose }, token);
       onCreated();
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao criar template');
@@ -216,6 +255,20 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
           Canal
         </label>
         <ChannelSelect id="template-channel" value={channelId} onChange={setChannelId} channels={officialChannels} />
+      </div>
+      <div>
+        <label htmlFor="template-purpose" className={LABEL}>
+          Finalidade
+        </label>
+        <select
+          id="template-purpose"
+          value={purpose}
+          onChange={(e) => setPurpose(e.target.value)}
+          className={inputClass}
+        >
+          <option value="atendimento">Atendimento — o atendente escolhe ao iniciar uma conversa</option>
+          <option value="disparo">Disparo — campanha e envios automáticos do SGP</option>
+        </select>
       </div>
       <div>
         <label htmlFor="template-name" className={LABEL}>
@@ -591,6 +644,9 @@ function TemplatesAdminTab() {
                           Categoria
                         </th>
                         <th scope="col" className={HEAD}>
+                          Finalidade
+                        </th>
+                        <th scope="col" className={HEAD}>
                           Status
                         </th>
                         <th scope="col" className={`${HEAD} text-right`}>
@@ -601,7 +657,7 @@ function TemplatesAdminTab() {
                     <tbody>
                       {visible.length === 0 ? (
                         <tr className="border-t border-wa-border">
-                          <td colSpan={4} className="px-3 py-6 text-center text-[13.5px] text-wa-muted">
+                          <td colSpan={5} className="px-3 py-6 text-center text-[13.5px] text-wa-muted">
                             Nenhum template neste canal com esse filtro.
                           </td>
                         </tr>

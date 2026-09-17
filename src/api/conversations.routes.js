@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const { findAgentById } = require('../agents/agent.repository');
 const { requireAuth, hasAdminLevelAccess } = require('../auth/auth.middleware');
 const {
   listWaitingConversations,
@@ -343,7 +344,15 @@ router.post('/:id/transfer', async (req, res) => {
     emitToAgent(req.agent.agentId, 'conversation:removed', { conversationId: conversation.id });
   }
   broadcast('queue:removed', { conversationId: conversation.id });
-  emitToAgent(toAgentId, 'conversation:assigned', { conversation: conversationWithContact });
+  // O mesmo evento avisa o atendente que pega uma conversa da fila sozinho.
+  // `transferredBy` e o que distingue os dois casos na tela: sem ele, o aviso
+  // de transferencia tocaria tambem quando o proprio atendente assumiu.
+  // Nunca derruba a transferencia: se o nome nao vier, o aviso sai generico.
+  const quemTransferiu = await findAgentById(req.agent.agentId);
+  emitToAgent(toAgentId, 'conversation:assigned', {
+    conversation: conversationWithContact,
+    transferredBy: quemTransferiu ? { id: quemTransferiu.id, name: quemTransferiu.name } : null,
+  });
   broadcastToDashboard('dashboard:conversation', { conversation: conversationWithContact });
   res.json(conversation);
 });

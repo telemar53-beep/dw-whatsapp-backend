@@ -14,6 +14,7 @@ jest.mock('../assignment-messages/assignment-message.service');
 jest.mock('../reasons/reason.repository');
 jest.mock('../ai/ai-suggestion.repository');
 jest.mock('../sectors/sector.repository');
+jest.mock('../agents/agent.repository');
 const request = require('supertest');
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -37,6 +38,7 @@ const {
 const { listMessagesByConversation, findMessageById } = require('../conversations/message.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
+const { findAgentById } = require('../agents/agent.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findChannelById } = require('../channels/channel.repository');
 const { findTemplateById } = require('../templates/template.repository');
@@ -742,7 +744,47 @@ describe('POST /api/conversations/:id/transfer', () => {
         contactPhoneNumber: '+5511999998888',
         contactDisplayName: 'Cliente',
       },
+      transferredBy: null,
     });
+  });
+
+  // O mesmo evento conversation:assigned e emitido quando o atendente pega uma
+  // conversa da fila sozinho. `transferredBy` e o que distingue os dois casos:
+  // sem ele, o aviso de transferencia tocaria tambem ao assumir da fila.
+  test('diz quem transferiu, para o aviso na tela do atendente que recebeu', async () => {
+    transferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2', contactDisplayName: 'Carlos' });
+    findAgentById.mockResolvedValue({ id: 'agent-1', name: 'Maria Souza' });
+
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ toAgentId: 'agent-2' });
+
+    expect(findAgentById).toHaveBeenCalledWith('agent-1');
+    expect(emitToAgent).toHaveBeenCalledWith(
+      'agent-2',
+      'conversation:assigned',
+      expect.objectContaining({ transferredBy: { id: 'agent-1', name: 'Maria Souza' } })
+    );
+  });
+
+  test('transfere mesmo se nao der para descobrir o nome de quem transferiu', async () => {
+    transferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    findAgentById.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .send({ toAgentId: 'agent-2' });
+
+    expect(res.status).toBe(200);
+    expect(emitToAgent).toHaveBeenCalledWith(
+      'agent-2',
+      'conversation:assigned',
+      expect.objectContaining({ transferredBy: null })
+    );
   });
 
   test('transfers a conversation that was still waiting in the queue, without requiring the caller to have claimed it', async () => {
@@ -820,7 +862,25 @@ describe('POST /api/conversations/:id/transfer', () => {
     expect(emitToAgent).not.toHaveBeenCalledWith('admin-1', 'conversation:removed', expect.anything());
     expect(emitToAgent).toHaveBeenCalledWith('agent-2', 'conversation:assigned', {
       conversation: { id: 'conv-1', assignedAgentId: 'agent-2' },
+      transferredBy: null,
     });
+  });
+
+  test('o aviso tambem diz o nome quando quem transferiu foi um admin', async () => {
+    adminTransferConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'agent-2' });
+    findAgentById.mockResolvedValue({ id: 'admin-1', name: 'Willemberg' });
+
+    await request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+      .send({ toAgentId: 'agent-2' });
+
+    expect(emitToAgent).toHaveBeenCalledWith(
+      'agent-2',
+      'conversation:assigned',
+      expect.objectContaining({ transferredBy: { id: 'admin-1', name: 'Willemberg' } })
+    );
   });
 
   test('returns 409 when an admin tries to transfer a conversation that does not exist or is already closed', async () => {

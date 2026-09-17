@@ -14,6 +14,7 @@ import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
 import { closeConversation } from '../services/api';
 import { useCompanyName } from '../hooks/useCompanyName';
+import { useTransferNotice } from '../hooks/useTransferNotice';
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -30,6 +31,7 @@ vi.mock('../hooks/useQuickReplies');
 vi.mock('../hooks/useQueueNotificationSound');
 vi.mock('../hooks/useUnreadMyConversations');
 vi.mock('../hooks/useCompanyName');
+vi.mock('../hooks/useTransferNotice');
 vi.mock('../components/StartConversationModal', () => ({
   default: ({ onCreated }) => (
     <button
@@ -52,6 +54,7 @@ beforeEach(() => {
   useUnreadMyConversations.mockReturnValue({ unreadIds: new Set(), clearUnread: vi.fn() });
   closeConversation.mockResolvedValue({ id: 'c1', status: 'closed' });
   useCompanyName.mockReturnValue({ name: 'Net Fibra', status: 'ready' });
+  useTransferNotice.mockReturnValue({ notice: null, dismiss: vi.fn() });
 });
 
 function renderDashboard() {
@@ -443,5 +446,53 @@ describe('DashboardPage', () => {
       ],
     });
     expect(screen.getByText('Cliente de Outro Atendente')).toBeInTheDocument();
+  });
+});
+
+// Maria transfere para João: ele precisa perceber. O aviso aparece na tela de
+// Atendimento e leva direto para a conversa recebida.
+describe('aviso de transferência recebida', () => {
+  const TRANSFERIDA = { id: 'conv-t', contactPhoneNumber: '5511999998888', contactDisplayName: 'Carlos', assignedAgentId: 'agent-1', status: 'assigned' };
+
+  test('não mostra nada quando ninguém transferiu', () => {
+    useQueue.mockReturnValue({ queue: [], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+    renderDashboard();
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  test('mostra quem transferiu e de qual cliente', () => {
+    useQueue.mockReturnValue({ queue: [], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [TRANSFERIDA], status: 'ready' });
+    useTransferNotice.mockReturnValue({
+      notice: { conversationId: 'conv-t', contactName: 'Carlos', byName: 'Maria Souza' },
+      dismiss: vi.fn(),
+    });
+    renderDashboard();
+
+    const aviso = screen.getByRole('status');
+    expect(aviso).toHaveTextContent('Maria Souza');
+    expect(aviso).toHaveTextContent('Carlos');
+  });
+
+  test('clicar no aviso abre a conversa transferida e dispensa o aviso', async () => {
+    const dismiss = vi.fn();
+    useQueue.mockReturnValue({ queue: [], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [TRANSFERIDA], status: 'ready' });
+    useTransferNotice.mockReturnValue({
+      notice: { conversationId: 'conv-t', contactName: 'Carlos', byName: 'Maria Souza' },
+      dismiss,
+    });
+    renderDashboard();
+
+    expect(screen.getByText('Net Fibra · Atendimento')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /abrir o atendimento/i }));
+
+    expect(dismiss).toHaveBeenCalled();
+    // A tela vazia deu lugar à conversa transferida.
+    expect(screen.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
+    expect(screen.getByTitle('5511999998888')).toHaveTextContent('Carlos');
   });
 });

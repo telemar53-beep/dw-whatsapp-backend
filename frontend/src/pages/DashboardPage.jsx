@@ -5,6 +5,8 @@ import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
 import { useCompanyName } from '../hooks/useCompanyName';
+import { useTransferNotice } from '../hooks/useTransferNotice';
+import TransferNotice from '../components/TransferNotice';
 import { closeConversation } from '../services/api';
 import QueueList from '../components/QueueList';
 import MyConversationsList from '../components/MyConversationsList';
@@ -47,10 +49,19 @@ function DashboardPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState('');
   const { unreadIds, clearUnread } = useUnreadMyConversations(myConversations, selectedId);
+  const { notice: transferNotice, dismiss: dismissTransferNotice } = useTransferNotice();
 
   function selectConversation(conversationId) {
     clearUnread(conversationId);
     setSelectedId(conversationId);
+  }
+
+  // A conversa transferida cai em "Meus atendimentos", então abrir pelo aviso
+  // também troca de aba — senão o atendente clica e não vê nada acontecer.
+  function openTransferred(conversationId) {
+    setActiveTab('inProgress');
+    selectConversation(conversationId);
+    dismissTransferNotice();
   }
 
   function quickCloseConversation(conversationId) {
@@ -234,6 +245,7 @@ function DashboardPage() {
           }}
         />
       )}
+      <TransferNotice notice={transferNotice} onOpen={openTransferred} onDismiss={dismissTransferNotice} />
     </div>
   );
 }

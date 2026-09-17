@@ -21,7 +21,8 @@ function ErrorNote({ children }) {
 // lugar — mesmo id, mesmo telefone — porque recriar perderia as conversas, os
 // protocolos, as campanhas e a integração SGP daquele número. O backend confere
 // as credenciais com a Meta contra o telefone deste canal antes de mudar nada.
-function MigrateToMetaCloud({ channel, canManage, onMigrated }) {
+function MetaCloudCredentialsForm({ channel, canManage, onSave }) {
+  const updating = channel.type === 'meta_cloud';
   const [open, setOpen] = useState(false);
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [accessToken, setAccessToken] = useState('');
@@ -34,10 +35,10 @@ function MigrateToMetaCloud({ channel, canManage, onMigrated }) {
     setError(null);
     setSubmitting(true);
     try {
-      await onMigrated({ phoneNumberId, accessToken, wabaId });
+      await onSave({ phoneNumberId, accessToken, wabaId });
       setOpen(false);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Não foi possível migrar este canal');
+      setError((err.body && err.body.error) || 'Não foi possível salvar as credenciais deste canal');
     } finally {
       setSubmitting(false);
     }
@@ -51,7 +52,7 @@ function MigrateToMetaCloud({ channel, canManage, onMigrated }) {
         disabled={!canManage}
         title={!canManage ? PERMISSION_REASON : undefined}
       >
-        Migrar para Meta Cloud
+        {updating ? 'Atualizar credenciais' : 'Migrar para Meta Cloud'}
       </Button>
     );
   }
@@ -59,9 +60,9 @@ function MigrateToMetaCloud({ channel, canManage, onMigrated }) {
   return (
     <form onSubmit={handleSubmit} className="w-full space-y-3">
       <p className="rounded-[12px] bg-wa-panel-header px-3 py-2.5 text-[13px] text-wa-muted">
-        O número {formatPhone(channel.phoneNumber)} precisa estar no Cloud API da Meta antes disso — ou seja, já ter saído
-        do provedor atual — e o app precisa estar inscrito no webhook da conta do WhatsApp. O histórico deste canal é
-        preservado: conversas, protocolos e integrações continuam aqui.
+        {updating
+          ? `Use isto quando o Access Token for rotacionado ou revogado. As credenciais são conferidas com a Meta contra o número ${formatPhone(channel.phoneNumber)} antes de serem salvas, e o histórico deste canal não é afetado.`
+          : `O número ${formatPhone(channel.phoneNumber)} precisa estar no Cloud API da Meta antes disso — ou seja, já ter saído do provedor atual — e o app precisa estar inscrito no webhook da conta do WhatsApp. O histórico deste canal é preservado: conversas, protocolos e integrações continuam aqui.`}
       </p>
       <div>
         <label htmlFor="migratePhoneNumberId" className="mb-1.5 block text-sm font-medium text-wa-muted">
@@ -102,7 +103,7 @@ function MigrateToMetaCloud({ channel, canManage, onMigrated }) {
       <ErrorNote>{error}</ErrorNote>
       <div className="flex gap-2">
         <Button type="submit" disabled={submitting}>
-          Migrar
+          {updating ? 'Salvar' : 'Migrar'}
         </Button>
         <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={submitting}>
           Cancelar
@@ -123,7 +124,10 @@ function joinPt(items) {
 function advancedActions(type) {
   const verbs = [];
   const notes = [];
-  if (type !== 'meta_cloud') {
+  if (type === 'meta_cloud') {
+    verbs.push('atualizar credenciais');
+    notes.push('atualizar credenciais troca o Access Token e os IDs deste canal');
+  } else {
     verbs.push('migrar');
     notes.push('migrar troca o provedor deste número sem perder o histórico');
   }
@@ -273,13 +277,11 @@ function ChannelConnectionTab() {
         </summary>
         <div className="px-4 pb-4 sm:px-5">
           <DangerZone description={advancedActions(channel.type).description}>
-            {channel.type !== 'meta_cloud' && (
-              <MigrateToMetaCloud
-                channel={channel}
-                canManage={canManage}
-                onMigrated={(credentials) => actions.migrateToMetaCloud(channel.id, credentials)}
-              />
-            )}
+            <MetaCloudCredentialsForm
+              channel={channel}
+              canManage={canManage}
+              onSave={(credentials) => actions.saveMetaCloudCredentials(channel.id, credentials)}
+            />
             {channel.type === 'baileys' && (
               <Button
                 variant="secondary"

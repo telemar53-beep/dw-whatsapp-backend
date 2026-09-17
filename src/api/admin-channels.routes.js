@@ -146,18 +146,20 @@ router.post('/', requireAuth, requireIntegrationsAccess, async (req, res) => {
   return res.status(400).json({ error: 'type must be meta_cloud, baileys, or 360dialog' });
 });
 
-// Levar um numero de outro provedor para o Meta Cloud. Converte o canal no
-// lugar porque recriar nao e opcao: o telefone e unico na tabela, e excluir um
-// canal com conversas e bloqueado — de proposito, para nao perder o historico.
+// Define as credenciais Meta Cloud deste canal, e serve a dois casos:
+//
+// - canal de outro provedor: converte no lugar, porque recriar nao e opcao (o
+//   telefone e unico na tabela, e excluir canal com conversas e bloqueado de
+//   proposito, para nao perder o historico);
+// - canal que ja e Meta Cloud: troca a credencial. Sem isso, um Access Token
+//   revogado ou rotacionado so poderia ser trocado mexendo no banco.
+//
 // A conferencia usa o telefone do proprio canal, entao credencial de outro
 // numero e recusada antes de qualquer alteracao.
-router.post('/:id/migrate-to-meta-cloud', requireAuth, requireIntegrationsAccess, async (req, res) => {
+router.post('/:id/meta-cloud-credentials', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const channel = await findChannelById(req.params.id);
   if (!channel) {
     return res.status(404).json({ error: 'Channel not found' });
-  }
-  if (channel.type === 'meta_cloud') {
-    return res.status(400).json({ error: 'Este canal já é Meta Cloud.' });
   }
   const { phoneNumberId, accessToken, wabaId } = req.body || {};
   if (!phoneNumberId || !accessToken || !wabaId) {
@@ -172,8 +174,17 @@ router.post('/:id/migrate-to-meta-cloud', requireAuth, requireIntegrationsAccess
   if (channel.type === 'baileys') {
     await baileysManager.stopBaileysChannel(channel.id);
   }
-  const converted = await convertChannelToMetaCloud(channel.id, { phoneNumberId, accessToken, wabaId });
-  res.json(toChannelResponse(converted));
+  try {
+    const converted = await convertChannelToMetaCloud(channel.id, { phoneNumberId, accessToken, wabaId });
+    return res.json(toChannelResponse(converted));
+  } catch (err) {
+    // O indice unique do phoneNumberId impede apontar dois canais para o mesmo
+    // numero; sem tratar, isso vazaria como 500 em vez de um recado util.
+    if (err.code === UNIQUE_VIOLATION) {
+      return res.status(409).json({ error: 'Esse Phone Number ID já está em uso por outro canal.' });
+    }
+    throw err;
+  }
 });
 
 router.patch('/:id', requireAuth, requireIntegrationsAccess, async (req, res) => {

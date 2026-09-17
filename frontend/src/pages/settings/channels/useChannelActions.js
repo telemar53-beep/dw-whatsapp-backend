@@ -10,7 +10,7 @@ import {
   setChannelAiEnabled,
   setChannelAiTriageEnabled,
   setChannelAiNightModeEnabled,
-  migrateChannelToMetaCloud,
+  setMetaCloudCredentials,
 } from '../../../services/api';
 
 const EMPTY_ERRORS = { triage: null, ai: null, aiTriage: null, aiNightMode: null, wabaId: null, action: null };
@@ -138,8 +138,8 @@ export function useChannelActions(refresh) {
   // Sem try/catch de proposito: o erro tem que chegar ao formulário da
   // migração, que mostra o motivo que a Meta deu ao lado dos campos. O refresh
   // só roda no sucesso, senão a tela recarregaria como se algo tivesse mudado.
-  async function migrateToMetaCloud(channelId, credentials) {
-    const channel = await migrateChannelToMetaCloud(channelId, credentials, token);
+  async function saveMetaCloudCredentials(channelId, credentials) {
+    const channel = await setMetaCloudCredentials(channelId, credentials, token);
     refresh();
     return channel;
   }
@@ -147,7 +147,7 @@ export function useChannelActions(refresh) {
   return {
     errors,
     busyChannelId,
-    migrateToMetaCloud,
+    saveMetaCloudCredentials,
     toggleTriage,
     toggleAi,
     toggleAiTriage,

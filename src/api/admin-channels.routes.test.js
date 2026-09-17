@@ -1258,7 +1258,7 @@ describe('POST /api/admin/channels — conferencia do cadastro com a Meta', () =
 // Levar um numero da 360dialog (ou do Baileys) para o Meta Cloud converte o
 // canal no lugar. Recriar nao e opcao: o telefone e unico na tabela e excluir
 // um canal com conversas e bloqueado — de proposito, para nao perder historico.
-describe('POST /api/admin/channels/:id/migrate-to-meta-cloud', () => {
+describe('POST /api/admin/channels/:id/meta-cloud-credentials', () => {
   const CREDENCIAIS = { phoneNumberId: '613336748527998', accessToken: 'tok-meta', wabaId: '3530350190603464' };
   const CANAL_360 = {
     id: 'channel-360',
@@ -1277,7 +1277,7 @@ describe('POST /api/admin/channels/:id/migrate-to-meta-cloud', () => {
 
   function migrar(body = CREDENCIAIS, role = 'admin') {
     return request(buildApp())
-      .post('/api/admin/channels/channel-360/migrate-to-meta-cloud')
+      .post('/api/admin/channels/channel-360/meta-cloud-credentials')
       .set('Authorization', `Bearer ${tokenFor('agent-1', role, true)}`)
       .send(body);
   }
@@ -1334,13 +1334,31 @@ describe('POST /api/admin/channels/:id/migrate-to-meta-cloud', () => {
     expect(baileysManager.stopBaileysChannel).not.toHaveBeenCalled();
   });
 
-  test('recusa um canal que ja e Meta Cloud', async () => {
-    findChannelById.mockResolvedValue({ ...CANAL_360, type: 'meta_cloud', config: CREDENCIAIS });
+  // Mesmo endpoint serve para trocar a credencial de um canal que ja e Meta
+  // Cloud: sem isso, um Access Token revogado ou rotacionado so poderia ser
+  // trocado mexendo no banco.
+  test('atualiza as credenciais de um canal que ja e Meta Cloud', async () => {
+    const atual = { ...CANAL_360, type: 'meta_cloud', config: { ...CREDENCIAIS, accessToken: 'tok-velho' } };
+    findChannelById.mockResolvedValue(atual);
+    convertChannelToMetaCloud.mockResolvedValue({ ...atual, config: CREDENCIAIS });
 
     const res = await migrar();
 
-    expect(res.status).toBe(400);
-    expect(convertChannelToMetaCloud).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(convertChannelToMetaCloud).toHaveBeenCalledWith('channel-360', CREDENCIAIS);
+    expect(baileysManager.stopBaileysChannel).not.toHaveBeenCalled();
+  });
+
+  // O indice unique do phoneNumberId recusa apontar dois canais para o mesmo
+  // numero. Sem tratar, isso vazaria como 500 em vez de um recado util.
+  test('409 quando o Phone Number ID ja pertence a outro canal', async () => {
+    findChannelById.mockResolvedValue(CANAL_360);
+    convertChannelToMetaCloud.mockRejectedValue(Object.assign(new Error('duplicate key'), { code: '23505' }));
+
+    const res = await migrar();
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/outro canal/i);
   });
 
   test('404 quando o canal nao existe', async () => {
@@ -1360,7 +1378,7 @@ describe('POST /api/admin/channels/:id/migrate-to-meta-cloud', () => {
 
   test('403 para quem nao gerencia integracoes', async () => {
     const res = await request(buildApp())
-      .post('/api/admin/channels/channel-360/migrate-to-meta-cloud')
+      .post('/api/admin/channels/channel-360/meta-cloud-credentials')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
       .send(CREDENCIAIS);
 

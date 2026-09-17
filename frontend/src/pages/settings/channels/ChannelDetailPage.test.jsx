@@ -233,11 +233,34 @@ describe('Migrar para Meta Cloud', () => {
     expect(screen.getByRole('button', { name: /migrar para meta cloud/i })).toBeInTheDocument();
   });
 
-  test('não oferece para um canal que já é Meta Cloud', () => {
+  // Num canal que ja e Meta Cloud o mesmo formulario troca a credencial: sem
+  // isso, um Access Token revogado ou rotacionado so poderia ser trocado
+  // mexendo no banco.
+  test('num canal Meta Cloud o botão vira "Atualizar credenciais"', () => {
     useChannels.mockReturnValue({ channels: [{ ...via360, type: 'meta_cloud' }], status: 'ready', refresh });
     renderDetail('/configuracoes/canais/ch1/conexao');
 
     expect(screen.queryByRole('button', { name: /migrar para meta cloud/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /atualizar credenciais/i })).toBeInTheDocument();
+  });
+
+  test('atualizar credenciais usa o mesmo endpoint e recarrega a lista', async () => {
+    useChannels.mockReturnValue({ channels: [{ ...via360, type: 'meta_cloud' }], status: 'ready', refresh });
+    api.setMetaCloudCredentials.mockResolvedValue({ ...via360, type: 'meta_cloud' });
+    renderDetail('/configuracoes/canais/ch1/conexao');
+
+    await userEvent.click(screen.getByRole('button', { name: /atualizar credenciais/i }));
+    await preencher();
+    await userEvent.click(screen.getByRole('button', { name: /^salvar$/i }));
+
+    await waitFor(() =>
+      expect(api.setMetaCloudCredentials).toHaveBeenCalledWith(
+        'ch1',
+        { phoneNumberId: '613336748527998', accessToken: 'tok-meta', wabaId: '3530350190603464' },
+        'tok'
+      )
+    );
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
   test('oferece também para um canal Baileys', () => {
@@ -249,7 +272,7 @@ describe('Migrar para Meta Cloud', () => {
 
   test('envia as credenciais e recarrega a lista quando dá certo', async () => {
     useChannels.mockReturnValue({ channels: [via360], status: 'ready', refresh });
-    api.migrateChannelToMetaCloud.mockResolvedValue({ ...via360, type: 'meta_cloud' });
+    api.setMetaCloudCredentials.mockResolvedValue({ ...via360, type: 'meta_cloud' });
     renderDetail('/configuracoes/canais/ch1/conexao');
 
     await abrirFormulario();
@@ -257,7 +280,7 @@ describe('Migrar para Meta Cloud', () => {
     await userEvent.click(screen.getByRole('button', { name: /^migrar$/i }));
 
     await waitFor(() =>
-      expect(api.migrateChannelToMetaCloud).toHaveBeenCalledWith(
+      expect(api.setMetaCloudCredentials).toHaveBeenCalledWith(
         'ch1',
         { phoneNumberId: '613336748527998', accessToken: 'tok-meta', wabaId: '3530350190603464' },
         'tok'
@@ -268,7 +291,7 @@ describe('Migrar para Meta Cloud', () => {
 
   test('mostra o motivo que a Meta deu quando a migração é recusada', async () => {
     useChannels.mockReturnValue({ channels: [via360], status: 'ready', refresh });
-    api.migrateChannelToMetaCloud.mockRejectedValue({
+    api.setMetaCloudCredentials.mockRejectedValue({
       body: { error: 'Nenhum app está inscrito no webhook dessa WABA, então as mensagens não chegariam.' },
     });
     renderDetail('/configuracoes/canais/ch1/conexao');
@@ -301,10 +324,10 @@ describe('Ações avançadas descrevem só o que está na tela', () => {
     renderDetail('/configuracoes/canais/ch1/conexao');
   }
 
-  test('num Meta Cloud não promete migrar nem reconectar', () => {
+  test('num Meta Cloud fala de credenciais, não de migrar nem reconectar', () => {
     renderTipo('meta_cloud');
 
-    expect(screen.getByText('Ocultar ou excluir este canal')).toBeInTheDocument();
+    expect(screen.getByText('Atualizar credenciais, ocultar ou excluir este canal')).toBeInTheDocument();
     const zone = screen.getByRole('heading', { name: /ações com cuidado/i }).closest('section');
     expect(zone).not.toHaveTextContent(/migrar/i);
     expect(zone).not.toHaveTextContent(/reconectar/i);

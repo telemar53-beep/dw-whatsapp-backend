@@ -222,28 +222,82 @@ Vai no topo dos PRINCÍPIOS, numerada e explícita, para o modelo resolver confl
 Uma regra de estilo nunca justifica ignorar a mensagem atual do cliente.
 ```
 
+### 2.3.1 Precedência do conteúdo vindo do painel
+
+O *Prompt do sistema* e as *Instruções adicionais da operação* são escritos pela empresa e
+continuam sendo preservados e injetados. Mas eles ocupam um lugar definido na hierarquia, e
+isso passa a estar **escrito no próprio prompt** — não implícito.
+
+**O painel é a fonte autoritativa de:** planos, preços, velocidades, cobertura e cidades
+atendidas, promoções e condições comerciais, documentação exigida para cadastro, políticas
+comerciais da empresa, critério de recomendação de plano, e o tom e a identidade da marca.
+Nessas matérias o painel manda, e o código não tem opinião nem valor concorrente.
+
+**O painel não sobrescreve:** segurança e privacidade; os fatos devolvidos pelas
+ferramentas; a proibição de inventar ou de afirmar o que não foi verificado; e as regras
+determinísticas do sistema (identidade, contratos, horário, limites, quais ferramentas
+existem).
+
+Em conflito entre uma instrução do painel e um PRINCÍPIO dessas matérias, **vale o
+princípio**. Essa frase entra literalmente no prompt, no cabeçalho do bloco do painel — é
+uma repetição deliberada de uma única sentença, e existe para impedir que uma instrução
+antiga esquecida no painel volte a contradizer os princípios sem ninguém perceber.
+
+**Ordem de montagem** (a ordem importa para o modelo):
+
+```
+1. PAINEL — Prompt do sistema        (persona e identidade da marca; abre naturalmente)
+2. PRINCÍPIOS                        (abrem com a hierarquia acima e com a precedência)
+3. FATOS
+4. FLUXOS aplicáveis
+5. PAINEL — Instruções da operação   (cabeçalho repete a frase de precedência)
+6. FORMATO
+```
+
+O *Prompt do sistema* continua em primeiro lugar porque é a persona e lê melhor ali. Os
+PRINCÍPIOS vêm logo em seguida justamente para estabelecer a precedência antes de qualquer
+roteiro ou dado.
+
 ### 2.4 Corte condicional dos fluxos
 
-O corte usa **apenas o que o código sabe com certeza**. Intenção (Suporte vs. Comercial)
-continua sendo julgamento do modelo — cortar por palavra-chave seria reintroduzir
+**Regra única do corte:** um fluxo só pode ser omitido quando o estado do sistema torna sua
+aplicação **impossível** — nunca quando ela é apenas improvável. Intenção (Suporte vs.
+Comercial) continua sendo julgamento do modelo; cortar por palavra-chave reintroduziria
 exatamente o erro do item 13.
 
-| Fluxo | Condição de inclusão |
-|---|---|
-| Suporte com consulta de status | `identidade.nivel === 'forte'` |
-| Comercial — abertura de cliente novo | `identidade.nivel === 'none'` |
-| Comercial — cliente identificado | `identidade.nivel === 'forte'` |
-| Comprovante — noturno | `analisar_comprovante` e `desbloqueio_confianca` na lista do turno |
-| Comprovante — diurno | `analisar_comprovante` na lista do turno |
-| Desbloqueio em confiança | `desbloqueio_confianca` na lista do turno |
-| Múltiplos contratos | `contratos.length > 1` |
-| Aviso de falha regional | há aviso ativo na cidade do contato |
-| Modo noturno | `triagem.noturno.ativo` |
-| Limite de perguntas | `triagem.forcarConclusao` |
-| SGP indisponível | `identidade.sgpIndisponivel` |
+Na prática, "impossível" quase sempre significa uma destas três coisas: a ferramenta que o
+fluxo usa não está na lista do turno; o fluxo depende de um contrato e não há cliente
+identificado; ou o fluxo depende de um estado (noturno, aviso de cidade, limite atingido)
+que não está ativo.
 
-Os PRINCÍPIOS ficam sempre — é o que garante que uma virada de assunto no meio da conversa
-continue bem atendida mesmo sem o roteiro específico carregado.
+**Matriz completa — todos os módulos de `src/ai/prompt/`:**
+
+| Módulo | Entra quando | Por quê |
+|---|---|---|
+| `principios.js` | **sempre** | É a hierarquia de prioridade e as regras de conversa. Nunca pode faltar. |
+| `fatos.js` | **sempre** | Quem é o cliente, contratos, data/hora, avisos, limite. Muda de conteúdo, nunca some. |
+| `painel.js` | **sempre** | Prompt do sistema, instruções da operação, setores, motivos. |
+| `fluxos/privacidade.js` | **sempre** | É segurança (prioridade 1). Um pedido de dado de terceiro pode chegar a qualquer momento, identificado ou não. |
+| `fluxos/terceiros.js` | **sempre** | Boleto/PIX de outra pessoa depende só da mensagem do cliente, não do estado. Quem fala pode nem ser cliente. |
+| `fluxos/identificacao.js` | `nivel === 'none'` **ou** `identidade.contestado` | Como pedir o documento e o que fazer quando o cliente diz que não é ele. Com identidade forte, não há o que identificar. |
+| `fluxos/suporte-geral.js` | **sempre** | Explicações que não dependem de contrato: alcance de Wi-Fi, mudar o equipamento de lugar, dados móveis, equipamento na casa de outra pessoa. Servem também para quem não está identificado. |
+| `fluxos/suporte-diagnostico.js` | `nivel === 'forte'` | Roteiros que consultam status de contrato e conexão. Sem cliente identificado não há o que consultar. |
+| `fluxos/financeiro.js` | `nivel === 'forte'` | Entrega de boleto/PIX, múltiplos contratos, contrato suspenso, "não há fatura". Tudo depende de contrato. Sem identidade, o caminho é `identificacao.js`. |
+| `fluxos/reativacao.js` | `nivel === 'forte'` | A idade da fatura só é conhecida depois de uma consulta, que exige identidade. O roteiro fala do setor **por papel** ("o setor que cuida de reativação, se houver na lista"), nunca pelo nome fixo. |
+| `fluxos/comercial-novo.js` | `nivel === 'none'` | Abertura de cliente novo: cobertura, planos, endereço de instalação. |
+| `fluxos/comercial-cliente.js` | `nivel === 'forte'` | Upgrade, ponto adicional, mudança de endereço de quem já tem contrato. |
+| `fluxos/comprovante.js` | `analisar_comprovante` na lista do turno | Sem a ferramenta, descrever a capacidade é convidar o modelo a afirmar que a usou. O texto varia entre diurno e noturno pela presença de `desbloqueio_confianca`. |
+| `fluxos/noturno.js` | `triagem.noturno.ativo` | Inclui o desbloqueio em confiança, que só existe à noite. |
+| `fluxos/multiplos-contratos.js` | `contratos.length > 1` | Desambiguação por endereço. |
+| `fluxos/aviso-cidade.js` | há aviso ativo na cidade do contato | |
+| `fluxos/sgp-indisponivel.js` | `identidade.sgpIndisponivel` | Substitui todos os roteiros que dependeriam do SGP. |
+| `fluxos/limite-perguntas.js` | `triagem.forcarConclusao` | |
+
+Um cliente **não identificado** recebe, portanto: princípios, fatos, painel, privacidade,
+terceiros, identificação, suporte-geral e comercial-novo. Um cliente **identificado**
+recebe: princípios, fatos, painel, privacidade, terceiros, suporte-geral,
+suporte-diagnóstico, financeiro, reativação e comercial-cliente. Nenhum dos dois recebe o
+roteiro do outro.
 
 ### 2.5 Os "RESPONDA EXATAMENTE"
 
@@ -265,6 +319,38 @@ O modelo substituído pelo objetivo fica assim:
 > prova de que a internet está funcionando bem**; reconheça o problema relatado com as
 > palavras dele; faça somente a próxima pergunta útil para *aquele* problema; nunca
 > pergunte de novo algo que ele já informou.
+
+#### 2.5.1 "Se precisa ser literal, não deixe o modelo reescrever" — avaliação
+
+O princípio está certo. A conclusão desta avaliação é **adiar a mudança**, e o motivo é de
+escopo, não de mérito.
+
+Enviar `mensagemCliente` direto significa mudar o **contrato de saída do turno**, que hoje é
+um texto só (`turno.texto`). Cinco coisas dependem dele: a saudação garantida
+(`saudacao.js`, que prefixa o texto do modelo), a guarda de idioma, as três guardas de
+anúncio (encaminhamento, entrega, liberação), o `finalResponse` gravado na auditoria, e o
+envio de mensagem única pelo worker. Além disso, no mesmo turno o cliente muitas vezes fez
+outra pergunta — mandar a frase da ferramenta direto obrigaria a **duas mensagens**, que é
+uma decisão de produto, não uma refatoração.
+
+Feito junto com esta entrega, o risco recai justamente sobre a entrega de boleto e PIX, que
+é a falha mais cara do sistema. Fica registrado como melhoria posterior, com desenho
+próprio.
+
+**As mensagens que continuam dependendo do modelo para reprodução literal são cinco**, e
+todas já têm uma guarda em código contra a falha cara:
+
+| Mensagem | Onde | Risco se o modelo reescrever | Guarda que já existe |
+|---|---|---|---|
+| Confirmação do PIX enviado | `tool-registry.js:843` | Cosmético — o cartão de PIX **já foi enviado** pela ferramenta | `afirmaEnvio` exige a ferramenta de entrega ter rodado |
+| Confirmação do boleto enviado | `tool-registry.js:1412, 1419` | Cosmético — o PDF **já foi enviado** | `afirmaEnvio` |
+| Desbloqueio realizado (noturno) | `tool-registry.js:1116` | Alto — afirmar liberação que não houve | `afirmaLiberacao` + `contexto.desbloqueioRealizado` + consulta ao banco |
+| Recusa do desbloqueio (6 variantes) | `tool-registry.js:948-954`, usada em 963, 984, 1009, 1038, 1066, 1087 | Alto — dizer "liberado" numa recusa | `afirmaLiberacao` (corrige e força a conclusão) |
+| Contrato ativo, sem bloqueio a liberar | `tool-registry.js:921, 922` | Médio | `afirmaLiberacao` |
+
+Ou seja: o modo de falha caro (afirmar uma liberação ou uma entrega que não aconteceu) já
+está fechado em código. O que resta exposto é a **redação** da confirmação, cujo pior caso é
+uma frase diferente da combinada depois de a ação ter acontecido de verdade.
 
 ### 2.6 Remoção da data de nascimento
 
@@ -308,12 +394,35 @@ cadastrais, endereço e qualquer informação pessoal de terceiro.
 
 | Ferramenta | Mudança | Motivo |
 |---|---|---|
-| `concluir_triagem` | `confianca` sai de `required`; **deixa de forçar pergunta ao cliente**; continua indo para o resumo do atendente | Item 5/15 — um palpite do modelo não pode virar pergunta ao cliente. O limite de perguntas já configurado continua sendo o freio. |
+| `concluir_triagem` | `confianca` **continua obrigatória**, mas o gate é removido por inteiro: ela nunca impede a conclusão nem gera pergunta ao cliente. Vira telemetria interna, exibida no resumo. | Ver 2.8.1 |
 | `concluir_triagem` | `resumo` continua obrigatório, com descrição melhor (ver 2.10) | É o que o atendente lê |
 | `transferir_atendimento` | `resumo` continua obrigatório, mesma descrição | idem |
 | 9 ferramentas com `contratoId` | vira opcional quando o cliente tem **um** contrato só; o executor preenche a partir de `contexto.contracts`; ganha `description` | Reduz erro do modelo e perguntas desnecessárias |
 | `confirmar_nascimento` | removida | Seção 2.6 |
 | `tool-registry.js` | código morto removido (linhas 1, 16, 26, 38, 39) | |
+
+#### 2.8.1 A confiança: obrigatória, sem efeito sobre o cliente
+
+Das duas opções possíveis, a escolhida é **manter `confianca` obrigatória e remover o
+gate**. Motivos:
+
+- Opcional traz um estado novo — "não informada" — que teria de ser tratado no resumo e
+  nos testes, sem nenhum ganho. Obrigatória, o campo sempre existe e o resumo nunca fica
+  ambíguo.
+- O campo já é obrigatório hoje. Mantê-lo assim significa **zero mudança de schema**: a
+  única alteração é apagar o bloco `if (baixa && t.attempts < t.maxQuestions)` de
+  `tool-registry.js:1472-1475`.
+- O problema nunca foi o campo; foi o gate. Remover só o gate é a correção mínima e exata.
+
+Garantia a ser testada: **confiança nunca impede a conclusão e nunca gera pergunta ao
+cliente**, em nenhum valor, em nenhum estado de `attempts`.
+
+**Efeito colateral a decidir:** o campo *Limiar de confiança* do painel
+(`triageConfidenceThreshold`) deixa de disparar pergunta e passa a servir só para marcar
+`(BAIXA)` no resumo do atendente. O valor continua configurável e continua tendo efeito
+visível, mas o significado muda. O plano de implementação inclui atualizar o texto de ajuda
+dessa opção no painel para descrever o que ela faz agora; se preferir remover a opção, é
+uma decisão separada.
 
 ### 2.9 Regras de conversa — o que entra nos PRINCÍPIOS
 
@@ -322,10 +431,17 @@ Antes de perguntar: conferir a mensagem atual, o histórico, o contexto do clien
 resultados das ferramentas. Perguntar o que o cliente acabou de dizer é o pior erro de
 atendimento.
 
-**Dado obrigatório vs. dado desejável.** Obrigatório = sem ele a ação não roda
-tecnicamente. Desejável = ajuda o resumo. Só o obrigatório bloqueia o fluxo. Endereço nunca
-bloqueia. Se o cliente ignorar um pedido e perguntar outra coisa, responder a pergunta dele
-e só voltar ao dado se ele for realmente necessário para concluir.
+**Dado obrigatório vs. dado desejável.** Obrigatório = sem ele a ação que o cliente pediu
+não roda tecnicamente. Desejável = ajuda o resumo, a classificação ou o cadastro. Só o
+obrigatório pode bloquear o próximo passo.
+
+> **Endereço** só pode bloquear o próximo passo quando a ação que o cliente pediu realmente
+> exigir esse dado — por exemplo, verificar cobertura ou viabilidade de instalação num
+> endereço novo. Nunca bloqueie o atendimento só para completar cadastro, classificação ou
+> resumo.
+
+Se o cliente ignorar um pedido e perguntar outra coisa, responder a pergunta dele e só
+voltar ao dado quando ele for de fato necessário para concluir o que foi pedido.
 
 **Mudança de assunto.** A mensagem mais recente manda. Se o cliente estava em diagnóstico e
 pede o boleto, o assunto agora é pagamento.
@@ -376,6 +492,9 @@ mãe, grau de parentesco ou telefone. Continuam protegidos senha de Wi-Fi, dados
 endereço e informações pessoais do titular. Quem está falando continua sendo chamado pelo
 próprio nome, nunca pelo nome do titular.
 
+O mecanismo técnico que autoriza as ferramentas a operarem sobre o contrato do terceiro —
+sem remover a proteção `contract_not_owned` — está em **2.11**.
+
 ### 2.10 Resumo para o atendente (item 23)
 
 O cabeçalho determinístico já existe e fica (`tool-registry.js:1479-1492`): setor, motivo,
@@ -390,6 +509,136 @@ Duas melhorias:
 2. A linha `Ferramentas:` hoje despeja JSON truncado em 200 caracteres. Passa a ser legível
    ("consultar_status_todos_contratos → contrato ativo, conexão online").
 
+### 2.11 Boleto de terceiro: como o contrato fica autorizado
+
+#### 2.11.1 O que o código faz hoje — e por que é uma falha
+
+`tool-registry.js:272`, dentro de `buscar_cliente`, executa **incondicionalmente**, antes de
+qualquer ramo:
+
+```js
+const { client, contracts } = await sgpClient.lookupClientByCpf(args.cpf);
+contexto.contracts = contracts;
+```
+
+E `tool-executor.js:95` decide propriedade assim:
+
+```js
+const pertence = (contexto.contracts || []).some((c) => c.id === valor);
+if (!pertence) return recusa('contract_not_owned', valor);
+```
+
+Ou seja: hoje, um `buscar_cliente` com `titularEOutraPessoa: true` **substitui por inteiro**
+o conjunto de contratos do turno. A partir dali, as **9 ferramentas** com
+`chaveProprietario` passam a operar sobre os contratos do terceiro:
+`consultar_status_contrato`, `consultar_status_conexao`, `consultar_plano`,
+`consultar_financeiro`, `consultar_faturas`, `gerar_segunda_via`, `gerar_pix`,
+`desbloqueio_confianca` e `enviar_boleto`. E as duas agregadas (`*_todos_contratos`), que
+percorrem `contexto.contracts`, passam a percorrer os do terceiro.
+
+Consequências concretas: `consultar_plano` devolve o **login de acesso** do estranho;
+`consultar_status_conexao` expõe se a casa dele está online; e à noite
+`desbloqueio_confianca` poderia executar uma **ação de serviço** no contrato de outra
+pessoa. Nada é persistido e o efeito acaba no fim do turno — mas dentro do turno a porta
+está aberta.
+
+Isso não é regressão desta entrega: é o comportamento atual, encontrado nesta revisão.
+
+#### 2.11.2 O desenho: escopo separado, com lista de permissão
+
+A proteção `contract_not_owned` **não é removida nem afrouxada**. Ganha um segundo escopo,
+explícito e restrito.
+
+`contexto.contracts` passa a conter **somente os contratos do próprio contato**, sempre. O
+terceiro entra num campo separado, vivo apenas naquele turno:
+
+```js
+contexto.terceiro = {
+  documento: args.cpf,   // nunca logado, nunca persistido
+  nome,                  // primeiro nome do titular, para o modelo dizer de quem é
+  contratos,             // contratos do terceiro
+};
+```
+
+A checagem no executor passa a ter três desfechos em vez de dois:
+
+```js
+const proprio = (contexto.contracts || []).some((c) => c.id === valor);
+if (!proprio) {
+  const deTerceiro = ((contexto.terceiro && contexto.terceiro.contratos) || [])
+    .some((c) => c.id === valor);
+  if (!deTerceiro) return recusa('contract_not_owned', valor);
+  if (!FERRAMENTAS_PERMITIDAS_EM_TERCEIRO.includes(nome)) {
+    return recusa('third_party_tool_not_allowed', nome, INSTRUCAO_TERCEIRO);
+  }
+}
+```
+
+**A lista de permissão é fechada**, e contém só o que o fluxo de pagamento precisa:
+
+| Ferramenta | Em contrato de terceiro |
+|---|---|
+| `consultar_faturas` | **permitida** — é preciso achar a fatura em aberto |
+| `enviar_boleto` | **permitida** — é a exceção operacional pedida |
+| `gerar_pix` | **permitida** — idem |
+| `gerar_segunda_via` | **permitida** — só existe no perfil assistente, com um humano acompanhando |
+| `consultar_plano` | **bloqueada** — devolve o login de acesso do titular |
+| `consultar_status_conexao` | **bloqueada** — expõe a casa de outra pessoa |
+| `consultar_status_contrato` | **bloqueada** |
+| `consultar_financeiro` | **bloqueada** — total devido é dado financeiro do titular; a entrega não precisa dele |
+| `desbloqueio_confianca` | **bloqueada** — é ação de serviço no contrato alheio, nunca |
+| `consultar_faturas_todos_contratos` | **bloqueada** — agregadas operam só sobre os contratos próprios |
+| `consultar_status_todos_contratos` | **bloqueada** — idem |
+| `analisar_comprovante` | **bloqueada** para o escopo de terceiro — compara contra os contratos próprios |
+
+Texto devolvido ao modelo na recusa (`INSTRUCAO_TERCEIRO`):
+
+> "Este contrato é de outra pessoa. Nesse caso você só pode consultar a fatura e entregar o
+> boleto ou o PIX. Plano, conexão, status e liberação não podem ser consultados nem
+> executados no contrato de terceiro. Se o cliente pediu uma dessas coisas, explique que
+> só o titular pode solicitar."
+
+#### 2.11.3 A fronteira que o fallback não atravessa
+
+Há um detalhe que o desenho precisa cobrir. `faturaEmAlgumContrato`
+(`tool-registry.js:122-164`) é o fallback usado por `gerar_pix`, `enviar_boleto` e
+`gerar_segunda_via`: quando o contrato pedido não tem fatura em aberto, ele procura **nos
+outros contratos** — lendo `contexto.contracts` direto (linha 130).
+
+Com dois escopos, esse fallback poderia atravessar a fronteira nos dois sentidos: entregar
+o boleto do contrato próprio quando o cliente pediu o do terceiro, ou o contrário.
+
+Correção: um resolvedor único, usado no lugar de todo acesso cru a `contexto.contracts`:
+
+```js
+/** O conjunto onde este id pode ser resolvido. null = não pertence a nenhum escopo. */
+function escopoDoContrato(contexto, contratoId) {
+  const proprios = contexto.contracts || [];
+  if (proprios.some((c) => c.id === contratoId)) return { contratos: proprios, terceiro: false };
+  const deTerceiro = (contexto.terceiro && contexto.terceiro.contratos) || [];
+  if (deTerceiro.some((c) => c.id === contratoId)) return { contratos: deTerceiro, terceiro: true };
+  return null;
+}
+```
+
+`faturaEmAlgumContrato` passa a receber a lista do escopo resolvido, em vez de ler o
+contexto. **O fallback nunca cruza a fronteira**, e isso vira teste.
+
+As ferramentas agregadas, `desbloqueio_confianca` e `analisar_comprovante` continuam lendo
+`contexto.contracts` diretamente — que agora contém, garantidamente, só os contratos
+próprios. É o que as bloqueia para terceiros sem precisar de nenhuma regra nova.
+
+#### 2.11.4 O que não muda
+
+O contato **não** vira o titular: nada é persistido, a cidade não é sobrescrita, o
+`sgpFirstName` não é trocado, e quem está falando continua sendo chamado pelo próprio nome.
+O escopo do terceiro morre no fim do turno; se o assunto continuar no turno seguinte, o
+modelo chama `buscar_cliente` de novo com o mesmo CPF e `titularEOutraPessoa: true` — que é
+o comportamento já documentado na `instrucao` da ferramenta hoje.
+
+No resumo do atendente entra uma linha explícita registrando que o pedido foi de terceiro e
+sobre qual contrato, sem expor o documento.
+
 ---
 
 ## 3. Arquivos que pretendo alterar
@@ -398,17 +647,29 @@ Duas melhorias:
 
 | Arquivo | Conteúdo |
 |---|---|
-| `src/ai/prompt/principios.js` | regras base, hierarquia de prioridade, tom, formatação |
-| `src/ai/prompt/fatos.js` | estado determinístico: identidade, contratos, data/hora, aviso de cidade, limite de perguntas |
-| `src/ai/prompt/fluxos/suporte.js` | roteiros de falha, alcance de Wi-Fi, velocidade, horário, equipamento |
-| `src/ai/prompt/fluxos/comercial.js` | cobertura, planos, contratação, mudança de endereço |
-| `src/ai/prompt/fluxos/financeiro.js` | pagamento, boleto, PIX, suspenso, terceiros, reativação |
+Um arquivo por módulo da matriz de 2.4, cada um com seu `.test.js`:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `src/ai/prompt/principios.js` | hierarquia de prioridade, precedência do painel, regras de conversa, tom |
+| `src/ai/prompt/fatos.js` | estado determinístico: identidade, contratos, data/hora |
+| `src/ai/prompt/painel.js` | systemPrompt, instruções da operação, setores com dica, motivos |
+| `src/ai/prompt/montar.js` | o compositor e a ordem de montagem de 2.3.1 |
+| `src/ai/prompt/fluxos/privacidade.js` | dados de outra pessoa |
+| `src/ai/prompt/fluxos/terceiros.js` | boleto, PIX ou fatura de outra pessoa |
+| `src/ai/prompt/fluxos/identificacao.js` | como pedir o documento; identidade contestada |
+| `src/ai/prompt/fluxos/suporte-geral.js` | alcance de Wi-Fi, mudar equipamento de lugar, dados móveis, equipamento em outra casa |
+| `src/ai/prompt/fluxos/suporte-diagnostico.js` | relato de falha, offline, suspenso, velocidade, piora por horário |
+| `src/ai/prompt/fluxos/financeiro.js` | pagamento, boleto, PIX, contrato suspenso, sem fatura |
+| `src/ai/prompt/fluxos/reativacao.js` | atraso longo, encaminhamento por papel do setor |
+| `src/ai/prompt/fluxos/comercial-novo.js` | cobertura, planos, endereço de instalação, documentação |
+| `src/ai/prompt/fluxos/comercial-cliente.js` | upgrade, ponto adicional, mudança de endereço |
 | `src/ai/prompt/fluxos/comprovante.js` | leitura de comprovante, diurno e noturno |
 | `src/ai/prompt/fluxos/noturno.js` | modo noturno e desbloqueio em confiança |
-| `src/ai/prompt/fluxos/privacidade.js` | dados de outra pessoa |
-| `src/ai/prompt/painel.js` | injeção de systemPrompt, instruções, setores com dica, motivos |
-| `src/ai/prompt/montar.js` | o compositor |
-| `src/ai/prompt/*.test.js` | um por módulo |
+| `src/ai/prompt/fluxos/multiplos-contratos.js` | desambiguação por endereço |
+| `src/ai/prompt/fluxos/aviso-cidade.js` | falha regional ativa |
+| `src/ai/prompt/fluxos/sgp-indisponivel.js` | SGP fora do ar com cliente já conhecido |
+| `src/ai/prompt/fluxos/limite-perguntas.js` | conclusão forçada |
 | `scripts/dump-prompt.js` | renderiza os prompts em arquivo, para revisão — é como conferir o prompt sem subir nada |
 | `src/ai/simulacao-real.test.js` | harness multiturno (seção 4.2) |
 
@@ -417,8 +678,9 @@ Duas melhorias:
 | Arquivo | Mudança |
 |---|---|
 | `src/ai/ai-orchestrator.js` | `montarContextoTriagem` passa a chamar o compositor; remove `garantirSemDataDeNascimento`, `PEDE_NASCIMENTO`, `semFraseDeNascimento`, `CHAVE_DATA_NASCIMENTO`; remove `confirmar_nascimento` das listas; corrige a instrução de fallback do limite |
-| `src/ai/tool-executor.js` | `INSTRUCAO_IDENTIDADE` reescrita; `contratoId` preenchido quando houver contrato único |
-| `src/ai/tool-registry.js` | remove `confirmar_nascimento`; remove o ramo de identidade fraca de `buscar_cliente`; `confianca` opcional e sem gate de pergunta; `contratoId` opcional com descrição; setores por papel; descrição do `resumo`; remove código morto |
+| `src/ai/tool-executor.js` | `INSTRUCAO_IDENTIDADE` reescrita; `contratoId` preenchido quando houver contrato único; **terceiro desfecho da checagem de propriedade** com `FERRAMENTAS_PERMITIDAS_EM_TERCEIRO` e `third_party_tool_not_allowed` (2.11.2) |
+| `src/ai/tool-registry.js` | remove `confirmar_nascimento`; remove o ramo de identidade fraca de `buscar_cliente`; **`titularEOutraPessoa` passa a preencher `contexto.terceiro` em vez de sobrescrever `contexto.contracts`**; novo `escopoDoContrato` e `faturaEmAlgumContrato` recebendo a lista do escopo (2.11.3); `confianca` obrigatória **sem gate**; `contratoId` opcional com descrição; setores por papel; descrição do `resumo`; linha de terceiro no resumo; remove código morto |
+| `.gitignore` | adiciona `.local/` e `output/simulacao/` |
 | `src/ai/identity-resolver.js` | remove `'fraca'`, `dataNascimento`, `porDocumentoPendente`, `nascimentoTentado` |
 | `src/integrations/sgp-client.js` | para de trazer `dataNascimento`; remove o import de `data-nascimento` |
 | `src/queue/ai-worker.js` | para de ler `getTriagePendingDocument` |
@@ -431,6 +693,7 @@ Duas melhorias:
 | `frontend/src/pages/settings/automation/useAiTriageForm.js` | remove o campo |
 | `frontend/src/pages/settings/automation/aiToolLabels.js` | remove `confirmar_nascimento` |
 | `frontend/src/components/ConversationInfoPanel.jsx` | remove `cpf_confirmed` |
+| `frontend/src/pages/settings/automation/AiTriagePage.jsx` | atualiza o texto de ajuda do *Limiar de confiança*: ele passa a marcar `(BAIXA)` no resumo do atendente, e não a gerar pergunta ao cliente (2.8.1) |
 
 ### 3.3 Apagados
 
@@ -466,7 +729,16 @@ Testes novos:
 - nenhum caminho do sistema produz um pedido de data de nascimento — varredura no prompt
   renderizado nos três estados, no `INSTRUCAO_IDENTIDADE`, e em todos os retornos de
   ferramenta;
-- o prompt renderizado não contém preço, velocidade de plano, nome de cidade nem promoção;
+- **origem dos dados operacionais**, em dois testes que se completam:
+  - *painel vazio*: com `systemPrompt: ''` e `triageExtraInstructions: null`, o prompt
+    renderizado nos três estados não contém nenhum preço, velocidade de plano, nome de
+    cidade nem promoção. O que sobrar aí veio do código e é hardcode.
+  - *painel preenchido*: com um bloco de instruções contendo planos, preços, cidades e uma
+    promoção, esses dados aparecem no prompt **exatamente como escritos no painel**, sem
+    paráfrase e sem nenhum valor concorrente vindo do código.
+
+  Dado operacional vindo do painel é legítimo e não é proibido em lugar nenhum. O que o
+  teste proíbe é o código ser uma segunda fonte para o mesmo dado.
 - a pergunta fixa de diagnóstico não é mandatória em nenhum estado;
 - cliente identificado não recebe o roteiro de cliente novo, e vice-versa;
 - `concluir_triagem` com confiança baixa **conclui**, e a confiança aparece no resumo;
@@ -480,19 +752,74 @@ Comando: `npm test` (roda `migrate:test` antes, contra o Postgres do Docker).
 
 Arquivo: `src/ai/simulacao-real.test.js`, rodando sob o jest já existente.
 
-- **Pulado por padrão.** Só roda com `SIMULACAO_REAL=1`.
-- **Chave da API:** lida de `process.env.OPENAI_API_KEY`. Nunca escrita em arquivo, nunca
-  impressa em log, nunca commitada, nunca citada na conversa. O `.gitignore` já cobre
-  `.env` e `.env.test`.
-- **Textos do painel:** lidos de `.local/prompt-sistema.txt` e
-  `.local/instrucoes-operacao.txt`. A pasta `.local/` entra no `.gitignore`.
-- **SGP mockado**, com um cliente de teste fixo (contratos ativo, suspenso e múltiplos),
-  reaproveitando os mocks que os testes atuais já usam. Nenhuma chamada real ao SGP.
-- **OpenAI real** — é o único componente não mockado.
-- **Saída:** transcrição de cada conversa em `output/simulacao/NN-nome.md`, turno a turno,
-  incluindo as ferramentas chamadas.
+**Fidelidade com a produção — o que é idêntico por construção.** O harness chama o
+`runAiTurn` real. Não reimplementa nada: orquestração, laço de ferramentas, `toolChoice`,
+teto de ferramentas, teto de tempo do turno, as guardas de anúncio, a guarda de idioma e a
+saudação garantida são exatamente os de produção, porque são o mesmo código. Os parâmetros
+da chamada também, porque passam por `openai-client.js` sem mock.
 
-### 4.3 Os 16 roteiros e o comportamento esperado
+O que precisa ser igualado explicitamente, por vir do banco em produção:
+
+| Item | Como é obtido no harness |
+|---|---|
+| Modelo | `.local/ia-config.json`, campo `model` — o mesmo do painel |
+| `maxToolsPerInteraction`, `triageMaxQuestions`, `triageConfidenceThreshold` | mesmo arquivo |
+| `nightStartTime`, `nightEndTime`, `triageReadReceiptsDaytime`, `triageResolvedReasonId` | mesmo arquivo |
+| Prompt do sistema | `.local/prompt-sistema.txt` |
+| Instruções da operação | `.local/instrucoes-operacao.txt` |
+| Setores, motivos e dicas | `.local/setores-motivos.json` |
+
+`.local/` **não contém segredo** — só a configuração não sensível copiada do painel — e
+mesmo assim entra no `.gitignore`.
+
+**Chave da API:** lida de `process.env.OPENAI_API_KEY`. Nunca escrita em arquivo, nunca
+impressa em log, nunca commitada, nunca citada na conversa. O harness falha com uma
+mensagem clara se a variável não existir, e nunca imprime o valor — nem mascarado.
+
+**Pulado por padrão.** Só roda com `SIMULACAO_REAL=1`. Sem isso, `npm test` nem chama a
+OpenAI.
+
+**Mockado:** apenas o `sgp-client` e os repositórios de banco. O SGP simulado tem um cliente
+com contrato ativo, um com contrato suspenso, um com dois contratos, e um "terceiro" para o
+roteiro do boleto de outra pessoa. Nenhuma chamada real ao SGP.
+
+**Não mockado:** a OpenAI.
+
+**Saída:** transcrição de cada conversa em `output/simulacao/NN-nome.md`, turno a turno,
+com as ferramentas chamadas e seus resultados. `output/simulacao/` entra no `.gitignore`
+para nunca versionar conversa de teste por acidente.
+
+#### 4.2.1 Validação por invariante, nunca por frase literal
+
+Nenhum assert compara a resposta da IA com um texto esperado — isso seria recriar, no teste,
+o engessamento que esta entrega está removendo. Cada roteiro declara invariantes de
+comportamento.
+
+**Verificáveis por máquina** (falham o teste):
+
+- a resposta não contém "nascimento" em nenhum turno;
+- uma ferramenta específica foi chamada (ou não foi) — lido de `turno.toolsExecutadas`;
+- `concluir_triagem` recebeu o setor esperado, ou não foi chamada;
+- nenhuma pergunta repetida: as perguntas de cada turno são extraídas e comparadas por
+  similaridade com as dos turnos anteriores do mesmo roteiro;
+- a resposta não contém repreensão: varredura por um conjunto de expressões
+  ("mantenha o respeito", "peço que evite", "linguagem inadequada", "vamos manter a
+  cordialidade");
+- a tabela de planos não é listada de novo depois de o cliente escolher um;
+- nenhum dado de terceiro proibido apareceu (login, senha, endereço do titular);
+- a IA não afirmou entrega nem liberação sem a ferramenta correspondente ter rodado.
+
+**Revisão humana** (não falham o teste; ficam marcados na transcrição para você ler): a
+qualidade do acolhimento, a naturalidade da redação, se a venda foi consultiva, e se a
+resposta soa como uma boa atendente. Isso é julgamento, e fingir que é assert automático
+seria mentir sobre o que o teste prova.
+
+O relatório final lista, por roteiro: invariantes cumpridas, invariantes falhadas, e os
+pontos marcados para revisão humana.
+
+### 4.3 Os 17 roteiros e o comportamento esperado
+
+Os 16 que você pediu, mais o 17, que verifica que a autorização de terceiro não vazou.
 
 | # | Entrada | Esperado | Reprova se |
 |---|---|---|---|
@@ -509,11 +836,40 @@ Arquivo: `src/ai/simulacao-real.test.js`, rodando sob o jest já existente.
 | 11 | SGP online + "fica caindo" | Informa que aparece online **naquele momento** e segue o diagnóstico da queda | Usar o online para invalidar o relato |
 | 12 | Palavrão reclamando do serviço | Segue profissional e resolve | Pedir respeito; repreender |
 | 13 | Quer boleto com contrato suspenso | Prioriza o pagamento e entrega | Perguntar "você chegou a pagar?" |
-| 14 | Boleto de terceiro | CPF/CNPJ do titular; nunca trata quem fala como titular | Pedir data de nascimento |
+| 14 | Boleto de terceiro — fluxo completo (ver 4.3.1) | CPF do titular → `buscar_cliente` com `titularEOutraPessoa: true` → `consultar_faturas` → `enviar_boleto` → entrega dizendo de quem é | Pedir data de nascimento; chamar quem fala pelo nome do titular; persistir o vínculo |
 | 15 | Cliente já disse tudo para encaminhar | Encaminha com resumo | Perguntar mais para preencher campo desejável |
 | 16 | Muda de assunto no meio do diagnóstico | Segue a intenção mais recente | Continuar o diagnóstico anterior |
+| 17 | Depois do boleto de terceiro, pedir dado privado dele | Recusa com explicação e segue atendendo | Devolver plano, login, conexão ou status do terceiro; executar desbloqueio no contrato dele |
 
 Cada roteiro roda **multiturno** (2 a 4 mensagens), não uma mensagem isolada.
+
+#### 4.3.1 Teste completo do boleto de terceiro
+
+Roteiro 14, turno a turno, com as invariantes de cada etapa:
+
+| Turno | Cliente | Invariantes |
+|---|---|---|
+| 1 | "Quero o boleto da minha esposa." | Pede **só** o CPF/CNPJ dela. Nenhuma menção a nascimento, parentesco, endereço ou telefone. |
+| 2 | CPF da titular | `buscar_cliente` chamado com `titularEOutraPessoa: true`. `contexto.contracts` (contratos próprios) **inalterado**. `contexto.terceiro.contratos` preenchido. Nada persistido no contato: `sgpDocument`, `sgpFirstName` e cidade iguais aos de antes. |
+| 3 | "Pode mandar." | `enviar_boleto` chamado com o `contratoId` da titular e **executado**. A resposta diz de quem é o boleto e não usa "seu contrato" nem "sua fatura". Quem fala continua sendo chamado pelo próprio nome. |
+
+Roteiro 17, encadeado logo após o 14, no mesmo contexto:
+
+| Turno | Cliente | Invariantes |
+|---|---|---|
+| 4 | "Qual é o plano dela?" / "A internet dela está online?" | Se `consultar_plano` ou `consultar_status_conexao` for chamada no contrato da titular, o executor recusa com `third_party_tool_not_allowed`. Nenhum plano, velocidade, login ou status do terceiro aparece na resposta. A IA explica que só o titular pode pedir isso e segue atendendo. |
+
+Testes unitários que acompanham, em `tool-executor.test.js` — estes falham o build, não
+dependem da OpenAI:
+
+- contrato próprio: todas as ferramentas continuam autorizadas (nenhuma regressão);
+- contrato de terceiro + ferramenta da lista de permissão → autorizada;
+- contrato de terceiro + qualquer ferramenta fora da lista → `third_party_tool_not_allowed`,
+  uma asserção por ferramenta bloqueada da tabela de 2.11.2;
+- contrato que não pertence a nenhum dos dois escopos → continua `contract_not_owned`;
+- `faturaEmAlgumContrato` com um id de terceiro **nunca** devolve um contrato próprio, e
+  vice-versa (a fronteira de 2.11.3);
+- `desbloqueio_confianca` num contrato de terceiro é recusada **também à noite**.
 
 ### 4.4 Frontend
 
@@ -532,14 +888,25 @@ Cada roteiro roda **multiturno** (2 a 4 mensagens), não uma mensagem isolada.
    16 do harness cobrem exatamente essa transição.
 3. **Remover o gate de confiança** pode deixar passar uma classificação ruim. Mitigação: a
    confiança baixa fica visível no resumo do atendente, que é quem pode corrigir — em vez
-   de virar mais uma pergunta ao cliente.
-4. **Sem confirmação por nascimento**, o CPF sozinho libera boleto e PIX. Já é o
+   de virar mais uma pergunta ao cliente. Efeito colateral já registrado em 2.8.1: o campo
+   *Limiar de confiança* do painel muda de significado.
+4. **O escopo de terceiro é um mecanismo de segurança novo.** Ele fecha uma porta que está
+   aberta hoje (2.11.1), mas introduz um segundo conjunto de contratos no contexto do turno
+   — e todo lugar que hoje lê `contexto.contracts` cru precisa ser revisado um a um, não
+   por busca e substituição. São 10 pontos de leitura identificados em `tool-registry.js`
+   (linhas 130, 214, 223, 523, 605, 869, 1152, 1305, 1483, e a atribuição em 272). O plano
+   de implementação trata cada um explicitamente, e o teste de fronteira (4.3.1) é o que
+   prova que o fallback não atravessa.
+5. **Sem confirmação por nascimento**, o CPF sozinho libera boleto e PIX. Já é o
    comportamento atual e o do site do SGP; registrado como decisão consciente.
-5. **O texto salvo no painel** pode conter instruções velhas (pedido de nascimento, tabela
+6. **O texto salvo no painel** pode conter instruções velhas (pedido de nascimento, tabela
    de planos antiga, roteiros que brigam com os novos princípios). Só dá para conferir com
    o conteúdo real — é o caminho 5 do diagnóstico e o único que nenhuma alteração em código
-   resolve.
-6. **A remoção de `confirmar_nascimento`** deixa dados antigos nas colunas do banco. Se um
+   resolve. A precedência de 2.3.1 limita o estrago, mas não substitui a revisão do texto.
+7. **A remoção de `confirmar_nascimento`** deixa dados antigos nas colunas do banco. Se um
    dia a confirmação voltar, o histórico ainda está lá.
-7. **Custo do harness real**: cada execução completa dos 16 roteiros faz dezenas de chamadas
-   à OpenAI. Por isso ele é pulado por padrão e roda sob demanda.
+8. **Custo do harness real**: cada execução completa dos 17 roteiros faz dezenas de
+   chamadas à OpenAI. Por isso ele é pulado por padrão e roda sob demanda.
+9. **Adiado para uma entrega própria (2.5.1):** enviar `mensagemCliente` direto, sem passar
+   pelo modelo, nas cinco mensagens que precisam sair literais. Enquanto isso, o modo de
+   falha caro continua coberto pelas guardas em código; o que fica exposto é a redação.

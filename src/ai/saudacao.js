@@ -28,25 +28,46 @@ function comecaComSaudacao(texto) {
   return COMECA_COM_SAUDACAO.test(String(texto || ''));
 }
 
+// Print 2026-09-17 (18:05): "Boa noite, Roseane! Prontinho, Roseane! Enviei
+// acima o PIX." — a instrução da entrega manda o modelo começar pelo nome e a
+// saudação garantida colava o nome de novo por cima. Quando a ABERTURA do
+// texto já chama a pessoa, a saudação entra sem o nome.
+const ABERTURA_ANALISADA = 60;
+
+function escaparParaRegex(valor) {
+  return String(valor).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function aberturaJaCitaONome(texto, primeiroNome) {
+  if (!primeiroNome) return false;
+  return new RegExp(`\\b${escaparParaRegex(primeiroNome)}\\b`, 'i')
+    .test(String(texto).slice(0, ABERTURA_ANALISADA));
+}
+
 /**
  * Garante que a resposta comece com a saudação da hora e o primeiro nome
  * ("Bom dia, João! …"). Se o modelo já cumprimentou, devolve o texto como
  * veio — nunca "Bom dia! Bom dia, João!".
+ *
+ * Duas passagens, nesta ordem:
+ * 1. "João, vou verificar…" (o vocativo logo no começo) perde o vocativo, que
+ *    reaparece na saudação: "Bom dia, João! Vou verificar…" (print 2026-09-16).
+ * 2. Com o nome em outro ponto da abertura ("Prontinho, Roseane! …"), o texto
+ *    fica intacto e a saudação sai sem o nome: "Boa noite! Prontinho, Roseane!"
  */
 function garantirSaudacao(texto, primeiroNome, agora = new Date()) {
   if (!texto || comecaComSaudacao(texto)) return texto;
-  const nome = primeiroNome ? `, ${primeiroNome}` : '';
-  // Print 2026-09-16: "Boa tarde, Agnieska! Agnieska, vou encaminhar..." — o
-  // modelo já tinha começado chamando pela pessoa e o prefixo dobrou o nome.
   let corpo = String(texto);
   if (primeiroNome) {
-    const escapado = primeiroNome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const comecaComNome = new RegExp(`^${escapado},\\s*`, 'i');
+    const comecaComNome = new RegExp(`^${escaparParaRegex(primeiroNome)},\\s*`, 'i');
     if (comecaComNome.test(corpo)) {
       corpo = corpo.replace(comecaComNome, '');
       corpo = corpo.charAt(0).toUpperCase() + corpo.slice(1);
     }
   }
+  // Decidido sobre o corpo JÁ limpo: senão o vocativo que acabou de sair ainda
+  // contaria como "a abertura já cita o nome".
+  const nome = primeiroNome && !aberturaJaCitaONome(corpo, primeiroNome) ? `, ${primeiroNome}` : '';
   return `${saudacaoDaHora(agora)}${nome}! ${corpo}`;
 }
 

@@ -1067,3 +1067,56 @@ describe('AI suggestion card', () => {
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+// A atendente descobria a janela de 24 h só depois de escrever e enviar, pela
+// falha em vermelho — e no caso real mandou duas vezes, porque a primeira
+// falha não explicava o que fazer. O aviso vem antes, mas não bloqueia: o
+// nosso relógio pode divergir do da Meta por alguns minutos, e impedir um
+// envio que passaria seria pior do que deixar tentar.
+describe('aviso da janela de 24 horas', () => {
+  const MINHA = { id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', channelType: 'meta_cloud' };
+
+  function comMensagens(messages) {
+    useConversationMessages.mockReturnValue({ messages, sendMessage: vi.fn() });
+  }
+
+  function horasAtras(horas) {
+    return new Date(Date.now() - horas * 60 * 60 * 1000).toISOString();
+  }
+
+  test('avisa quando o cliente não responde há mais de 24 horas', () => {
+    comMensagens([{ id: 'm1', direction: 'inbound', content: 'Oi', createdAt: horasAtras(25) }]);
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getByText(/janela de 24h fechada/i)).toBeInTheDocument();
+  });
+
+  test('não avisa quando o cliente respondeu há pouco', () => {
+    comMensagens([{ id: 'm1', direction: 'inbound', content: 'Oi', createdAt: horasAtras(2) }]);
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.queryByText(/janela de 24h fechada/i)).not.toBeInTheDocument();
+  });
+
+  // O caso do print: a atendente iniciou com template e o cliente não respondeu.
+  test('avisa quando só nós falamos, porque template não abre a janela', () => {
+    comMensagens([{ id: 'm1', direction: 'outbound', content: 'Olá!', createdAt: horasAtras(1) }]);
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getByText(/janela de 24h fechada/i)).toBeInTheDocument();
+  });
+
+  test('não avisa nada num canal Baileys, que não tem essa regra', () => {
+    comMensagens([{ id: 'm1', direction: 'outbound', content: 'Olá!', createdAt: horasAtras(30) }]);
+    render(<ConversationView conversation={{ ...MINHA, channelType: 'baileys' }} onTransferClick={vi.fn()} />);
+
+    expect(screen.queryByText(/janela de 24h fechada/i)).not.toBeInTheDocument();
+  });
+
+  test('o campo de mensagem continua disponível apesar do aviso', () => {
+    comMensagens([{ id: 'm1', direction: 'inbound', content: 'Oi', createdAt: horasAtras(25) }]);
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getByPlaceholderText('Digite uma mensagem...')).not.toBeDisabled();
+  });
+});

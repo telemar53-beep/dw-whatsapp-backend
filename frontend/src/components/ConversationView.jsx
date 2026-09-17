@@ -24,7 +24,9 @@ import {
   IconClaim,
   IconLock,
   IconSearch,
+  IconInfo,
 } from './icons/WaIcons';
+import { isServiceWindowClosed } from '../utils/serviceWindow';
 
 const OVERLAY_TYPES = ['image', 'video', 'sticker'];
 const BLOCK_TYPES = ['document', 'location', 'pix'];
@@ -129,6 +131,7 @@ function HeaderIconButton({ label, onClick, children }) {
 function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
   const { messages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
+  const windowClosed = isServiceWindowClosed({ channelType: conversation.channelType, messages });
   const { quickReplies, status: quickRepliesStatus } = useQuickReplies();
   // O nome do provedor é configuração: o sistema roda em mais de uma empresa.
   // Pela rota pública, e não pela de admin: esta tela é do atendente comum.
@@ -525,6 +528,21 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             onEdit={handleEditSuggestion}
             onDiscard={handleDiscardSuggestion}
           />
+          {/* Avisa, mas não bloqueia: o nosso relógio pode divergir do da Meta
+              por alguns minutos, e impedir um envio que passaria seria pior do
+              que deixar tentar. */}
+          {windowClosed && (
+            <p className="mx-3 mb-1 flex items-start gap-2 rounded-[12px] border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] leading-[18px] text-chat-muted md:mx-5">
+              <span aria-hidden="true" className="shrink-0 text-chat-copper">
+                <IconInfo size={16} />
+              </span>
+              <span>
+                <strong className="font-semibold text-chat-text">Janela de 24h fechada.</strong> O WhatsApp só entrega
+                texto livre até 24h depois da última mensagem do cliente — e template não reabre essa contagem, só a
+                resposta dele. Enviar agora provavelmente vai falhar; use um template aprovado.
+              </span>
+            </p>
+          )}
           <MessageInput
             onSend={handleSend}
             quickReplies={quickReplies}

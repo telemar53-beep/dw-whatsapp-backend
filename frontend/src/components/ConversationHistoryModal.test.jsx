@@ -78,3 +78,44 @@ describe('ConversationHistoryModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+// A data sozinha não ajuda quem vai retomar o atendimento: quem falou com o
+// cliente, quem encerrou e por quê é o que permite continuar de onde parou.
+describe('quem atendeu, quem encerrou e por quê', () => {
+  function renderComHistorico(conversation) {
+    api.getConversationHistory.mockResolvedValue([
+      { id: 'conv-1', channelName: 'DW Telcom 1', channelType: 'baileys', updatedAt: '2026-09-17T12:00:00.000Z', ...conversation },
+    ]);
+    render(<ConversationHistoryModal contactId="contact-1" onClose={vi.fn()} />);
+  }
+
+  test('mostra um nome só quando quem atendeu também encerrou', async () => {
+    renderComHistorico({ assignedAgentName: 'Tatiane', closedByAgentName: 'Tatiane' });
+
+    expect(await screen.findByText(/DW Telcom 1 · Tatiane/)).toBeInTheDocument();
+  });
+
+  test('mostra os dois nomes quando o admin encerrou o atendimento de outra pessoa', async () => {
+    renderComHistorico({ assignedAgentName: 'Tatiane', closedByAgentName: 'Willemberg' });
+
+    expect(await screen.findByText(/Atendido por Tatiane, encerrado por Willemberg/)).toBeInTheDocument();
+  });
+
+  test('mostra o motivo do encerramento', async () => {
+    renderComHistorico({ assignedAgentName: 'Tatiane', closedByAgentName: 'Tatiane', closeReasonName: 'Segunda via de fatura' });
+
+    expect(await screen.findByText(/Segunda via de fatura/)).toBeInTheDocument();
+  });
+
+  test('sem atendente, mostra só o canal', async () => {
+    renderComHistorico({ assignedAgentName: null, closedByAgentName: null, closeReasonName: null });
+
+    expect(await screen.findByText('DW Telcom 1')).toBeInTheDocument();
+  });
+
+  test('encerrado pela IA, sem atendente, ainda mostra o motivo', async () => {
+    renderComHistorico({ assignedAgentName: null, closedByAgentName: null, closeReasonName: 'Resolvido pela IA' });
+
+    expect(await screen.findByText(/Resolvido pela IA/)).toBeInTheDocument();
+  });
+});

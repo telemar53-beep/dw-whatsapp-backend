@@ -732,11 +732,27 @@ async function setConversationSector(conversationId, sectorId) {
 }
 
 async function listClosedConversationsByContact(contactId) {
+  // Quem atendeu e quem encerrou nem sempre é a mesma pessoa: o admin pode
+  // encerrar uma conversa sem estar atribuído a ela. Por isso o nome de quem
+  // encerrou vem do evento 'closed' (com o motivo junto), e não do
+  // assigned_agent_id — que só diz quem estava atendendo.
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.suggested_reason_id, c.created_at, c.updated_at,
-            ch.name AS channel_name, ch.type AS channel_type
+            ch.name AS channel_name, ch.type AS channel_type,
+            aa.name AS assigned_agent_name,
+            fim.closed_by_agent_name, fim.close_reason_name
      FROM conversations c
      JOIN channels ch ON ch.id = c.channel_id
+     LEFT JOIN agents aa ON aa.id = c.assigned_agent_id
+     LEFT JOIN LATERAL (
+       SELECT ca.name AS closed_by_agent_name, r.name AS close_reason_name
+       FROM conversation_events ce
+       LEFT JOIN agents ca ON ca.id = ce.from_agent_id
+       LEFT JOIN contact_reasons r ON r.id = ce.reason_id
+       WHERE ce.conversation_id = c.id AND ce.event_type = 'closed'
+       ORDER BY ce.created_at DESC
+       LIMIT 1
+     ) fim ON true
      WHERE c.contact_id = $1 AND c.status = 'closed'
      ORDER BY c.updated_at DESC
      LIMIT 50`,
@@ -746,6 +762,9 @@ async function listClosedConversationsByContact(contactId) {
     ...toConversation(row),
     channelName: row.channel_name,
     channelType: row.channel_type,
+    assignedAgentName: row.assigned_agent_name || null,
+    closedByAgentName: row.closed_by_agent_name || null,
+    closeReasonName: row.close_reason_name || null,
   }));
 }
 

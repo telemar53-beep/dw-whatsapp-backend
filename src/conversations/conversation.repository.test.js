@@ -7,6 +7,7 @@ const {
   setContactSgpLink,
 } = require('./contact.repository');
 const { createAgent } = require('../agents/agent.repository');
+const { createReason } = require('../reasons/reason.repository');
 const { createSector } = require('../sectors/sector.repository');
 const { createCity } = require('../cities/city.repository');
 const { createMessage } = require('./message.repository');
@@ -563,6 +564,22 @@ describe('conversation repository', () => {
     expect(waiting.map((c) => c.id)).toEqual([waitingConversation.id]);
     expect(waiting[0].contactPhoneNumber).toBe('+5511977776666');
     expect(waiting[0].contactDisplayName).toBe('Joao');
+  });
+
+  // A fila e FIFO: quem esta esperando ha mais tempo fica em cima. O teste
+  // acima diz "oldest first" no nome mas cria uma conversa so, entao nao
+  // provava ordem nenhuma — trocar ASC por DESC passava despercebido.
+  test('listWaitingConversations devolve a fila por ordem de chegada, mais antigo primeiro', async () => {
+    const maira = await findOrCreateContactByPhoneNumber('+5511977771111', 'Maira');
+    const berg = await findOrCreateContactByPhoneNumber('+5511977772222', 'Berg');
+
+    const joao = await createConversation(contactId, channelId);
+    const daMaira = await createConversation(maira.id, channelId);
+    const doBerg = await createConversation(berg.id, channelId);
+
+    const fila = await listWaitingConversations();
+
+    expect(fila.map((c) => c.id)).toEqual([joao.id, daMaira.id, doBerg.id]);
   });
 
   test('listWaitingConversations includes the contact avatar path', async () => {
@@ -1270,5 +1287,70 @@ describe('conversation repository', () => {
     test('getTriagePendingDocument devolve null para uma conversa que não existe', async () => {
       expect(await getTriagePendingDocument('00000000-0000-0000-0000-000000000000')).toBeNull();
     });
+  });
+});
+
+// No histórico de um cliente que volta, a data sozinha não diz nada: quem
+// atendeu, quem encerrou e por quê é o que permite retomar de onde parou.
+// Quem atendeu e quem encerrou nem sempre é a mesma pessoa — o admin pode
+// encerrar sem estar atribuído — então os dois vêm separados.
+describe('listClosedConversationsByContact — quem atendeu, quem encerrou e por quê', () => {
+  let contactId;
+  let channelId;
+
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE conversations, contacts, channels, agents, contact_reasons CASCADE');
+    const contact = await findOrCreateContactByPhoneNumber('+5598984454546', 'Noah Gabriel');
+    contactId = contact.id;
+    const channel = await createChannel({ type: 'baileys', name: 'DW Telcom 1', phoneNumber: '+5598984129046', config: {} });
+    channelId = channel.id;
+  });
+
+  test('traz o nome de quem atendeu e de quem encerrou', async () => {
+    const tatiane = await createAgent({ email: 'tatiane@dw.com', password: 'secret123', role: 'agent', name: 'Tatiane' });
+    const conversa = await createConversation(contactId, channelId);
+    await claimConversation(conversa.id, tatiane.id);
+    await closeConversation(conversa.id, tatiane.id);
+
+    const [historico] = await listClosedConversationsByContact(contactId);
+
+    expect(historico.assignedAgentName).toBe('Tatiane');
+    expect(historico.closedByAgentName).toBe('Tatiane');
+  });
+
+  test('distingue o admin que encerrou do atendente que atendeu', async () => {
+    const tatiane = await createAgent({ email: 'tatiane2@dw.com', password: 'secret123', role: 'agent', name: 'Tatiane' });
+    const willemberg = await createAgent({ email: 'will@dw.com', password: 'secret123', role: 'admin', name: 'Willemberg' });
+    const conversa = await createConversation(contactId, channelId);
+    await claimConversation(conversa.id, tatiane.id);
+    await adminCloseConversation(conversa.id, willemberg.id);
+
+    const [historico] = await listClosedConversationsByContact(contactId);
+
+    expect(historico.assignedAgentName).toBe('Tatiane');
+    expect(historico.closedByAgentName).toBe('Willemberg');
+  });
+
+  test('traz o motivo do encerramento', async () => {
+    const tatiane = await createAgent({ email: 'tatiane3@dw.com', password: 'secret123', role: 'agent', name: 'Tatiane' });
+    const motivo = await createReason({ name: 'Segunda via de fatura' });
+    const conversa = await createConversation(contactId, channelId);
+    await claimConversation(conversa.id, tatiane.id);
+    await closeConversation(conversa.id, tatiane.id, motivo.id);
+
+    const [historico] = await listClosedConversationsByContact(contactId);
+
+    expect(historico.closeReasonName).toBe('Segunda via de fatura');
+  });
+
+  test('aguenta um encerramento sem motivo e sem atendente', async () => {
+    const conversa = await createConversation(contactId, channelId);
+    await closeConversation(conversa.id, null);
+
+    const [historico] = await listClosedConversationsByContact(contactId);
+
+    expect(historico.assignedAgentName).toBeNull();
+    expect(historico.closedByAgentName).toBeNull();
+    expect(historico.closeReasonName).toBeNull();
   });
 });

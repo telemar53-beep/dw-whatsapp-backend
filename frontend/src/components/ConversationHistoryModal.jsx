@@ -6,6 +6,24 @@ import WaDialog, { waGhostButtonClass } from './WaDialog';
 import { IconArrowLeft, IconHistory } from './icons/WaIcons';
 import { AsyncState } from './ui';
 
+// Quem atendeu e quem encerrou nem sempre é a mesma pessoa: o admin pode
+// encerrar sem estar atribuído. Um nome só no caso comum, os dois quando
+// divergem — e o motivo junto, porque no histórico de um cliente que volta ele
+// costuma valer mais que a data.
+function quemAtendeu(conversation) {
+  const { assignedAgentName: atendeu, closedByAgentName: encerrou } = conversation;
+  if (atendeu && encerrou && atendeu !== encerrou) {
+    return `Atendido por ${atendeu}, encerrado por ${encerrou}`;
+  }
+  return atendeu || encerrou || null;
+}
+
+function linhaDoHistorico(conversation) {
+  return [conversation.channelName, quemAtendeu(conversation), conversation.closeReasonName]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 function ConversationHistoryModal({ contactId, onClose }) {
   const { token } = useAuth();
   const [history, setHistory] = useState([]);
@@ -94,7 +112,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
                           {new Date(conversation.updatedAt).toLocaleDateString('pt-BR')}
                         </span>
                         <span className="block truncate text-[13px] leading-[18px] text-wa-muted">
-                          {conversation.channelName}
+                          {linhaDoHistorico(conversation)}
                         </span>
                       </span>
                     </button>

@@ -579,3 +579,53 @@ describe('a cidade não some atrás de um nome comprido', () => {
     expect(screen.getByText('Suporte')).toBeInTheDocument();
   });
 });
+
+// A fila de espera e ordenada por chegada, mas a linha mostrava a hora da
+// ULTIMA mensagem — duas coisas diferentes. Quem chegou as 9h e mandou mais uma
+// mensagem agora aparecia com 12h em cima de quem chegou as 11h, e a lista
+// parecia fora de ordem sem estar. Na fila vale a hora da chegada.
+describe('hora mostrada na linha', () => {
+  const CHEGADA = '2026-09-17T12:00:00.000Z';
+  const ULTIMA = '2026-09-17T15:00:00.000Z';
+
+  function renderItem(props) {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Ana Julia', contactPhoneNumber: '+551199', createdAt: CHEGADA, lastMessageAt: ULTIMA }}
+          onSelect={vi.fn()}
+          {...props}
+        />
+      </ul>
+    );
+  }
+
+  function hora(iso) {
+    return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  test('por padrão mostra a hora da última mensagem', () => {
+    renderItem({});
+    expect(screen.getByText(hora(ULTIMA))).toBeInTheDocument();
+    expect(screen.queryByText(hora(CHEGADA))).not.toBeInTheDocument();
+  });
+
+  test('na fila mostra a hora em que o cliente chegou', () => {
+    renderItem({ showArrivalTime: true });
+    expect(screen.getByText(hora(CHEGADA))).toBeInTheDocument();
+    expect(screen.queryByText(hora(ULTIMA))).not.toBeInTheDocument();
+  });
+
+  test('sem hora de chegada, a linha não inventa nada', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Ana Julia', contactPhoneNumber: '+551199' }}
+          onSelect={vi.fn()}
+          showArrivalTime
+        />
+      </ul>
+    );
+    expect(screen.getByText('Ana Julia')).toBeInTheDocument();
+  });
+});

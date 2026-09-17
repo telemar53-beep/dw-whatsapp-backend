@@ -26,14 +26,19 @@ function formatMessageTime(lastMessageAt) {
   return new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected, divided = true }) {
+function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected, divided = true, showArrivalTime = false }) {
   // A cidade já foi colada no nome ("Fulano - Cidade"), mas os dois dividiam um
   // `truncate` só: nome comprido comia a cidade inteira. Com cada atendente
   // puxando uma cidade diferente, era justamente o dado que sumia — então ela
   // virou um chip próprio na segunda linha, que não disputa espaço com o nome.
   const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
   const previewText = getPreviewText(conversation);
-  const messageTime = formatMessageTime(conversation.lastMessageAt);
+  // Na fila, a hora que importa é a da CHEGADA: a lista é ordenada por ela, e
+  // mostrar a da última mensagem fazia a fila parecer fora de ordem sem estar —
+  // quem chegou às 9h e falou de novo às 12h aparecia com 12h acima de quem
+  // chegou às 11h. Em "Andamento", que é ordenado por atividade recente, a hora
+  // da última mensagem continua sendo a certa.
+  const messageTime = formatMessageTime(showArrivalTime ? conversation.createdAt : conversation.lastMessageAt);
 
   function handleSelect() {
     onSelect(conversation.id);

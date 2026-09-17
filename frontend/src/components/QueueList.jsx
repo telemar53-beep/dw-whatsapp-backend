@@ -12,6 +12,7 @@ function QueueList({ conversations, status, onSelect, onQuickClose, emptyMessage
             onSelect={onSelect}
             onQuickClose={onQuickClose}
             selected={selectedId === conversation.id}
+            showArrivalTime
           />
         ))}
       </ul>

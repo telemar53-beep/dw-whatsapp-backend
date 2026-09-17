@@ -269,7 +269,12 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // sabendo a hora); no primeiro turno, além disso, a saudação é garantida —
   // e da segunda resposta em diante ela é REMOVIDA (print 2026-09-16).
   const textoDoModelo = corrigirPeriodoDaSaudacao(paraWhatsApp(turno.texto));
-  const texto = primeiroTurno ? garantirSaudacao(textoDoModelo, identidade && identidade.primeiroNome) : removerSaudacao(textoDoModelo);
+  // O nome pode ter sido descoberto DENTRO do turno (buscar_cliente com o CPF
+  // que o cliente acabou de mandar): a identidade do fim do turno vem antes da
+  // que foi resolvida no começo (print 2026-09-17, entrega sem nome nenhum).
+  const nomeParaSaudar = (turno.identidade && turno.identidade.primeiroNome)
+    || (identidade && identidade.primeiroNome) || null;
+  const texto = primeiroTurno ? garantirSaudacao(textoDoModelo, nomeParaSaudar) : removerSaudacao(textoDoModelo);
   // Nunca a mesma resposta duas vezes seguidas (sem efeito por trás): melhor
   // o silêncio de um "Ah"/"Pai!" do que a IA parecendo travada.
   if (texto && !turnoTeveEfeito(turno) && await repeteRespostaRecenteDaIa(conversation.id, texto)) {

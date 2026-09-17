@@ -1371,6 +1371,14 @@ describe('perfil de triagem', () => {
     });
   });
 
+  // Print 2026-09-17 (16:56): entrega de boleto inteira sem chamar a cliente
+  // pelo nome, mesmo depois de identificar pelo CPF. "Está muito robô."
+  test('depois de identificar, a IA trata o cliente pelo primeiro nome', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toMatch(/Assim que souber o primeiro nome do cliente .* use o nome dele/);
+    expect(sys).toMatch(/Entregar boleto, PIX ou resposta sem nunca chamar a pessoa pelo nome soa robótico/);
+  });
+
   // Print 2026-09-17 (16:32): "quero pagar minha internet" + CPF → a IA
   // respondeu com o roteiro do contrato suspenso e perguntou "você chegou a
   // fazer esse pagamento?". Ela acabou de dizer que QUER pagar.

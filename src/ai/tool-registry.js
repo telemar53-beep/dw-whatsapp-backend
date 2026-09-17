@@ -195,6 +195,16 @@ function daMaisAntiga(faturas) {
 }
 
 /**
+ * Print 2026-09-17: a IA entregou o boleto sem chamar a cliente pelo nome,
+ * logo depois de identificá-la pelo CPF — o dono: "está muito robô". A
+ * instrução da entrega passa a lembrar o nome; sem nome conhecido, some.
+ */
+function nomeParaTratar(contexto) {
+  const nome = contexto && contexto.identidade && contexto.identidade.primeiroNome;
+  return nome ? `Comece pelo primeiro nome do cliente ("Prontinho, ${nome}!").` : '';
+}
+
+/**
  * Endereço que o modelo de frase da entrega cita ao cliente. Regra do dono:
  * "cite o endereço só quando ele tiver mais de um contrato" — com um ponto
  * só, nada; com vários, o endereço do contrato de onde a fatura saiu (o
@@ -828,7 +838,9 @@ const TOOLS = [
         valor: primeira.value,
         vencimento: primeira.dueDate,
         ...(contratoUsado ? { contratoUsado } : {}),
-        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão com botão de copiar). Responda EXATAMENTE no modelo: "Enviei acima o PIX${endereco ? ' referente ao seu contrato do endereço ' + endereco : ''}. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!" NÃO repita o código nem o valor.`,
+        // Print 2026-09-17: entrega inteira sem chamar o cliente pelo nome,
+        // logo depois de identificar pelo CPF — "está muito robô".
+        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão com botão de copiar). ${nomeParaTratar(contexto)} Responda EXATAMENTE no modelo: "Enviei acima o PIX${endereco ? ' referente ao seu contrato do endereço ' + endereco : ''}. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!" NÃO repita o código nem o valor.`,
       };
     },
   },
@@ -1404,7 +1416,7 @@ const TOOLS = [
         vencimento: primeira.dueDate,
         linhaDigitavelEnviada,
         ...(contratoUsado ? { contratoUsado } : {}),
-        instrucao: `O boleto já foi enviado ao cliente nesta conversa em PDF${linhaDigitavelEnviada ? ' e com a linha digitável em mensagem separada' : ''}. Responda EXATAMENTE no modelo, sem emoji: "${frase}" NÃO repita a linha digitável nem o valor.`,
+        instrucao: `O boleto já foi enviado ao cliente nesta conversa em PDF${linhaDigitavelEnviada ? ' e com a linha digitável em mensagem separada' : ''}. ${nomeParaTratar(contexto)} Responda EXATAMENTE no modelo, sem emoji: "${frase}" NÃO repita a linha digitável nem o valor.`,
       };
     },
   },

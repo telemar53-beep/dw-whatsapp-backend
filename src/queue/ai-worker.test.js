@@ -444,6 +444,23 @@ describe('ai-worker — triagem', () => {
     expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: `${certa}, Willemberg! Verifiquei aqui que sua conexão está offline.` }));
   });
 
+  // Print 2026-09-17: o cliente mandou o CPF e a IA entregou o boleto sem
+  // nunca chamá-lo pelo nome — a identidade tinha sido descoberta DENTRO do
+  // turno (buscar_cliente), e o worker só olhava a identidade de antes dele.
+  test('o nome descoberto durante o turno vale para a saudação garantida', async () => {
+    resolverIdentidade.mockResolvedValue({ nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] });
+    runAiTurn.mockResolvedValue({
+      texto: 'Enviei acima o boleto em PDF.', toolsExecutadas: [{ nome: 'enviar_boleto' }], erro: null, triagemConcluida: null,
+      identidade: { nivel: 'forte', origem: 'cpf', primeiroNome: 'Priscila', contracts: [] },
+    });
+
+    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+    expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining('Priscila'),
+    }));
+  });
+
   test('a saudação não é duplicada nem aplicada fora do primeiro turno', async () => {
     resolverIdentidade.mockResolvedValue({ nivel: 'forte', origem: 'phone', primeiroNome: 'Willemberg', contracts: [] });
     // A saudação do período certo para a hora em que o teste roda: o worker

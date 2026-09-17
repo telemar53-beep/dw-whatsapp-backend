@@ -1674,7 +1674,9 @@ describe('buscar_cliente na triagem com a data de nascimento dispensada (padrao)
 });
 
 describe('enviar_boleto', () => {
-  const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte' } });
+  // primeiroNome no fixture desde 2026-09-17: a instrução da entrega passa a
+  // lembrar o modelo de chamar o cliente pelo nome.
+  const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte', primeiroNome: 'Willemberg' } });
   beforeEach(() => {
     jest.clearAllMocks();
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix', barCode: '836100000012' }] });
@@ -1699,6 +1701,9 @@ describe('enviar_boleto', () => {
     // O modelo de frase do dono sai DAQUI, depois do envio real (teste real
     // 2026-09-15: no prompt, o modelo copiava a frase sem enviar nada). Com
     // um contrato só, sem endereço.
+    // Print 2026-09-17: a IA entregou o boleto sem chamar a cliente pelo nome,
+    // mesmo tendo acabado de identificar pelo CPF. Ficou robótico.
+    expect(r.instrucao).toContain('Comece pelo primeiro nome do cliente ("Prontinho, Willemberg!")');
     expect(r.instrucao).toContain('Responda EXATAMENTE no modelo, sem emoji: "Enviei acima o boleto em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
     expect(r.instrucao).not.toMatch(/endereço/);
     // A linha digitável vai junto, sozinha numa mensagem, pelo mesmo sender do
@@ -1832,6 +1837,7 @@ describe('enviar_boleto', () => {
       expect(markTriageResolvedByAi).toHaveBeenCalledWith('c-1');
       // Modelo de frase do dono, devolvido só depois do envio real; com um
       // contrato só, sem endereço.
+      expect(r.instrucao).toContain('Comece pelo primeiro nome do cliente ("Prontinho, Willemberg!")');
       expect(r.instrucao).toContain('Responda EXATAMENTE no modelo: "Enviei acima o PIX. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!"');
     });
 

@@ -313,6 +313,9 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // Tom pedido pelo dono depois dos testes reais (2026-09-13): recepcionista
     // simpática, frases completas, um emoji leve — não telegramas.
     'Tom: caloroso e direto, como uma recepcionista simpática. Frases completas e educadas.',
+    // Print 2026-09-17: entrega de boleto inteira sem chamar a cliente pelo
+    // nome, logo depois de identificar pelo CPF.
+    'Assim que souber o primeiro nome do cliente (pelo cadastro ou porque ele acabou de se identificar), use o nome dele na resposta seguinte e continue usando de vez em quando. Entregar boleto, PIX ou resposta sem nunca chamar a pessoa pelo nome soa robótico.',
     // Emoji do COMERCIAL ampliado pelo dono (2026-09-15): ícone por plano
     // (como vier nas instruções) e 👍 ao confirmar o endereço.
     'Emoji SÓ nos fluxos do PIX e do COMERCIAL. No PIX: no máximo um 😊 por mensagem (na saudação ou no agradecimento). No COMERCIAL: um 😊 na saudação ou no encaminhamento, um ícone por plano se as instruções trouxerem, e 👍 ao confirmar o endereço. No BOLETO, no SUPORTE e em qualquer outro assunto, NENHUM emoji — nem na saudação.',

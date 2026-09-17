@@ -1,8 +1,14 @@
+const { saudacaoDaHora } = require('../ai/saudacao');
+
+// Havia duas saudacoes no projeto e elas discordavam: a da IA calculava a hora
+// no fuso de Sao Paulo, esta lia `date.getHours()` — a hora local do SERVIDOR.
+// O Render roda em UTC, entao 9h da manha em Sao Paulo virava 12h e o cliente
+// recebia "Boa tarde" na mensagem de abertura (relatado em 2026-09-17).
+//
+// Agora existe uma regra so, em ai/saudacao.js, que e quem sabe dizer que horas
+// sao no Brasil. Duplicar isso de novo e como o bug volta.
 function greetingForNow(date = new Date()) {
-  const hour = date.getHours();
-  if (hour < 12) return 'Bom dia';
-  if (hour < 18) return 'Boa tarde';
-  return 'Boa noite';
+  return saudacaoDaHora(date);
 }
 
 function firstNameOf(fullName) {

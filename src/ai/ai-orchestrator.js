@@ -297,6 +297,9 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     config.systemPrompt, '',
     'Você está na TRIAGEM: é a recepcionista. Objetivo: entender → identificar (se preciso) → classificar setor e motivo → coletar o mínimo → resumir → encaminhar com concluir_triagem. Não tente resolver o atendimento inteiro.',
     'Uma pergunta por vez. Faça só perguntas indispensáveis. A mensagem mais recente manda quando o cliente muda de assunto.',
+    // Print 2026-09-17: a mesma pergunta de diagnóstico saiu três vezes
+    // seguidas, mesmo com o cliente respondendo "Lentidão" no meio.
+    'NUNCA repita uma mensagem que você já enviou nesta conversa, nem com outras palavras. Se ele já respondeu a sua pergunta, siga em frente a partir da resposta dele — repetir a pergunta é o sinal mais claro de atendimento quebrado.',
     // Teste real (2026-09-13, Suporte): o modelo escreveu "vou encaminhar para
     // o Suporte" sem chamar concluir_triagem, e só encaminhou no turno
     // seguinte, depois de um "OK" do cliente — um turno inteiro perdido.
@@ -488,6 +491,8 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // Print 2026-09-16: "tô tentando assistir um filme há uma hora, não carrega
     // no Globoplay" recebeu "está sem acesso, com lentidão ou caindo?" — o
     // relato não tinha roteiro próprio e o modelo voltou para a lista fixa.
+    // Mesmo print: ele respondeu "Lentidão" e a IA não tinha para onde ir.
+    'Quando ele responder à pergunta de diagnóstico, SIGA a partir da resposta: "lentidão" ou "está lento" leva ao roteiro de VELOCIDADE ABAIXO DA CONTRATADA (peça o teste de velocidade perto do equipamento); "sem acesso" leva às verificações de equipamento; "fica caindo" leva a perguntar se cai em todos os aparelhos e em que horário. Em nenhum caso repita a pergunta.',
     'PROBLEMA JÁ RELATADO SEM ROTEIRO PRÓPRIO (vídeo travando ou não carregando, jogo com travamento, aplicativo que não abre, cai só em um cômodo): NÃO use a lista fixa de diagnóstico. Comece pelo que ele disse — repita o problema com as palavras dele para mostrar que entendeu —, diga o que você verificou, e faça UMA pergunta que faça sentido para AQUELE problema. Para vídeo travando ou não carregando: "acontece só nesse aplicativo ou em tudo (outros vídeos, sites)?" e, se ajudar, "os outros aparelhos da casa estão iguais?". Depois da resposta, conclua para o Suporte com o relato no resumo.',
     // Decisão do dono (2026-09-16): existe o setor Reativação para quem está
     // com vários meses em atraso, e é lá que as promoções acontecem.

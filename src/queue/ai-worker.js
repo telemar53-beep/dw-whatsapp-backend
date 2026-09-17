@@ -145,11 +145,20 @@ function normalizarResposta(texto) {
   return removerSaudacao(String(texto || '')).trim().toLowerCase();
 }
 
-async function repeteUltimaRespostaDaIa(conversationId, texto) {
+// Print 2026-09-17: a mesma pergunta de diagnóstico saiu TRÊS vezes seguidas,
+// com esta guarda no ar. listRecentMessagesByConversation devolve em ordem
+// CRONOLÓGICA (a mais antiga primeiro, por causa do .reverse() no
+// repositório), e o find() pegava a PRIMEIRA resposta da IA da conversa — a
+// saudação — em vez da última. Compara com as últimas respostas dela, não
+// só com uma, para pegar também a repetição alternada.
+const RESPOSTAS_COMPARADAS = 3;
+
+async function repeteRespostaRecenteDaIa(conversationId, texto) {
   const recentes = (await listRecentMessagesByConversation(conversationId, 10)) || [];
-  const ultimaDaIa = recentes.find((m) => m && m.direction === 'outbound' && m.sentBy === 'ai' && m.content);
-  if (!ultimaDaIa) return false;
-  return normalizarResposta(ultimaDaIa.content) === normalizarResposta(texto);
+  const daIa = recentes.filter((m) => m && m.direction === 'outbound' && m.sentBy === 'ai' && m.content);
+  if (daIa.length === 0) return false;
+  const alvo = normalizarResposta(texto);
+  return daIa.slice(-RESPOSTAS_COMPARADAS).some((m) => normalizarResposta(m.content) === alvo);
 }
 
 async function handleTriageTurn({ conversation, config, messageId }) {
@@ -263,8 +272,8 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   const texto = primeiroTurno ? garantirSaudacao(textoDoModelo, identidade && identidade.primeiroNome) : removerSaudacao(textoDoModelo);
   // Nunca a mesma resposta duas vezes seguidas (sem efeito por trás): melhor
   // o silêncio de um "Ah"/"Pai!" do que a IA parecendo travada.
-  if (texto && !turnoTeveEfeito(turno) && await repeteUltimaRespostaDaIa(conversation.id, texto)) {
-    console.warn(`AI reply repeated the previous AI message in conversation ${conversation.id}; not sent`);
+  if (texto && !turnoTeveEfeito(turno) && await repeteRespostaRecenteDaIa(conversation.id, texto)) {
+    console.warn(`AI reply repeated a recent AI message in conversation ${conversation.id}; not sent`);
     return;
   }
   if (texto) {

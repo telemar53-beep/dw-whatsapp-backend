@@ -425,6 +425,8 @@ describe('consultar_status_todos_contratos executar', () => {
     // IA respondeu "está sem acesso, com lentidão ou caindo?" — a instrução
     // mandava usar o modelo "ativo e online" mesmo com o problema já relatado.
     expect(r.instrucao).toMatch(/Se o cliente JÁ disse qual é o problema, NÃO pergunte de novo/);
+    // Print 2026-09-17: o modelo "ativo e online" saiu três vezes seguidas.
+    expect(r.instrucao).toMatch(/Se você já mandou esse modelo nesta conversa, NÃO repita/);
     // O login PPPoE nunca sai daqui: as palavras do modelo vão direto ao cliente.
     expect(JSON.stringify(r)).not.toContain('"login"');
   });
@@ -2148,6 +2150,79 @@ describe('tool-executor + consultar_faturas_todos_contratos (composição real, 
     const resultado = await executeTool('consultar_faturas_todos_contratos', {}, contexto);
     expect(resultado.ok).toBe(true);
     expect(sgpClient.listInvoices).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Relato do dono 2026-09-17: cliente com duas faturas em aberto (uma vencida e
+// uma a vencer) recebeu a que AINDA vai vencer. A entrega é sempre a mais
+// antiga — a que venceu primeiro é a que tira o cliente do atraso.
+describe('fatura entregue é sempre a mais antiga', () => {
+  const SETOR_X = '11111111-1111-1111-1111-111111111111';
+  const ctx = () => ({
+    conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte' },
+  });
+  // Ordem embaralhada de propósito: o SGP não garante ordenação.
+  const DUAS = {
+    hasOpenInvoice: true,
+    duplicates: [
+      { id: 'nova', dueDate: '2026-10-05', value: 100, barCode: 'b-nova', pixCode: 'pix-nova', boletoLink: 'https://x/nova.pdf' },
+      { id: 'antiga', dueDate: '2026-08-20', value: 100, barCode: 'b-antiga', pixCode: 'pix-antiga', boletoLink: 'https://x/antiga.pdf' },
+    ],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+    saveMediaFile.mockResolvedValue('abc.pdf');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-9' });
+    enviarBoleto.mockReset().mockResolvedValue([{ id: 'm-c' }, { id: 'm-l' }]);
+    enviarPix.mockReset().mockResolvedValue([{ id: 'm-c' }]);
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, status: 'waiting', triageState: 'pending' });
+  });
+
+  test('enviar_boleto baixa e envia a fatura vencida, não a que ainda vai vencer', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue(DUAS);
+    const r = await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+    expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/antiga.pdf');
+    expect(r.vencimento).toBe('2026-08-20');
+    expect(enviarBoleto).toHaveBeenCalledWith(expect.objectContaining({ fatura: expect.objectContaining({ id: 'antiga' }) }));
+  });
+
+  test('gerar_pix envia o código da fatura vencida', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue(DUAS);
+    const r = await findTool('gerar_pix').executar({ contratoId: 17402 }, ctx());
+    expect(enviarPix).toHaveBeenCalledWith(expect.objectContaining({ fatura: expect.objectContaining({ id: 'antiga', pixCode: 'pix-antiga' }) }));
+    expect(r.vencimento).toBe('2026-08-20');
+  });
+
+  test('gerar_segunda_via lista as faturas da mais antiga para a mais nova', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue(DUAS);
+    const r = await findTool('gerar_segunda_via').executar({ contratoId: 17402 }, ctx());
+    expect(r.faturas.map((f) => f.faturaId)).toEqual(['antiga', 'nova']);
+  });
+
+  test('data em DD/MM/AAAA também é ordenada certo', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue({
+      hasOpenInvoice: true,
+      duplicates: [
+        { id: 'nova', dueDate: '05/10/2026', value: 100, barCode: 'b', pixCode: 'p', boletoLink: 'https://x/nova.pdf' },
+        { id: 'antiga', dueDate: '20/08/2026', value: 100, barCode: 'b', pixCode: 'p', boletoLink: 'https://x/antiga.pdf' },
+      ],
+    });
+    await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+    expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/antiga.pdf');
+  });
+
+  test('sem data legível, a ordem que o SGP mandou é mantida', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue({
+      hasOpenInvoice: true,
+      duplicates: [
+        { id: 'primeira', dueDate: null, value: 100, barCode: 'b', pixCode: 'p', boletoLink: 'https://x/1.pdf' },
+        { id: 'segunda', dueDate: null, value: 100, barCode: 'b', pixCode: 'p', boletoLink: 'https://x/2.pdf' },
+      ],
+    });
+    await findTool('enviar_boleto').executar({ contratoId: 17402 }, ctx());
+    expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledWith('https://x/1.pdf');
   });
 });
 

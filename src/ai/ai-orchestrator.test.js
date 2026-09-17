@@ -1371,6 +1371,23 @@ describe('perfil de triagem', () => {
     });
   });
 
+  // Print 2026-09-17 (16:05–16:06): a mesma pergunta de diagnóstico saiu três
+  // vezes seguidas, mesmo com o cliente respondendo "Lentidão" no meio.
+  describe('nunca repetir a mesma mensagem', () => {
+    test('o prompt proíbe repetir mensagem já enviada na conversa', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/NUNCA repita uma mensagem que você já enviou nesta conversa/);
+      expect(sys).toMatch(/Se ele já respondeu a sua pergunta, siga em frente/);
+    });
+
+    test('resposta de diagnóstico tem para onde ir', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toMatch(/Quando ele responder à pergunta de diagnóstico/);
+      expect(sys).toMatch(/"lentidão" ou "está lento"/);
+      expect(sys).toMatch(/roteiro de VELOCIDADE ABAIXO DA CONTRATADA/);
+    });
+  });
+
   // Prints 2026-09-17, três correções pedidas pelo dono.
   describe('correções de 2026-09-17', () => {
     test('com a exigência desligada (padrão da operação), o prompt PROÍBE pedir data de nascimento', async () => {

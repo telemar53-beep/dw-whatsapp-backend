@@ -244,9 +244,11 @@ describe('ai-worker — triagem', () => {
     test('resposta igual à última mensagem da IA nesta conversa: não envia de novo', async () => {
       getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 1 });
       findLatestInboundMessageId.mockResolvedValue('m-2');
+      // listRecentMessagesByConversation devolve em ordem CRONOLÓGICA (a mais
+      // antiga primeiro) — ver o .reverse() no repositório.
       listRecentMessagesByConversation.mockResolvedValue([
-        { id: 'm-2', direction: 'inbound', content: 'Pai!' },
         { id: 'o-1', direction: 'outbound', sentBy: 'ai', content: 'Bom dia! Como posso ajudar você hoje?' },
+        { id: 'm-2', direction: 'inbound', content: 'Pai!' },
       ]);
       runAiTurn.mockResolvedValue({ texto: 'Bom dia! Como posso ajudar você hoje?', toolsExecutadas: [], erro: null, triagemConcluida: null });
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -257,6 +259,67 @@ describe('ai-worker — triagem', () => {
       } finally {
         warn.mockRestore();
       }
+    });
+
+    // Print 2026-09-17: a IA mandou a MESMA pergunta de diagnóstico três vezes
+    // seguidas. A guarda existia mas olhava a PRIMEIRA resposta da IA da
+    // conversa (a saudação), não a última — listRecentMessagesByConversation
+    // devolve em ordem cronológica.
+    test('repetição é detectada mesmo com várias mensagens da IA antes no histórico', async () => {
+      const MODELO = 'Verifiquei aqui que seu contrato está ativo e sua conexão aparece online no momento. Me conta: está totalmente sem acesso, com lentidão ou a conexão fica caindo?';
+      getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 2 });
+      findLatestInboundMessageId.mockResolvedValue('m-4');
+      listRecentMessagesByConversation.mockResolvedValue([
+        { id: 'm-1', direction: 'inbound', content: 'Boa tarde' },
+        { id: 'o-1', direction: 'outbound', sentBy: 'ai', content: 'Boa tarde! Como posso ajudar você hoje?' },
+        { id: 'm-2', direction: 'inbound', content: 'Sobre o sinal da internet tá muito ruim faz dias' },
+        { id: 'o-2', direction: 'outbound', sentBy: 'ai', content: 'Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor.' },
+        { id: 'm-3', direction: 'inbound', content: '62373943387' },
+        { id: 'o-3', direction: 'outbound', sentBy: 'ai', content: MODELO },
+        { id: 'm-4', direction: 'inbound', content: 'Lentidão' },
+      ]);
+      runAiTurn.mockResolvedValue({ texto: MODELO, toolsExecutadas: [{ nome: 'consultar_status_todos_contratos' }], erro: null, triagemConcluida: null });
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-4' });
+        expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    test('repetição de uma resposta anterior (não só a última) também é barrada', async () => {
+      const PERGUNTA = 'Me conta: está totalmente sem acesso, com lentidão ou a conexão fica caindo?';
+      getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 2 });
+      findLatestInboundMessageId.mockResolvedValue('m-3');
+      listRecentMessagesByConversation.mockResolvedValue([
+        { id: 'o-1', direction: 'outbound', sentBy: 'ai', content: PERGUNTA },
+        { id: 'm-2', direction: 'inbound', content: 'Lentidão' },
+        { id: 'o-2', direction: 'outbound', sentBy: 'ai', content: 'Entendi. Acontece em todos os aparelhos?' },
+        { id: 'm-3', direction: 'inbound', content: 'Está muito lento' },
+      ]);
+      runAiTurn.mockResolvedValue({ texto: PERGUNTA, toolsExecutadas: [], erro: null, triagemConcluida: null });
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
+        expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    test('resposta nova, diferente das anteriores, é enviada normalmente', async () => {
+      getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 2 });
+      findLatestInboundMessageId.mockResolvedValue('m-3');
+      listRecentMessagesByConversation.mockResolvedValue([
+        { id: 'o-1', direction: 'outbound', sentBy: 'ai', content: 'Me conta: está sem acesso, com lentidão ou caindo?' },
+        { id: 'm-3', direction: 'inbound', content: 'Lentidão' },
+      ]);
+      runAiTurn.mockResolvedValue({ texto: 'Entendi. Você consegue fazer um teste de velocidade perto do equipamento?', toolsExecutadas: [], erro: null, triagemConcluida: null });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-3' });
+
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('teste de velocidade') }));
     });
 
     test('da segunda resposta em diante, a saudação de período do começo é removida', async () => {

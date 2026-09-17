@@ -164,6 +164,37 @@ async function faturaEmAlgumContrato(contratoPedido, contexto) {
 }
 
 /**
+ * Relato do dono 2026-09-17: cliente com duas faturas em aberto (uma vencida e
+ * uma a vencer) recebeu a que AINDA ia vencer — o SGP devolve os boletos na
+ * ordem dele, e o código pegava o primeiro da lista. A entrega é sempre a mais
+ * ANTIGA: é ela que tira o cliente do atraso e destrava o acesso.
+ *
+ * Aceita 'AAAA-MM-DD' (o que o SGP manda hoje) e 'DD/MM/AAAA'. Fatura sem data
+ * legível não é reordenada: fica onde estava, para nunca piorar a ordem que
+ * veio.
+ */
+function emMilissegundos(vencimento) {
+  if (typeof vencimento !== 'string') return null;
+  const iso = vencimento.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  const br = vencimento.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return Date.UTC(Number(br[3]), Number(br[2]) - 1, Number(br[1]));
+  return null;
+}
+
+function daMaisAntiga(faturas) {
+  const lista = Array.isArray(faturas) ? faturas.slice() : [];
+  // Ordenação estável (Array.prototype.sort é estável no Node): sem data, o
+  // par mantém a ordem original.
+  return lista.sort((a, b) => {
+    const da = emMilissegundos(a && a.dueDate);
+    const db = emMilissegundos(b && b.dueDate);
+    if (da === null || db === null) return 0;
+    return da - db;
+  });
+}
+
+/**
  * Endereço que o modelo de frase da entrega cita ao cliente. Regra do dono:
  * "cite o endereço só quando ele tiver mais de um contrato" — com um ponto
  * só, nada; com vários, o endereço do contrato de onde a fatura saiu (o
@@ -601,7 +632,7 @@ const TOOLS = [
           // Print 2026-09-16: a cliente disse "contratei 500 mega e aparece
           // 20 no celular" e ouviu "está sem acesso, com lentidão ou caindo?".
           // O modelo "ativo e online" é para quem AINDA não disse o problema.
-          instrucao = 'Todos os contratos estão ativos e online. Se o cliente JÁ disse qual é o problema, NÃO pergunte de novo: siga o roteiro daquele problema. Se ele não disse, use o modelo "ativo e online". Se ele tiver mais de um contrato, pergunte também de qual endereço fala.';
+          instrucao = 'Todos os contratos estão ativos e online. Se o cliente JÁ disse qual é o problema, NÃO pergunte de novo: siga o roteiro daquele problema. Se ele não disse, use o modelo "ativo e online". Se você já mandou esse modelo nesta conversa, NÃO repita: siga a partir do que ele respondeu. Se ele tiver mais de um contrato, pergunte também de qual endereço fala.';
         }
       }
       return {
@@ -711,7 +742,7 @@ const TOOLS = [
       const result = busca.resultado;
       const resposta = {
         temFaturaAberta: true,
-        faturas: result.duplicates.map((d) => ({
+        faturas: daMaisAntiga(result.duplicates).map((d) => ({
           faturaId: d.id, vencimento: d.dueDate, valor: d.value,
           linhaDigitavel: d.barCode, linkBoleto: d.boletoLink,
         })),
@@ -759,7 +790,7 @@ const TOOLS = [
             : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
         };
       }
-      const primeira = busca.resultado.duplicates[0];
+      const primeira = daMaisAntiga(busca.resultado.duplicates)[0];
       const contratoUsado = busca.trocouContrato
         ? { contratoId: busca.contratoId, endereco: busca.endereco }
         : null;
@@ -1323,7 +1354,7 @@ const TOOLS = [
             : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
         };
       }
-      const primeira = busca.resultado.duplicates[0];
+      const primeira = daMaisAntiga(busca.resultado.duplicates)[0];
       const contratoUsado = busca.trocouContrato
         ? { contratoId: busca.contratoId, endereco: busca.endereco }
         : null;

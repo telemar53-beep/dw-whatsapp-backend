@@ -128,12 +128,16 @@ if (require.main === module) {
   const { startCampaignWorker } = require('./queue/campaign-worker');
   const { startAiWorker } = require('./queue/ai-worker');
   const { startTranscriptionWorker } = require('./queue/transcription-worker');
+  const { startMediaCompressionWorker } = require('./queue/media-compression-worker');
+  const { startMediaRetentionWorker } = require('./queue/media-retention-worker');
   const { startAllBaileysConnections } = require('./whatsapp-adapters/baileys.manager');
   const httpServer = http.createServer(app);
   initSocketServer(httpServer);
   startOutboundWorker();
   startCampaignWorker();
   startAiWorker();
+  startMediaCompressionWorker();
+  startMediaRetentionWorker();
   startTranscriptionWorker();
   startAllBaileysConnections().catch((err) => {
     console.error('Failed to start Baileys connections', err);

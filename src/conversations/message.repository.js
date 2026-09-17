@@ -92,6 +92,53 @@ async function createMessage({
   return toMessage(result.rows[0]);
 }
 
+// O video e comprimido DEPOIS de gravado, fora do webhook: quando o worker
+// termina, ele troca o arquivo da mensagem por aqui.
+async function updateMessageMedia(messageId, { mediaPath, mediaMimeType }) {
+  const result = await getPool().query(
+    `UPDATE messages SET media_path = $2, media_mime_type = $3 WHERE id = $1 RETURNING ${MESSAGE_COLUMNS}`,
+    [messageId, mediaPath, mediaMimeType]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
+// Retenção de mídia: o disco só cresce, porque nada nunca era apagado. Arquivo
+// com mais de N meses sai; a MENSAGEM fica — a bolha, a legenda e o tipo
+// permanecem no histórico do atendimento, e só o arquivo some.
+//
+// `media_path IS NOT NULL` também exclui o que já foi limpo numa passagem
+// anterior: sem isso a varredura devolveria as mesmas linhas para sempre.
+async function listExpiredMedia({ olderThanMonths, limit = 500 }) {
+  const result = await getPool().query(
+    `SELECT id, media_path, media_mime_type, message_type, created_at
+       FROM messages
+      WHERE media_path IS NOT NULL
+        AND created_at < now() - ($1::int * interval '1 month')
+      ORDER BY created_at ASC
+      LIMIT $2`,
+    [olderThanMonths, limit]
+  );
+  return result.rows.map((row) => ({
+    id: row.id,
+    mediaPath: row.media_path,
+    mediaMimeType: row.media_mime_type,
+    messageType: row.message_type,
+    createdAt: row.created_at,
+  }));
+}
+
+// Só o caminho do arquivo é limpo. O message_type continua 'image'/'video', e é
+// isso que permite a tela dizer "arquivo removido" em vez de sumir com a bolha.
+async function clearMessageMedia(messageId) {
+  const result = await getPool().query(
+    `UPDATE messages SET media_path = NULL WHERE id = $1 RETURNING ${MESSAGE_COLUMNS}`,
+    [messageId]
+  );
+  if (result.rowCount === 0) return null;
+  return toMessage(result.rows[0]);
+}
+
 async function updateMessageStatus(messageId, status) {
   const result = await getPool().query(
     `UPDATE messages SET status = $2 WHERE id = $1 RETURNING ${MESSAGE_COLUMNS}`,
@@ -388,6 +435,9 @@ async function markPixFallbackSent(messageId, motivo) {
 module.exports = {
   createMessage,
   updateMessageStatus,
+  updateMessageMedia,
+  listExpiredMedia,
+  clearMessageMedia,
   advanceMessageStatus,
   markMessageFailed,
   markMessageFailedByWhatsappId,

@@ -4,7 +4,7 @@ const { findChannelByWebhookToken } = require('../channels/channel.repository');
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
 const { applyTemplateStatusUpdates } = require('../templates/template.service');
 const { applyMessageStatusUpdates } = require('../conversations/message-status.service');
-const { saveMediaFile, extensionForMimeType } = require('../media/media-storage');
+const { saveInboundMedia, extensionForMimeType } = require('../media/media-storage');
 const { mensagemSegura } = require('../ai/safe-error-log');
 
 const router = express.Router();
@@ -30,7 +30,7 @@ router.post('/360dialog/:webhookToken', async (req, res) => {
       let mediaPath;
       if (inboundMessage.mediaId) {
         const buffer = await threeSixtyDialogAdapter.downloadMedia(inboundMessage.mediaId, channel);
-        mediaPath = await saveMediaFile(buffer, extensionForMimeType(inboundMessage.mediaMimeType));
+        ({ mediaPath } = await saveInboundMedia(buffer, inboundMessage.mediaMimeType));
       }
       await ingestInboundMessage({
         channelId: channel.id,

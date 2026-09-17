@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { loadConfig } = require('../config/env');
+const { compressInboundImage } = require('./image-compressor');
 
 const EXTENSION_BY_MIME_TYPE = {
   'image/jpeg': '.jpg',
@@ -39,6 +40,15 @@ async function saveMediaFile(buffer, extension) {
   return relativePath;
 }
 
+// Ponto unico por onde a midia RECEBIDA entra no disco: comprime a imagem
+// antes de gravar. Centralizado de proposito — os tres canais salvavam cada um
+// do seu jeito, e uma otimizacao aplicada em dois de tres nao economiza nada.
+async function saveInboundMedia(buffer, mimeType) {
+  const comprimido = await compressInboundImage(buffer, mimeType);
+  const mediaPath = await saveMediaFile(comprimido.buffer, extensionForMimeType(comprimido.mimeType));
+  return { mediaPath, mediaMimeType: comprimido.mimeType };
+}
+
 function getMediaFilePath(relativePath) {
   const baseDir = path.resolve(loadConfig().mediaStorageDir);
   const fullPath = path.resolve(baseDir, relativePath);
@@ -55,4 +65,4 @@ async function deleteMediaFile(relativePath) {
   await fs.promises.rm(getMediaFilePath(relativePath), { force: true });
 }
 
-module.exports = { saveMediaFile, deleteMediaFile, getMediaFilePath, extensionForMimeType, messageTypeForMimeType };
+module.exports = { saveMediaFile, saveInboundMedia, deleteMediaFile, getMediaFilePath, extensionForMimeType, messageTypeForMimeType };

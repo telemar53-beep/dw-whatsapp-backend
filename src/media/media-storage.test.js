@@ -1,3 +1,4 @@
+jest.mock('./image-compressor');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -8,7 +9,9 @@ const {
   getMediaFilePath,
   extensionForMimeType,
   messageTypeForMimeType,
+  saveInboundMedia,
 } = require('./media-storage');
+const { compressInboundImage } = require('./image-compressor');
 
 describe('media-storage', () => {
   let tempDir;
@@ -123,5 +126,29 @@ describe('media-storage', () => {
     test('defaults to document when mimeType is falsy', () => {
       expect(messageTypeForMimeType(null)).toBe('document');
     });
+  });
+});
+
+// Imagem recebida era gravada exatamente como chegava: foto de celular ocupa
+// 2-4 MB, e nada nunca e apagado. Medido em producao: ~76 MB/dia.
+describe('saveInboundMedia', () => {
+  test('grava a imagem ja comprimida e devolve o caminho', async () => {
+    const grande = Buffer.alloc(400 * 1024, 1);
+    compressInboundImage.mockResolvedValue({ buffer: Buffer.from('menor'), mimeType: 'image/jpeg' });
+
+    const { mediaPath, mediaMimeType } = await saveInboundMedia(grande, 'image/jpeg');
+
+    expect(compressInboundImage).toHaveBeenCalledWith(grande, 'image/jpeg');
+    expect(mediaPath).toMatch(/\.jpg$/);
+    expect(mediaMimeType).toBe('image/jpeg');
+  });
+
+  test('o que nao e imagem passa direto', async () => {
+    const pdf = Buffer.from('%PDF');
+    compressInboundImage.mockResolvedValue({ buffer: pdf, mimeType: 'application/pdf' });
+
+    const { mediaPath } = await saveInboundMedia(pdf, 'application/pdf');
+
+    expect(mediaPath).toMatch(/\.pdf$/);
   });
 });

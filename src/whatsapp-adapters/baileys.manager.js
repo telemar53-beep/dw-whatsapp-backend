@@ -6,7 +6,7 @@ const { createChannel, updateChannelStatus, listChannels } = require('../channel
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
 const { setContactAvatarPath, claimContactAvatarRefresh, findContactByPhoneNumber } = require('../conversations/contact.repository');
 const { applyParsedMessageStatusUpdates } = require('../conversations/message-status.service');
-const { saveMediaFile, deleteMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
+const { saveMediaFile, saveInboundMedia, deleteMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
 const { broadcast } = require('../realtime/socket-server');
 const { formatarData, formatarValor } = require('../payments/payment-card');
 const { getCompanyConfig } = require('../company/company-config.repository');
@@ -331,7 +331,7 @@ async function handleMessagesUpsert(channel, { messages, type }) {
     if (mediaInfo) {
       const { downloadMediaMessage } = loadBaileysLib();
       const buffer = await downloadMediaMessage(msg, 'buffer', {});
-      const mediaPath = await saveMediaFile(buffer, extensionForMimeType(mediaInfo.mimeType));
+      const { mediaPath } = await saveInboundMedia(buffer, mediaInfo.mimeType);
       const result = await ingestInboundMessage({
         channelId: channel.id,
         fromPhoneNumber,

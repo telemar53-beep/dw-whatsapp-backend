@@ -5,6 +5,7 @@ jest.mock('../conversations/message-status.service');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
   saveMediaFile: jest.fn(),
+  saveInboundMedia: jest.fn(),
 }));
 jest.mock('./three-sixty-dialog.adapter', () => ({
   ...jest.requireActual('./three-sixty-dialog.adapter'),

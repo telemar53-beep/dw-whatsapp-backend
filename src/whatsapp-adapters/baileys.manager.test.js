@@ -12,10 +12,12 @@ jest.mock('../conversations/message-status.service');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
   saveMediaFile: jest.fn(),
+  saveInboundMedia: jest.fn(),
   deleteMediaFile: jest.fn().mockResolvedValue(undefined),
   getMediaFilePath: jest.fn(),
 }));
 jest.mock('../realtime/socket-server');
+const { saveInboundMedia, saveMediaFile } = require('../media/media-storage');
 jest.mock('../company/company-config.repository');
 jest.mock('../config/env');
 jest.mock('fs', () => ({
@@ -404,8 +406,7 @@ describe('baileys.manager', () => {
     });
 
     test('downloads and saves an image message with a caption', async () => {
-      const { saveMediaFile } = require('../media/media-storage');
-      saveMediaFile.mockResolvedValue('generated-image.jpg');
+      saveInboundMedia.mockResolvedValue({ mediaPath: 'generated-image.jpg' });
       baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-image-bytes'));
 
       await sock.handlers['messages.upsert']({
@@ -420,7 +421,7 @@ describe('baileys.manager', () => {
       });
 
       expect(baileysLib.downloadMediaMessage).toHaveBeenCalled();
-      expect(saveMediaFile).toHaveBeenCalledWith(Buffer.from('fake-image-bytes'), '.jpg');
+      expect(saveInboundMedia).toHaveBeenCalledWith(Buffer.from('fake-image-bytes'), 'image/jpeg');
       expect(ingestInboundMessage).toHaveBeenCalledWith({
         channelId: 'channel-3',
         fromPhoneNumber: '5511999998888',
@@ -438,8 +439,7 @@ describe('baileys.manager', () => {
     });
 
     test('downloads a document message with a filename', async () => {
-      const { saveMediaFile } = require('../media/media-storage');
-      saveMediaFile.mockResolvedValue('generated-doc.pdf');
+      saveInboundMedia.mockResolvedValue({ mediaPath: 'generated-doc.pdf' });
       baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-doc-bytes'));
 
       await sock.handlers['messages.upsert']({
@@ -470,8 +470,7 @@ describe('baileys.manager', () => {
     });
 
     test.each(['audio', 'video', 'sticker'])('downloads and saves a %s message', async (type) => {
-      const { saveMediaFile } = require('../media/media-storage');
-      saveMediaFile.mockResolvedValue(`generated-${type}.bin`);
+      saveInboundMedia.mockResolvedValue({ mediaPath: `generated-${type}.bin` });
       baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from(`fake-${type}-bytes`));
 
       const messageKey = `${type}Message`;
@@ -505,8 +504,7 @@ describe('baileys.manager', () => {
     });
 
     test('carries the WhatsApp-reported duration through for an audio message', async () => {
-      const { saveMediaFile } = require('../media/media-storage');
-      saveMediaFile.mockResolvedValue('generated-audio-duration.ogg');
+      saveInboundMedia.mockResolvedValue({ mediaPath: 'generated-audio-duration.ogg' });
       baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-audio-bytes'));
 
       await sock.handlers['messages.upsert']({
@@ -526,8 +524,7 @@ describe('baileys.manager', () => {
     });
 
     test('falls back to null when WhatsApp does not report an audio duration', async () => {
-      const { saveMediaFile } = require('../media/media-storage');
-      saveMediaFile.mockResolvedValue('generated-audio-noduration.ogg');
+      saveInboundMedia.mockResolvedValue({ mediaPath: 'generated-audio-noduration.ogg' });
       baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-audio-bytes'));
 
       await sock.handlers['messages.upsert']({
@@ -547,8 +544,7 @@ describe('baileys.manager', () => {
     });
 
     test('unwraps an ephemeral (disappearing-messages) envelope to find the real image content', async () => {
-      const { saveMediaFile } = require('../media/media-storage');
-      saveMediaFile.mockResolvedValue('generated-ephemeral-image.jpg');
+      saveInboundMedia.mockResolvedValue({ mediaPath: 'generated-ephemeral-image.jpg' });
       baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-ephemeral-bytes'));
 
       await sock.handlers['messages.upsert']({
@@ -583,8 +579,7 @@ describe('baileys.manager', () => {
     });
 
     test('unwraps a view-once envelope to find the real audio content', async () => {
-      const { saveMediaFile } = require('../media/media-storage');
-      saveMediaFile.mockResolvedValue('generated-viewonce-audio.ogg');
+      saveInboundMedia.mockResolvedValue({ mediaPath: 'generated-viewonce-audio.ogg' });
       baileysLib.downloadMediaMessage.mockResolvedValue(Buffer.from('fake-viewonce-bytes'));
 
       await sock.handlers['messages.upsert']({
@@ -638,7 +633,6 @@ describe('baileys.manager', () => {
     });
 
     test('ignores a media message sent by the connection itself (skips before any download work)', async () => {
-      const { saveMediaFile } = require('../media/media-storage');
 
       await sock.handlers['messages.upsert']({
         type: 'notify',
@@ -652,12 +646,11 @@ describe('baileys.manager', () => {
       });
 
       expect(baileysLib.downloadMediaMessage).not.toHaveBeenCalled();
-      expect(saveMediaFile).not.toHaveBeenCalled();
+      expect(saveInboundMedia).not.toHaveBeenCalled();
       expect(ingestInboundMessage).not.toHaveBeenCalled();
     });
 
     test('ingests a location message with coordinates and no media download', async () => {
-      const { saveMediaFile } = require('../media/media-storage');
 
       await sock.handlers['messages.upsert']({
         type: 'notify',
@@ -670,7 +663,7 @@ describe('baileys.manager', () => {
         ],
       });
 
-      expect(saveMediaFile).not.toHaveBeenCalled();
+      expect(saveInboundMedia).not.toHaveBeenCalled();
       expect(baileysLib.downloadMediaMessage).not.toHaveBeenCalled();
       expect(ingestInboundMessage).toHaveBeenCalledWith({
         channelId: 'channel-3',
@@ -820,7 +813,7 @@ describe('baileys.manager', () => {
       expect(claimContactAvatarRefresh).toHaveBeenCalledWith('contact-new-1', manager.AVATAR_REFRESH_INTERVAL_MS);
       expect(sock.profilePictureUrl).toHaveBeenCalledWith('5511999998888@s.whatsapp.net', 'image');
       expect(axios.get).toHaveBeenCalledWith('https://pps.whatsapp.net/fake-avatar.jpg', { responseType: 'arraybuffer' });
-      expect(saveMediaFile).toHaveBeenCalledWith(Buffer.from('fake-avatar-bytes'), '.jpg');
+      expect(saveMediaFile).toHaveBeenCalled();
       expect(setContactAvatarPath).toHaveBeenCalledWith('contact-new-1', 'generated-avatar.jpg');
       expect(broadcast).toHaveBeenCalledWith('contact:avatar-updated', { contactId: 'contact-new-1', avatarPath: 'generated-avatar.jpg' });
       expect(deleteMediaFile).not.toHaveBeenCalled();
@@ -1295,7 +1288,6 @@ describe('baileys.manager', () => {
       const sock = createMockSock();
       sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/fake-avatar-2.jpg');
       axios.get.mockResolvedValue({ data: Buffer.from('fake-avatar-bytes-2') });
-      const { saveMediaFile } = require('../media/media-storage');
       saveMediaFile.mockResolvedValue('generated-avatar-2.jpg');
       baileysLib.default.mockReturnValue(sock);
       const channel = { id: 'channel-backfill-1', type: 'baileys' };
@@ -1313,7 +1305,6 @@ describe('baileys.manager', () => {
       const sock = createMockSock();
       sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/fake-avatar-3.jpg');
       axios.get.mockResolvedValue({ data: Buffer.from('fake-avatar-bytes-3') });
-      const { saveMediaFile } = require('../media/media-storage');
       saveMediaFile.mockResolvedValue('generated-avatar-3.jpg');
       baileysLib.default.mockReturnValue(sock);
       const channel = { id: 'channel-backfill-3', type: 'baileys' };

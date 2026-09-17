@@ -20,6 +20,9 @@ const {
   markPixFallbackSent,
   markMessageFailed,
   markMessageFailedByWhatsappId,
+  updateMessageMedia,
+  listExpiredMedia,
+  clearMessageMedia,
 } = require('./message.repository');
 
 describe('message repository', () => {
@@ -841,5 +844,117 @@ describe('createMessage com a hora informada pelo provedor', () => {
     });
 
     expect(primeira.createdAt.getTime()).toBeLessThan(segunda.createdAt.getTime());
+  });
+});
+
+// O video e comprimido DEPOIS de gravado, fora do webhook: o worker troca o
+// arquivo da mensagem quando termina.
+describe('updateMessageMedia', () => {
+  let conversationId;
+
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE conversations, contacts, channels, messages CASCADE');
+    const contact = await findOrCreateContactByPhoneNumber('+5511966665557', 'Video');
+    const channel = await createChannel({ type: 'baileys', name: 'Canal Video', phoneNumber: '+5511999990012', config: {} });
+    const conversation = await createConversation(contact.id, channel.id);
+    conversationId = conversation.id;
+  });
+
+  test('troca o arquivo e o tipo da midia', async () => {
+    const message = await createMessage({
+      conversationId, direction: 'inbound', status: 'received',
+      messageType: 'video', mediaPath: 'original.mp4', mediaMimeType: 'video/quicktime',
+    });
+
+    const atualizada = await updateMessageMedia(message.id, { mediaPath: 'menor.mp4', mediaMimeType: 'video/mp4' });
+
+    expect(atualizada.mediaPath).toBe('menor.mp4');
+    expect(atualizada.mediaMimeType).toBe('video/mp4');
+    expect((await findMessageById(message.id)).mediaPath).toBe('menor.mp4');
+  });
+
+  test('nao mexe no resto da mensagem', async () => {
+    const message = await createMessage({
+      conversationId, direction: 'inbound', status: 'received', content: 'olha o problema',
+      messageType: 'video', mediaPath: 'original.mp4', mediaMimeType: 'video/mp4',
+    });
+
+    const atualizada = await updateMessageMedia(message.id, { mediaPath: 'menor.mp4', mediaMimeType: 'video/mp4' });
+
+    expect(atualizada.content).toBe('olha o problema');
+    expect(atualizada.messageType).toBe('video');
+    expect(atualizada.direction).toBe('inbound');
+  });
+
+  test('devolve null para uma mensagem que nao existe', async () => {
+    expect(await updateMessageMedia('00000000-0000-0000-0000-000000000000', { mediaPath: 'x.mp4', mediaMimeType: 'video/mp4' })).toBeNull();
+  });
+});
+
+// O disco so cresce: nada nunca era apagado. Arquivo com mais de 12 meses sai,
+// mas a MENSAGEM fica — a bolha, a legenda e o tipo permanecem no historico do
+// atendimento; some so o arquivo.
+describe('retencao de midia', () => {
+  let conversationId;
+
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE conversations, contacts, channels, messages CASCADE');
+    const contact = await findOrCreateContactByPhoneNumber('+5511966665558', 'Retencao');
+    const channel = await createChannel({ type: 'baileys', name: 'Canal Retencao', phoneNumber: '+5511999990013', config: {} });
+    const conversation = await createConversation(contact.id, channel.id);
+    conversationId = conversation.id;
+  });
+
+  async function criarMidia({ mesesAtras, mediaPath = 'antigo.jpg' }) {
+    return createMessage({
+      conversationId, direction: 'inbound', status: 'received', messageType: 'image',
+      mediaPath, mediaMimeType: 'image/jpeg', content: 'olha o comprovante',
+      sentAt: new Date(Date.now() - mesesAtras * 30 * 24 * 60 * 60 * 1000),
+    });
+  }
+
+  test('lista so os arquivos mais antigos que o limite', async () => {
+    const antiga = await criarMidia({ mesesAtras: 13, mediaPath: 'velho.jpg' });
+    await criarMidia({ mesesAtras: 6, mediaPath: 'novo.jpg' });
+
+    const expirados = await listExpiredMedia({ olderThanMonths: 12 });
+
+    expect(expirados.map((m) => m.id)).toEqual([antiga.id]);
+    expect(expirados[0].mediaPath).toBe('velho.jpg');
+  });
+
+  test('nao lista mensagem que ja teve o arquivo removido', async () => {
+    const antiga = await criarMidia({ mesesAtras: 13 });
+    await clearMessageMedia(antiga.id);
+
+    expect(await listExpiredMedia({ olderThanMonths: 12 })).toEqual([]);
+  });
+
+  test('remover o arquivo mantem a mensagem e a legenda', async () => {
+    const antiga = await criarMidia({ mesesAtras: 13 });
+
+    await clearMessageMedia(antiga.id);
+
+    const depois = await findMessageById(antiga.id);
+    expect(depois).not.toBeNull();
+    expect(depois.mediaPath).toBeNull();
+    expect(depois.content).toBe('olha o comprovante');
+    expect(depois.messageType).toBe('image');
+  });
+
+  test('respeita o limite pedido', async () => {
+    await criarMidia({ mesesAtras: 7 });
+
+    expect(await listExpiredMedia({ olderThanMonths: 12 })).toEqual([]);
+    expect((await listExpiredMedia({ olderThanMonths: 6 })).length).toBe(1);
+  });
+
+  test('mensagem de texto nunca entra na lista', async () => {
+    await createMessage({
+      conversationId, direction: 'inbound', status: 'received', content: 'so texto',
+      sentAt: new Date(Date.now() - 24 * 30 * 24 * 60 * 60 * 1000),
+    });
+
+    expect(await listExpiredMedia({ olderThanMonths: 12 })).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+jest.mock('../queue/media-compression-queue');
 jest.mock('./contact.repository');
 jest.mock('./conversation.repository');
 jest.mock('./message.repository');
@@ -16,6 +17,7 @@ const {
   findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent,
   findRecentAiClosedConversation,
 } = require('./conversation.repository');
+const { enqueueMediaCompression } = require('../queue/media-compression-queue');
 const { createMessage, findMessageByWhatsappMessageId } = require('./message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
@@ -1574,5 +1576,59 @@ describe('ingestInboundMessage — hora informada pelo provedor', () => {
     });
 
     expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ sentAt: undefined }));
+  });
+});
+
+// Comprimir video leva segundos a minutos: fica fora do webhook. O original
+// entra na hora, a mensagem aparece no chat, e o worker troca o arquivo depois.
+describe('ingestInboundMessage — compressao de video em segundo plano', () => {
+  // Este describe e irmao do principal: os mocks de base dele nao valem aqui.
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1', phoneNumber: '+5511999998888', displayName: 'Cliente' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: null });
+    findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: null });
+    shouldStartTriage.mockResolvedValue(false);
+    findActiveCityNoticeByCityId.mockResolvedValue(null);
+    getBusinessHoursConfig.mockResolvedValue({ enabled: false, startTime: '08:00', endTime: '18:00', message: '' });
+    isOutsideBusinessHours.mockReturnValue(false);
+    shouldRunAi.mockResolvedValue(false);
+    shouldTranscribe.mockResolvedValue(false);
+    shouldStartAiTriage.mockResolvedValue(false);
+    isNightModeActiveForChannel.mockResolvedValue(false);
+    getAiConfig.mockResolvedValue({ triageTimeoutMinutes: 3 });
+  });
+
+  test('enfileira a compressao depois de gravar um video', async () => {
+    createMessage.mockResolvedValue({ id: 'msg-video', messageType: 'video' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      contactDisplayName: 'Cliente',
+      whatsappMessageId: 'wamid.VIDEO',
+      messageType: 'video',
+      mediaPath: 'v.mp4',
+      mediaMimeType: 'video/mp4',
+    });
+
+    expect(enqueueMediaCompression).toHaveBeenCalledWith({ messageId: 'msg-video' });
+  });
+
+  test('nao enfileira para imagem, que ja foi comprimida na entrada', async () => {
+    createMessage.mockResolvedValue({ id: 'msg-img', messageType: 'image' });
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      contactDisplayName: 'Cliente',
+      whatsappMessageId: 'wamid.IMG',
+      messageType: 'image',
+      mediaPath: 'i.jpg',
+      mediaMimeType: 'image/jpeg',
+    });
+
+    expect(enqueueMediaCompression).not.toHaveBeenCalled();
   });
 });

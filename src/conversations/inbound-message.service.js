@@ -12,6 +12,7 @@ const { ehMensagemDeCortesia } = require('./courtesy-message');
 // Suporte). Fixa de propósito — 30 min cobre a troca de gentilezas e não
 // segura um pedido de verdade, que de qualquer jeito não passa no filtro.
 const JANELA_DE_CORTESIA_MS = 30 * 60 * 1000;
+const { enqueueMediaCompression } = require('../queue/media-compression-queue');
 const { createMessage, findMessageByWhatsappMessageId } = require('./message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
@@ -158,6 +159,12 @@ async function ingestInboundMessage({
       repliedToMessageId: repliedTo ? repliedTo.id : null,
       sentAt,
     });
+    // Comprimir vídeo leva segundos a minutos: fica fora do webhook, que
+    // precisa responder rápido ao provedor. O original já está gravado e a
+    // mensagem já vai aparecer no chat; o worker troca o arquivo depois.
+    if (message && message.messageType === 'video') {
+      await enqueueMediaCompression({ messageId: message.id });
+    }
   } catch (err) {
     if (err.code !== UNIQUE_VIOLATION) throw err;
     return { contact, conversation, message: null, contactJustCreated };

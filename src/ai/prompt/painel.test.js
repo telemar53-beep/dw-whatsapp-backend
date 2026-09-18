@@ -6,6 +6,30 @@ describe('módulo painel', () => {
     expect(painel.entra(estadoBase())).toBe(true);
   });
 
+  // Task 18 — duas das 7 lacunas apontadas pelo despacho (regra presente no
+  // compositor, sem teste). A LISTAGEM de setores e motivos já era testada
+  // abaixo; os CABEÇALHOS, não. São eles que dizem ao modelo o contrato de
+  // concluir_triagem: o id EXATO da lista (não o nome do setor, que o modelo
+  // inventaria) e, para o motivo, que null é uma resposta válida — sem isso
+  // ele escolhe um motivo errado só para preencher o campo.
+  test('os cabeçalhos mandam usar o id exato, e o de motivos admite null', () => {
+    const texto = painel.linhas(estadoBase()).join('\n');
+    expect(texto).toContain('Setores (use o id exato em concluir_triagem):');
+    expect(texto).toContain('Motivos (use o id exato, ou null se nenhum se aplica):');
+  });
+
+  test('cada cabeçalho vem imediatamente antes da sua própria lista', () => {
+    const texto = painel.linhas(estadoBase({
+      setores: [{ id: 's1', name: 'Suporte', aiHint: null }],
+      motivos: [{ id: 'r1', name: 'Lentidão' }],
+    })).join('\n');
+    const cabecalhoSetores = texto.indexOf('Setores (use o id exato');
+    const cabecalhoMotivos = texto.indexOf('Motivos (use o id exato');
+    expect(cabecalhoSetores).toBeLessThan(texto.indexOf('- s1 = Suporte'));
+    expect(texto.indexOf('- s1 = Suporte')).toBeLessThan(cabecalhoMotivos);
+    expect(cabecalhoMotivos).toBeLessThan(texto.indexOf('- r1 = Lentidão'));
+  });
+
   test('lista os setores com o aiHint quando existe, e sem traço quando não existe', () => {
     const texto = painel.linhas(estadoBase({
       setores: [

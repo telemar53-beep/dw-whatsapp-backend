@@ -60,4 +60,46 @@ describe('módulo principios', () => {
   // TODOS os módulos de uma vez (menos painel.js, que repassa dado do
   // operador por natureza). Ver o teste "nenhum módulo... hardcoda
   // velocidade, preço ou nome de setor" lá.
+
+  // Rodada de correção 2 da Task 17 (coordenador, 2026-09-18): três regras
+  // GERAIS (proibição de nascimento, fim de roteiro não automático, regra
+  // de emoji) sumiram em silêncio na migração — existiam só como comentário
+  // em fatos.js/comercial-novo.js, nunca chegaram a ser emitidas pelo
+  // compositor. Medido pelo coordenador comparando baseline × compositor
+  // nos três cenários (emite 1, compositor emitia 0). Já sumiram uma vez
+  // sem que nenhum teste pegasse — esta guarda trava as três para não
+  // sumirem de novo.
+  describe('guarda contra as três regras gerais que já sumiram uma vez (Rodada de correção 2, Task 17)', () => {
+    const texto = () => principios.linhas(estadoBase()).join('\n');
+
+    test('proíbe pedir data de nascimento, em qualquer situação', () => {
+      expect(texto()).toMatch(/NUNCA peça data de nascimento ao cliente, em nenhuma situação/);
+    });
+
+    test('fim de roteiro não é automático', () => {
+      expect(texto()).toMatch(/Fim de roteiro NÃO é automático: só conclua quando não houver mais nada para responder\./);
+    });
+
+    test('o resumo ao concluir é para o atendente', () => {
+      expect(texto()).toMatch(/Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou\./);
+    });
+
+    test('regra de emoji: só PIX e vendas, nenhum emoji em boleto/suporte/outros assuntos', () => {
+      const t = texto();
+      expect(t).toMatch(/Emoji SÓ nos fluxos de PIX e de vendas\./);
+      expect(t).toMatch(/No BOLETO, no suporte e em qualquer outro assunto, NENHUM emoji — nem na saudação\./);
+    });
+
+    // A adaptação de "COMERCIAL"/"SUPORTE" para "vendas"/"suporte" não pode
+    // reintroduzir nome de setor fixo (Restrição Global do plano) — mesma
+    // categoria que a guarda de montar.test.js varre em todos os módulos de
+    // fluxo; aqui, direto, porque principios.js é um caso à parte (não está
+    // na lista MODULOS de fluxos/, mas entra na varredura geral de
+    // montar.test.js do mesmo jeito, por incluir 'principios' em MODULOS).
+    test('a regra de emoji não nomeia um setor fixo (maiúsculo ou minúsculo)', () => {
+      const t = texto();
+      expect(t).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
+      expect(t).not.toMatch(/\b(FINANCEIRO|COMERCIAL|SUPORTE|REATIVAÇÃO)\b/);
+    });
+  });
 });

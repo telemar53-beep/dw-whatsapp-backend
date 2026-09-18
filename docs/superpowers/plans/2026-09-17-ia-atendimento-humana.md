@@ -2283,7 +2283,12 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: Task 16.
 - Produces:
-  - `comprovante.entra` = `estado.ferramentas.includes('analisar_comprovante')`
+  - `comprovante.entra` = **`true` sempre**. O cliente pode mandar uma imagem a qualquer
+    momento. O que a presença de `analisar_comprovante` na lista muda é o **conteúdo**, não a
+    entrada: com a ferramenta, o módulo manda ler; sem ela, manda perguntar se é comprovante e
+    classificar sem confirmar pagamento. O construtor antigo faz exatamente isso, num ternário.
+    Condicionar a ENTRADA à ferramenta apaga a orientação no padrão de fábrica — que é
+    justamente o estado sem leitura de dia.
   - `noturno.entra` = `estado.triagem.noturno.ativo`
   - `multiplos-contratos.entra` = `estado.contratos.length > 1`
   - `aviso-cidade.entra` = `Boolean(estado.avisoCidade)`
@@ -2293,9 +2298,14 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - [ ] **Step 1: Escrever os testes**
 
 ```js
-test('comprovante só entra quando a ferramenta está na lista do turno', () => {
-  expect(comprovante.entra(estadoBase({ ferramentas: ['buscar_cliente'] }))).toBe(false);
+test('comprovante entra sempre; a ferramenta muda o conteúdo, não a entrada', () => {
+  // Com a leitura de dia desligada (o padrão de fábrica) o módulo PRECISA entrar:
+  // é nesse estado que vale "pergunte se é um comprovante".
+  expect(comprovante.entra(estadoBase({ ferramentas: ['buscar_cliente'] }))).toBe(true);
   expect(comprovante.entra(estadoBase({ ferramentas: ['analisar_comprovante'] }))).toBe(true);
+  const semFerramenta = comprovante.linhas(estadoBase({ ferramentas: ['buscar_cliente'] })).join('
+');
+  expect(semFerramenta).toMatch(/pergunte se .* comprovante/i);
 });
 
 test('o comprovante de cliente não identificado pede o documento, nunca outro dado', () => {

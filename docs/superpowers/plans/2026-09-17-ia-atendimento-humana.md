@@ -35,7 +35,7 @@
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `migrations/1789180000000_add-ai-triage-third-party.js` | coluna `ai_triage_third_party` |
+| `migrations/1789200000000_add-ai-triage-third-party.js` | coluna `ai_triage_third_party` |
 | `src/ai/third-party-scope.js` | ciclo de vida do escopo de terceiro: montar, validar, expirar |
 | `src/ai/third-party-minimize.js` | projeção de campos permitidos no retorno de ferramenta de terceiro |
 | `src/ai/prompt/montar.js` | compositor: ordem de montagem e seleção de módulos |
@@ -392,7 +392,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 4: Persistência do escopo
 
 **Files:**
-- Create: `migrations/1789180000000_add-ai-triage-third-party.js`
+- Create: `migrations/1789200000000_add-ai-triage-third-party.js`
 - Modify: `src/conversations/conversation.repository.js`
 - Test: `src/conversations/conversation.repository.test.js`
 
@@ -406,7 +406,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Escrever a migração**
 
-`migrations/1789180000000_add-ai-triage-third-party.js`:
+`migrations/1789200000000_add-ai-triage-third-party.js`:
 
 ```js
 exports.up = (pgm) => {
@@ -433,7 +433,7 @@ Em `src/conversations/conversation.repository.test.js`:
 
 ```js
 test('guarda, lê e limpa o escopo de terceiro da conversa', async () => {
-  const conversation = await criarConversa();
+  const conversation = await createConversation(contactId, channelId);
   expect(await getThirdPartyScope(conversation.id)).toBeNull();
 
   const escopo = { nome: 'Maria', contratos: [10, 11], expiraEm: '2026-09-17T23:00:00.000Z' };
@@ -466,14 +466,14 @@ Em `src/conversations/conversation.repository.js`, junto das outras consultas de
  * as ferramentas de pagamento, e o CPF já não é necessário depois da consulta.
  */
 async function setThirdPartyScope(conversationId, escopo) {
-  await query(
+  await getPool().query(
     `UPDATE conversations SET ai_triage_third_party = $2 WHERE id = $1`,
     [conversationId, escopo ? JSON.stringify(escopo) : null]
   );
 }
 
 async function getThirdPartyScope(conversationId) {
-  const result = await query(
+  const result = await getPool().query(
     `SELECT ai_triage_third_party FROM conversations WHERE id = $1`,
     [conversationId]
   );
@@ -492,7 +492,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add migrations/1789180000000_add-ai-triage-third-party.js src/conversations/conversation.repository.js src/conversations/conversation.repository.test.js
+git add migrations/1789200000000_add-ai-triage-third-party.js src/conversations/conversation.repository.js src/conversations/conversation.repository.test.js
 git commit -m "Terceiro: coluna e consultas dedicadas do escopo na conversa
 
 Guarda ids de contrato e primeiro nome do titular, nunca o CPF dele.

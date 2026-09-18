@@ -1273,7 +1273,15 @@ Expected: FAIL — módulo ausente e fallback atravessando.
 // pode vazar por acaso.
 const PROJECOES = {
   consultar_faturas: (r) => ({
-    faturas: (r.faturas || []).map((f) => ({ id: f.id, vencimento: f.vencimento, status: f.status })),
+    // normalizeInvoices (sgp-normalizer.js) devolve faturaId e
+    // vencimentoOriginal/vencimentoAtualizado — nunca "id"/"vencimento"
+    // soltos. vencimentoAtualizado prevalece quando existe: é a data que vale
+    // de fato quando a fatura foi renegociada; sem ela, cai para a original.
+    faturas: (r.faturas || []).map((f) => ({
+      id: f.faturaId,
+      vencimento: f.vencimentoAtualizado || f.vencimentoOriginal,
+      status: f.status,
+    })),
   }),
   enviar_boleto: (r) => ({
     enviado: r.enviado === true,
@@ -1285,7 +1293,10 @@ const PROJECOES = {
     ...(r.instrucao ? { instrucao: r.instrucao } : {}),
   }),
   gerar_segunda_via: (r) => ({
-    gerado: true,
+    // `gerado` nasce do resultado real, nunca de uma constante: um `true` fixo
+    // é a mesma classe do defeito de 2026-09-15, em que a IA dizia ter enviado
+    // o boleto sem ter enviado.
+    gerado: r.temFaturaAberta === true,
     ...(r.instrucao ? { instrucao: r.instrucao } : {}),
   }),
 };

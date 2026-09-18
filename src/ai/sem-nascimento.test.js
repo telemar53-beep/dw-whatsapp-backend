@@ -7,7 +7,14 @@ const path = require('path');
 // depois um ramo morto do prompt) — esta é a rede permanente que impede a
 // terceira. Varre o código de produção, não os testes.
 const RAIZ = path.join(__dirname, '..');
-const IGNORAR = /\.test\.js$|[\\/]node_modules[\\/]/;
+// src/ai/simulacao/ é o harness de validação (Task 20): código de TESTE que só
+// existe para ser chamado por simulacao-real.test.js, e que precisa escrever a
+// palavra para poder PROIBI-la — o invariante `nuncaPediuNascimento` é aplicado
+// a todos os roteiros e reprova a simulação se a IA pedir a data. Varrê-lo aqui
+// reprovaria a própria rede que checa a mesma regra, agora no comportamento.
+// A exclusão é de escopo, não de rigor: o alvo desta varredura continua sendo
+// tudo o que roda em produção.
+const IGNORAR = /\.test\.js$|[\\/]node_modules[\\/]|[\\/]ai[\\/]simulacao[\\/]/;
 
 function arquivosJs(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

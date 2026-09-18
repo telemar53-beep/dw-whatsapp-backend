@@ -2188,10 +2188,12 @@ describe('concluir_triagem', () => {
     expect(c.triagemConcluida).toEqual({ setor: 'Financeiro' });
   });
 
-  test('o resumo lista as ferramentas usadas e o que devolveram', async () => {
+  // Task 11: a linha deixou de despejar o JSON cru do registro — vira uma
+  // frase curta ("chave valor, chave valor") que um atendente lê sem esforço.
+  test('o resumo lista as ferramentas usadas e o que devolveram, de forma legível', async () => {
     const c = ctx({ registroFerramentas: [{ nome: 'enviar_boleto', resultado: '{"enviado":false,"motivo":"Nenhuma fatura em aberto"}' }] });
     await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'Pediu boleto.', confianca: 0.9 }, c);
-    expect(concludeAiTriage.mock.calls[0][1].summary).toContain('Ferramentas: enviar_boleto → {"enviado":false,"motivo":"Nenhuma fatura em aberto"}');
+    expect(concludeAiTriage.mock.calls[0][1].summary).toContain('Ferramentas: enviar_boleto → enviado false, motivo Nenhuma fatura em aberto');
   });
 
   test('setor desconhecido ou motivo inativo são recusados', async () => {
@@ -2370,6 +2372,69 @@ describe('concluir_triagem', () => {
       expect(summary).not.toContain('Comprovante (visão)');
       expect(summary).not.toContain('Pendente:');
     });
+  });
+});
+
+// Task 11: o resumo que a IA entrega ao atendente ganha duas melhorias —
+// registra quando o pedido era de um terceiro (pelo primeiro nome e pelo
+// contrato, nunca pelo documento do titular, que nem chega a ficar guardado
+// em contexto.terceiro) e troca o despejo de JSON cru da linha "Ferramentas:"
+// por uma frase legível. Roda pelo executor de verdade (executeTool), não só
+// tool.executar, seguindo o mesmo padrão dos outros describes 'tool-executor +
+// X (composição real)' deste arquivo. beforeEach próprio de propósito: nada
+// aqui depende de mock armado em outro describe (rodar isolado com `-t` tem
+// que bastar).
+describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+    concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'c1', assignedAgentId: null });
+  });
+
+  test('o resumo registra que o pedido era de outra pessoa, sem o documento dela', async () => {
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Boleto entregue.', confianca: 0.9 }, contexto);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    expect(summary).toMatch(/Pedido de terceiro: titular Maria, contrato 77/);
+    expect(summary).not.toMatch(/\d{11}/);
+  });
+
+  // O `if (contexto.terceiro)` é condicional: sem escopo de terceiro, a linha
+  // não pode aparecer — nem vazia, nem com "não informado".
+  test('sem escopo de terceiro, o resumo não ganha a linha "Pedido de terceiro"', async () => {
+    const contexto = contextoDeTriagemCom({ terceiro: null });
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }, contexto);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    expect(summary).not.toContain('Pedido de terceiro');
+  });
+
+  test('a linha de ferramentas do resumo é legível, não JSON cru', async () => {
+    const contexto = contextoDeTriagemCom({
+      registroFerramentas: [{ nome: 'consultar_status_todos_contratos', resultado: '{"contratos":[{"status":"ativo","conexao":"online"}]}' }],
+    });
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }, contexto);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    expect(summary).toMatch(/consultar_status_todos_contratos →/);
+    expect(summary).not.toMatch(/\{"contratos"/);
+  });
+
+  // O registro grava o resultado truncado em 200 caracteres, com "…(truncado)"
+  // colado no fim (ai-orchestrator.js) — o que deixa de ser JSON válido no meio
+  // de uma string ou de um array. legivel precisa cair no texto cru sem
+  // lançar: um resultado grande não pode derrubar a conclusão da triagem.
+  test('resultado truncado (JSON inválido) não derruba a ferramenta: cai no texto cru', async () => {
+    const original = JSON.stringify({
+      faturas: Array.from({ length: 10 }, (_, i) => ({ id: i, valor: 100 + i, vencimento: '2026-09-10' })),
+    });
+    const truncado = `${original.slice(0, 200)}…(truncado)`;
+    const contexto = contextoDeTriagemCom({
+      registroFerramentas: [{ nome: 'consultar_faturas_todos_contratos', resultado: truncado }],
+    });
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }, contexto);
+    expect(r.ok).toBe(true);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    expect(summary).toContain(`Ferramentas: consultar_faturas_todos_contratos → ${truncado.slice(0, 160)}`);
   });
 });
 

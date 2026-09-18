@@ -261,6 +261,20 @@ async function limparEscopoDeTerceiro(contexto) {
   return true;
 }
 
+/** Transforma o JSON gravado do resultado numa frase curta para o atendente. */
+function legivel(serializado) {
+  try {
+    const dado = JSON.parse(serializado);
+    if (dado && typeof dado === 'object') {
+      const partes = Object.entries(dado)
+        .filter(([chave]) => chave !== 'instrucao' && chave !== 'proximoPasso')
+        .map(([chave, valor]) => `${chave} ${typeof valor === 'object' ? JSON.stringify(valor) : valor}`);
+      if (partes.length > 0) return partes.join(', ').slice(0, 160);
+    }
+  } catch (err) { /* resultado truncado não é JSON válido: cai no texto cru */ }
+  return String(serializado).slice(0, 160);
+}
+
 const TOOLS = [
   {
     nome: 'buscar_cliente',
@@ -674,7 +688,10 @@ const TOOLS = [
       type: 'object',
       properties: {
         setorId: { type: 'string', description: 'UUID de um setor existente.' },
-        resumo: { type: 'string', description: 'Resumo do atendimento para o atendente humano.' },
+        resumo: {
+          type: 'string',
+          description: 'Resumo para o atendente humano, em 2 a 4 frases: o que o cliente pediu COM AS PALAVRAS DELE, o que as consultas mostraram, o que você já resolveu, e o que falta. Bom: "Cliente relata quedas desde cedo. Cadastro localizado, contrato ativo e conexão online na consulta. Diz que acontece em todos os aparelhos." Ruim: "Cliente com problema de internet."',
+        },
       },
       required: ['setorId', 'resumo'],
     },
@@ -1297,7 +1314,10 @@ const TOOLS = [
       properties: {
         setorId: { type: 'string', description: 'UUID de um setor existente.' },
         motivoId: { type: ['string', 'null'], description: 'UUID de um motivo existente, ou null se nenhum se aplica.' },
-        resumo: { type: 'string', description: 'Resumo objetivo para o atendente: o que o cliente quer e o que já foi apurado.' },
+        resumo: {
+          type: 'string',
+          description: 'Resumo para o atendente humano, em 2 a 4 frases: o que o cliente pediu COM AS PALAVRAS DELE, o que as consultas mostraram, o que você já resolveu, e o que falta. Bom: "Cliente relata quedas desde cedo. Cadastro localizado, contrato ativo e conexão online na consulta. Diz que acontece em todos os aparelhos." Ruim: "Cliente com problema de internet."',
+        },
         confianca: { type: 'number', description: 'Confiança na classificação, de 0 a 1.' },
       },
       required: ['setorId', 'resumo', 'confianca'],
@@ -1354,9 +1374,14 @@ const TOOLS = [
         `Origem: ${contexto.origemMensagem || 'texto'}`,
         `Confiança: ${Math.round(args.confianca * 100)}%${baixa ? ' (BAIXA)' : ''}`,
       ];
+      // O titular aparece pelo primeiro nome e pelo contrato; o documento dele nunca
+      // entra no resumo — não está nem guardado.
+      if (contexto.terceiro) {
+        linhas.push(`Pedido de terceiro: titular ${contexto.terceiro.nome || 'não informado'}, contrato ${contexto.terceiro.contratos.map((c) => c.id).join(', ')}`);
+      }
       if (resolvidoPelaIa) linhas.push('Resolvido pela IA: boleto/PIX enviado — só confirmar.');
       if (Array.isArray(contexto.registroFerramentas) && contexto.registroFerramentas.length > 0) {
-        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
+        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${legivel(r.resultado)}`).join('; ')}`);
       }
       linhas.push('', args.resumo);
       // Quem pega a conversa de manhã precisa ver, na PRIMEIRA linha, que ela

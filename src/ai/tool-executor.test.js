@@ -404,6 +404,21 @@ describe('tool-executor — contrato de terceiro (lista de permissão)', () => {
     expect(r.motivo).toBe('contract_not_owned');
   });
 
+  // O quadrante da expiração: o escopo já foi limpo (30 minutos, conclusão,
+  // encerramento), mas o modelo ainda carrega o id do contrato do terceiro na
+  // memória da conversa e tenta usar. Sem escopo, não há autorização nenhuma —
+  // nem a da lista de permissão. Usa as PERMITIDAS de propósito: são elas que
+  // passariam se o escopo existisse, então são elas que provam que a ausência
+  // do escopo fecha a porta (as BLOQUEADAS já são recusadas por dois motivos
+  // diferentes, e o teste ficaria menos específico).
+  test.each(PERMITIDAS)('%s no contrato do terceiro SEM escopo registrado volta a contract_not_owned', async (nome) => {
+    const contexto = contextoComTerceiro([nome], SEM_IDENTIDADE);
+    contexto.terceiro = null;
+    const r = await executeTool(nome, ARGS_MINIMOS[nome], contexto);
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('contract_not_owned');
+  });
+
   test('sem escopo de terceiro, nada muda para os contratos próprios', async () => {
     const contexto = contextoComTerceiro(['consultar_plano']);
     contexto.terceiro = null;

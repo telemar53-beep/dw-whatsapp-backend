@@ -93,6 +93,33 @@ describe('módulo comercial-cliente', () => {
       expect(t).toMatch(/Para já adiantar, me diz o novo endereço/);
     });
 
+    // =================================================================
+    // Task 18 — asserts migrados de ai-orchestrator.test.js
+    // =================================================================
+
+    // Antes: ai-orchestrator.test.js:1207-1208. Print 2026-09-16: "quero mudar
+    // minha internet de endereço, vou embora pra outra casa, o que eu faço?"
+    // recebeu só "o atendimento vai para o Comercial" — pergunta sem resposta,
+    // e é um dos pedidos mais comuns. Os dois dados que o setor precisa são
+    // pedidos ANTES de encaminhar.
+    test('mudança de endereço: pede endereço novo e data prevista, e não encaminha sem isso', () => {
+      const t = texto();
+      expect(t).toMatch(/me diz o novo endereço \(cidade, bairro e rua\) e a data prevista da mudança\?/);
+      expect(t).toMatch(/NÃO encaminhe sem pedir isso/);
+      expect(t).toMatch(/com a resposta, conclua para o setor da lista acima que cuidar de vendas com o endereço novo e a data no resumo/);
+    });
+
+    // Antes: ai-orchestrator.test.js:1419-1420. O bloco antigo era uma frase
+    // fixa com nome real de cliente e três preços reais ("Boa tarde,
+    // [nome real]! ... 500 Mega por R$ 100/mês"). A spec removeu o texto e
+    // manteve o COMPORTAMENTO: cumprimentar pelo nome, dizer que vai ajudar,
+    // apresentar os planos das instruções, e encaminhar com a escolha.
+    test('cliente identificado que pede preço: cumprimenta pelo nome, ajuda, apresenta e encaminha com a escolha', () => {
+      const t = texto();
+      expect(t).toMatch(/cumprimente pelo nome, diga que vai ajudar/);
+      expect(t).toMatch(/Pergunte qual interessa e, com a escolha, conclua para o setor da lista acima que cuidar de vendas com o plano escolhido no resumo\./);
+    });
+
     // Rodada de correção 1 da Task 17 (coordenador): este módulo também
     // encaminha para vendas (upgrade, mudança de endereço), então ganhou a
     // mesma frase-modelo dia x noite que comercial-novo.js tem, centralizada

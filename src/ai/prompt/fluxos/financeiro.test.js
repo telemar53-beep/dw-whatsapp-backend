@@ -41,6 +41,10 @@ describe('módulo financeiro', () => {
       expect(t).toMatch(/PEDIDO DE PAGAMENTO/);
       expect(t).toMatch(/tem prioridade sobre qualquer roteiro de diagnóstico/);
       expect(t).toMatch(/NUNCA pergunte "você chegou a fazer esse pagamento\?" a quem acabou de dizer que quer pagar/);
+      // Task 18 — antes: ai-orchestrator.test.js:1352. Print 2026-09-17
+      // (16:32): a entrega tem de sair AGORA, inclusive com o contrato
+      // suspenso — a pendência é justamente o que ele está resolvendo.
+      expect(t).toMatch(/entregue o boleto ou o PIX AGORA \(enviar_boleto ou gerar_pix\), mesmo com o contrato suspenso — a pendência é justamente o que ele está resolvendo\./);
     });
 
     test('identidade já confirmada: não pede CPF, entrega direto por ferramenta', () => {
@@ -79,6 +83,42 @@ describe('módulo financeiro', () => {
       test('encerra também quando o cliente só confirma com "ok" ou joinha', () => {
         expect(t).toMatch(/Se responder só "ok", "certo" ou um joinha: chame encerrar_atendimento/);
       });
+
+      // Task 18 — antes: ai-orchestrator.test.js:1813. A despedida fecha o
+      // atendimento de verdade: reabre a porta e deseja o dia, variando à
+      // noite. Sem isso o "encerrar" sai seco.
+      test('a despedida reabre a porta e varia entre dia e noite', () => {
+        expect(t).toMatch(/pode chamar a gente por aqui\. Tenha um ótimo dia!/);
+        expect(t).toMatch(/\(à noite, "Tenha uma boa noite!"\)/);
+      });
+
+      // Task 18 — antes: ai-orchestrator.test.js:1809-1811. Teste real
+      // 2026-09-15 (produção): com o exemplo "Enviei acima o boleto..." no
+      // prompt, o modelo copiou a frase sem chamar enviar_boleto e o cliente
+      // não recebeu nada. Os modelos de frase da ENTREGA saíram do prompt de
+      // propósito — quem devolve o texto é a própria ferramenta, depois de
+      // ter enviado. Nenhum pode voltar, nem com nome real de cliente junto.
+      test('nenhum modelo de frase de entrega vive no prompt, nem nome real de cliente', () => {
+        expect(t).not.toMatch(/Enviei acima o PIX/);
+        expect(t).not.toMatch(/Enviei acima o boleto/);
+        expect(t).not.toMatch(/Agenor Costa/);
+      });
+
+      // Task 18 — antes: ai-orchestrator.test.js:1823. Com motivo configurado
+      // a IA ENCERRA; a instrução de encaminhar ao financeiro depois de
+      // entregar é do outro ramo e não pode sobrar aqui, ou o modelo lê as
+      // duas e faz as duas coisas.
+      test('com motivo, a instrução de encaminhar depois de entregar não sobra no prompt', () => {
+        expect(t).not.toMatch(/e depois conclua a triagem para o setor da lista acima que cuidar do financeiro/);
+      });
+    });
+
+    // Task 18 — antes: ai-orchestrator.test.js:1840. O espelho do teste
+    // acima: sem motivo configurado, encerrar_atendimento não pode ser
+    // oferecido em lugar nenhum deste módulo.
+    test('sem motivo de encerramento, o módulo nunca manda encerrar o atendimento', () => {
+      const t = texto({ config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: null } });
+      expect(t).not.toMatch(/chame encerrar_atendimento/);
     });
 
     test('pedido de boleto/PIX com mais de um contrato só aparece com mais de um contrato', () => {
@@ -95,11 +135,33 @@ describe('módulo financeiro', () => {
       expect(umContrato).not.toMatch(/Pedido de boleto ou PIX com mais de um contrato/);
     });
 
+    // Task 18 — antes: ai-orchestrator.test.js:1083, :1833 e :1834. 1º teste
+    // real com dois contratos: o modelo gastou as duas perguntas ("qual
+    // contrato", "qual endereço") e encaminhou sem mandar o PIX que já podia
+    // mandar. A ferramenta decide: se só um tem fatura, entrega sem perguntar;
+    // se mais de um, UMA pergunta pelo endereço — com emoji no PIX e sem no
+    // boleto, como manda a regra de emoji de principios.js.
+    test('com dois contratos, a consulta decide: um só entrega direto, mais de um pede o endereço uma vez', () => {
+      const t = texto({
+        contratos: [
+          { id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço 1]', status: 'ativo' },
+          { id: 2, plano: '[plano]', velocidade: null, endereco: '[endereço 2]', status: 'suspenso' },
+        ],
+      });
+      expect(t).toMatch(/Se só um contrato tiver fatura em aberto, entregue dele sem perguntar\./);
+      expect(t).toMatch(/Claro, vou te ajudar com o PIX 😊 Vi que você tem mais de um contrato com a gente\./);
+      expect(t).toMatch(/Para BOLETO, o mesmo pedido sem emoji: "Claro, vou te ajudar com o boleto\. Vi que você tem mais de um contrato com a gente\./);
+    });
+
     test('sem fatura em aberto em nenhum contrato: avisa sem valor e conclui sem perguntar', () => {
       const t = texto();
       expect(t).toMatch(/Se a ferramenta responder que não há fatura em aberto em nenhum contrato/);
       expect(t).toMatch(/não pergunte se ele quer ser encaminhado/);
       expect(t).toMatch(/chame concluir_triagem para o setor da lista acima que cuidar do financeiro/);
+      // Task 18 — antes: ai-orchestrator.test.js:732. O outro retorno da
+      // ferramenta tem outro desfecho: com contratosComFatura, pergunta o
+      // endereço e entrega na resposta seguinte, em vez de encaminhar.
+      expect(t).toMatch(/Se ela devolver contratosComFatura, pergunte pelo endereço e entregue na resposta seguinte\./);
     });
 
     test('cliente suspenso perguntando se a internet volta depois de pagar: confirma sem prometer prazo', () => {

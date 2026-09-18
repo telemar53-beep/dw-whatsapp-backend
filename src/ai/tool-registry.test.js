@@ -2220,6 +2220,25 @@ describe('concluir_triagem', () => {
     expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9 }, ctx())).ok).toBe(false);
   });
 
+  // Correção 2026-09-18 (re-revisão): mesma prova que já existia para
+  // encerrar_atendimento, agora simétrica — cobre as outras duas saídas
+  // antecipadas que ficam ANTES da guarda (setor desconhecido, motivo
+  // inativo), não só baixa_confianca. Sem isto, uma regressão que movesse a
+  // guarda para entre a checagem de motivo e a de confiança baixa destruiria
+  // o escopo nestes dois ramos sem quebrar nenhum teste.
+  test.each([
+    ['setor desconhecido', () => listSectors.mockResolvedValue([])],
+    ['motivo inativo', () => findReasonById.mockResolvedValue({ id: MOTIVO, active: false })],
+  ])('recusado por %s: preserva o escopo de terceiro e não chama setThirdPartyScope', async (_nome, armar) => {
+    armar();
+    const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
+    const c = ctx({ terceiro });
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9 }, c);
+    expect(r.ok).toBe(false);
+    expect(setThirdPartyScope).not.toHaveBeenCalled();
+    expect(c.terceiro).toBe(terceiro);
+  });
+
   test('conversa que já saiu de pending (atendente assumiu) devolve concluido:false sem quebrar', async () => {
     concludeAiTriage.mockResolvedValue(null);
     const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx());

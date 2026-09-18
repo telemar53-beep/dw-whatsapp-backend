@@ -1475,8 +1475,12 @@ const TOOLS = [
         return { encerrado: false, motivo: 'Nada foi entregue neste atendimento. Conclua a triagem com concluir_triagem.' };
       }
       const linhas = ['Resolvido pela IA e encerrado sem atendente.'];
+      // Rodada de correção 1 (Task 11): mesma legibilidade de concluir_triagem
+      // — este resumo também é lido por gente (auditoria/histórico do
+      // atendimento fechado), então não há razão para ficar com JSON cru
+      // enquanto concluir_triagem ganhou o formato legível.
       if (Array.isArray(contexto.registroFerramentas) && contexto.registroFerramentas.length > 0) {
-        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
+        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${legivel(r.resultado)}`).join('; ')}`);
       }
       // Corrigido 2026-09-18: a guarda mora AQUI agora — imediatamente antes
       // da escrita terminal —, não mais logo após o perfil. As três saídas

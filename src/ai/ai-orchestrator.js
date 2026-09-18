@@ -868,12 +868,27 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           toolsExecuted.push({ nome });
           // Registro compacto para o resumo da triagem: o atendente precisa ver
           // o que a IA consultou e o que veio ("enviar_boleto → nenhuma fatura
-          // em aberto"), senão um encaminhamento parece vazio.
+          // em aberto"), senão um encaminhamento parece vazio. Este valor NUNCA
+          // volta para o modelo — o que alimenta `messages`, duas linhas abaixo,
+          // é JSON.stringify(resposta.resultado) por inteiro, sem corte nenhum.
+          // O único consumidor de contexto.registroFerramentas é a linha
+          // "Ferramentas:" do resumo (concluir_triagem/encerrar_atendimento em
+          // tool-registry.js), e quem de fato enxuga esse texto para o
+          // atendente é a função legivel() de lá: ela faz o parse, descarta os
+          // campos `instrucao`/`proximoPasso` (texto para o MODELO, não para o
+          // atendente) e corta o que sobra em 160 caracteres. O corte aqui
+          // embaixo é só uma salvaguarda contra uma ferramenta futura devolver
+          // algo gigante — Rodada de correção 1 (Task 11): 200 era estreito
+          // demais e cortava no MEIO do JSON de enviar_boleto/gerar_pix (que
+          // têm um `instrucao` longo), antes de legivel poder filtrar esse
+          // campo; o resultado chegava a legivel já não sendo mais JSON
+          // válido, e a linha do resumo virava fragmento cru. 2000 é folgado
+          // o bastante para o formato real de qualquer ferramenta hoje.
           if (Array.isArray(contexto.registroFerramentas)) {
             const serializado = JSON.stringify(resposta.resultado);
             contexto.registroFerramentas.push({
               nome,
-              resultado: serializado.length > 200 ? `${serializado.slice(0, 200)}…(truncado)` : serializado,
+              resultado: serializado.length > 2000 ? `${serializado.slice(0, 2000)}…(truncado)` : serializado,
             });
           }
           messages.push({ role: 'tool', tool_call_id: chamada.id, content: JSON.stringify(resposta.resultado) });

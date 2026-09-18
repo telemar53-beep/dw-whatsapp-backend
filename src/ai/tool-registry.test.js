@@ -2419,10 +2419,13 @@ describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)
     expect(summary).not.toMatch(/\{"contratos"/);
   });
 
-  // O registro grava o resultado truncado em 200 caracteres, com "…(truncado)"
-  // colado no fim (ai-orchestrator.js) — o que deixa de ser JSON válido no meio
-  // de uma string ou de um array. legivel precisa cair no texto cru sem
-  // lançar: um resultado grande não pode derrubar a conclusão da triagem.
+  // O registro AINDA PODE gravar um resultado truncado (ai-orchestrator.js só
+  // corta acima de 2000 caracteres desde a Rodada de correção 1 — ver o
+  // comentário lá —, com "…(truncado)" colado no fim), o que deixa de ser
+  // JSON válido no meio de uma string ou de um array. legivel precisa cair no
+  // texto cru sem lançar: um resultado grande não pode derrubar a conclusão
+  // da triagem. Simulado aqui com um corte de 200 só para manter o teste
+  // pequeno — o fallback não depende do tamanho exato do corte.
   test('resultado truncado (JSON inválido) não derruba a ferramenta: cai no texto cru', async () => {
     const original = JSON.stringify({
       faturas: Array.from({ length: 10 }, (_, i) => ({ id: i, valor: 100 + i, vencimento: '2026-09-10' })),
@@ -2435,6 +2438,56 @@ describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)
     expect(r.ok).toBe(true);
     const { summary } = concludeAiTriage.mock.calls[0][1];
     expect(summary).toContain(`Ferramentas: consultar_faturas_todos_contratos → ${truncado.slice(0, 160)}`);
+  });
+
+  // Rodada de correção 1 (achado da revisão): "Ferramentas: fica legível" não
+  // valia para enviar_boleto/gerar_pix — as duas ferramentas mais comuns em
+  // produção —, porque o `instrucao` real delas (o modelo de frase para o
+  // cliente) já passa fácil de 200 caracteres sozinho, e o corte antigo
+  // cortava o JSON no meio ANTES de legivel poder filtrar esse campo. Prova
+  // fim a fim: roda enviar_boleto de VERDADE (não um resultado inventado),
+  // reproduz a contabilização real de ai-orchestrator.js (corte acima de
+  // 2000) e confere a linha final do resumo.
+  test('enviar_boleto de verdade (com instrucao longa): a linha de ferramentas sai legível de ponta a ponta', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue({
+      hasOpenInvoice: true,
+      duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix', barCode: '836100000012' }],
+    });
+    sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+    saveMediaFile.mockResolvedValue('abc.pdf');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-9' });
+    enviarBoleto.mockResolvedValue([{ id: 'm-cartao' }, { id: 'm-linha' }]);
+    getConversationWithContact.mockResolvedValue({ id: 'c1', status: 'waiting', triageState: 'pending', assignedAgentId: null });
+
+    const contexto = contextoDeTriagemCom({ contracts: [{ id: 17402, address: 'RUA X' }] });
+    const respostaEnvio = await executeTool('enviar_boleto', { contratoId: 17402 }, contexto);
+    expect(respostaEnvio.ok).toBe(true);
+    // instrucao de verdade: mais de 200 caracteres sozinha — é exatamente o
+    // caso que o corte antigo (200) cortava no meio.
+    expect(respostaEnvio.resultado.instrucao.length).toBeGreaterThan(200);
+
+    // Mesma contabilização de ai-orchestrator.js (linha ~876): registra
+    // nome+resultado serializado, truncando só acima de 2000 caracteres.
+    const serializado = JSON.stringify(respostaEnvio.resultado);
+    contexto.registroFerramentas.push({
+      nome: 'enviar_boleto',
+      resultado: serializado.length > 2000 ? `${serializado.slice(0, 2000)}…(truncado)` : serializado,
+    });
+
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }, contexto);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    const linhaFerramentas = summary.split('\n').find((l) => l.startsWith('Ferramentas:'));
+
+    expect(linhaFerramentas).toMatch(/enviar_boleto → /);
+    expect(linhaFerramentas).toMatch(/\benviado true\b/);
+    expect(linhaFerramentas).not.toContain('{"');
+    expect(linhaFerramentas).not.toContain('instrucao');
+    // Formato exato: prova, de uma vez, que nada ficou cortado no meio de uma
+    // palavra — a linha termina numa palavra inteira ("true"), não num
+    // fragmento.
+    expect(linhaFerramentas).toBe(
+      'Ferramentas: enviar_boleto → enviado true, valor 89.9, vencimento 2026-09-20, linhaDigitavelEnviada true'
+    );
   });
 });
 
@@ -2581,13 +2634,15 @@ describe('encerrar_atendimento', () => {
     expect(c.terceiro).toBe(terceiro);
   });
 
+  // Rodada de correção 1 (Task 11): a linha de ferramentas ganhou o mesmo
+  // formato legível de concluir_triagem — deixou de despejar o JSON cru.
   test('caminho feliz: fecha com o motivo configurado, resume, avisa o painel e marca o turno', async () => {
     const c = ctx({ registroFerramentas: [{ nome: 'gerar_pix', resultado: '{"enviado":true}' }] });
     const r = await findTool('encerrar_atendimento').executar({}, c);
 
     expect(closeConversationByAi).toHaveBeenCalledWith('c-1', {
       reasonId: MOTIVO_RESOLVIDO,
-      summary: 'Resolvido pela IA e encerrado sem atendente.\nFerramentas: gerar_pix → {"enviado":true}',
+      summary: 'Resolvido pela IA e encerrado sem atendente.\nFerramentas: gerar_pix → enviado true',
     });
     expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', expect.objectContaining({
       conversation: expect.any(Object), closedAt: expect.any(String),

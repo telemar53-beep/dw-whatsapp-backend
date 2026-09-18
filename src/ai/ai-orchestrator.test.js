@@ -743,6 +743,34 @@ describe('perfil de triagem', () => {
     expect(ctxVisto.registroFerramentas).toEqual([{ nome: 'enviar_boleto', resultado: '{"enviado":false,"motivo":"Nenhuma fatura em aberto"}' }]);
   });
 
+  // Rodada de correção 1 (Task 11): enviar_boleto/gerar_pix carregam um
+  // `instrucao` longo (o texto do modelo de frase para o cliente) que sozinho
+  // já passa de 200 caracteres — o corte antigo cortava o JSON no meio, antes
+  // de legivel (tool-registry.js) poder filtrar esse campo para o resumo.
+  // Um resultado do TAMANHO REAL dessas ferramentas precisa sobreviver
+  // intacto aqui: é o texto de verdade que enviar_boleto.executar devolve
+  // (conferido em tool-registry.test.js), não um exagero artificial.
+  test('um resultado do tamanho real de enviar_boleto/gerar_pix não é truncado no registro', async () => {
+    const resultadoRealista = {
+      enviado: true,
+      valor: 89.9,
+      vencimento: '2026-09-20',
+      linhaDigitavelEnviada: true,
+      instrucao: 'O boleto já foi enviado ao cliente nesta conversa em PDF e com a linha digitável em mensagem separada. Comece pelo primeiro nome do cliente ("Prontinho, João!"). Responda EXATAMENTE no modelo, sem emoji: "Enviei acima o boleto referente ao seu contrato do endereço RUA X, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!" NÃO repita a linha digitável nem o valor.',
+    };
+    expect(JSON.stringify(resultadoRealista).length).toBeGreaterThan(200);
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Prontinho!' }, usage: {} });
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: resultadoRealista }; });
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    const guardado = ctxVisto.registroFerramentas[0].resultado;
+    expect(guardado).toBe(JSON.stringify(resultadoRealista));
+    expect(guardado).not.toMatch(/…\(truncado\)/);
+    expect(() => JSON.parse(guardado)).not.toThrow();
+  });
+
   test('identidade none instrui a pedir CPF só se o setor exigir', async () => {
     const sys = (await contexto({ identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] } })).messages[0].content;
     expect(sys).toMatch(/não identificado/i);

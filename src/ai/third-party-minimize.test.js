@@ -21,6 +21,17 @@ test('consultar_faturas cai para vencimentoOriginal quando não há vencimentoAt
     .toEqual({ faturas: [{ id: 7, vencimento: '2026-09-01', status: 'aberta' }] });
 });
 
+// Aprovado pelo dono: no fluxo de pagamento, a data que vale é a atualmente
+// válida da cobrança. Com as duas presentes (fatura renegociada), a
+// atualizada é a exposta ao modelo — e a original não pode aparecer em lugar
+// nenhum do retorno.
+test('consultar_faturas expõe vencimentoAtualizado (não a original) quando as duas datas estão presentes', () => {
+  const bruto = { faturas: [{ faturaId: 9, vencimentoOriginal: '2026-08-01', vencimentoAtualizado: '2026-09-20', status: 'aberta' }] };
+  const r = minimizarParaTerceiro('consultar_faturas', bruto);
+  expect(r).toEqual({ faturas: [{ id: 9, vencimento: '2026-09-20', status: 'aberta' }] });
+  expect(JSON.stringify(r)).not.toMatch('2026-08-01');
+});
+
 test('enviar_boleto devolve só a confirmação e a instrução, sem valor', () => {
   const bruto = { enviado: true, valor: 135.0, vencimento: '2026-09-10', linhaDigitavelEnviada: true, instrucao: 'texto' };
   const r = minimizarParaTerceiro('enviar_boleto', bruto);

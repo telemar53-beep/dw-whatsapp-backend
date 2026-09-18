@@ -146,6 +146,76 @@ describe('módulo comercial-novo', () => {
       });
     });
 
+    // =================================================================
+    // Task 18 — asserts migrados de ai-orchestrator.test.js
+    // =================================================================
+
+    // Antes: ai-orchestrator.test.js:1297. Print 2026-09-17 (18:25): cliente
+    // COM contrato perguntou se o sinal tinha normalizado e recebeu a tabela
+    // de planos inteira. A tabela tem dono: cliente NÃO identificado.
+    test('a tabela de planos tem dono: só cliente não identificado que pergunta de contratar, preço ou cobertura', () => {
+      expect(texto()).toMatch(/A tabela de planos é SÓ para cliente NÃO identificado que pergunta sobre contratar, preço ou cobertura\./);
+    });
+
+    // Antes: ai-orchestrator.test.js:1435 e :1396. A fonte única de verdade
+    // dos planos são as instruções da operação — copiadas como estão, com as
+    // mesmas linhas, ícones e preços. Vale para o bloco de planos e para a
+    // lista de documentos do cadastro.
+    test('planos e documentação são copiados das instruções exatamente como estão lá', () => {
+      const t = texto();
+      expect(t).toMatch(/copie o bloco de planos EXATAMENTE como está escrito nas instruções \(mesmas linhas, mesmos ícones, mesmos preços\)/);
+      expect(t).toMatch(/responda com a lista exatamente como está lá e pergunte se ele quer seguir com a contratação/);
+    });
+
+    // Antes: ai-orchestrator.test.js:1416 e :1418. A abertura tem duas partes
+    // que o dono ditou em 2026-09-15: o acolhimento opcional e o pedido de
+    // endereço que fecha a mensagem.
+    test('a abertura acolhe e fecha pedindo bairro e rua numa pergunta só', () => {
+      const t = texto();
+      expect(t).toMatch(/"Que bom ter você por aqui 😊" pode entrar depois da saudação\./);
+      expect(t).toMatch(/Para verificar a disponibilidade no seu endereço, me informe seu bairro e sua rua\./);
+    });
+
+    // Antes: ai-orchestrator.test.js:1441-1442. Teste real 2026-09-15 (print
+    // do dono): a IA pediu bairro/rua três vezes. Duas regras saem daí — nunca
+    // pedir três vezes, e não precisar do endereço completo para encaminhar.
+    test('endereço: nunca é pedido uma terceira vez, e não precisa estar completo para encaminhar', () => {
+      const t = texto();
+      expect(t).toMatch(/Nunca peça a mesma coisa uma terceira vez\./);
+      expect(t).toMatch(/Se ele mudar de assunto ou perguntar algo, responda e siga sem voltar a cobrar o endereço\./);
+      expect(t).toMatch(/Não é preciso ter o endereço completo para encaminhar\./);
+    });
+
+    // Antes: ai-orchestrator.test.js:1452-1453. Mesmo print: perguntado "qual
+    // é o melhor?", a IA encaminhou sem responder. As duas saídas possíveis
+    // estão escritas — com critério nas instruções, ou sem.
+    test('"qual é o melhor?": recomenda pelo critério das instruções, ou explica a diferença e pergunta o uso', () => {
+      const t = texto();
+      expect(t).toMatch(/se as instruções trouxerem critério de recomendação, recomende um plano com uma frase de motivo/);
+      expect(t).toMatch(/se não trouxerem, explique que a diferença entre os planos é a velocidade e pergunte quantas pessoas ou aparelhos vão usar/);
+    });
+
+    // Antes: ai-orchestrator.test.js:1446. O modelo antigo terminava em
+    // "Algum desses planos chamou sua atenção?" — uma pergunta fechada que
+    // não levava a lugar nenhum. Saiu, e não pode voltar por cópia.
+    test('a abertura não termina em pergunta fechada sobre os planos', () => {
+      expect(texto()).not.toMatch(/Algum desses planos chamou sua atenção\?/);
+    });
+
+    // Antes: ai-orchestrator.test.js:1463-1464 e :1466. Print 2026-09-15
+    // (21:16): "tem internet em X?" → "Atendemos em X. Certo! Vou encaminhar
+    // você." Confirmou e encaminhou na primeira resposta, sem planos nem
+    // endereço, e com um "Certo!" que não respondia a pedido nenhum.
+    test('pergunta de cobertura: confirma, emenda a venda na mesma mensagem e não encaminha na primeira resposta', () => {
+      const t = texto();
+      expect(t).toMatch(/Pergunta de cobertura de cliente novo \("tem internet em X\?"\): responda "Atendemos em X!" e, NA MESMA mensagem, emende a abertura de cliente novo \(planos e a pergunta de endereço\)/);
+      expect(t).toMatch(/NUNCA encaminhe um cliente novo na primeira resposta se a cidade estiver na lista\./);
+    });
+
+    test('o "Certo!" só responde a um pedido do cliente; sem pedido, começa direto no encaminhamento', () => {
+      expect(texto()).toMatch(/O "Certo!" é só quando ele pediu algo \(contratar, falar com atendente\); senão comece direto em "Vou encaminhar\.\.\."\./);
+    });
+
     test('nunca nomeia um setor fixo como string literal', () => {
       expect(texto()).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
     });

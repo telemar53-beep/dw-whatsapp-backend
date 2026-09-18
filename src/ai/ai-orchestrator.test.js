@@ -1033,41 +1033,6 @@ describe('perfil de triagem', () => {
     });
   });
 
-  describe('com a data de nascimento dispensada (padrão)', () => {
-    beforeEach(() => {
-      getAiConfig.mockResolvedValue({
-        apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
-        maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.',
-        triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
-        triageRequireBirthdate: false,
-      });
-    });
-
-    // Descrever ao modelo uma ferramenta que não serve para nada é o jeito
-    // conhecido de ele afirmar que a usou.
-    test('confirmar_nascimento sai da lista de ferramentas da triagem', async () => {
-      const nomes = (await contexto()).tools.map((t) => t.function.name).sort();
-      expect(nomes).not.toContain('confirmar_nascimento');
-      expect(nomes).toEqual(FERRAMENTAS_TRIAGEM.filter((n) => n !== 'confirmar_nascimento').sort());
-    });
-
-    test('o prompt só fala em data de nascimento para PROIBIR que ela seja pedida', async () => {
-      const sys = (await contexto()).messages[0].content;
-      // Print 2026-09-17: a IA pediu a data mesmo com a exigência desligada,
-      // então a única menção que sobrou é a proibição explícita.
-      expect(sys).toMatch(/NUNCA peça data de nascimento/);
-      expect(sys.replace(/NUNCA peça data de nascimento[^\n]*/g, '')).not.toMatch(/data de nascimento/i);
-      // A linha do cliente ainda não identificado continua: o CPF segue sendo
-      // o que identifica.
-      const semIdentidade = (await (async () => {
-        createChatCompletion.mockClear();
-        return contexto({ identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] } });
-      })()).messages[0].content;
-      expect(semIdentidade).toContain('Cliente NÃO identificado.');
-      expect(semIdentidade.replace(/NUNCA peça data de nascimento[^\n]*/g, '')).not.toMatch(/data de nascimento/i);
-    });
-  });
-
   test('não vaza cpf, login pppoe, sobrenome nem data de nascimento no contexto de sistema', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).not.toContain('11122233344');

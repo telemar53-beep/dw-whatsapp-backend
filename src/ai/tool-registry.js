@@ -283,8 +283,7 @@ const TOOLS = [
           contexto.identidade = {
             nivel: 'forte', origem: (contexto.identidade && contexto.identidade.origem) || 'cpf',
             primeiroNome: nomeDeQuemFala, contracts,
-            client: { id: client.id, document: args.cpf }, dataNascimento: null,
-            contestado: false, nascimentoTentado: false,
+            client: { id: client.id, document: args.cpf }, contestado: false,
             titular: { nome, terceiro: true },
           };
           return {
@@ -298,8 +297,7 @@ const TOOLS = [
         }
         contexto.identidade = {
           nivel: 'forte', origem: 'cpf', primeiroNome: nome, contracts,
-          client: { id: client.id, document: args.cpf }, dataNascimento: null,
-          contestado: false, nascimentoTentado: false,
+          client: { id: client.id, document: args.cpf }, contestado: false,
         };
         await setContactSgpLink(contexto.contact.id, {
           sgpClientId: client.id,
@@ -1122,7 +1120,7 @@ const TOOLS = [
       // permissões do assistente clássico bastaria para alcançar uma
       // ferramenta pensada só para a recepcionista da triagem.
       if (!perfilTriagem(contexto)) return erro('esquecer_identificacao is only available during AI triage');
-      contexto.identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], client: null, dataNascimento: null, contestado: true, nascimentoTentado: false };
+      contexto.identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], client: null, contestado: true };
       contexto.contracts = [];
       if (contexto.contact) {
         contexto.contact.sgpDocument = null;

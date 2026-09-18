@@ -12,3 +12,6 @@ node_modules/
 # Runtime Python vendorizado do gerador de audio da URA (site-packages inteiro,
 # ~390 arquivos). E ambiente local, nao entrega.
 artifacts/ura/tts-runtime/
+
+# Prompts renderizados por scripts/dump-prompt.js, para conferencia local.
+output/prompt/

@@ -44,6 +44,8 @@ const {
   findRecentAiClosedConversation,
   markPhoneContested,
   isPhoneContested,
+  setThirdPartyScope,
+  getThirdPartyScope,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -1244,6 +1246,22 @@ describe('conversation repository', () => {
     test('isPhoneContested devolve false para uma conversa que não existe', async () => {
       expect(await isPhoneContested('00000000-0000-0000-0000-000000000000')).toBe(false);
     });
+  });
+
+  test('guarda, lê e limpa o escopo de terceiro da conversa', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    expect(await getThirdPartyScope(conversation.id)).toBeNull();
+
+    const escopo = { nome: 'Maria', contratos: [10, 11], expiraEm: '2026-09-17T23:00:00.000Z' };
+    await setThirdPartyScope(conversation.id, escopo);
+    expect(await getThirdPartyScope(conversation.id)).toEqual(escopo);
+
+    await setThirdPartyScope(conversation.id, null);
+    expect(await getThirdPartyScope(conversation.id)).toBeNull();
+  });
+
+  test('o escopo de terceiro de uma conversa inexistente é nulo', async () => {
+    expect(await getThirdPartyScope('00000000-0000-0000-0000-000000000000')).toBeNull();
   });
 });
 

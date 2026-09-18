@@ -295,6 +295,28 @@ async function isPhoneContested(conversationId) {
   return Boolean(result.rows[0].ai_triage_phone_contested);
 }
 
+/**
+ * Escopo do pedido de boleto de outra pessoa. Vive na conversa porque o
+ * atendimento pode levar mais de um turno (várias faturas, o cliente escolhe
+ * uma). NUNCA guarda o documento do terceiro: os ids de contrato bastam para
+ * as ferramentas de pagamento, e o CPF já não é necessário depois da consulta.
+ */
+async function setThirdPartyScope(conversationId, escopo) {
+  await getPool().query(
+    `UPDATE conversations SET ai_triage_third_party = $2 WHERE id = $1`,
+    [conversationId, escopo ? JSON.stringify(escopo) : null]
+  );
+}
+
+async function getThirdPartyScope(conversationId) {
+  const result = await getPool().query(
+    `SELECT ai_triage_third_party FROM conversations WHERE id = $1`,
+    [conversationId]
+  );
+  if (result.rows.length === 0) return null;
+  return result.rows[0].ai_triage_third_party || null;
+}
+
 async function activateConversation(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET status = 'waiting', updated_at = now()
@@ -757,4 +779,6 @@ module.exports = {
   setConversationSector,
   markPhoneContested,
   isPhoneContested,
+  setThirdPartyScope,
+  getThirdPartyScope,
 };

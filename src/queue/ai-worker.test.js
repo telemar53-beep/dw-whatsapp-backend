@@ -195,6 +195,25 @@ describe('ai-worker — triagem', () => {
     enviarAvisoDeCidadeSePreciso.mockReset().mockResolvedValue(null);
     findActiveCityNoticeByCityId.mockReset().mockResolvedValue(null);
     findCityById.mockReset().mockResolvedValue(null);
+    // Default benigno para o bloco de carga do escopo de terceiro (logo depois
+    // de resolverIdentidade em ai-worker.js): sem isto, só o describe('escopo
+    // de terceiro') abaixo configurava getThirdPartyScope, e um
+    // mockRejectedValue (não-Once, sem Once) de um dos quatro testes ali
+    // vazava para TODOS os testes seguintes do describe inteiro — 17 chamadas
+    // de "Failed to load the third party scope" de mentira poluindo o log de
+    // testes sem nenhuma relação com terceiro. Mesma classe de problema do
+    // Achado 2 em tool-registry.test.js. "Não há escopo" é o estado normal da
+    // esmagadora maioria das conversas, então é o default certo aqui; os
+    // quatro testes do describe abaixo continuam sobrescrevendo localmente.
+    getThirdPartyScope.mockResolvedValue(null);
+    // setThirdPartyScope nunca é feito rejeitar em lugar nenhum do arquivo
+    // hoje, então não há vazamento em cima dela ainda — mas ela é chamada por
+    // dentro do mesmo bloco (quando o escopo carregado está expirado) e era a
+    // única função nova desta lista sem default explícito, dependendo do
+    // automock puro. Mesmo raciocínio de defesa que getThirdPartyScope acima:
+    // um default benigno aqui evita que um mockRejectedValue esquecido em
+    // teste futuro vaze pelo mesmo motivo.
+    setThirdPartyScope.mockResolvedValue();
   });
 
   // Print 2026-09-16: "Ah" e "Pai!" em rajada → duas respostas idênticas

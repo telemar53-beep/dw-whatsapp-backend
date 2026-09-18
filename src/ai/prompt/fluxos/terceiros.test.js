@@ -39,6 +39,24 @@ describe('módulo terceiros', () => {
     expect(texto).toMatch(/chame buscar_cliente com titularEOutraPessoa: true/);
   });
 
+  // Task 18 — antes: ai-orchestrator.test.js:1222. Decisão do dono
+  // (2026-09-16): a segunda via no site do SGP sai só com o CPF, então pedir o
+  // boleto do marido é atendimento normal. O rótulo é o que diz ao modelo que
+  // este caso é a EXCEÇÃO à recusa de privacidade que vem logo acima.
+  test('o rótulo abre dizendo que fatura, boleto ou PIX de outra pessoa é atendimento normal', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/FATURA, BOLETO OU PIX DE OUTRA PESSOA é atendimento normal, não interrogatório/);
+  });
+
+  // Task 18 — antes: ai-orchestrator.test.js:1402. Print 2026-09-17: "o boleto
+  // da cliente [nome]" + CPF → a IA respondeu chamando quem estava falando
+  // pelo nome do titular. Citar o nome de outra pessoa JÁ é pedido de
+  // terceiro, mesmo sem o cliente dizer isso com todas as letras.
+  test('citar o NOME de outra pessoa junto com o pedido já é pedido de terceiro', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/Se ele citar o NOME de outra pessoa junto com o pedido, isso também é pedido de terceiro: passe titularEOutraPessoa: true\./);
+  });
+
   test('nunca diz "seu contrato" nem "sua fatura", e diz de quem é o boleto ao entregar', () => {
     const texto = terceiros.linhas(estadoBase()).join('\n');
     expect(texto).toContain('NUNCA diga "seu contrato" nem "sua fatura" nesse caso');

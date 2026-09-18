@@ -36,6 +36,10 @@ describe('módulo reativacao', () => {
       expect(t).toMatch(/mais de 90 dias/);
       expect(t).toMatch(/conte pela data de hoje/);
       expect(t).toMatch(/contrato já cancelado/);
+      // Task 18 — antes: ai-orchestrator.test.js:1390. O corte anterior era
+      // "DOIS meses ou mais em atraso"; o dono ajustou para 90 dias em
+      // 2026-09-17. A redação antiga não pode voltar por cópia.
+      expect(t).not.toMatch(/DOIS meses ou mais em atraso/);
     });
 
     test('até 90 dias continua sendo o financeiro; acima disso, o setor de reativação se existir, senão o financeiro', () => {

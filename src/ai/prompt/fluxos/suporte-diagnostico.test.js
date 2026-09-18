@@ -163,6 +163,73 @@ describe('módulo suporte-diagnostico', () => {
       expect(t).toMatch(/Sem identidade confirmada, este fluxo de diagnóstico não cita status nenhum/);
     });
 
+    // =================================================================
+    // Task 18 — asserts migrados de ai-orchestrator.test.js
+    // =================================================================
+
+    // Antes: ai-orchestrator.test.js:1497. UMA chamada cobre todos os
+    // contratos: teste real 2026-09-13, com vários contratos as 2N consultas
+    // estouravam o teto do turno e a IA acabava dizendo que não conseguiu
+    // verificar. E o resultado da consulta não é decoração — ele MANDA no que
+    // vem depois.
+    test('relato de falha: UMA chamada cobre todos os contratos, e a instrução devolvida é seguida', () => {
+      expect(texto()).toMatch(/chame consultar_status_todos_contratos \(UMA chamada, cobre todos os contratos\) e siga a instrução que ela devolver/);
+    });
+
+    // Antes: ai-orchestrator.test.js:1320 e :1499. O que o cliente ouve no
+    // caso "ativo e online" deixou de ser frase decorada e virou conteúdo:
+    // dizer que consultou, dizer o que encontrou, e dizer que é AGORA.
+    test('contrato ativo e online: o cliente ouve que o cadastro foi consultado e qual é o estado NESTE MOMENTO', () => {
+      expect(texto()).toMatch(/diga que consultou o cadastro e que o contrato está ativo e a conexão aparece online NESTE MOMENTO/);
+    });
+
+    // Antes: ai-orchestrator.test.js:1323-1324. Duas redações antigas já
+    // removidas pelo dono; nenhuma pode voltar por cópia de um print velho.
+    test('nenhuma redação antiga do modelo de "ativo e online" sobrevive', () => {
+      const t = texto();
+      expect(t).not.toMatch(/Mesmo assim, você pode estar enfrentando alguma dificuldade/);
+      expect(t).not.toMatch(/está totalmente sem acesso/);
+    });
+
+    // Antes: ai-orchestrator.test.js:1501. O rótulo "- Conexão offline" já é
+    // testado; o que o cliente ouve, não era.
+    test('conexão offline: o cliente ouve o que foi verificado e que a IA vai ajudar a investigar', () => {
+      const t = texto();
+      expect(t).toMatch(/Verifiquei aqui que sua conexão está offline no momento\./);
+      expect(t).toMatch(/Vou te ajudar a verificar o que está acontecendo\./);
+    });
+
+    // Antes: ai-orchestrator.test.js:1503-1504. Print 2026-09-17 (16:32): a
+    // pergunta "você chegou a fazer esse pagamento?" foi disparada contra
+    // quem tinha acabado de dizer que QUERIA pagar. A pergunta continua
+    // existindo — mas só neste roteiro, e vem com a ressalva que acolhe quem
+    // já pagou e ainda não teve a baixa.
+    test('contrato suspenso: o cliente ouve a pendência, a ressalva de pagamento não confirmado e a pergunta', () => {
+      const t = texto();
+      expect(t).toMatch(/consta uma pendência na fatura que deixou o acesso à internet temporariamente suspenso/);
+      expect(t).toMatch(/Pode ser que você já tenha pago e a confirmação ainda não tenha chegado ao sistema\./);
+      expect(t).toMatch(/Você chegou a fazer esse pagamento\? Assim consigo te orientar no próximo passo\./);
+    });
+
+    // Antes: ai-orchestrator.test.js:1306. Print 2026-09-17 (18:25): o cliente
+    // citou a cidade dentro de um acompanhamento de falha e a IA leu isso como
+    // pergunta de cobertura, disparando o roteiro de cliente novo.
+    test('já normalizou: citar a cidade não converte o assunto em cobertura', () => {
+      const t = texto();
+      expect(t).toMatch(/se houver aviso ativo na cidade dele, use o aviso/);
+      expect(t).toMatch(/O cliente citar a cidade não transforma o assunto em cobertura — ele está falando do ponto que já tem\./);
+    });
+
+    // Antes: ai-orchestrator.test.js:1196. O fecho antigo concluía SEMPRE,
+    // logo depois da resposta do cliente — a conversa morria com a pergunta
+    // dele sem resposta. Hoje a conclusão é condicionada, e principios.js tem
+    // a regra geral ("fim de roteiro NÃO é automático").
+    test('a conclusão nunca é incondicional: depende de não haver mais nada para responder', () => {
+      const t = texto();
+      expect(t).not.toMatch(/Depois da resposta dele, conclua para o setor/);
+      expect(t).toMatch(/Depois da resposta dele, se não houver mais nada para responder, conclua/);
+    });
+
     test('nunca nomeia um setor fixo como string literal', () => {
       expect(texto()).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
     });

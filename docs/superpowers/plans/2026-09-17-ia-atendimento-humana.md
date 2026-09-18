@@ -666,11 +666,27 @@ Primeiro, o ajudante usado por este e pelos próximos testes. Adicione ao topo d
 `src/ai/tool-registry.test.js`, junto dos outros mocks:
 
 ```js
-jest.mock('../conversations/conversation.repository');
-const { setThirdPartyScope, completeTriage } = require('../conversations/conversation.repository');
+// NÃO acrescente mocks nem imports: o arquivo já mocka os dois repositórios
+// (linhas 4-5) e já importa `concludeAiTriage`, `closeConversationByAi`,
+// `markPhoneContested` e `setContactSgpLink` (linhas 29-32). O ÚNICO import
+// novo é `setThirdPartyScope`: some-o ao destructure de
+// conversation.repository que já existe ali.
+// `FERRAMENTAS_TRIAGEM` ainda não está no arquivo — este require é novo:
+const { FERRAMENTAS_TRIAGEM } = require('./ai-orchestrator');
 
 const SETOR = '11111111-1111-1111-1111-111111111111';
 const FATURA_ABERTA = { id: 5, value: 135, dueDate: '2026-09-10', status: 'aberta' };
+
+// A ação principal de cada ferramenta que limpa o escopo de terceiro. Nenhuma
+// delas pode ter rodado quando a limpeza falha. Note que são três funções
+// diferentes, de dois módulos diferentes — `completeTriage` NÃO serve para
+// nenhuma das três: ela pertence ao menu numérico antigo (triage.service.js),
+// que é mutuamente exclusivo com a triagem por IA.
+const ACAO_PRINCIPAL = {
+  concluir_triagem: concludeAiTriage,
+  encerrar_atendimento: closeConversationByAi,
+  esquecer_identificacao: setContactSgpLink,
+};
 
 /** Contexto de um turno de triagem já identificado, com o que cada teste variar. */
 function contextoDeTriagemCom(extra = {}) {
@@ -757,7 +773,11 @@ test.each(['concluir_triagem', 'encerrar_atendimento', 'esquecer_identificacao']
     const r = await executeTool(nome, args, contexto);
 
     expect(r.ok).toBe(false);
-    expect(completeTriage).not.toHaveBeenCalled();
+    // A ação principal NÃO pode ter rodado: é isso que prova que o abort
+    // acontece ANTES dela, e não depois. `r.ok === false` sozinho não provaria
+    // — a ferramenta poderia ter concluído a triagem e falhado em seguida,
+    // deixando a conversa fora da triagem com a autorização de terceiro viva.
+    expect(ACAO_PRINCIPAL[nome]).not.toHaveBeenCalled();
     expect(contexto.terceiro).not.toBeNull();   // nada foi dado por limpo
   }
 );
@@ -1368,9 +1388,11 @@ test.each([0, 0.1, 0.5, 0.79, 0.8, 1])('confiança %s conclui a triagem e nunca 
 test('a confiança baixa continua marcada no resumo do atendente', async () => {
   const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts: 0 } });
   await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.4 }, contexto);
-  expect(completeTriage).toHaveBeenCalledWith(expect.objectContaining({
-    summary: expect.stringContaining('40% (BAIXA)'),
-  }));
+  // O resumo vai no SEGUNDO argumento: concludeAiTriage(conversationId, { ..., summary }).
+  expect(concludeAiTriage).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({ summary: expect.stringContaining('40% (BAIXA)') })
+  );
 });
 ```
 
@@ -1543,7 +1565,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 test('o resumo registra que o pedido era de outra pessoa, sem o documento dela', async () => {
   const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
   await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Boleto entregue.', confianca: 0.9 }, contexto);
-  const { summary } = completeTriage.mock.calls[0][0];
+  const { summary } = concludeAiTriage.mock.calls[0][1];
   expect(summary).toMatch(/Pedido de terceiro: titular Maria, contrato 77/);
   expect(summary).not.toMatch(/\d{11}/);
 });
@@ -1553,7 +1575,7 @@ test('a linha de ferramentas do resumo é legível, não JSON cru', async () => 
     registroFerramentas: [{ nome: 'consultar_status_todos_contratos', resultado: '{"contratos":[{"status":"ativo","conexao":"online"}]}' }],
   });
   await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }, contexto);
-  const { summary } = completeTriage.mock.calls[0][0];
+  const { summary } = concludeAiTriage.mock.calls[0][1];
   expect(summary).toMatch(/consultar_status_todos_contratos →/);
   expect(summary).not.toMatch(/\{"contratos"/);
 });

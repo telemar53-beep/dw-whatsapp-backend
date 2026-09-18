@@ -1,0 +1,70 @@
+const terceiros = require('./terceiros');
+const { estadoBase } = require('../estado-de-teste');
+
+describe('módulo terceiros', () => {
+  test('entra sempre, independente do estado', () => {
+    expect(terceiros.entra(estadoBase())).toBe(true);
+  });
+
+  // Testes do brief da Task 13 (Step 1), literais.
+  test('terceiros entra em qualquer estado e nunca pede outro dado além do documento', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(terceiros.entra(estadoBase())).toBe(true);
+    expect(texto).toMatch(/CPF( ou CNPJ)? do titular/i);
+    expect(texto).not.toMatch(/nascimento|parentesco|nome da mãe/i);
+  });
+
+  test('terceiros avisa que plano, conexão e status do titular não podem ser consultados', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/plano.*conex|conex.*plano/i);
+  });
+
+  test('também avisa que situação financeira e liberação/desbloqueio não podem ser feitos no contrato do titular', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toContain('situação financeira e liberação ou desbloqueio desse contrato NÃO podem ser consultados nem executados');
+  });
+
+  test('aceita CPF ou CNPJ do titular (limite novo da Task 7)', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/CPF ou CNPJ/);
+  });
+
+  test('pode consultar a fatura e entregar boleto ou PIX do titular', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toContain('você pode consultar a fatura e entregar o boleto ou o PIX dele');
+  });
+
+  test('chama buscar_cliente com titularEOutraPessoa: true', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/chame buscar_cliente com titularEOutraPessoa: true/);
+  });
+
+  test('nunca diz "seu contrato" nem "sua fatura", e diz de quem é o boleto ao entregar', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toContain('NUNCA diga "seu contrato" nem "sua fatura" nesse caso');
+    expect(texto).toContain('ao entregar, diga de quem é (o boleto ou o PIX)');
+  });
+
+  test('quem fala continua chamado pelo próprio nome, nunca pelo nome do titular', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toContain('Continue chamando quem está falando pelo próprio nome dele, nunca pelo nome do titular.');
+  });
+
+  test('a autorização vale por tempo limitado e, expirada, exige o CPF do titular de novo', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/vale só por um tempo e só para esta conversa/);
+    expect(texto).toMatch(/se ela expirar, peça o CPF ou CNPJ do titular de novo/);
+  });
+
+  test('nunca contém nome real de cliente (só marcador)', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).not.toMatch(/Laureny/);
+    expect(texto).not.toMatch(/Jureildson/);
+    expect(texto).toContain('[nome]');
+  });
+
+  test('nunca nomeia um setor fixo como string literal', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
+  });
+});

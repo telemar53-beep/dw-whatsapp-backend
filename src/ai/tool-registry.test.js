@@ -2166,6 +2166,21 @@ describe('concluir_triagem', () => {
     expect(concludeAiTriage).not.toHaveBeenCalled();
   });
 
+  // Correção 2026-09-18: a guarda do escopo de terceiro passou a ficar
+  // imediatamente antes de concludeAiTriage (a ação terminal), não mais logo
+  // após o perfil. Antes desta correção, sair por baixa_confianca já tinha
+  // destruído a autorização — a cliente teria que informar de novo o CPF do
+  // titular no meio do mesmo pedido de boleto.
+  test('confiança baixa preserva o escopo de terceiro e não chama setThirdPartyScope', async () => {
+    const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
+    const c = ctx({ terceiro });
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.5 }, c);
+    expect(r.concluido).toBe(false);
+    expect(r.motivo).toBe('baixa_confianca');
+    expect(setThirdPartyScope).not.toHaveBeenCalled();
+    expect(c.terceiro).toBe(terceiro);
+  });
+
   test('confiança baixa sem pergunta sobrando: conclui e marca baixa confiança', async () => {
     const c = ctx({ triagem: { threshold: 0.8, maxQuestions: 2, attempts: 2 } });
     const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.5 }, c);
@@ -2425,6 +2440,25 @@ describe('encerrar_atendimento', () => {
     const r = await findTool('encerrar_atendimento').executar({}, ctx());
     expect(r.encerrado).toBe(false);
     expect(closeConversationByAi).not.toHaveBeenCalled();
+  });
+
+  // Correção 2026-09-18: a guarda do escopo de terceiro passou a ficar
+  // imediatamente antes de closeConversationByAi (a ação terminal), não mais
+  // logo após o perfil. Antes desta correção, qualquer um destes três
+  // { encerrado: false } já tinha destruído a autorização mesmo sem encerrar
+  // nada — a cliente teria que informar de novo o CPF do titular.
+  test.each([
+    ['sem motivo configurado', () => motivoDeEncerramentoAtivo.mockResolvedValue(null)],
+    ['saiu da triagem', () => getConversationWithContact.mockResolvedValue({ ...emTriagemComEntrega, assignedAgentId: 'ag-1' })],
+    ['nada entregue', () => getConversationWithContact.mockResolvedValue({ ...emTriagemComEntrega, aiTriageResolvedByAi: false })],
+  ])('sai por { encerrado: false } (%s): preserva o escopo de terceiro e não chama setThirdPartyScope', async (_nome, armar) => {
+    armar();
+    const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
+    const c = ctx({ terceiro });
+    const r = await findTool('encerrar_atendimento').executar({}, c);
+    expect(r.encerrado).toBe(false);
+    expect(setThirdPartyScope).not.toHaveBeenCalled();
+    expect(c.terceiro).toBe(terceiro);
   });
 
   test('caminho feliz: fecha com o motivo configurado, resume, avisa o painel e marca o turno', async () => {

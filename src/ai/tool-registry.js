@@ -1322,13 +1322,6 @@ const TOOLS = [
       // esquecer_identificacao — concluir_triagem só existe para a
       // recepcionista da triagem, nunca para o assistente clássico.
       if (!perfilTriagem(contexto)) return erro('concluir_triagem is only available during AI triage');
-      // Antes de concluir/encerrar/esquecer, e não depois: se a limpeza falhar, o
-      // atendimento NÃO avança. Concluir com uma autorização de terceiro ainda viva
-      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
-      // da triagem.
-      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
-        return erro('third_party_scope_not_cleared');
-      }
       // A entrega (boleto/PIX) pode ter sido num turno ANTERIOR, e
       // contexto.resolvidoPelaIa só conhece este turno. Leitura extra de
       // propósito: a releitura que já existe aqui embaixo acontece DEPOIS do
@@ -1393,6 +1386,21 @@ const TOOLS = [
       if (comp || desbloqueio) extras.push('Pendente: conferir pagamento e dar baixa');
       if (noturno) linhas.unshift(`Modo noturno · ${horaDeSaoPaulo()}`, ...extras);
       else if (extras.length > 0) linhas.unshift(...extras);
+      // Corrigido 2026-09-18: a guarda mora AQUI agora — imediatamente antes da
+      // escrita terminal —, não mais logo após o perfil. O resumo (linhas) já
+      // está todo montado, inclusive o que uma tarefa futura vai ler de
+      // contexto.terceiro para citar o pedido de terceiro no próprio resumo.
+      // Montar o resumo não é a ação terminal; concluir é. As saídas
+      // antecipadas ACIMA (setor/motivo inválidos, baixa confiança) preservam
+      // contexto.terceiro de propósito: a triagem continua e a cliente não
+      // precisa informar de novo o CPF do titular.
+      // Antes de concluir, e não depois: se a limpeza falhar, a triagem NÃO
+      // conclui. Concluir com uma autorização de terceiro ainda viva deixaria
+      // o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
+      // da triagem.
+      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+        return erro('third_party_scope_not_cleared');
+      }
       const conversa = await concludeAiTriage(contexto.conversationId, {
         sectorId: setor.id, reasonId: motivo ? motivo.id : null, confidence: args.confianca,
         summary: linhas.join('\n'), identifiedBy, lowConfidence: baixa, resolvedByAi: resolvidoPelaIa,
@@ -1422,13 +1430,6 @@ const TOOLS = [
     },
     async executar(args, contexto) {
       if (!perfilTriagem(contexto)) return erro('encerrar_atendimento is only available during AI triage');
-      // Antes de concluir/encerrar/esquecer, e não depois: se a limpeza falhar, o
-      // atendimento NÃO avança. Concluir com uma autorização de terceiro ainda viva
-      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
-      // da triagem.
-      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
-        return erro('third_party_scope_not_cleared');
-      }
       // Sem motivo escolhido pelo admin — ou com o motivo desativado depois de
       // escolhido — o encerramento pela IA simplesmente não existe: tudo
       // segue como hoje (encaminha ao setor).
@@ -1449,6 +1450,19 @@ const TOOLS = [
       const linhas = ['Resolvido pela IA e encerrado sem atendente.'];
       if (Array.isArray(contexto.registroFerramentas) && contexto.registroFerramentas.length > 0) {
         linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
+      }
+      // Corrigido 2026-09-18: a guarda mora AQUI agora — imediatamente antes
+      // da escrita terminal —, não mais logo após o perfil. As três saídas
+      // antecipadas ACIMA (sem motivo configurado, saiu da triagem, nada
+      // entregue) preservam contexto.terceiro de propósito: o atendimento
+      // continua na triagem e a cliente não precisa informar de novo o CPF do
+      // titular.
+      // Antes de encerrar, e não depois: se a limpeza falhar, o encerramento
+      // NÃO acontece. Encerrar com uma autorização de terceiro ainda viva
+      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que
+      // já saiu da triagem.
+      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+        return erro('third_party_scope_not_cleared');
       }
       const conversa = await closeConversationByAi(contexto.conversationId, {
         reasonId, summary: linhas.join('\n'),

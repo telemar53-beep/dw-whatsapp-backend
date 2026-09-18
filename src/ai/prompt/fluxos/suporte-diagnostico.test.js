@@ -28,21 +28,31 @@ describe('módulo suporte-diagnostico', () => {
       }
     });
 
-    // Documentado, não escondido: a interface desta tarefa (brief da Task 15)
-    // define entra() como "nivel === 'forte'", sem exceção para sgpIndisponivel
-    // — mesmo comportamento que o texto original tinha (o bloco de SUPORTE era
-    // emitido incondicionalmente por ai-orchestrator.js, inclusive com SGP
-    // fora do ar). Ver ressalva no relatório desta tarefa: com o SGP
-    // indisponível, fatos.js já instrui "NÃO tente... status de conexão" e
-    // vem antes deste módulo na ordem de montagem (PRIORIDADE 3, "fatos que
-    // você já sabe", acima do resultado de ferramenta) — mas o teste fica
-    // aqui documentando o comportamento real, não presumindo uma exclusão que
-    // o módulo não implementa.
-    test('entra mesmo com SGP indisponível, contanto que o nível continue forte (comportamento documentado, ver relatório)', () => {
+    // Pendência 2 da Task 17 (registrada pela Task 15): entra() agora exclui
+    // sgpIndisponivel. Antes desta correção, "identificado pela memória com
+    // SGP fora do ar" (nivel 'forte' + sgpIndisponivel: true) fazia este
+    // módulo entrar JUNTO com fatos.js, que nesse mesmo estado instrui "NÃO
+    // tente... status de conexão" — contradição direta com a primeira linha
+    // deste módulo ("ANTES de responder, chame
+    // consultar_status_todos_contratos"). Teste dos dois lados: nivel 'forte'
+    // sozinho continua entrando (comportamento pré-existente, preservado);
+    // nivel 'forte' + sgpIndisponivel passa a NÃO entrar (comportamento novo).
+    test('NÃO entra com SGP indisponível, mesmo com identidade forte (Pendência 2 — evita contradizer fatos.js)', () => {
       const estado = estadoBase({
         identidade: { nivel: 'forte', origem: 'memory', primeiroNome: 'Maria', contracts: [], contestado: false, sgpIndisponivel: true },
       });
-      expect(suporteDiagnostico.entra(estado)).toBe(true);
+      expect(suporteDiagnostico.entra(estado)).toBe(false);
+    });
+
+    test('entra com identidade forte quando sgpIndisponivel é false ou ausente', () => {
+      const semCampo = estadoBase({
+        identidade: { nivel: 'forte', origem: 'memory', primeiroNome: 'Maria', contracts: [], contestado: false },
+      });
+      expect(suporteDiagnostico.entra(semCampo)).toBe(true);
+      const comFalse = estadoBase({
+        identidade: { nivel: 'forte', origem: 'memory', primeiroNome: 'Maria', contracts: [], contestado: false, sgpIndisponivel: false },
+      });
+      expect(suporteDiagnostico.entra(comFalse)).toBe(true);
     });
   });
 

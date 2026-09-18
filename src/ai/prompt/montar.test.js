@@ -94,6 +94,20 @@ const ESTADOS_PARA_VARREDURA = [
     contratos: [{ id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço]', status: 'ativo' }],
     config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: '[motivo]' },
   }),
+  // Task 17 (comprovante.js): a lista padrão de estado-de-teste.js
+  // (`ferramentas: ['buscar_cliente', 'concluir_triagem']`) nunca inclui
+  // 'analisar_comprovante' — sem um estado que a acrescente, comprovante.entra()
+  // seria false em toda a varredura e o conteúdo do módulo (os dois ramos,
+  // noturno e diurno — texto diferente em cada um) nunca seria varrido. Dois
+  // estados, um por ramo.
+  estadoBase({
+    ferramentas: ['buscar_cliente', 'concluir_triagem', 'analisar_comprovante', 'desbloqueio_confianca'],
+    triagem: { noturno: { ativo: true, retornoAs: '[hora]' }, forcarConclusao: false },
+  }),
+  estadoBase({
+    ferramentas: ['buscar_cliente', 'concluir_triagem', 'analisar_comprovante'],
+    triagem: { noturno: { ativo: false }, forcarConclusao: false },
+  }),
 ];
 
 // painel.js fica de fora de propósito, não por afrouxamento: o trabalho DELE

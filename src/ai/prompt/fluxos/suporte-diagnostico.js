@@ -72,10 +72,44 @@
 // para cobrir o caso de o modelo ler a seção mesmo sem identidade) virou
 // garantia estrutural. Mantida por instrução explícita do plano e como
 // reforço defensivo; ver ressalva no relatório desta tarefa.
+//
+// ==========================================================================
+// PENDÊNCIA 2 (Task 17) — contradição com sgpIndisponivel, corrigida aqui
+// ==========================================================================
+// Registrado pela Task 15 e cobrado explicitamente no despacho da Task 17:
+// entra() usava só `nivel === 'forte'`, sem excluir identidade.sgpIndisponivel.
+// Como "identificado pela memória com SGP fora do ar" TAMBÉM é nivel 'forte'
+// (identity-resolver preserva o nível ao cair para a memória), os dois
+// módulos entravam juntos: fatos.js manda "NÃO tente... status de conexão"
+// (ramo sgpIndisponivel) e este módulo mandava "ANTES de responder, chame
+// consultar_status_todos_contratos" — instrução direta para fazer o que
+// acabou de ser proibido, e não uma tensão resolvível por prioridade textual
+// (não é um "prefira X a Y": é "não tente" vs. "tente antes de tudo",
+// contraditório mesmo). A tensão já existia no construtor antigo (o bloco de
+// SUPORTE era incondicional lá também), mas virou uma contradição ENTRE
+// MÓDULOS agora que os dois são unidades independentes que o compositor pode
+// selecionar juntas.
+//
+// Corrigido com autorização explícita do despacho da Task 17: entra() ganhou
+// `&& !identidade.sgpIndisponivel`. Justificativa (não é só "seguir a ordem"):
+// o conteúdo inteiro deste módulo pressupõe uma consulta ao SGP que funciona
+// (consultar_status_todos_contratos, os três casos online/offline/suspenso
+// que dependem do retorno dela, e "sem identidade confirmada, este fluxo não
+// cita status" — todo o módulo é sobre STATUS). Com o SGP fora do ar não há
+// status nenhum para consultar; manter este módulo selecionável nesse estado
+// não sobra nem como fallback (chamar a ferramenta ia falhar ou devolver algo
+// que o modelo não tem instrução de tratar aqui). Excluir na origem (entra())
+// é mais seguro que confiar na ordem de PRIORIDADE de principios.js para o
+// modelo escolher entre dois módulos que se contradizem.
+// Testes dos dois lados em suporte-diagnostico.test.js: entra() continua true
+// com nivel 'forte' sem sgpIndisponivel (comportamento pré-existente,
+// preservado) e passa a false com nivel 'forte' + sgpIndisponivel: true
+// (comportamento novo, que fecha a contradição).
 module.exports = {
   nome: 'suporte-diagnostico',
   entra(estado) {
-    return (estado.identidade || {}).nivel === 'forte';
+    const identidade = estado.identidade || {};
+    return identidade.nivel === 'forte' && !identidade.sgpIndisponivel;
   },
   linhas() {
     return [

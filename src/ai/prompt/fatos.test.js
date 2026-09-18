@@ -31,7 +31,11 @@ describe('módulo fatos', () => {
   // afirmaria algo que não existe na lista real (injetada por painel.js).
   test('sem instruções da operação, aponta para o setor da lista em vez de nomear "Comercial"', () => {
     const texto = fatos.linhas(estadoBase()).join('\n');
-    expect(texto).toMatch(/não invente: diga que a equipe confirma e encaminhe para o setor da lista acima que cuidar de vendas\./);
+    // Sem "da lista acima": fatos é o único módulo que vem ANTES de painel na
+    // ordem de composição, então uma referência posicional aqui apontaria para
+    // baixo — o defeito que o ajuste de ordem consertou no resto do prompt.
+    expect(texto).toMatch(/não invente: diga que a equipe confirma e encaminhe para o setor que cuidar de vendas\./);
+    expect(texto).not.toMatch(/lista acima/);
     expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
   });
 

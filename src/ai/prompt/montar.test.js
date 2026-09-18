@@ -348,22 +348,13 @@ test('a lista de setores (painel) aparece antes das referências "setor da lista
     // passariam vazias.
     expect(ocorrencias.length).toBeGreaterThan(1);
 
-    // fatos.js:104 ("...encaminhe para o setor da lista acima que cuidar de
-    // vendas.") é a ÚNICA referência que continua vindo ANTES da lista mesmo
-    // depois do Ajuste 1: fatos é o único módulo que permanece antes de
-    // painel na nova ordem (principios, fatos, painel, ...), e reescrever
-    // fatos.js está fora do escopo desta tarefa ("mova painel", nada mais).
-    // É uma exceção conhecida e documentada — por isso a asserção exige
-    // exatamente 1 ocorrência antes da lista (nem 0, que indicaria um teste
-    // desatualizado se fatos.js mudasse; nem 2+, que seria uma regressão
-    // nova não coberta pelo brief).
+    // NENHUMA referência posicional pode vir antes da lista. A frase "acima"
+    // só é verdade se o referente já foi lido: o prompt é lido de cima para
+    // baixo, e uma referência para frente rotulada "acima" manda o modelo
+    // procurar no lugar errado. fatos.js era a última exceção (é o único
+    // módulo antes de painel) e foi reescrito sem a palavra posicional.
     const antesDaLista = ocorrencias.filter((i) => i < idxSetores);
-    expect(antesDaLista.length).toBe(1);
-
-    // Todas as DEMAIS referências — as "dezenas de linhas dos módulos" que
-    // motivaram o Ajuste 1 — agora vêm depois da lista, em todo estado.
-    const depoisDaLista = ocorrencias.filter((i) => i >= idxSetores);
-    expect(depoisDaLista.length).toBe(ocorrencias.length - 1);
+    expect(antesDaLista).toEqual([]);
   }
 });
 

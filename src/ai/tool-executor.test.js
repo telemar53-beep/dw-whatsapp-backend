@@ -294,6 +294,124 @@ describe('tool-executor — perfil com lista fixa e identidade', () => {
   });
 });
 
+describe('tool-executor — contrato de terceiro (lista de permissão)', () => {
+  // Usa o tool-registry de verdade (não o mock do topo do arquivo), como o
+  // teste de regressão de buscar_cliente já faz acima: o que está sob teste
+  // aqui é exatamente a combinação real de chaveProprietario/
+  // exigeIdentidadeForte de cada ferramenta, não uma cópia à mão delas — uma
+  // fake reimplementaria esse conhecimento e não pegaria uma divergência
+  // futura entre o registro e este teste.
+  const registroReal = jest.requireActual('./tool-registry');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findTool.mockImplementation((nomeConsultado) => registroReal.findTool(nomeConsultado));
+  });
+
+  const ARGS_MINIMOS = {
+    consultar_faturas: { contratoId: 77 },
+    enviar_boleto: { contratoId: 77 },
+    gerar_pix: { contratoId: 77 },
+    gerar_segunda_via: { contratoId: 77 },
+    consultar_plano: { contratoId: 77 },
+    consultar_status_conexao: { contratoId: 77 },
+    consultar_status_contrato: { contratoId: 77 },
+    consultar_financeiro: { contratoId: 77 },
+    desbloqueio_confianca: { contratoId: 77 },
+  };
+
+  const PERMITIDAS = ['consultar_faturas', 'enviar_boleto', 'gerar_pix', 'gerar_segunda_via'];
+  const BLOQUEADAS = [
+    'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
+    'consultar_financeiro', 'desbloqueio_confianca',
+  ];
+
+  function contextoComTerceiro(ferramentas, identidade = { nivel: 'forte', primeiroNome: 'João' }) {
+    return {
+      ferramentasPermitidas: ferramentas, conversationId: 'c1', contact: { id: 'ct1' },
+      contracts: [{ id: 1 }],
+      terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
+      identidade, sgpCache: {}, registroFerramentas: [],
+    };
+  }
+
+  // Guarda do próprio teste: se os args pararem de ser válidos, o teste passa a
+  // medir invalid_args em vez de autorização, e ninguém percebe.
+  test.each([...PERMITIDAS, ...BLOQUEADAS])('os args de teste de %s chegam na checagem de autorização', async (nome) => {
+    const r = await executeTool(nome, ARGS_MINIMOS[nome], contextoComTerceiro([nome]));
+    expect(r.motivo).not.toBe('invalid_args');
+  });
+
+  test.each(PERMITIDAS)('%s é autorizada no contrato de terceiro', async (nome) => {
+    const r = await executeTool(nome, ARGS_MINIMOS[nome], contextoComTerceiro([nome]));
+    expect(r.motivo).not.toBe('third_party_tool_not_allowed');
+    expect(r.motivo).not.toBe('contract_not_owned');
+    expect(r.motivo).not.toBe('identity_not_confirmed');
+  });
+
+  test.each(BLOQUEADAS)('%s é recusada no contrato de terceiro', async (nome) => {
+    const r = await executeTool(nome, ARGS_MINIMOS[nome], contextoComTerceiro([nome]));
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('third_party_tool_not_allowed');
+    expect(r.instrucao).toMatch(/outra pessoa/i);
+  });
+
+  // Quem pede o boleto da esposa pode não ser cliente nenhum. Três das quatro
+  // ferramentas da allowlist exigem identidade forte; sem esta exceção, o fluxo
+  // inteiro morria em identity_not_confirmed para quem estava com nível 'none'.
+  const SEM_IDENTIDADE = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
+
+  test.each(PERMITIDAS)('%s funciona no contrato de terceiro mesmo com quem fala não identificado', async (nome) => {
+    const contexto = contextoComTerceiro([nome], SEM_IDENTIDADE);
+    const r = await executeTool(nome, ARGS_MINIMOS[nome], contexto);
+    expect(r.motivo).not.toBe('identity_not_confirmed');
+    expect(contexto.identidade.nivel).toBe('none'); // e continua não identificado
+  });
+
+  // A exceção vale SÓ no escopo de terceiro. Nos contratos próprios, quem não
+  // está identificado continua barrado — mas isso só é observável nas
+  // ferramentas que já exigiam identidade forte antes desta tarefa (Fato 1 do
+  // brief: 3 das 4 da allowlist, não consultar_faturas). Calculado do
+  // registro de verdade, não copiado à mão, para nunca divergir dele: se
+  // consultar_faturas um dia ganhar exigeIdentidadeForte, este teste passa a
+  // cobri-la sozinho.
+  const COM_IDENTIDADE_FORTE = PERMITIDAS.filter((nome) => registroReal.findTool(nome).exigeIdentidadeForte === true);
+
+  test.each(COM_IDENTIDADE_FORTE)('%s continua exigindo identidade forte nos contratos próprios', async (nome) => {
+    const contexto = contextoComTerceiro([nome], SEM_IDENTIDADE);
+    const r = await executeTool(nome, { contratoId: 1 }, contexto);
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('identity_not_confirmed');
+  });
+
+  // E nunca escapa para uma ferramenta fora da allowlist, nem no escopo.
+  test.each(BLOQUEADAS)('%s não ganha a exceção de identidade pelo escopo de terceiro', async (nome) => {
+    const r = await executeTool(nome, ARGS_MINIMOS[nome], contextoComTerceiro([nome], SEM_IDENTIDADE));
+    expect(r.motivo).toBe('third_party_tool_not_allowed');
+  });
+
+  // À noite desbloqueio_confianca entra na lista da triagem. Continua barrada no
+  // contrato alheio: é ação de serviço, não consulta.
+  test('desbloqueio_confianca é recusada no contrato de terceiro também à noite', async () => {
+    const contexto = contextoComTerceiro(['desbloqueio_confianca']);
+    contexto.triagem = { noturno: { ativo: true, retornoAs: '08:00' } };
+    const r = await executeTool('desbloqueio_confianca', { contratoId: 77 }, contexto);
+    expect(r.motivo).toBe('third_party_tool_not_allowed');
+  });
+
+  test('contrato que não é de ninguém continua dando contract_not_owned', async () => {
+    const r = await executeTool('enviar_boleto', { contratoId: 999 }, contextoComTerceiro(['enviar_boleto']));
+    expect(r.motivo).toBe('contract_not_owned');
+  });
+
+  test('sem escopo de terceiro, nada muda para os contratos próprios', async () => {
+    const contexto = contextoComTerceiro(['consultar_plano']);
+    contexto.terceiro = null;
+    const r = await executeTool('consultar_plano', { contratoId: 1 }, contexto);
+    expect(r.motivo).not.toBe('third_party_tool_not_allowed');
+  });
+});
+
 describe('tool-executor — orçamento de tempo declarado pela ferramenta', () => {
   beforeEach(() => jest.clearAllMocks());
 

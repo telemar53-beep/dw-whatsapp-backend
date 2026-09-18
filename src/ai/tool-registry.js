@@ -35,6 +35,12 @@ const { descreverUsoAnterior } = require('./receipt-usage-text');
 const MIMES_COMPROVANTE = ['image/jpeg', 'image/png', 'image/webp'];
 const TAMANHO_MAXIMO_COMPROVANTE = 5 * 1024 * 1024;
 
+// Lista FECHADA: só o que o fluxo de pagamento de outra pessoa precisa. Tudo o
+// mais no contrato alheio é recusado — plano devolve o login de acesso do
+// titular, conexão diz se a casa dele está online, e o desbloqueio executa uma
+// ação de serviço no contrato de um estranho.
+const FERRAMENTAS_PERMITIDAS_EM_TERCEIRO = ['consultar_faturas', 'enviar_boleto', 'gerar_pix', 'gerar_segunda_via'];
+
 function erro(mensagem) {
   return { ok: false, erro: mensagem };
 }
@@ -1467,4 +1473,6 @@ function toOpenAiTools(nomesHabilitados) {
   }));
 }
 
-module.exports = { listTools, findTool, toOpenAiTools, perfilTriagem };
+module.exports = {
+  listTools, findTool, toOpenAiTools, perfilTriagem, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO,
+};

@@ -889,8 +889,27 @@ if (!(await limparEscopoDeTerceiro(contexto))) return erro('third_party_scope_no
 ```
 
 Em `concluir_triagem.executar`, `encerrar_atendimento.executar` e
-`esquecer_identificacao.executar`, a limpeza vem **antes** da ação principal, e aborta se
-falhar:
+`esquecer_identificacao.executar`, a limpeza vem **imediatamente antes da ação terminal**, e
+aborta se falhar.
+
+**"Terminal" é literal.** A guarda NÃO pode ficar antes das saídas antecipadas que não
+encerram nem concluem nada — `{ concluido: false, motivo: 'baixa_confianca' }`, os três
+`{ encerrado: false }` e as recusas por argumento. Nesses casos a conversa continua na
+triagem, e destruir a autorização ali obrigaria o cliente a informar o CPF do titular outra
+vez: é justamente o multiturno que o escopo existe para viabilizar. Onde cada uma fica:
+
+| Ferramenta | A guarda fica imediatamente antes de |
+|---|---|
+| `concluir_triagem` | `concludeAiTriage(...)` — **depois** de o resumo já estar montado |
+| `encerrar_atendimento` | `closeConversationByAi(...)` — depois das três saídas `{ encerrado: false }` |
+| `esquecer_identificacao` | `setContactSgpLink(...)` — não há saída antecipada aqui, a posição atual já serve |
+
+O detalhe do resumo em `concluir_triagem` importa: `limparEscopoDeTerceiro` zera
+`contexto.terceiro`, e é desse campo que sai a linha "Pedido de terceiro" do resumo (2.10).
+Limpar antes de montar o resumo apagaria essa linha sem ninguém perceber. Montar o resumo
+não é a ação terminal — gravar é.
+
+Código:
 
 ```js
 // Antes de concluir/encerrar/esquecer, e não depois: se a limpeza falhar, o

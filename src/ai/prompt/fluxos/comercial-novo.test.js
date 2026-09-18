@@ -115,5 +115,20 @@ describe('módulo comercial-novo', () => {
       expect(t).not.toMatch(/identidade fraca/i);
       expect(t).not.toMatch(/gate de confiança/i);
     });
+
+    // Rodada de correção 1 (dono, 2026-09-18): "(todos fibra)" tinha
+    // escapado na frase de recomendação de plano — mesma afirmação de
+    // "100% fibra óptica" que já tinha sido removida da abertura, só
+    // reescrita mais adiante. Guarda direta aqui, além da guarda geral
+    // ("oferta da operação") que entrou em montar.test.js por causa deste
+    // achado.
+    test('nunca afirma o que a operação oferece (fibra, grátis, ilimitado) — só as instruções do painel podem', () => {
+      const t = texto();
+      expect(t).not.toMatch(/fibra/i);
+      expect(t).not.toMatch(/óptica/i);
+      expect(t).not.toMatch(/grátis/i);
+      expect(t).not.toMatch(/gratuit/i);
+      expect(t).not.toMatch(/ilimitad/i);
+    });
   });
 });

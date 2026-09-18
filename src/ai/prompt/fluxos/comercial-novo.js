@@ -42,6 +42,14 @@
 // não roteiro fixo: por isso a saudação vira "(saudação da hora)" em vez de
 // cravar "Boa noite!" (fatos.js já resolve qual saudação usar; repetir uma
 // saudação fixa aqui poderia contradizer aquela regra).
+//
+// Rodada de correção 1 (dono, 2026-09-18): a frase de recomendação de plano
+// dizia "a diferença é só a velocidade (todos fibra)" — o parêntese afirma
+// que TODOS os planos da operação são fibra, o mesmo dado proibido que já
+// tinha sido removido da abertura como "100% fibra óptica" (linha 19 acima),
+// só reescrito mais adiante no mesmo parágrafo original. Este chat é vendido
+// para outras operações; nem toda uma vende só fibra. Parêntese removido; se
+// a operação quiser afirmar isso, vem das Instruções adicionais do painel.
 module.exports = {
   nome: 'comercial-novo',
   entra(estado) {
@@ -60,7 +68,7 @@ module.exports = {
         '',
         'Para verificar a disponibilidade no seu endereço, me informe seu bairro e sua rua." "Que bom ter você por aqui 😊" pode entrar depois da saudação.',
         'Endereço é UMA pergunta só (bairro e rua juntos). Se ele responder só uma parte, confirme o que veio e peça só o que falta, UMA vez: "Perfeito, [bairro], [cidade] 👍 Qual é a rua onde deseja instalar?" Nunca peça a mesma coisa uma terceira vez. Se ele mudar de assunto ou perguntar algo, responda e siga sem voltar a cobrar o endereço. Não é preciso ter o endereço completo para encaminhar.',
-        'Se ele perguntar qual plano é o melhor ou pedir indicação: se as instruções trouxerem critério de recomendação, recomende um plano com uma frase de motivo; se não trouxerem, explique que a diferença é só a velocidade (todos fibra) e pergunte quantas pessoas ou aparelhos vão usar — assim o setor da lista acima que cuidar de vendas já recebe essa informação. Nunca encaminhe deixando uma pergunta dele sem resposta: responda primeiro, na mesma mensagem.',
+        'Se ele perguntar qual plano é o melhor ou pedir indicação: se as instruções trouxerem critério de recomendação, recomende um plano com uma frase de motivo; se não trouxerem, explique que a diferença entre os planos é a velocidade e pergunte quantas pessoas ou aparelhos vão usar — assim o setor da lista acima que cuidar de vendas já recebe essa informação. Nunca encaminhe deixando uma pergunta dele sem resposta: responda primeiro, na mesma mensagem.',
       ].join('\n'),
       'O QUE PRECISA PARA FAZER O CADASTRO ("quais dados/documentos preciso", "o que preciso levar"): se as INSTRUÇÕES ADICIONAIS DA OPERAÇÃO trouxerem a lista de documentos ou dados necessários, responda com a lista exatamente como está lá e pergunte se ele quer seguir com a contratação. Se lá não houver nada sobre isso, diga em uma frase que a equipe confirma a documentação e encaminhe para o setor da lista acima que cuidar de vendas — mas NÃO encaminhe sem responder alguma coisa.',
       'Encaminhe para o setor da lista acima que cuidar de vendas SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço; ou pedir para falar com um atendente; ou a cidade não estiver na lista. Antes disso, continue a venda (planos, endereço, dúvidas). O "Certo!" é só quando ele pediu algo (contratar, falar com atendente); senão comece direto em "Vou encaminhar...".',

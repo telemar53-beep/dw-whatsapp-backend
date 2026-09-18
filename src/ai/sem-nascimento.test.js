@@ -120,9 +120,26 @@ describe('linhaPermitida', () => {
   // depois do corte por pontuação não começa mais com "//", e a versão
   // antiga da função reprovava a linha inteira. A checagem de "linha inteira
   // é comentário" ANTES do split (acima) é o que resolve isto.
-  test('comentário de verdade com pontuação antes de "nascimento" continua aprovado', () => {
+  //
+  // Correção (revisão 1, 2026-09-18): o caso abaixo usa a linha FÍSICA real,
+  // copiada de terceiros.js:39 — sem "mãe", sem aspas de fechamento, sem
+  // ponto final, porque a frase continua na linha 40 do arquivo. A versão
+  // anterior deste teste usava uma frase reconstruída e completa, que não é
+  // o texto que quebrou de verdade; o relatório da tarefa também afirmava
+  // (incorretamente) que era o texto real. Corrigido aqui e lá.
+  test('comentário real que quebrou (terceiros.js:39, linha física, sem fechar a frase) continua aprovado', () => {
     expect(linhaPermitida(
-      '// Cuidado ao editar: NÃO escreva "parentesco", "nascimento" nem "nome da mãe".'
+      '// Cuidado ao editar: NÃO escreva "parentesco", "nascimento" nem "nome da'
+    )).toBe(true);
+  });
+
+  // terceiros.js:40 é a continuação do mesmo comentário (mesma linha física
+  // do arquivo). Não contém a palavra "nascimento" isolada — é só para
+  // provar que a linha de continuação de um comentário multilinha real
+  // também é aprovada pela checagem de "linha inteira é comentário".
+  test('continuação do mesmo comentário (terceiros.js:40) também é aprovada', () => {
+    expect(linhaPermitida(
+      '// mãe" em nenhuma linha abaixo — o teste deste módulo e a guarda de'
     )).toBe(true);
   });
 });

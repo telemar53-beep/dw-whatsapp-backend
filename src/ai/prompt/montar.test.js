@@ -96,10 +96,32 @@ const ESTADOS_PARA_VARREDURA = [
 // entender isso; se precisar testar painel.js especificamente, o teste dele
 // já cobre isso em painel.test.js (checando só a frase de fallback, não a
 // listagem de setores).
+// Esta lista NÃO é exaustiva — cada padrão entrou depois de uma categoria
+// de dado da operação reincidir de verdade numa migração; ela não substitui
+// o julgamento de quem migra cada módulo, só pega as reincidentes.
+//
+// Achado real (Task 14, rodada de revisão 1, 2026-09-18): "(todos fibra)"
+// escapou de comercial-novo.js porque nenhum padrão cobria afirmação sobre
+// O QUE A OPERAÇÃO OFERECE — só velocidade, preço e nome de setor estavam
+// aqui. É a mesma categoria de "100% fibra óptica" e "Instalação grátis."
+// que a Restrição Global já proíbe, só reescrita mais adiante no mesmo
+// parágrafo original. As três tarefas restantes (fluxos de suporte e
+// financeiro) vão migrar muito mais texto onde essa categoria pode
+// reaparecer — por isso o padrão cobre um radical, não só "fibra".
+//
+// Ressalva IMPORTANTE: se um módulo futuro precisar legitimamente de uma
+// destas palavras dentro de uma PROIBIÇÃO ("não afirme que os planos são
+// fibra"), esta guarda VAI reprovar a linha inteira — ela não olha negação,
+// só presença da palavra. O conserto correto nesse caso é reescrever a frase
+// sem a palavra (mesma solução já usada para "parentesco" em
+// terceiros.js/terceiros.test.js, ver comentário lá). NUNCA afrouxe ou
+// remova um padrão daqui para fazer uma linha passar — isso reabriria
+// exatamente o buraco que este achado fechou.
 const NOME_DOS_REGEX = [
   ['velocidade', /\d+\s*mega/i],
   ['preço', /R\$\s*\d/],
   ['nome de setor', /\b(Financeiro|Comercial|Suporte|Reativação)\b/],
+  ['oferta da operação', /fibra|óptica|grátis|gratuit|ilimitad/i],
 ];
 
 test('nenhum módulo (exceto painel, que repassa dado do operador) hardcoda velocidade, preço ou nome de setor', () => {

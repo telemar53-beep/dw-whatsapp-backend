@@ -33,6 +33,11 @@ describe('módulo painel', () => {
     expect(texto).toMatch(/INSTRUÇÕES ADICIONAIS DA OPERAÇÃO — única fonte de preço, planos, cobertura, promoções e documentação/);
     expect(texto).toMatch(/vale o princípio acima/);
     expect(texto).toContain('Planos: 500 Mega R$ 100');
+    // Task 18 — antes: ai-orchestrator.test.js:713. Os dois textos são
+    // mutuamente exclusivos: com instruções cadastradas, a frase de "não há
+    // instruções" não pode sobrar no prompt ao lado delas, ou o modelo lê as
+    // duas e manda o cliente para o setor de vendas mesmo tendo a resposta.
+    expect(texto).not.toMatch(/Não há instruções adicionais da operação/);
   });
 
   // Rodada de correção 3 (dono, 2026-09-18): a redação antiga dizia "são

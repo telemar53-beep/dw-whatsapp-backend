@@ -11,6 +11,14 @@ describe('módulo fatos', () => {
     expect(texto).toContain('Hoje é 17/09/2026 e agora são 11:00 em Brasília.');
   });
 
+  // Task 18 — antes: ai-orchestrator.test.js:1879. A hora sozinha não resolve:
+  // o modelo não tem relógio E não sabe onde cada saudação começa. Sem a
+  // tabela de faixas ele cumprimenta errado (ou não cumprimenta).
+  test('a hora vem acompanhada da faixa de cada saudação', () => {
+    const texto = fatos.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois\./);
+  });
+
   test('cumprimenta só na primeira resposta e não repete saudação depois', () => {
     const texto = fatos.linhas(estadoBase()).join('\n');
     expect(texto).toMatch(/Cumprimente só na primeira resposta da conversa; nas seguintes, não repita a saudação/);
@@ -25,6 +33,27 @@ describe('módulo fatos', () => {
     const texto = fatos.linhas(estadoBase()).join('\n');
     expect(texto).toMatch(/não invente: diga que a equipe confirma e encaminhe para o setor da lista acima que cuidar de vendas\./);
     expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
+  });
+
+  // Task 18 — antes: ai-orchestrator.test.js:710. A outra metade da mesma
+  // regra: preço, planos e cobertura saem SÓ das instruções da operação, e
+  // exatamente como estão lá. O teste acima cobre o "e se não houver"; este
+  // cobre a fonte única em si, que é o que impede a IA de inventar plano.
+  test('preço, planos e cobertura vêm SOMENTE das instruções da operação, exatamente como estão lá', () => {
+    const texto = fatos.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá\./);
+  });
+
+  // Task 18 — antes: ai-orchestrator.test.js:1141-1142. Uma das 7 lacunas
+  // apontadas pelo despacho (regra presente no compositor, sem teste).
+  // O encaminhamento não se anuncia antes de acontecer: "me diga qual
+  // problema para eu encaminhar ao setor correto" expõe o funcionamento
+  // interno e transforma a pergunta num aviso de que ninguém vai atender.
+  test('o esclarecimento pergunta o que se precisa saber, sem anunciar encaminhamento', () => {
+    const texto = fatos.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/Ao pedir um esclarecimento, pergunte direto o que você precisa saber/);
+    expect(texto).toMatch(/nunca "me diga qual problema para eu encaminhar ao setor correto"/);
+    expect(texto).toMatch(/O encaminhamento não se anuncia antes de acontecer\./);
   });
 
   describe('SGP indisponível', () => {
@@ -119,6 +148,18 @@ describe('módulo fatos', () => {
       expect(texto).toMatch(/pergunte de uma vez pelo endereço, citando os endereços/);
     });
 
+    // Task 18 — antes: ai-orchestrator.test.js:671. A desambiguação só
+    // funciona se o modelo souber COMO citar os endereços; e ela é
+    // condicional: só quando a resposta depender do ponto.
+    test('a desambiguação traz o exemplo de como citar os endereços, e só quando o ponto importa', () => {
+      const texto = fatos.linhas(estadoIdentificado({}, [
+        { id: 1, plano: 'A', velocidade: null, endereco: 'Rua A', status: 'ativo' },
+        { id: 2, plano: 'B', velocidade: null, endereco: 'Rua B', status: 'ativo' },
+      ])).join('\n');
+      expect(texto).toContain('("é o da Rua X ou o da Av. Y?")');
+      expect(texto).toMatch(/Pergunte SÓ quando a resposta depender do ponto\./);
+    });
+
     test('nunca cita o número do contrato ao cliente nem pede para escolher pelo número', () => {
       const texto = fatos.linhas(estadoIdentificado({}, [
         { id: 1, plano: 'A', velocidade: null, endereco: 'Rua A', status: 'ativo' },
@@ -131,6 +172,16 @@ describe('módulo fatos', () => {
       expect(texto).toMatch(/Com identidade confirmada você pode dizer há quantos dias\/meses a fatura está vencida e quantas faturas estão em aberto/);
       expect(texto).toMatch(/Continua proibido dizer o VALOR\./);
       expect(texto).toMatch(/NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço/);
+    });
+
+    // Task 18 — antes: ai-orchestrator.test.js:1506. A proibição acima tem
+    // três exceções, todas só com identidade confirmada — e a terceira é a
+    // que autoriza o fluxo de diagnóstico a dizer status. Sem esta metade, o
+    // roteiro de suporte inteiro fica proibido por engano.
+    test('as três exceções à proibição de falar da conta estão explícitas, e só com identidade confirmada', () => {
+      const texto = fatos.linhas(estadoIdentificado()).join('\n');
+      expect(texto).toMatch(/Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo\./);
+      expect(texto).toMatch(/Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai"\./);
     });
   });
 

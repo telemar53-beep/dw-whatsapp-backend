@@ -47,6 +47,26 @@ describe('módulo identificacao', () => {
       expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
     });
 
+    // Task 18 — antes: ai-orchestrator.test.js:1312. Redação reescrita pelo
+    // dono em 2026-09-17: a frase seca ("me informe seu CPF") tinha virado
+    // padrão e soava impessoal. O pedido acolhe antes de pedir o documento, e
+    // diz para que serve.
+    test('o pedido do documento acolhe antes de pedir, e diz para que serve', () => {
+      const texto = identificacao.linhas(estadoBase({
+        identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false },
+      })).join('\n');
+      expect(texto).toContain('"Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor."');
+    });
+
+    // Task 18 — antes: ai-orchestrator.test.js:776. Depois de buscar_cliente
+    // a triagem CONTINUA: identificar não é o fim do atendimento.
+    test('depois de buscar_cliente, a triagem continua', () => {
+      const texto = identificacao.linhas(estadoBase({
+        identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false },
+      })).join('\n');
+      expect(texto).toMatch(/Depois de buscar_cliente, continue a triagem\./);
+    });
+
     test('sem contestação, não soma o aviso de identificação descartada', () => {
       const texto = identificacao.linhas(estadoBase({
         identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false },

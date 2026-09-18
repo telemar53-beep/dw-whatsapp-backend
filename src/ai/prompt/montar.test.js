@@ -84,6 +84,16 @@ const ESTADOS_PARA_VARREDURA = [
   estadoBase({ triagem: { noturno: { ativo: true, retornoAs: '[hora]' }, forcarConclusao: false } }),
   estadoBase({ triagem: { noturno: { ativo: false }, forcarConclusao: true } }),
   estadoBase({ terceiro: { titular: '[nome do titular]' } }),
+  // Task 16 (financeiro.js): com motivo de encerramento configurado, a
+  // despedida de boleto/PIX vem por um ramo do ternário que nenhum estado
+  // acima liga (nenhum outro define config.triageResolvedReasonId) — sem
+  // este estado, a guarda varreria sempre o mesmo ramo do módulo e nunca
+  // chegaria a ler a despedida com "[nome]".
+  estadoBase({
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: '[nome]', contracts: [{ id: 1 }], contestado: false },
+    contratos: [{ id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço]', status: 'ativo' }],
+    config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: '[motivo]' },
+  }),
 ];
 
 // painel.js fica de fora de propósito, não por afrouxamento: o trabalho DELE
@@ -117,10 +127,37 @@ const ESTADOS_PARA_VARREDURA = [
 // terceiros.js/terceiros.test.js, ver comentário lá). NUNCA afrouxe ou
 // remova um padrão daqui para fazer uma linha passar — isso reabriria
 // exatamente o buraco que este achado fechou.
+// Rodada de correção (Task 16, dono, 2026-09-18): terceira ocorrência do
+// mesmo escape — comercial-novo.js (Task 14) já tinha trocado o cabeçalho
+// "COMERCIAL" por "VENDA", suporte-diagnostico.js (Task 15) já tinha trocado
+// "SUPORTE — RELATO DE FALHA" por "RELATO DE FALHA", e agora reativacao.js
+// ia repetir o mesmo erro com "REATIVAÇÃO:" como rótulo. Nas três vezes a
+// causa é a mesma: o regex de "nome de setor" é case-sensitive e só pega a
+// forma "Palavra" (P maiúsculo, resto minúsculo) — um RÓTULO em CAIXA ALTA
+// (como o próprio ai-orchestrator.js usa para títulos de seção) passa reto.
+// Categoria nova, formalizada aqui em vez de esperar uma quarta tarefa
+// redescobrir: um padrão SEPARADO para a forma toda maiúscula, ANCORADO NO
+// INÍCIO da entrada (^) — porque é exatamente aí que o defeito real mora: um
+// bullet/bloco que ABRE nomeando o setor como se fosse o título da seção.
+// Testado por mutação (achado real, não hipotético): a primeira versão deste
+// padrão, sem o ^, reprovou fatos.js linha 103 — "...dizer o status do
+// contrato e da conexão no fluxo de SUPORTE abaixo" — uma referência cruzada
+// NO MEIO da frase (não um rótulo), migração da Task 12, revisada, verbatim
+// do original (ai-orchestrator.js:412). Ancorar no início resolve o achado
+// sem tocar em fatos.js (fora do escopo desta tarefa) porque o defeito real
+// (rótulo) sempre ocupa o começo do bullet — os três casos precedentes
+// (COMERCIAL, SUPORTE —, REATIVAÇÃO:) começavam a própria entrada do array,
+// e é isso que ^ verifica.
+// Por que NÃO adicionar a flag /i no padrão já existente em vez de um
+// padrão novo: isso reprovaria a própria convenção que a Restrição Global
+// exige — "o setor da lista acima que cuidar de suporte/vendas/financeiro"
+// (minúsculo, function-word, não nome próprio) é texto SANCIONADO, usado em
+// dezenas de linhas já revisadas; case-insensitive pegaria todas elas.
 const NOME_DOS_REGEX = [
   ['velocidade', /\d+\s*mega/i],
   ['preço', /R\$\s*\d/],
   ['nome de setor', /\b(Financeiro|Comercial|Suporte|Reativação)\b/],
+  ['nome de setor em CAIXA ALTA (rótulo no início do bloco)', /^(FINANCEIRO|COMERCIAL|SUPORTE|REATIVAÇÃO)\b/],
   ['oferta da operação', /fibra|óptica|grátis|gratuit|ilimitad/i],
 ];
 

@@ -70,7 +70,7 @@ const HISTORICO_MAX = 20;
 function lerLocal(arquivo) {
   const caminho = path.join(pastaLocal(), arquivo);
   if (!fs.existsSync(caminho)) {
-    throw new Error(`Falta ${path.join('.local', arquivo)}. Veja .local/README.md para saber o que copiar do painel.`);
+    throw new Error(`Falta ${path.join('.local', arquivo)}. Veja docs/simulacao/README.md para saber o que copiar do painel.`);
   }
   return fs.readFileSync(caminho, 'utf8');
 }
@@ -86,7 +86,7 @@ function configDoPainel() {
   const obrigatorios = ['model', 'maxToolsPerInteraction', 'triageMaxQuestions', 'triageConfidenceThreshold'];
   const faltando = obrigatorios.filter((c) => bruto[c] === undefined || bruto[c] === null);
   if (faltando.length > 0) {
-    throw new Error(`.local/ia-config.json sem os campos: ${faltando.join(', ')}. Compare com .local/ia-config.exemplo.json.`);
+    throw new Error(`.local/ia-config.json sem os campos: ${faltando.join(', ')}. Compare com docs/simulacao/ia-config.exemplo.json.`);
   }
   if (bruto.apiKey) {
     // Ordem do dono desde o início do projeto: a chave nunca em arquivo. O

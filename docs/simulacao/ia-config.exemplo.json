@@ -1,0 +1,23 @@
+{
+  "_leia": "Copie este arquivo para ia-config.json e troque os valores pelos do SEU painel. NUNCA acrescente apiKey: a chave vem so de OPENAI_API_KEY, no ambiente.",
+
+  "model": "coloque-aqui-o-modelo-do-painel",
+  "mode": "triage",
+
+  "maxToolsPerInteraction": 8,
+  "triageMaxQuestions": 5,
+  "triageConfidenceThreshold": 0.8,
+  "triageTimeoutMinutes": 10,
+
+  "_triageResolvedReasonId": "id do motivo de encerramento pela IA, ou null. Com o catalogo de teste embutido, use 88888888-8888-8888-8888-888888888888.",
+  "triageResolvedReasonId": null,
+
+  "triageReadReceiptsDaytime": false,
+
+  "_noturno": "Mesma janela do painel, HH:MM. So valem quando o roteiro pede modo noturno (o 21).",
+  "nightStartTime": "20:00",
+  "nightEndTime": "08:00",
+
+  "_empresa": "Nome da empresa, como esta no cartao Empresa. Entra no prompt.",
+  "empresa": "Provedor de Teste"
+}

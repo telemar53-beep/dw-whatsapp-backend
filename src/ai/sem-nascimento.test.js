@@ -33,20 +33,74 @@ test('nenhum arquivo de produção menciona os mecanismos removidos de data de n
 // produção só em dois casos legítimos — um comentário (contexto histórico)
 // ou a própria frase de proibição ("nunca peça"/"não peça"). Qualquer outra
 // ocorrência é um pedido de data de nascimento escrito na frente do cliente.
+//
+// O julgamento é por ORAÇÃO, não pela linha inteira: as frases deste arquivo
+// (ai-orchestrator.js) juntam três ou quatro orações numa linha só, e testar
+// a linha inteira contra E_PROIBICAO deixa passar coisa como 'não peça CPF de
+// novo, mas pergunte a data de nascimento do titular' — o "não peça" ali é
+// sobre CPF, não sobre nascimento; o pedido de nascimento passaria batido.
 const MENCIONA_NASCIMENTO = /nascimento/i;
 const E_COMENTARIO = /^(\/\/|\*)/;
 const E_PROIBICAO = /nunca peça|não peça/i;
+// Fronteiras de oração: ponto final, ponto e vírgula, travessão e dois-pontos
+// (as frases daqui usam muito os dois últimos) — e também vírgula, porque
+// "não peça X, mas peça Y" são duas orações independentes ligadas por
+// conjunção, não uma só; sem quebrar aí, a proibição da primeira oração
+// "perdoa" um pedido de verdade escondido na segunda.
+const FRONTEIRA_DE_ORACAO = /[.,;—:]/;
+
+/**
+ * Uma linha só é permitida se TODA oração dela que mencione "nascimento" for,
+ * sozinha, um comentário (começa com // ou *) ou a própria proibição. Linha
+ * sem menção nenhuma a "nascimento" é sempre permitida (o filter abaixo fica
+ * vazio e .every() de array vazio é true). Função pura: só olha a string que
+ * recebe, sem tocar em disco — é o que faz dela testável por si mesma, e não
+ * só através da varredura de arquivos.
+ */
+function linhaPermitida(linha) {
+  return linha
+    .split(FRONTEIRA_DE_ORACAO)
+    .filter((oracao) => MENCIONA_NASCIMENTO.test(oracao))
+    .every((oracao) => {
+      const semEspacos = oracao.replace(/^\s+/, '');
+      return E_COMENTARIO.test(semEspacos) || E_PROIBICAO.test(oracao);
+    });
+}
 
 test('toda menção a "nascimento" em produção é comentário ou proibição, nunca um pedido', () => {
   const culpadas = [];
   for (const arquivo of arquivosJs(RAIZ)) {
     const linhas = fs.readFileSync(arquivo, 'utf8').split('\n');
     linhas.forEach((linha, indice) => {
-      if (!MENCIONA_NASCIMENTO.test(linha)) return;
-      const semEspacos = linha.replace(/^\s+/, '');
-      if (E_COMENTARIO.test(semEspacos) || E_PROIBICAO.test(linha)) return;
+      if (linhaPermitida(linha)) return;
       culpadas.push(`${path.relative(RAIZ, arquivo)}:${indice + 1}: ${linha.trim()}`);
     });
   }
   expect(culpadas).toEqual([]);
 });
+
+// A função de julgamento testada por si mesma, com frases fabricadas — não
+// basta a varredura passar em cima do código atual (ela passaria mesmo
+// quebrada, se nada em produção acionasse o defeito). Estes quatro casos
+// prendem o comportamento da função, não só o estado do código hoje.
+describe('linhaPermitida', () => {
+  test('proibição de CPF não perdoa um pedido de nascimento na mesma linha', () => {
+    expect(linhaPermitida(
+      'Identidade JÁ confirmada: não peça CPF de novo, mas pergunte a data de nascimento do titular.'
+    )).toBe(false);
+  });
+
+  test('a proibição de verdade é aprovada', () => {
+    expect(linhaPermitida('NUNCA peça data de nascimento ao cliente')).toBe(true);
+  });
+
+  test('comentário é aprovado, qualquer que seja o conteúdo', () => {
+    expect(linhaPermitida('// a data de nascimento saiu do fluxo em 2026-09-17')).toBe(true);
+  });
+
+  test('pedido disfarçado de instrução é reprovado', () => {
+    expect(linhaPermitida('Pergunte a data de nascimento e chame confirmar_nascimento')).toBe(false);
+  });
+});
+
+module.exports = { linhaPermitida };

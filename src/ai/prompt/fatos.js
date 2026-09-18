@@ -3,10 +3,12 @@
 // bloco de identidade/contratos e da linha de data/hora de
 // ai-orchestrator.js:montarContextoTriagem, sem mudar o sentido.
 //
-// Fora daqui de propósito (fica para os módulos de fluxo das tarefas
-// seguintes, que hoje são só esqueleto): o aviso de cidade, o modo noturno, o
-// limite de perguntas, a entrega de boleto/PIX e a leitura de comprovante —
-// tudo isso é procedimento de UM fluxo específico, não fato sobre o cliente.
+// Fora daqui de propósito (fica para os módulos de fluxo, hoje já
+// preenchido — fluxos/identificacao.js, Task 14 — ou ainda esqueleto): o
+// aviso de cidade, o modo noturno, o limite de perguntas, a entrega de
+// boleto/PIX, a leitura de comprovante e a instrução de identificação (pedir
+// CPF/CNPJ, tratar a contestação) — tudo isso é procedimento de UM fluxo
+// específico, não fato sobre o cliente.
 // "Nunca encaminhe deixando a pergunta dele sem resposta" também não é
 // repetido aqui: principios.js já cobre essa regra.
 //
@@ -32,6 +34,13 @@
 // descrever o ASSUNTO (localizar cadastro; setor que cuida de vendas) e
 // apontar para a lista de setores que painel.js já injeta acima, em vez de
 // nomear um setor específico.
+//
+// Rodada de correção 4 (dono, 2026-09-18, Task 14): a instrução de pedir
+// CPF/CNPJ e a de tratar a contestação SAÍRAM do ramo 'none' abaixo. Eram
+// resíduo da Task 12 — sobreviveram a 3 rodadas de revisão porque ninguém
+// comparou as duas camadas entre si: fatos.js diz o FATO ("o cliente ainda
+// não foi identificado"), fluxos/identificacao.js diz o QUE FAZER a
+// respeito. Instrução de fluxo não é fato. Ver guarda em fatos.test.js.
 
 // Mesma redação de horaDeBrasilia/dataDeBrasilia em ai-orchestrator.js, mas
 // recebendo a hora do ESTADO (estado.agora) em vez de ler o relógio direto:
@@ -74,8 +83,7 @@ module.exports = {
       // mas não há contratos nem consultas possíveis.
       l.push(`Cliente identificado pela memória (primeiro nome ${identidade.primeiroNome || 'cliente'}), mas o sistema do SGP NÃO respondeu agora. NÃO peça CPF e NÃO tente boleto, PIX nem status de conexão. Cumprimente pelo primeiro nome, diga em uma frase que o sistema de consulta está instável neste momento, e chame concluir_triagem para o setor adequado ao que ele pediu, com o resumo começando por "SGP indisponível na triagem".`);
     } else if (identidade.nivel === 'none') {
-      l.push('Cliente NÃO identificado. Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele (conta, fatura, problema no serviço, retorno de cliente antigo), no modelo: "Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Quem só quer conhecer planos ou contratar não precisa se identificar. Depois de buscar_cliente, continue a triagem.');
-      if (identidade.contestado) l.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');
+      l.push('Cliente NÃO identificado.');
     } else {
       // Chegando aqui a identidade já é FORTE — é o único nível possível além
       // de 'none' —, então o endereço pode ser falado de volta ao cliente.

@@ -58,6 +58,19 @@ const FRONTEIRA_DE_ORACAO = /[.,;—:]/;
  * só através da varredura de arquivos.
  */
 function linhaPermitida(linha) {
+  // Uma linha que É COMENTÁRIO inteira (começa com // ou *, já sem espaços à
+  // esquerda) é sempre aprovada — checagem sobre a LINHA INTEIRA, antes de
+  // quebrar em orações. Achado real (Task 14, 2026-09-18): quebrar primeiro
+  // e só depois checar o prefixo de CADA oração deixava passar batido um
+  // comentário de VERDADE quando ele tem pontuação antes de "nascimento"
+  // (":", "," etc.) — a oração que sobra depois do corte já não começa mais
+  // com "//", mesmo a linha inteira sendo comentário
+  // (terceiros.js:39: '// Cuidado ao editar: NÃO escreva "parentesco",
+  // "nascimento"...' reprovava por causa disso). A quebra em orações só faz
+  // sentido para linha que NÃO é comentário — é ali que mora o risco real
+  // (uma instrução pedindo a data escondida no meio de uma frase).
+  const semEspacosLinha = linha.replace(/^\s+/, '');
+  if (E_COMENTARIO.test(semEspacosLinha)) return true;
   return linha
     .split(FRONTEIRA_DE_ORACAO)
     .filter((oracao) => MENCIONA_NASCIMENTO.test(oracao))
@@ -100,6 +113,17 @@ describe('linhaPermitida', () => {
 
   test('pedido disfarçado de instrução é reprovado', () => {
     expect(linhaPermitida('Pergunte a data de nascimento e chame confirmar_nascimento')).toBe(false);
+  });
+
+  // Achado real (Task 14, 2026-09-18): terceiros.js:39 é comentário de
+  // verdade, mas tem ":" e "," antes de "nascimento" — a oração que sobra
+  // depois do corte por pontuação não começa mais com "//", e a versão
+  // antiga da função reprovava a linha inteira. A checagem de "linha inteira
+  // é comentário" ANTES do split (acima) é o que resolve isto.
+  test('comentário de verdade com pontuação antes de "nascimento" continua aprovado', () => {
+    expect(linhaPermitida(
+      '// Cuidado ao editar: NÃO escreva "parentesco", "nascimento" nem "nome da mãe".'
+    )).toBe(true);
   });
 });
 

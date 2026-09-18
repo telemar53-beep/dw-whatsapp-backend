@@ -1,14 +1,6 @@
 const identificacao = require('./identificacao');
 const { estadoBase } = require('../estado-de-teste');
 
-// BLOQUEADO (Task 14, 2026-09-18) — ver header do módulo e task-14-report.md
-// para o achado completo. Resumo: o conteúdo que o brief pede para linhas()
-// ("Cliente NÃO identificado. Peça o CPF/CNPJ" + a linha de contestação) já
-// existe, revisado e aprovado, em fatos.js (ramo identidade.nivel === 'none')
-// — selecionado no MESMO estado em que este módulo entraria. Preenchê-lo
-// aqui do jeito que o brief pede duplicaria a instrução; mover o conteúdo de
-// fatos.js está fora do escopo desta tarefa. Só entra() está pronto: é
-// inequívoco (contrato dado pelo brief) e não depende da decisão pendente.
 describe('módulo identificacao', () => {
   describe('entra()', () => {
     test('entra quando a identidade ainda não foi confirmada (nivel none)', () => {
@@ -20,11 +12,10 @@ describe('módulo identificacao', () => {
 
     test('entra quando a identidade foi contestada, mesmo com nivel diferente de none', () => {
       // Combinação hipotética: na prática, esquecer_identificacao sempre
-      // zera nivel para 'none' junto com contestado: true (tool-registry.js,
-      // ramo do esquecer_identificacao) — os dois nunca se separam hoje. Mas
-      // o contrato de entra() dado pela tarefa é a UNIÃO dos dois estados,
-      // não só o caso observado; testando nos dois sentidos como pedido,
-      // inclusive esta combinação que hoje não ocorre na prática.
+      // zera nivel para 'none' junto com contestado: true (tool-registry.js)
+      // — os dois nunca se separam hoje. Mas o contrato de entra() é a UNIÃO
+      // dos dois estados, não só o caso observado; testando nos dois
+      // sentidos, inclusive esta combinação que hoje não ocorre na prática.
       const estado = estadoBase({
         identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', contracts: [], contestado: true },
       });
@@ -46,9 +37,35 @@ describe('módulo identificacao', () => {
     });
   });
 
-  describe('linhas() — BLOQUEADO, ver task-14-report.md', () => {
-    test('fica vazio até a divergência com fatos.js ser resolvida (não duplica conteúdo)', () => {
-      expect(identificacao.linhas(estadoBase())).toEqual([]);
+  describe('conteúdo', () => {
+    test('pede CPF/CNPJ só quando o pedido depende de localizar o cadastro, sem nomear setor', () => {
+      const texto = identificacao.linhas(estadoBase({
+        identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false },
+      })).join('\n');
+      expect(texto).toMatch(/Cliente NÃO identificado\. Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele/);
+      expect(texto).toMatch(/Quem só quer conhecer planos ou contratar não precisa se identificar\./);
+      expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
+    });
+
+    test('sem contestação, não soma o aviso de identificação descartada', () => {
+      const texto = identificacao.linhas(estadoBase({
+        identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false },
+      })).join('\n');
+      expect(texto).not.toMatch(/identificação foi descartada/);
+    });
+
+    test('identidade contestada soma o aviso de identificação descartada', () => {
+      const texto = identificacao.linhas(estadoBase({
+        identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: true },
+      })).join('\n');
+      expect(texto).toMatch(/O cliente disse que o nome anterior não era dele: a identificação foi descartada\. Peça o CPF\./);
+    });
+
+    test('nunca reintroduz data de nascimento, identidade fraca ou gate de confiança', () => {
+      const texto = identificacao.linhas(estadoBase()).join('\n');
+      expect(texto).not.toMatch(/nascimento/i);
+      expect(texto).not.toMatch(/identidade fraca/i);
+      expect(texto).not.toMatch(/gate de confiança/i);
     });
   });
 });

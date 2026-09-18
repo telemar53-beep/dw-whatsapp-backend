@@ -46,23 +46,16 @@ describe('módulo fatos', () => {
   });
 
   describe('cliente não identificado', () => {
-    test('pede CPF/CNPJ só quando o pedido depende de localizar o cadastro, sem nomear setor', () => {
+    // Rodada de correção 4 (dono, 2026-09-18, Task 14): fatos.js diz o FATO
+    // ("o cliente ainda não foi identificado"); o QUE FAZER a respeito
+    // (pedir CPF/CNPJ, tratar a contestação) virou conteúdo de
+    // fluxos/identificacao.js — instrução de fluxo não é fato. Ver o teste
+    // equivalente em identificacao.test.js e a guarda-tripwire abaixo, em
+    // 'guardas de princípio'.
+    test('só constata o estado, sem instruir o que fazer a respeito', () => {
       const texto = fatos.linhas(estadoBase()).join('\n');
-      expect(texto).toMatch(/Cliente NÃO identificado\. Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele/);
-      expect(texto).toMatch(/Quem só quer conhecer planos ou contratar não precisa se identificar\./);
-      // Rodada de correção 3 (dono, 2026-09-18): Restrição Global do plano —
-      // nome de setor nunca aparece como string literal, nem aqui.
-      expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
-    });
-
-    test('identidade contestada soma o aviso de identificação descartada', () => {
-      const semContestar = fatos.linhas(estadoBase()).join('\n');
-      expect(semContestar).not.toMatch(/identificação foi descartada/);
-
-      const comContestar = fatos.linhas(estadoBase({
-        identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: true },
-      })).join('\n');
-      expect(comContestar).toMatch(/O cliente disse que o nome anterior não era dele: a identificação foi descartada\. Peça o CPF\./);
+      expect(texto).toMatch(/Cliente NÃO identificado\./);
+      expect(texto).not.toMatch(/Peça o CPF/);
     });
   });
 
@@ -154,6 +147,20 @@ describe('módulo fatos', () => {
       })).join('\n');
       expect(texto).not.toMatch(/DADOS DE OUTRA PESSOA/);
       expect(texto).not.toMatch(/titularEOutraPessoa/);
+    });
+
+    // Rodada de correção 4 (dono, 2026-09-18, Task 14): pedir CPF/CNPJ e a
+    // aftermath da contestação são conteúdo de fluxos/identificacao.js agora
+    // (entra() condicional: nivel === 'none' ou contestado) — mesmo
+    // raciocínio que já tirou privacidade/terceiros daqui na Task 13.
+    test('não pede CPF/CNPJ nem cita identificação descartada: isso é conteúdo de fluxos/identificacao.js', () => {
+      const semContestar = fatos.linhas(estadoBase()).join('\n');
+      expect(semContestar).not.toMatch(/Peça o CPF ou CNPJ/);
+
+      const comContestar = fatos.linhas(estadoBase({
+        identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: true },
+      })).join('\n');
+      expect(comContestar).not.toMatch(/identificação foi descartada/);
     });
 
     test('nunca contém nome real de cliente (só marcador ou nome de teste genérico)', () => {

@@ -1,40 +1,39 @@
-// BLOQUEADO (Task 14, 2026-09-18) — ver task-14-report.md para o achado
-// completo, com comandos e evidência. Resumo:
+// Identificação: como pedir o documento quando ainda não se sabe quem é o
+// cliente, e o que fazer quando ele diz que o nome anterior não era dele
+// (identidade contestada). Migração de ai-orchestrator.js — texto-âncora
+// "Cliente NÃO identificado. Peça o CPF/CNPJ" (hoje linha 364) e a linha de
+// contestação (:365).
 //
-// O brief desta tarefa pede que este módulo receba "Cliente NÃO
-// identificado. Peça o CPF/CNPJ" (ai-orchestrator.js:364) e a linha de
-// contestação (:365) — mas esse EXATO conteúdo já está em fatos.js (ramo
-// identidade.nivel === 'none'), colocado lá pela implementação original da
-// Task 12 (commit 6a1cd3b) e mantido de pé por 3 rodadas de revisão daquela
-// tarefa, incluindo uma que editou essa PRÓPRIA linha por outro motivo (nome
-// de setor fixo, commit cabe5cf) sem movê-la para um módulo de fluxo — ao
-// contrário de privacidade/terceiros, que tinham comentário explícito
-// ("Rodada de correção 1... saíram daqui") e teste-tripwire documentando a
-// mudança de camada antes da Task 13 preencher os dois. fatos.test.js também
-// afirma esse conteúdo POSITIVAMENTE (describe('cliente não identificado')),
-// revisado e aprovado junto com o resto da Task 12.
+// Decisão do dono (2026-09-18, depois do achado da Task 14): este conteúdo
+// tinha ido parar em fatos.js na Task 12 e sobrevivido a 3 rodadas de
+// revisão porque ninguém comparou as duas camadas entre si — fatos.js diz o
+// FATO ("o cliente ainda não foi identificado"), este módulo diz o QUE FAZER
+// a respeito. Instrução de fluxo não é fato. O texto abaixo é o mesmo que
+// estava em fatos.js (já com a redação corrigida na Rodada de correção 3:
+// sem nomear setor), só realocado — não uma nova migração a partir do texto
+// bruto de ai-orchestrator.js.
 //
-// Preencher linhas() aqui do jeito que o brief pede duplicaria a instrução
-// toda vez que o cliente não estiver identificado: fatos.js entra sempre
-// (entra() -> true) e este módulo entraria exatamente no mesmo estado
-// (nivel === 'none') — o oposto do que as Tasks 12 e 13 vêm ativamente
-// evitando (é o mesmo "DEFEITO DO PLANO" que a Task 12 corrigiu para
-// privacidade/terceiros, agora seguindo despercebido para identificação).
-// Mover o conteúdo de fatos.js para cá, por conta própria, desfaria uma
-// decisão revisada 3 vezes sem autorização explícita para tocar naquele
-// arquivo — esta tarefa só autoriza preencher identificacao.js e
-// comercial-novo.js.
-//
-// entra() abaixo está implementado e testado (contrato dado pela tarefa:
-// nivel === 'none' OU identidade.contestado) — é inequívoco e não depende da
-// decisão pendente. linhas() fica vazio (não contribui NADA ao prompt ainda)
-// até alguém decidir entre mover o conteúdo de fatos.js para cá ou corrigir
-// o brief desta tarefa para refletir que fatos.js já cobre isso.
+// entra() cobre os dois casos em que este módulo precisa falar: identidade
+// ainda não confirmada (nivel === 'none') OU identidade que acabou de ser
+// descartada por contestação. Na prática hoje os dois sempre andam juntos
+// (esquecer_identificacao zera nivel para 'none' junto com contestado: true
+// — tool-registry.js), mas o contrato é a união dos dois estados, não só o
+// caso observado (ver identificacao.test.js).
 module.exports = {
   nome: 'identificacao',
   entra(estado) {
     const identidade = estado.identidade || {};
     return identidade.nivel === 'none' || Boolean(identidade.contestado);
   },
-  linhas() { return []; },
+  linhas(estado) {
+    const identidade = estado.identidade || {};
+    const l = [
+      '',
+      'Cliente NÃO identificado. Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele (conta, fatura, problema no serviço, retorno de cliente antigo), no modelo: "Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Quem só quer conhecer planos ou contratar não precisa se identificar. Depois de buscar_cliente, continue a triagem.',
+    ];
+    if (identidade.contestado) {
+      l.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');
+    }
+    return l;
+  },
 };

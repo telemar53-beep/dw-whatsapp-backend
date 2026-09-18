@@ -31,11 +31,17 @@ test('cliente identificado não recebe a abertura de cliente novo', () => {
   expect(texto).not.toMatch(/bloco de planos das instruções/);
 });
 
-test('privacidade e terceiros entram nos dois estados de identidade', () => {
+// Este teste olha a SELEÇÃO, não o conteúdo: privacidade e terceiros são os dois
+// módulos que entram em qualquer estado de identidade. O texto deles é a tarefa
+// seguinte — aqui eles ainda são esqueleto, então asserir a frase faria a Task 12
+// ter de escrever conteúdo da Task 13 e acabaria duplicando o bloco nos dois lugares.
+test('privacidade e terceiros são selecionados nos dois estados de identidade', () => {
+  const privacidade = MODULOS.find((m) => m.nome === 'privacidade');
+  const terceiros = MODULOS.find((m) => m.nome === 'terceiros');
   for (const nivel of ['none', 'forte']) {
-    const texto = montarContexto(estadoBase({ identidade: { nivel, origem: 'phone', primeiroNome: 'João', contracts: [], contestado: false } }));
-    expect(texto).toMatch(/DADOS DE OUTRA PESSOA/);
-    expect(texto).toMatch(/de outra pessoa/i);
+    const estado = estadoBase({ identidade: { nivel, origem: 'phone', primeiroNome: '[nome]', contracts: [], contestado: false } });
+    expect(privacidade.entra(estado)).toBe(true);
+    expect(terceiros.entra(estado)).toBe(true);
   }
 });
 

@@ -10,6 +10,16 @@
 // "Nunca encaminhe deixando a pergunta dele sem resposta" também não é
 // repetido aqui: principios.js já cobre essa regra.
 //
+// Rodada de correção 1 (dono, 2026-09-18): as quatro linhas de privacidade e
+// dados de terceiros ("DADOS DE OUTRA PESSOA" e a exceção de fatura/boleto/PIX
+// de outra pessoa) SAÍRAM daqui. Elas são conteúdo de fluxos/privacidade.js e
+// fluxos/terceiros.js (Task 13) — deixá-las aqui garantiria a duplicação que
+// esta entrega existe para eliminar, e o texto original em ai-orchestrator.js
+// tem dois nomes reais de cliente ("Laureny", "Jureildson") que a Task 13
+// precisa trocar por marcador ao migrar, não copiar verbatim. Os dois módulos
+// já entram (entra() -> true) em qualquer estado de identidade; só o
+// conteúdo (linhas()) ainda é esqueleto.
+//
 // Regras da migração (brief da Task 12): o ramo de identidade fraca não
 // existe mais — só forte, none e sgpIndisponivel —, e nenhuma frase aqui
 // pergunta ou cita data de nascimento (princípio do dono: não reintroduzir).
@@ -75,10 +85,6 @@ module.exports = {
       'Com identidade confirmada você pode dizer há quantos dias/meses a fatura está vencida e quantas faturas estão em aberto (use a data de hoje, no alto, para contar). Continua proibido dizer o VALOR.',
       'NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
       'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que o Comercial confirma e encaminhe.',
-      'A recusa abaixo vale só quando ele PEDIR um dado de outra pessoa. Relatar problema do vizinho ("o roteador dele está com luz vermelha", "ele me pediu para falar com vocês") NÃO é pedido de dado: atenda o relato normalmente. E a senha da rede DELE mesmo, do contrato dele, é pedido legítimo — nunca recuse.',
-      'DADOS DE OUTRA PESSOA: senha do Wi-Fi, dados cadastrais, endereço ou informação de vizinho, parente ou outro cliente NUNCA são passados e NUNCA viram chamado — não encaminhe nem diga que a equipe vai ver. Recuse na hora, no modelo: "Não consigo passar dados de outro cliente, nem a senha da rede dele — só o titular pode informar isso. Posso te ajudar com alguma coisa do seu contrato?" Se ele insistir em falar com um atendente, conclua com o resumo começando por "Pedido de dado de outra pessoa; recusado na triagem".',
-      'Se ele citar o NOME de outra pessoa junto com o pedido ("a fatura da cliente Laureny", "o boleto do meu marido"), isso já é pedido de terceiro: passe titularEOutraPessoa: true e nunca chame quem está falando pelo nome do titular.',
-      'FATURA, BOLETO OU PIX DE OUTRA PESSOA é a exceção: se ele disser que é de outra pessoa ("quero a fatura do Jureildson", "o boleto do meu marido"), peça o CPF do titular e chame buscar_cliente com titularEOutraPessoa: true. Depois siga normalmente (consultar fatura, enviar boleto ou PIX). NUNCA diga "seu contrato" nem "sua fatura" nesse caso: diga que localizou o contrato no CPF informado e, ao entregar, diga de quem é o boleto. Continue chamando quem fala pelo nome dela, nunca pelo nome do titular.',
       'Ao pedir um esclarecimento, pergunte direto o que você precisa saber — nunca "me diga qual problema para eu encaminhar ao setor correto". O encaminhamento não se anuncia antes de acontecer.',
     );
 

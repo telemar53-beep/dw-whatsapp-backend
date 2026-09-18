@@ -127,24 +127,29 @@ describe('módulo fatos', () => {
     });
   });
 
-  describe('privacidade e dados de terceiros (sempre presentes)', () => {
-    test.each(['none', 'forte'])('aparece com identidade %s', (nivel) => {
+  describe('guardas de princípio (não reintroduzir o que foi removido)', () => {
+    // Rodada de correção 1 (dono, 2026-09-18): privacidade e terceiros são
+    // conteúdo de fluxos/privacidade.js e fluxos/terceiros.js (Task 13), não
+    // de fatos.js — deixá-los aqui duplicaria o bloco quando a Task 13
+    // preencher os dois módulos. O texto original em ai-orchestrator.js tem
+    // dois nomes reais de cliente ("Laureny", "Jureildson"); a guarda abaixo
+    // também serve de tripwire para eles não voltarem por aqui.
+    test.each(['none', 'forte'])('não emite mais o bloco de privacidade/terceiros (identidade %s)', (nivel) => {
       const texto = fatos.linhas(estadoBase({
         identidade: { nivel, origem: 'phone', primeiroNome: 'João', contracts: [], contestado: false },
       })).join('\n');
-      expect(texto).toMatch(/DADOS DE OUTRA PESSOA: senha do Wi-Fi, dados cadastrais, endereço ou informação de vizinho/);
-      expect(texto).toMatch(/Não consigo passar dados de outro cliente, nem a senha da rede dele/);
-      expect(texto).toMatch(/isso já é pedido de terceiro: passe titularEOutraPessoa: true/);
-      expect(texto).toMatch(/FATURA, BOLETO OU PIX DE OUTRA PESSOA é a exceção/);
+      expect(texto).not.toMatch(/DADOS DE OUTRA PESSOA/);
+      expect(texto).not.toMatch(/titularEOutraPessoa/);
     });
 
-    test('relato do problema do vizinho não é tratado como pedido de dado', () => {
-      const texto = fatos.linhas(estadoBase()).join('\n');
-      expect(texto).toMatch(/Relatar problema do vizinho .* NÃO é pedido de dado: atenda o relato normalmente/);
+    test('nunca contém nome real de cliente (só marcador ou nome de teste genérico)', () => {
+      const texto = fatos.linhas(estadoBase({
+        identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', contracts: [], contestado: false },
+      })).join('\n');
+      expect(texto).not.toMatch(/Laureny/);
+      expect(texto).not.toMatch(/Jureildson/);
     });
-  });
 
-  describe('guardas de princípio (não reintroduzir o que foi removido)', () => {
     test('nunca menciona data de nascimento em nenhum cenário', () => {
       for (const identidade of [
         { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false },

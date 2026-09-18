@@ -594,9 +594,17 @@ function montarEscopo(nome, contratos, agora = new Date()) {
   };
 }
 
+// Formato ISO completo, como .toISOString() produz. A checagem de tipo e de
+// forma vem ANTES do Date.parse de propósito: Date.parse('12345') não é lixo
+// para o V8 — é o ano 12345, uma data válida e distante, que transformaria um
+// campo corrompido numa autorização de séculos. Falhar fechado é o ponto
+// inteiro desta função.
+const ISO_COMPLETO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
 function escopoValido(escopo, agora = new Date()) {
   if (!escopo || typeof escopo !== 'object') return false;
   if (!Array.isArray(escopo.contratos) || escopo.contratos.length === 0) return false;
+  if (typeof escopo.expiraEm !== 'string' || !ISO_COMPLETO.test(escopo.expiraEm)) return false;
   const expira = Date.parse(escopo.expiraEm);
   if (Number.isNaN(expira)) return false;
   return agora.getTime() <= expira;

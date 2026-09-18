@@ -43,4 +43,18 @@ describe('módulo principios', () => {
     expect(texto).toMatch(/A mensagem mais recente manda/);
     expect(texto).toMatch(/NUNCA cite o funcionamento interno/);
   });
+
+  // Rodada de correção 2 (dono, 2026-09-18): o exemplo de leitura de sentido
+  // tinha "600 mega" e "135" — velocidade e preço reais desta operação escritos
+  // em código. Guarda travada aqui para os módulos seguintes também: nenhuma
+  // velocidade (número + "mega") nem preço (R$ + número) pode nascer dentro de
+  // um módulo. Dado operacional como isso só pode vir das INSTRUÇÕES ADICIONAIS
+  // DA OPERAÇÃO (config.triageExtraInstructions), nunca hardcoded.
+  test('nunca hardcoda velocidade ou preço real: os exemplos usam marcador', () => {
+    const texto = principios.linhas(estadoBase()).join('\n');
+    expect(texto).not.toMatch(/\d+\s*mega/i);
+    expect(texto).not.toMatch(/R\$\s*\d/);
+    expect(texto).toContain('[velocidade]');
+    expect(texto).toContain('[valor]');
+  });
 });

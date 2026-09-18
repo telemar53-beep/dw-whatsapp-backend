@@ -48,6 +48,17 @@ describe('módulo noturno', () => {
       expect(t).toMatch(/Contrato suspenso por pendência: roteiro do suspenso e, se vier comprovante, o roteiro do comprovante\./);
     });
 
+    // Rodada de correção 3 (Task 17, critério nº 9 do dono: toda regra
+    // migrada do construtor antigo precisa de um teste comportamental
+    // correspondente). O teste acima trava só o RÓTULO "CONEXÃO À NOITE" —
+    // uma cláusula de dentro da linha podia ser apagada sem nada ficar
+    // vermelho. Este trava as duas cláusulas de desfecho.
+    test('conexão à noite: se resolver fica registrado; se não resolver, não promete técnico nem prazo', () => {
+      const t = texto();
+      expect(t).toMatch(/ficou registrado que a conexão voltou/);
+      expect(t).toMatch(/Sem prometer técnico nem prazo/);
+    });
+
     test('o script de fila dirigido ao cliente não nomeia o setor de suporte', () => {
       const t = texto('08:00');
       expect(t).toMatch(/"Vou deixar seu atendimento na fila com tudo o que verificamos\. Nossa equipe dá continuidade a partir das 08:00\."/);

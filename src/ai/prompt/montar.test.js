@@ -94,6 +94,18 @@ const ESTADOS_PARA_VARREDURA = [
     contratos: [{ id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço]', status: 'ativo' }],
     config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: '[motivo]' },
   }),
+  // Rodada de correção 3 (Task 17): o mesmo buraco que a Task 16 fechou para
+  // financeiro.js existia para limite-perguntas.js — o estado que liga
+  // forcarConclusao: true (acima) usa a config padrão (triageResolvedReasonId:
+  // null), e o estado com triageResolvedReasonId definido (logo acima) tem
+  // forcarConclusao: false. Sem um estado que combine os dois, a guarda
+  // varreria sempre o mesmo ramo do ternário de limite-perguntas.js — o ramo
+  // com motivo (o "conclua sozinha" de config.triageResolvedReasonId) nunca
+  // seria lido.
+  estadoBase({
+    triagem: { noturno: { ativo: false }, forcarConclusao: true },
+    config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: '[motivo]' },
+  }),
   // Task 17 (comprovante.js): a lista padrão de estado-de-teste.js
   // (`ferramentas: ['buscar_cliente', 'concluir_triagem']`) nunca inclui
   // 'analisar_comprovante' — sem um estado que a acrescente, comprovante.entra()
@@ -232,4 +244,24 @@ test('nenhum módulo (exceto painel, que repassa dado do operador) hardcoda velo
     }
   }
   expect(violacoes).toEqual([]);
+});
+
+// Rodada de correção 3 (Task 17): a correção mais estrutural da rodada 1
+// (quatro entra() passando a excluir identidade.sgpIndisponivel, em
+// suporte-diagnostico.js, financeiro.js, reativacao.js e
+// comercial-cliente.js) só era testada módulo a módulo — nenhuma asserção
+// cobria o PROMPT MONTADO nesse estado. Sem esta guarda, basta um módulo
+// futuro entrar nesse estado com instrução de ferramenta dependente do SGP
+// para a contradição com fatos.js (que manda "NÃO tente boleto, PIX nem
+// status de conexão" quando o SGP está indisponível) voltar sem nenhum
+// teste vermelho — foi exatamente assim que ela surgiu da primeira vez
+// (Task 16, item 2 do relatório, registrada mas não corrigida por falta de
+// autorização até a Task 17).
+test('com SGP indisponível, o prompt montado não instrui nenhuma ferramenta que dependa do SGP', () => {
+  const texto = montarContexto(estadoBase({
+    identidade: { nivel: 'forte', origem: 'memory', primeiroNome: '[nome]', contracts: [], contestado: false, sgpIndisponivel: true },
+  }));
+  expect(texto).not.toMatch(/consultar_status_todos_contratos/);
+  expect(texto).not.toMatch(/enviar_boleto/);
+  expect(texto).not.toMatch(/gerar_pix/);
 });

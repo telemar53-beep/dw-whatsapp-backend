@@ -129,5 +129,31 @@ describe('módulo comprovante', () => {
       expect(t).not.toMatch(/\d+\s*mega/i);
       expect(t).not.toMatch(/nascimento/i);
     });
+
+    // Rodada de correção 3 (Task 17, critério nº 9 do dono: toda regra
+    // migrada do construtor antigo precisa de um teste comportamental
+    // correspondente). Os testes acima de COMPROVANTE À NOITE travam só o
+    // RÓTULO da linha — uma cláusula de dentro dela podia ser apagada sem
+    // nada ficar vermelho. Este trava a CLÁUSULA.
+    test('à noite, se a ferramenta devolver jaUtilizado, o cliente não é informado disso nem de outro contrato', () => {
+      // A mais sensível das quatro cláusulas desta rodada: protege a privacidade de OUTRO contrato.
+      const t = comprovante.linhas(comFerramenta({
+        triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false },
+      })).join('\n');
+      expect(t).toMatch(/jaUtilizado: true/);
+      expect(t).toMatch(/NÃO diga isso ao cliente/);
+      expect(t).toMatch(/nem cite outro contrato/);
+    });
+
+    // Mesmo critério nº 9, para o ramo diurno: trava a cláusula, não só o
+    // rótulo "COMPROVANTE:".
+    test('de dia, se o comprovante já foi utilizado, o cliente não é informado disso; a equipe confere e dá baixa', () => {
+      const t = comprovante.linhas(comFerramenta({
+        triagem: { noturno: { ativo: false }, forcarConclusao: false },
+      })).join('\n');
+      expect(t).toMatch(/já foi utilizado/);
+      expect(t).toMatch(/NÃO diga isso ao cliente/);
+      expect(t).toMatch(/a equipe confere e dá baixa/);
+    });
   });
 });

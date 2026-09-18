@@ -36,6 +36,41 @@
 // ramo que estava sumindo.
 // ==========================================================================
 //
+// ==========================================================================
+// PENDÊNCIA (Rodada de correção 3, revisão formal da Task 17, 2026-09-18) —
+// diferença de comportamento À NOITE entre o construtor antigo e este módulo
+// ==========================================================================
+// No construtor antigo (ai-orchestrator.js), o bloco "COMPROVANTE À NOITE"
+// (linha 342) fica dentro do `if (triagem.noturno.ativo)` que fecha na linha
+// 348. Bem mais abaixo, de forma inteiramente separada, um outro
+// `linhas.push(...)` INCONDICIONAL (abre na linha 407, roda sempre,
+// independente de noturno) contém o ternário `config.triageReadReceiptsDaytime
+// && !noturno` (linha 438): IF (linha 439) é o "COMPROVANTE:" diurno; ELSE
+// (linha 440) é "Se o cliente enviou uma imagem, pergunte se é um
+// comprovante... sem confirmar pagamento."
+//
+// Consequência: À NOITE, `!noturno` é false, então o ternário SEMPRE cai no
+// ELSE (linha 440) — e como esse push é incondicional, o texto sai JUNTO com
+// o bloco COMPROVANTE À NOITE (linha 342). O construtor antigo emite os DOIS
+// textos ao mesmo tempo, de noite: "chame analisar_comprovante (sem perguntar
+// nada antes)" (COMPROVANTE À NOITE) E "pergunte se é um comprovante..., sem
+// confirmar pagamento" (o ELSE) — na mesma resposta de sistema.
+//
+// Este módulo ramifica por PRESENÇA DA FERRAMENTA antes de perguntar se é
+// noite (`if (!temFerramenta) ... else if (noturno) ... else ...`): com a
+// ferramenta presente a única saída à noite é o ramo `noturno` (COMPROVANTE À
+// NOITE) — o texto "pergunte se é comprovante..., sem confirmar pagamento"
+// (que aqui só existe no ramo `!temFerramenta`) deixa de coexistir com ele.
+//
+// Na prática é uma MELHORA, não uma perda: aquele texto contradizia "chame
+// analisar_comprovante (sem perguntar nada antes)" do próprio bloco noturno —
+// o prompt antigo mandava simultaneamente perguntar primeiro E não perguntar
+// nada antes. Mas essa diferença não está registrada em lugar nenhum fora
+// deste comentário, e a Task 18 (comparação dos dois construtores lado a
+// lado, ~260 asserts) vai esbarrar nela sem contexto: se aparecer lá, é este
+// achado, não uma regressão desta tarefa.
+// ==========================================================================
+//
 // Nomes de setor e motivo (Restrição Global do plano — "o setor da lista
 // acima que cuidar de X" / "o motivo da lista acima que falar de X, se
 // houver", mesmo idioma de fatos.js/financeiro.js/suporte-diagnostico.js):

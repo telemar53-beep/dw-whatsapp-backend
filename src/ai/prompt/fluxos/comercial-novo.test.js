@@ -119,11 +119,22 @@ describe('módulo comercial-novo', () => {
         expect(t).not.toMatch(/Um atendente continuará o atendimento por aqui\./);
       });
 
+      // Rodada de correção 3 (Task 17): dois defeitos na versão anterior
+      // deste teste. (a) se a frase-âncora fosse reescrita, indexOf devolvia
+      // -1 e slice(-1) devolvia o ÚLTIMO CARACTERE da string — a asserção
+      // passava em silêncio, mesma família do
+      // `expect(completeTriage).not.toHaveBeenCalled()` que este projeto já
+      // teve. Corrigido: a existência da âncora agora é asseverada primeiro.
+      // (b) slice(0, 300) cortava a variante noturna (417 caracteres) e
+      // nunca chegava a checar o final dela. Corrigido: checa o trecho
+      // inteiro a partir da âncora, sem cortar.
       test('nem de dia nem à noite a frase nomeia o setor (nem fora, nem dentro do script ao cliente)', () => {
         for (const noturno of [true, false]) {
           const t = texto({ triagem: { noturno: { ativo: noturno, retornoAs: '08:00' }, forcarConclusao: false } });
-          const trecho = t.slice(t.indexOf('Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA'));
-          expect(trecho.slice(0, 300)).not.toMatch(/Comercial/);
+          const i = t.indexOf('Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA');
+          expect(i).toBeGreaterThanOrEqual(0);
+          const trecho = t.slice(i);
+          expect(trecho).not.toMatch(/Comercial/);
         }
       });
 

@@ -508,6 +508,21 @@ describe('tool-executor — contratoId dedutível com um contrato só (Task 10)'
     expect(sgpClient.checkConnection).toHaveBeenCalledWith(42);
   });
 
+  // A checagem é estrita (undefined/null) de propósito: um valor que o modelo
+  // mandou nunca pode ser sobrescrito por um id deduzido, nem quando é falsy.
+  // Se alguém trocar por `!args.contratoId` num refactor de limpeza, este teste
+  // fica vermelho — que é o ponto.
+  test.each([0, '', false, NaN])('contratoId falsy (%p) não é substituído pelo contrato único: recusa em vez de deduzir', async (valor) => {
+    const contexto = {
+      ferramentasPermitidas: ['consultar_status_conexao'], contracts: [{ id: 42 }], contact: {},
+      identidade: { nivel: 'forte' }, conversationId: 'c1',
+    };
+    const r = await executeTool('consultar_status_conexao', { contratoId: valor }, contexto);
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('invalid_args');
+    expect(sgpClient.checkConnection).not.toHaveBeenCalledWith(42);
+  });
+
   test('contratoId ausente com vários contratos continua sendo erro de argumento', async () => {
     const contexto = {
       ferramentasPermitidas: ['consultar_status_conexao'], contracts: [{ id: 1 }, { id: 2 }], contact: {},

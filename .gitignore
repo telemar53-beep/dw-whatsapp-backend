@@ -4,3 +4,7 @@ node_modules/
 .worktrees/
 .baileys-sessions*/
 .media-storage*/
+
+# Rascunho interno do processo de desenvolvimento (ledger, briefs, relatorios e
+# pacotes de revisao das sessoes). Nunca faz parte do produto.
+.superpowers/

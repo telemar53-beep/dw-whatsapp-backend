@@ -3,6 +3,14 @@
 // instruções cita "vale o princípio acima" para amarrar com a hierarquia de
 // principios.js: fora de preço/planos/cobertura/política comercial, quem
 // manda é a PRIORIDADE, não o texto da operação.
+//
+// Rodada de correção 3 (dono, 2026-09-18): a frase de fallback (sem
+// instruções adicionais) dizia "são sempre com o setor comercial" — nome de
+// setor fixo, violando a Restrição Global ("nomes de setor e motivo nunca
+// aparecem como string literal"). Numa operação sem um setor chamado
+// "Comercial" a frase afirmaria algo que não está na lista real (a lista de
+// estado.setores, injetada acima, é a única fonte). Agora ela aponta para
+// "o setor da lista acima", sem nomear nenhum.
 module.exports = {
   nome: 'painel',
   entra() { return true; },
@@ -18,7 +26,7 @@ module.exports = {
         estado.config.triageExtraInstructions
       );
     } else {
-      l.push('', 'Não há instruções adicionais da operação: preço, planos e cobertura são sempre com o setor comercial.');
+      l.push('', 'Não há instruções adicionais da operação: preço, planos e cobertura você não tem como confirmar sozinha — encaminhe para o setor da lista acima que cuidar de vendas e contratação.');
     }
     return l;
   },

@@ -23,6 +23,15 @@
 // Regras da migração (brief da Task 12): o ramo de identidade fraca não
 // existe mais — só forte, none e sgpIndisponivel —, e nenhuma frase aqui
 // pergunta ou cita data de nascimento (princípio do dono: não reintroduzir).
+//
+// Rodada de correção 3 (dono, 2026-09-18): duas linhas citavam nome de setor
+// fixo ("Financeiro, Suporte, Reativação", "o Comercial confirma") — viola a
+// Restrição Global do plano ("nomes de setor e motivo nunca aparecem como
+// string literal: referencie por papel"). Numa operação sem um setor
+// "Comercial" a frase afirmaria algo que não existe. Reescritas para
+// descrever o ASSUNTO (localizar cadastro; setor que cuida de vendas) e
+// apontar para a lista de setores que painel.js já injeta acima, em vez de
+// nomear um setor específico.
 
 // Mesma redação de horaDeBrasilia/dataDeBrasilia em ai-orchestrator.js, mas
 // recebendo a hora do ESTADO (estado.agora) em vez de ler o relógio direto:
@@ -65,7 +74,7 @@ module.exports = {
       // mas não há contratos nem consultas possíveis.
       l.push(`Cliente identificado pela memória (primeiro nome ${identidade.primeiroNome || 'cliente'}), mas o sistema do SGP NÃO respondeu agora. NÃO peça CPF e NÃO tente boleto, PIX nem status de conexão. Cumprimente pelo primeiro nome, diga em uma frase que o sistema de consulta está instável neste momento, e chame concluir_triagem para o setor adequado ao que ele pediu, com o resumo começando por "SGP indisponível na triagem".`);
     } else if (identidade.nivel === 'none') {
-      l.push('Cliente NÃO identificado. Peça o CPF/CNPJ só se o setor exigir identificação (Financeiro, Suporte, Reativação), no modelo: "Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Comercial de cliente novo nunca exige CPF. Depois de buscar_cliente, continue a triagem.');
+      l.push('Cliente NÃO identificado. Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele (conta, fatura, problema no serviço, retorno de cliente antigo), no modelo: "Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Quem só quer conhecer planos ou contratar não precisa se identificar. Depois de buscar_cliente, continue a triagem.');
       if (identidade.contestado) l.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');
     } else {
       // Chegando aqui a identidade já é FORTE — é o único nível possível além
@@ -84,7 +93,7 @@ module.exports = {
       '',
       'Com identidade confirmada você pode dizer há quantos dias/meses a fatura está vencida e quantas faturas estão em aberto (use a data de hoje, no alto, para contar). Continua proibido dizer o VALOR.',
       'NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
-      'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que o Comercial confirma e encaminhe.',
+      'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que a equipe confirma e encaminhe para o setor da lista acima que cuidar de vendas.',
       'Ao pedir um esclarecimento, pergunte direto o que você precisa saber — nunca "me diga qual problema para eu encaminhar ao setor correto". O encaminhamento não se anuncia antes de acontecer.',
     );
 

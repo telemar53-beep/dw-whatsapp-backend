@@ -35,11 +35,23 @@ describe('módulo painel', () => {
     expect(texto).toContain('Planos: 500 Mega R$ 100');
   });
 
-  test('sem instruções adicionais, diz que preço e cobertura são sempre com o setor comercial', () => {
-    const texto = painel.linhas(estadoBase({
+  // Rodada de correção 3 (dono, 2026-09-18): a redação antiga dizia "são
+  // sempre com o setor comercial" — nome de setor fixo, violando a Restrição
+  // Global ("nomes de setor e motivo nunca aparecem como string literal").
+  // O padrão certo é apontar para a lista de setores (que vem do banco, acima
+  // no prompt), nunca nomear um setor que pode nem existir naquela operação.
+  test('sem instruções adicionais, aponta para o setor da lista em vez de nomear "comercial"', () => {
+    const linhas = painel.linhas(estadoBase({
       config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: null },
-    })).join('\n');
-    expect(texto).toContain('Não há instruções adicionais da operação: preço, planos e cobertura são sempre com o setor comercial.');
+    }));
+    const texto = linhas.join('\n');
+    expect(texto).toContain('Não há instruções adicionais da operação: preço, planos e cobertura você não tem como confirmar sozinha — encaminhe para o setor da lista acima que cuidar de vendas e contratação.');
     expect(texto).not.toMatch(/INSTRUÇÕES ADICIONAIS DA OPERAÇÃO —/);
+    // A checagem de nome de setor fixo é só na frase de fallback (a última
+    // linha), não no texto inteiro: a listagem de setores acima LEGITIMAMENTE
+    // repassa nomes que vêm do banco (ex.: "Suporte" no estadoBase padrão) —
+    // ver a guarda completa, com essa mesma ressalva, em montar.test.js.
+    const fraseDeFallback = linhas[linhas.length - 1];
+    expect(fraseDeFallback).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
   });
 });

@@ -16,6 +16,17 @@ describe('módulo fatos', () => {
     expect(texto).toMatch(/Cumprimente só na primeira resposta da conversa; nas seguintes, não repita a saudação/);
   });
 
+  // Rodada de correção 3 (dono, 2026-09-18): a linha dizia "diga que o
+  // Comercial confirma e encaminhe" — nome de setor fixo, violando a
+  // Restrição Global do plano ("nomes de setor e motivo nunca aparecem como
+  // string literal"). Numa operação sem um setor chamado "Comercial" a frase
+  // afirmaria algo que não existe na lista real (injetada por painel.js).
+  test('sem instruções da operação, aponta para o setor da lista em vez de nomear "Comercial"', () => {
+    const texto = fatos.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/não invente: diga que a equipe confirma e encaminhe para o setor da lista acima que cuidar de vendas\./);
+    expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
+  });
+
   describe('SGP indisponível', () => {
     test('cumprimenta pelo nome da memória, sem pedir CPF nem tentar boleto/PIX', () => {
       const texto = fatos.linhas(estadoBase({
@@ -35,10 +46,13 @@ describe('módulo fatos', () => {
   });
 
   describe('cliente não identificado', () => {
-    test('pede CPF/CNPJ só se o setor exigir, e não trata Comercial de cliente novo', () => {
+    test('pede CPF/CNPJ só quando o pedido depende de localizar o cadastro, sem nomear setor', () => {
       const texto = fatos.linhas(estadoBase()).join('\n');
-      expect(texto).toMatch(/Cliente NÃO identificado\. Peça o CPF\/CNPJ só se o setor exigir identificação/);
-      expect(texto).toMatch(/Comercial de cliente novo nunca exige CPF/);
+      expect(texto).toMatch(/Cliente NÃO identificado\. Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele/);
+      expect(texto).toMatch(/Quem só quer conhecer planos ou contratar não precisa se identificar\./);
+      // Rodada de correção 3 (dono, 2026-09-18): Restrição Global do plano —
+      // nome de setor nunca aparece como string literal, nem aqui.
+      expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
     });
 
     test('identidade contestada soma o aviso de identificação descartada', () => {

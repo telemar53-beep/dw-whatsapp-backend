@@ -52,3 +52,70 @@ test('todo módulo declara nome, entra e linhas', () => {
     expect(typeof m.linhas).toBe('function');
   }
 });
+
+// Rodada de correção 3 (dono, 2026-09-18): a guarda de dado operacional
+// (Rodada 2) só olhava principios.js. Nomes de setor fixo entraram por
+// fatos.js e painel.js sem que nenhum teste pegasse. Esta guarda varre TODOS
+// os módulos — para travar a regra também para as Tasks 13-17, que ainda vão
+// escrever o conteúdo real de cada fluxo.
+//
+// Estados variados de propósito (não só não-identificado/identificado): cada
+// um liga uma condição diferente (aviso de cidade, noturno, limite de
+// perguntas, SGP indisponível, terceiro, múltiplos contratos) para que,
+// quando uma tarefa futura ligar o entra() de um fluxo hoje esqueleto, esta
+// varredura já passe a cobrir o conteúdo dele também.
+const ESTADOS_PARA_VARREDURA = [
+  estadoBase(),
+  estadoBase({
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: '[nome]', contracts: [{ id: 1 }], contestado: false },
+    contratos: [{ id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço]', status: 'ativo' }],
+  }),
+  estadoBase({
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: '[nome]', contracts: [{ id: 1 }, { id: 2 }], contestado: false },
+    contratos: [
+      { id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço 1]', status: 'ativo' },
+      { id: 2, plano: '[plano]', velocidade: null, endereco: '[endereço 2]', status: 'suspenso' },
+    ],
+  }),
+  estadoBase({
+    identidade: { nivel: 'forte', origem: 'memory', primeiroNome: '[nome]', contracts: [], contestado: false, sgpIndisponivel: true },
+  }),
+  estadoBase({ avisoCidade: { cidade: '[cidade]', mensagem: '[mensagem]' } }),
+  estadoBase({ triagem: { noturno: { ativo: true, retornoAs: '[hora]' }, forcarConclusao: false } }),
+  estadoBase({ triagem: { noturno: { ativo: false }, forcarConclusao: true } }),
+  estadoBase({ terceiro: { titular: '[nome do titular]' } }),
+];
+
+// painel.js fica de fora de propósito, não por afrouxamento: o trabalho DELE
+// é repassar dado que vem do operador/banco — a listagem de setores
+// (estado.setores, que legitimamente contém "Suporte", "Comercial" etc. como
+// dado, não como o módulo decidindo isso) e o texto de
+// config.triageExtraInstructions (que legitimamente contém preço). painel.js
+// não decide nenhum desses valores, só formata o que recebe — é o único
+// módulo cujo trabalho é exatamente esse repasse. NÃO tire esta exclusão sem
+// entender isso; se precisar testar painel.js especificamente, o teste dele
+// já cobre isso em painel.test.js (checando só a frase de fallback, não a
+// listagem de setores).
+const NOME_DOS_REGEX = [
+  ['velocidade', /\d+\s*mega/i],
+  ['preço', /R\$\s*\d/],
+  ['nome de setor', /\b(Financeiro|Comercial|Suporte|Reativação)\b/],
+];
+
+test('nenhum módulo (exceto painel, que repassa dado do operador) hardcoda velocidade, preço ou nome de setor', () => {
+  const violacoes = [];
+  for (const modulo of MODULOS) {
+    if (modulo.nome === 'painel') continue;
+    for (const estado of ESTADOS_PARA_VARREDURA) {
+      if (!modulo.entra(estado)) continue;
+      modulo.linhas(estado).forEach((linha, indice) => {
+        for (const [rotulo, regex] of NOME_DOS_REGEX) {
+          if (regex.test(linha)) {
+            violacoes.push(`módulo "${modulo.nome}", linha [${indice}] — ${rotulo} hardcoded: "${linha}"`);
+          }
+        }
+      });
+    }
+  }
+  expect(violacoes).toEqual([]);
+});

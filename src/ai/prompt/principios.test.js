@@ -46,15 +46,18 @@ describe('módulo principios', () => {
 
   // Rodada de correção 2 (dono, 2026-09-18): o exemplo de leitura de sentido
   // tinha "600 mega" e "135" — velocidade e preço reais desta operação escritos
-  // em código. Guarda travada aqui para os módulos seguintes também: nenhuma
-  // velocidade (número + "mega") nem preço (R$ + número) pode nascer dentro de
-  // um módulo. Dado operacional como isso só pode vir das INSTRUÇÕES ADICIONAIS
-  // DA OPERAÇÃO (config.triageExtraInstructions), nunca hardcoded.
-  test('nunca hardcoda velocidade ou preço real: os exemplos usam marcador', () => {
+  // em código. Os exemplos usam marcador.
+  test('exemplo de leitura de sentido usa marcador, não velocidade/preço real', () => {
     const texto = principios.linhas(estadoBase()).join('\n');
-    expect(texto).not.toMatch(/\d+\s*mega/i);
-    expect(texto).not.toMatch(/R\$\s*\d/);
     expect(texto).toContain('[velocidade]');
     expect(texto).toContain('[valor]');
   });
+
+  // Rodada de correção 3 (dono, 2026-09-18): a guarda geral de dado
+  // operacional (velocidade, preço, nome de setor) que morava aqui só
+  // cobria principios.js — se um módulo de fluxo reintroduzisse isso nas
+  // Tasks 13-17, nada pegava. Ela SE MUDOU para montar.test.js, onde varre
+  // TODOS os módulos de uma vez (menos painel.js, que repassa dado do
+  // operador por natureza). Ver o teste "nenhum módulo... hardcoda
+  // velocidade, preço ou nome de setor" lá.
 });

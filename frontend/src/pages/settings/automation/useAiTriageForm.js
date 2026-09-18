@@ -10,7 +10,6 @@ function fromConfig(config) {
     timeoutMinutes: config.triageTimeoutMinutes == null ? 3 : config.triageTimeoutMinutes,
     extraInstructions: config.triageExtraInstructions || '',
     resolvedReasonId: config.triageResolvedReasonId || '',
-    requireBirthdate: Boolean(config.triageRequireBirthdate),
     readReceiptsDaytime: Boolean(config.triageReadReceiptsDaytime),
     // Sem valor salvo, o campo nasce vazio: "20:00"/"08:00" eram só sugestão
     // de placeholder em NightModePage, mas qualquer save() nas outras duas
@@ -22,7 +21,7 @@ function fromConfig(config) {
 }
 
 // Três páginas editam pedaços diferentes da MESMA configuração, e o backend
-// trata campo ausente como "desligado". Por isso save() manda os nove sempre.
+// trata campo ausente como "desligado". Por isso save() manda os oito sempre.
 export function useAiTriageForm() {
   const { token } = useAuth();
   const { config, status, refresh } = useAiConfig();
@@ -51,7 +50,6 @@ export function useAiTriageForm() {
           triageResolvedReasonId: values.resolvedReasonId || null,
           nightStartTime: values.nightStart || null,
           nightEndTime: values.nightEnd || null,
-          triageRequireBirthdate: values.requireBirthdate,
           triageReadReceiptsDaytime: values.readReceiptsDaytime,
         },
         token

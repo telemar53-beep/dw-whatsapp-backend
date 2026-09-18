@@ -8,7 +8,6 @@ export const TOOL_LABELS = {
   consultar_faturas_todos_contratos: 'Consultar faturas de todos os contratos',
   consultar_status_todos_contratos: 'Consultar situação de todos os contratos',
   analisar_comprovante: 'Analisar comprovante de pagamento',
-  confirmar_nascimento: 'Confirmar data de nascimento',
   definir_motivo_atendimento: 'Registrar motivo do atendimento',
   transferir_atendimento: 'Transferir para um setor',
   esquecer_identificacao: 'Esquecer identificação atual',

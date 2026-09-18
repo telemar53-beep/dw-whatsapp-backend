@@ -59,7 +59,7 @@ describe('ConversationInfoPanel', () => {
       aiTriageCompletedAt: '2026-09-12T10:00:00.000Z',
       aiTriageSectorId: 's-2',
       aiTriageReasonName: 'Segunda via',
-      aiTriageIdentifiedBy: 'cpf_confirmed',
+      aiTriageIdentifiedBy: 'cpf',
       aiTriageConfidence: 0.87,
       aiTriageSummary: 'Cliente pediu segunda via do boleto.',
     };
@@ -74,7 +74,7 @@ describe('ConversationInfoPanel', () => {
       expect(screen.getByText('Motivo')).toBeInTheDocument();
       expect(screen.getByText('Segunda via')).toBeInTheDocument();
       expect(screen.getByText('Identificação')).toBeInTheDocument();
-      expect(screen.getByText('CPF + nascimento')).toBeInTheDocument();
+      expect(screen.getByText('CPF')).toBeInTheDocument();
       expect(screen.getByText('Confiança')).toBeInTheDocument();
       expect(screen.getByText('87%')).toBeInTheDocument();
       expect(screen.getByText('Cliente pediu segunda via do boleto.')).toBeInTheDocument();
@@ -90,7 +90,6 @@ describe('ConversationInfoPanel', () => {
         ['memory', 'memória'],
         ['phone', 'telefone'],
         ['cpf', 'CPF'],
-        ['cpf_confirmed', 'CPF + nascimento'],
         ['none', 'não identificado'],
       ];
       cases.forEach(([identifiedBy, label]) => {

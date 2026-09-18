@@ -16,13 +16,6 @@ function IdentificationPage() {
         <form onSubmit={(e) => { e.preventDefault(); form.save(); }}>
           <Card title="Identificação" footer={<Button type="submit" loading={form.saving}>Salvar identificação</Button>}>
             <Toggle
-              id="triage-require-birthdate"
-              checked={form.values.requireBirthdate}
-              onChange={(e) => form.setValue('requireBirthdate', e.target.checked)}
-              label="Exigir data de nascimento depois do CPF"
-              description="Desmarcado, o CPF digitado já identifica o cliente e libera boleto/PIX."
-            />
-            <Toggle
               id="triage-read-receipts-daytime"
               checked={form.values.readReceiptsDaytime}
               onChange={(e) => form.setValue('readReceiptsDaytime', e.target.checked)}

@@ -11,7 +11,7 @@ vi.mock('../../../services/api');
 
 const saved = {
   triageConfidenceThreshold: 0.65, triageMaxQuestions: 4, triageTimeoutMinutes: 12, triageExtraInstructions: 'seja breve',
-  triageResolvedReasonId: 'r1', nightStartTime: '21:00', nightEndTime: '07:00', triageRequireBirthdate: true, triageReadReceiptsDaytime: false,
+  triageResolvedReasonId: 'r1', nightStartTime: '21:00', nightEndTime: '07:00', triageReadReceiptsDaytime: false,
 };
 
 beforeEach(() => {
@@ -22,21 +22,21 @@ beforeEach(() => {
 });
 
 describe('useAiTriageForm', () => {
-  test('carrega os nove campos da config', () => {
+  test('carrega os oito campos da config', () => {
     const { result } = renderHook(() => useAiTriageForm());
     expect(result.current.values).toEqual({
       confidencePercent: 65, maxQuestions: 4, timeoutMinutes: 12, extraInstructions: 'seja breve', resolvedReasonId: 'r1',
-      requireBirthdate: true, readReceiptsDaytime: false, nightStart: '21:00', nightEnd: '07:00',
+      readReceiptsDaytime: false, nightStart: '21:00', nightEnd: '07:00',
     });
   });
-  test('mudar só a janela e salvar envia os nove campos, com os outros intactos', async () => {
+  test('mudar só a janela e salvar envia os oito campos, com os outros intactos', async () => {
     const { result } = renderHook(() => useAiTriageForm());
     act(() => result.current.setValue('nightStart', '20:00'));
     await act(() => result.current.save());
     expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
       {
         triageConfidenceThreshold: 0.65, triageMaxQuestions: 4, triageTimeoutMinutes: 12, triageExtraInstructions: 'seja breve',
-        triageResolvedReasonId: 'r1', nightStartTime: '20:00', nightEndTime: '07:00', triageRequireBirthdate: true, triageReadReceiptsDaytime: false,
+        triageResolvedReasonId: 'r1', nightStartTime: '20:00', nightEndTime: '07:00', triageReadReceiptsDaytime: false,
       },
       'tok'
     );

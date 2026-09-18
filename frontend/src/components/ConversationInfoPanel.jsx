@@ -8,7 +8,6 @@ const IDENTIFIED_BY_LABELS = {
   memory: 'memória',
   phone: 'telefone',
   cpf: 'CPF',
-  cpf_confirmed: 'CPF + nascimento',
   none: 'não identificado',
 };
 

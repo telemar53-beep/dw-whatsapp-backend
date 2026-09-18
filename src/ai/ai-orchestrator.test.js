@@ -1891,6 +1891,41 @@ describe('perfil de triagem', () => {
     expect(recordAiInteraction).toHaveBeenCalledWith(expect.objectContaining({ mode: 'triage' }));
   });
 
+  // Task 6: o escopo do terceiro (boleto de outra pessoa) entra pelo mesmo
+  // parâmetro que a identidade e sai pelo mesmo caminho no retorno — quem
+  // persiste de verdade é a própria ferramenta (tool-registry.js), não o
+  // orquestrador; aqui só provamos a passagem contexto ida e volta.
+  test('recebe terceiro e o coloca no contexto do turno', async () => {
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: {} }; });
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'esquecer_identificacao', arguments: '{}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'ok' }, usage: {} });
+    const escopo = { nome: 'Maria', contratos: [{ id: 77 }] };
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, terceiro: escopo });
+    expect(ctxVisto.terceiro).toEqual(escopo);
+  });
+
+  test('sem terceiro informado, o contexto do turno nasce com null', async () => {
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: {} }; });
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'esquecer_identificacao', arguments: '{}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'ok' }, usage: {} });
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    expect(ctxVisto.terceiro).toBeNull();
+  });
+
+  test('devolve terceiro no retorno do turno, refletindo o que a ferramenta deixou no contexto', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'buscar_cliente', arguments: '{"cpf":"52998224725","titularEOutraPessoa":true}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Localizei o contrato.' }, usage: {} });
+    const escopo = { nome: 'Maria', contratos: [{ id: 77 }] };
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctx.terceiro = escopo; return { ok: true, resultado: {} }; });
+    const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    expect(r.terceiro).toEqual(escopo);
+  });
+
   test('perfil assistente continua igual: sem identidade, ferramentas do cartão', async () => {
     createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });

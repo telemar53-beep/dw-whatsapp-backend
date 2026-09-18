@@ -27,7 +27,7 @@ const { listSectors } = require('../sectors/sector.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const {
   setConversationSector, setSuggestedReason, concludeAiTriage, getConversationWithContact,
-  markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
+  markPhoneContested, markTriageResolvedByAi, closeConversationByAi, setThirdPartyScope,
 } = require('../conversations/conversation.repository');
 const { setContactSgpLink } = require('../conversations/contact.repository');
 const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
@@ -47,6 +47,37 @@ const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
 const { executeTool } = require('./tool-executor');
+// FERRAMENTAS_TRIAGEM ainda não estava neste arquivo: é exportado por
+// ai-orchestrator.js, não por tool-registry.js.
+const { FERRAMENTAS_TRIAGEM } = require('./ai-orchestrator');
+
+const SETOR = '11111111-1111-1111-1111-111111111111';
+const FATURA_ABERTA = { id: 5, value: 135, dueDate: '2026-09-10', status: 'aberta' };
+
+// A ação principal de cada ferramenta que limpa o escopo de terceiro. Nenhuma
+// delas pode ter rodado quando a limpeza falha. Note que são três funções
+// diferentes, de dois módulos diferentes — `completeTriage` NÃO serve para
+// nenhuma das três: ela pertence ao menu numérico antigo (triage.service.js),
+// que é mutuamente exclusivo com a triagem por IA.
+const ACAO_PRINCIPAL = {
+  concluir_triagem: concludeAiTriage,
+  encerrar_atendimento: closeConversationByAi,
+  esquecer_identificacao: setContactSgpLink,
+};
+
+/** Contexto de um turno de triagem já identificado, com o que cada teste variar. */
+function contextoDeTriagemCom(extra = {}) {
+  return {
+    conversationId: 'c1',
+    contact: { id: 'ct1', sgpDocument: '11122233344' },
+    contracts: [{ id: 1, address: 'Minha rua' }],
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', client: { id: 5 } },
+    ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+    registroFerramentas: [], sgpCache: {}, terceiro: null,
+    triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0, noturno: { ativo: false } },
+    ...extra,
+  };
+}
 
 describe('tool-registry', () => {
   test('registers exactly the known tools, sensitive ones included', () => {
@@ -1186,23 +1217,20 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     expect(c.identidade.primeiroNome).toBe('Agnieska');
   });
 
-  test('a identidade fica forte com os contratos do titular, para o boleto poder ser entregue', async () => {
-    const c = ctxTerceiro();
-    await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, c);
-    expect(c.identidade.nivel).toBe('forte');
-    expect(c.identidade.contracts).toEqual([{ id: 51, login: 'l', plan: 'p', statusCode: 1, address: 'RUA B, 2' }]);
-    expect(c.contracts).toEqual(c.identidade.contracts);
-  });
+  // Substituída em 2026-09-18 (Task 6): até então este teste provava a
+  // elevação indevida (nivel forte + contratos do titular dentro de
+  // contexto.identidade), que era exatamente o bug. Agora contexto.identidade
+  // sai intocado — ver describe('escopo de terceiro') logo abaixo, teste
+  // "buscar_cliente de terceiro NUNCA eleva a identidade de quem está
+  // falando", que prova o objeto inteiro intocado, e "buscar_cliente de
+  // terceiro cria o escopo..." para onde os contratos passaram a ir
+  // (contexto.terceiro, não contexto.identidade).
 
   test('a instrução proíbe "seu contrato" e manda dizer de quem é', async () => {
     const r = await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, ctxTerceiro());
     expect(r.instrucao).toMatch(/NUNCA diga "seu contrato"/);
     expect(r.instrucao).toMatch(/Jureildson/);
     expect(r.instrucao).toMatch(/registre no resumo que quem pediu não é o titular/);
-    // Print 2026-09-16: o cadastro do terceiro não é guardado, então no turno
-    // seguinte a IA pedia o CPF de novo. Ela precisa saber que basta rechamar.
-    expect(r.instrucao).toMatch(/Este cadastro NÃO fica guardado/);
-    expect(r.instrucao).toMatch(/chame buscar_cliente de novo com o mesmo CPF/);
   });
 
   test('sem o parâmetro, nada muda: o vínculo continua sendo gravado', async () => {
@@ -1217,6 +1245,126 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     expect(v({ cpf: '90460835315', titularEOutraPessoa: true }).args).toEqual({ cpf: '90460835315', titularEOutraPessoa: true });
     expect(v({ cpf: '90460835315' }).args).toEqual({ cpf: '90460835315', titularEOutraPessoa: false });
     expect(v({ cpf: '90460835315', titularEOutraPessoa: 'sim' }).args).toEqual({ cpf: '90460835315', titularEOutraPessoa: false });
+  });
+});
+
+// Ciclo de vida do escopo de terceiro (Task 6): criado por buscar_cliente com
+// titularEOutraPessoa, persistido na conversa por 30 minutos, e limpo ao
+// identificar o próprio contato, esquecer a identificação, concluir a triagem
+// ou encerrar o atendimento. Nunca eleva contexto.identidade nem substitui
+// contexto.contracts (que continua sendo só os contratos do próprio contato).
+describe('escopo de terceiro', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('buscar_cliente de terceiro cria o escopo e NÃO toca em contexto.contracts', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 77, status: 1, address: 'Rua da Maria' }],
+    });
+    const proprios = [{ id: 1, address: 'Minha rua' }];
+    const contexto = {
+      ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1',
+      contact: { id: 'ct1', sgpDocument: null }, contracts: proprios,
+      identidade: { nivel: 'forte', primeiroNome: 'João', origem: 'phone' },
+    };
+
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+    expect(r.ok).toBe(true);
+    expect(contexto.contracts).toBe(proprios);                 // intocado
+    expect(contexto.terceiro.contratos).toEqual([{ id: 77 }]);
+    expect(contexto.identidade.primeiroNome).toBe('João');     // quem fala continua sendo quem fala
+    expect(setContactSgpLink).not.toHaveBeenCalled();          // o terceiro nao vira dono do contato
+    expect(setThirdPartyScope).toHaveBeenCalledWith('c1', expect.objectContaining({ nome: 'Maria', contratos: [77] }));
+  });
+
+  // Digitar o CPF de outra pessoa nao pode promover ninguem. Ate 2026-09-17 este
+  // ramo escrevia nivel: 'forte' em contexto.identidade, elevando quem nem era
+  // cliente. A autorizacao mora no escopo, nunca na identidade do solicitante.
+  test('buscar_cliente de terceiro NUNCA eleva a identidade de quem está falando', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 77, status: 1 }],
+    });
+    const identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
+    const contexto = {
+      ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1',
+      contact: { id: 'ct1', sgpDocument: null }, contracts: [], identidade,
+    };
+
+    await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+    expect(contexto.identidade).toEqual(identidade);   // objeto inteiro intocado
+    expect(contexto.identidade.nivel).toBe('none');
+  });
+
+  // Falha fechado: sem gravacao no banco nao ha autorizacao neste turno.
+  test('se a gravação do escopo falhar, a ferramenta falha e o escopo não vale', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 77, status: 1 }],
+    });
+    setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+    const contexto = contextoDeTriagemCom({ contracts: [] });
+
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+    expect(r.ok).toBe(false);
+    expect(contexto.terceiro).toBeNull();
+  });
+
+  test.each(['concluir_triagem', 'encerrar_atendimento', 'esquecer_identificacao'])(
+    'se a limpeza do escopo falhar, %s aborta em vez de seguir com a autorização viva',
+    async (nome) => {
+      setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+      const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+      const args = nome === 'concluir_triagem' ? { setorId: SETOR, resumo: 'x', confianca: 0.9 } : {};
+
+      const r = await executeTool(nome, args, contexto);
+
+      expect(r.ok).toBe(false);
+      // A ação principal NÃO pode ter rodado: é isso que prova que o abort
+      // acontece ANTES dela, e não depois. `r.ok === false` sozinho não provaria
+      // — a ferramenta poderia ter concluído a triagem e falhado em seguida,
+      // deixando a conversa fora da triagem com a autorização de terceiro viva.
+      expect(ACAO_PRINCIPAL[nome]).not.toHaveBeenCalled();
+      expect(contexto.terceiro).not.toBeNull();   // nada foi dado por limpo
+    }
+  );
+
+  // Endereco do titular e dado cadastral de outra pessoa: nao vai ao modelo.
+  test('o retorno do buscar_cliente de terceiro não traz endereço nem status do titular', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 77, status: 4, address: 'Rua da Maria' }],
+    });
+    const contexto = {
+      ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1',
+      contact: { id: 'ct1' }, contracts: [], identidade: { nivel: 'forte', primeiroNome: 'João' },
+    };
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+    expect(JSON.stringify(r.resultado)).not.toMatch(/Rua da Maria/);
+    expect(r.resultado.contratos).toEqual([{ id: 77 }]);
+  });
+
+  test.each([
+    ['concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }],
+    ['encerrar_atendimento', {}],
+    ['esquecer_identificacao', {}],
+  ])('%s limpa o escopo de terceiro', async (nome, args) => {
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+    await executeTool(nome, args, contexto);
+    expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, null);
+  });
+
+  test('buscar_cliente sem a marcação de terceiro limpa um escopo anterior', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 5, name: 'JOAO', document: '11122233344' }, contracts: [{ id: 1, status: 1 }],
+    });
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+    await executeTool('buscar_cliente', { cpf: '11122233344' }, contexto);
+    expect(contexto.terceiro).toBeNull();
+    expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, null);
   });
 });
 

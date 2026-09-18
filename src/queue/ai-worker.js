@@ -4,8 +4,9 @@ const { createSuggestion } = require('../ai/ai-suggestion.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const {
   getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
-  closeConversationByAi,
+  closeConversationByAi, getThirdPartyScope, setThirdPartyScope,
 } = require('../conversations/conversation.repository');
+const { escopoValido, paraContexto } = require('../ai/third-party-scope');
 const { findContactById } = require('../conversations/contact.repository');
 const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation } = require('../conversations/message.repository');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
@@ -190,6 +191,22 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // SGP e cumprimentaria a mesma pessoa errada de novo.
   const ignorarTelefone = await isPhoneContested(conversation.id);
   const identidade = await resolverIdentidade({ contact, ignorarTelefone });
+
+  // O escopo do boleto de terceiro sobrevive ao turno: o titular pode ter duas
+  // faturas e o cliente precisa escolher uma. Expirado, morre aqui e a coluna é
+  // limpa — nunca fica um resto autorizando um contrato alheio.
+  let terceiro = null;
+  try {
+    const escopo = await getThirdPartyScope(conversation.id);
+    if (escopoValido(escopo)) {
+      terceiro = paraContexto(escopo);
+    } else if (escopo) {
+      await setThirdPartyScope(conversation.id, null);
+    }
+  } catch (err) {
+    console.error(`Failed to load the third party scope for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+  }
+
   // A identificação pode ter acabado de descobrir a cidade do cliente no SGP:
   // quando a mensagem chegou (inbound-message.service.js), o contato ainda
   // estava sem cidade e o aviso não tinha como sair. Aqui ele sai.
@@ -226,7 +243,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // ai-orchestrator.js) — nunca vai a log nem é persistido aqui; o worker só
   // olha turno.texto e turno.triagemConcluida.
   const turno = await runAiTurn({
-    conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade,
+    conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade, terceiro,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 

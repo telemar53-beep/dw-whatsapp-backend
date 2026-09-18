@@ -592,7 +592,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
   return linhas.join('\n');
 }
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -615,7 +615,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // propriedade (chaveProprietario).
     contexto = {
       conversationId: conversation.id, contact, contracts: identidadeEfetiva.contracts || [], sgpCache: {},
-      identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem, config), registroFerramentas: [],
+      identidade: identidadeEfetiva, terceiro, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem, config), registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
     };
     systemContent = await montarContextoTriagem(config, identidadeEfetiva, triagem, avisoCidade, empresa.name);
@@ -927,6 +927,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // código quando o turno estoura o tempo antes da resposta final.
     desbloqueioRealizado: Boolean(contexto.desbloqueioRealizado),
     identidade: contexto.identidade || null,
+    // O harness de simulação encadeia roteiros e precisa do escopo de saída; o
+    // worker ignora este campo, porque quem persiste é a própria ferramenta.
+    terceiro: contexto.terceiro || null,
   };
 }
 

@@ -7,8 +7,9 @@ const { findReasonById } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const {
   setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
-  markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
+  markPhoneContested, markTriageResolvedByAi, closeConversationByAi, setThirdPartyScope,
 } = require('../conversations/conversation.repository');
+const { montarEscopo, paraContexto } = require('./third-party-scope');
 const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
@@ -221,6 +222,23 @@ async function contratoDoCache(contexto, contratoId) {
   return achado;
 }
 
+/**
+ * Derruba a autorização sobre o contrato de terceiro. Falha FECHADO: se o banco
+ * não confirmar a limpeza, quem chamou precisa abortar. Um escopo que sobrevive
+ * a uma limpeza malsucedida é autorização viva sobre o contrato de um estranho,
+ * e reapareceria no próximo turno como se nada tivesse acontecido.
+ */
+async function limparEscopoDeTerceiro(contexto) {
+  try {
+    await setThirdPartyScope(contexto.conversationId, null);
+  } catch (err) {
+    console.error(`Failed to clear the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    return false;
+  }
+  contexto.terceiro = null;
+  return true;
+}
+
 const TOOLS = [
   {
     nome: 'buscar_cliente',
@@ -265,7 +283,6 @@ const TOOLS = [
       }
 
       const { client, contracts } = await sgpClient.lookupClientByCpf(args.cpf);
-      contexto.contracts = contracts;
 
       // No perfil de triagem, o CPF digitado já deixa a identidade forte,
       // com a cidade preenchida e o aviso de falha regional disparado aqui
@@ -278,22 +295,34 @@ const TOOLS = [
         // persistido, a cidade não é sobrescrita e quem fala continua sendo
         // chamado pelo próprio nome.
         if (args.titularEOutraPessoa) {
-          const nomeDeQuemFala = (contexto.identidade && contexto.identidade.primeiroNome) || null;
-          contexto.identidade = {
-            nivel: 'forte', origem: (contexto.identidade && contexto.identidade.origem) || 'cpf',
-            primeiroNome: nomeDeQuemFala, contracts,
-            client: { id: client.id, document: args.cpf }, contestado: false,
-            titular: { nome, terceiro: true },
-          };
+          // O CPF do titular abre o contrato dele — igual à segunda via do site do SGP —,
+          // mas NADA disso vira o contato: sem persistência no contato, sem cidade, sem
+          // trocar o nome de quem fala. E, principalmente, SEM MEXER EM
+          // contexto.identidade: quem está falando pode não ser cliente nenhum, e digitar
+          // o CPF de outra pessoa não pode elevar a identidade de ninguém. A autorização
+          // mora no escopo, não na identidade do solicitante.
+          const escopo = montarEscopo(nome, contracts);
+
+          // Falha fechado: a gravação vem ANTES de o escopo valer neste turno. Sem
+          // persistência não há autorização — nem agora nem no turno seguinte. Deixar o
+          // turno seguir com um escopo que o banco não conhece é o começo de um escopo
+          // órfão. O documento nunca entra no log.
+          try {
+            await setThirdPartyScope(contexto.conversationId, escopo);
+          } catch (err) {
+            console.error(`Failed to store the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+            return erro('third_party_scope_not_stored');
+          }
+          contexto.terceiro = paraContexto(escopo);
+
           return {
-            cliente: { nome },
-            contratos: contracts.map((c) => {
-              const n = normalizeContract(c);
-              return { id: c.id, status: n.status, endereco: n.endereco };
-            }),
-            instrucao: `O CPF é de OUTRA pessoa (${nome}), não de quem está falando. Pode seguir com fatura, boleto ou PIX desse contrato normalmente, mas NUNCA diga "seu contrato" nem "sua fatura": diga "localizei o contrato no CPF informado" e, ao entregar, diga de quem é ("o boleto do contrato de ${nome}"). Continue chamando quem fala pelo nome dela. Ao concluir, registre no resumo que quem pediu não é o titular. Este cadastro NÃO fica guardado no contato: se precisar dele de novo no próximo turno, chame buscar_cliente de novo com o mesmo CPF e titularEOutraPessoa: true.`,
+            titular: { nome },
+            contratos: contracts.map((c) => ({ id: c.id })),
+            instrucao: `O CPF é de OUTRA pessoa (${nome}), não de quem está falando. Você pode consultar a fatura e entregar o boleto ou o PIX desse contrato; plano, conexão e status do contrato dela não podem ser consultados. NUNCA diga "seu contrato" nem "sua fatura": diga que localizou o contrato no CPF informado e, ao entregar, diga de quem é ("o boleto do contrato de ${nome}"). Continue chamando quem fala pelo nome dela. Ao concluir, registre no resumo que quem pediu não é o titular.`,
           };
         }
+        contexto.contracts = contracts;
+        if (!(await limparEscopoDeTerceiro(contexto))) return erro('third_party_scope_not_cleared');
         contexto.identidade = {
           nivel: 'forte', origem: 'cpf', primeiroNome: nome, contracts,
           client: { id: client.id, document: args.cpf }, contestado: false,
@@ -333,6 +362,7 @@ const TOOLS = [
       // vínculo é persistido de imediato — o guard de "troca de cliente" do
       // executor (que lê contexto.contact.sgpDocument) depende disso para
       // disparar dentro do mesmo turno.
+      contexto.contracts = contracts;
       await setContactSgpLink(contexto.contact.id, {
         sgpClientId: client.id,
         sgpContractId: contracts.length === 1 ? contracts[0].id : null,
@@ -1119,6 +1149,13 @@ const TOOLS = [
       // permissões do assistente clássico bastaria para alcançar uma
       // ferramenta pensada só para a recepcionista da triagem.
       if (!perfilTriagem(contexto)) return erro('esquecer_identificacao is only available during AI triage');
+      // Antes de concluir/encerrar/esquecer, e não depois: se a limpeza falhar, o
+      // atendimento NÃO avança. Concluir com uma autorização de terceiro ainda viva
+      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
+      // da triagem.
+      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+        return erro('third_party_scope_not_cleared');
+      }
       contexto.identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], client: null, contestado: true };
       contexto.contracts = [];
       if (contexto.contact) {
@@ -1263,6 +1300,13 @@ const TOOLS = [
       // esquecer_identificacao — concluir_triagem só existe para a
       // recepcionista da triagem, nunca para o assistente clássico.
       if (!perfilTriagem(contexto)) return erro('concluir_triagem is only available during AI triage');
+      // Antes de concluir/encerrar/esquecer, e não depois: se a limpeza falhar, o
+      // atendimento NÃO avança. Concluir com uma autorização de terceiro ainda viva
+      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
+      // da triagem.
+      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+        return erro('third_party_scope_not_cleared');
+      }
       // A entrega (boleto/PIX) pode ter sido num turno ANTERIOR, e
       // contexto.resolvidoPelaIa só conhece este turno. Leitura extra de
       // propósito: a releitura que já existe aqui embaixo acontece DEPOIS do
@@ -1356,6 +1400,13 @@ const TOOLS = [
     },
     async executar(args, contexto) {
       if (!perfilTriagem(contexto)) return erro('encerrar_atendimento is only available during AI triage');
+      // Antes de concluir/encerrar/esquecer, e não depois: se a limpeza falhar, o
+      // atendimento NÃO avança. Concluir com uma autorização de terceiro ainda viva
+      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
+      // da triagem.
+      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+        return erro('third_party_scope_not_cleared');
+      }
       // Sem motivo escolhido pelo admin — ou com o motivo desativado depois de
       // escolhido — o encerramento pela IA simplesmente não existe: tudo
       // segue como hoje (encaminha ao setor).

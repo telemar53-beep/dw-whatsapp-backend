@@ -487,3 +487,48 @@ describe('tool-executor — orçamento de tempo declarado pela ferramenta', () =
     expect(result.motivo).toBe('timeout');
   });
 });
+
+describe('tool-executor — contratoId dedutível com um contrato só (Task 10)', () => {
+  // Usa o tool-registry de verdade: o que está sob teste é o validar/
+  // chaveProprietario reais de consultar_status_conexao e enviar_boleto, não
+  // um toolFake() genérico (que sempre finge ser consultar_plano).
+  const registroReal = jest.requireActual('./tool-registry');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findTool.mockImplementation((nomeConsultado) => registroReal.findTool(nomeConsultado));
+  });
+
+  test('contratoId ausente com um contrato só é preenchido pelo sistema', async () => {
+    const contexto = {
+      ferramentasPermitidas: ['consultar_status_conexao'], contracts: [{ id: 42 }], contact: {},
+      identidade: { nivel: 'forte' }, conversationId: 'c1',
+    };
+    await executeTool('consultar_status_conexao', {}, contexto);
+    expect(sgpClient.checkConnection).toHaveBeenCalledWith(42);
+  });
+
+  test('contratoId ausente com vários contratos continua sendo erro de argumento', async () => {
+    const contexto = {
+      ferramentasPermitidas: ['consultar_status_conexao'], contracts: [{ id: 1 }, { id: 2 }], contact: {},
+      identidade: { nivel: 'forte' }, conversationId: 'c1',
+    };
+    const r = await executeTool('consultar_status_conexao', {}, contexto);
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('invalid_args');
+  });
+
+  // O preenchimento nunca pode alcançar um contrato de terceiro: ele exige
+  // escolha explícita do modelo. contracts (próprios) fica vazio de propósito —
+  // só o terceiro tem contrato aqui, e mesmo assim não é usado para preencher.
+  test('contratoId ausente nunca é preenchido com um contrato de terceiro', async () => {
+    const contexto = {
+      ferramentasPermitidas: ['enviar_boleto'], contracts: [], contact: {},
+      terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
+      identidade: { nivel: 'forte' }, conversationId: 'c1',
+    };
+    const r = await executeTool('enviar_boleto', {}, contexto);
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('invalid_args');
+  });
+});

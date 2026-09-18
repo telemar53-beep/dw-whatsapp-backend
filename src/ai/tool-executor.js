@@ -78,6 +78,17 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       return recusa('tool_disabled', nome);
     }
 
+    // Com um contrato só, o contratoId é dedutível — e obrigar o modelo a escolher
+    // um número que ele não vê direito é de onde vinham escolhas erradas e
+    // perguntas desnecessárias ao cliente. Só os contratos PRÓPRIOS entram aqui: um
+    // contrato de terceiro sempre exige escolha explícita.
+    const proprios = (contexto && contexto.contracts) || [];
+    if (tool.chaveProprietario === 'contratoId'
+        && (!args || args.contratoId === undefined || args.contratoId === null)
+        && proprios.length === 1) {
+      args = { ...(args || {}), contratoId: proprios[0].id };
+    }
+
     const validacao = tool.validar(args);
     if (!validacao.ok) return recusa('invalid_args', validacao.erro);
     const argsValidados = validacao.args;

@@ -407,7 +407,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -424,7 +424,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -440,7 +440,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -457,7 +457,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -473,7 +473,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -710,7 +710,7 @@ const TOOLS = [
     exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -761,7 +761,7 @@ const TOOLS = [
     exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -842,7 +842,7 @@ const TOOLS = [
     exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -1207,7 +1207,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     exigeIdentidadeForte: true,
     timeoutMs: 40000,
-    parametros: { type: 'object', properties: { contratoId: { type: 'integer' } }, required: ['contratoId'] },
+    parametros: { type: 'object', properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } }, required: ['contratoId'] },
     validar: validarContratoId,
     async executar(args, contexto) {
       // Fora da triagem não há gate nem instrução própria para o modelo saber

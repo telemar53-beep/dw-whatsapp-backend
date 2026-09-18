@@ -4,8 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const { montarContexto } = require('../src/ai/prompt/montar');
 // FERRAMENTAS_TRIAGEM e FERRAMENTAS_TRIAGEM_NOTURNO já são exportadas por
-// ai-orchestrator.js (brief da Task 12); o próprio construtor antigo não é
-// tocado, só consultado pelas constantes que ele expõe.
+// ai-orchestrator.js. Desde a Task 18 ele não tem mais construtor próprio de
+// prompt: o contexto da triagem vem deste mesmo montarContexto, então o que
+// este script renderiza é literalmente o que a produção manda à OpenAI.
 const { FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO } = require('../src/ai/ai-orchestrator');
 
 const CENARIOS = {

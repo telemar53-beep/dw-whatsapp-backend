@@ -45,6 +45,51 @@ test('privacidade e terceiros são selecionados nos dois estados de identidade',
   }
 });
 
+// =====================================================================
+// Task 18 — asserts de COMPOSIÇÃO migrados de ai-orchestrator.test.js
+// =====================================================================
+// Estes seis asserts não eram sobre o conteúdo de um módulo: eram sobre QUAL
+// módulo entra em QUAL estado. No construtor antigo isso só dava para testar
+// pelo texto do prompt inteiro; aqui é o próprio contrato do compositor.
+
+// Antes: ai-orchestrator.test.js:581 e :630. O bloco noturno é o que autoriza
+// a IA a atender sozinha e a prometer o retorno da equipe: de dia ele não pode
+// existir, nem quando a leitura de comprovante de dia está ligada (a flag
+// acrescenta UMA ferramenta, não o modo noturno).
+test('de dia o prompt não tem o bloco noturno, nem com a leitura de comprovante de dia ligada', () => {
+  expect(montarContexto(estadoBase())).not.toMatch(/MODO NOTURNO/);
+  const comLeituraDeDia = montarContexto(estadoBase({
+    ferramentas: ['buscar_cliente', 'concluir_triagem', 'analisar_comprovante'],
+    triagem: { noturno: { ativo: false }, forcarConclusao: false },
+  }));
+  expect(comLeituraDeDia).not.toMatch(/MODO NOTURNO/);
+  expect(comLeituraDeDia).toMatch(/chame analisar_comprovante/);
+});
+
+// Antes: ai-orchestrator.test.js:794 e :797. Teste real 2026-09-13: cliente já
+// vinculado ouviu "me informe seu CPF" porque o SGP não respondeu. Com
+// sgpIndisponivel a identidade CONTINUA valendo — o que cai são os módulos que
+// dependeriam do SGP. Pedir CPF de novo a quem já foi chamado pelo nome é o
+// pior desfecho possível.
+test('com SGP indisponível, nem o pedido de documento nem o fluxo financeiro entram', () => {
+  const texto = montarContexto(estadoBase({
+    identidade: { nivel: 'forte', origem: 'memory', primeiroNome: '[nome]', contracts: [], contestado: false, sgpIndisponivel: true },
+  }));
+  expect(texto).not.toMatch(/me informe seu CPF ou CNPJ/);
+  expect(texto).not.toMatch(/Identidade JÁ confirmada/);
+  // E o que SOBRA é o único caminho possível: cumprimentar, avisar, encaminhar.
+  expect(texto).toMatch(/SGP indisponível na triagem/);
+});
+
+// Antes: ai-orchestrator.test.js:1867-1868. Sem falha regional ativa, nenhuma
+// das duas linhas do aviso pode aparecer: elas suprimem o roteiro de
+// diagnóstico inteiro, e suprimi-lo sem motivo deixa o cliente sem atendimento.
+test('sem aviso de cidade, nenhuma linha de falha regional entra no prompt', () => {
+  const texto = montarContexto(estadoBase());
+  expect(texto).not.toMatch(/AVISO ATIVO NA CIDADE DO CLIENTE/);
+  expect(texto).not.toMatch(/falha regional em andamento/);
+});
+
 test('todo módulo declara nome, entra e linhas', () => {
   for (const m of MODULOS) {
     expect(typeof m.nome).toBe('string');

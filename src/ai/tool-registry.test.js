@@ -27,7 +27,7 @@ const { listSectors } = require('../sectors/sector.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const {
   setConversationSector, setSuggestedReason, concludeAiTriage, getConversationWithContact,
-  incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
+  markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
   setTriagePendingDocument,
 } = require('../conversations/conversation.repository');
 const { setContactSgpLink } = require('../conversations/contact.repository');
@@ -53,7 +53,7 @@ describe('tool-registry', () => {
   test('registers exactly the known tools, sensitive ones included', () => {
     const nomes = listTools().map((t) => t.nome).sort();
     expect(nomes).toEqual([
-      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas',
+      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'consultar_faturas',
       'consultar_faturas_todos_contratos', 'consultar_financeiro',
       'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
       'consultar_status_todos_contratos',
@@ -102,11 +102,11 @@ describe('tool-registry', () => {
     // consultar_faturas_todos_contratos entrou porque não recebe id nenhum do
     // modelo: percorre contexto.contracts, carregado pelo servidor a partir do
     // CPF do próprio contato — não há valor vindo do modelo para conferir.
-    // confirmar_nascimento, esquecer_identificacao e concluir_triagem entraram
-    // pela mesma razão: nenhuma das três recebe um contratoId (ou qualquer id
-    // de posse) do modelo — atuam sobre contexto.identidade/conversationId,
-    // que o servidor já resolveu, não sobre algo que precise ser conferido
-    // contra os contratos do cliente.
+    // esquecer_identificacao e concluir_triagem entraram pela mesma razão:
+    // nenhuma das duas recebe um contratoId (ou qualquer id de posse) do
+    // modelo — atuam sobre contexto.identidade/conversationId, que o servidor
+    // já resolveu, não sobre algo que precise ser conferido contra os
+    // contratos do cliente.
     // encerrar_atendimento entrou pelo mesmo motivo: nao recebe argumento
     // nenhum do modelo e so age sobre contexto.conversationId.
     // consultar_status_todos_contratos entrou pela mesma razao de
@@ -117,7 +117,7 @@ describe('tool-registry', () => {
     // mandou NESTA conversa, escolhida pelo servidor.
     const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
     expect(isentas).toEqual([
-      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento',
+      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem',
       'consultar_faturas_todos_contratos',
       'consultar_status_todos_contratos', 'definir_motivo_atendimento', 'encerrar_atendimento',
       'esquecer_identificacao', 'transferir_atendimento',
@@ -180,6 +180,32 @@ describe('tool-registry', () => {
     const tool = findTool('transferir_atendimento');
     expect(tool.validar({ setorId: 'a'.repeat(36), resumo: 'resumo' }).ok).toBe(false);
     expect(tool.validar({ setorId: '11111111-1111-1111-1111-111111111111', resumo: 'resumo' }).ok).toBe(true);
+  });
+
+  // A ferramenta e o nível de identidade fraca foram removidos: o CPF digitado
+  // já basta para deixar a identidade forte (ver describe 'buscar_cliente na
+  // triagem' mais abaixo).
+  const todasAsFerramentas = () => toOpenAiTools(listTools().map((t) => t.nome));
+
+  test('confirmar_nascimento não existe mais no registro de ferramentas', () => {
+    expect(findTool('confirmar_nascimento')).toBeNull();
+    expect(todasAsFerramentas().map((t) => t.function.name)).not.toContain('confirmar_nascimento');
+  });
+
+  test('nenhuma descrição ou parâmetro de ferramenta menciona nascimento', () => {
+    expect(JSON.stringify(todasAsFerramentas())).not.toMatch(/nascimento/i);
+  });
+
+  test('buscar_cliente deixa a identidade forte e não devolve proximoPasso', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 9, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 1, status: 1, address: 'Rua A' }],
+    });
+    const contexto = { ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1', contact: { id: 'ct1' }, identidade: { nivel: 'none' } };
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725' }, contexto);
+    expect(r.ok).toBe(true);
+    expect(r.resultado.proximoPasso).toBeUndefined();
+    expect(contexto.identidade.nivel).toBe('forte');
   });
 });
 
@@ -1069,212 +1095,6 @@ describe('desbloqueio_confianca — modo noturno', () => {
   });
 });
 
-describe('confirmar_nascimento', () => {
-  // client/contracts/document presentes: precisos para o setContactSgpLink
-  // que a confirmação bem-sucedida agora dispara (fix round 1, C1).
-  const ctx = (extra = {}) => ({
-    conversationId: 'conv-1', contact: { id: 'ct-1' },
-    identidade: {
-      nivel: 'fraca', origem: 'cpf', primeiroNome: 'Maria', dataNascimento: '1990-05-20', nascimentoTentado: false,
-      client: { id: 9, document: '11122233344' }, contracts: [{ id: 5 }],
-    },
-    ...extra,
-  });
-  beforeEach(() => {
-    jest.clearAllMocks();
-    incrementBirthdateAttempts.mockResolvedValue(1);
-    // confirmar_nascimento só existe com a exigência LIGADA: desligada (o
-    // padrão) o próprio buscar_cliente já deixa a identidade forte.
-    getAiConfig.mockResolvedValue({ triageRequireBirthdate: true });
-  });
-
-  test('data certa em DD/MM/AAAA eleva para forte e persiste o vínculo do contato', async () => {
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(true);
-    expect(c.identidade.nivel).toBe('forte');
-    expect(c.identidade.origem).toBe('cpf_confirmed');
-    // C1 (fix round 1): antes da confirmação o vínculo não existe; só agora,
-    // com a data batida, é seguro persistir (senão o próximo turno leria
-    // memory/forte de um CPF que nunca foi confirmado).
-    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: 9, sgpContractId: 5, sgpDocument: '11122233344', sgpFirstName: 'Maria' });
-    expect(c.contact.sgpDocument).toBe('11122233344');
-  });
-  test('sucesso preenche a cidade do contato com a do contrato', async () => {
-    // Só aqui, depois da data batida: antes disso o CPF podia ser de outra
-    // pessoa e a cidade dela não pode encostar neste contato.
-    const c = ctx();
-    await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(preencherCidadePeloSgp).toHaveBeenCalledWith(c.contact, c.identidade.contracts);
-  });
-  test('sucesso manda o aviso da cidade recém-descoberta, no mesmo turno', async () => {
-    // A cidade nasceu agora, no meio do turno: sem isto o cliente só receberia
-    // o aviso da falha regional na próxima mensagem que mandasse.
-    const c = { ...ctx(), channelId: 'ch-1' };
-    await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(enviarAvisoDeCidadeSePreciso).toHaveBeenCalledWith({
-      contact: c.contact, conversationId: 'conv-1', channelId: 'ch-1',
-    });
-  });
-  test('falha ao mandar o aviso da cidade não derruba a confirmação', async () => {
-    enviarAvisoDeCidadeSePreciso.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(true);
-    erroSpy.mockRestore();
-  });
-  test('data errada não preenche cidade nenhuma', async () => {
-    const c = ctx();
-    await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(preencherCidadePeloSgp).not.toHaveBeenCalled();
-    expect(enviarAvisoDeCidadeSePreciso).not.toHaveBeenCalled();
-  });
-  test('falha ao preencher a cidade não derruba a confirmação', async () => {
-    preencherCidadePeloSgp.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(true);
-    erroSpy.mockRestore();
-  });
-  test('sucesso limpa o CPF pendente da conversa (a identidade agora vive no vínculo do contato)', async () => {
-    const c = ctx();
-    await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
-  });
-  test('falha ao limpar o CPF pendente não derruba a confirmação já persistida', async () => {
-    setTriagePendingDocument.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(true);
-    expect(c.identidade.nivel).toBe('forte');
-    erroSpy.mockRestore();
-  });
-  test('data errada NÃO limpa o CPF pendente (o cliente ainda pode tentar de novo)', async () => {
-    const c = ctx();
-    await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(setTriagePendingDocument).not.toHaveBeenCalled();
-  });
-  // Defeito C: os contratos só chegam ao modelo DEPOIS da confirmação — e com
-  // endereço, que é o que o cliente reconhece. O número segue existindo só
-  // para as ferramentas.
-  test('sucesso devolve os contratos com endereço e a instrução de seguir', async () => {
-    const c = ctx();
-    c.identidade.contracts = [
-      { id: 5, statusCode: 1, address: 'RUA X, 10' },
-      { id: 6, statusCode: 4, address: 'AV Y, 20' },
-    ];
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.contratos).toEqual([
-      { id: 5, status: 'ativo', endereco: 'RUA X, 10' },
-      { id: 6, status: 'suspenso', endereco: 'AV Y, 20' },
-    ]);
-    expect(r.instrucao).toBe('Identidade confirmada. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.');
-  });
-
-  test('aceita AAAA-MM-DD e D/M/AA', async () => {
-    for (const data of ['1990-05-20', '20/5/90']) {
-      const c = ctx();
-      expect((await findTool('confirmar_nascimento').executar({ data }, c)).confirmado).toBe(true);
-    }
-  });
-  test('data errada mantém fraca e não persiste vínculo nenhum', async () => {
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(r.confirmado).toBe(false);
-    expect(c.identidade.nivel).toBe('fraca');
-    expect(setContactSgpLink).not.toHaveBeenCalled();
-  });
-  test('identidade já forte: confirma sem comparar, sem contar tentativa e sem mudar a origem', async () => {
-    const c = { conversationId: 'c-1', identidade: { nivel: 'forte', origem: 'phone', dataNascimento: '1990-05-20' } };
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(r.confirmado).toBe(true);
-    expect(r.jaConfirmada).toBe(true);
-    expect(c.identidade.origem).toBe('phone');
-    expect(incrementBirthdateAttempts).not.toHaveBeenCalled();
-  });
-
-  test('sem data de nascimento no cadastro, não confirma, explica e não conta tentativa', async () => {
-    const c = { identidade: { nivel: 'fraca', dataNascimento: null, nascimentoTentado: false } };
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(false);
-    expect(incrementBirthdateAttempts).not.toHaveBeenCalled();
-    // Defeito B: o retorno seco fazia o modelo encaminhar em silêncio. Agora
-    // ele recebe a instrução do que dizer E do que chamar na mesma resposta.
-    expect(r.semDataNoCadastro).toBe(true);
-    expect(r.motivo).toBe('O cadastro não tem data de nascimento para conferir.');
-    expect(r.instrucao).toBe('Diga ao cliente que não foi possível confirmar a identidade pelo chat e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.');
-  });
-
-  test('data errada com tentativa sobrando manda pedir a data de novo', async () => {
-    incrementBirthdateAttempts.mockResolvedValue(1);
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, ctx());
-    expect(r).toEqual({
-      confirmado: false,
-      tentativasRestantes: 1,
-      instrucao: 'Diga que a data não confere e peça a data de nascimento mais uma vez.',
-    });
-  });
-
-  test('data errada na última tentativa manda encaminhar na mesma resposta', async () => {
-    incrementBirthdateAttempts.mockResolvedValue(2);
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, ctx());
-    expect(r.confirmado).toBe(false);
-    expect(r.tentativasRestantes).toBeUndefined();
-    expect(r.instrucao).toBe('Diga que não foi possível confirmar a identidade e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.');
-  });
-  // Fix round 2: incrementBirthdateAttempts devolve 0 quando a conversa não
-  // é encontrada — e 0 > 2 é falso, então sem esta checagem extra o contador
-  // "falhando" deixaria passar como se fosse a primeira tentativa. Falha
-  // fechado: sem contador confiável, recusa.
-  test('contador devolvendo 0 (conversa não encontrada) recusa em vez de deixar passar', async () => {
-    incrementBirthdateAttempts.mockResolvedValue(0);
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(false);
-    expect(r.motivo).toMatch(/não foi possível registrar/i);
-    expect(setContactSgpLink).not.toHaveBeenCalled();
-    expect(c.identidade.nivel).toBe('fraca');
-  });
-  test('o resultado nunca contém a data cadastrada', async () => {
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(JSON.stringify(r)).not.toContain('1990');
-  });
-
-  // I2 (fix round 1): o limite de tentativas era um campo em memória
-  // (nascimentoTentado) que zerava com esquecer_identificacao — o cliente
-  // podia tentar de novo só chamando esquecer_identificacao + buscar_cliente.
-  // Agora é contado no banco, por conversationId, e sobrevive a isso.
-  test('terceira tentativa é recusada mesmo depois de esquecer_identificacao + buscar_cliente de novo', async () => {
-    incrementBirthdateAttempts
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce(3);
-    const c = ctx();
-
-    const primeira = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(primeira.confirmado).toBe(false);
-
-    await findTool('esquecer_identificacao').executar({}, c);
-
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'Maria Souza', document: '11122233344' }, contracts: [{ id: 5 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1990-05-20' } });
-    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-
-    const segunda = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(segunda.confirmado).toBe(false);
-
-    const terceira = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(terceira.confirmado).toBe(false);
-    expect(terceira.motivo).toMatch(/limite de tentativas/i);
-    expect(incrementBirthdateAttempts).toHaveBeenCalledTimes(3);
-    expect(incrementBirthdateAttempts).toHaveBeenCalledWith('conv-1');
-  });
-});
-
 describe('esquecer_identificacao', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -1310,35 +1130,6 @@ describe('esquecer_identificacao', () => {
     };
     await findTool('esquecer_identificacao').executar({}, c);
     expect(markPhoneContested).toHaveBeenCalledWith('conv-1');
-  });
-
-  test('limpa também o CPF pendente da conversa', async () => {
-    const c = {
-      identidade: { nivel: 'fraca', origem: 'cpf', primeiroNome: 'João' },
-      contracts: [],
-      contact: { id: 'ct-1', sgpDocument: null, sgpClientId: null, sgpContractId: null },
-      conversationId: 'conv-1',
-    };
-    await findTool('esquecer_identificacao').executar({}, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
-  });
-
-  // O CPF pendente é a identidade inteira depois de buscar_cliente: se
-  // markPhoneContested falhar e levar a limpeza dele junto, o CPF descartado
-  // ressuscita como identidade fraca no turno seguinte — exatamente o que
-  // esquecer_identificacao acabou de desfazer.
-  test('markPhoneContested falhando ainda assim limpa o CPF pendente', async () => {
-    markPhoneContested.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = {
-      identidade: { nivel: 'fraca', origem: 'cpf', primeiroNome: 'João' },
-      contracts: [],
-      contact: { id: 'ct-1', sgpDocument: null, sgpClientId: null, sgpContractId: null },
-      conversationId: 'conv-1',
-    };
-    await findTool('esquecer_identificacao').executar({}, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
-    erroSpy.mockRestore();
   });
 
   test('markPhoneContested falhando não derruba a limpeza em memória nem do vínculo', async () => {
@@ -1434,50 +1225,6 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
 describe('buscar_cliente no perfil de triagem', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Este bloco cobre o comportamento com a EXIGENCIA LIGADA: CPF digitado
-    // vale como identidade fraca ate a data de nascimento bater. Com a flag
-    // desligada (o padrao) o ramo e outro, no bloco logo abaixo.
-    getAiConfig.mockResolvedValue({ triageRequireBirthdate: true });
-  });
-
-  test('atualiza a identidade para fraca com primeiro nome e data de nascimento no servidor, sem persistir vínculo', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, login: 'l', plan: 'p', statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(c.identidade).toMatchObject({ nivel: 'fraca', origem: 'cpf', primeiroNome: 'Maria', dataNascimento: '1985-01-02', nascimentoTentado: false });
-    expect(JSON.stringify(r)).not.toContain('1985');
-    // C1 (fix round 1): CPF ainda não confirmado — nada é persistido. Sem
-    // isto, o próximo turno leria contact.sgpDocument e resolveria
-    // identidade FORTE por memória, pulando confirmar_nascimento de vez.
-    expect(setContactSgpLink).not.toHaveBeenCalled();
-    expect(c.contact.sgpDocument).toBeUndefined();
-  });
-
-  test('grava o CPF digitado na conversa, para o próximo turno reconstruir a identidade fraca', async () => {
-    // Defeito A: sem isto, resolverIdentidade devolvia 'none' no turno
-    // seguinte e o modelo pedia o CPF de novo.
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', '11122233344');
-  });
-
-  test('falha ao gravar o CPF pendente não derruba a busca (o turno atual ainda vale)', async () => {
-    // Perder a persistência é voltar ao comportamento antigo; perder o turno
-    // inteiro é pior — o cliente acabou de digitar o CPF.
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    setTriagePendingDocument.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(r.cliente).toEqual({ nome: 'Maria' });
-    expect(c.identidade.nivel).toBe('fraca');
-    // O CPF nunca vai a log.
-    expect(erroSpy.mock.calls.map((a) => JSON.stringify(a)).join(' ')).not.toContain('11122233344');
-    erroSpy.mockRestore();
   });
 
   test('no perfil assistente NÃO grava CPF pendente (a coluna é só da triagem)', async () => {
@@ -1485,39 +1232,6 @@ describe('buscar_cliente no perfil de triagem', () => {
     const c = { conversationId: 'conv-1', contact: { id: 'ct-1' } };
     await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
     expect(setTriagePendingDocument).not.toHaveBeenCalled();
-  });
-
-  // C2 (fix round 1): na triagem as palavras do modelo vão direto ao
-  // cliente — o sobrenome completo e o login PPPoE não podem vazar ali.
-  test('não devolve sobrenome nem login PPPoE ao modelo', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, login: 'joao123', plan: '600MB', statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    // I5 (revisão final do branch inteiro): a triagem não devolve mais o
-    // plano contratado ao modelo — só id e status, o suficiente para
-    // classificar sem entregar dado sensível a uma identidade ainda fraca.
-    // Defeito C (teste real 2026-09-14): com a lista de contratos na mão, o
-    // modelo citava "contrato 2354" e perguntava "qual contrato" mesmo com um
-    // contrato só. Antes da confirmação ele recebe só a quantidade.
-    expect(r).toEqual({
-      cliente: { nome: 'Maria' },
-      quantidadeContratos: 1,
-      proximoPasso: 'Identificação por CPF ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento. NÃO cite contrato, endereço nem plano; NÃO pergunte qual contrato.',
-    });
-    expect(JSON.stringify(r)).not.toContain('SOUZA');
-    expect(JSON.stringify(r)).not.toContain('joao123');
-    expect(JSON.stringify(r)).not.toContain('5');
-  });
-
-  test('os contratos continuam no contexto (o executor e o pós-confirmação precisam deles)', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1 }, { id: 6, statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(r.quantidadeContratos).toBe(2);
-    expect(c.contracts).toEqual([{ id: 5, statusCode: 1 }, { id: 6, statusCode: 1 }]);
-    expect(c.identidade.contracts).toEqual([{ id: 5, statusCode: 1 }, { id: 6, statusCode: 1 }]);
   });
 
   test('sem identidade no contexto (assistente) não muda nada e persiste o vínculo de imediato', async () => {
@@ -1563,34 +1277,16 @@ describe('buscar_cliente no perfil de triagem', () => {
     expect(r3.cliente).toBeDefined();
     expect(sgpClient.lookupClientByCpf).toHaveBeenCalledTimes(3);
   });
-
-  // Fix round 2 (discriminator alignment): a checagem antiga usava
-  // `contexto.identidade` diretamente. Se o runner de triagem (Task 4)
-  // algum dia passasse `identidade: null` (falsy, mas o perfil ainda É de
-  // triagem, porque ferramentasPermitidas está presente), buscar_cliente
-  // cairia no ramo assistente por engano — persistindo o vínculo e
-  // devolvendo o nome completo. perfilTriagem() usa o mesmo discriminador do
-  // executor (ferramentasPermitidas OU identidade) para não reabrir C1/C2.
-  test('com ferramentasPermitidas e identidade: null, ainda usa o ramo de triagem', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, login: 'l', plan: 'p', statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { contact: { id: 'ct-1' }, ferramentasPermitidas: ['buscar_cliente'], identidade: null };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(r).toEqual({ cliente: { nome: 'Maria' }, quantidadeContratos: 1, proximoPasso: expect.stringContaining('confirmar_nascimento') });
-    expect(setContactSgpLink).not.toHaveBeenCalled();
-    expect(c.contact.sgpDocument).toBeUndefined();
-  });
 });
 
 describe('buscar_cliente na triagem com a data de nascimento dispensada (padrao)', () => {
   // Decisao do dono (2026-09-14): "o dado mais importante e o CPF; no site do
-  // SGP o cliente loga so com ele". Com triageRequireBirthdate desligado, o CPF
-  // digitado ja identifica e libera boleto/PIX.
+  // SGP o cliente loga so com ele". O CPF digitado ja identifica e libera
+  // boleto/PIX direto, sem confirmação nenhuma.
   const CLIENTE = { client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1, address: 'RUA X, 10' }] };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    getAiConfig.mockResolvedValue({ triageRequireBirthdate: false });
     sgpClient.lookupClientByCpf.mockResolvedValue(CLIENTE);
   });
 
@@ -1624,12 +1320,6 @@ describe('buscar_cliente na triagem com a data de nascimento dispensada (padrao)
     });
   });
 
-  test('limpa qualquer CPF pendente: nao ha mais o que confirmar', async () => {
-    const c = ctx();
-    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
-  });
-
   test('devolve os contratos com endereco e a instrucao de seguir', async () => {
     sgpClient.lookupClientByCpf.mockResolvedValue({
       client: { id: 9, name: 'MARIA SOUZA', document: '1' },
@@ -1659,16 +1349,6 @@ describe('buscar_cliente na triagem com a data de nascimento dispensada (padrao)
     expect(c.identidade.nivel).toBe('forte');
     expect(r.cliente).toEqual({ nome: 'Maria' });
     expect(erroSpy.mock.calls.map((a) => JSON.stringify(a)).join(' ')).not.toContain('11122233344');
-    erroSpy.mockRestore();
-  });
-
-  test('falha ao limpar o CPF pendente nao derruba a identificacao', async () => {
-    setTriagePendingDocument.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = ctx();
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(c.identidade.nivel).toBe('forte');
-    expect(r.cliente).toEqual({ nome: 'Maria' });
     erroSpy.mockRestore();
   });
 });

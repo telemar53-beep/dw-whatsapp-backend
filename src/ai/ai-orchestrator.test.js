@@ -19,7 +19,10 @@ const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
 const { getCompanyConfig } = require('../company/company-config.repository');
-const { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA } = require('./ai-orchestrator');
+const {
+  runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA,
+  ferramentasDaTriagem,
+} = require('./ai-orchestrator');
 
 const CONVERSATION = { id: 'c-1', channelId: 'ch-1' };
 const CONTACT = { id: 'ct-1', sgpClientId: null, sgpContractId: null, sgpDocument: null };
@@ -547,7 +550,7 @@ describe('perfil de triagem', () => {
     expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM].sort());
     expect(nomes).not.toContain('desbloqueio_confianca');
     // Nominal: nenhuma ferramenta do assistente clássico (fora da lista fixa
-    // de onze) pode vazar para a triagem por engano.
+    // de dez) pode vazar para a triagem por engano.
     expect(FERRAMENTAS_TRIAGEM).not.toEqual(expect.arrayContaining([
       'consultar_plano', 'transferir_atendimento', 'definir_motivo_atendimento',
       'desbloqueio_confianca', 'consultar_financeiro', 'consultar_faturas',
@@ -557,6 +560,17 @@ describe('perfil de triagem', () => {
     // lista, o modelo dizia "enviei acima o boleto" sem nenhum envio. Na
     // triagem quem entrega é enviar_boleto; a segunda via fica no assistente.
     expect(FERRAMENTAS_TRIAGEM).not.toContain('gerar_segunda_via');
+  });
+
+  // A ferramenta e o nível de identidade fraca foram removidos: não há mais
+  // configuração nenhuma (flag ligada/desligada, dia/noite) que a traga de
+  // volta à lista da triagem.
+  test('confirmar_nascimento não entra na lista da triagem em nenhuma configuração', () => {
+    for (const config of [{ triageRequireBirthdate: true }, { triageRequireBirthdate: false }, {}]) {
+      for (const triagem of [{ noturno: { ativo: true } }, { noturno: { ativo: false } }]) {
+        expect(ferramentasDaTriagem(triagem, config)).not.toContain('confirmar_nascimento');
+      }
+    }
   });
 
   describe('perfil noturno', () => {
@@ -1054,12 +1068,6 @@ describe('perfil de triagem', () => {
     });
   });
 
-  test('com a exigência ligada, confirmar_nascimento continua na lista', async () => {
-    const nomes = (await contexto()).tools.map((t) => t.function.name).sort();
-    expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM].sort());
-    expect(nomes).toContain('confirmar_nascimento');
-  });
-
   test('não vaza cpf, login pppoe, sobrenome nem data de nascimento no contexto de sistema', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).not.toContain('11122233344');
@@ -1450,15 +1458,6 @@ describe('perfil de triagem', () => {
 
       expect(r.texto).toBe('Me informe seu CPF, por favor.');
       expect(r.texto).not.toMatch(/nascimento/i);
-    });
-
-    test('com a exigência ligada (ferramenta na lista), pedir a data é legítimo', async () => {
-      createChatCompletion.mockResolvedValue({ message: { content: 'Me informe sua data de nascimento, por favor.' }, usage: {} });
-
-      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
-
-      expect(r.texto).toBe('Me informe sua data de nascimento, por favor.');
-      expect(createChatCompletion).toHaveBeenCalledTimes(1);
     });
 
     test('texto sem menção à data não gera chamada extra', async () => {
@@ -2031,7 +2030,7 @@ describe('perfil de triagem', () => {
 
   test('encerrar_atendimento entra na lista fixa da triagem', async () => {
     expect(FERRAMENTAS_TRIAGEM).toContain('encerrar_atendimento');
-    expect(FERRAMENTAS_TRIAGEM).toHaveLength(11);
+    expect(FERRAMENTAS_TRIAGEM).toHaveLength(10);
   });
 
   // 2N chamadas (status do contrato + da conexão de cada contrato) estouravam

@@ -7,8 +7,7 @@ const { findReasonById } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const {
   setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
-  incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
-  setTriagePendingDocument,
+  markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
 } = require('../conversations/conversation.repository');
 const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
@@ -29,9 +28,6 @@ const { analisarComprovante } = require('./receipt-analysis');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const { descreverUsoAnterior } = require('./receipt-usage-text');
-// Mesmo normalizador que sgp-client.js usa no que vem do cadastro: os dois
-// lados da conferência da data precisam concordar sobre o que é uma data.
-const { normalizarDataNascimento } = require('./data-nascimento');
 
 // A imagem só sai do servidor depois de passar por estes dois filtros: o
 // que a OpenAI consegue ler de verdade, e um teto de bytes.
@@ -271,128 +267,68 @@ const TOOLS = [
       const { client, contracts } = await sgpClient.lookupClientByCpf(args.cpf);
       contexto.contracts = contracts;
 
-      // No perfil de triagem, CPF digitado por número desconhecido é identidade
-      // FRACA: classifica, mas não entrega nada até confirmar_nascimento. Por
-      // isso o vínculo do contato NÃO é persistido aqui — é
-      // confirmar_nascimento quem persiste, só depois de bater a data. Sem
-      // isso, um CPF errado (ou de outra pessoa) vazaria para o próximo turno
-      // como identidade forte via memória (contact.sgpDocument já setado).
+      // No perfil de triagem, o CPF digitado já deixa a identidade forte: o
+      // mesmo caminho do ramo assistente, mais a cidade e o aviso de falha
+      // regional que a confirmação por data de nascimento fazia antes de ser
+      // removida.
       if (perfilTriagem(contexto)) {
-        const configIa = await getAiConfig();
-        // Decisão do dono (2026-09-14): "o dado mais importante é o CPF; no
-        // site do SGP o cliente loga só com ele". Por padrão a confirmação por
-        // data de nascimento está DESLIGADA e o CPF digitado já identifica —
-        // mesmo caminho do ramo assistente, mais a cidade e o aviso que
-        // confirmar_nascimento fazia. Com a flag ligada, o comportamento
-        // antigo (identidade fraca até a data bater) volta inteiro.
-        if (!(configIa && configIa.triageRequireBirthdate)) {
-          const nome = primeiroNome(client.name);
-          // Fatura de outra pessoa (print 2026-09-16): o CPF do titular abre o
-          // contrato dele — igual à segunda via do site do SGP —, mas o
-          // contato de quem está falando NÃO vira o titular: nada é
-          // persistido, a cidade não é sobrescrita e quem fala continua sendo
-          // chamado pelo próprio nome.
-          if (args.titularEOutraPessoa) {
-            const nomeDeQuemFala = (contexto.identidade && contexto.identidade.primeiroNome) || null;
-            contexto.identidade = {
-              nivel: 'forte', origem: (contexto.identidade && contexto.identidade.origem) || 'cpf',
-              primeiroNome: nomeDeQuemFala, contracts,
-              client: { id: client.id, document: args.cpf }, dataNascimento: null,
-              contestado: false, nascimentoTentado: false,
-              titular: { nome, terceiro: true },
-            };
-            return {
-              cliente: { nome },
-              contratos: contracts.map((c) => {
-                const n = normalizeContract(c);
-                return { id: c.id, status: n.status, endereco: n.endereco };
-              }),
-              instrucao: `O CPF é de OUTRA pessoa (${nome}), não de quem está falando. Pode seguir com fatura, boleto ou PIX desse contrato normalmente, mas NUNCA diga "seu contrato" nem "sua fatura": diga "localizei o contrato no CPF informado" e, ao entregar, diga de quem é ("o boleto do contrato de ${nome}"). Continue chamando quem fala pelo nome dela. Ao concluir, registre no resumo que quem pediu não é o titular. Este cadastro NÃO fica guardado no contato: se precisar dele de novo no próximo turno, chame buscar_cliente de novo com o mesmo CPF e titularEOutraPessoa: true.`,
-            };
-          }
+        const nome = primeiroNome(client.name);
+        // Fatura de outra pessoa (print 2026-09-16): o CPF do titular abre o
+        // contrato dele — igual à segunda via do site do SGP —, mas o
+        // contato de quem está falando NÃO vira o titular: nada é
+        // persistido, a cidade não é sobrescrita e quem fala continua sendo
+        // chamado pelo próprio nome.
+        if (args.titularEOutraPessoa) {
+          const nomeDeQuemFala = (contexto.identidade && contexto.identidade.primeiroNome) || null;
           contexto.identidade = {
-            nivel: 'forte', origem: 'cpf', primeiroNome: nome, contracts,
+            nivel: 'forte', origem: (contexto.identidade && contexto.identidade.origem) || 'cpf',
+            primeiroNome: nomeDeQuemFala, contracts,
             client: { id: client.id, document: args.cpf }, dataNascimento: null,
             contestado: false, nascimentoTentado: false,
+            titular: { nome, terceiro: true },
           };
-          await setContactSgpLink(contexto.contact.id, {
-            sgpClientId: client.id,
-            sgpContractId: contracts.length === 1 ? contracts[0].id : null,
-            sgpDocument: args.cpf,
-            // O nome guardado no contato salva o cumprimento quando o SGP não
-            // responder no próximo atendimento.
-            sgpFirstName: nome,
-          });
-          contexto.contact.sgpDocument = args.cpf;
-          // Try/catch: a identificação já está persistida e não pode virar
-          // recusa por causa de um campo acessório. O CPF nunca vai a log.
-          try {
-            await preencherCidadePeloSgp(contexto.contact, contracts);
-            await enviarAvisoDeCidadeSePreciso({
-              contact: contexto.contact,
-              conversationId: contexto.conversationId,
-              channelId: contexto.channelId,
-            });
-          } catch (err) {
-            console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
-          }
-          // Sem confirmação pendente não há CPF pendente: um resto na coluna
-          // faria o próximo turno reconstruir uma identidade fraca por cima de
-          // uma forte já gravada.
-          try {
-            await setTriagePendingDocument(contexto.conversationId, null);
-          } catch (err) {
-            console.error(`Failed to clear the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
-          }
           return {
             cliente: { nome },
             contratos: contracts.map((c) => {
               const n = normalizeContract(c);
               return { id: c.id, status: n.status, endereco: n.endereco };
             }),
-            instrucao: 'Cliente identificado. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
+            instrucao: `O CPF é de OUTRA pessoa (${nome}), não de quem está falando. Pode seguir com fatura, boleto ou PIX desse contrato normalmente, mas NUNCA diga "seu contrato" nem "sua fatura": diga "localizei o contrato no CPF informado" e, ao entregar, diga de quem é ("o boleto do contrato de ${nome}"). Continue chamando quem fala pelo nome dela. Ao concluir, registre no resumo que quem pediu não é o titular. Este cadastro NÃO fica guardado no contato: se precisar dele de novo no próximo turno, chame buscar_cliente de novo com o mesmo CPF e titularEOutraPessoa: true.`,
           };
         }
-
-        let dataNascimento = null;
-        try {
-          const rec = await sgpClient.findClientRecord({ cpfcnpj: args.cpf });
-          dataNascimento = rec.cliente ? rec.cliente.dataNascimento : null;
-        } catch (err) {
-          console.error(`Birth date lookup failed: ${mensagemSegura(err)}`);
-        }
         contexto.identidade = {
-          nivel: 'fraca', origem: 'cpf', primeiroNome: primeiroNome(client.name), contracts,
-          client: { id: client.id, document: args.cpf }, dataNascimento, contestado: false, nascimentoTentado: false,
+          nivel: 'forte', origem: 'cpf', primeiroNome: nome, contracts,
+          client: { id: client.id, document: args.cpf }, dataNascimento: null,
+          contestado: false, nascimentoTentado: false,
         };
-        // A identidade FRACA precisa sobreviver ao fim do turno: sem isto,
-        // resolverIdentidade devolvia 'none' no turno seguinte e o modelo
-        // pedia o CPF outra vez (defeito A, teste real 2026-09-14). A coluna
-        // é dedicada e fica fora dos resumos.
-        //
-        // Try/catch: a identidade deste turno já está montada e vale. Perder a
-        // persistência é voltar ao comportamento antigo; derrubar o turno
-        // inteiro (execution_error) logo depois de o cliente digitar o CPF é
-        // pior. O CPF nunca entra na mensagem de log.
+        await setContactSgpLink(contexto.contact.id, {
+          sgpClientId: client.id,
+          sgpContractId: contracts.length === 1 ? contracts[0].id : null,
+          sgpDocument: args.cpf,
+          // O nome guardado no contato salva o cumprimento quando o SGP não
+          // responder no próximo atendimento.
+          sgpFirstName: nome,
+        });
+        contexto.contact.sgpDocument = args.cpf;
+        // Try/catch: a identificação já está persistida e não pode virar
+        // recusa por causa de um campo acessório. O CPF nunca vai a log.
         try {
-          await setTriagePendingDocument(contexto.conversationId, args.cpf);
+          await preencherCidadePeloSgp(contexto.contact, contracts);
+          await enviarAvisoDeCidadeSePreciso({
+            contact: contexto.contact,
+            conversationId: contexto.conversationId,
+            channelId: contexto.channelId,
+          });
         } catch (err) {
-          console.error(`Failed to store the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+          console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
         }
-        // As palavras do modelo vão direto ao cliente na triagem: nunca o
-        // sobrenome completo nem o login PPPoE, só o que já se apresentaria
-        // por telefone.
-        //
-        // Defeito C (teste real 2026-09-14): a lista de contratos saía daqui
-        // com id e status, e o modelo citava "contrato 2354" ao cliente e
-        // perguntava "qual contrato" mesmo com um contrato só. Antes da
-        // confirmação ele recebe só a quantidade — os contratos continuam em
-        // contexto.identidade.contracts, para o executor e para
-        // confirmar_nascimento devolvê-los depois.
         return {
-          cliente: { nome: primeiroNome(client.name) },
-          quantidadeContratos: contracts.length,
-          proximoPasso: 'Identificação por CPF ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento. NÃO cite contrato, endereço nem plano; NÃO pergunte qual contrato.',
+          cliente: { nome },
+          contratos: contracts.map((c) => {
+            const n = normalizeContract(c);
+            return { id: c.id, status: n.status, endereco: n.endereco };
+          }),
+          instrucao: 'Cliente identificado. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
         };
       }
 
@@ -1175,121 +1111,6 @@ const TOOLS = [
     },
   },
   {
-    nome: 'confirmar_nascimento',
-    categoria: 'CONSULTA',
-    descricao: 'Confirma a identidade de um cliente identificado por CPF digitado, comparando a data de nascimento que ele informou. Use SÓ quando o contexto disser que a identificação por CPF ainda não foi confirmada; se o contexto disser que a identidade já está confirmada (telefone ou memória), NÃO use e não peça a data. No máximo duas tentativas por atendimento.',
-    isentoDeProprietario: true,
-    parametros: { type: 'object', properties: { data: { type: 'string', description: 'Data informada pelo cliente, ex.: 20/05/1990' } }, required: ['data'] },
-    validar(args) {
-      if (typeof (args && args.data) !== 'string' || !args.data.trim()) return erro('data is required');
-      return { ok: true, args: { data: args.data.trim() } };
-    },
-    async executar(args, contexto) {
-      const id = contexto.identidade;
-      // Identidade já forte (telefone, memória ou já confirmada): não há o que
-      // confirmar. Em código, e não só no prompt — foi o modelo desobedecer o
-      // prompt que fez um cliente identificado pelo telefone ser cobrado da
-      // data. Não conta tentativa nem sobrescreve a origem.
-      if (id && id.nivel === 'forte') return { confirmado: true, jaConfirmada: true, instrucao: 'A identidade já estava confirmada; não pergunte a data de nascimento. Siga o atendimento.' };
-      // Defeito B: o retorno seco ("Não há data de nascimento no cadastro")
-      // fazia o modelo encaminhar em silêncio, logo depois de o cliente ter
-      // informado a data. A instrução diz o que falar E o que chamar na mesma
-      // resposta.
-      if (!id || !id.dataNascimento) {
-        return {
-          confirmado: false,
-          semDataNoCadastro: true,
-          motivo: 'O cadastro não tem data de nascimento para conferir.',
-          instrucao: 'Diga ao cliente que não foi possível confirmar a identidade pelo chat e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.',
-        };
-      }
-      // O limite de tentativas é por conversa, gravado no banco — não no
-      // objeto de identidade em memória, que zera a cada turno e também com
-      // esquecer_identificacao. Sem isso, o cliente podia tentar de novo só
-      // chamando esquecer_identificacao e buscar_cliente outra vez.
-      const tentativas = await incrementBirthdateAttempts(contexto.conversationId);
-      // tentativas === 0 significa que a conversa não foi encontrada (a
-      // função devolve 0 nesse caso) — falha fechado: sem contador
-      // confiável, não há como saber se o limite já estourou, então trata
-      // como recusa em vez de deixar passar (0 > 2 é falso).
-      if (tentativas === 0 || tentativas > 2) {
-        return {
-          confirmado: false,
-          motivo: tentativas === 0
-            ? 'Não foi possível registrar a tentativa. Encaminhe sem entregar dados.'
-            : 'Limite de tentativas de confirmação atingido. Encaminhe sem entregar dados.',
-        };
-      }
-      const informada = normalizarDataNascimento(args.data);
-      if (informada && informada === id.dataNascimento) {
-        id.nivel = 'forte';
-        id.origem = 'cpf_confirmed';
-        // Só agora, com a confirmação batida, o vínculo do contato é
-        // persistido — antes disso (buscar_cliente) a identidade era só
-        // FRACA e não podia vazar como memória para o próximo turno.
-        await setContactSgpLink(contexto.contact.id, {
-          sgpClientId: id.client.id,
-          sgpContractId: id.contracts.length === 1 ? id.contracts[0].id : null,
-          sgpDocument: id.client.document,
-          // O nome guardado no contato é o que salva o cumprimento quando o
-          // SGP não responder no próximo atendimento.
-          sgpFirstName: primeiroNome(id.primeiroNome),
-        });
-        contexto.contact.sgpDocument = id.client.document;
-        // Com o vínculo gravado, o endereço do contrato pode preencher a
-        // cidade do contato. Try/catch pelo mesmo motivo do bloco abaixo: a
-        // confirmação já está persistida e não pode virar recusa por causa de
-        // um campo acessório.
-        try {
-          await preencherCidadePeloSgp(contexto.contact, id.contracts);
-          // Com a cidade recém-descoberta, o aviso de falha regional sai neste
-          // mesmo turno — quem já recebeu não recebe de novo.
-          await enviarAvisoDeCidadeSePreciso({
-            contact: contexto.contact,
-            conversationId: contexto.conversationId,
-            channelId: contexto.channelId,
-          });
-        } catch (err) {
-          console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
-        }
-        // Confirmada: a identidade passa a viver no vínculo do contato, então
-        // o CPF pendente não é mais necessário na conversa. Try/catch porque a
-        // confirmação (setContactSgpLink acima) já está persistida: um resto
-        // na coluna é inofensivo (a memória tem precedência no resolvedor) e
-        // não pode transformar uma confirmação bem-sucedida em recusa.
-        try {
-          await setTriagePendingDocument(contexto.conversationId, null);
-        } catch (err) {
-          console.error(`Failed to clear the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
-        }
-        // Só agora os contratos chegam ao modelo, e com o ENDEREÇO — que é o
-        // que o cliente reconhece. O número continua existindo só para as
-        // ferramentas.
-        return {
-          confirmado: true,
-          contratos: id.contracts.map((c) => {
-            const n = normalizeContract(c);
-            return { id: c.id, status: n.status, endereco: n.endereco };
-          }),
-          instrucao: 'Identidade confirmada. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
-        };
-      }
-      // Ainda há uma tentativa (o teto é 2): pedir a data de novo é melhor do
-      // que encaminhar quem só errou de digitar. Na última, encaminha.
-      if (tentativas < 2) {
-        return {
-          confirmado: false,
-          tentativasRestantes: 2 - tentativas,
-          instrucao: 'Diga que a data não confere e peça a data de nascimento mais uma vez.',
-        };
-      }
-      return {
-        confirmado: false,
-        instrucao: 'Diga que não foi possível confirmar a identidade e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.',
-      };
-    },
-  },
-  {
     nome: 'esquecer_identificacao',
     categoria: 'ACAO',
     descricao: 'Use quando o cliente disser que o nome pelo qual foi chamado não é dele. Descarta a identificação atual; em seguida peça o CPF.',
@@ -1319,16 +1140,6 @@ const TOOLS = [
         await markPhoneContested(contexto.conversationId);
       } catch (err) {
         console.error(`Failed to mark phone contested for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
-      }
-      // Try/catch PRÓPRIO, e não junto do de cima: depois de buscar_cliente o
-      // CPF pendente É a identidade inteira. Se a falha de markPhoneContested
-      // levasse esta limpeza junto, o CPF que o cliente acabou de descartar
-      // ressuscitaria como identidade fraca no turno seguinte — exatamente o
-      // que esquecer_identificacao existe para desfazer.
-      try {
-        await setTriagePendingDocument(contexto.conversationId, null);
-      } catch (err) {
-        console.error(`Failed to clear the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
       }
       return { esquecido: true };
     },

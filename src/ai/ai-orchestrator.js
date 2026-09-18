@@ -268,7 +268,7 @@ async function carregarContratos(contact) {
 }
 
 const FERRAMENTAS_TRIAGEM = [
-  'buscar_cliente', 'confirmar_nascimento', 'esquecer_identificacao',
+  'buscar_cliente', 'esquecer_identificacao',
   'consultar_status_contrato', 'consultar_status_conexao',
   'consultar_status_todos_contratos', 'consultar_faturas_todos_contratos',
   // gerar_segunda_via fica de fora de propósito (teste real 2026-09-15): na
@@ -298,11 +298,7 @@ function ferramentasDaTriagem(triagem, config) {
   const lista = noturno
     ? FERRAMENTAS_TRIAGEM_NOTURNO
     : (leDeDia ? FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA : FERRAMENTAS_TRIAGEM);
-  // Sem exigência de data de nascimento (o padrão) não há o que confirmar: o
-  // próprio buscar_cliente já deixa a identidade forte. Deixar a ferramenta
-  // descrita seria convidar o modelo a pedir a data — ou a afirmar que a usou.
-  if (config && config.triageRequireBirthdate) return lista;
-  return lista.filter((n) => n !== 'confirmar_nascimento');
+  return lista;
 }
 
 // Sem empresa cadastrada a frase precisa continuar de pé: "a empresa é o

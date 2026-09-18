@@ -22,7 +22,7 @@ jest.mock('../city-notices/city-notice.service');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
-const { listTools, findTool, toOpenAiTools } = require('./tool-registry');
+const { listTools, findTool, toOpenAiTools, faturaEmAlgumContrato } = require('./tool-registry');
 const { listSectors } = require('../sectors/sector.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const {
@@ -1912,6 +1912,52 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       sgpClient.getDuplicateInvoice.mockResolvedValue(semFatura);
       const r = await findTool('gerar_segunda_via').executar({ contratoId: 17402 }, ctx());
       expect(r).toEqual({ temFaturaAberta: false, faturas: [], motivo: 'Nenhuma fatura em aberto em nenhum contrato do cliente.' });
+    });
+  });
+
+  // O fallback procura a fatura em OUTROS contratos quando o pedido não tem.
+  // Com contexto.contracts (próprios) e contexto.terceiro.contratos (de um
+  // terceiro consultado) povoados ao mesmo tempo no turno — o caso real de
+  // uma conversa que já resolveu os dois —, ele não pode atravessar a
+  // fronteira em NENHUM sentido: nem entregar o boleto do próprio cliente
+  // quando o pedido era do terceiro, nem o contrário. Chama
+  // faturaEmAlgumContrato direto (não uma ferramenta), para testar o
+  // resolvedor de escopo sem depender de qual ferramenta o usa.
+  describe('a fronteira entre o escopo próprio e o de terceiro nunca é atravessada pelo fallback', () => {
+    test('pedido no contrato do terceiro não cai para os contratos próprios', async () => {
+      const contexto = {
+        contracts: [{ id: 1 }, { id: 2 }],
+        terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
+      };
+      // Um dos contratos PRÓPRIOS (id 2) tem fatura em aberto: se a fronteira
+      // vazasse, seria exatamente essa fatura — a do cliente, não a do
+      // terceiro — que sairia como resposta ao pedido do contrato 77.
+      sgpClient.getDuplicateInvoice.mockImplementation((id) => Promise.resolve(
+        id === 2 ? comFatura(2, 50) : semFatura,
+      ));
+      const busca = await faturaEmAlgumContrato(77, contexto);
+      expect(busca.trocouContrato).toBe(false);
+      expect(busca.semFaturaEmNenhum).toBe(true);
+      expect(busca.contratoId).toBe(77);
+      expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalledWith(1);
+      expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalledWith(2);
+    });
+
+    test('pedido num contrato próprio não cai para o contrato do terceiro', async () => {
+      const contexto = {
+        contracts: [{ id: 1 }],
+        terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
+      };
+      // O único contrato do TERCEIRO (id 77) tem fatura em aberto: se a
+      // fronteira vazasse, o cliente receberia o boleto do marido/esposa ao
+      // pedir o próprio.
+      sgpClient.getDuplicateInvoice.mockImplementation((id) => Promise.resolve(
+        id === 77 ? comFatura(77, 50) : semFatura,
+      ));
+      const busca = await faturaEmAlgumContrato(1, contexto);
+      expect(busca.trocouContrato).toBe(false);
+      expect(busca.semFaturaEmNenhum).toBe(true);
+      expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalledWith(77);
     });
   });
 });

@@ -107,15 +107,28 @@ async function saiuDaTriagem(conversationId) {
 }
 
 /**
+ * Onde este contrato pode ser resolvido. Os contratos do próprio contato e os
+ * de um terceiro consultado são dois conjuntos SEPARADOS, e nada — nem o
+ * fallback de fatura — atravessa de um para o outro.
+ */
+function escopoDoContrato(contexto, contratoId) {
+  const proprios = (contexto && contexto.contracts) || [];
+  if (proprios.some((c) => c.id === contratoId)) return { contratos: proprios, terceiro: false };
+  const deTerceiro = (contexto && contexto.terceiro && contexto.terceiro.contratos) || [];
+  if (deTerceiro.some((c) => c.id === contratoId)) return { contratos: deTerceiro, terceiro: true };
+  return null;
+}
+
+/**
  * Procura a fatura em aberto no contrato pedido e, se não houver, nos DEMAIS
  * contratos do cliente. Teste real 2026-09-13: cliente com dois contratos, o
  * modelo chamou gerar_pix no contrato sem fatura e respondeu "não encontrei
  * fatura em aberto" — mesmo com o prompt mandando consultar todos antes. A
  * garantia tem que estar no código, não na obediência do modelo.
  *
- * Propriedade: os contratos alternativos saem de contexto.contracts, que o
- * servidor carregou a partir do CPF do PRÓPRIO contato — a troca de contrato
- * nunca sai do dono, não há id vindo do modelo aqui.
+ * Propriedade: os contratos alternativos vêm de escopoDoContrato — o mesmo
+ * dono do contrato pedido (o próprio contato, ou o terceiro confirmado nesta
+ * conversa) — nunca do outro conjunto. Não há id vindo do modelo aqui.
  *
  * Devolve uma de quatro formas:
  * - fatura achada: { resultado, contratoId, trocouContrato, endereco? }
@@ -130,7 +143,8 @@ async function faturaEmAlgumContrato(contratoPedido, contexto) {
     return { resultado: principal, contratoId: contratoPedido, trocouContrato: false };
   }
 
-  const outros = ((contexto && contexto.contracts) || []).filter((c) => c.id !== contratoPedido);
+  const escopo = escopoDoContrato(contexto, contratoPedido);
+  const outros = ((escopo && escopo.contratos) || []).filter((c) => c.id !== contratoPedido);
   if (outros.length === 0) {
     return { resultado: principal, contratoId: contratoPedido, trocouContrato: false, semFaturaEmNenhum: true };
   }
@@ -214,7 +228,8 @@ function nomeParaTratar(contexto) {
  * pedido, ou o outro quando faturaEmAlgumContrato trocou).
  */
 function enderecoParaCitar(busca, contexto) {
-  const contratos = (contexto && contexto.contracts) || [];
+  const escopo = escopoDoContrato(contexto, busca.contratoId);
+  const contratos = (escopo && escopo.contratos) || [];
   if (contratos.length < 2) return null;
   if (busca.endereco) return busca.endereco;
   const usado = contratos.find((c) => c.id === busca.contratoId);
@@ -223,7 +238,8 @@ function enderecoParaCitar(busca, contexto) {
 
 /** Busca no cache do turno; só chama o SGP se ainda não houver nada. */
 async function contratoDoCache(contexto, contratoId) {
-  const achado = (contexto.contracts || []).find((c) => c.id === contratoId);
+  const escopo = escopoDoContrato(contexto, contratoId);
+  const achado = ((escopo && escopo.contratos) || []).find((c) => c.id === contratoId);
   if (!achado) throw new Error('contract_not_in_context');
   return achado;
 }
@@ -1475,4 +1491,5 @@ function toOpenAiTools(nomesHabilitados) {
 
 module.exports = {
   listTools, findTool, toOpenAiTools, perfilTriagem, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO,
+  escopoDoContrato, faturaEmAlgumContrato,
 };

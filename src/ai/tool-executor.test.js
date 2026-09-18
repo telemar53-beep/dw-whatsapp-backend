@@ -427,6 +427,47 @@ describe('tool-executor — contrato de terceiro (lista de permissão)', () => {
   });
 });
 
+describe('tool-executor — minimização do retorno no contrato de terceiro', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // FERRAMENTAS_PERMITIDAS_EM_TERCEIRO e a projeção de minimização casam pelo
+  // NOME passado a executeTool, não por nenhuma propriedade do objeto da
+  // ferramenta — então um fake com o nome certo já basta para testar a
+  // aplicação da Task 8, sem depender do SGP de verdade (isso já é coberto,
+  // com os nomes reais de campo, em third-party-minimize.test.js).
+  const CONTEXTO_TERCEIRO = {
+    conversationId: 'c-1', contact: { id: 'ct-1' },
+    contracts: [{ id: 1 }],
+    terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
+  };
+
+  const BRUTO = {
+    faturas: [{ faturaId: 5, vencimentoAtualizado: '2026-09-10', status: 'aberta', valorOriginal: 135, pagador: 'MARIA SILVA' }],
+  };
+
+  test('resultado de ferramenta permitida no contrato do terceiro chega minimizado ao modelo', async () => {
+    const tool = toolFake({ nome: 'consultar_faturas', executar: jest.fn().mockResolvedValue(BRUTO) });
+    findTool.mockReturnValue(tool);
+    isToolEnabled.mockResolvedValue(true);
+
+    const r = await executeTool('consultar_faturas', { contratoId: 77 }, CONTEXTO_TERCEIRO);
+
+    expect(r).toEqual({ ok: true, resultado: { faturas: [{ id: 5, vencimento: '2026-09-10', status: 'aberta' }] } });
+    // O bruto (pagador, valor) nunca sobrevive na resposta final.
+    expect(JSON.stringify(r)).not.toMatch(/MARIA SILVA|135/);
+  });
+
+  test('resultado no contrato do próprio contato nunca passa pela minimização', async () => {
+    const tool = toolFake({ nome: 'consultar_faturas', executar: jest.fn().mockResolvedValue(BRUTO) });
+    findTool.mockReturnValue(tool);
+    isToolEnabled.mockResolvedValue(true);
+
+    const r = await executeTool('consultar_faturas', { contratoId: 1 }, CONTEXTO_TERCEIRO); // 1 é próprio, não 77
+
+    expect(r).toEqual({ ok: true, resultado: BRUTO });
+  });
+});
+
 describe('tool-executor — orçamento de tempo declarado pela ferramenta', () => {
   beforeEach(() => jest.clearAllMocks());
 

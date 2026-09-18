@@ -1,4 +1,5 @@
 const { findTool, perfilTriagem, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
+const { minimizarParaTerceiro } = require('./third-party-minimize');
 const { isToolEnabled } = require('./ai-config.repository');
 const { mensagemSegura } = require('./safe-error-log');
 
@@ -151,6 +152,10 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     const resultado = await comTimeout(tool.executar(argsValidados, contexto), tool.timeoutMs || timeoutMs);
     if (resultado === Symbol.for('timeout')) return recusa('timeout', nome);
     if (resultado && resultado.ok === false) return recusa('execution_error', resultado.erro);
+    // Minimização: o resultado de um contrato de terceiro passa pela projeção antes
+    // de chegar ao modelo. Aplicada aqui, e não em cada ferramenta, para que uma
+    // ferramenta futura na lista de permissão não possa esquecer de aplicá-la.
+    if (emTerceiro) return { ok: true, resultado: minimizarParaTerceiro(nome, resultado) };
     return { ok: true, resultado };
   } catch (err) {
     logFalha(nome, err);

@@ -42,7 +42,7 @@ describe('módulo identificacao', () => {
       const texto = identificacao.linhas(estadoBase({
         identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false },
       })).join('\n');
-      expect(texto).toMatch(/Cliente NÃO identificado\. Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele/);
+      expect(texto).toMatch(/Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele/);
       expect(texto).toMatch(/Quem só quer conhecer planos ou contratar não precisa se identificar\./);
       expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
     });

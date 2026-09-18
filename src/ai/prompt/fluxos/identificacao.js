@@ -29,7 +29,7 @@ module.exports = {
     const identidade = estado.identidade || {};
     const l = [
       '',
-      'Cliente NÃO identificado. Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele (conta, fatura, problema no serviço, retorno de cliente antigo), no modelo: "Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Quem só quer conhecer planos ou contratar não precisa se identificar. Depois de buscar_cliente, continue a triagem.',
+      'Peça o CPF ou CNPJ só quando o que ele pediu depender de localizar o cadastro dele (conta, fatura, problema no serviço, retorno de cliente antigo), no modelo: "Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Quem só quer conhecer planos ou contratar não precisa se identificar. Depois de buscar_cliente, continue a triagem.',
     ];
     if (identidade.contestado) {
       l.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');

@@ -1,12 +1,14 @@
 const MODULOS = [
   require('./principios'),
   require('./fatos'),
+  require('./painel'),
   require('./fluxos/privacidade'),
   require('./fluxos/terceiros'),
   require('./fluxos/identificacao'),
   require('./fluxos/sgp-indisponivel'),
   require('./fluxos/aviso-cidade'),
   require('./fluxos/multiplos-contratos'),
+  require('./fluxos/noturno'),
   require('./fluxos/suporte-geral'),
   require('./fluxos/suporte-diagnostico'),
   require('./fluxos/financeiro'),
@@ -14,9 +16,7 @@ const MODULOS = [
   require('./fluxos/comercial-novo'),
   require('./fluxos/comercial-cliente'),
   require('./fluxos/comprovante'),
-  require('./fluxos/noturno'),
   require('./fluxos/limite-perguntas'),
-  require('./painel'),
   require('./formato'),
 ];
 

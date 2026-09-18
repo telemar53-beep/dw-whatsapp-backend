@@ -310,3 +310,86 @@ test('com SGP indisponível, o prompt montado não instrui nenhuma ferramenta qu
   expect(texto).not.toMatch(/enviar_boleto/);
   expect(texto).not.toMatch(/gerar_pix/);
 });
+
+// =====================================================================
+// Task 18 — ajustes de ordem (painel logo após fatos, noturno antes dos
+// fluxos operacionais) e fim da duplicação de estado em identificacao.js.
+// Ver .superpowers/sdd/2026-09-17-ia-atendimento-humana/task-18-ajustes-brief.md
+// =====================================================================
+// Pedido explícito do dono: estes três testes são sobre o PROMPT RENDERIZADO
+// (o texto final de montarContexto), não sobre a posição de um módulo dentro
+// do array MODULOS — mover um módulo no array não prova que a referência
+// textual que ele deveria preceder realmente aparece depois dele no texto
+// montado.
+
+const ESTADO_IDENTIFICADO = estadoBase({
+  identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', contracts: [{ id: 1 }], contestado: false },
+  contratos: [{ id: 1, plano: 'X', velocidade: null, endereco: 'Rua A', status: 'ativo' }],
+});
+
+const ESTADO_IDENTIFICADO_NOTURNO = estadoBase({
+  identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', contracts: [{ id: 1 }], contestado: false },
+  contratos: [{ id: 1, plano: 'X', velocidade: null, endereco: 'Rua A', status: 'ativo' }],
+  ferramentas: ['buscar_cliente', 'concluir_triagem', 'analisar_comprovante', 'desbloqueio_confianca'],
+  triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false },
+});
+
+test('a lista de setores (painel) aparece antes das referências "setor da lista acima", nos estados não identificado, identificado e noturno', () => {
+  const estados = [estadoBase(), ESTADO_IDENTIFICADO, ESTADO_IDENTIFICADO_NOTURNO];
+  for (const estado of estados) {
+    const texto = montarContexto(estado);
+    const idxSetores = texto.indexOf('Setores (use o id exato');
+    expect(idxSetores).toBeGreaterThanOrEqual(0);
+
+    const ocorrencias = [...texto.matchAll(/setor da lista acima/g)].map((m) => m.index);
+    // Guarda equivalente ao "indexOf >= 0" pedido pelo brief: matchAll só
+    // devolve casamentos reais (nunca -1), então a guarda aqui é garantir que
+    // a varredura achou mais de uma ocorrência — senão as asserções abaixo
+    // passariam vazias.
+    expect(ocorrencias.length).toBeGreaterThan(1);
+
+    // fatos.js:104 ("...encaminhe para o setor da lista acima que cuidar de
+    // vendas.") é a ÚNICA referência que continua vindo ANTES da lista mesmo
+    // depois do Ajuste 1: fatos é o único módulo que permanece antes de
+    // painel na nova ordem (principios, fatos, painel, ...), e reescrever
+    // fatos.js está fora do escopo desta tarefa ("mova painel", nada mais).
+    // É uma exceção conhecida e documentada — por isso a asserção exige
+    // exatamente 1 ocorrência antes da lista (nem 0, que indicaria um teste
+    // desatualizado se fatos.js mudasse; nem 2+, que seria uma regressão
+    // nova não coberta pelo brief).
+    const antesDaLista = ocorrencias.filter((i) => i < idxSetores);
+    expect(antesDaLista.length).toBe(1);
+
+    // Todas as DEMAIS referências — as "dezenas de linhas dos módulos" que
+    // motivaram o Ajuste 1 — agora vêm depois da lista, em todo estado.
+    const depoisDaLista = ocorrencias.filter((i) => i >= idxSetores);
+    expect(depoisDaLista.length).toBe(ocorrencias.length - 1);
+  }
+});
+
+test('com o modo noturno ativo, "MODO NOTURNO" aparece antes dos roteiros que ele governa (suporte, financeiro e comprovante)', () => {
+  const texto = montarContexto(ESTADO_IDENTIFICADO_NOTURNO);
+  const idxNoturno = texto.indexOf('MODO NOTURNO');
+  expect(idxNoturno).toBeGreaterThanOrEqual(0);
+
+  // suporte-diagnostico: é o módulo que noturno.js referencia diretamente
+  // ("CONEXÃO À NOITE: os roteiros de suporte (consulte
+  // consultar_status_todos_contratos antes)") — só suporte-diagnostico.js
+  // chama essa ferramenta.
+  const idxSuporte = texto.indexOf('RELATO DE FALHA (internet lenta');
+  const idxFinanceiro = texto.indexOf('PEDIDO DE PAGAMENTO (');
+  const idxComprovante = texto.indexOf('COMPROVANTE À NOITE');
+  expect(idxSuporte).toBeGreaterThanOrEqual(0);
+  expect(idxFinanceiro).toBeGreaterThanOrEqual(0);
+  expect(idxComprovante).toBeGreaterThanOrEqual(0);
+
+  expect(idxNoturno).toBeLessThan(idxSuporte);
+  expect(idxNoturno).toBeLessThan(idxFinanceiro);
+  expect(idxNoturno).toBeLessThan(idxComprovante);
+});
+
+test('"Cliente NÃO identificado." aparece exatamente uma vez no prompt do estado não identificado', () => {
+  const texto = montarContexto(estadoBase());
+  const ocorrencias = texto.match(/Cliente NÃO identificado\./g) || [];
+  expect(ocorrencias.length).toBe(1);
+});

@@ -1254,7 +1254,26 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
 // ou encerrar o atendimento. Nunca eleva contexto.identidade nem substitui
 // contexto.contracts (que continua sendo só os contratos do próprio contato).
 describe('escopo de terceiro', () => {
-  beforeEach(() => jest.clearAllMocks());
+  // Arma explicitamente o caminho feliz de concluir_triagem/encerrar_atendimento/
+  // esquecer_identificacao: sem isto, os testes deste describe dependiam de mocks
+  // NÃO-Once deixados por describes de ~200 linhas acima (ex.: um
+  // listSectors.mockResolvedValue de um teste de desbloqueio_confianca cujo id de
+  // setor coincidia com SETOR por acaso — jest.clearAllMocks() reseta contagem de
+  // chamadas, não a implementação). Rodando com `-t` (sem os describes anteriores)
+  // esse acaso não acontece e concluir_triagem estourava em listSectors().find.
+  // markPhoneContested precisa de mockReset() porque describe('esquecer_identificacao',
+  // ...), mais acima, deixa um mockRejectedValue (não-Once) armado num teste próprio.
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+    getConversationWithContact.mockResolvedValue({
+      id: 'c1', status: 'waiting', triageState: 'pending', assignedAgentId: null, aiTriageResolvedByAi: true,
+    });
+    concludeAiTriage.mockResolvedValue({ id: 'c1' });
+    closeConversationByAi.mockResolvedValue({ id: 'c1' });
+    motivoDeEncerramentoAtivo.mockResolvedValue('motivo-1');
+    markPhoneContested.mockReset().mockResolvedValue();
+  });
 
   test('buscar_cliente de terceiro cria o escopo e NÃO toca em contexto.contracts', async () => {
     sgpClient.lookupClientByCpf.mockResolvedValue({
@@ -1287,6 +1306,12 @@ describe('escopo de terceiro', () => {
       contracts: [{ id: 77, status: 1 }],
     });
     const identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
+    // Cópia congelada ANTES da chamada: contexto.identidade é o MESMO objeto
+    // que `identidade` referencia, então comparar contra `identidade` depois
+    // seria comparar o objeto com ele mesmo — passaria sempre, mesmo que o
+    // executor mutasse os campos in place (ex.: contexto.identidade.contracts
+    // = contracts). `original` é o único jeito de provar "intocado" de verdade.
+    const original = structuredClone(identidade);
     const contexto = {
       ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1',
       contact: { id: 'ct1', sgpDocument: null }, contracts: [], identidade,
@@ -1294,7 +1319,7 @@ describe('escopo de terceiro', () => {
 
     await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
 
-    expect(contexto.identidade).toEqual(identidade);   // objeto inteiro intocado
+    expect(contexto.identidade).toEqual(original);   // objeto inteiro intocado
     expect(contexto.identidade.nivel).toBe('none');
   });
 
@@ -1353,8 +1378,14 @@ describe('escopo de terceiro', () => {
     ['esquecer_identificacao', {}],
   ])('%s limpa o escopo de terceiro', async (nome, args) => {
     const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
-    await executeTool(nome, args, contexto);
+    const r = await executeTool(nome, args, contexto);
     expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, null);
+    // Caminho feliz de verdade, não só "não travou": a ferramenta precisa ter
+    // concluído a própria ação (não parado em algum mock desarmado por acaso) e
+    // deixado a limpeza refletida no contexto.
+    expect(r.ok).toBe(true);
+    expect(contexto.terceiro).toBeNull();
+    expect(ACAO_PRINCIPAL[nome]).toHaveBeenCalled();
   });
 
   test('buscar_cliente sem a marcação de terceiro limpa um escopo anterior', async () => {

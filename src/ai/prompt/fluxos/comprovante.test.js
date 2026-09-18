@@ -155,5 +155,49 @@ describe('módulo comprovante', () => {
       expect(t).toMatch(/NÃO diga isso ao cliente/);
       expect(t).toMatch(/a equipe confere e dá baixa/);
     });
+
+    // ===================================================================
+    // Task 18 — asserts migrados de ai-orchestrator.test.js
+    // ===================================================================
+    // Os testes acima travam o rótulo e o desfecho de cada ramo. Estes três
+    // trazem as lições que os asserts do construtor antigo guardavam e que
+    // nenhum teste de módulo ainda cobria.
+
+    // Antes: ai-orchestrator.test.js:559 e :624 ("chame analisar_comprovante"),
+    // :623 ("COMPROVANTE: se o cliente enviar uma imagem") e :633 (de dia, com
+    // a flag ligada, a linha antiga "pergunte se é um comprovante" NÃO
+    // aparece). Print 2026-09-17: perguntar antes de ler é exatamente o que a
+    // ferramenta elimina — a ordem de ação é ler primeiro, perguntar nunca.
+    test('com a ferramenta, a imagem é lida pela ferramenta ANTES de qualquer pergunta (de dia e de noite)', () => {
+      for (const triagem of [
+        { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false },
+        { noturno: { ativo: false }, forcarConclusao: false },
+      ]) {
+        const t = comprovante.linhas(comFerramenta({ triagem })).join('\n');
+        expect(t).toMatch(/se o cliente enviar uma imagem e disser \(ou parecer\) que é o pagamento, chame analisar_comprovante \(sem perguntar nada antes\)/);
+        expect(t).not.toMatch(/pergunte se é um comprovante/);
+      }
+    });
+
+    // Antes: ai-orchestrator.test.js:625 e :629. De dia há atendente e a
+    // liberação em confiança é decisão de gente: o ramo diurno não pode nem
+    // prometer liberação nem sequer citar desbloqueio.
+    test('de dia, com a ferramenta, não confirma pagamento, não promete liberação e não cita desbloqueio', () => {
+      const t = comprovante.linhas(comFerramenta({
+        triagem: { noturno: { ativo: false }, forcarConclusao: false },
+      })).join('\n');
+      expect(t).toMatch(/NÃO confirme pagamento nem prometa liberação/);
+      expect(t).not.toMatch(/desbloqueio/i);
+    });
+
+    // Antes: ai-orchestrator.test.js:1333-1334. Print 2026-09-17 (17:53): o
+    // comprovante de cliente não identificado virou pedido de data de
+    // nascimento. O documento é o único dado pedido, e a frase diz POR QUÊ —
+    // sem cadastro localizado não existe conferência.
+    test('cliente não identificado: só o documento é pedido, e a frase diz por que ele é indispensável', () => {
+      const t = comprovante.linhas(estadoBase()).join('\n');
+      expect(t).toMatch(/COMPROVANTE DE CLIENTE NÃO IDENTIFICADO: peça o CPF ou CNPJ primeiro, nunca outro dado/);
+      expect(t).toMatch(/Sem o cadastro localizado não há o que conferir/);
+    });
   });
 });

@@ -36,6 +36,14 @@ describe('módulo aviso-cidade', () => {
       expect(t).toMatch(/NÃO peça verificações de equipamento, NÃO prometa previsão/);
     });
 
+    // Task 18 — antes: ai-orchestrator.test.js:1860. A empresa já sabe da
+    // falha: o cliente precisa OUVIR que existe uma falha regional em
+    // andamento na cidade dele, não só deixar de receber o roteiro normal.
+    test('diz ao cliente que há falha regional em andamento na cidade dele, usando o aviso', () => {
+      const t = texto();
+      expect(t).toMatch(/informe que há uma falha regional em andamento nessa cidade \(use o aviso acima\)/);
+    });
+
     test('resumo cita "falha regional" e conclui para o setor da lista acima que cuidar de suporte', () => {
       const t = texto();
       expect(t).toMatch(/conclua para o setor da lista acima que cuidar de suporte na mesma resposta com "falha regional" no resumo/);

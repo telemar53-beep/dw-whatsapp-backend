@@ -1868,7 +1868,10 @@ linhas(estado) {
       estado.config.triageExtraInstructions
     );
   } else {
-    l.push('', 'Não há instruções adicionais da operação: preço, planos e cobertura são sempre com o setor comercial.');
+    // Sem nomear setor: a lista real vem do banco, logo acima, e uma operação
+    // pode não ter nenhum setor chamado "Comercial" (a Restrição Global manda
+    // referenciar por PAPEL, nunca por nome fixo).
+    l.push('', 'Não há instruções adicionais da operação: preço, planos e cobertura você não tem como confirmar sozinha — encaminhe para o setor da lista acima que cuidar de vendas e contratação.');
   }
   return l;
 }

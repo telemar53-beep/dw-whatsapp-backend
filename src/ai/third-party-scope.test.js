@@ -19,11 +19,24 @@ test('o escopo nunca guarda endereço, status, nome completo nem documento', () 
 test('o escopo vale até o instante de expirar e não depois', () => {
   const escopo = montarEscopo('Maria', [{ id: 10 }], AGORA);
   expect(escopoValido(escopo, new Date('2026-09-17T20:29:59.000Z'))).toBe(true);
+  expect(escopoValido(escopo, new Date(escopo.expiraEm))).toBe(true);
   expect(escopoValido(escopo, new Date('2026-09-17T20:30:01.000Z'))).toBe(false);
 });
 
 test('escopo ausente ou malformado nunca é válido', () => {
-  for (const ruim of [null, undefined, {}, { nome: 'Maria' }, { contratos: [] }, { contratos: [1], expiraEm: 'xx' }]) {
+  for (const ruim of [
+    null,
+    undefined,
+    {},
+    { nome: 'Maria' },
+    { contratos: [] },
+    { contratos: [1], expiraEm: 'xx' },
+    { contratos: [1], expiraEm: 12345 },
+    { contratos: [1], expiraEm: '12345' },
+    { contratos: [1], expiraEm: '2026-09-17' },
+    { contratos: 'nao-e-array', expiraEm: '2026-09-17T20:30:00.000Z' },
+    { contratos: [1], expiraEm: '2026-99-01T00:00:00.000Z' },
+  ]) {
     expect(escopoValido(ruim, AGORA)).toBe(false);
   }
 });

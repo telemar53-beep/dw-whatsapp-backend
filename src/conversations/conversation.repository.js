@@ -272,28 +272,9 @@ async function incrementTriageAttempts(conversationId) {
 }
 
 /**
- * Tentativas de confirmar_nascimento (ai/tool-registry.js), por conversa —
- * gravado no banco de propósito, não no contexto em memória do turno: um
- * contador em memória zera a cada turno e também com esquecer_identificacao,
- * que é justamente a brecha que este contador fecha. Sem condição de
- * triage_state = 'pending': confirmar_nascimento pode ser chamado a
- * qualquer momento da triagem, não só enquanto pendente.
- */
-async function incrementBirthdateAttempts(conversationId) {
-  const result = await getPool().query(
-    `UPDATE conversations SET ai_triage_birthdate_attempts = ai_triage_birthdate_attempts + 1
-     WHERE id = $1
-     RETURNING ai_triage_birthdate_attempts`,
-    [conversationId]
-  );
-  if (result.rowCount === 0) return 0;
-  return result.rows[0].ai_triage_birthdate_attempts;
-}
-
-/**
  * ai_triage_phone_contested vive fora do mapper e das 25 consultas que
- * enumeram colunas (mesmo tratamento de ai_triage_birthdate_attempts): só
- * estas duas funções a leem/escrevem. Registra que esquecer_identificacao já
+ * enumeram colunas: só estas duas funções a leem/escrevem. Registra que
+ * esquecer_identificacao já
  * foi chamado nesta conversa — sem isso, o turno seguinte de resolverIdentidade
  * buscaria de novo pelo MESMO telefone no SGP e cumprimentaria a mesma pessoa
  * errada.
@@ -312,32 +293,6 @@ async function isPhoneContested(conversationId) {
   );
   if (result.rowCount === 0) return false;
   return Boolean(result.rows[0].ai_triage_phone_contested);
-}
-
-/**
- * ai_triage_pending_document: o CPF/CNPJ que o cliente DIGITOU na triagem e
- * que ainda não passou pela conferência da data de nascimento. Mesmo
- * tratamento de ai_triage_phone_contested — fora do mapper e das consultas que
- * enumeram colunas, só estas duas funções o leem/escrevem, e ele nunca entra
- * num resumo de conversa. Sem isto, a identidade FRACA vivia só no contexto do
- * turno e o turno seguinte pedia o CPF de novo.
- *
- * Nunca vai a log: é dado pessoal do cliente.
- */
-async function setTriagePendingDocument(conversationId, document) {
-  await getPool().query(
-    `UPDATE conversations SET ai_triage_pending_document = $2 WHERE id = $1`,
-    [conversationId, document || null]
-  );
-}
-
-async function getTriagePendingDocument(conversationId) {
-  const result = await getPool().query(
-    `SELECT ai_triage_pending_document FROM conversations WHERE id = $1`,
-    [conversationId]
-  );
-  if (result.rowCount === 0) return null;
-  return result.rows[0].ai_triage_pending_document || null;
 }
 
 async function activateConversation(conversationId) {
@@ -783,7 +738,6 @@ module.exports = {
   closeConversationByAi,
   findRecentAiClosedConversation,
   incrementTriageAttempts,
-  incrementBirthdateAttempts,
   activateConversation,
   getConversationWithContact,
   findConversationByProtocolNumber,
@@ -803,6 +757,4 @@ module.exports = {
   setConversationSector,
   markPhoneContested,
   isPhoneContested,
-  setTriagePendingDocument,
-  getTriagePendingDocument,
 };

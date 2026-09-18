@@ -21,7 +21,6 @@ const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const {
   runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA,
-  ferramentasDaTriagem,
 } = require('./ai-orchestrator');
 
 const CONVERSATION = { id: 'c-1', channelId: 'ch-1' };
@@ -349,12 +348,12 @@ describe('ai-orchestrator', () => {
         message: { tool_calls: [{ id: 'c1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] },
         usage: {},
       })
-      .mockResolvedValueOnce({ message: { content: 'Pode me informar sua data de nascimento?' }, usage: {} });
+      .mockResolvedValueOnce({ message: { content: 'Pode me informar seu CPF?' }, usage: {} });
     executeTool.mockResolvedValue({
       ok: false,
       motivo: 'identity_not_confirmed',
       detalhe: 'enviar_boleto',
-      instrucao: 'Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.',
+      instrucao: 'Identidade ainda não confirmada. Peça o CPF ou CNPJ e chame buscar_cliente; depois chame esta ferramenta de novo.',
     });
 
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
@@ -362,7 +361,7 @@ describe('ai-orchestrator', () => {
     const toolMessage = createChatCompletion.mock.calls[1][0].messages.find((m) => m.role === 'tool');
     expect(JSON.parse(toolMessage.content)).toEqual({
       erro: 'identity_not_confirmed',
-      instrucao: 'Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.',
+      instrucao: 'Identidade ainda não confirmada. Peça o CPF ou CNPJ e chame buscar_cliente; depois chame esta ferramenta de novo.',
     });
   });
 
@@ -442,35 +441,6 @@ describe('ai-orchestrator', () => {
     expect(JSON.stringify(toolsRequested)).not.toContain('52998224725');
   });
 
-  // I4 (fix round 1, ai-triage): confirmar_nascimento's argument is named
-  // "data", not "cpf"/"documento" — CHAVE_DOCUMENTO didn't cover it, so the
-  // customer's birth date reached ai_interactions unmasked. Widened the
-  // pattern to also catch "nascimento" and an exact "data" key.
-  // Fix round 2: maskDocument mantém os 3 primeiros e os 4 últimos
-  // caracteres — em '20/05/1990' isso ainda entrega o dia ('20/') e o ano
-  // ('1990') de nascimento. Uma data não é um documento parcialmente
-  // mascarável; o valor inteiro precisa virar um literal fixo.
-  test('replaces the data (birth date) argument of confirmar_nascimento with a fixed literal in the audit trail, but still passes the real value to the tool', async () => {
-    createChatCompletion
-      .mockResolvedValueOnce({
-        message: {
-          tool_calls: [{ id: 'c1', type: 'function', function: { name: 'confirmar_nascimento', arguments: '{"data":"20/05/1990"}' } }],
-        },
-        usage: {},
-      })
-      .mockResolvedValueOnce({ message: { content: 'Confirmado.' }, usage: {} });
-    executeTool.mockResolvedValue({ ok: true, resultado: { confirmado: true } });
-
-    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
-
-    expect(executeTool).toHaveBeenCalledWith('confirmar_nascimento', { data: '20/05/1990' }, expect.any(Object));
-    const { toolsRequested } = recordAiInteraction.mock.calls[0][0];
-    expect(toolsRequested).toEqual([{ nome: 'confirmar_nascimento', args: { data: '[data]' } }]);
-    const gravado = JSON.stringify(toolsRequested);
-    expect(gravado).not.toContain('1990');
-    expect(gravado).not.toContain('20/');
-  });
-
   test('never sends the api key inside the messages', async () => {
     createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
@@ -519,15 +489,12 @@ describe('perfil de triagem', () => {
   const IDENT_FORTE = {
     nivel: 'forte', origem: 'phone', primeiroNome: 'João', nome: 'João Da Silva Pereira',
     contracts: [{ id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X', login: 'joao.pppoe' }],
-    client: { id: 9, document: '11122233344' }, dataNascimento: '1990-05-20', contestado: false, nascimentoTentado: false,
+    client: { id: 9, document: '11122233344' }, contestado: false,
   };
   const TRIAGEM = { threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false };
 
   beforeEach(() => {
-    // triageRequireBirthdate: true em quase todo este bloco — ele descreve a
-    // triagem COM a confirmação por data de nascimento. O padrão de produção
-    // (desligada) tem bloco próprio mais abaixo.
-    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null, triageRequireBirthdate: true });
+    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null });
     listSectors.mockResolvedValue([{ id: 's-1', name: 'Financeiro', aiHint: 'Boleto, PIX, cobrança.' }, { id: 's-2', name: 'Suporte', aiHint: '' }]);
     listActiveReasons.mockResolvedValue([{ id: 'r-1', name: 'Segunda via' }]);
     listToolPermissions.mockResolvedValue([{ toolName: 'desbloqueio_confianca', enabled: true }]);
@@ -560,17 +527,6 @@ describe('perfil de triagem', () => {
     // lista, o modelo dizia "enviei acima o boleto" sem nenhum envio. Na
     // triagem quem entrega é enviar_boleto; a segunda via fica no assistente.
     expect(FERRAMENTAS_TRIAGEM).not.toContain('gerar_segunda_via');
-  });
-
-  // A ferramenta e o nível de identidade fraca foram removidos: não há mais
-  // configuração nenhuma (flag ligada/desligada, dia/noite) que a traga de
-  // volta à lista da triagem.
-  test('confirmar_nascimento não entra na lista da triagem em nenhuma configuração', () => {
-    for (const config of [{ triageRequireBirthdate: true }, { triageRequireBirthdate: false }, {}]) {
-      for (const triagem of [{ noturno: { ativo: true } }, { noturno: { ativo: false } }]) {
-        expect(ferramentasDaTriagem(triagem, config)).not.toContain('confirmar_nascimento');
-      }
-    }
   });
 
   describe('perfil noturno', () => {
@@ -634,7 +590,7 @@ describe('perfil de triagem', () => {
       apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
       maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.',
       triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
-      triageRequireBirthdate: true, triageReadReceiptsDaytime: true,
+      triageReadReceiptsDaytime: true,
     };
 
     test('com a flag desligada, de dia a lista fixa não muda', async () => {
@@ -695,7 +651,6 @@ describe('perfil de triagem', () => {
     // Teste real do Suporte: "vou encaminhar" sem concluir gastou um turno.
     expect(sys).toMatch(/chame concluir_triagem NA MESMA resposta em que avisa o cliente/);
     expect(sys).toContain('Seja breve.');
-    expect(sys).not.toContain('1990');
     // Não é a PALAVRA "valor" que é proibida (ela aparece dentro da própria
     // regra "nunca diga... valores") — é um valor em R$ ou uma fatura em
     // aberto vazando de verdade para o texto do sistema.
@@ -707,30 +662,13 @@ describe('perfil de triagem', () => {
     expect(semPlanosDeExemplo).not.toMatch(/R\$|\bvalor (da|de|em)\b|venc(e|imento) (em|dia) \d/i);
   });
 
-  // I1 (review): o endereço só pode ser dito de volta ao cliente quando a
-  // identidade já é FORTE — é o endereço do próprio cliente. Com identidade
-  // fraca (CPF ainda não confirmado por data de nascimento) o endereço
-  // pertence a quem quer que seja o dono do CPF digitado, que pode não ser
-  // quem está no WhatsApp.
+  // O endereço só pode ser dito de volta ao cliente porque a identidade da
+  // triagem só existe em dois estados possíveis: 'none' (não identificado,
+  // tratado à parte) e 'forte' (identificado pelo CPF) — é sempre o endereço
+  // do próprio cliente.
   test('com identidade forte, pode desambiguar contratos pelo endereço', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).toContain('Rua X ou');
-  });
-
-  test('com identidade fraca, nunca cita endereço/plano/cadastro para desambiguar', async () => {
-    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
-    expect(sys).toContain('NUNCA cite endereço');
-    expect(sys).not.toContain('Rua X ou');
-  });
-
-  // Defeito C (teste real 2026-09-14): o modelo citou "contrato 2354" e, com
-  // um contrato só, ainda perguntou "qual contrato/endereço".
-  test('com identidade fraca, o contexto não lista contratos — só a quantidade', async () => {
-    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
-    expect(sys).toContain('Contratos: 1');
-    expect(sys).not.toContain('Contratos dele:');
-    expect(sys).not.toContain('17402');
-    expect(sys).not.toContain('600MB');
   });
 
   test('com identidade forte, os contratos continuam listados com endereço', async () => {
@@ -739,24 +677,16 @@ describe('perfil de triagem', () => {
     expect(sys).toContain('RUA X');
   });
 
-  test('os dois níveis proíbem citar o número do contrato ao cliente', async () => {
-    for (const nivel of ['forte', 'fraca']) {
-      jest.clearAllMocks();
-      createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
-      const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel, origem: nivel === 'forte' ? 'phone' : 'cpf' } })).messages[0].content;
-      expect(sys).toContain('NUNCA cite o número do contrato ao cliente.');
-    }
+  test('proíbe citar o número do contrato ao cliente', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toContain('NUNCA cite o número do contrato ao cliente.');
   });
 
-  test('com um contrato só, os dois níveis mandam usá-lo sem perguntar qual', async () => {
-    for (const nivel of ['forte', 'fraca']) {
-      jest.clearAllMocks();
-      createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
-      const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel, origem: nivel === 'forte' ? 'phone' : 'cpf' } })).messages[0].content;
-      expect(sys).toContain('Contrato único: use-o sem perguntar qual.');
-      // Unificado: a instrução aparece uma vez só, não duplicada por nível.
-      expect(sys.split('Contrato único: use-o sem perguntar qual.').length - 1).toBe(1);
-    }
+  test('com um contrato só, manda usá-lo sem perguntar qual', async () => {
+    const sys = (await contexto()).messages[0].content;
+    expect(sys).toContain('Contrato único: use-o sem perguntar qual.');
+    // A instrução aparece uma vez só, não duplicada.
+    expect(sys.split('Contrato único: use-o sem perguntar qual.').length - 1).toBe(1);
   });
 
   test('com mais de um contrato, não há a instrução de contrato único', async () => {
@@ -769,7 +699,7 @@ describe('perfil de triagem', () => {
   // no roteiro de cliente novo, e a IA listava todas as cidades atendidas.
   test('o bloco COMERCIAL cobre quem já é cliente e não foi identificado', async () => {
     const sys = (await contexto()).messages[0].content;
-    expect(sys).toContain('Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF e data de nascimento) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.');
+    expect(sys).toContain('Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.');
   });
 
   test('preço e cobertura vêm só das instruções adicionais, rotuladas como fonte única', async () => {
@@ -789,11 +719,11 @@ describe('perfil de triagem', () => {
     expect(sys).toMatch(/Não há instruções adicionais da operação/);
   });
 
-  test('identidade forte proíbe pedir CPF ou data de nascimento e manda dizer quando não há fatura', async () => {
-    // Observado em produção: cliente identificado pelo telefone foi cobrado da
-    // data de nascimento e depois encaminhado sem saber que não havia boleto.
+  test('identidade forte proíbe pedir CPF de novo e manda dizer quando não há fatura', async () => {
+    // Observado em produção: cliente identificado pelo telefone foi cobrado o
+    // CPF de novo e depois encaminhado sem saber que não havia boleto.
     const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/NÃO peça CPF nem data de nascimento/);
+    expect(sys).toMatch(/NÃO peça CPF\. /);
     // Round 2026-09-13: a instrução passou a falar de "nenhum contrato" (a
     // ferramenta agora procura em todos) e a exigir concluir_triagem na mesma
     // resposta, em vez de perguntar se o cliente quer ser encaminhado.
@@ -826,8 +756,8 @@ describe('perfil de triagem', () => {
     const sys = (await contexto({
       identidade: {
         nivel: 'forte', origem: 'memory', primeiroNome: 'Willemberg', contracts: [],
-        client: { id: 9, document: '11122233344' }, dataNascimento: null,
-        contestado: false, nascimentoTentado: false, sgpIndisponivel: true,
+        client: { id: 9, document: '11122233344' },
+        contestado: false, sgpIndisponivel: true,
       },
     })).messages[0].content;
     expect(sys).toContain('NÃO peça CPF');
@@ -845,18 +775,6 @@ describe('perfil de triagem', () => {
     })).messages[0].content;
     expect(sys).toContain('primeiro nome cliente');
     expect(sys).not.toContain('primeiro nome null');
-  });
-
-  test('identidade fraca instrui a confirmar nascimento antes de entregar', async () => {
-    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
-    expect(sys).toMatch(/confirmar_nascimento/);
-  });
-
-  // Defeito A: com a identidade fraca chegando já pronta do resolvedor, o
-  // modelo não precisa (e não deve) chamar buscar_cliente de novo.
-  test('identidade fraca proíbe pedir o CPF outra vez', async () => {
-    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
-    expect(sys).toContain('O CPF já foi informado; NÃO peça o CPF de novo.');
   });
 
   // Minor (revisão final do branch inteiro): um cliente identificado (nível
@@ -974,7 +892,6 @@ describe('perfil de triagem', () => {
         apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
         maxToolsPerInteraction: 2, triageExtraInstructions: 'Seja breve.',
         triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
-        triageRequireBirthdate: true,
       });
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: null, tool_calls: [
@@ -1004,7 +921,6 @@ describe('perfil de triagem', () => {
         apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
         maxToolsPerInteraction: 2, triageExtraInstructions: 'Seja breve.',
         triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
-        triageRequireBirthdate: true,
       });
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: null, tool_calls: [
@@ -1033,12 +949,11 @@ describe('perfil de triagem', () => {
     });
   });
 
-  test('não vaza cpf, login pppoe, sobrenome nem data de nascimento no contexto de sistema', async () => {
+  test('não vaza cpf, login pppoe nem sobrenome no contexto de sistema', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).not.toContain('11122233344');
     expect(sys).not.toContain('pppoe');
     expect(sys).not.toContain('Silva');
-    expect(sys).not.toContain('1990');
   });
 
   test('imagem e documento entram no histórico como placeholder', async () => {
@@ -1383,56 +1298,12 @@ describe('perfil de triagem', () => {
 
   // Print 2026-09-17 (17:53): cliente mandou o comprovante e a IA respondeu
   // "Para seguir com a conferência, preciso confirmar a titularidade com a
-  // data de nascimento" — com a confirmação por data DESLIGADA, ou seja, sem
-  // nem ter como conferir a data. O prompt já proibia e foi ignorado.
+  // data de nascimento" — mesmo sem nenhuma ferramenta para conferir. O
+  // prompt já proibia e foi ignorado.
   test('comprovante de cliente não identificado pede o CPF primeiro', async () => {
     const sys = (await contexto()).messages[0].content;
     expect(sys).toMatch(/COMPROVANTE DE CLIENTE NÃO IDENTIFICADO: peça o CPF ou CNPJ primeiro/);
     expect(sys).toMatch(/Sem o cadastro localizado não há o que conferir/);
-  });
-
-  describe('guarda contra pedir data de nascimento', () => {
-    const IDENT = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] };
-    const SEM_EXIGENCIA = {
-      apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
-      maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8,
-      triageMaxQuestions: 2, triageResolvedReasonId: null, triageRequireBirthdate: false,
-    };
-
-    test('pediu a data sem a ferramenta na lista: refaz a resposta', async () => {
-      getAiConfig.mockResolvedValue(SEM_EXIGENCIA);
-      createChatCompletion
-        .mockResolvedValueOnce({ message: { content: 'Boa tarde! Para seguir com a conferência, preciso confirmar a titularidade com a data de nascimento.' }, usage: {} })
-        .mockResolvedValueOnce({ message: { content: 'Boa tarde! Para localizar seu cadastro, me informe seu CPF, por favor.' }, usage: {} });
-
-      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
-
-      expect(r.texto).toBe('Boa tarde! Para localizar seu cadastro, me informe seu CPF, por favor.');
-      const segunda = createChatCompletion.mock.calls[1][0];
-      expect(segunda.tools).toEqual([]);
-      expect(segunda.messages[segunda.messages.length - 1].content).toMatch(/Você pediu a data de nascimento/);
-    });
-
-    test('se a reescrita ainda pedir, a frase da data é cortada', async () => {
-      getAiConfig.mockResolvedValue(SEM_EXIGENCIA);
-      createChatCompletion
-        .mockResolvedValueOnce({ message: { content: 'Boa tarde! Para seguir, preciso da data de nascimento. Me informe seu CPF, por favor.' }, usage: {} })
-        .mockResolvedValueOnce({ message: { content: 'Preciso da data de nascimento. Me informe seu CPF, por favor.' }, usage: {} });
-
-      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
-
-      expect(r.texto).toBe('Me informe seu CPF, por favor.');
-      expect(r.texto).not.toMatch(/nascimento/i);
-    });
-
-    test('texto sem menção à data não gera chamada extra', async () => {
-      getAiConfig.mockResolvedValue(SEM_EXIGENCIA);
-      createChatCompletion.mockResolvedValue({ message: { content: 'Me informe seu CPF, por favor.' }, usage: {} });
-
-      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
-
-      expect(createChatCompletion).toHaveBeenCalledTimes(1);
-    });
   });
 
   // Print 2026-09-17 (16:56): entrega de boleto inteira sem chamar a cliente
@@ -1479,20 +1350,10 @@ describe('perfil de triagem', () => {
 
   // Prints 2026-09-17, três correções pedidas pelo dono.
   describe('correções de 2026-09-17', () => {
-    test('com a exigência desligada (padrão da operação), o prompt PROÍBE pedir data de nascimento', async () => {
-      getAiConfig.mockResolvedValue({
-        apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
-        maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8,
-        triageMaxQuestions: 2, triageResolvedReasonId: null, triageRequireBirthdate: false,
-      });
+    test('o prompt sempre PROÍBE pedir data de nascimento', async () => {
       const sys = (await contexto()).messages[0].content;
       expect(sys).toMatch(/NUNCA peça data de nascimento/);
       expect(sys).toMatch(/nem para conferir comprovante/);
-    });
-
-    test('com a exigência ligada, a proibição não aparece', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).not.toMatch(/NUNCA peça data de nascimento/);
     });
 
     test('Reativação passa a ser mais de 90 dias de atraso', async () => {

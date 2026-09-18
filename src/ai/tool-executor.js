@@ -21,10 +21,9 @@ function recusa(motivo, detalhe, instrucao) {
 }
 
 // A recusa chegava ao modelo como { erro: 'identity_not_confirmed' } seco e ele
-// improvisava (defeito D, teste real 2026-09-14). O texto antigo mandava pedir a
-// data de nascimento e chamar confirmar_nascimento — ferramenta que nem existia
-// na lista do turno. Era esta linha, e não o prompt, que fazia a IA pedir a data
-// em produção: resultado de ferramenta o modelo lê como fato apurado.
+// improvisava (defeito D, teste real 2026-09-14). Era esta linha, e não o
+// prompt, que fazia a IA pedir um dado errado em produção: resultado de
+// ferramenta o modelo lê como fato apurado.
 const INSTRUCAO_IDENTIDADE = 'Ainda não sei quem é o cliente. Peça o CPF ou CNPJ e chame buscar_cliente; depois chame esta ferramenta de novo.';
 
 function comTimeout(promise, ms) {

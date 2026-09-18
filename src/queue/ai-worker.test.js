@@ -21,7 +21,7 @@ const { getAiConfig } = require('../ai/ai-config.repository');
 const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
 const {
   getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
-  closeConversationByAi, getTriagePendingDocument,
+  closeConversationByAi,
 } = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
 const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation } = require('../conversations/message.repository');
@@ -181,7 +181,6 @@ describe('ai-worker — triagem', () => {
     findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text' });
     findLatestInboundMessageId.mockResolvedValue('m-1');
     isPhoneContested.mockResolvedValue(false);
-    getTriagePendingDocument.mockResolvedValue(null);
     // Default: concludeAiTriage "ganha a corrida" (devolve a conversa
     // atualizada) — sem isto, concluirEmCodigo's guard (if (!conversa) return)
     // descartaria o broadcast em qualquer teste que não mocke isto por conta
@@ -558,30 +557,15 @@ describe('ai-worker — triagem', () => {
     expect(resolverIdentidade).toHaveBeenCalledWith(expect.objectContaining({ ignorarTelefone: false }));
   });
 
-  test('o resolutor de identidade recebe o CPF pendente gravado na conversa', async () => {
-    // Defeito A: sem isto, a identidade fraca morria no fim do turno e o
-    // modelo pedia o CPF de novo no turno seguinte.
-    getTriagePendingDocument.mockResolvedValue('52998224725');
-    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
-    expect(getTriagePendingDocument).toHaveBeenCalledWith('c-1');
-    expect(resolverIdentidade).toHaveBeenCalledWith(expect.objectContaining({ documentoPendente: '52998224725' }));
-  });
-
-  test('sem CPF pendente, o resolutor recebe documentoPendente null', async () => {
-    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
-    expect(resolverIdentidade).toHaveBeenCalledWith(expect.objectContaining({ documentoPendente: null }));
-  });
-
-  test('a identidade devolvida pelo turno (com data de nascimento e CPF) nunca é logada nem persistida pelo worker', async () => {
+  test('a identidade devolvida pelo turno (com o CPF do cliente) nunca é logada nem persistida pelo worker', async () => {
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     runAiTurn.mockResolvedValue({
       texto: 'Perfeito.', toolsExecutadas: [], erro: null, triagemConcluida: null,
-      identidade: { nivel: 'forte', origem: 'cpf_confirmed', dataNascimento: '1990-05-20', client: { document: '52998224725' } },
+      identidade: { nivel: 'forte', origem: 'cpf', client: { document: '52998224725' } },
     });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     const tudoLogado = [...logSpy.mock.calls, ...errorSpy.mock.calls].map((args) => JSON.stringify(args)).join(' ');
-    expect(tudoLogado).not.toContain('1990-05-20');
     expect(tudoLogado).not.toContain('52998224725');
     logSpy.mockRestore();
     errorSpy.mockRestore();

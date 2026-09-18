@@ -27,7 +27,6 @@ const {
   listClosedConversationsByContact,
   completeTriage,
   incrementTriageAttempts,
-  incrementBirthdateAttempts,
   activateConversation,
   listInProgressConversations,
   listWaitingForAgentConversations,
@@ -45,8 +44,6 @@ const {
   findRecentAiClosedConversation,
   markPhoneContested,
   isPhoneContested,
-  setTriagePendingDocument,
-  getTriagePendingDocument,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -771,22 +768,6 @@ describe('conversation repository', () => {
     expect(second).toBe(2);
   });
 
-  test('incrementBirthdateAttempts increases the counter and returns the new value, regardless of triage_state', async () => {
-    const conversation = await createConversation(contactId, channelId, 'pending');
-    await completeTriage(conversation.id, (await createSector({ name: 'Financeiro' })).id);
-
-    const first = await incrementBirthdateAttempts(conversation.id);
-    const second = await incrementBirthdateAttempts(conversation.id);
-
-    expect(first).toBe(1);
-    expect(second).toBe(2);
-  });
-
-  test('incrementBirthdateAttempts returns 0 for a conversation that does not exist', async () => {
-    const result = await incrementBirthdateAttempts('00000000-0000-0000-0000-000000000000');
-    expect(result).toBe(0);
-  });
-
   test('getConversationWithContact includes the sector name when a sector is set', async () => {
     const sector = await createSector({ name: 'Suporte' });
     const conversation = await createConversation(contactId, channelId, 'pending');
@@ -1091,7 +1072,7 @@ describe('conversation repository', () => {
     // A armadilha das colunas enumeradas: escreve por uma função, relê por outras.
     const conv = await createConversation(contactId, channelId, 'pending');
     const setor = (await getPool().query("INSERT INTO sectors (name) VALUES ('Suporte') RETURNING id")).rows[0].id;
-    await concludeAiTriage(conv.id, { sectorId: setor, reasonId: null, confidence: 0.5, summary: 'resumo X', identifiedBy: 'cpf_confirmed', lowConfidence: true, resolvedByAi: false });
+    await concludeAiTriage(conv.id, { sectorId: setor, reasonId: null, confidence: 0.5, summary: 'resumo X', identifiedBy: 'cpf', lowConfidence: true, resolvedByAi: false });
 
     const agent = await createAgent({ email: 'ai-triage-reads@dw.com', password: 'secret123', role: 'agent' });
 
@@ -1104,7 +1085,7 @@ describe('conversation repository', () => {
     for (const [nome, c] of Object.entries(leituras)) {
       if (!c) throw new Error(`${nome}: esperava encontrar a conversa`);
       expect(c.aiTriageSummary).toBe('resumo X');
-      expect(c.aiTriageIdentifiedBy).toBe('cpf_confirmed');
+      expect(c.aiTriageIdentifiedBy).toBe('cpf');
       expect(c.aiTriageLowConfidence).toBe(true);
       expect(c.aiTriageSectorId).toBe(setor);
     }
@@ -1262,30 +1243,6 @@ describe('conversation repository', () => {
 
     test('isPhoneContested devolve false para uma conversa que não existe', async () => {
       expect(await isPhoneContested('00000000-0000-0000-0000-000000000000')).toBe(false);
-    });
-  });
-
-  describe('ai_triage_pending_document', () => {
-    test('getTriagePendingDocument é null por padrão numa conversa nova', async () => {
-      const conv = await createConversation(contactId, channelId, 'pending');
-      expect(await getTriagePendingDocument(conv.id)).toBeNull();
-    });
-
-    test('setTriagePendingDocument grava o documento e getTriagePendingDocument o devolve', async () => {
-      const conv = await createConversation(contactId, channelId, 'pending');
-      await setTriagePendingDocument(conv.id, '52998224725');
-      expect(await getTriagePendingDocument(conv.id)).toBe('52998224725');
-    });
-
-    test('setTriagePendingDocument com null limpa o documento pendente', async () => {
-      const conv = await createConversation(contactId, channelId, 'pending');
-      await setTriagePendingDocument(conv.id, '52998224725');
-      await setTriagePendingDocument(conv.id, null);
-      expect(await getTriagePendingDocument(conv.id)).toBeNull();
-    });
-
-    test('getTriagePendingDocument devolve null para uma conversa que não existe', async () => {
-      expect(await getTriagePendingDocument('00000000-0000-0000-0000-000000000000')).toBeNull();
     });
   });
 });

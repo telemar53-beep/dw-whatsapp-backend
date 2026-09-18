@@ -4,7 +4,7 @@ const { createSuggestion } = require('../ai/ai-suggestion.repository');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const {
   getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
-  closeConversationByAi, getTriagePendingDocument,
+  closeConversationByAi,
 } = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
 const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation } = require('../conversations/message.repository');
@@ -189,12 +189,7 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // nome) — sem isto o turno seguinte buscaria de novo pelo MESMO telefone no
   // SGP e cumprimentaria a mesma pessoa errada de novo.
   const ignorarTelefone = await isPhoneContested(conversation.id);
-  // O CPF digitado num turno anterior e ainda não confirmado pela data de
-  // nascimento: sem ele, a identidade FRACA morre no fim do turno e o modelo
-  // pede o CPF de novo ("me informe o CPF novamente", teste real 2026-09-14).
-  // Nunca vai a log — é dado pessoal do cliente.
-  const documentoPendente = await getTriagePendingDocument(conversation.id);
-  const identidade = await resolverIdentidade({ contact, ignorarTelefone, documentoPendente });
+  const identidade = await resolverIdentidade({ contact, ignorarTelefone });
   // A identificação pode ter acabado de descobrir a cidade do cliente no SGP:
   // quando a mensagem chegou (inbound-message.service.js), o contato ainda
   // estava sem cidade e o aviso não tinha como sair. Aqui ele sai.
@@ -227,9 +222,9 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   const maxQuestions = (Number.isInteger(config.triageMaxQuestions) ? config.triageMaxQuestions : 2) + (noturnoAtivo ? 2 : 0);
   const forcarConclusao = attempts >= maxQuestions;
 
-  // O turno pode devolver identidade.dataNascimento e o CPF do cliente
-  // (contexto.identidade em ai-orchestrator.js) — nunca vão a log nem são
-  // persistidos aqui; o worker só olha turno.texto e turno.triagemConcluida.
+  // O turno pode devolver o CPF do cliente (contexto.identidade em
+  // ai-orchestrator.js) — nunca vai a log nem é persistido aqui; o worker só
+  // olha turno.texto e turno.triagemConcluida.
   const turno = await runAiTurn({
     conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },

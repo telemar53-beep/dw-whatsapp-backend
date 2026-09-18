@@ -19,18 +19,12 @@ const { temAlfabetoEstranho, semAlfabetoEstranho } = require('./idioma');
 // nome da ferramenta) de propósito: cobre qualquer ferramenta futura que
 // receba um documento, não só a de hoje.
 const CHAVE_DOCUMENTO = /cpf|documento/i;
-// Data de nascimento (confirmar_nascimento) não é um documento — maskDocument
-// mantém os 3 primeiros e os 4 últimos caracteres, o que em '20/05/1990'
-// ainda entrega o dia e o ano de nascimento (fix round 2). Aqui não há nada
-// para preservar parcialmente: o valor inteiro vira '[data]'.
-const CHAVE_DATA_NASCIMENTO = /nascimento|^data$/i;
 
 function mascararArgsParaAuditoria(args) {
   if (!args || typeof args !== 'object') return args;
   const mascarado = { ...args };
   for (const chave of Object.keys(mascarado)) {
-    if (CHAVE_DATA_NASCIMENTO.test(chave)) mascarado[chave] = '[data]';
-    else if (CHAVE_DOCUMENTO.test(chave)) mascarado[chave] = maskDocument(mascarado[chave]);
+    if (CHAVE_DOCUMENTO.test(chave)) mascarado[chave] = maskDocument(mascarado[chave]);
   }
   return mascarado;
 }
@@ -90,52 +84,6 @@ function afirmaEnvio(texto) { return AFIRMA_ENVIO.test(String(texto || '')); }
 // (ou a chamada falhar, ou o tempo do turno tiver acabado), as palavras
 // estranhas são cortadas: pior uma palavra a menos do que árabe no WhatsApp.
 const INSTRUCAO_PORTUGUES = 'Sua resposta contém palavras ou letras de outro idioma/alfabeto. Reescreva a MESMA resposta, com o mesmo sentido, inteiramente em português do Brasil, sem nenhuma palavra de outro idioma.';
-
-// Print 2026-09-17 (17:53): cliente mandou o comprovante e a IA respondeu
-// "Para seguir com a conferência, preciso confirmar a titularidade com a data
-// de nascimento" — com a confirmação por data desligada, ou seja, sem nem ter
-// a ferramenta para conferir. O prompt já proibia e foi ignorado duas vezes,
-// então a garantia é em código. O critério não é a flag e sim a ferramenta:
-// pedir um dado que você não tem como verificar é sempre erro.
-const PEDE_NASCIMENTO = /\bnascimento\b/i;
-const INSTRUCAO_SEM_NASCIMENTO = 'Você pediu a data de nascimento, e isso é proibido: não há como conferi-la. Reescreva a resposta sem pedir a data — se ainda precisar identificar o cliente, peça o CPF ou CNPJ.';
-
-function pedeDataDeNascimento(texto) {
-  return PEDE_NASCIMENTO.test(String(texto || ''));
-}
-
-/** Rede final: tira as frases que falam em nascimento, preservando o resto. */
-function semFraseDeNascimento(texto) {
-  const frases = String(texto || '').split(/(?<=[.!?])\s+/);
-  const limpas = frases.filter((f) => !PEDE_NASCIMENTO.test(f));
-  const junto = limpas.join(' ').replace(/\s{2,}/g, ' ').trim();
-  return junto || texto;
-}
-
-async function garantirSemDataDeNascimento({ texto, messages, config, tools, iniciadoEm, conversationId }) {
-  const tokens = { prompt: 0, completion: 0 };
-  // Com confirmar_nascimento na lista do turno, pedir a data é legítimo.
-  const podeConferir = Array.isArray(tools)
-    && tools.some((t) => t && t.function && t.function.name === 'confirmar_nascimento');
-  if (!texto || podeConferir || !pedeDataDeNascimento(texto)) return { texto, tokens };
-  if (Date.now() - iniciadoEm < TURNO_MAX_MS) {
-    try {
-      const r = await createChatCompletion({
-        apiKey: config.apiKey, model: config.model, tools: [],
-        messages: [...messages, { role: 'assistant', content: texto }, { role: 'system', content: INSTRUCAO_SEM_NASCIMENTO }],
-      });
-      tokens.prompt += (r.usage && r.usage.promptTokens) || 0;
-      tokens.completion += (r.usage && r.usage.completionTokens) || 0;
-      const reescrito = r.message && r.message.content;
-      if (reescrito && !pedeDataDeNascimento(reescrito)) return { texto: reescrito, tokens };
-      if (reescrito) return { texto: semFraseDeNascimento(reescrito), tokens };
-    } catch (err) {
-      console.error(`Reescrita sem data de nascimento falhou na conversa ${conversationId}: ${mensagemSegura(err)}`);
-    }
-  }
-  console.error(`Pedido de data de nascimento removido da resposta na conversa ${conversationId}`);
-  return { texto: semFraseDeNascimento(texto), tokens };
-}
 
 async function garantirPortugues({ texto, messages, config, iniciadoEm, conversationId }) {
   const tokens = { prompt: 0, completion: 0 };
@@ -326,11 +274,6 @@ function dataDeBrasilia() {
 // endereço ou "pagamento confirmado" — isso vai só no resumo interno para o
 // atendente humano).
 async function montarContextoTriagem(config, identidade, triagem, avisoCidade, empresa) {
-  // Com a confirmação por data de nascimento desligada (o padrão), a data
-  // não é citada em lugar nenhum do prompt: o CPF sozinho identifica.
-  const exigeNascimento = Boolean(config && config.triageRequireBirthdate);
-  const eDataDeNascimento = exigeNascimento ? ' e data de nascimento' : '';
-  const nemDataDeNascimento = exigeNascimento ? ' nem data de nascimento' : '';
   // Guarda defensiva: um identidade null/undefined não pode derrubar a
   // montagem do contexto — cai no mesmo tratamento de "não identificado".
   identidade = identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
@@ -369,10 +312,12 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     `NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo: a ${empresa || NOME_GENERICO_EMPRESA} é o suporte. Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica.`,
     // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
     // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
-    // Print 2026-09-17: com a exigência desligada, a IA ainda pediu "sua data
-    // de nascimento" para conferir um comprovante — e insistiu quando a
-    // cliente respondeu. O dono: nunca peça, em nenhum fluxo.
-    ...(exigeNascimento ? [] : ['NUNCA peça data de nascimento ao cliente, em nenhuma situação — nem para identificar, nem para conferir comprovante, nem para "seguir com a conferência". O CPF já identifica.']),
+    // Print 2026-09-17: mesmo com o prompt proibindo, a IA pediu "sua data de
+    // nascimento" para conferir um comprovante — e insistiu quando a cliente
+    // respondeu. O dono: nunca peça, em nenhum fluxo. Não há mais ferramenta
+    // nem fluxo nenhum que confira uma data de nascimento, então a proibição
+    // vale sempre, sem condição.
+    'NUNCA peça data de nascimento ao cliente, em nenhuma situação — nem para identificar, nem para conferir comprovante, nem para "seguir com a conferência". O CPF já identifica.',
     `Hoje é ${dataDeBrasilia()} e agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois. Cumprimente só na primeira resposta da conversa; nas seguintes, não repita a saudação: vá direto ao assunto.`,
   ];
   // A empresa já sabe da falha: mandar o cliente reiniciar o roteador é perder
@@ -412,7 +357,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // identificado — pedir CPF de novo a quem já foi chamado pelo nome é o
     // pior desfecho —, mas não há contratos nem consultas possíveis, então o
     // único caminho é cumprimentar, avisar e encaminhar.
-    linhas.push(`Cliente identificado pela memória (primeiro nome ${identidade.primeiroNome || 'cliente'}), mas o sistema do SGP NÃO respondeu agora. NÃO peça CPF${nemDataDeNascimento} e NÃO tente boleto, PIX nem status de conexão. Cumprimente pelo primeiro nome, diga em uma frase que o sistema de consulta está instável neste momento, e chame concluir_triagem para o setor adequado ao que ele pediu, com o resumo começando por "SGP indisponível na triagem".`);
+    linhas.push(`Cliente identificado pela memória (primeiro nome ${identidade.primeiroNome || 'cliente'}), mas o sistema do SGP NÃO respondeu agora. NÃO peça CPF e NÃO tente boleto, PIX nem status de conexão. Cumprimente pelo primeiro nome, diga em uma frase que o sistema de consulta está instável neste momento, e chame concluir_triagem para o setor adequado ao que ele pediu, com o resumo começando por "SGP indisponível na triagem".`);
   } else if (identidade.nivel === 'none') {
     // Redação reescrita pelo dono em 2026-09-17: a frase seca virou padrão e
     // soava impessoal; acolher antes de pedir o documento.
@@ -425,54 +370,39 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // nome null", que o modelo podia repetir de volta ao cliente.
     linhas.push(`Cliente identificado (${identidade.origem === 'memory' ? 'memória' : identidade.origem === 'phone' ? 'telefone' : 'CPF'}): primeiro nome ${identidade.primeiroNome || 'cliente'}. A PRIMEIRA resposta desta conversa começa SEMPRE com a saudação da hora e o primeiro nome ("Bom dia, ${identidade.primeiroNome || 'cliente'}!"), mesmo quando você já entregou algo por ferramenta. Se ele disser que não é ele ou que o nome está errado, chame esquecer_identificacao e peça o CPF.`);
     if (contratos.length > 0) {
-      // O endereço (e o próprio fato de existirem dois pontos) só pode ser
-      // falado de volta ao cliente quando a identidade já é FORTE: é o
-      // endereço do próprio cliente. Com identidade fraca (CPF ainda não
-      // confirmado por data de nascimento) o cadastro pertence a quem quer
-      // que seja o dono do CPF digitado — pode não ser quem está no WhatsApp.
-      // Defeito C: listar os contratos também com identidade fraca era o que
-      // dava ao modelo o número que ele acabava citando ("contrato 2354").
-      if (identidade.nivel === 'forte') {
-        linhas.push('Contratos dele:');
-        for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
-        linhas.push('Se precisar saber de qual ponto ele fala, pergunte de uma vez pelo endereço, citando os endereços ("é o da Rua X ou o da Av. Y?"). Pergunte SÓ quando a resposta depender do ponto.');
-      } else {
-        linhas.push(`Contratos: ${contratos.length}.`);
-        linhas.push('NUNCA cite endereço, plano ou qualquer dado do cadastro ao cliente: a identificação ainda não foi confirmada. Se precisar desambiguar, peça que ELE descreva o local, sem você citar nada.');
-      }
-      // Vale para os DOIS níveis, e aparece uma vez só: o cliente não conhece
-      // o número do contrato, nem com a identidade já confirmada.
+      // Chegando aqui a identidade já é FORTE — é o único nível possível
+      // além de 'none' —, então o endereço pode ser falado de volta ao
+      // cliente: é o endereço do próprio cliente.
+      linhas.push('Contratos dele:');
+      for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
+      linhas.push('Se precisar saber de qual ponto ele fala, pergunte de uma vez pelo endereço, citando os endereços ("é o da Rua X ou o da Av. Y?"). Pergunte SÓ quando a resposta depender do ponto.');
       linhas.push('Nunca peça o número do contrato nem pergunte "qual contrato": o cliente não sabe. NUNCA cite o número do contrato ao cliente.');
       if (contratos.length === 1) linhas.push('Contrato único: use-o sem perguntar qual.');
     }
-    if (identidade.nivel === 'fraca') {
-      linhas.push('Identificação por CPF ainda NÃO confirmada: para entregar boleto ou PIX, pergunte a data de nascimento e chame confirmar_nascimento. Se não confirmar, apenas encaminhe. O CPF já foi informado; NÃO peça o CPF de novo.');
-    } else {
-      linhas.push(
-        // Com um motivo de encerramento configurado, o atendimento que começou
-        // e terminou em "quero o boleto" não vai mais para a fila: a própria
-        // IA fecha. Sem motivo, tudo continua como antes.
-        config.triageResolvedReasonId
-          ? [
-            `Identidade JÁ confirmada: NÃO peça CPF${nemDataDeNascimento}. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. NÃO conclua a triagem nesse momento.`,
-            // Os modelos de frase da entrega NÃO ficam aqui (teste real
-            // 2026-09-15: com o exemplo "Enviei acima o boleto..." no prompt, o
-            // modelo copiou a frase sem chamar enviar_boleto e o cliente não
-            // recebeu nada). A frase sai da própria ferramenta, no campo
-            // instrucao, só depois de ela ter enviado de verdade.
-            'Depois de entregar, responda EXATAMENTE no modelo que a ferramenta devolver no campo instrucao. NUNCA diga que enviou o boleto ou o PIX antes de a ferramenta confirmar o envio (enviado: true): sem essa confirmação, nada chegou ao cliente.',
-            'Se depois disso ele agradecer ("obrigado", "valeu"): chame encerrar_atendimento e responda no modelo: "Imagina, Willemberg! 😊 Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" (à noite, "Tenha uma boa noite!"). Se responder só "ok", "certo" ou um joinha: chame encerrar_atendimento e responda: "Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" Se pedir outra coisa, siga a triagem normalmente e encerre só quando ele agradecer ou confirmar que está tudo certo. No fluxo do BOLETO as mesmas despedidas valem, mas SEM emoji ("Imagina, Willemberg! Qualquer dúvida…").',
-          ].join('\n')
-          : `Identidade JÁ confirmada: NÃO peça CPF${nemDataDeNascimento}. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.`,
-        ...(contratos.length > 1
-          ? ['Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, no modelo: "Claro, vou te ajudar com o PIX 😊 Vi que você tem mais de um contrato com a gente. Para eu te enviar os dados do pagamento certinho, pode me confirmar de qual endereço você precisa?" (cite os endereços se ajudar) e entregue na resposta seguinte. Para BOLETO, o mesmo pedido sem emoji: "Claro, vou te ajudar com o boleto. Vi que você tem mais de um contrato com a gente. Para eu te enviar o boleto certinho, pode me confirmar de qual endereço você precisa?"']
-          : []),
-        // A ferramenta agora procura a fatura em TODOS os contratos do cliente
-        // antes de dizer que não há: quando ela diz "em nenhum contrato", é
-        // definitivo e não há o que perguntar — só avisar e encaminhar.
-        'Se a ferramenta responder que não há fatura em aberto em nenhum contrato, diga isso em uma frase (sem valores) e chame concluir_triagem para o Financeiro na mesma resposta — não pergunte se ele quer ser encaminhado. Se ela devolver contratosComFatura, pergunte pelo endereço e entregue na resposta seguinte.'
-      );
-    }
+    linhas.push(
+      // Com um motivo de encerramento configurado, o atendimento que começou
+      // e terminou em "quero o boleto" não vai mais para a fila: a própria
+      // IA fecha. Sem motivo, tudo continua como antes.
+      config.triageResolvedReasonId
+        ? [
+          'Identidade JÁ confirmada: NÃO peça CPF. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. NÃO conclua a triagem nesse momento.',
+          // Os modelos de frase da entrega NÃO ficam aqui (teste real
+          // 2026-09-15: com o exemplo "Enviei acima o boleto..." no prompt, o
+          // modelo copiou a frase sem chamar enviar_boleto e o cliente não
+          // recebeu nada). A frase sai da própria ferramenta, no campo
+          // instrucao, só depois de ela ter enviado de verdade.
+          'Depois de entregar, responda EXATAMENTE no modelo que a ferramenta devolver no campo instrucao. NUNCA diga que enviou o boleto ou o PIX antes de a ferramenta confirmar o envio (enviado: true): sem essa confirmação, nada chegou ao cliente.',
+          'Se depois disso ele agradecer ("obrigado", "valeu"): chame encerrar_atendimento e responda no modelo: "Imagina, Willemberg! 😊 Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" (à noite, "Tenha uma boa noite!"). Se responder só "ok", "certo" ou um joinha: chame encerrar_atendimento e responda: "Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" Se pedir outra coisa, siga a triagem normalmente e encerre só quando ele agradecer ou confirmar que está tudo certo. No fluxo do BOLETO as mesmas despedidas valem, mas SEM emoji ("Imagina, Willemberg! Qualquer dúvida…").',
+        ].join('\n')
+        : 'Identidade JÁ confirmada: NÃO peça CPF. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.',
+      ...(contratos.length > 1
+        ? ['Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, no modelo: "Claro, vou te ajudar com o PIX 😊 Vi que você tem mais de um contrato com a gente. Para eu te enviar os dados do pagamento certinho, pode me confirmar de qual endereço você precisa?" (cite os endereços se ajudar) e entregue na resposta seguinte. Para BOLETO, o mesmo pedido sem emoji: "Claro, vou te ajudar com o boleto. Vi que você tem mais de um contrato com a gente. Para eu te enviar o boleto certinho, pode me confirmar de qual endereço você precisa?"']
+        : []),
+      // A ferramenta agora procura a fatura em TODOS os contratos do cliente
+      // antes de dizer que não há: quando ela diz "em nenhum contrato", é
+      // definitivo e não há o que perguntar — só avisar e encaminhar.
+      'Se a ferramenta responder que não há fatura em aberto em nenhum contrato, diga isso em uma frase (sem valores) e chame concluir_triagem para o Financeiro na mesma resposta — não pergunte se ele quer ser encaminhado. Se ela devolver contratosComFatura, pergunte pelo endereço e entregue na resposta seguinte.'
+    );
   }
   linhas.push(
     '',
@@ -585,7 +515,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     'EQUIPAMENTO NA CASA DE OUTRA PESSOA (internet dividida com vizinho ou parente, roteador em outra casa): é alcance de Wi-Fi, não falha. Explique que o sinal precisa atravessar a distância e as paredes entre as duas casas e que por isso chega fraco, e que o contrato é atendido no endereço onde o equipamento está instalado. Conclua para o Suporte com isso no resumo.',
     'DADOS MÓVEIS (2G, 3G, 4G, 5G): se ele disser que está conectado nos dados do celular, avise com cuidado que aí ele não está usando a internet da casa, e peça que teste conectado ao Wi-Fi antes de qualquer diagnóstico.',
     'Fim de roteiro NÃO é automático: só conclua quando não houver mais nada para responder. Se a última mensagem dele traz uma pergunta, responda-a na mesma mensagem em que encaminha.',
-    `Sem identidade confirmada, o fluxo de Suporte não cita status nenhum: identifique primeiro (CPF${eDataDeNascimento}) ou apenas encaminhe.`,
+    'Sem identidade confirmada, o fluxo de Suporte não cita status nenhum: identifique primeiro (CPF) ou apenas encaminhe.',
     '',
     // Roteiros de COMERCIAL ditados pelo dono (2026-09-13) depois do teste real
     // em que a IA confirmou a cobertura, engoliu os planos que estavam nas
@@ -601,7 +531,7 @@ async function montarContextoTriagem(config, identidade, triagem, avisoCidade, e
     // Print 1 (teste real 2026-09-14): quem já é cliente e queria outro ponto
     // caía no roteiro de cliente novo, e a IA despejava a lista inteira de
     // cidades atendidas em vez de confirmar a dele.
-    `Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF${eDataDeNascimento}) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.`,
+    'Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.',
     [
       '- Cliente NOVO (não identificado): "Boa noite! 😊 Temos planos de internet 100% fibra óptica:',
       '',
@@ -971,13 +901,6 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
 
   // Depois do laço, antes da auditoria: vale para os dois perfis, e o que fica
   // gravado (finalResponse) é o que o cliente/atendente recebe de fato.
-  const semNascimento = await garantirSemDataDeNascimento({
-    texto, messages, config, tools, iniciadoEm, conversationId: conversation.id,
-  });
-  texto = semNascimento.texto;
-  promptTokens += semNascimento.tokens.prompt;
-  completionTokens += semNascimento.tokens.completion;
-
   const portugues = await garantirPortugues({ texto, messages, config, iniciadoEm, conversationId: conversation.id });
   texto = portugues.texto;
   promptTokens += portugues.tokens.prompt;

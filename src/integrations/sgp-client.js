@@ -1,9 +1,5 @@
 const axios = require('axios');
 const { getSgpQueryConfig } = require('./sgp-query-config.repository');
-// Módulo puro (sem requires): não forma ciclo com nada aqui. É o MESMO
-// normalizador que confirmar_nascimento usa no que o cliente digita — os dois
-// lados da conferência precisam concordar sobre o que é uma data.
-const { normalizarDataNascimento } = require('../ai/data-nascimento');
 
 class SgpNotConfiguredError extends Error {}
 class SgpDisabledError extends Error {}
@@ -219,9 +215,7 @@ async function requestTrustUnlock(contratoId) {
 /**
  * Localiza UM cliente por telefone ou CPF/CNPJ em /api/ura/clientes/.
  * Allowlist estrita: a resposta traz contratoCentralSenha, contratoCentralLogin,
- * endereço e contatos — nada disso sai daqui. dataNascimento sai porque é o
- * fator de confirmação da triagem; quem recebe guarda no servidor e nunca o
- * envia ao modelo (ver identity-resolver.js e confirmar_nascimento).
+ * endereço e contatos — nada disso sai daqui, só id e cpfcnpj.
  * `cliente` só vem preenchido quando o total é exatamente 1 — telefone zerado
  * casa com vários cadastros no SGP da DW (sondagem de 2026-09-12).
  */
@@ -243,11 +237,6 @@ async function findClientRecord(filtro) {
     cliente: {
       id: c.id,
       cpfcnpj: String(c.cpfcnpj || '').replace(/\D/g, ''),
-      // Defeito B (teste real 2026-09-14): a checagem antiga exigia AAAA-MM-DD
-      // cru. Cadastros com a data em DD/MM/AAAA ou com hora (ISO) viravam
-      // null, e confirmar_nascimento respondia "não há data de nascimento no
-      // cadastro" logo depois de o cliente informar a data.
-      dataNascimento: normalizarDataNascimento(c.dataNascimento),
     },
   };
 }

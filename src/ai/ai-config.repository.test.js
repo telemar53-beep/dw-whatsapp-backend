@@ -135,24 +135,6 @@ describe('ai config repository', () => {
     expect((await getAiConfig()).nightStartTime).toBeNull();
   });
 
-  test('triageRequireBirthdate sai desligado e updateTriageConfig liga e desliga', async () => {
-    expect((await getAiConfig()).triageRequireBirthdate).toBe(false);
-
-    const exigindo = await updateTriageConfig({
-      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3,
-      triageExtraInstructions: '', triageRequireBirthdate: true,
-    });
-    expect(exigindo.triageRequireBirthdate).toBe(true);
-    expect((await getAiConfig()).triageRequireBirthdate).toBe(true);
-
-    const semExigir = await updateTriageConfig({
-      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3,
-      triageExtraInstructions: '', triageRequireBirthdate: false,
-    });
-    expect(semExigir.triageRequireBirthdate).toBe(false);
-    expect((await getAiConfig()).triageRequireBirthdate).toBe(false);
-  });
-
   test('triageReadReceiptsDaytime sai desligado e updateTriageConfig liga e desliga', async () => {
     expect((await getAiConfig()).triageReadReceiptsDaytime).toBe(false);
 

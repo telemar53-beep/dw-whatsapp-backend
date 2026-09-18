@@ -22,8 +22,6 @@ function toConfig(row) {
     // Desligada (padrao): a IA sugerindo resposta ao atendente e separado da
     // triagem e da transcricao — desligar pelo `mode` levava os tres juntos.
     assistantSuggestionsEnabled: Boolean(row.assistant_suggestions_enabled),
-    // Desligada (padrao): o CPF digitado ja identifica o cliente.
-    triageRequireBirthdate: Boolean(row.triage_require_birthdate),
     // Desligada (padrao): de dia a triagem nem abre a imagem. Ligada, ela le
     // o comprovante so para conferir e avisar a atendente — nunca libera nada.
     triageReadReceiptsDaytime: Boolean(row.triage_read_receipts_daytime),
@@ -84,16 +82,16 @@ async function updateAssistantSuggestionsEnabled(enabled) {
   return toConfig(result.rows[0]);
 }
 
-async function updateTriageConfig({ triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId, nightStartTime, nightEndTime, triageRequireBirthdate, triageReadReceiptsDaytime }) {
+async function updateTriageConfig({ triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId, nightStartTime, nightEndTime, triageReadReceiptsDaytime }) {
   const result = await getPool().query(
     `UPDATE ai_config SET triage_confidence_threshold = $1, triage_max_questions = $2,
             triage_timeout_minutes = $3, triage_extra_instructions = $4,
             triage_resolved_reason_id = $5, night_start_time = $6, night_end_time = $7,
-            triage_require_birthdate = $8, triage_read_receipts_daytime = $9, updated_at = now()
+            triage_read_receipts_daytime = $8, updated_at = now()
       WHERE id = 1 RETURNING *`,
     [triageConfidenceThreshold, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions,
      triageResolvedReasonId || null, nightStartTime || null, nightEndTime || null,
-     Boolean(triageRequireBirthdate), Boolean(triageReadReceiptsDaytime)]
+     Boolean(triageReadReceiptsDaytime)]
   );
   return toConfig(result.rows[0]);
 }

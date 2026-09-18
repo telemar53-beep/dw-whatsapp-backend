@@ -267,10 +267,9 @@ const TOOLS = [
       const { client, contracts } = await sgpClient.lookupClientByCpf(args.cpf);
       contexto.contracts = contracts;
 
-      // No perfil de triagem, o CPF digitado já deixa a identidade forte: o
-      // mesmo caminho do ramo assistente, mais a cidade e o aviso de falha
-      // regional que a confirmação por data de nascimento fazia antes de ser
-      // removida.
+      // No perfil de triagem, o CPF digitado já deixa a identidade forte,
+      // com a cidade preenchida e o aviso de falha regional disparado aqui
+      // mesmo.
       if (perfilTriagem(contexto)) {
         const nome = primeiroNome(client.name);
         // Fatura de outra pessoa (print 2026-09-16): o CPF do titular abre o
@@ -783,11 +782,11 @@ const TOOLS = [
     categoria: 'ACAO_SENSIVEL',
     descricao: 'Libera em confiança (promessa de pagamento) um contrato SUSPENSO por inadimplência, devolvendo a internet por alguns dias até o pagamento. Use só quando o cliente pedir a liberação e o contrato estiver suspenso. Regras da casa: uma liberação a cada 30 dias, e nunca se a liberação anterior não foi paga. Ao responder, informe o prazo devolvido pela ferramenta e que a fatura continua devida.',
     chaveProprietario: 'contratoId',
-    // À noite esta ferramenta entra na lista da triagem, e a identidade 'fraca'
-    // (CPF digitado, sem data de nascimento confirmada) também carrega
-    // contratos: sem este gate, quem digitasse o CPF de outra pessoa liberaria
-    // o contrato dela. O gate do tool-executor só vale no perfil de triagem,
-    // então o assistente clássico (humano no comando) não muda.
+    // À noite esta ferramenta entra na lista da triagem: o gate de identidade
+    // forte garante que só quem já teve o CPF confirmado pode liberar um
+    // contrato — sem ele, o CPF de outra pessoa liberaria o contrato dela. O
+    // gate do tool-executor só vale no perfil de triagem, então o assistente
+    // clássico (humano no comando) não muda.
     exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
@@ -1152,11 +1151,11 @@ const TOOLS = [
     parametros: { type: 'object', properties: { contratoId: { type: 'integer' } }, required: ['contratoId'] },
     validar: validarContratoId,
     async executar(args, contexto) {
-      // Fora da triagem não há confirmar_nascimento no meio do caminho, nem
-      // instrução para o modelo saber quando é seguro entregar — enviar_boleto
-      // EXECUTA (entrega um arquivo real ao cliente), então não é uma
-      // ferramenta de assistente/humano-no-comando. perfilTriagem (não só
-      // contexto.identidade) para não reabrir com um identidade: null bugado.
+      // Fora da triagem não há gate nem instrução própria para o modelo saber
+      // quando é seguro entregar — enviar_boleto EXECUTA (entrega um arquivo
+      // real ao cliente), então não é uma ferramenta de assistente/
+      // humano-no-comando. perfilTriagem (não só contexto.identidade) para
+      // não reabrir com um identidade: null bugado.
       if (!perfilTriagem(contexto)) return erro('enviar_boleto is only available during AI triage');
       const busca = await faturaEmAlgumContrato(args.contratoId, contexto);
       if (busca.varios) {
@@ -1284,7 +1283,7 @@ const TOOLS = [
       }
       const id = contexto.identidade || { nivel: 'none', origem: 'none' };
       const identifiedBy = id.origem === 'none' ? 'none' : id.origem;
-      const rotuloId = { memory: 'memória', phone: 'telefone', cpf: 'CPF (não confirmado)', cpf_confirmed: 'CPF + data de nascimento', none: 'não identificado' }[identifiedBy];
+      const rotuloId = { memory: 'memória', phone: 'telefone', cpf: 'CPF (não confirmado)', none: 'não identificado' }[identifiedBy];
       const linhas = [
         `Setor: ${setor.name}`,
         `Motivo: ${motivo ? motivo.name : 'não definido'}`,

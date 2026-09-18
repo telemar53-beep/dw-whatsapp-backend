@@ -488,7 +488,7 @@ describe('findClientRecord', () => {
   const CONFIG = { baseUrl: 'https://dwtelecom.sgp.tsmx.com.br', app: 'chatmix', token: 'tok-123', enabled: true };
   beforeEach(() => { jest.clearAllMocks(); getSgpQueryConfig.mockResolvedValue(CONFIG); });
 
-  test('busca por telefone com omitir_* e limit 2, e devolve só id, cpfcnpj e dataNascimento', async () => {
+  test('busca por telefone com omitir_* e limit 2, e devolve só id e cpfcnpj', async () => {
     axios.post.mockResolvedValue({ data: { paginacao: { total: 1 }, clientes: [{
       id: 16957, nome: 'CLIENTE EXEMPLO', cpfcnpj: '529.982.247-25', dataNascimento: '1990-05-20',
       contratos: [{ id: 17402, contratoCentralSenha: 'SEGREDO', contratoCentralLogin: 'user' }],
@@ -501,35 +501,20 @@ describe('findClientRecord', () => {
     expect(p.get('omitir_titulos')).toBe('1');
     expect(p.get('omitir_contatos')).toBe('1');
     expect(p.get('limit')).toBe('2');
-    expect(r).toEqual({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725', dataNascimento: '1990-05-20' } });
+    // dataNascimento vem no payload cru do SGP (mock acima) mas não é mais
+    // devolvido por findClientRecord: a allowlist é só id e cpfcnpj.
+    expect(r).toEqual({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725' } });
+    expect(r.cliente).not.toHaveProperty('dataNascimento');
     expect(JSON.stringify(r)).not.toContain('SEGREDO');
     expect(JSON.stringify(r)).not.toContain('RUA X');
+    expect(JSON.stringify(r)).not.toContain('1990-05-20');
   });
 
   test('busca por cpfcnpj', async () => {
-    axios.post.mockResolvedValue({ data: { paginacao: { total: 1 }, clientes: [{ id: 1, cpfcnpj: '52998224725', dataNascimento: null }] } });
+    axios.post.mockResolvedValue({ data: { paginacao: { total: 1 }, clientes: [{ id: 1, cpfcnpj: '52998224725' }] } });
     const r = await findClientRecord({ cpfcnpj: '52998224725' });
     expect(new URLSearchParams(axios.post.mock.calls[0][1]).get('cpfcnpj')).toBe('52998224725');
-    expect(r.cliente.dataNascimento).toBeNull();
-  });
-
-  // Defeito B (teste real 2026-09-14): a checagem antiga exigia AAAA-MM-DD
-  // cru; qualquer outro formato virava null e confirmar_nascimento respondia
-  // "não há data de nascimento no cadastro" logo depois de o cliente informar
-  // a data.
-  test('normaliza a data de nascimento do cadastro em qualquer formato comum', async () => {
-    for (const [bruto, esperado] of [
-      ['1990-05-20', '1990-05-20'],
-      ['10/05/2001', '2001-05-10'],
-      ['10-05-2001', '2001-05-10'],
-      ['2001-05-10T00:00:00', '2001-05-10'],
-      ['abc', null],
-      ['', null],
-    ]) {
-      axios.post.mockResolvedValue({ data: { paginacao: { total: 1 }, clientes: [{ id: 1, cpfcnpj: '52998224725', dataNascimento: bruto }] } });
-      const r = await findClientRecord({ cpfcnpj: '52998224725' });
-      expect(r.cliente.dataNascimento).toBe(esperado);
-    }
+    expect(r.cliente).toEqual({ id: 1, cpfcnpj: '52998224725' });
   });
 
   test('zero ou vários resultados devolvem cliente nulo com o total', async () => {

@@ -28,7 +28,6 @@ const { findReasonById } = require('../reasons/reason.repository');
 const {
   setConversationSector, setSuggestedReason, concludeAiTriage, getConversationWithContact,
   markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
-  setTriagePendingDocument,
 } = require('../conversations/conversation.repository');
 const { setContactSgpLink } = require('../conversations/contact.repository');
 const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
@@ -1167,7 +1166,6 @@ describe('esquecer_identificacao', () => {
 describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    getAiConfig.mockResolvedValue({ triageRequireBirthdate: false });
     sgpClient.lookupClientByCpf.mockResolvedValue({
       client: { id: 77, name: 'JUREILDSON SOUZA', document: '90460835315' },
       contracts: [{ id: 51, login: 'l', plan: 'p', statusCode: 1, address: 'RUA B, 2' }],
@@ -1225,13 +1223,6 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
 describe('buscar_cliente no perfil de triagem', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  test('no perfil assistente NÃO grava CPF pendente (a coluna é só da triagem)', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'X SOBRENOME', document: '1' }, contracts: [] });
-    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' } };
-    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(setTriagePendingDocument).not.toHaveBeenCalled();
   });
 
   test('sem identidade no contexto (assistente) não muda nada e persiste o vínculo de imediato', async () => {
@@ -1996,11 +1987,6 @@ describe('concluir_triagem', () => {
     expect(broadcast).not.toHaveBeenCalled();
   });
 
-  test('cpf_confirmed é gravado como identificação quando a origem for essa', async () => {
-    const c = ctx({ identidade: { nivel: 'forte', origem: 'cpf_confirmed', primeiroNome: 'Ana', client: { id: 1 } } });
-    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, c);
-    expect(concludeAiTriage.mock.calls[0][1].identifiedBy).toBe('cpf_confirmed');
-  });
 
   // A entrega pode ter acontecido num turno ANTERIOR: contexto.resolvidoPelaIa
   // nasce false a cada turno, então só a flag persistida sabe disso.

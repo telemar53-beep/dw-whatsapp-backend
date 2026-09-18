@@ -27,7 +27,7 @@ describe('módulo comercial-novo', () => {
   });
 
   describe('conteúdo', () => {
-    const texto = () => comercialNovo.linhas(estadoBase()).join('\n');
+    const texto = (extra) => comercialNovo.linhas(estadoBase(extra)).join('\n');
 
     test('cobre cobertura, planos e contratação', () => {
       expect(texto()).toMatch(/VENDA \(cobertura, planos, contratar, mudar de plano\)/);
@@ -99,6 +99,40 @@ describe('módulo comercial-novo', () => {
 
     test('resumo do encaminhamento inclui plano, cidade e bairro/rua', () => {
       expect(texto()).toMatch(/Ao encaminhar, o resumo inclui: plano de interesse, cidade, bairro\/rua se tiver, e o que ele contou\./);
+    });
+
+    // Rodada de correção 1 da Task 17 (coordenador): a frase-modelo de
+    // encaminhamento ao setor de vendas, que tinha ficado sem dono (a
+    // metade diurna) e depois foi migrada errado (a metade noturna foi
+    // parar em noturno.js, arriscando frases concorrentes). Agora as duas
+    // metades vivem juntas aqui, ramificando em triagem.noturno.ativo.
+    describe('frase-modelo de encaminhamento ao setor de vendas (dia x noite)', () => {
+      test('de dia, o modelo diz que um atendente continua por aqui, sem menção a horário', () => {
+        const t = texto({ triagem: { noturno: { ativo: false }, forcarConclusao: false } });
+        expect(t).toMatch(/Vou encaminhar você\. Um atendente continuará o atendimento por aqui\./);
+        expect(t).not.toMatch(/fora do horário de atendimento/);
+      });
+
+      test('à noite, o modelo avisa que está fora do horário e a conversa fica registrada', () => {
+        const t = texto({ triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false } });
+        expect(t).toMatch(/No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar\./);
+        expect(t).not.toMatch(/Um atendente continuará o atendimento por aqui\./);
+      });
+
+      test('nem de dia nem à noite a frase nomeia o setor (nem fora, nem dentro do script ao cliente)', () => {
+        for (const noturno of [true, false]) {
+          const t = texto({ triagem: { noturno: { ativo: noturno, retornoAs: '08:00' }, forcarConclusao: false } });
+          const trecho = t.slice(t.indexOf('Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA'));
+          expect(trecho.slice(0, 300)).not.toMatch(/Comercial/);
+        }
+      });
+
+      test('não duplica a instrução de resumo — só uma ocorrência, independente do horário', () => {
+        for (const noturno of [true, false]) {
+          const t = texto({ triagem: { noturno: { ativo: noturno, retornoAs: '08:00' }, forcarConclusao: false } });
+          expect(t.match(/Ao encaminhar, o resumo inclui/g) || []).toHaveLength(1);
+        }
+      });
     });
 
     test('nunca nomeia um setor fixo como string literal', () => {

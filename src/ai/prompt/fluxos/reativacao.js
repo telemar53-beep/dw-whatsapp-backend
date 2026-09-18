@@ -48,10 +48,19 @@
 // em CAIXA ALTA") em vez de deixar para uma quarta tarefa redescobrir — ver
 // relatório. Aqui o rótulo virou "MAIS DE 90 DIAS EM ATRASO OU CONTRATO JÁ
 // CANCELADO" (a situação, não o setor de destino).
+//
+// Rodada de correção 1 da Task 17 (coordenador, 2026-09-18): entra() ganhou
+// `&& !identidade.sgpIndisponivel`, mesma correção já aplicada a
+// suporte-diagnostico.js e agora estendida aqui por autorização explícita —
+// com o SGP fora do ar não há como saber há quantos dias uma fatura está
+// vencida (precisa de consulta ao SGP), então o roteamento por "mais de 90
+// dias" não tem como ser decidido; fatos.js já instrui a encaminhar direto
+// nesse estado, sem tentar apurar nada.
 module.exports = {
   nome: 'reativacao',
   entra(estado) {
-    return (estado.identidade || {}).nivel === 'forte';
+    const identidade = estado.identidade || {};
+    return identidade.nivel === 'forte' && !identidade.sgpIndisponivel;
   },
   linhas() {
     return [

@@ -10,6 +10,22 @@ describe('módulo reativacao', () => {
     test('entra com identidade forte', () => {
       expect(reativacao.entra(estadoBase({ identidade: { nivel: 'forte' } }))).toBe(true);
     });
+
+    // Rodada de correção 1 da Task 17 (coordenador, 2026-09-18): mesma
+    // correção já aplicada a suporte-diagnostico.js, estendida aqui — com o
+    // SGP fora do ar não há como saber há quantos dias uma fatura está
+    // vencida, então este módulo não tem como decidir o roteamento.
+    test('NÃO entra com SGP indisponível, mesmo com identidade forte', () => {
+      const estado = estadoBase({
+        identidade: { nivel: 'forte', origem: 'memory', primeiroNome: 'Maria', contracts: [], contestado: false, sgpIndisponivel: true },
+      });
+      expect(reativacao.entra(estado)).toBe(false);
+    });
+
+    test('entra com identidade forte quando sgpIndisponivel é false ou ausente', () => {
+      expect(reativacao.entra(estadoBase({ identidade: { nivel: 'forte', sgpIndisponivel: false } }))).toBe(true);
+      expect(reativacao.entra(estadoBase({ identidade: { nivel: 'forte' } }))).toBe(true);
+    });
   });
 
   describe('conteúdo', () => {

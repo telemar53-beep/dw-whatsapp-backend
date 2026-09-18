@@ -3,37 +3,58 @@ const { estadoBase } = require('../estado-de-teste');
 
 describe('módulo comprovante', () => {
   describe('entra()', () => {
-    // Teste literal do brief/plano da Task 17 (Step 1).
-    test('comprovante só entra quando a ferramenta está na lista do turno', () => {
-      expect(comprovante.entra(estadoBase({ ferramentas: ['buscar_cliente'] }))).toBe(false);
+    // CORREÇÃO (Rodada de correção 1, coordenador, 2026-09-18): o teste
+    // literal do brief/plano original ("só entra quando a ferramenta está
+    // na lista") testava a interface ERRADA — o original é um ternário que
+    // SEMPRE emite um dos dois textos, nunca nenhum. Gatear entra() pela
+    // ferramenta fazia o ramo "sem ferramenta" (o padrão de fábrica, de dia)
+    // nunca ser migrado, uma regressão real medida pelo coordenador. entra()
+    // agora é sempre true; o que muda com a ferramenta é o CONTEÚDO — ver
+    // describe('conteúdo') abaixo.
+    test('entra sempre, com ou sem a ferramenta na lista do turno', () => {
+      expect(comprovante.entra(estadoBase({ ferramentas: ['buscar_cliente'] }))).toBe(true);
       expect(comprovante.entra(estadoBase({ ferramentas: ['analisar_comprovante'] }))).toBe(true);
-    });
-
-    test('entra de dia ou de noite, contanto que a ferramenta esteja na lista', () => {
-      const deDia = estadoBase({
-        ferramentas: ['buscar_cliente', 'analisar_comprovante'],
-        triagem: { noturno: { ativo: false }, forcarConclusao: false },
-      });
-      const deNoite = estadoBase({
-        ferramentas: ['buscar_cliente', 'analisar_comprovante', 'desbloqueio_confianca'],
-        triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false },
-      });
-      expect(comprovante.entra(deDia)).toBe(true);
-      expect(comprovante.entra(deNoite)).toBe(true);
+      expect(comprovante.entra(estadoBase())).toBe(true);
     });
   });
 
   describe('conteúdo', () => {
-    // Teste literal do brief/plano da Task 17 (Step 1).
+    // Teste literal do brief/plano da Task 17 (Step 1) — continua válido: a
+    // orientação de cliente não identificado é comum aos dois ramos.
     test('o comprovante de cliente não identificado pede o documento, nunca outro dado', () => {
       const texto = comprovante.linhas(estadoBase({ ferramentas: ['analisar_comprovante'] })).join('\n');
       expect(texto).toMatch(/CPF ou CNPJ/);
       expect(texto).not.toMatch(/nascimento|titularidade/i);
     });
 
+    // O caso que estava sumindo (achado do coordenador): sem a ferramenta no
+    // turno — o padrão de fábrica de dia, já que triageReadReceiptsDaytime
+    // sai desligado — o modelo ainda precisa de uma orientação para a
+    // imagem, mesmo sem poder analisá-la.
+    test('sem a ferramenta na lista do turno, pergunta se é comprovante e classifica sem confirmar pagamento', () => {
+      const t = comprovante.linhas(estadoBase({ ferramentas: ['buscar_cliente'] })).join('\n');
+      expect(t).toMatch(/Se o cliente enviou uma imagem, pergunte se é um comprovante/);
+      expect(t).toMatch(/sem confirmar pagamento/);
+      expect(t).not.toMatch(/analisar_comprovante/);
+      expect(t).not.toMatch(/COMPROVANTE À NOITE/);
+      expect(t).not.toMatch(/^COMPROVANTE:/m);
+    });
+
+    test('sem a ferramenta, o texto é o mesmo de dia ou de noite (a distinção só existe com a ferramenta presente)', () => {
+      const semFerramentaDia = comprovante.linhas(estadoBase({
+        ferramentas: ['buscar_cliente'],
+        triagem: { noturno: { ativo: false }, forcarConclusao: false },
+      })).join('\n');
+      const semFerramentaNoite = comprovante.linhas(estadoBase({
+        ferramentas: ['buscar_cliente'],
+        triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false },
+      })).join('\n');
+      expect(semFerramentaDia).toBe(semFerramentaNoite);
+    });
+
     const comFerramenta = (extra = {}) => estadoBase({ ferramentas: ['buscar_cliente', 'analisar_comprovante'], ...extra });
 
-    test('de noite, o texto é o COMPROVANTE À NOITE, com desbloqueio em confiança', () => {
+    test('de noite, com a ferramenta, o texto é o COMPROVANTE À NOITE, com desbloqueio em confiança', () => {
       const t = comprovante.linhas(comFerramenta({
         triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false },
       })).join('\n');
@@ -42,7 +63,7 @@ describe('módulo comprovante', () => {
       expect(t).not.toMatch(/^COMPROVANTE:/m);
     });
 
-    test('de dia, o texto é o COMPROVANTE diurno, sem desbloqueio em confiança', () => {
+    test('de dia, com a ferramenta, o texto é o COMPROVANTE diurno, sem desbloqueio em confiança', () => {
       const t = comprovante.linhas(comFerramenta({
         triagem: { noturno: { ativo: false }, forcarConclusao: false },
       })).join('\n');
@@ -51,7 +72,7 @@ describe('módulo comprovante', () => {
       expect(t).not.toMatch(/desbloqueio_confianca/);
     });
 
-    test('a frase pós-execução do desbloqueio (EXATAMENTE) é a exceção legítima — só existe à noite', () => {
+    test('a frase pós-execução do desbloqueio (EXATAMENTE) é a exceção legítima — só existe à noite, com a ferramenta', () => {
       const noite = comprovante.linhas(comFerramenta({
         triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false },
       })).join('\n');
@@ -61,6 +82,9 @@ describe('módulo comprovante', () => {
         triagem: { noturno: { ativo: false }, forcarConclusao: false },
       })).join('\n');
       expect(dia).not.toMatch(/EXATAMENTE/);
+
+      const semFerramenta = comprovante.linhas(estadoBase({ ferramentas: ['buscar_cliente'] })).join('\n');
+      expect(semFerramenta).not.toMatch(/EXATAMENTE/);
     });
 
     test('nunca diz "pagamento confirmado" ou "acesso liberado" sem a ferramenta confirmar', () => {
@@ -71,20 +95,26 @@ describe('módulo comprovante', () => {
     });
 
     test('o motivo de comprovante é referenciado pela lista, nunca como nome fixo "Comprovante"', () => {
-      for (const noturnoAtivo of [true, false]) {
-        const t = comprovante.linhas(comFerramenta({
-          triagem: { noturno: { ativo: noturnoAtivo, retornoAs: '08:00' }, forcarConclusao: false },
-        })).join('\n');
+      const estados = [
+        estadoBase({ ferramentas: ['buscar_cliente'] }),
+        comFerramenta({ triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false } }),
+        comFerramenta({ triagem: { noturno: { ativo: false }, forcarConclusao: false } }),
+      ];
+      for (const estado of estados) {
+        const t = comprovante.linhas(estado).join('\n');
         expect(t).toMatch(/o motivo da lista acima que falar de comprovante, se houver um/);
         expect(t).not.toMatch(/\bComprovante\b/);
       }
     });
 
     test('nunca nomeia um setor fixo (maiúsculo ou minúsculo) como Financeiro', () => {
-      for (const noturnoAtivo of [true, false]) {
-        const t = comprovante.linhas(comFerramenta({
-          triagem: { noturno: { ativo: noturnoAtivo, retornoAs: '08:00' }, forcarConclusao: false },
-        })).join('\n');
+      const estados = [
+        estadoBase({ ferramentas: ['buscar_cliente'] }),
+        comFerramenta({ triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false } }),
+        comFerramenta({ triagem: { noturno: { ativo: false }, forcarConclusao: false } }),
+      ];
+      for (const estado of estados) {
+        const t = comprovante.linhas(estado).join('\n');
         expect(t).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
         expect(t).not.toMatch(/\b(FINANCEIRO|COMERCIAL|SUPORTE|REATIVAÇÃO)\b/);
       }

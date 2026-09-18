@@ -68,12 +68,36 @@
 // dentro de uma fala dirigida ao cliente); as outras duas viraram "o setor
 // da lista acima que cuidar de vendas" / "esse setor" (para não repetir a
 // frase inteira duas vezes seguidas na mesma instrução).
+//
+// ==========================================================================
+// Rodada de correção 1 da Task 17 (coordenador, 2026-09-18) — duas mudanças
+// ==========================================================================
+// (1) entra() ganhou `&& !identidade.sgpIndisponivel`, mesma correção já
+// aplicada a suporte-diagnostico.js (Pendência 2 original) e agora estendida
+// aqui, a financeiro.js e a reativacao.js por autorização explícita do
+// coordenador: com o SGP fora do ar, fatos.js manda não tentar boleto, PIX
+// nem status — e este módulo (upgrade, ponto adicional, mudança de
+// endereço) pressupõe justamente esse tipo de consulta/ação sobre o
+// contrato. Deixar três módulos corrigidos (financeiro, reativação,
+// suporte-diagnóstico) e este errado seria pior que qualquer um dos
+// extremos.
+// (2) Ganhou a mesma frase-modelo de encaminhamento ao setor de vendas que
+// comercial-novo.js tem (dia x noite, ramificando em
+// estado.triagem.noturno.ativo) — ele também encaminha para vendas (upgrade
+// e mudança de endereço), então precisa da mesma orientação de horário que
+// o coordenador decidiu centralizar nos módulos comerciais. Não interfere
+// no script próprio de MUDANÇA DE ENDEREÇO (mais específico, sem "Certo!"),
+// que continua como estava — mesma relação implícita "mais específico
+// primeiro" que o texto original já tinha entre os dois.
 module.exports = {
   nome: 'comercial-cliente',
   entra(estado) {
-    return (estado.identidade || {}).nivel === 'forte';
+    const identidade = estado.identidade || {};
+    return identidade.nivel === 'forte' && !identidade.sgpIndisponivel;
   },
-  linhas() {
+  linhas(estado) {
+    const triagem = (estado && estado.triagem) || {};
+    const noturno = Boolean(triagem.noturno && triagem.noturno.ativo);
     return [
       '',
       'Cliente com contrato nunca recebe a lista de planos, a menos que peça preço ou upgrade com todas as letras — para ele, cidade e endereço são o ponto que ele já tem, não cobertura nova.',
@@ -81,6 +105,9 @@ module.exports = {
       'Se ele JÁ escolheu um plano, não liste os planos de novo: siga para o próximo passo.',
       'Antes de recomendar, entenda a necessidade (quantas pessoas usam, para quê). Recomende apoiado no que as instruções permitirem; se elas não trouxerem critério, explique que a diferença é a velocidade e pergunte quantas pessoas ou aparelhos vão usar. Nunca empurre o mais caro e nunca invente vantagem que não esteja nas instruções.',
       'MUDANÇA DE ENDEREÇO ("vou me mudar", "quero levar a internet para outra casa"): isso é a transferência do ponto. Responda no modelo: "Claro! Mudança de endereço a gente chama de transferência do ponto. Para já adiantar, me diz o novo endereço (cidade, bairro e rua) e a data prevista da mudança?" NÃO encaminhe sem pedir isso — com a resposta, conclua para o setor da lista acima que cuidar de vendas com o endereço novo e a data no resumo. Prazo, custo e disponibilidade quem confirma é esse setor: não invente nenhum dos três.',
+      noturno
+        ? 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar seu atendimento. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.'
+        : 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar você. Um atendente continuará o atendimento por aqui." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.',
     ];
   },
 };

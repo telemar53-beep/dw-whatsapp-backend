@@ -64,10 +64,21 @@
 // tarefa ("pedido de pagamento tem prioridade sobre diagnóstico") e não
 // depende de nada declarado depois. Mesma reordenação inerente à
 // modularização que toda tarefa anterior já documentou.
+//
+// Rodada de correção 1 da Task 17 (coordenador, 2026-09-18): entra() ganhou
+// `&& !identidade.sgpIndisponivel`, mesma correção já aplicada a
+// suporte-diagnostico.js (Pendência 2 original daquela tarefa) e agora
+// estendida aqui por autorização explícita — com o SGP fora do ar, fatos.js
+// manda não tentar boleto, PIX nem status; este módulo entrega boleto/PIX
+// por ferramenta e conclui para o financeiro, exatamente o que a proibição
+// veta. A Task 16 já tinha registrado esta mesma contradição como
+// preocupação (item 2 do relatório daquela tarefa) sem corrigir por falta
+// de autorização; a Task 17 corrige agora.
 module.exports = {
   nome: 'financeiro',
   entra(estado) {
-    return (estado.identidade || {}).nivel === 'forte';
+    const identidade = estado.identidade || {};
+    return identidade.nivel === 'forte' && !identidade.sgpIndisponivel;
   },
   linhas(estado) {
     const config = estado.config || {};

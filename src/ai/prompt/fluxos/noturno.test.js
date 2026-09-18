@@ -54,16 +54,15 @@ describe('módulo noturno', () => {
       expect(t).not.toMatch(/fila do Suporte/);
     });
 
-    // Pendência 3 do despacho: o encaminhamento comercial noturno, sem dono
-    // desde o gap registrado pela Task 14.
-    test('encaminhamento à noite para vendas avisa que a conversa fica registrada até o expediente (Pendência 3)', () => {
+    // Pendência 3, Rodada de correção 1 (coordenador): o encaminhamento
+    // comercial noturno SAIU deste módulo — as duas metades (dia e noite)
+    // agora moram juntas em comercial-novo.js/comercial-cliente.js. Este
+    // teste prova a ausência (ver noturno.js para a justificativa completa;
+    // os testes da frase em si estão em comercial-novo.test.js e
+    // comercial-cliente.test.js).
+    test('não encaminha para vendas — isso mora em comercial-novo.js/comercial-cliente.js', () => {
       const t = texto();
-      expect(t).toMatch(/Ao encaminhar à noite para o setor da lista acima que cuidar de vendas/);
-      expect(t).toMatch(/No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar\./);
-    });
-
-    test('não duplica a instrução de resumo (plano de interesse, cidade...), que já é de comercial-novo.js', () => {
-      const t = texto();
+      expect(t).not.toMatch(/Ao encaminhar/);
       expect(t).not.toMatch(/Resumo: plano de interesse/);
     });
 

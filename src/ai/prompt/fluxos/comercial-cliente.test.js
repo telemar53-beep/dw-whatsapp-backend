@@ -10,10 +10,26 @@ describe('módulo comercial-cliente', () => {
     test('entra com identidade forte', () => {
       expect(comercialCliente.entra(estadoBase({ identidade: { nivel: 'forte' } }))).toBe(true);
     });
+
+    // Rodada de correção 1 da Task 17 (coordenador, 2026-09-18): mesma
+    // correção já aplicada a suporte-diagnostico.js, estendida aqui — com o
+    // SGP fora do ar, fatos.js manda não tentar boleto, PIX nem status, e
+    // este módulo (upgrade, mudança de endereço) pressupõe justamente isso.
+    test('NÃO entra com SGP indisponível, mesmo com identidade forte', () => {
+      const estado = estadoBase({
+        identidade: { nivel: 'forte', origem: 'memory', primeiroNome: 'Maria', contracts: [], contestado: false, sgpIndisponivel: true },
+      });
+      expect(comercialCliente.entra(estado)).toBe(false);
+    });
+
+    test('entra com identidade forte quando sgpIndisponivel é false ou ausente', () => {
+      expect(comercialCliente.entra(estadoBase({ identidade: { nivel: 'forte', sgpIndisponivel: false } }))).toBe(true);
+      expect(comercialCliente.entra(estadoBase({ identidade: { nivel: 'forte' } }))).toBe(true);
+    });
   });
 
   describe('conteúdo', () => {
-    const texto = () => comercialCliente.linhas(estadoBase({ identidade: { nivel: 'forte' } })).join('\n');
+    const texto = (extra = {}) => comercialCliente.linhas(estadoBase({ identidade: { nivel: 'forte' }, ...extra })).join('\n');
 
     // Teste literal do brief (task-16-brief.md, Step 1): a trava contra o
     // hardcode mais grave do diagnóstico inteiro voltar.
@@ -75,6 +91,24 @@ describe('módulo comercial-cliente', () => {
       // o nome de um setor.
       const t = texto();
       expect(t).toMatch(/Para já adiantar, me diz o novo endereço/);
+    });
+
+    // Rodada de correção 1 da Task 17 (coordenador): este módulo também
+    // encaminha para vendas (upgrade, mudança de endereço), então ganhou a
+    // mesma frase-modelo dia x noite que comercial-novo.js tem, centralizada
+    // nos módulos comerciais em vez de partida com noturno.js.
+    describe('frase-modelo de encaminhamento ao setor de vendas (dia x noite)', () => {
+      test('de dia, o modelo diz que um atendente continua por aqui, sem menção a horário', () => {
+        const t = texto({ triagem: { noturno: { ativo: false }, forcarConclusao: false } });
+        expect(t).toMatch(/Vou encaminhar você\. Um atendente continuará o atendimento por aqui\./);
+        expect(t).not.toMatch(/fora do horário de atendimento/);
+      });
+
+      test('à noite, o modelo avisa que está fora do horário e a conversa fica registrada', () => {
+        const t = texto({ triagem: { noturno: { ativo: true, retornoAs: '08:00' }, forcarConclusao: false } });
+        expect(t).toMatch(/No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar\./);
+        expect(t).not.toMatch(/Um atendente continuará o atendimento por aqui\./);
+      });
     });
 
     test('nunca nomeia um setor fixo (maiúsculo ou minúsculo) como Comercial', () => {

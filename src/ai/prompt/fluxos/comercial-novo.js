@@ -50,12 +50,34 @@
 // só reescrito mais adiante no mesmo parágrafo original. Este chat é vendido
 // para outras operações; nem toda uma vende só fibra. Parêntese removido; se
 // a operação quiser afirmar isso, vem das Instruções adicionais do painel.
+//
+// ==========================================================================
+// Rodada de correção 1 da Task 17 (coordenador, 2026-09-18) — encaminhamento
+// comercial ganha noção de horário
+// ==========================================================================
+// A frase-modelo "Ao encaminhar para o Comercial..." (ai-orchestrator.js:
+// 569-571, um ternário com metade noturna e metade diurna) tinha ficado sem
+// dono entre a Task 14 (este módulo) e a Task 16 (comercial-cliente.js): a
+// Task 17 (primeira rodada) migrou só a metade NOTURNA, para noturno.js — a
+// metade DIURNA continuou sem lar. O coordenador decidiu que as DUAS metades
+// formam um conceito só ("como encaminhar para vendas") e devem morar juntas
+// aqui (e em comercial-cliente.js, que também encaminha para vendas — ver lá),
+// ramificando em estado.triagem.noturno.ativo, em vez de partidas entre
+// noturno.js e os módulos comerciais.
+// Nomes de setor: "Comercial" saiu de dentro e de fora do script entre aspas
+// (mesma convenção já usada no resto deste módulo — "o setor da lista acima
+// que cuidar de vendas"; dentro da fala dirigida ao cliente, "nossa equipe
+// Comercial"/"para o Comercial" viraram só "nossa equipe"/"você", sem nome).
+// Não duplica a instrução de resumo ("Ao encaminhar, o resumo inclui...",
+// logo abaixo): ela já cobre as duas metades.
 module.exports = {
   nome: 'comercial-novo',
   entra(estado) {
     return (estado.identidade || {}).nivel === 'none';
   },
-  linhas() {
+  linhas(estado) {
+    const triagem = (estado && estado.triagem) || {};
+    const noturno = Boolean(triagem.noturno && triagem.noturno.ativo);
     return [
       '',
       'A tabela de planos é SÓ para cliente NÃO identificado que pergunta sobre contratar, preço ou cobertura.',
@@ -72,6 +94,9 @@ module.exports = {
       ].join('\n'),
       'O QUE PRECISA PARA FAZER O CADASTRO ("quais dados/documentos preciso", "o que preciso levar"): se as INSTRUÇÕES ADICIONAIS DA OPERAÇÃO trouxerem a lista de documentos ou dados necessários, responda com a lista exatamente como está lá e pergunte se ele quer seguir com a contratação. Se lá não houver nada sobre isso, diga em uma frase que a equipe confirma a documentação e encaminhe para o setor da lista acima que cuidar de vendas — mas NÃO encaminhe sem responder alguma coisa.',
       'Encaminhe para o setor da lista acima que cuidar de vendas SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço; ou pedir para falar com um atendente; ou a cidade não estiver na lista. Antes disso, continue a venda (planos, endereço, dúvidas). O "Certo!" é só quando ele pediu algo (contratar, falar com atendente); senão comece direto em "Vou encaminhar...".',
+      noturno
+        ? 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar seu atendimento. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.'
+        : 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar você. Um atendente continuará o atendimento por aqui." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.',
       'Ao encaminhar, o resumo inclui: plano de interesse, cidade, bairro/rua se tiver, e o que ele contou.',
     ];
   },

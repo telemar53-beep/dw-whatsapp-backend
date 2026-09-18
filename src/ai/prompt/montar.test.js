@@ -99,7 +99,10 @@ const ESTADOS_PARA_VARREDURA = [
   // 'analisar_comprovante' — sem um estado que a acrescente, comprovante.entra()
   // seria false em toda a varredura e o conteúdo do módulo (os dois ramos,
   // noturno e diurno — texto diferente em cada um) nunca seria varrido. Dois
-  // estados, um por ramo.
+  // estados, um por ramo. (Nota, Rodada de correção 1: comprovante.entra()
+  // depois virou sempre `true` — ver abaixo —, então esses dois estados já
+  // não são mais indispensáveis para ALCANÇAR o módulo, mas continuam
+  // exercitando especificamente os ramos COM a ferramenta, dia e noite.)
   estadoBase({
     ferramentas: ['buscar_cliente', 'concluir_triagem', 'analisar_comprovante', 'desbloqueio_confianca'],
     triagem: { noturno: { ativo: true, retornoAs: '[hora]' }, forcarConclusao: false },
@@ -107,6 +110,16 @@ const ESTADOS_PARA_VARREDURA = [
   estadoBase({
     ferramentas: ['buscar_cliente', 'concluir_triagem', 'analisar_comprovante'],
     triagem: { noturno: { ativo: false }, forcarConclusao: false },
+  }),
+  // Task 17, Rodada de correção 1 (coordenador): nenhum estado acima combina
+  // identidade FORTE com noturno ativo — os únicos estados noturnos da lista
+  // têm identidade 'none' (default). Sem um estado assim, o ramo noturno de
+  // comercial-cliente.js (e qualquer outro conteúdo futuro condicionado a
+  // "forte + noite") nunca seria varrido pela guarda.
+  estadoBase({
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: '[nome]', contracts: [{ id: 1 }], contestado: false },
+    contratos: [{ id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço]', status: 'ativo' }],
+    triagem: { noturno: { ativo: true, retornoAs: '[hora]' }, forcarConclusao: false },
   }),
 ];
 

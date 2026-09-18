@@ -8,3 +8,7 @@ node_modules/
 # Rascunho interno do processo de desenvolvimento (ledger, briefs, relatorios e
 # pacotes de revisao das sessoes). Nunca faz parte do produto.
 .superpowers/
+
+# Runtime Python vendorizado do gerador de audio da URA (site-packages inteiro,
+# ~390 arquivos). E ambiente local, nao entrega.
+artifacts/ura/tts-runtime/

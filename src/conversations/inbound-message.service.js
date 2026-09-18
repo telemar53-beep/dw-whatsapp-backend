@@ -4,6 +4,7 @@ const {
   findRecentAiClosedConversation,
 } = require('./conversation.repository');
 const { ehMensagemDeCortesia } = require('./courtesy-message');
+const { getCompanyConfig } = require('../company/company-config.repository');
 
 // Janela de cortesia depois de um encerramento pela IA: um "obrigado" ou
 // "ótimo dia pra você também" que chega neste intervalo fica no histórico da
@@ -69,29 +70,42 @@ async function ingestInboundMessage({
   // (triagemIa) para não chamar shouldStartAiTriage duas vezes quando a
   // conversa acabou de nascer.
   let aiTriage = false;
-  if (!conversation && ehMensagemDeCortesia({ content, messageType })) {
-    const encerradaPelaIa = await findRecentAiClosedConversation(contact.id, channelId, JANELA_DE_CORTESIA_MS);
-    if (encerradaPelaIa) {
-      // Só o histórico: a conversa continua encerrada, ninguém é avisado e
-      // nada responde — para "pra você também", silêncio é a resposta certa.
-      let message = null;
-      try {
-        message = await createMessage({
-          conversationId: encerradaPelaIa.id,
-          direction: 'inbound',
-          content,
-          whatsappMessageId,
-          status: 'received',
-          messageType,
-          mediaPath,
-          mediaMimeType,
-          mediaFilename,
-          sentAt,
-        });
-      } catch (err) {
-        if (err.code !== UNIQUE_VIOLATION) throw err;
+  if (!conversation) {
+    // Só busca a config da empresa neste caminho (sem conversa aberta): a
+    // maioria das mensagens chega dentro de uma conversa já existente, e ali
+    // ehMensagemDeCortesia nem é chamada — não vale acrescentar leitura de
+    // banco ao caminho quente de toda mensagem recebida. Falha aqui não pode
+    // derrubar a ingestão: segue sem o nome, que é opcional.
+    let nomeDaEmpresa;
+    try {
+      ({ name: nomeDaEmpresa } = await getCompanyConfig());
+    } catch (err) {
+      console.error('Failed to load company config for courtesy check', err);
+    }
+    if (ehMensagemDeCortesia({ content, messageType, nomeDaEmpresa })) {
+      const encerradaPelaIa = await findRecentAiClosedConversation(contact.id, channelId, JANELA_DE_CORTESIA_MS);
+      if (encerradaPelaIa) {
+        // Só o histórico: a conversa continua encerrada, ninguém é avisado e
+        // nada responde — para "pra você também", silêncio é a resposta certa.
+        let message = null;
+        try {
+          message = await createMessage({
+            conversationId: encerradaPelaIa.id,
+            direction: 'inbound',
+            content,
+            whatsappMessageId,
+            status: 'received',
+            messageType,
+            mediaPath,
+            mediaMimeType,
+            mediaFilename,
+            sentAt,
+          });
+        } catch (err) {
+          if (err.code !== UNIQUE_VIOLATION) throw err;
+        }
+        return { contact, conversation: encerradaPelaIa, message, contactJustCreated, cortesia: true };
       }
-      return { contact, conversation: encerradaPelaIa, message, contactJustCreated, cortesia: true };
     }
   }
   if (!conversation) {

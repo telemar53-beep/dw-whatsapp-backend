@@ -12,6 +12,7 @@ jest.mock('../business-hours/business-hours.service');
 jest.mock('../ai/ai.service');
 jest.mock('../ai/ai-config.repository');
 jest.mock('../queue/ai-queue');
+jest.mock('../company/company-config.repository');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const {
   findOpenConversation, createConversation, getConversationWithContact, activateConversation, markBusinessHoursNoticeSent,
@@ -36,6 +37,7 @@ const {
 } = require('../ai/ai.service');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { enqueueTriageTimeout } = require('../queue/ai-queue');
+const { getCompanyConfig } = require('../company/company-config.repository');
 const { ingestInboundMessage } = require('./inbound-message.service');
 
 describe('ingestInboundMessage', () => {
@@ -51,6 +53,7 @@ describe('ingestInboundMessage', () => {
     shouldStartAiTriage.mockResolvedValue(false);
     isNightModeActiveForChannel.mockResolvedValue(false);
     getAiConfig.mockResolvedValue({ triageTimeoutMinutes: 3 });
+    getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
   });
 
   test('reuses an existing open conversation and broadcasts queue:new when unassigned', async () => {
@@ -242,6 +245,34 @@ describe('ingestInboundMessage', () => {
       });
 
       expect(result.message).toBeNull();
+      expect(result.cortesia).toBe(true);
+    });
+
+    // Task 19: nomeDaEmpresa vem do painel (company_config), nunca do código —
+    // o mesmo caminho reconhece "obrigado" de qualquer provedor que o comprar.
+    test('reconhece o nome da empresa vindo do painel como cortesia', async () => {
+      getCompanyConfig.mockResolvedValue({ id: 'cfg-1', name: 'Provedor Teste', acceptedPayeeNames: [] });
+      findRecentAiClosedConversation.mockResolvedValue(ENCERRADA);
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C4',
+        content: 'Obrigado, Provedor Teste!', messageType: 'text',
+      });
+
+      expect(findRecentAiClosedConversation).toHaveBeenCalledWith('contact-9', 'channel-1', 30 * 60 * 1000);
+      expect(createConversation).not.toHaveBeenCalled();
+      expect(result.cortesia).toBe(true);
+    });
+
+    test('falha ao buscar a config da empresa não derruba a ingestão: segue sem o nome', async () => {
+      getCompanyConfig.mockRejectedValue(new Error('db down'));
+      findRecentAiClosedConversation.mockResolvedValue(ENCERRADA);
+
+      const result = await ingestInboundMessage({
+        channelId: 'channel-1', fromPhoneNumber: '+5598984129046', whatsappMessageId: 'wamid.C5',
+        content: 'obrigado', messageType: 'text',
+      });
+
       expect(result.cortesia).toBe(true);
     });
   });
@@ -1598,6 +1629,7 @@ describe('ingestInboundMessage — compressao de video em segundo plano', () => 
     shouldStartAiTriage.mockResolvedValue(false);
     isNightModeActiveForChannel.mockResolvedValue(false);
     getAiConfig.mockResolvedValue({ triageTimeoutMinutes: 3 });
+    getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
   });
 
   test('enfileira a compressao depois de gravar um video', async () => {

@@ -1,3 +1,4 @@
+const fs = require('fs');
 const { ehMensagemDeCortesia } = require('./courtesy-message');
 
 const texto = (content) => ehMensagemDeCortesia({ content, messageType: 'text' });
@@ -40,5 +41,18 @@ describe('ehMensagemDeCortesia', () => {
     expect(ehMensagemDeCortesia({ content: null, messageType: 'audio' })).toBe(false);
     expect(ehMensagemDeCortesia({ content: 'obrigado', messageType: 'image' })).toBe(false);
     expect(ehMensagemDeCortesia({ content: null, messageType: 'document' })).toBe(false);
+  });
+
+  // Task 19: o produto é vendido para outros provedores — o nome comercial não
+  // pode estar escrito no código. nomeDaEmpresa é opcional e vem do painel
+  // (company_config), passado pelo chamador (inbound-message.service.js).
+  test('a cortesia reconhece o nome de qualquer empresa, não só uma', () => {
+    expect(ehMensagemDeCortesia({ content: 'obrigado Provedor X', messageType: 'text', nomeDaEmpresa: 'Provedor X' })).toBe(true);
+    expect(ehMensagemDeCortesia({ content: 'obrigado DW Telecom', messageType: 'text', nomeDaEmpresa: 'DW Telecom' })).toBe(true);
+  });
+
+  test('o classificador de cortesia não tem nome de marca embutido', () => {
+    const fonte = fs.readFileSync(require.resolve('./courtesy-message'), 'utf8');
+    expect(fonte).not.toMatch(/'dw'|'telecom'/i);
   });
 });

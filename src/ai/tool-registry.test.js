@@ -1010,7 +1010,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
     const abertura = 'Responda EXATAMENTE neste modelo: "';
     expect(r.instrucao.startsWith(abertura)).toBe(true);
-    const fecho = '" — e chame concluir_triagem para o Financeiro NA MESMA resposta.';
+    const fecho = '" — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.';
     expect(r.instrucao.endsWith(fecho)).toBe(true);
     const paraOCliente = r.instrucao.slice(abertura.length, r.instrucao.length - fecho.length);
     expect(paraOCliente).toBe(
@@ -1096,7 +1096,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
       const ctx = noturno({ contracts: [ATIVO] });
       const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
       expect(r.liberado).toBe(false);
-      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Recebi seu comprovante, Willemberg! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das 08:00." — e chame concluir_triagem para o Financeiro NA MESMA resposta.');
+      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Recebi seu comprovante, Willemberg! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das 08:00." — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.');
       expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'contrato ativo, não há bloqueio para liberar' });
       expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
       expect(enqueueOutboundMessage).not.toHaveBeenCalled();
@@ -2961,5 +2961,30 @@ describe('analisar_comprovante', () => {
     expect(r).toEqual({ analisado: false, motivo: 'Nenhum nome de favorecido cadastrado em Empresa; não é possível conferir comprovantes.' });
     expect(analyzeImage).not.toHaveBeenCalled();
     expect(c.comprovante).toBeUndefined();
+  });
+});
+
+// Task 19: nomes de setor (Financeiro, Comercial, Reativação...) vêm do painel
+// (sector.repository), nunca escritos à mão numa ferramenta ou instrução —
+// outro provedor pode não ter um setor com esse nome.
+describe('Task 19 — nenhum nome de setor fixo no código', () => {
+  test('nenhuma descrição de ferramenta cita nome de setor como texto fixo', () => {
+    const serializado = JSON.stringify(toOpenAiTools(listTools().map((t) => t.nome)));
+    expect(serializado).not.toMatch(/\b(Financeiro|Comercial|Reativação)\b/);
+  });
+
+  // As `instrucao` de retorno não passam por toOpenAiTools (só descricao e
+  // parametros vão para a OpenAI) — varre o FONTE de tool-registry.js e de
+  // ai-orchestrator.js, que também injeta uma instrução por `content` de
+  // mensagem 'system' fora do registro de ferramentas.
+  test('nenhuma instrução de retorno cita nome de setor como texto fixo', () => {
+    const fonteToolRegistry = fs.readFileSync(require.resolve('./tool-registry'), 'utf8');
+    const fonteOrchestrator = fs.readFileSync(require.resolve('./ai-orchestrator'), 'utf8');
+    const trechos = [
+      ...(fonteToolRegistry.match(/instrucao\s*[:=]\s*[`'"][^`'"]*/g) || []),
+      ...(fonteOrchestrator.match(/content:\s*[`'"][^`'"]*/g) || []),
+    ];
+    expect(trechos.length).toBeGreaterThan(0);
+    expect(trechos.filter((t) => /\b(Financeiro|Comercial|Reativação)\b/.test(t))).toEqual([]);
   });
 });

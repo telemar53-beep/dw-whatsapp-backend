@@ -15,3 +15,8 @@ artifacts/ura/tts-runtime/
 
 # Prompts renderizados por scripts/dump-prompt.js, para conferencia local.
 output/prompt/
+
+# Config local do harness de simulacao (copiada do painel, sem segredo) e as
+# transcricoes que ele gera ao rodar com a OpenAI de verdade.
+.local/
+output/simulacao/

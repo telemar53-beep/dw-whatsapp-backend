@@ -1,4 +1,4 @@
-const { avaliarElegibilidade, DIAS_ENTRE_LIBERACOES } = require('./trust-unlock-rules');
+const { avaliarElegibilidade, DIAS_ENTRE_LIBERACOES, MENSAGENS } = require('./trust-unlock-rules');
 
 // Meio-dia UTC = 9h em São Paulo: o dia é o mesmo nos dois fusos, então os
 // testes de contagem não dependem do TZ da máquina. O teste de fuso, abaixo,
@@ -149,5 +149,13 @@ describe('avaliarElegibilidade (desbloqueio em confiança)', () => {
   test('aceita createdAt como texto vindo do banco', () => {
     const r = avaliarElegibilidade({ liberacoes: [{ createdAt: '2026-09-10 08:00:00' }], faturas: [], hoje: HOJE });
     expect(r.motivo).toBe('intervalo_minimo');
+  });
+});
+
+// Task 19: o prazo tinha três fontes (a constante e dois números escritos à
+// mão). A regra continua fixa no código — só a duplicação sai.
+describe('MENSAGENS.intervalo_minimo', () => {
+  test('a mensagem do intervalo entre liberações usa a constante, não um número escrito à mão', () => {
+    expect(MENSAGENS.intervalo_minimo).toContain(String(DIAS_ENTRE_LIBERACOES));
   });
 });

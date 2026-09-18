@@ -1,5 +1,3 @@
-const fs = require('fs');
-
 const sgpClient = require('../integrations/sgp-client');
 const { normalizeContract, normalizeConnection, normalizeInvoices } = require('./sgp-normalizer');
 const { setContactSgpLink } = require('../conversations/contact.repository');
@@ -12,8 +10,8 @@ const {
 const { montarEscopo, paraContexto } = require('./third-party-scope');
 const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
-const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
-const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
+const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO, DIAS_ENTRE_LIBERACOES } = require('./trust-unlock-rules');
+const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { enviarPix, enviarBoleto } = require('../payments/payment-sender');
 const { formatarData } = require('../payments/payment-card');
@@ -23,10 +21,8 @@ const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const { mensagemSegura } = require('./safe-error-log');
 const { findLatestInboundImage } = require('../conversations/message.repository');
-const { analyzeImage } = require('./openai-client');
 const { getAiConfig } = require('./ai-config.repository');
 const { analisarComprovante } = require('./receipt-analysis');
-const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const { descreverUsoAnterior } = require('./receipt-usage-text');
 
@@ -555,7 +551,7 @@ const TOOLS = [
         } else if (contratosComFaturaEmAberto.length > 1) {
           instrucao = 'Mais de um contrato tem fatura em aberto: pergunte de qual endereço ele quer, citando os endereços de contratosComFaturaEmAberto, e entregue na resposta seguinte.';
         } else {
-          instrucao = 'Nenhum contrato tem fatura em aberto: diga isso em uma frase (sem valores) e chame concluir_triagem para o Financeiro.';
+          instrucao = 'Nenhum contrato tem fatura em aberto: diga isso em uma frase (sem valores) e chame concluir_triagem para o setor que cuidar de financeiro.';
         }
       }
       return {
@@ -849,7 +845,7 @@ const TOOLS = [
   {
     nome: 'desbloqueio_confianca',
     categoria: 'ACAO_SENSIVEL',
-    descricao: 'Libera em confiança (promessa de pagamento) um contrato SUSPENSO por inadimplência, devolvendo a internet por alguns dias até o pagamento. Use só quando o cliente pedir a liberação e o contrato estiver suspenso. Regras da casa: uma liberação a cada 30 dias, e nunca se a liberação anterior não foi paga. Ao responder, informe o prazo devolvido pela ferramenta e que a fatura continua devida.',
+    descricao: `Libera em confiança (promessa de pagamento) um contrato SUSPENSO por inadimplência, devolvendo a internet por alguns dias até o pagamento. Use só quando o cliente pedir a liberação e o contrato estiver suspenso. Regras da casa: uma liberação a cada ${DIAS_ENTRE_LIBERACOES} dias, e nunca se a liberação anterior não foi paga. Ao responder, informe o prazo devolvido pela ferramenta e que a fatura continua devida.`,
     chaveProprietario: 'contratoId',
     // À noite esta ferramenta entra na lista da triagem: o gate de identidade
     // forte garante que só quem já teve o CPF confirmado pode liberar um
@@ -920,7 +916,7 @@ const TOOLS = [
         // provavelmente está com problema de conexão, e aí a conversa continua.
         if (noturno) {
           resposta.instrucao = comprovante && comprovante.valido === true
-            ? `Responda EXATAMENTE neste modelo: "Recebi seu comprovante, ${nome}! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das ${noturno.retornoAs}." — e chame concluir_triagem para o Financeiro NA MESMA resposta.`
+            ? `Responda EXATAMENTE neste modelo: "Recebi seu comprovante, ${nome}! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das ${noturno.retornoAs}." — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.`
             : `Responda EXATAMENTE neste modelo: "${nome}, seu contrato está ativo, então não há bloqueio para liberar. Se a internet não estiver funcionando, me conta o que está acontecendo." — não conclua ainda.`;
           registrarRecusa('contrato ativo, não há bloqueio para liberar');
         }
@@ -952,7 +948,7 @@ const TOOLS = [
         // sempre termina em ponto: sem normalizar, "…judicial Assim que…".
         const motivoPontuado = String(motivo).replace(/[.\s]*$/, '.');
         const paraOCliente = `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivoPontuado} Assim que o pagamento for confirmado, a liberação é automática.`;
-        return `Responda EXATAMENTE neste modelo: "${paraOCliente}" — e chame concluir_triagem para o Financeiro NA MESMA resposta.`;
+        return `Responda EXATAMENTE neste modelo: "${paraOCliente}" — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.`;
       };
       // Comprovante que a visão já reprovou (Task 3): não há o que avaliar nem
       // o que pedir ao SGP — a recusa sai daqui, sem nenhuma chamada externa.
@@ -1115,7 +1111,7 @@ const TOOLS = [
         // deixar a frase passar. E o resultado vai para o resumo da fila.
         contexto.desbloqueioRealizado = true;
         contexto.desbloqueioResultado = { liberado: true, dias: resposta.dias || null };
-        resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?" — e chame concluir_triagem para o Financeiro NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
+        resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?" — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
       }
       return resposta;
     },

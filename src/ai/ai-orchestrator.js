@@ -419,7 +419,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
               messages.push({ role: 'assistant', content: texto });
               messages.push({
                 role: 'system',
-                content: 'Agora chame concluir_triagem para o Financeiro com o resumo (comprovante/desbloqueio recusado) e responda ao cliente em uma frase.',
+                content: 'Agora chame concluir_triagem para o setor que cuidar de financeiro com o resumo (comprovante/desbloqueio recusado) e responda ao cliente em uma frase.',
               });
               proximoToolChoice = 'concluir_triagem';
               continue;

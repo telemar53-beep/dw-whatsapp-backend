@@ -21,10 +21,21 @@
 // fixo. Reescritas por papel, preservando a MESMA regra de fallback que já
 // existia em prosa (reativação se houver; senão, financeiro): "o setor que
 // cuidar de reativação ou retorno de clientes, se houver um na lista de
-// setores acima; se não houver, vá para o que cuidar de financeiro". As duas
-// menções seguintes ("Até 90 dias..." e a de promoção) reusam essa mesma
-// referência ("o setor da lista acima que cuidar do financeiro" / "esse
-// mesmo setor") em vez de repetir a frase inteira duas vezes.
+// setores acima; se não houver, vá para o que cuidar de financeiro".
+//
+// Rodada de correção 1 (revisão do coordenador, 2026-09-18): a 3ª oração
+// ("a Reativação cuida disso") tinha virado "esse mesmo setor cuida disso"
+// — um pronome com DOIS candidatos a antecedente na frase anterior imediata
+// ("o setor que cuidar de reativação..." e "o setor da lista acima que
+// cuidar do financeiro", este último mais perto). O sentido pretendido
+// (reativação, não o financeiro do "até 90 dias") continuava recuperável
+// pelo contexto, mas é uma ambiguidade que NÃO existia no original — lá o
+// nome do setor desambiguava por repetição, e a genericização por papel
+// tirou essa âncora sem repor outra. Corrigido repetindo a referência por
+// extenso ("o setor que cuidar de reativação ou retorno de clientes é quem
+// trata disso e encaminhe para ele") em vez de um pronome solto apontando
+// para trás. O "ele" final é seguro: só há UM candidato a setor na frase
+// que o contém.
 //
 // Achado à mão (categoria que a guarda de montar.test.js ainda não cobria,
 // mesmo padrão de comercial-novo.js/Task 14 trocando "COMERCIAL" por "VENDA"
@@ -45,7 +56,7 @@ module.exports = {
   linhas() {
     return [
       '',
-      'MAIS DE 90 DIAS EM ATRASO OU CONTRATO JÁ CANCELADO: cliente cuja fatura mais antiga venceu há mais de 90 dias (conte pela data de hoje), ou com o contrato já cancelado, vai para o setor que cuidar de reativação ou retorno de clientes, se houver um na lista de setores acima; se não houver, vá para o que cuidar de financeiro. Até 90 dias continua sendo o setor da lista acima que cuidar do financeiro. Se ele perguntar por promoção, condição especial ou desconto para voltar, diga que esse mesmo setor cuida disso e encaminhe; nunca invente promoção, desconto ou valor, e nunca diga que "não trabalha com promoções".',
+      'MAIS DE 90 DIAS EM ATRASO OU CONTRATO JÁ CANCELADO: cliente cuja fatura mais antiga venceu há mais de 90 dias (conte pela data de hoje), ou com o contrato já cancelado, vai para o setor que cuidar de reativação ou retorno de clientes, se houver um na lista de setores acima; se não houver, vá para o que cuidar de financeiro. Até 90 dias continua sendo o setor da lista acima que cuidar do financeiro. Se ele perguntar por promoção, condição especial ou desconto para voltar, diga que o setor que cuidar de reativação ou retorno de clientes é quem trata disso e encaminhe para ele; nunca invente promoção, desconto ou valor, e nunca diga que "não trabalha com promoções".',
     ];
   },
 };

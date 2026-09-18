@@ -153,11 +153,31 @@ const ESTADOS_PARA_VARREDURA = [
 // exige — "o setor da lista acima que cuidar de suporte/vendas/financeiro"
 // (minúsculo, function-word, não nome próprio) é texto SANCIONADO, usado em
 // dezenas de linhas já revisadas; case-insensitive pegaria todas elas.
+//
+// Rodada de correção 1 (revisão do coordenador, 2026-09-18): buraco latente
+// no padrão de CAIXA ALTA acima. Cada elemento de linhas() é UMA STRING, mas
+// pode ser um bloco de VÁRIAS sentenças juntadas com .join('\n') (ex.: o
+// ramo triageResolvedReasonId de financeiro.js, ou o bloco "- Contrato ativo
+// e conexão online" de suporte-diagnostico.js). O `^` sem a flag /m ancora
+// no início da STRING INTEIRA do elemento — só pegaria um rótulo em caixa
+// alta se ele fosse a PRIMEIRA sentença do bloco. Um rótulo como SEGUNDA ou
+// TERCEIRA sentença de um `.join('\n')` passaria batido. Não havia caso
+// ativo ainda, mas a Task 17 migra o bloco do modo noturno (o mais longo do
+// prompt antigo, com essa forma de várias sentenças juntadas) — bug latente
+// virando ativo na próxima tarefa se não corrigido agora.
+// Fix: a varredura agora quebra CADA elemento por '\n' e testa TODA regra
+// linha a linha (não só a de CAIXA ALTA — as outras não mudam de resultado
+// com isso, já que nenhuma delas usa ^/$, mas testar a sub-linha em vez do
+// bloco inteiro também deixa a MENSAGEM DE ERRO apontar a frase exata, não o
+// parágrafo inteiro — preferido a só acrescentar /m pelo mesmo motivo).
+// Verificado por mutação (ver relatório da Task 16, Rodada de correção 1):
+// rótulo em caixa alta injetado como SEGUNDA sentença de um elemento
+// .join('\n') de financeiro.js — pego; revertido.
 const NOME_DOS_REGEX = [
   ['velocidade', /\d+\s*mega/i],
   ['preço', /R\$\s*\d/],
   ['nome de setor', /\b(Financeiro|Comercial|Suporte|Reativação)\b/],
-  ['nome de setor em CAIXA ALTA (rótulo no início do bloco)', /^(FINANCEIRO|COMERCIAL|SUPORTE|REATIVAÇÃO)\b/],
+  ['nome de setor em CAIXA ALTA (rótulo no início da linha)', /^(FINANCEIRO|COMERCIAL|SUPORTE|REATIVAÇÃO)\b/],
   ['oferta da operação', /fibra|óptica|grátis|gratuit|ilimitad/i],
 ];
 
@@ -168,11 +188,19 @@ test('nenhum módulo (exceto painel, que repassa dado do operador) hardcoda velo
     for (const estado of ESTADOS_PARA_VARREDURA) {
       if (!modulo.entra(estado)) continue;
       modulo.linhas(estado).forEach((linha, indice) => {
-        for (const [rotulo, regex] of NOME_DOS_REGEX) {
-          if (regex.test(linha)) {
-            violacoes.push(`módulo "${modulo.nome}", linha [${indice}] — ${rotulo} hardcoded: "${linha}"`);
+        // Cada elemento pode ser um bloco de várias sentenças juntadas com
+        // .join('\n') (ver Rodada de correção 1 acima) — quebrar por '\n' e
+        // testar cada física linha separadamente é o que faz `^` (sem /m)
+        // enxergar o início de CADA sentença do bloco, não só do elemento
+        // inteiro, e também é o que deixa a mensagem de erro abaixo apontar
+        // a frase exata em vez do parágrafo inteiro.
+        linha.split('\n').forEach((subLinha) => {
+          for (const [rotulo, regex] of NOME_DOS_REGEX) {
+            if (regex.test(subLinha)) {
+              violacoes.push(`módulo "${modulo.nome}", linha [${indice}] — ${rotulo} hardcoded: "${subLinha}"`);
+            }
           }
-        }
+        });
       });
     }
   }

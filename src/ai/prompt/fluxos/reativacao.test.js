@@ -36,6 +36,20 @@ describe('módulo reativacao', () => {
       expect(t).toMatch(/nunca diga que "não trabalha com promoções"/);
     });
 
+    // Rodada de correção 1 (revisão do coordenador, 2026-09-18): "esse mesmo
+    // setor cuida disso" tinha DOIS candidatos a antecedente na frase
+    // imediatamente anterior (o setor de reativação da 1ª oração e o
+    // financeiro da 2ª, mais perto) — ambiguidade que o original não tinha
+    // (lá o nome do setor desambiguava por repetição). A oração de promoção
+    // agora repete por extenso a MESMA descrição do setor da 1ª oração, sem
+    // pronome solto apontando para trás.
+    test('a frase de promoção repete a referência ao setor, sem pronome ambíguo', () => {
+      const t = texto();
+      expect(t).not.toMatch(/esse mesmo setor/);
+      const oracaoPromocao = t.slice(t.indexOf('Se ele perguntar por promoção'));
+      expect(oracaoPromocao).toMatch(/^Se ele perguntar por promoção, condição especial ou desconto para voltar, diga que o setor que cuidar de reativação ou retorno de clientes é quem trata disso e encaminhe para ele/);
+    });
+
     test('não usa "REATIVAÇÃO" maiúsculo como rótulo de setor', () => {
       // Mesmo cuidado já registrado em comercial-novo.js (COMERCIAL -> VENDA) e
       // suporte-diagnostico.js (SUPORTE -> RELATO DE FALHA): a guarda de

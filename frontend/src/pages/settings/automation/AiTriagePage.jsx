@@ -84,7 +84,11 @@ function AiTriagePage() {
               fazer antes de encaminhar para um atendente.
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Field id="triage-confidence" label="Confiança mínima (%)">
+              <Field
+                id="triage-confidence"
+                label="Confiança mínima (%)"
+                help="Abaixo deste valor, o resumo entregue ao atendente é marcado como confiança baixa. Não gera pergunta ao cliente."
+              >
                 <input
                   id="triage-confidence"
                   type="number"

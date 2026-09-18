@@ -2159,34 +2159,16 @@ describe('concluir_triagem', () => {
     expect(v({ setorId: SETOR, resumo: 'r', confianca: true }).ok).toBe(false);
   });
 
-  test('confiança baixa com pergunta sobrando: não conclui e manda perguntar', async () => {
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.5 }, ctx());
-    expect(r.concluido).toBe(false);
-    expect(r.instrucao).toMatch(/UMA pergunta/);
-    expect(concludeAiTriage).not.toHaveBeenCalled();
-  });
-
-  // Correção 2026-09-18: a guarda do escopo de terceiro passou a ficar
-  // imediatamente antes de concludeAiTriage (a ação terminal), não mais logo
-  // após o perfil. Antes desta correção, sair por baixa_confianca já tinha
-  // destruído a autorização — a cliente teria que informar de novo o CPF do
-  // titular no meio do mesmo pedido de boleto.
-  test('confiança baixa preserva o escopo de terceiro e não chama setThirdPartyScope', async () => {
-    const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
-    const c = ctx({ terceiro });
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.5 }, c);
-    expect(r.concluido).toBe(false);
-    expect(r.motivo).toBe('baixa_confianca');
-    expect(setThirdPartyScope).not.toHaveBeenCalled();
-    expect(c.terceiro).toBe(terceiro);
-  });
-
-  test('confiança baixa sem pergunta sobrando: conclui e marca baixa confiança', async () => {
-    const c = ctx({ triagem: { threshold: 0.8, maxQuestions: 2, attempts: 2 } });
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.5 }, c);
-    expect(r.concluido).toBe(true);
-    expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ lowConfidence: true, sectorId: SETOR }));
-  });
+  // Task 9 (2026-09-17): o gate de baixa_confianca foi removido por completo
+  // de concluir_triagem.executar — confiança baixa nunca mais bloqueia a
+  // conclusão nem gera pergunta ao cliente. Os três testes que exercitavam
+  // esse gate (bloqueia com pergunta sobrando; preserva o escopo de terceiro
+  // na saída antecipada por baixa_confianca; conclui só quando attempts
+  // esgota) testavam um comportamento que deixou de existir e foram
+  // apagados. A garantia nova — confiança baixa nunca bloqueia, em nenhum
+  // estado de attempts, e continua marcada como (BAIXA) no resumo — está em
+  // 'tool-executor + concluir_triagem — confiança nunca bloqueia a conclusão
+  // (Task 9)', mais abaixo neste arquivo.
 
   test('conclui: grava, prefixa o resumo com o que o código sabe, avisa a fila e instrui uma frase final', async () => {
     const c = ctx({ resolvidoPelaIa: true, origemMensagem: 'áudio' });
@@ -2388,6 +2370,60 @@ describe('concluir_triagem', () => {
       expect(summary).not.toContain('Comprovante (visão)');
       expect(summary).not.toContain('Pendente:');
     });
+  });
+});
+
+// A confiança é um palpite do modelo sobre si mesmo. Até 2026-09-17 um
+// palpite baixo bloqueava concluir_triagem e forçava mais uma pergunta ao
+// cliente (o gate removido em tool-registry.js). Roda pelo executor de
+// verdade (executeTool), não só tool.executar, porque é na composição
+// registro+executor que a checagem de perfil de triagem entra no caminho —
+// mesmo motivo dos outros describes 'tool-executor + X (composição real)'
+// deste arquivo. beforeEach próprio de propósito: nada aqui depende de mock
+// armado em outro describe (rodar isolado com `-t` tem que bastar).
+describe('tool-executor + concluir_triagem — confiança nunca bloqueia a conclusão (Task 9)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+    concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null });
+  });
+
+  test.each([0, 0.1, 0.5, 0.79, 0.8, 1])('confiança %s conclui a triagem e nunca gera pergunta', async (confianca) => {
+    const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts: 0 } });
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente quer o boleto.', confianca }, contexto);
+    expect(r.ok).toBe(true);
+    expect(r.resultado.concluido).not.toBe(false);
+    expect(r.resultado.motivo).not.toBe('baixa_confianca');
+    // Divergência mecânica com o brief: /pergunta/i sobre o resultado inteiro
+    // colide com "Não faça mais perguntas." — frase legítima da instrução de
+    // sucesso, sem relação com o gate antigo. O alvo real é a pergunta de
+    // esclarecimento que baixa_confianca mandava fazer.
+    expect(JSON.stringify(r.resultado)).not.toMatch(/pergunta curta de esclarecimento/i);
+  });
+
+  // O gate antigo só bloqueava quando t.attempts < t.maxQuestions — com o
+  // gate inteiro removido, nenhum estado de attempts pode voltar a bloquear:
+  // nem esgotado (attempts === maxQuestions), nem além do limite. attempts:0
+  // é o caso em que o gate antigo disparava.
+  test.each([0, 1, 4, 5, 6])('confiança baixa (0.1) nunca bloqueia, qualquer que seja attempts (%i)', async (attempts) => {
+    const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts } });
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente quer o boleto.', confianca: 0.1 }, contexto);
+    expect(r.ok).toBe(true);
+    expect(r.resultado.concluido).toBe(true);
+    expect(r.resultado.motivo).not.toBe('baixa_confianca');
+  });
+
+  test('a confiança baixa continua marcada no resumo do atendente', async () => {
+    const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts: 0 } });
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.4 }, contexto);
+    // O resumo vai no SEGUNDO argumento: concludeAiTriage(conversationId, { ..., summary }).
+    expect(concludeAiTriage).toHaveBeenCalledWith(
+      expect.any(String),
+      // lowConfidence somado à checagem do brief: era a única cobertura direta
+      // desse campo, e sumiu junto com o teste apagado que a exercitava.
+      expect.objectContaining({ summary: expect.stringContaining('40% (BAIXA)'), lowConfidence: true })
+    );
   });
 });
 

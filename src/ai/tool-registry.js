@@ -1337,9 +1337,11 @@ const TOOLS = [
       }
       const t = contexto.triagem || { threshold: 0.8, maxQuestions: 2, attempts: 0 };
       const baixa = args.confianca < t.threshold;
-      if (baixa && t.attempts < t.maxQuestions) {
-        return { concluido: false, motivo: 'baixa_confianca', instrucao: 'Faça UMA pergunta curta de esclarecimento ao cliente e chame concluir_triagem de novo depois da resposta.' };
-      }
+      // A confiança é um palpite do modelo sobre si mesmo. Até 2026-09-17 um
+      // palpite baixo RECUSAVA a conclusão e forçava mais uma pergunta ao
+      // cliente — um número inventado virava pergunta na tela de quem estava
+      // esperando ser atendido. Agora ela só marca o resumo: quem decide se a
+      // classificação está ruim é o atendente, que tem a conversa na frente.
       const id = contexto.identidade || { nivel: 'none', origem: 'none' };
       const identifiedBy = id.origem === 'none' ? 'none' : id.origem;
       const rotuloId = { memory: 'memória', phone: 'telefone', cpf: 'CPF (não confirmado)', none: 'não identificado' }[identifiedBy];

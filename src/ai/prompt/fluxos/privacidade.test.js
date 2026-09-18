@@ -16,6 +16,23 @@ describe('módulo privacidade', () => {
     expect(texto).toContain('DADOS DE OUTRA PESSOA');
     expect(texto).toContain('NUNCA são passados e NUNCA viram chamado');
     expect(texto).toContain('Não consigo passar dados de outro cliente, nem a senha da rede dele — só o titular pode informar isso.');
+    // Task 18 — antes: ai-orchestrator.test.js:1129. A recusa não termina em
+    // porta fechada: ela reabre o atendimento no que a IA PODE resolver.
+    expect(texto).toContain('Posso te ajudar com alguma coisa do seu contrato?');
+  });
+
+  // Task 18 — antes: ai-orchestrator.test.js:1234. Prints 2026-09-16: "tem uma
+  // luz vermelha no roteador do meu vizinho" recebeu a recusa de dado de
+  // terceiro. A regra virou gatilho cego para qualquer menção a outra pessoa —
+  // esta frase de abertura é o que a condiciona a PEDIDO de dado.
+  test('a recusa é condicionada a PEDIDO de dado, e isso está dito antes da própria recusa', () => {
+    const linhas = privacidade.linhas(estadoBase());
+    const texto = linhas.join('\n');
+    expect(texto).toContain('A recusa abaixo vale só quando ele PEDIR um dado de outra pessoa.');
+    // A condição vem ANTES da recusa: invertida, o modelo lê a recusa primeiro
+    // e a aplica antes de chegar à ressalva.
+    expect(texto.indexOf('A recusa abaixo vale só quando ele PEDIR'))
+      .toBeLessThan(texto.indexOf('DADOS DE OUTRA PESSOA'));
   });
 
   test('se insistir em falar com atendente, o resumo começa identificando o pedido de dado de outra pessoa', () => {

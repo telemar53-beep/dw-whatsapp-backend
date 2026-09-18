@@ -1412,7 +1412,10 @@ test.each([0, 0.1, 0.5, 0.79, 0.8, 1])('confiança %s conclui a triagem e nunca 
   expect(r.ok).toBe(true);
   expect(r.resultado.concluido).not.toBe(false);
   expect(r.resultado.motivo).not.toBe('baixa_confianca');
-  expect(JSON.stringify(r.resultado)).not.toMatch(/pergunta/i);
+  // /pergunta/i seria falso-positivo: a instrucao de SUCESSO legitima termina em
+  // "Não faça mais perguntas." A frase que tem de sumir e a que o gate antigo
+  // devolvia.
+  expect(JSON.stringify(r.resultado)).not.toMatch(/pergunta curta de esclarecimento/i);
 });
 
 test('a confiança baixa continua marcada no resumo do atendente', async () => {

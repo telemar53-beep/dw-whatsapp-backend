@@ -53,8 +53,23 @@ diferente do painel muda o comportamento e a simulação passa a validar outra c
 **Com ele preenchido**, a IA entrega o boleto e *não* conclui a triagem (espera o
 cliente agradecer) — que é o estado de que o roteiro 17 precisa para continuar o 14.
 **Sem ele**, o roteiro 14 conclui a triagem ao entregar, a conversa sai da triagem, e o
-17 falha dizendo exatamente isso. Se for usar, aponte para um id que exista em
-`setores-motivos.json`.
+17 falha dizendo exatamente isso.
+
+**O ID é simulation-only, e isso é deliberado.** No harness, `reason.repository` é
+mocado e `findReasonById` resolve *exclusivamente* contra `setores-motivos.json` — o
+banco não é consultado. Logo o ID não tem semântica comportamental aqui: é só chave de
+ligação entre os dois arquivos. Use um UUID determinístico e exclusivo da simulação
+(os arquivos de exemplo usam o prefixo `ffffffff-` para marcar isso visualmente) e
+**nunca** copie um ID de produção para cá, nem um daqui para o painel.
+
+O que **precisa** reproduzir o painel real é tudo o que chega ao modelo: o `name` e o
+`aiHint` dos setores, o `name` dos motivos, o `active`, e os limiares numéricos. Esses
+mudam o comportamento da IA; o ID não.
+
+A única regra dura: o `triageResolvedReasonId` do `ia-config.json` e o `id` do motivo
+com `papel: "resolvido-pela-ia"` em `setores-motivos.json` têm de ser **idênticos**.
+Se divergirem, `findReasonById` devolve `null`, `motivoDeEncerramentoAtivo()` devolve
+`null`, e o roteiro 17 não consegue continuar o 14.
 
 ### 2. `prompt-sistema.txt` (obrigatório)
 

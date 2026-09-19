@@ -1,18 +1,68 @@
 {
-  "_leia": "Opcional. Copie para setores-motivos.json so se quiser rodar com os SEUS setores e motivos. Cada item precisa de papel: e por ele que os roteiros acham o setor, sem escrever o nome dele.",
+  "_leia": "Catalogo de setores e motivos da SIMULACAO (Task 20). Os repositorios reason.repository e sector.repository sao MOCADOS no harness e resolvem exclusivamente contra este arquivo -- o banco local nao e consultado. Os IDs aqui sao chaves de ligacao sem semantica comportamental: o que muda o comportamento da IA e o NOME e a DICA (aiHint), que entram no prompt. Por isso os nomes e dicas devem reproduzir o painel real; os IDs nao precisam.",
+
+  "_ids": "Todos os IDs deste arquivo sao SIMULATION-ONLY: nao existem em nenhum banco, nao vieram de producao e nunca devem ser copiados para o painel. O prefixo ffffffff- e o sufixo -0000000000NN marcam isso visualmente.",
+
+  "_substituir": "CONFIRA OU CORRIJA os campos name e aiHint abaixo para os do SEU painel (Configuracoes -> Cadastros auxiliares -> Setores e Motivos). Os valores atuais sao genericos e plausiveis, escolhidos por nao existir acesso ao painel a partir daqui -- nao sao os seus. O campo papel e do harness, nao do painel: e como os roteiros se referem ao setor sem escrever o nome dele.",
 
   "setores": [
-    { "id": "11111111-1111-1111-1111-111111111111", "name": "Suporte de Teste", "aiHint": "problemas tecnicos: internet fora, lenta, caindo, equipamento", "papel": "suporte" },
-    { "id": "22222222-2222-2222-2222-222222222222", "name": "Financeiro de Teste", "aiHint": "fatura, boleto, PIX, pagamento, comprovante, negociacao", "papel": "financeiro" },
-    { "id": "33333333-3333-3333-3333-333333333333", "name": "Comercial de Teste", "aiHint": "vendas, planos, cobertura, contratacao, mudanca de endereco", "papel": "comercial" },
-    { "id": "44444444-4444-4444-4444-444444444444", "name": "Reativacao de Teste", "aiHint": "cliente antigo que quer voltar", "papel": "reativacao" }
+    {
+      "id": "ffffffff-0000-4000-8000-000000000011",
+      "name": "Suporte Técnico",
+      "aiHint": "problemas técnicos: internet fora, lenta, caindo, equipamento, Wi-Fi",
+      "papel": "suporte"
+    },
+    {
+      "id": "ffffffff-0000-4000-8000-000000000022",
+      "name": "Financeiro",
+      "aiHint": "fatura, boleto, PIX, pagamento, comprovante, negociação, desbloqueio",
+      "papel": "financeiro"
+    },
+    {
+      "id": "ffffffff-0000-4000-8000-000000000033",
+      "name": "Comercial",
+      "aiHint": "vendas, planos, cobertura, contratação, mudança de endereço",
+      "papel": "comercial"
+    },
+    {
+      "id": "ffffffff-0000-4000-8000-000000000044",
+      "name": "Reativação",
+      "aiHint": "cliente antigo que quer voltar, contrato cancelado, retorno",
+      "papel": "reativacao"
+    }
   ],
 
   "motivos": [
-    { "id": "55555555-5555-5555-5555-555555555555", "name": "Lentidao de Teste", "active": true, "papel": "lentidao" },
-    { "id": "66666666-6666-6666-6666-666666666666", "name": "Segunda via de Teste", "active": true, "papel": "segunda-via" },
-    { "id": "77777777-7777-7777-7777-777777777777", "name": "Comprovante de Teste", "active": true, "papel": "comprovante" },
-    { "id": "88888888-8888-8888-8888-888888888888", "name": "Resolvido pela IA (Teste)", "active": true, "papel": "resolvido-pela-ia" },
-    { "id": "99999999-9999-9999-9999-999999999999", "name": "Contratacao de Teste", "active": true, "papel": "contratacao" }
+    {
+      "id": "ffffffff-0000-4000-8000-000000000055",
+      "name": "Lentidão",
+      "active": true,
+      "papel": "lentidao"
+    },
+    {
+      "id": "ffffffff-0000-4000-8000-000000000066",
+      "name": "Segunda via de boleto",
+      "active": true,
+      "papel": "segunda-via"
+    },
+    {
+      "id": "ffffffff-0000-4000-8000-000000000077",
+      "name": "Comprovante de pagamento",
+      "active": true,
+      "papel": "comprovante"
+    },
+    {
+      "_papel": "resolvido-pela-ia: ESTE e o motivo apontado por triageResolvedReasonId no ia-config.json. Os dois arquivos precisam trazer o MESMO id, senao findReasonById devolve null, motivoDeEncerramentoAtivo() devolve null, e o roteiro 17 nao consegue continuar o 14.",
+      "id": "ffffffff-0000-4000-8000-000000000020",
+      "name": "Resolvido pela IA",
+      "active": true,
+      "papel": "resolvido-pela-ia"
+    },
+    {
+      "id": "ffffffff-0000-4000-8000-000000000099",
+      "name": "Contratação",
+      "active": true,
+      "papel": "contratacao"
+    }
   ]
 }

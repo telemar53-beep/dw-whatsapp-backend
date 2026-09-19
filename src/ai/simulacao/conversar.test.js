@@ -29,6 +29,7 @@ jest.mock('../../cities/contact-city.service');
 jest.mock('../../city-notices/city-notice.service');
 jest.mock('../triage-close-reason');
 jest.mock('../receipt-usage.repository');
+jest.mock('../billing-delivery.repository');
 // A diferença para a simulação real está NESTA linha, e só nela.
 jest.mock('../openai-client');
 
@@ -40,6 +41,7 @@ const { createChatCompletion } = require('../openai-client');
 const sgpClient = require('../../integrations/sgp-client');
 const { enqueueOutboundMessage } = require('../../queue/outbound-queue');
 const { conversar, salvarTranscricao, configDoPainel } = require('./conversar');
+const { claimDelivery } = require('../billing-delivery.repository');
 const { setorPorPapel, motivoPorPapel, CPF } = require('./sgp-falso');
 
 // Valor claramente falso: a chave de verdade nunca entra em teste, e forçar o
@@ -245,5 +247,127 @@ describe('conversar (harness com a OpenAI fingida)', () => {
     } finally {
       process.env.OPENAI_API_KEY = guardada;
     }
+  });
+});
+
+// ===========================================================================
+// O messageId SINTÉTICO do harness
+//
+// Em produção o id vem da mensagem inbound do turno (ai-worker.js). Aqui ele é
+// fabricado, e a semântica tem de ser a MESMA: um id por mensagem do cliente,
+// o mesmo em todas as tool calls dela, um novo quando o cliente escreve de
+// novo. Um id por tool call (ou por chamada à OpenAI) anularia a guarda de
+// reenvio e faria a simulação passar por engano.
+// ===========================================================================
+describe('idempotência da entrega no harness', () => {
+  const ROTEIRO_ENTREGA = {
+    numero: 95,
+    nome: 'idempotencia da entrega',
+    identidade: 'forte-ativo',
+    mensagens: ['Quero o boleto', 'Pode mandar', 'Não recebi nada, manda de novo por favor'],
+    invariantes: {},
+    revisaoHumana: [],
+  };
+  const pedidos = () => claimDelivery.mock.calls.map(([p]) => p.requestKey);
+  const idsDeReenvio = () => pedidos().filter((c) => c.startsWith('resend:')).map((c) => c.slice('resend:'.length));
+
+  // Este arquivo não limpa os mocks entre os testes (os outros contam
+  // chamadas de uma conversa só). Aqui a contagem é o objeto do teste, então
+  // cada um começa do zero.
+  beforeEach(() => jest.clearAllMocks());
+
+  // O DEFEITO QUE ESTA ENTREGA CORRIGE, reproduzido no harness: o boleto sai
+  // no turno 1 e, diante do "Pode mandar" ambíguo do turno 2, o modelo chama
+  // enviar_boleto DE NOVO. Um boleto só pode sair.
+  test('"Pode mandar" no turno seguinte não entrega um segundo boleto', async () => {
+    enfileirar([
+      respostaComFerramenta('enviar_boleto', { contratoId: 101 }),
+      respostaComTexto('Enviei acima o boleto em PDF e com a linha digitável.'),
+      respostaComFerramenta('enviar_boleto', { contratoId: 101 }),
+      respostaComTexto('Ele já está aí em cima, pode conferir.'),
+      respostaComTexto('Combinado!'),
+    ]);
+
+    const resultado = await conversar(ROTEIRO_ENTREGA);
+
+    const documentos = enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document');
+    expect(documentos).toHaveLength(1);
+    expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledTimes(1);
+    // A segunda chamada rodou (o modelo pediu), mas não entregou nada.
+    expect(resultado.turnos[1].toolsExecutadas.map((f) => f.nome)).toEqual(['enviar_boleto']);
+    expect(pedidos()).toEqual(['initial', 'initial']);
+  });
+
+  test('duas tool calls da MESMA mensagem entregam uma vez', async () => {
+    enfileirar([
+      respostaComFerramenta('enviar_boleto', { contratoId: 101 }),
+      respostaComFerramenta('enviar_boleto', { contratoId: 101 }),
+      respostaComTexto('Enviei acima o boleto em PDF.'),
+    ]);
+
+    await conversar({ ...ROTEIRO_ENTREGA, numero: 94, mensagens: ['Quero o boleto'] });
+
+    expect(enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document')).toHaveLength(1);
+    expect(pedidos()).toEqual(['initial', 'initial']);
+  });
+
+  // A prova de que o id é ESTÁVEL dentro do turno: duas chamadas de reenvio
+  // da mesma mensagem produzem a mesma chave, e só uma entrega. Um id novo
+  // por tool call (ou por chamada à OpenAI) daria duas chaves e dois boletos.
+  test('duas tool calls de reenvio da MESMA mensagem usam o mesmo id', async () => {
+    enfileirar([
+      respostaComFerramenta('enviar_boleto', { contratoId: 101, reenviar: true }),
+      respostaComFerramenta('enviar_boleto', { contratoId: 101, reenviar: true }),
+      respostaComTexto('Enviei acima o boleto em PDF.'),
+    ]);
+
+    await conversar({ ...ROTEIRO_ENTREGA, numero: 90, mensagens: ['Não recebi, manda de novo'] });
+
+    expect(enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document')).toHaveLength(1);
+    const reenvios = idsDeReenvio();
+    expect(reenvios).toHaveLength(2);
+    expect(new Set(reenvios).size).toBe(1);
+  });
+
+  test('mensagens diferentes do cliente recebem ids diferentes', async () => {
+    enfileirar([
+      respostaComFerramenta('enviar_boleto', { contratoId: 101 }),
+      respostaComTexto('Enviei acima o boleto em PDF.'),
+      respostaComFerramenta('enviar_boleto', { contratoId: 101, reenviar: true }),
+      respostaComTexto('Pronto, pode conferir aí.'),
+      respostaComFerramenta('enviar_boleto', { contratoId: 101, reenviar: true }),
+      respostaComTexto('Pronto de novo.'),
+    ]);
+
+    const resultado = await conversar({
+      ...ROTEIRO_ENTREGA,
+      numero: 93,
+      mensagens: ['Quero o boleto', 'Não recebi, manda de novo', 'Continua não chegando, reenvia'],
+    });
+
+    expect(resultado.turnos).toHaveLength(3);
+    const reenvios = idsDeReenvio();
+    expect(reenvios).toHaveLength(2);
+    expect(new Set(reenvios).size).toBe(2);
+    // Cada pedido explícito de reenvio entregou de verdade.
+    expect(enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document')).toHaveLength(3);
+  });
+
+  // O roteiro encadeado continua a MESMA conversa: o boleto entregue lá atrás
+  // não volta a ser reivindicável aqui, como não voltaria no banco.
+  test('o claim sobrevive ao roteiro encadeado', async () => {
+    enfileirar([
+      respostaComFerramenta('enviar_boleto', { contratoId: 101 }),
+      respostaComTexto('Enviei acima o boleto em PDF.'),
+    ]);
+    const primeiro = await conversar({ ...ROTEIRO_ENTREGA, numero: 92, mensagens: ['Quero o boleto'] });
+
+    enfileirar([
+      respostaComFerramenta('enviar_boleto', { contratoId: 101 }),
+      respostaComTexto('Ele já está aí em cima.'),
+    ]);
+    await conversar({ ...ROTEIRO_ENTREGA, numero: 91, identidade: undefined, continuaDe: 92, mensagens: ['Pode mandar'] }, primeiro);
+
+    expect(enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document')).toHaveLength(1);
   });
 });

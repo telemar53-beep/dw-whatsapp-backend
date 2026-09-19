@@ -43,6 +43,7 @@ const { preencherCidadePeloSgp } = require('../../cities/contact-city.service');
 const { enviarAvisoDeCidadeSePreciso } = require('../../city-notices/city-notice.service');
 const { motivoDeEncerramentoAtivo } = require('../triage-close-reason');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('../receipt-usage.repository');
+const { claimDelivery, markDeliverySent, releaseDelivery } = require('../billing-delivery.repository');
 
 const { IDENTIDADES, prepararSgpFalso, SETORES, MOTIVOS } = require('./sgp-falso');
 
@@ -135,12 +136,15 @@ function exigirMock(fn, nome, caminho) {
  * enxergar essa mudança — é assim que a produção se comporta, e é o que faz o
  * turno seguinte recusar a entrega depois de a conversa sair da triagem.
  */
-function prepararMundo({ config, conversa, contact, historico }) {
+function prepararMundo({ config, conversa, contact, historico, entregas }) {
   exigirMock(getAiConfig, 'getAiConfig', './ai-config.repository');
   exigirMock(recordAiInteraction, 'recordAiInteraction', './ai-interaction.repository');
   exigirMock(listRecentMessagesByConversation, 'listRecentMessagesByConversation', '../conversations/message.repository');
   exigirMock(getConversationWithContact, 'getConversationWithContact', '../conversations/conversation.repository');
   exigirMock(enqueueOutboundMessage, 'enqueueOutboundMessage', '../queue/outbound-queue');
+  // Sem este, a primeira entrega de boleto/PIX da simulação morreria com um
+  // TypeError obscuro dentro de prepararMundo em vez de dizer o que falta.
+  exigirMock(claimDelivery, 'claimDelivery', '../billing-delivery.repository');
 
   getAiConfig.mockResolvedValue(config);
   isToolEnabled.mockResolvedValue(true);
@@ -216,6 +220,28 @@ function prepararMundo({ config, conversa, contact, historico }) {
   claimReceipt.mockResolvedValue({ ok: true });
   releaseReceipt.mockResolvedValue(undefined);
   findReceiptUsage.mockResolvedValue(null);
+
+  // A idempotência da entrega é uma GUARDA, não um detalhe de infraestrutura:
+  // um mock que sempre concede o claim mascararia exatamente o defeito que a
+  // simulação achou (o boleto entregue duas vezes). Então aqui ela é
+  // reimplementada em memória com a mesma unicidade das cinco colunas da
+  // tabela — a verificação e a escrita acontecem sem `await` entre elas, que é
+  // o que o `INSERT ... ON CONFLICT DO NOTHING` garante no banco.
+  const chaveDaEntrega = (e) => [e.conversationId, e.tool, e.contractId, String(e.invoiceId), e.requestKey].join('|');
+  claimDelivery.mockImplementation(async (pedido) => {
+    const chave = chaveDaEntrega(pedido);
+    const existente = entregas.get(chave);
+    if (existente) return { obtido: false, registro: { ...existente } };
+    const registro = { id: `entrega-${entregas.size + 1}`, claimedAt: new Date(), sentAt: null };
+    entregas.set(chave, registro);
+    return { obtido: true, registro: { ...registro } };
+  });
+  markDeliverySent.mockImplementation(async (id) => {
+    for (const registro of entregas.values()) if (registro.id === id) registro.sentAt = new Date();
+  });
+  releaseDelivery.mockImplementation(async (id) => {
+    for (const [chave, registro] of entregas) if (registro.id === id && !registro.sentAt) entregas.delete(chave);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +333,12 @@ async function conversar(roteiro, anterior = null) {
     aiTriageThirdParty: null,
   };
 
-  prepararMundo({ config, conversa, contact, historico });
+  // Os claims de entrega sobrevivem ao roteiro encadeado, como sobreviveriam no
+  // banco: o roteiro 17 continua a MESMA conversa do 14, e o boleto entregue lá
+  // não pode ser reivindicado do zero aqui.
+  const entregas = anterior ? anterior.entregas : new Map();
+
+  prepararMundo({ config, conversa, contact, historico, entregas });
 
   // Os limiares saem do painel, nunca de número escrito aqui: o harness existe
   // para reproduzir a produção, e maxQuestions muda o momento em que a
@@ -321,6 +352,14 @@ async function conversar(roteiro, anterior = null) {
   let identidade = anterior ? anterior.identidade : identidadeInicial;
   let terceiro = anterior ? anterior.terceiro : null;
   let attempts = anterior ? anterior.attempts : 0;
+  // O contador do messageId sintético. Em produção o id é o da mensagem inbound
+  // do turno (ai-worker.js), e a semântica que importa para a idempotência é
+  // esta: UM id por mensagem do cliente — o mesmo em todas as tool calls dela,
+  // em todas as voltas internas do laço e em todos os retries do modelo dentro
+  // do turno; um NOVO quando o cliente escreve de novo. Gerar um id por chamada
+  // de ferramenta ou por chamada à OpenAI anularia a guarda e faria os testes
+  // passarem por engano.
+  let mensagensDoCliente = anterior ? anterior.mensagensDoCliente : 0;
   let parou = null;
   const mensagensNaoEnviadas = [];
 
@@ -330,6 +369,10 @@ async function conversar(roteiro, anterior = null) {
       continue;
     }
     const doCliente = empurrarDoCliente(historico, mensagem);
+    // Incrementado UMA vez por mensagem que de fato vira turno (a que não é
+    // enviada, acima, não gasta id).
+    mensagensDoCliente += 1;
+    const messageId = `${conversationId}-msg-${mensagensDoCliente}`;
     const antes = retrato({ identidade, terceiro, attempts });
     const jaGravadas = recordAiInteraction.mock.calls.length;
 
@@ -339,6 +382,7 @@ async function conversar(roteiro, anterior = null) {
       perfil: 'triagem',
       identidade,
       terceiro,
+      messageId,
       origemMensagem: doCliente.audio ? 'áudio' : 'texto',
       avisoCidade: null,
       triagem: {
@@ -392,7 +436,7 @@ async function conversar(roteiro, anterior = null) {
   }
 
   return {
-    roteiro, turnos, historico, identidade, terceiro, attempts, conversa,
+    roteiro, turnos, historico, identidade, terceiro, attempts, conversa, entregas, mensagensDoCliente,
     sgp: { identidade: identidadeInicial, contact, perfil },
     conversationId,
     config,

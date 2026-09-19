@@ -24,6 +24,7 @@ const { findLatestInboundImage } = require('../conversations/message.repository'
 const { getAiConfig } = require('./ai-config.repository');
 const { analisarComprovante } = require('./receipt-analysis');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
+const { claimDelivery, markDeliverySent, releaseDelivery } = require('./billing-delivery.repository');
 const { descreverUsoAnterior } = require('./receipt-usage-text');
 
 // A imagem só sai do servidor depois de passar por estes dois filtros: o
@@ -64,6 +65,30 @@ function validarContratoId(args) {
   if (!Number.isInteger(id) || id <= 0) return erro('contratoId must be a positive integer');
   return { ok: true, args: { contratoId: id } };
 }
+
+/**
+ * Validador das DUAS ferramentas que entregam a fatura ao cliente. Existe
+ * porque validarContratoId devolve só `{ contratoId }`: todo campo a mais é
+ * descartado antes de chegar em `executar`, e `reenviar` sumiria em silêncio.
+ *
+ * `=== true` é estrito de propósito. 'true', 1, 'sim' ou um objeto não abrem o
+ * caminho do reenvio: a ausência (e qualquer valor estranho) significa "não é
+ * reenvio", que já é o estado seguro. Falha FECHADO.
+ */
+function validarEntregaDeFatura(args) {
+  const base = validarContratoId(args);
+  if (!base.ok) return base;
+  return { ok: true, args: { ...base.args, reenviar: Boolean(args && args.reenviar === true) } };
+}
+
+// Opcional nas duas ferramentas, e não `required` como pendenciasObrigatorias:
+// lá a ausência significaria "nada pendente" (permissão) e por isso tinha de
+// ser obrigatório; aqui a ausência significa "não é reenvio" (bloqueio), que é
+// o estado seguro. Obrigá-lo normalizaria o modelo escrever `reenviar: true`.
+const PARAMETRO_REENVIAR = {
+  type: 'boolean',
+  description: 'Só true quando, NESTA mensagem, o cliente pediu o reenvio com todas as letras ("não recebi, manda de novo", "reenvia por favor"). Confirmar, agradecer ou dizer "pode mandar" NÃO é pedido de reenvio. Em qualquer outro caso, omita.',
+};
 
 /** Total informado pela paginação do SGP, ou null quando não há como saber. */
 function totalDaPaginacao(paginacao) {
@@ -255,6 +280,104 @@ async function limparEscopoDeTerceiro(contexto) {
   }
   contexto.terceiro = null;
   return true;
+}
+
+/**
+ * IDEMPOTÊNCIA DA ENTREGA (boleto e PIX)
+ *
+ * Simulação real, roteiro 14: a IA entregou o boleto; no turno seguinte, diante
+ * de um "Pode mandar" ambíguo, entregou DE NOVO. Em produção isso é o cliente
+ * recebendo dois boletos e podendo pagar duas vezes. Nenhuma das duas
+ * ferramentas tinha qualquer checagem de já-enviado.
+ *
+ * A guarda é um claim atômico no banco (ai_billing_deliveries), reivindicado
+ * antes de qualquer efeito externo e confirmado só depois que todos voltaram.
+ */
+
+/**
+ * 'initial' na primeira entrega da fatura; 'resend:<messageId>' quando o
+ * cliente pediu o reenvio com todas as letras NESTA mensagem.
+ *
+ * O messageId é o da mensagem inbound do turno: é o mesmo em todas as tool
+ * calls e em todas as voltas internas do laço, e muda só quando o cliente
+ * escreve de novo. Sem ele no contexto, o reenvio falha FECHADO e vira
+ * 'initial' — nunca uma chave aleatória nem um relógio, porque uma chave nova a
+ * cada chamada anularia a guarda inteira.
+ */
+function chaveDoPedido(args, contexto) {
+  const messageId = contexto && contexto.messageId;
+  return args && args.reenviar === true && messageId ? `resend:${messageId}` : 'initial';
+}
+
+/**
+ * A resposta quando o claim NÃO foi obtido. As duas situações não são a mesma
+ * coisa, e a diferença é exatamente o que o modelo pode dizer ao cliente:
+ * - com `sentAt`: a entrega se completou → `jaEnviado`.
+ * - só com `claimedAt` (ou registro ilegível): uma tentativa começou e nunca
+ *   confirmou → `envioAnteriorIncerto`, e a instrução NÃO pode afirmar que o
+ *   cliente recebeu, porque não sabemos.
+ */
+function respostaDeDuplicata(registro, item) {
+  if (registro && registro.sentAt) {
+    return {
+      enviado: false,
+      jaEnviado: true,
+      instrucao: `O ${item} desta fatura já foi enviado nesta conversa. Não envie de novo, a menos que o cliente peça o reenvio com todas as letras. Se ele apenas confirmou, agradeceu ou disse "pode mandar", só responda: o ${item} já está com ele, logo acima.`,
+    };
+  }
+  return {
+    enviado: false,
+    envioAnteriorIncerto: true,
+    instrucao: `Uma tentativa anterior de enviar o ${item} desta fatura nesta conversa ficou SEM confirmação. Não afirme que o cliente recebeu, porque não sabemos. Não repita o envio por conta própria: pergunte a ele se o ${item} chegou. Se ele disser que não e pedir o reenvio com todas as letras, aí sim chame esta ferramenta de novo com reenviar: true.`,
+  };
+}
+
+/**
+ * Reivindica a entrega desta fatura. Devolve `{ claimId }` quando a ferramenta
+ * pode seguir, ou `{ resposta }` pronta quando já havia um claim.
+ *
+ * Um claim obtido mas sem id não teria como ser confirmado nem liberado depois:
+ * vira duplicata incerta, porque bloquear é mais seguro do que arriscar
+ * entregar dinheiro duas vezes.
+ */
+async function reivindicarEntrega({ tool, item, contratoId, fatura, args, contexto }) {
+  const { obtido, registro } = await claimDelivery({
+    conversationId: contexto.conversationId,
+    tool,
+    contractId: contratoId,
+    invoiceId: fatura.id,
+    requestKey: chaveDoPedido(args, contexto),
+  });
+  if (!obtido) return { resposta: respostaDeDuplicata(registro, item) };
+  if (!registro || !registro.id) return { resposta: respostaDeDuplicata(null, item) };
+  return { claimId: registro.id };
+}
+
+/**
+ * ZONA A — antes de qualquer efeito externo. Nada saiu do sistema, então
+ * devolver o claim é correto: a próxima tentativa TEM de poder entregar.
+ * Uma falha ao liberar não muda a resposta da ferramenta; no pior caso o claim
+ * fica de pé e a próxima chamada lê "incerto", que é o lado seguro.
+ */
+async function liberarEntrega(claimId, conversationId, onde) {
+  try {
+    await releaseDelivery(claimId);
+  } catch (err) {
+    console.error(`Falha ao liberar o claim de entrega (${onde}) na conversa ${conversationId}: ${mensagemSegura(err)}`);
+  }
+}
+
+/**
+ * ZONA C — todos os efeitos externos voltaram. Uma falha aqui não desfaz a
+ * entrega e não pode derrubar a ferramenta: o claim fica sem sent_at e a
+ * próxima chamada lê "incerto" em vez de "já enviado". Nunca o contrário.
+ */
+async function confirmarEntrega(claimId, conversationId) {
+  try {
+    await markDeliverySent(claimId);
+  } catch (err) {
+    console.error(`Falha ao confirmar a entrega ${claimId} na conversa ${conversationId}: ${mensagemSegura(err)}`);
+  }
 }
 
 /** Transforma o JSON gravado do resultado numa frase curta para o atendente. */
@@ -774,10 +897,13 @@ const TOOLS = [
     exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
+      properties: {
+        contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' },
+        reenviar: PARAMETRO_REENVIAR,
+      },
       required: ['contratoId'],
     },
-    validar: validarContratoId,
+    validar: validarEntregaDeFatura,
     async executar(args, contexto) {
       // Vale para os DOIS ramos (triagem e assistente): o atendente humano
       // também pedia o PIX do contrato errado e ouvia "não há fatura".
@@ -812,17 +938,45 @@ const TOOLS = [
         return resposta;
       }
 
-      // Regra do Financeiro: sem código PIX no SGP, não há o que enviar.
-      if (!primeira.pixCode) return { sucesso: false, motivo: 'Fatura sem código PIX no SGP' };
+      // Idempotência: o claim vem DEPOIS de faturaEmAlgumContrato (só aqui
+      // primeira.id existe) e ANTES de qualquer trabalho externo. Fica também
+      // depois do ramo assistente acima de propósito: lá nada é enviado, e
+      // reivindicar ali prenderia a chave 'initial' sem nunca usá-la.
+      const entrega = await reivindicarEntrega({
+        tool: 'gerar_pix', item: 'PIX', contratoId: busca.contratoId, fatura: primeira, args, contexto,
+      });
+      if (entrega.resposta) return entrega.resposta;
+      const claimId = entrega.claimId;
 
-      // Mesma guarda de enviar_boleto: entre a consulta ao SGP e este ponto,
-      // um atendente pode ter assumido a conversa, ou ela pode ter sido
-      // fechada/silenciada/concluída.
-      if (await saiuDaTriagem(contexto.conversationId)) {
-        return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+      // ---- ZONA A: nada saiu do sistema. Toda saída daqui devolve o claim.
+      try {
+        // Regra do Financeiro: sem código PIX no SGP, não há o que enviar.
+        if (!primeira.pixCode) {
+          await liberarEntrega(claimId, contexto.conversationId, 'gerar_pix sem código PIX');
+          return { sucesso: false, motivo: 'Fatura sem código PIX no SGP' };
+        }
+
+        // Mesma guarda de enviar_boleto: entre a consulta ao SGP e este ponto,
+        // um atendente pode ter assumido a conversa, ou ela pode ter sido
+        // fechada/silenciada/concluída.
+        if (await saiuDaTriagem(contexto.conversationId)) {
+          await liberarEntrega(claimId, contexto.conversationId, 'gerar_pix fora da triagem');
+          return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+        }
+      } catch (err) {
+        // A releitura da conversa falhou: nada chegou ao cliente.
+        await liberarEntrega(claimId, contexto.conversationId, 'gerar_pix falhou antes do envio');
+        throw err;
       }
 
+      // ---- ZONA B: daqui em diante o claim NUNCA é liberado — nem em
+      // exceção, nem em timeout, nem em resultado incerto. enviarPix chama
+      // enqueueOutboundMessage, que GRAVA a linha da mensagem no banco (já
+      // visível na conversa) e só então enfileira: se estourar no meio, a
+      // mensagem existe, e devolver o claim autorizaria uma segunda.
       await enviarPix({ conversationId: contexto.conversationId, channelId: contexto.channelId, fatura: primeira, sentBy: 'ai' });
+      // ---- ZONA C: o efeito externo voltou. A entrega vira um fato gravado.
+      await confirmarEntrega(claimId, contexto.conversationId);
       contexto.resolvidoPelaIa = true;
       // Grava a entrega: contexto.resolvidoPelaIa nasce false a cada turno, e o
       // "nao preciso de mais nada" do cliente costuma vir no turno SEGUINTE.
@@ -1220,8 +1374,15 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     exigeIdentidadeForte: true,
     timeoutMs: 40000,
-    parametros: { type: 'object', properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } }, required: ['contratoId'] },
-    validar: validarContratoId,
+    parametros: {
+      type: 'object',
+      properties: {
+        contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' },
+        reenviar: PARAMETRO_REENVIAR,
+      },
+      required: ['contratoId'],
+    },
+    validar: validarEntregaDeFatura,
     async executar(args, contexto) {
       // Fora da triagem não há gate nem instrução própria para o modelo saber
       // quando é seguro entregar — enviar_boleto EXECUTA (entrega um arquivo
@@ -1250,18 +1411,46 @@ const TOOLS = [
       const contratoUsado = busca.trocouContrato
         ? { contratoId: busca.contratoId, endereco: busca.endereco }
         : null;
-      if (!primeira.boletoLink) return { enviado: false, motivo: 'Boleto sem link para download' };
-      const buffer = await sgpClient.downloadBoletoPdf(primeira.boletoLink);
-      const mediaPath = await saveMediaFile(buffer, '.pdf');
+      // Idempotência: o claim vem DEPOIS de faturaEmAlgumContrato (só aqui
+      // primeira.id existe) e ANTES de qualquer trabalho externo — antes do
+      // download do PDF, antes de gravar o arquivo, antes de enfileirar.
+      const entrega = await reivindicarEntrega({
+        tool: 'enviar_boleto', item: 'boleto', contratoId: busca.contratoId, fatura: primeira, args, contexto,
+      });
+      if (entrega.resposta) return entrega.resposta;
+      const claimId = entrega.claimId;
 
-      // I1 (revisão final do branch inteiro): entre o início deste turno (a
-      // OpenAI, o download do PDF) e este ponto, um atendente humano pode ter
-      // assumido a conversa, ou ela pode ter sido fechada/silenciada — sem
-      // reler agora, o PDF sairia mesmo com um humano já no comando.
-      if (await saiuDaTriagem(contexto.conversationId)) {
-        return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+      // ---- ZONA A: nada saiu do sistema. Toda saída daqui devolve o claim, e
+      // a próxima tentativa tem de poder entregar de verdade.
+      let mediaPath;
+      try {
+        if (!primeira.boletoLink) {
+          await liberarEntrega(claimId, contexto.conversationId, 'enviar_boleto sem link');
+          return { enviado: false, motivo: 'Boleto sem link para download' };
+        }
+        const buffer = await sgpClient.downloadBoletoPdf(primeira.boletoLink);
+        mediaPath = await saveMediaFile(buffer, '.pdf');
+
+        // I1 (revisão final do branch inteiro): entre o início deste turno (a
+        // OpenAI, o download do PDF) e este ponto, um atendente humano pode ter
+        // assumido a conversa, ou ela pode ter sido fechada/silenciada — sem
+        // reler agora, o PDF sairia mesmo com um humano já no comando.
+        if (await saiuDaTriagem(contexto.conversationId)) {
+          await liberarEntrega(claimId, contexto.conversationId, 'enviar_boleto fora da triagem');
+          return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+        }
+      } catch (err) {
+        // Download, gravação do arquivo ou releitura da conversa falharam:
+        // nada chegou ao cliente, então o claim volta.
+        await liberarEntrega(claimId, contexto.conversationId, 'enviar_boleto falhou antes do envio');
+        throw err;
       }
 
+      // ---- ZONA B: daqui em diante o claim NUNCA é liberado — nem em
+      // exceção, nem em timeout, nem em resultado incerto.
+      // enqueueOutboundMessage GRAVA a linha da mensagem no banco (já visível
+      // na conversa) e só então enfileira: se estourar no meio, a mensagem
+      // existe, e devolver o claim autorizaria uma segunda.
       await enqueueOutboundMessage({
         conversationId: contexto.conversationId, channelId: contexto.channelId,
         content: null, messageType: 'document', mediaPath,
@@ -1280,6 +1469,10 @@ const TOOLS = [
           console.error(`enviar_boleto: linha digitável não enviada na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
         }
       }
+      // ---- ZONA C: os dois efeitos externos voltaram. A entrega vira um fato
+      // gravado — antes de markTriageResolvedByAi, para que uma falha naquela
+      // escrita não deixe esta entrega registrada como incerta.
+      await confirmarEntrega(claimId, contexto.conversationId);
       contexto.resolvidoPelaIa = true;
       // Mesma razão de gerar_pix: a flag persistida é o que autoriza
       // encerrar_atendimento num turno posterior à entrega.

@@ -243,7 +243,13 @@ async function handleTriageTurn({ conversation, config, messageId }) {
   // ai-orchestrator.js) — nunca vai a log nem é persistido aqui; o worker só
   // olha turno.texto e turno.triagemConcluida.
   const turno = await runAiTurn({
-    conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade, terceiro,
+    // messageId é a mensagem inbound deste turno — já garantida como a mais
+    // recente logo acima (findLatestInboundMessageId). A idempotência de
+    // enviar_boleto/gerar_pix usa esse id para separar "o cliente pediu o
+    // reenvio agora" de "o modelo chamou a ferramenta duas vezes na mesma
+    // mensagem": um id por mensagem do cliente, o mesmo em todas as tool calls
+    // dela.
+    conversation, contact, perfil: 'triagem', identidade, origemMensagem, avisoCidade, terceiro, messageId,
     triagem: { threshold: config.triageConfidenceThreshold, maxQuestions, attempts, forcarConclusao, noturno },
   });
 

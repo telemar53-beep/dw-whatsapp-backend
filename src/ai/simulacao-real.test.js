@@ -35,6 +35,7 @@ jest.mock('../cities/contact-city.service');
 jest.mock('../city-notices/city-notice.service');
 jest.mock('./triage-close-reason');
 jest.mock('./receipt-usage.repository');
+jest.mock('./billing-delivery.repository');
 
 const { conversar, salvarTranscricao, SAIDA } = require('./simulacao/conversar');
 const { ROTEIROS } = require('./simulacao/roteiros');

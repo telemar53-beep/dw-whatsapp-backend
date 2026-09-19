@@ -1383,3 +1383,89 @@ describe('perfil de triagem', () => {
     expect(req.messages[0].content).not.toMatch(/recepcionista/i);
   });
 });
+
+// Threading do messageId (idempotência de enviar_boleto/gerar_pix). O que
+// importa não é só o repasse: é que o MESMO id chegue a todas as tool calls do
+// turno e a todas as voltas internas do laço. Um id por tool call, ou por
+// chamada à OpenAI, anularia a guarda de reenvio inteira.
+describe('messageId no contexto do turno', () => {
+  const IDENTIDADE = {
+    nivel: 'forte', origem: 'phone', primeiroNome: 'João', nome: 'João Da Silva Pereira',
+    contracts: [{ id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X' }],
+    client: { id: 9, document: '11122233344' }, contestado: false,
+  };
+  const TRIAGEM_LOCAL = { threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false };
+
+  beforeEach(() => {
+    getAiConfig.mockResolvedValue({
+      apiKey: 'sk', model: 'gpt-x', mode: 'triage', systemPrompt: 'Você é a assistente.',
+      maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.',
+      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
+    });
+    createChatCompletion.mockReset();
+  });
+
+  const turno = (extra = {}) => runAiTurn({
+    conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem',
+    identidade: IDENTIDADE, triagem: TRIAGEM_LOCAL, origemMensagem: 'texto', ...extra,
+  });
+
+  test('o messageId do turno chega ao contexto das ferramentas', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Enviei acima o boleto.' }, usage: {} });
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: { enviado: true } }; });
+    await turno({ messageId: 'msg-42' });
+    expect(ctxVisto.messageId).toBe('msg-42');
+  });
+
+  test('duas tool calls do mesmo turno recebem o MESMO messageId', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: {
+          content: null,
+          tool_calls: [
+            { id: 't1', function: { name: 'consultar_status_contrato', arguments: '{"contratoId":17402}' } },
+            { id: 't2', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } },
+          ],
+        },
+        usage: {},
+      })
+      .mockResolvedValueOnce({ message: { content: 'Enviei acima o boleto.' }, usage: {} });
+    const vistos = [];
+    executeTool.mockImplementation(async (nome, args, ctx) => {
+      vistos.push(ctx.messageId);
+      return { ok: true, resultado: { enviado: true } };
+    });
+    await turno({ messageId: 'msg-42' });
+    expect(vistos).toEqual(['msg-42', 'msg-42']);
+  });
+
+  test('voltas seguidas do laço (três chamadas à OpenAI) mantêm o mesmo messageId', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'consultar_status_contrato', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't2', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Tudo certo por aqui.' }, usage: {} });
+    const vistos = [];
+    executeTool.mockImplementation(async (nome, args, ctx) => {
+      vistos.push(ctx.messageId);
+      return { ok: true, resultado: { enviado: true } };
+    });
+    await turno({ messageId: 'msg-42' });
+    expect(vistos).toEqual(['msg-42', 'msg-42']);
+    expect(createChatCompletion).toHaveBeenCalledTimes(3);
+  });
+
+  // Sem messageId o contexto carrega null — nunca um valor inventado: em
+  // tool-registry.js é isso que faz o reenvio falhar FECHADO.
+  test('sem messageId, o contexto carrega null (falha fechado)', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Enviei acima o boleto.' }, usage: {} });
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: { enviado: true } }; });
+    await turno();
+    expect(ctxVisto.messageId).toBeNull();
+  });
+});

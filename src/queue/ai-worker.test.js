@@ -216,6 +216,33 @@ describe('ai-worker — triagem', () => {
     setThirdPartyScope.mockResolvedValue();
   });
 
+  // Idempotência de enviar_boleto/gerar_pix: o turno precisa saber QUAL
+  // mensagem do cliente o abriu. É esse id que separa "o cliente pediu o
+  // reenvio agora" de "o modelo chamou a ferramenta duas vezes na mesma
+  // mensagem". O worker já o tem em mãos, e já conferiu (logo acima) que é a
+  // mensagem inbound mais recente.
+  describe('messageId repassado ao turno', () => {
+    test('runAiTurn recebe o messageId do job', async () => {
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'm-1' }));
+    });
+
+    test('o id repassado é o da mensagem do job, não outro qualquer', async () => {
+      findLatestInboundMessageId.mockReset().mockResolvedValue('m-77');
+      findMessageById.mockResolvedValue({ id: 'm-77', messageType: 'text' });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-77' });
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'm-77' }));
+    });
+
+    // O job que não é mais o mais novo sai antes do turno: não há messageId
+    // para repassar porque não há turno nenhum.
+    test('job ultrapassado não roda turno', async () => {
+      findLatestInboundMessageId.mockReset().mockResolvedValue('m-2');
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(runAiTurn).not.toHaveBeenCalled();
+    });
+  });
+
   // Print 2026-09-16: "Ah" e "Pai!" em rajada → duas respostas idênticas
   // ("Bom dia! Como posso ajudar você hoje?"). A checagem "ainda é a última
   // mensagem?" só existia ANTES do turno; a mensagem que chega DURANTE o turno

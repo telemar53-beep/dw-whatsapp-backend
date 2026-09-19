@@ -18,11 +18,12 @@ jest.mock('./openai-client');
 jest.mock('../cities/contact-city.service');
 jest.mock('../company/company-config.repository');
 jest.mock('./receipt-usage.repository');
+jest.mock('./billing-delivery.repository');
 jest.mock('../city-notices/city-notice.service');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
-const { listTools, findTool, toOpenAiTools, faturaEmAlgumContrato } = require('./tool-registry');
+const { listTools, findTool, toOpenAiTools, faturaEmAlgumContrato, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
 const { listSectors } = require('../sectors/sector.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const {
@@ -42,6 +43,7 @@ const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
+const { claimDelivery, markDeliverySent, releaseDelivery } = require('./billing-delivery.repository');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
@@ -64,6 +66,37 @@ const ACAO_PRINCIPAL = {
   encerrar_atendimento: closeConversationByAi,
   esquecer_identificacao: setContactSgpLink,
 };
+
+// IDEMPOTÊNCIA DA ENTREGA — o repositório é mockado, e o mock reproduz a
+// unicidade das cinco colunas da tabela (conversa, ferramenta, contrato,
+// fatura, chave do pedido). Sem isto o automock devolveria `undefined` de
+// claimDelivery e as duas ferramentas de entrega quebrariam em todo teste
+// deste arquivo. A verificação e a escrita acontecem sem `await` entre elas —
+// é o que o `INSERT ... ON CONFLICT DO NOTHING RETURNING` garante no banco.
+// O armazenamento é recriado a cada teste (beforeEach de arquivo, que roda
+// ANTES dos beforeEach de cada describe).
+let entregas;
+const chaveDaEntrega = (p) => [p.conversationId, p.tool, p.contractId, String(p.invoiceId), p.requestKey].join('|');
+
+beforeEach(() => {
+  entregas = new Map();
+  claimDelivery.mockImplementation(async (pedido) => {
+    const chave = chaveDaEntrega(pedido);
+    const existente = entregas.get(chave);
+    if (existente) return { obtido: false, registro: { ...existente } };
+    const registro = { id: `entrega-${entregas.size + 1}`, claimedAt: new Date(), sentAt: null };
+    entregas.set(chave, registro);
+    return { obtido: true, registro: { ...registro } };
+  });
+  markDeliverySent.mockImplementation(async (id) => {
+    for (const registro of entregas.values()) if (registro.id === id) registro.sentAt = new Date();
+  });
+  // Espelha o `AND sent_at IS NULL` do repositório: uma entrega confirmada
+  // nunca volta a ser reivindicável, nem por um chamador enganado.
+  releaseDelivery.mockImplementation(async (id) => {
+    for (const [chave, registro] of entregas) if (registro.id === id && !registro.sentAt) entregas.delete(chave);
+  });
+});
 
 /** Contexto de um turno de triagem já identificado, com o que cada teste variar. */
 function contextoDeTriagemCom(extra = {}) {
@@ -3211,5 +3244,458 @@ describe('Task 19 — nenhum nome de setor fixo no código', () => {
     ];
     expect(trechos.length).toBeGreaterThan(0);
     expect(trechos.filter((t) => /\b(Financeiro|Comercial|Reativação)\b/.test(t))).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// IDEMPOTÊNCIA DE enviar_boleto E gerar_pix
+//
+// Simulação real, roteiro 14: a IA entregou o boleto do titular no turno 2. No
+// turno 3 o cliente disse "Pode mandar" e ela executou enviar_boleto DE NOVO.
+// Em produção isso é o cliente recebendo dois boletos e podendo pagar duas
+// vezes. Os dez testes abaixo são os que o dono pediu, na ordem dele.
+// ===========================================================================
+describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
+  const FATURA = {
+    id: '9', dueDate: '2026-09-20', value: 89.9,
+    boletoLink: 'https://x/b.pdf', pixCode: '000201-pix-emv', barCode: '836100000012',
+  };
+  const ctx = (extra = {}) => ({
+    conversationId: 'c-idem', channelId: 'ch-1', contracts: [{ id: 17402 }],
+    identidade: { nivel: 'forte', primeiroNome: 'Willemberg' },
+    ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+    registroFerramentas: [], sgpCache: {}, terceiro: null,
+    messageId: 'msg-1',
+    ...extra,
+  });
+  const boleto = (args, contexto) => findTool('enviar_boleto').executar(args, contexto);
+  const pix = (args, contexto) => findTool('gerar_pix').executar(args, contexto);
+  const chavesPedidas = () => claimDelivery.mock.calls.map(([p]) => p.requestKey);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA] });
+    sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+    saveMediaFile.mockResolvedValue('abc.pdf');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-9' });
+    enviarBoleto.mockResolvedValue([{ id: 'm-cartao' }, { id: 'm-linha' }]);
+    enviarPix.mockResolvedValue([{ id: 'm-pix' }]);
+    getConversationWithContact.mockResolvedValue({ id: 'c-idem', assignedAgentId: null, status: 'waiting', triageState: 'pending' });
+  });
+
+  // -------------------------------------------------------------------------
+  // 1. Duas execuções SIMULTÂNEAS do envio inicial
+  // -------------------------------------------------------------------------
+  // Não são duas chamadas em sequência: as duas ficam EM VOO ao mesmo tempo. O
+  // atraso no SGP garante que ambas passem de faturaEmAlgumContrato antes de
+  // qualquer uma chegar ao claim — é a corrida de verdade, a mesma que dois
+  // workers fariam em produção.
+  describe('1. duas execuções simultâneas do envio inicial', () => {
+    const depois = (ms, valor) => new Promise((resolve) => { setTimeout(() => resolve(valor), ms); });
+
+    beforeEach(() => {
+      // A consulta ao SGP leva 5 ms nas duas, e o envio leva 10 ms: quando a
+      // segunda execução chega ao claim, a primeira AINDA ESTÁ enviando. É a
+      // sobreposição real de dois workers, e é o que faz a perdedora cair no
+      // ramo "sem confirmação" em vez do ramo "já enviado".
+      sgpClient.getDuplicateInvoice.mockImplementation(() => depois(5, { hasOpenInvoice: true, duplicates: [FATURA] }));
+      enqueueOutboundMessage.mockImplementation(() => depois(10, { id: 'm-9' }));
+      enviarPix.mockImplementation(() => depois(10, [{ id: 'm-pix' }]));
+    });
+
+    test('enviar_boleto: só uma ganha o claim e só um boleto sai', async () => {
+      const [a, b] = await Promise.all([boleto({ contratoId: 17402 }, ctx()), boleto({ contratoId: 17402 }, ctx())]);
+      expect(claimDelivery).toHaveBeenCalledTimes(2);
+      expect([a.enviado, b.enviado].filter(Boolean)).toHaveLength(1);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+      expect(enviarBoleto).toHaveBeenCalledTimes(1);
+      // A perdedora chegou enquanto a vencedora ainda enviava: ninguém pode
+      // afirmar que o cliente recebeu.
+      const perdedora = [a, b].find((r) => !r.enviado);
+      expect(perdedora.envioAnteriorIncerto).toBe(true);
+      expect(perdedora.jaEnviado).toBeUndefined();
+      expect(releaseDelivery).not.toHaveBeenCalled();
+    });
+
+    test('gerar_pix: só uma ganha o claim e só um PIX sai', async () => {
+      const [a, b] = await Promise.all([pix({ contratoId: 17402 }, ctx()), pix({ contratoId: 17402 }, ctx())]);
+      expect([a.enviado, b.enviado].filter(Boolean)).toHaveLength(1);
+      expect(enviarPix).toHaveBeenCalledTimes(1);
+      expect([a, b].find((r) => !r.enviado).envioAnteriorIncerto).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 2. Duas tool calls na MESMA mensagem do cliente
+  // -------------------------------------------------------------------------
+  // Mesmo messageId, sem reenviar: a chave é 'initial' nas duas, então a
+  // segunda bate no claim. É o caso do "Pode mandar".
+  describe('2. duas tool calls na mesma mensagem', () => {
+    test('enviar_boleto: a segunda não envia e devolve jaEnviado', async () => {
+      const contexto = ctx();
+      const primeira = await boleto({ contratoId: 17402 }, contexto);
+      const segunda = await boleto({ contratoId: 17402 }, contexto);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(segunda.envioAnteriorIncerto).toBeUndefined();
+      expect(segunda.instrucao).toMatch(/já foi enviado nesta conversa/);
+      expect(segunda.instrucao).toMatch(/com todas as letras/);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+      expect(chavesPedidas()).toEqual(['initial', 'initial']);
+    });
+
+    test('gerar_pix: a segunda não envia e devolve jaEnviado', async () => {
+      const contexto = ctx();
+      expect((await pix({ contratoId: 17402 }, contexto)).enviado).toBe(true);
+      expect(await pix({ contratoId: 17402 }, contexto)).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(enviarPix).toHaveBeenCalledTimes(1);
+    });
+
+    // A guarda é por FATURA, não por conversa: outra fatura do mesmo cliente
+    // continua entregável no mesmo turno.
+    test('outra fatura da mesma conversa não é bloqueada', async () => {
+      await boleto({ contratoId: 17402 }, ctx());
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: '10' }] });
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 3. Mensagem NOVA pedindo o reenvio com todas as letras
+  // -------------------------------------------------------------------------
+  test('3. nova mensagem de reenvio explícito permite uma nova entrega', async () => {
+    expect((await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }))).enviado).toBe(true);
+    const reenvio = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+    expect(reenvio.enviado).toBe(true);
+    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
+    expect(chavesPedidas()).toEqual(['initial', 'resend:msg-2']);
+  });
+
+  // -------------------------------------------------------------------------
+  // 4. Duas tool calls DA MESMA mensagem de reenvio
+  // -------------------------------------------------------------------------
+  test('4. duas tool calls da mesma mensagem de reenvio entregam uma vez só', async () => {
+    await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+    const contextoDoReenvio = ctx({ messageId: 'msg-2' });
+    const primeira = await boleto({ contratoId: 17402, reenviar: true }, contextoDoReenvio);
+    const segunda = await boleto({ contratoId: 17402, reenviar: true }, contextoDoReenvio);
+    expect(primeira.enviado).toBe(true);
+    expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
+    expect(chavesPedidas()).toEqual(['initial', 'resend:msg-2', 'resend:msg-2']);
+  });
+
+  // -------------------------------------------------------------------------
+  // 5. Mensagem POSTERIOR pedindo outro reenvio
+  // -------------------------------------------------------------------------
+  test('5. outro pedido de reenvio, em outra mensagem, é permitido', async () => {
+    await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+    await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+    const terceiro = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-3' }));
+    expect(terceiro.enviado).toBe(true);
+    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(3);
+    expect(chavesPedidas()).toEqual(['initial', 'resend:msg-2', 'resend:msg-3']);
+  });
+
+  // -------------------------------------------------------------------------
+  // 6. Falha na ZONA A → o claim é LIBERADO
+  // -------------------------------------------------------------------------
+  // Nada saiu do sistema, então a próxima tentativa TEM de poder entregar.
+  describe('6. falha na Zona A libera o claim', () => {
+    test('boleto sem link: libera, e com link a chamada seguinte envia', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, boletoLink: null }] });
+      expect(await boleto({ contratoId: 17402 }, ctx())).toEqual({ enviado: false, motivo: 'Boleto sem link para download' });
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA] });
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+    });
+
+    test('downloadBoletoPdf falhou: libera, e a chamada seguinte envia', async () => {
+      sgpClient.downloadBoletoPdf.mockRejectedValueOnce(new Error('SGP fora'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('SGP fora');
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+
+    test('saveMediaFile falhou: libera, e a chamada seguinte envia', async () => {
+      saveMediaFile.mockRejectedValueOnce(new Error('disco cheio'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('disco cheio');
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+
+    test('a conversa saiu da triagem: libera, e de volta à triagem a seguinte envia', async () => {
+      getConversationWithContact.mockResolvedValueOnce({ id: 'c-idem', assignedAgentId: 'ag-1', status: 'waiting', triageState: 'pending' });
+      expect(await boleto({ contratoId: 17402 }, ctx())).toEqual({ enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' });
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+
+    test('a releitura da conversa lançou: libera e propaga o erro', async () => {
+      getConversationWithContact.mockRejectedValueOnce(new Error('banco fora'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('banco fora');
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('gerar_pix sem código PIX: libera, e com código a seguinte envia', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
+      expect(await pix({ contratoId: 17402 }, ctx())).toEqual({ sucesso: false, motivo: 'Fatura sem código PIX no SGP' });
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA] });
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(enviarPix).toHaveBeenCalledTimes(1);
+    });
+
+    test('gerar_pix fora da triagem: recusa e libera o claim', async () => {
+      getConversationWithContact.mockResolvedValueOnce({ id: 'c-idem', assignedAgentId: 'ag-1', status: 'waiting', triageState: 'pending' });
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(false);
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 7. Falha DEPOIS de iniciar o envio → o claim é PRESERVADO
+  // -------------------------------------------------------------------------
+  // enqueueOutboundMessage grava a linha da mensagem no banco ANTES de
+  // enfileirar: se estourar no meio, a mensagem já existe na conversa. Liberar
+  // aqui autorizaria uma segunda.
+  describe('7. falha na Zona B preserva o claim', () => {
+    test('enqueueOutboundMessage falhou: não libera, e a repetição não envia', async () => {
+      enqueueOutboundMessage.mockRejectedValueOnce(new Error('fila fora'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('fila fora');
+      expect(releaseDelivery).not.toHaveBeenCalled();
+      expect(markDeliverySent).not.toHaveBeenCalled();
+
+      const repeticao = await boleto({ contratoId: 17402 }, ctx());
+      expect(repeticao.enviado).toBe(false);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+    });
+
+    test('enviarPix falhou: não libera, e a repetição não envia', async () => {
+      enviarPix.mockRejectedValueOnce(new Error('fila fora'));
+      await expect(pix({ contratoId: 17402 }, ctx())).rejects.toThrow('fila fora');
+      expect(releaseDelivery).not.toHaveBeenCalled();
+
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(false);
+      expect(enviarPix).toHaveBeenCalledTimes(1);
+    });
+
+    // A linha digitável é melhor esforço e já era: o PDF saiu, então o claim
+    // continua de pé e a entrega é confirmada.
+    test('a linha digitável falhou depois do PDF: confirma a entrega mesmo assim', async () => {
+      enviarBoleto.mockRejectedValueOnce(new Error('fila fora'));
+      const r = await boleto({ contratoId: 17402 }, ctx());
+      expect(r).toMatchObject({ enviado: true, linhaDigitavelEnviada: false });
+      expect(releaseDelivery).not.toHaveBeenCalled();
+      expect(markDeliverySent).toHaveBeenCalledTimes(1);
+    });
+
+    // Uma falha ao gravar sent_at não desfaz a entrega nem derruba a
+    // ferramenta: o claim fica sem confirmação, que é o lado seguro.
+    test('markDeliverySent falhou: a entrega continua valendo e nada é liberado', async () => {
+      markDeliverySent.mockRejectedValueOnce(new Error('banco fora'));
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(releaseDelivery).not.toHaveBeenCalled();
+      expect((await boleto({ contratoId: 17402 }, ctx())).envioAnteriorIncerto).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. Claim sem sent_at ≠ entrega confirmada
+  // -------------------------------------------------------------------------
+  describe('8. claim sem sent_at devolve envioAnteriorIncerto, nunca jaEnviado', () => {
+    test('a instrução não afirma que o cliente recebeu', async () => {
+      enqueueOutboundMessage.mockRejectedValueOnce(new Error('fila fora'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('fila fora');
+
+      const r = await boleto({ contratoId: 17402 }, ctx());
+      expect(r.envioAnteriorIncerto).toBe(true);
+      expect(r.jaEnviado).toBeUndefined();
+      expect(r.instrucao).toMatch(/ficou SEM confirmação/);
+      expect(r.instrucao).toMatch(/[Nn]ão afirme que o cliente recebeu/);
+      expect(r.instrucao).not.toMatch(/já foi enviado nesta conversa/);
+      // E diz ao modelo o caminho legítimo de sair do impasse.
+      expect(r.instrucao).toMatch(/reenviar: true/);
+    });
+
+    test('com sent_at, aí sim jaEnviado — e as duas respostas são diferentes', async () => {
+      await boleto({ contratoId: 17402 }, ctx());
+      const r = await boleto({ contratoId: 17402 }, ctx());
+      expect(r.jaEnviado).toBe(true);
+      expect(r.envioAnteriorIncerto).toBeUndefined();
+      expect(r.instrucao).not.toMatch(/sem confirmação/i);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 9. Titular e terceiro seguem o MESMO mecanismo
+  // -------------------------------------------------------------------------
+  describe('9. o boleto de terceiro segue o mesmo mecanismo', () => {
+    const ctxTerceiro = () => ({
+      conversationId: 'c-idem', channelId: 'ch-1', contracts: [],
+      identidade: { nivel: 'fraca', primeiroNome: 'Willemberg' },
+      ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+      terceiro: { nome: 'Maria', contratos: [{ id: 99 }] },
+      registroFerramentas: [], sgpCache: {}, messageId: 'msg-1',
+    });
+
+    test('a segunda entrega do mesmo boleto de terceiro é bloqueada', async () => {
+      const primeira = await executeTool('enviar_boleto', { contratoId: 99 }, ctxTerceiro());
+      const segunda = await executeTool('enviar_boleto', { contratoId: 99 }, ctxTerceiro());
+      expect(primeira.resultado.enviado).toBe(true);
+      expect(segunda.resultado.enviado).toBe(false);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+      // MINIMIZAÇÃO (Fase 3) intacta: jaEnviado não atravessa a projeção — o
+      // que chega ao modelo continua sendo só enviado + instrucao.
+      expect(Object.keys(segunda.resultado).sort()).toEqual(['enviado', 'instrucao']);
+      expect(segunda.resultado.instrucao).toMatch(/já foi enviado nesta conversa/);
+    });
+
+    test('o claim do terceiro e o do titular são entregas separadas', async () => {
+      await executeTool('enviar_boleto', { contratoId: 99 }, ctxTerceiro());
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 10. Fases 2-3 intactas
+  // -------------------------------------------------------------------------
+  describe('10. allowlist, identidade, escopo e minimização seguem intactos', () => {
+    test('a allowlist de terceiro não mudou', () => {
+      expect(FERRAMENTAS_PERMITIDAS_EM_TERCEIRO)
+        .toEqual(['consultar_faturas', 'enviar_boleto', 'gerar_pix', 'gerar_segunda_via']);
+    });
+
+    test('identidade não confirmada recusa ANTES de reivindicar qualquer entrega', async () => {
+      const r = await executeTool('enviar_boleto', { contratoId: 17402 }, ctx({ identidade: { nivel: 'fraca' } }));
+      expect(r).toMatchObject({ ok: false, motivo: 'identity_not_confirmed' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+
+    test('contrato de outra pessoa recusa ANTES de reivindicar qualquer entrega', async () => {
+      const r = await executeTool('enviar_boleto', { contratoId: 404 }, ctx());
+      expect(r).toMatchObject({ ok: false, motivo: 'contract_not_owned' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+
+    test('nenhuma fatura: nada é reivindicado', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(false);
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+
+    test('vários contratos com fatura: nada é reivindicado antes da escolha', async () => {
+      const contexto = ctx({ contracts: [{ id: 17402 }, { id: 17405 }, { id: 17408 }] });
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (
+        id === 17402
+          ? { hasOpenInvoice: false, duplicates: [] }
+          : { hasOpenInvoice: true, duplicates: [FATURA] }
+      ));
+      expect(await boleto({ contratoId: 17402 }, contexto)).toMatchObject({ enviado: false });
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+
+    // gerar_pix fora da triagem só SUGERE o código ao atendente humano: não há
+    // efeito externo nenhum, e reivindicar ali prenderia a chave 'initial' sem
+    // nunca usá-la — bloqueando a entrega real depois.
+    test('gerar_pix no perfil assistente não reivindica entrega', async () => {
+      const r = await pix({ contratoId: 17402 }, { conversationId: 'c-idem', channelId: 'ch-1', contracts: [{ id: 17402 }] });
+      expect(r).toMatchObject({ sucesso: true, pixCopiaCola: '000201-pix-emv' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // A chave do pedido: como ela é montada é a guarda inteira
+  // -------------------------------------------------------------------------
+  describe('chave do pedido', () => {
+    // Uma chave nova a cada chamada anularia tudo. Sem messageId o reenvio
+    // falha FECHADO e vira 'initial'.
+    test('reenviar sem messageId no contexto cai em initial, e a repetição é bloqueada', async () => {
+      const contexto = ctx({ messageId: null });
+      const primeira = await boleto({ contratoId: 17402, reenviar: true }, contexto);
+      const segunda = await boleto({ contratoId: 17402, reenviar: true }, contexto);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda.enviado).toBe(false);
+      expect(chavesPedidas()).toEqual(['initial', 'initial']);
+    });
+
+    test('sem reenviar, o messageId não entra na chave: turnos diferentes continuam bloqueados', async () => {
+      await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      const segunda = await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-2' }));
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(chavesPedidas()).toEqual(['initial', 'initial']);
+    });
+
+    // O validador é quem carrega `reenviar` até `executar` — validarContratoId
+    // devolvia só { contratoId } e o campo sumiria em silêncio.
+    test('o validador carrega reenviar e só aceita o booleano true', () => {
+      const validar = findTool('enviar_boleto').validar;
+      expect(validar({ contratoId: 17402, reenviar: true })).toEqual({ ok: true, args: { contratoId: 17402, reenviar: true } });
+      expect(validar({ contratoId: 17402 })).toEqual({ ok: true, args: { contratoId: 17402, reenviar: false } });
+      for (const valor of ['true', 1, 'sim', {}, [], 'yes']) {
+        expect(validar({ contratoId: 17402, reenviar: valor }).args.reenviar).toBe(false);
+      }
+      expect(findTool('gerar_pix').validar({ contratoId: 17402, reenviar: true }).args.reenviar).toBe(true);
+      expect(validar({ contratoId: 0, reenviar: true }).ok).toBe(false);
+    });
+
+    test('reenviar: "true" (string) pelo executor não abre reenvio nenhum', async () => {
+      await executeTool('enviar_boleto', { contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      const segunda = await executeTool('enviar_boleto', { contratoId: 17402, reenviar: 'true' }, ctx({ messageId: 'msg-2' }));
+      expect(segunda.resultado.enviado).toBe(false);
+      expect(chavesPedidas()).toEqual(['initial', 'initial']);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // O schema que a OpenAI vê
+  // -------------------------------------------------------------------------
+  describe('schema de reenviar', () => {
+    test.each(['enviar_boleto', 'gerar_pix'])('%s declara reenviar booleano e OPCIONAL', (nome) => {
+      const { parametros } = findTool(nome);
+      expect(parametros.properties.reenviar.type).toBe('boolean');
+      expect(parametros.required).toEqual(['contratoId']);
+      expect(parametros.required).not.toContain('reenviar');
+      // A ausência já significa "não é reenvio": um default no schema faria o
+      // modelo normalizar o campo.
+      expect(parametros.properties.reenviar.default).toBeUndefined();
+      expect(parametros.properties.reenviar.description).toMatch(/com todas as letras/);
+    });
+
+    test('a descrição chega à OpenAI nas duas ferramentas', () => {
+      const declaradas = toOpenAiTools(['enviar_boleto', 'gerar_pix']);
+      for (const t of declaradas) {
+        expect(t.function.parameters.properties.reenviar).toBeDefined();
+        expect(t.function.parameters.required).not.toContain('reenviar');
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // O que a tabela guarda
+  // -------------------------------------------------------------------------
+  test('o claim leva só ids: nenhum valor, linha digitável ou código PIX', async () => {
+    await boleto({ contratoId: 17402 }, ctx());
+    await pix({ contratoId: 17402 }, ctx());
+    for (const [pedido] of claimDelivery.mock.calls) {
+      expect(Object.keys(pedido).sort()).toEqual(['contractId', 'conversationId', 'invoiceId', 'requestKey', 'tool']);
+      const serializado = JSON.stringify(pedido);
+      expect(serializado).not.toContain('836100000012');
+      expect(serializado).not.toContain('000201-pix-emv');
+      expect(serializado).not.toContain('89.9');
+      expect(serializado).not.toContain('Willemberg');
+    }
   });
 });

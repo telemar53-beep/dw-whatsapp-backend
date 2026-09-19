@@ -250,7 +250,7 @@ function ferramentasDaTriagem(triagem, config) {
   return lista;
 }
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, messageId = null }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -276,6 +276,11 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       conversationId: conversation.id, contact, contracts: identidadeEfetiva.contracts || [], sgpCache: {},
       identidade: identidadeEfetiva, terceiro, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem, config), registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
+      // A mensagem do cliente que abriu este turno. É a MESMA em todas as tool
+      // calls do turno e em todas as voltas internas do laço — é isso que faz a
+      // chave de reenvio de enviar_boleto/gerar_pix valer por pedido do
+      // cliente, e não por chamada de ferramenta.
+      messageId,
     };
     // Setores e motivos em paralelo: são duas consultas independentes e o
     // turno inteiro espera por elas antes da primeira chamada à OpenAI.

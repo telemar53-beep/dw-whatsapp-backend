@@ -85,4 +85,38 @@ describe('módulo terceiros', () => {
     const texto = terceiros.linhas(estadoBase()).join('\n');
     expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
   });
+
+  // Rodada de correção 1 da Task 20 (execução real, 2026-09-18): a instrução
+  // de não concluir a triagem logo depois de entregar existia só em
+  // fluxos/financeiro.js, que NÃO entra no estado do fluxo de terceiro
+  // (identidade.nivel === 'none'). Na execução real o modelo entregou o
+  // boleto do titular e concluiu a triagem no mesmo turno. Os dois testes
+  // abaixo são os dois lados: com motivo de encerramento configurado a linha
+  // aparece; sem ele, nada muda.
+  const COM_MOTIVO = () => estadoBase({
+    config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: '[motivo]' },
+  });
+
+  test('com motivo de encerramento configurado, manda NÃO concluir a triagem e esperar para encerrar', () => {
+    const texto = terceiros.linhas(COM_MOTIVO()).join('\n');
+    expect(texto).toContain('NÃO conclua a triagem nesse momento');
+    expect(texto).toMatch(/chame encerrar_atendimento/);
+    // A linha fala do fluxo de QUEM PEDIU, não do titular.
+    expect(texto).toMatch(/espere quem está falando confirmar ou agradecer/);
+    expect(texto).toMatch(/Se ele pedir outra coisa, siga a triagem normalmente\./);
+  });
+
+  test('sem motivo de encerramento configurado, a linha não entra (segue concluindo)', () => {
+    const texto = terceiros.linhas(estadoBase()).join('\n');
+    expect(texto).not.toContain('NÃO conclua a triagem nesse momento');
+    expect(texto).not.toMatch(/encerrar_atendimento/);
+  });
+
+  // A linha nova é varrida pelas mesmas guardas do módulo: sem palavra
+  // proibida e sem nome de setor fixo.
+  test('a linha nova respeita as guardas do módulo (dado proibido e nome de setor)', () => {
+    const texto = terceiros.linhas(COM_MOTIVO()).join('\n');
+    expect(texto).not.toMatch(/nascimento|parentesco|nome da mãe/i);
+    expect(texto).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
+  });
 });

@@ -384,3 +384,39 @@ test('"Cliente NÃO identificado." aparece exatamente uma vez no prompt do estad
   const ocorrencias = texto.match(/Cliente NÃO identificado\./g) || [];
   expect(ocorrencias.length).toBe(1);
 });
+
+// =====================================================================
+// Task 20, rodada de correção 1 — a lacuna de COMPOSIÇÃO do fluxo de terceiro
+// =====================================================================
+// Achado da execução real com a OpenAI (2026-09-18, roteiros 14 e 17): a
+// instrução "NÃO conclua a triagem nesse momento" existia só em
+// fluxos/financeiro.js, cujo entra() exige identidade forte. No fluxo de
+// boleto de terceiro quem pede NUNCA é identificado (titularEOutraPessoa
+// preenche contexto.terceiro, não contexto.contracts — decisão de segurança
+// da Fase 2), então o módulo inteiro ficava fora e a instrução nunca chegava
+// ao modelo: ele entregou o boleto do titular e concluiu a triagem no mesmo
+// turno.
+// Este teste é sobre o PROMPT MONTADO no estado exato onde a linha faltava —
+// testar só terceiros.linhas() provaria que o texto existe, não que ele chega
+// ao modelo neste estado.
+const ESTADO_TERCEIRO_COM_MOTIVO = estadoBase({
+  terceiro: { titular: '[nome do titular]' },
+  config: { systemPrompt: 'p', triageExtraInstructions: null, triageResolvedReasonId: '[motivo]' },
+});
+
+test('no estado de terceiro (identidade none) o prompt montado manda NÃO concluir a triagem depois de entregar', () => {
+  // A condição que CRIOU a lacuna continua valendo: o financeiro segue fora.
+  // Se um dia alguém afrouxar esse entra(), este expect vira vermelho e quem
+  // mexer tem de decidir de novo, em vez de a mudança passar despercebida.
+  const financeiro = MODULOS.find((m) => m.nome === 'financeiro');
+  expect(financeiro.entra(ESTADO_TERCEIRO_COM_MOTIVO)).toBe(false);
+
+  const texto = montarContexto(ESTADO_TERCEIRO_COM_MOTIVO);
+  expect(texto).toContain('NÃO conclua a triagem nesse momento');
+  expect(texto).toMatch(/chame encerrar_atendimento/);
+});
+
+test('sem motivo de encerramento configurado, o prompt de terceiro não traz a instrução de não concluir', () => {
+  const texto = montarContexto(estadoBase({ terceiro: { titular: '[nome do titular]' } }));
+  expect(texto).not.toContain('NÃO conclua a triagem nesse momento');
+});

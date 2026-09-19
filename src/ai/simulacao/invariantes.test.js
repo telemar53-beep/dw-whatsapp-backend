@@ -17,8 +17,8 @@ const {
   mudouDeSetor, concluiuNoSetor,
   tabelasDePlanos, naoRepetiuTabelaDePlanos, naoMostrouTabelaDePlanos,
   resumoUtil, resumoConcreto,
-  pediuEndereco, naoPediuEndereco, identidadeEstavel,
-  naoAfirmouSemFerramenta, baixaConfiancaAindaConcluiu,
+  pediuEndereco, naoPediuEndereco, respondeuAntesDePedirEndereco, identidadeEstavel,
+  naoAfirmouSemFerramenta, resolveuOuConcluiu, baixaConfiancaAindaConcluiu,
 } = require('./invariantes');
 
 /** Turno mínimo: só o que cada teste precisa, o resto no padrão vazio. */
@@ -398,6 +398,127 @@ describe('pediuEndereco / naoPediuEndereco', () => {
     expect(naoPediuEndereco([
       turno({ texto: 'Entendi. Acontece em todos os aparelhos ou só em um?' }),
     ])).toBe(true);
+  });
+});
+
+// Rodada de correção 1 da Task 20: o que o roteiro 10 tem de julgar é ORDEM —
+// cobrar o endereço ANTES de atender a pergunta nova é falha; responder e só
+// então oferecer é aceitável. As duas respostas abaixo pedem o endereço com
+// as MESMAS palavras, de propósito: é a ordem que separa uma da outra, e se
+// alguém trocar isto por um casamento de frase literal, os dois testes
+// deixam de poder passar ao mesmo tempo.
+describe('respondeuAntesDePedirEndereco', () => {
+  const PERGUNTA_NOVA = 'Vocês fazem instalação no fim de semana?';
+
+  function resposta(texto) {
+    return [turno({ cliente: PERGUNTA_NOVA, texto })];
+  }
+
+  test('acusa a cobrança do endereço ANTES de responder', () => {
+    expect(respondeuAntesDePedirEndereco(resposta(
+      'Para seguirmos, me informe seu bairro e sua rua. Depois eu confirmo se fazemos instalação no fim de semana.'
+    ))).toBe(false);
+  });
+
+  test('acusa também quando o pedido abre a resposta e o assunto novo nunca é atendido', () => {
+    expect(respondeuAntesDePedirEndereco(resposta(
+      'Claro! Para verificar a disponibilidade, me informe seu bairro e sua rua.'
+    ))).toBe(false);
+  });
+
+  test('acusa o pedido que se disfarça de resposta na mesma frase', () => {
+    expect(respondeuAntesDePedirEndereco(resposta(
+      'Me informe sua rua para eu ver se fazemos instalação aí no fim de semana.'
+    ))).toBe(false);
+  });
+
+  test('não acusa quem responde primeiro e só depois OFERECE o endereço', () => {
+    expect(respondeuAntesDePedirEndereco(resposta(
+      'Sim, fazemos instalação aos sábados, conforme a agenda. Se quiser, me informe seu bairro e sua rua que eu já verifico a disponibilidade.'
+    ))).toBe(true);
+  });
+
+  // TEXTO REAL da execução de 2026-09-18 (roteiro 10, turno 2), copiado da
+  // transcrição. É o desfecho que esta correção veio deixar passar — e repare
+  // que ele NÃO repete nenhuma palavra da pergunta ("instalação", "fim de
+  // semana"): é por isso que o invariante não pode se apoiar só no eco.
+  test('não acusa a resposta real da execução, que responde sem repetir palavra da pergunta', () => {
+    expect(respondeuAntesDePedirEndereco(resposta(
+      'A equipe confirma essa condição para você. Se quiser, me informe seu bairro e sua rua para eu seguir com a verificação.'
+    ))).toBe(true);
+  });
+
+  test('não acusa a resposta que nem toca no endereço', () => {
+    expect(respondeuAntesDePedirEndereco(resposta('Sim, fazemos instalação aos sábados.'))).toBe(true);
+  });
+
+  test('falha fechado sem turno e sem mensagem do cliente para ancorar', () => {
+    expect(respondeuAntesDePedirEndereco([])).toBe(false);
+    expect(respondeuAntesDePedirEndereco([turno({ cliente: '', texto: 'Me informe seu bairro e sua rua.' })])).toBe(false);
+  });
+
+  test('bordão de abertura não conta como resposta à pergunta nova', () => {
+    // "Claro", "vocês" e "gente" ficam fora das palavras que contam: o que
+    // sobra ("podem contar") não chega ao piso de substância. Sem isso,
+    // qualquer bordão antes da cobrança aprovaria a cobrança.
+    expect(respondeuAntesDePedirEndereco(resposta(
+      'Claro, vocês podem contar com a gente! Me informe seu bairro e sua rua, por favor.'
+    ))).toBe(false);
+  });
+
+  test('julga cada turno recebido: escolher entre contratos conhecidos não é pedido', () => {
+    expect(respondeuAntesDePedirEndereco([turno({
+      cliente: 'quero o boleto',
+      texto: 'Vi que você tem mais de um contrato. Pode me confirmar de qual endereço você precisa?',
+    })])).toBe(true);
+  });
+});
+
+// Rodada de correção 1 da Task 20: o roteiro 19 exigia `concluiu` e reprovava
+// o desfecho melhor (resolver sozinha). Este invariante aceita os dois, e só
+// os dois — a conversa que só devolveu pergunta continua reprovada.
+describe('resolveuOuConcluiu', () => {
+  const RESOLUCAO = ['consultar_faturas', 'enviar_boleto', 'gerar_pix'];
+
+  test('acusa a conversa que só ficou perguntando', () => {
+    expect(resolveuOuConcluiu([
+      turno({ texto: 'Pode me dizer melhor o que você precisa?' }),
+      turno({ texto: 'É sobre pagamento ou sobre a internet?' }),
+    ], RESOLUCAO)).toBe(false);
+  });
+
+  test('acusa a ferramenta PEDIDA que não executou (recusada não resolveu nada)', () => {
+    expect(resolveuOuConcluiu([turno({
+      texto: 'Vou verificar suas faturas.',
+      toolsSolicitadas: [{ nome: 'consultar_faturas', args: {} }],
+      toolsExecutadas: [],
+    })], RESOLUCAO)).toBe(false);
+  });
+
+  test('acusa a ferramenta que executou mas está fora do que o roteiro chama de resolver', () => {
+    expect(resolveuOuConcluiu([turno({
+      texto: 'Consultei aqui.',
+      toolsExecutadas: [{ nome: 'consultar_status_todos_contratos' }],
+    })], RESOLUCAO)).toBe(false);
+  });
+
+  test('não acusa quem resolveu com a ferramenta, mesmo sem concluir a triagem', () => {
+    expect(resolveuOuConcluiu([turno({
+      texto: 'Vi duas faturas em aberto. Quer o boleto ou o PIX?',
+      toolsExecutadas: [{ nome: 'consultar_faturas' }],
+    })], RESOLUCAO)).toBe(true);
+  });
+
+  test('não acusa quem concluiu a triagem, mesmo sem ferramenta de resolução', () => {
+    expect(resolveuOuConcluiu([turno({
+      texto: 'Vou encaminhar você para um atendente.',
+      triagemConcluida: { setor: 'Financeiro de Teste' },
+    })], RESOLUCAO)).toBe(true);
+  });
+
+  test('recusa um uso mal formado em vez de passar calado', () => {
+    expect(() => resolveuOuConcluiu([turno({})], [])).toThrow(/resolver/);
+    expect(() => resolveuOuConcluiu([turno({})], undefined)).toThrow(/resolver/);
   });
 });
 

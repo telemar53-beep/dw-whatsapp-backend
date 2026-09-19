@@ -17,7 +17,9 @@
 // 11. endereço só é solicitado quando tecnicamente necessário ...
 //     PEDE: 4, 10, 20 · NÃO PEDE: 1, 9, 11, 13, 14, 16, 18
 // 12. a última mensagem do cliente vence contexto/intenção antiga ........... 4, 10, 16
-// 13. handoff humano gera resumo concreto e útil .......................... 15, 16, 19, 20
+// 13. handoff humano gera resumo concreto e útil ..... 15, 16, 20 · 19 só quando
+//     houver handoff (lá resolver sozinha também é desfecho válido — ver o
+//     comentário no roteiro 19)
 // ===========================================================================
 //
 // Os 17 da seção 4.3 da spec são os de número 1 a 17, na mesma ordem. Do 18 ao
@@ -38,8 +40,8 @@ const {
   naoRepetiuPergunta, nenhumTextoCasa, algumTextoCasa, nenhumaPerguntaCasa,
   naoVazouDadoDeTerceiro, usouInfoDoAudio, mudouDeSetor, concluiuNoSetor,
   naoRepetiuTabelaDePlanos, naoMostrouTabelaDePlanos, resumoUtil,
-  pediuEndereco, naoPediuEndereco, identidadeEstavel,
-  naoAfirmouSemFerramenta, baixaConfiancaAindaConcluiu,
+  pediuEndereco, naoPediuEndereco, respondeuAntesDePedirEndereco, identidadeEstavel,
+  naoAfirmouSemFerramenta, resolveuOuConcluiu, baixaConfiancaAindaConcluiu,
 } = require('./invariantes');
 
 const SUPORTE = setorPorPapel('suporte').name;
@@ -47,6 +49,15 @@ const FINANCEIRO = setorPorPapel('financeiro').name;
 const COMERCIAL = setorPorPapel('comercial').name;
 
 const ENTREGA = ['enviar_boleto', 'gerar_pix'];
+
+// O que conta como RESOLVER um pedido vago sobre "a minha conta" (roteiro 19):
+// consultar a situação e entregar o pagamento. São as ferramentas que, tendo
+// EXECUTADO, provam que a IA atendeu em vez de só devolver pergunta. Nomes
+// conferidos um a um contra tool-registry.js.
+const RESOLUCAO_DA_CONTA = [
+  'consultar_faturas', 'consultar_faturas_todos_contratos', 'consultar_financeiro',
+  'enviar_boleto', 'gerar_pix', 'gerar_segunda_via',
+];
 
 // ---------------------------------------------------------------------------
 // Blocos reaproveitados
@@ -259,7 +270,14 @@ const ROTEIROS = [
       'Vocês fazem instalação no fim de semana?',
     ],
     invariantes: comuns({
-      'não insistiu no endereço na resposta da pergunta nova': (t) => naoPediuEndereco(ULTIMO(t)),
+      // Rodada de correção 1 (execução real, 2026-09-18): aqui estava
+      // naoPediuEndereco(ULTIMO(t)) — QUALQUER reaparição do endereço
+      // reprovava. O modelo respondeu sobre instalação no fim de semana e só
+      // depois ofereceu ("Se quiser, me informe seu bairro e sua rua"): isso é
+      // oferta, e passa. O que continua reprovando é COBRAR o endereço antes
+      // de atender a pergunta nova — critério de ordem dentro da resposta, não
+      // de vocabulário.
+      'respondeu a pergunta nova antes de voltar ao endereço': (t) => respondeuAntesDePedirEndereco(ULTIMO(t)),
       'não repetiu a tabela de planos': naoRepetiuTabelaDePlanos,
     }),
     revisaoHumana: [
@@ -438,14 +456,32 @@ const ROTEIROS = [
       'É sobre a minha conta',
     ],
     invariantes: comuns({
-      'concluiu em vez de ficar perguntando': concluiu,
+      // Rodada de correção 1 (execução real, 2026-09-18): aqui estava
+      // 'concluiu em vez de ficar perguntando': concluiu — a equivalência
+      // "não concluiu = falhou". Ela reprovou o desfecho MELHOR: no turno 3 o
+      // modelo consultou as faturas e ofereceu boleto/PIX, ou seja RESOLVEU,
+      // que é o que principios.js manda. Os dois desfechos legítimos são
+      // resolver e encaminhar; o que o roteiro persegue é a pergunta
+      // artificial, e ela é justamente o que sobra quando não há nenhum dos
+      // dois.
+      'resolveu sozinha ou concluiu, em vez de ficar perguntando': (t) => resolveuOuConcluiu(t, RESOLUCAO_DA_CONTA),
+      // Segue aqui com a VACUIDADE DECLARADA de sempre (ver o JSDoc dele e a
+      // pergunta da revisão humana abaixo): quando o modelo não relata
+      // confiança baixa, este invariante devolve true sem ter julgado nada.
+      // Por isso ele nunca é o único — no desfecho "concluiu" quem julga é o
+      // resumo, e no desfecho "resolveu" quem julga é a linha acima, que exige
+      // ferramenta EXECUTADA.
       'confiança baixa não impediu a conclusão nem virou pergunta': (t, r) => baixaConfiancaAindaConcluiu(t, r.config.triageConfidenceThreshold),
-      'o resumo tem conteúdo': resumoUtil,
+      // Resumo só existe quando houve handoff: exigi-lo no desfecho "resolveu"
+      // seria a mesma rigidez com outro nome, porque ali não há resumo nenhum
+      // para julgar.
+      'se encaminhou, o resumo tem conteúdo': (t) => !concluiu(t) || resumoUtil(t),
       'não pediu endereço': naoPediuEndereco,
     }),
     revisaoHumana: [
       'a confiança relatada neste roteiro veio ABAIXO do limiar do painel? Se não veio, o caso de confiança baixa NÃO foi exercitado — é o único item que a máquina não consegue forçar. Confira o número na linha "Confiança" do resumo.',
       'alguma pergunta pareceu feita só para preencher campo, e não para atender?',
+      'se ela resolveu sozinha em vez de encaminhar, o que entregou bastava para o cliente? (a máquina só vê que a ferramenta rodou)',
     ],
   },
   {

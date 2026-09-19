@@ -420,6 +420,11 @@ const PEDE_ENDERECO = /qual (é |e )?(a |o )?(sua |seu )?(rua|bairro|logradouro|
 // reprovaria por fazer exatamente o que o prompt manda.
 const ESCOLHE_ENDERECO = /de qual endere[çc]o|qual (dos |desses |destes )?endere[çc]os|qual contrato|é o da /i;
 
+/** Uma frase que PEDE endereço novo — desambiguação entre contratos não conta. */
+function pedeEndereco(frase) {
+  return PEDE_ENDERECO.test(frase) && !ESCOLHE_ENDERECO.test(frase);
+}
+
 /**
  * A avaliação é por FRASE: uma desambiguação numa frase não pode perdoar um
  * pedido de endereço em outra, no mesmo parágrafo. Foi o que motivou o recorte
@@ -427,12 +432,94 @@ const ESCOLHE_ENDERECO = /de qual endere[çc]o|qual (dos |desses |destes )?ender
  * coisas diferentes ditas juntas.
  */
 function pediuEndereco(turnos) {
-  return textosDaIa(turnos)
-    .some((texto) => frases(texto).some((f) => PEDE_ENDERECO.test(f) && !ESCOLHE_ENDERECO.test(f)));
+  return textosDaIa(turnos).some((texto) => frases(texto).some(pedeEndereco));
 }
 
 function naoPediuEndereco(turnos) {
   return !pediuEndereco(turnos);
+}
+
+// Rodada de correção 1 da Task 20 (execução real, 2026-09-18) — ORDEM, não
+// vocabulário. No roteiro 10 o cliente ignora o pedido de endereço e pergunta
+// outra coisa. Reprovar QUALQUER reaparição do endereço (o que
+// naoPediuEndereco fazia ali) reprova também o desfecho certo: na execução
+// real o modelo respondeu sobre instalação no fim de semana e SÓ ENTÃO
+// ofereceu ("se quiser, me informe seu bairro e sua rua"). Isso é oferta; o
+// que não pode é COBRAR o endereço antes de atender a intenção nova.
+//
+// O menor radical que ainda separa uma palavra de conteúdo da outra:
+// "instalação"/"instalamos" casam por "insta", "fazem"/"fazemos" por "fazem",
+// e "semana"/"sábado" continuam diferentes. Comparar radical, e não a palavra
+// inteira, é o que deixa o critério ser de ordem: a IA responde com as
+// palavras dela, não com as do cliente.
+const TAMANHO_DO_RADICAL = 5;
+
+// As genéricas que o resumo já lista, mais as formas de tratamento e os
+// bordões de abertura. Sem isto, "Claro, vocês podem contar com a gente!"
+// contaria como resposta à pergunta nova só por repetir "vocês" — e um
+// bordão antes da cobrança do endereço passaria batido.
+const SEM_ANCORA_NA_RESPOSTA = new Set([
+  ...PALAVRAS_SEM_ANCORA,
+  'voces', 'claro', 'certo', 'perfeito', 'entendi', 'anotado', 'vamos', 'posso', 'consigo', 'entao',
+]);
+
+// Abaixo disto a frase é bordão de abertura, não resposta: "Claro!",
+// "Perfeito!", "Entendi, vamos lá". Três é escolha de produto, e está na lista
+// de revisão humana do roteiro 10 — a máquina julga a ORDEM, a pessoa julga se
+// o que veio antes respondeu mesmo. Referência real: "A equipe confirma essa
+// condição para você" (resposta da execução de 2026-09-18) tem quatro.
+const PALAVRAS_MINIMAS_NA_RESPOSTA = 3;
+
+function radicaisDeConteudo(frase) {
+  return new Set(normalizar(frase)
+    .filter((p) => !SEM_ANCORA_NA_RESPOSTA.has(p))
+    .map((p) => p.slice(0, TAMANHO_DO_RADICAL)));
+}
+
+/**
+ * Em cada turno recebido: se a resposta pede endereço, ela atendeu a mensagem
+ * daquele turno ANTES de pedir.
+ *
+ * O critério é de ORDEM, e não de vocabulário: nenhuma frase esperada, nenhum
+ * "se quiser" literal. Uma frase conta como resposta quando toca um radical do
+ * que o cliente acabou de escrever OU quando tem substância própria (palavras
+ * de conteúdo suficientes para não ser um bordão). Existindo uma dessas ANTES
+ * do pedido, o endereço veio como oferta; não existindo — inclusive quando o
+ * pedido ABRE a resposta —, veio como cobrança.
+ *
+ * As duas portas são necessárias, e cada uma veio de um caso real: a do
+ * radical aprova a resposta curta que responde ("Sim, fazemos aos sábados"), e
+ * a da substância aprova a resposta que responde sem repetir palavra nenhuma
+ * da pergunta — foi o que o modelo fez na execução de 2026-09-18 ("A equipe
+ * confirma essa condição para você. Se quiser, me informe seu bairro e sua
+ * rua…"), que é exatamente o desfecho que esta correção veio deixar passar.
+ *
+ * Recebe os turnos que o roteiro quiser julgar — no roteiro 10 só o ÚLTIMO,
+ * porque no primeiro turno pedir o endereço é o comportamento certo da venda,
+ * e não há intenção nova a atender antes.
+ *
+ * Falha fechado: lista vazia devolve false, e uma resposta que ABRE com o
+ * pedido é sempre cobrança (não há nada antes para julgar).
+ *
+ * LIMITE CONHECIDO: isto decide ORDEM, não relevância — um parágrafo
+ * substancioso porém fora do assunto, dito antes do pedido, passa aqui. Quem
+ * julga se a pergunta nova foi de fato respondida é a revisão humana do
+ * roteiro, que pergunta isso com todas as letras.
+ */
+function respondeuAntesDePedirEndereco(turnos) {
+  const lista = turnos || [];
+  if (lista.length === 0) return false;
+  return lista.every((t) => {
+    const fs = frases((t && t.texto) || '');
+    const iPedido = fs.findIndex(pedeEndereco);
+    if (iPedido === -1) return true;
+    const doCliente = radicaisDeConteudo((t && t.cliente) || '');
+    return fs.slice(0, iPedido).some((f) => {
+      const daFrase = radicaisDeConteudo(f);
+      if ([...doCliente].some((r) => daFrase.has(r))) return true;
+      return daFrase.size >= PALAVRAS_MINIMAS_NA_RESPOSTA;
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -490,6 +577,38 @@ function naoAfirmouSemFerramenta(turnos, detecta, ferramentas) {
 }
 
 // ---------------------------------------------------------------------------
+// Desfecho da conversa
+// ---------------------------------------------------------------------------
+
+/**
+ * A conversa chegou a um DESFECHO: ou a triagem concluiu (foi para um
+ * atendente), ou a IA RESOLVEU sozinha, executando uma das ferramentas que o
+ * roteiro considera resolução.
+ *
+ * Rodada de correção 1 da Task 20 (execução real, 2026-09-18): o roteiro 19
+ * exigia `concluiu` e com isso reprovou o desfecho MELHOR — o modelo consultou
+ * as faturas e ofereceu boleto/PIX, que é o que principios.js manda ("Resolva
+ * sozinha tudo o que as regras e as ferramentas permitirem"). Concluir não é o
+ * único desfecho aceitável; ficar só perguntando é que não é. Este invariante
+ * existe para tirar do harness a equivalência "não concluiu = falhou".
+ *
+ * Olha toolsExecutadas, e não toolsSolicitadas: pedir uma ferramenta e ser
+ * recusado não resolveu nada para o cliente.
+ *
+ * Falha alto (TypeError) sem a lista: qual ferramenta CONTA como resolver é
+ * decisão do roteiro — um padrão inventado aqui esconderia essa escolha, e uma
+ * lista vazia devolveria `false` sempre, que é ruído, não rigor.
+ */
+function resolveuOuConcluiu(turnos, ferramentasDeResolucao) {
+  if (!Array.isArray(ferramentasDeResolucao) || ferramentasDeResolucao.length === 0) {
+    throw new TypeError('informe as ferramentas que contam como resolver');
+  }
+  if (concluiu(turnos)) return true;
+  return (turnos || []).some((t) => ((t && t.toolsExecutadas) || [])
+    .some((f) => ferramentasDeResolucao.includes(f.nome)));
+}
+
+// ---------------------------------------------------------------------------
 // Confiança (confirmação 9)
 // ---------------------------------------------------------------------------
 
@@ -532,9 +651,9 @@ module.exports = {
   mudouDeSetor, concluiuNoSetor,
   tabelasDePlanos, linhasDeOferta, naoRepetiuTabelaDePlanos, naoMostrouTabelaDePlanos,
   resumoUtil, resumoConcreto,
-  pediuEndereco, naoPediuEndereco,
+  pediuEndereco, naoPediuEndereco, respondeuAntesDePedirEndereco,
   identidadeEstavel,
-  naoAfirmouSemFerramenta, baixaConfiancaAindaConcluiu,
+  naoAfirmouSemFerramenta, resolveuOuConcluiu, baixaConfiancaAindaConcluiu,
   // constantes que os roteiros e os testes reaproveitam
   LIMIAR_DE_SEMELHANCA, PALAVRAS_MINIMAS_NO_RESUMO, REPREENSAO, NASCIMENTO,
 };

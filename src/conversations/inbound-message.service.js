@@ -32,6 +32,47 @@ const { mensagemSegura } = require('../ai/safe-error-log');
 
 const UNIQUE_VIOLATION = '23505';
 
+// created_at guarda COALESCE(sentAt, now()) e o valor CRU do provedor era
+// jogado fora, então o banco não sabia responder a pergunta que interessa
+// quando uma hora aparece errada no chat: o provedor mandou errado, ou nós
+// transformamos errado? Os três adaptadores convergem em ingestInboundMessage,
+// então a metadata é montada num lugar só - aqui.
+//
+// Só o timestamp e a origem: nada de conteúdo do cliente. E a semântica de
+// created_at não muda em nada por causa disto.
+const TAMANHO_MAXIMO_DO_CRU = 200;
+
+// O Baileys entrega messageTimestamp como number, texto ou Long ({ low, high }).
+// Primitivo vai como veio (é exatamente isso que se quer conferir depois);
+// qualquer objeto vira texto curto, para a metadata não crescer sem limite.
+function valorCru(valor) {
+  if (valor === undefined || valor === null) return null;
+  const tipo = typeof valor;
+  if (tipo === 'number' || tipo === 'string' || tipo === 'boolean') return valor;
+  try {
+    return JSON.stringify(valor).slice(0, TAMANHO_MAXIMO_DO_CRU);
+  } catch (err) {
+    return String(valor).slice(0, TAMANHO_MAXIMO_DO_CRU);
+  }
+}
+
+// Devolve undefined - e não null - quando o chamador não declarou a origem:
+// assim createMessage recebe exatamente o que recebia antes, e quem ingere por
+// outro caminho não ganha metadata inventada.
+function metadataDoTimestamp({ base, sentAt, sentAtRaw, timestampSource }) {
+  if (!timestampSource) return base || undefined;
+  const parsed = sentAt instanceof Date && Number.isFinite(sentAt.getTime()) ? sentAt.toISOString() : null;
+  // Mescla em vez de substituir: messages.metadata já é usada para outras
+  // coisas (motivoFalha, no outbound) e inbound não pode passar por cima.
+  return {
+    ...(base || {}),
+    providerTimestampRaw: valorCru(sentAtRaw),
+    providerTimestampParsed: parsed,
+    timestampSource,
+    receivedAt: new Date().toISOString(),
+  };
+}
+
 async function ingestInboundMessage({
   channelId,
   fromPhoneNumber,
@@ -48,7 +89,12 @@ async function ingestInboundMessage({
   repliedToWhatsappMessageId,
   // A hora que o provedor informou. Ausente cai no now() da gravacao.
   sentAt,
+  // O valor CRU do provedor, antes de virar Date, e qual adaptador o entregou.
+  // Só vão para messages.metadata (observabilidade); created_at não muda.
+  sentAtRaw,
+  timestampSource,
 }) {
+  const metadataDeTempo = metadataDoTimestamp({ sentAt, sentAtRaw, timestampSource });
   const { wasCreated, ...contact } = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   const contactJustCreated = Boolean(wasCreated);
 
@@ -100,6 +146,7 @@ async function ingestInboundMessage({
             mediaMimeType,
             mediaFilename,
             sentAt,
+            metadata: metadataDeTempo,
           });
         } catch (err) {
           if (err.code !== UNIQUE_VIOLATION) throw err;
@@ -172,6 +219,7 @@ async function ingestInboundMessage({
       locationLongitude,
       repliedToMessageId: repliedTo ? repliedTo.id : null,
       sentAt,
+      metadata: metadataDeTempo,
     });
     // Comprimir vídeo leva segundos a minutos: fica fora do webhook, que
     // precisa responder rápido ao provedor. O original já está gravado e a

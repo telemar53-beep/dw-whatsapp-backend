@@ -42,4 +42,42 @@ function motivoDaResposta(data) {
   return null;
 }
 
-module.exports = { motivoDaMeta, motivoDaResposta };
+// Códigos da Meta em que tentar de novo dá exatamente o mesmo resultado: a
+// recusa é sobre o ESTADO da conversa, não sobre a chamada. Repetir só gasta
+// duas chamadas extras à API e atrasa a falha na tela do atendente.
+//
+// A lista é curta e explícita de propósito, e NUNCA por faixa de código: marcar
+// um código como permanente por engano faz uma mensagem que seria entregue ser
+// descartada sem nenhuma retentativa - o defeito mais caro dos dois.
+//
+// 131047 (janela de 24 h fechada): só uma mensagem NOVA do cliente reabre a
+// janela, e isso não acontece nos segundos do backoff.
+//
+// Os outros códigos que o projeto já conhece (frontend/src/utils/failureReasons.js)
+// ficaram DE FORA por falta de evidência de que sejam permanentes: 131049
+// (limite de marketing) e 131042 (pagamento na conta da Meta) se resolvem
+// sozinhos com o tempo, e a própria descrição de 131026 no catálogo admite
+// "está indisponível", que é transitório. Só entra aqui código com evidência.
+const CODIGOS_PERMANENTES = new Set([131047]);
+
+/**
+ * Recebe o corpo inteiro da resposta de erro (err.response.data), igual a
+ * motivoDaResposta, e diz se vale a pena o Bull tentar de novo.
+ *
+ * Lê SÓ data.error.code, o código de erro da Meta. O 360dialog devolve os erros
+ * dele próprio em { meta: { http_code } } - http_code é status HTTP, não código
+ * da Meta, e comparar um com o outro seria comparar coisas diferentes. Quando o
+ * 360dialog repassa um erro da Meta ele vem no formato da Meta e cai aqui igual.
+ *
+ * Nunca lança: qualquer corpo sem um código conhecido é tratado como
+ * transitório, que é o lado seguro (retenta).
+ */
+function ehErroPermanente(data) {
+  if (!data || typeof data !== 'object') return false;
+  const { error } = data;
+  if (!error || typeof error !== 'object') return false;
+  const code = Number(error.code);
+  return Number.isFinite(code) && CODIGOS_PERMANENTES.has(code);
+}
+
+module.exports = { motivoDaMeta, motivoDaResposta, ehErroPermanente };

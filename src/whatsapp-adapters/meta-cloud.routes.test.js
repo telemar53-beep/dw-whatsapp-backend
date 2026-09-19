@@ -109,6 +109,7 @@ describe('POST /webhooks/meta', () => {
       locationLongitude: undefined,
       repliedToWhatsappMessageId: null,
       sentAt: null,
+      timestampSource: 'meta_cloud',
     });
   });
 
@@ -256,6 +257,7 @@ describe('POST /webhooks/meta', () => {
       locationLongitude: undefined,
       repliedToWhatsappMessageId: null,
       sentAt: null,
+      timestampSource: 'meta_cloud',
     });
   });
 
@@ -304,6 +306,7 @@ describe('POST /webhooks/meta', () => {
       locationLongitude: -60.0,
       repliedToWhatsappMessageId: null,
       sentAt: null,
+      timestampSource: 'meta_cloud',
     });
   });
 });

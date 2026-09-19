@@ -1,4 +1,4 @@
-const { motivoDaMeta, motivoDaResposta } = require('./meta-error');
+const { motivoDaMeta, motivoDaResposta, ehErroPermanente } = require('./meta-error');
 
 describe('motivoDaMeta', () => {
   test('returns null when there is no error object', () => {
@@ -75,5 +75,46 @@ describe('motivoDaResposta', () => {
   test('returns null when nothing usable is present', () => {
     expect(motivoDaResposta({})).toBeNull();
     expect(motivoDaResposta({ meta: { success: false } })).toBeNull();
+  });
+});
+
+// Classificar é outra coisa que formatar: motivoDaMeta continua só montando o
+// texto que o atendente lê, e quem decide se vale retentar é esta função.
+describe('ehErroPermanente', () => {
+  test('131047 (janela de 24 h fechada) é permanente: só uma mensagem nova do cliente reabre', () => {
+    expect(ehErroPermanente({ error: { code: 131047, title: 'Re-engagement message' } })).toBe(true);
+  });
+
+  test('aceita o código como texto, que é como algumas respostas o mandam', () => {
+    expect(ehErroPermanente({ error: { code: '131047' } })).toBe(true);
+  });
+
+  // Marcar um código como permanente por engano descarta uma mensagem que seria
+  // entregue. Na dúvida, transitório - o pior que acontece é retentar à toa.
+  test('os outros códigos conhecidos do projeto continuam transitórios', () => {
+    for (const code of [131049, 131026, 131051, 131042, 132001, 132015, 132016, 130472]) {
+      expect(ehErroPermanente({ error: { code } })).toBe(false);
+    }
+  });
+
+  test('não generaliza por faixa: um vizinho de 131047 não é permanente', () => {
+    expect(ehErroPermanente({ error: { code: 131046 } })).toBe(false);
+    expect(ehErroPermanente({ error: { code: 131048 } })).toBe(false);
+  });
+
+  // http_code do 360dialog é status HTTP, não código da Meta: comparar um com o
+  // outro seria comparar coisas diferentes.
+  test('ignora o formato do 360dialog, que não traz código da Meta', () => {
+    expect(ehErroPermanente({ meta: { http_code: 131047, developer_message: 'x' } })).toBe(false);
+    expect(ehErroPermanente({ meta: { http_code: 403, developer_message: 'x' } })).toBe(false);
+  });
+
+  test('corpo ausente, vazio ou sem objeto de erro é transitório, nunca lança', () => {
+    expect(ehErroPermanente(null)).toBe(false);
+    expect(ehErroPermanente(undefined)).toBe(false);
+    expect(ehErroPermanente({})).toBe(false);
+    expect(ehErroPermanente('erro de rede')).toBe(false);
+    expect(ehErroPermanente({ error: 'texto solto' })).toBe(false);
+    expect(ehErroPermanente({ error: {} })).toBe(false);
   });
 });

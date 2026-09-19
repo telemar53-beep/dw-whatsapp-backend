@@ -1,5 +1,5 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationView from './ConversationView';
 import { useAuth } from '../contexts/AuthContext';
@@ -1176,5 +1176,304 @@ describe('enviar template com a janela fechada', () => {
     await userEvent.click(screen.getByRole('button', { name: /^enviar$/i }));
 
     await waitFor(() => expect(api.sendConversationTemplate).toHaveBeenCalledWith('c1', 'tpl-1', ['Maria'], 'tok-123'));
+  });
+});
+
+// Uma mensagem com data ausente ou ilegível não criava separador nenhum e era
+// desenhada sob o cabeçalho do dia ANTERIOR: a bolha aparecia num dia que não é
+// o dela, sem nada na tela dizendo isso.
+describe('cabeçalho de dia com data ilegível', () => {
+  const MINHA = { id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', channelType: 'baileys' };
+
+  function comMensagens(messages) {
+    useConversationMessages.mockReturnValue({ messages, sendMessage: vi.fn() });
+  }
+
+  function ordemDe(container, trecho, ultima = false) {
+    const texto = container.textContent;
+    return ultima ? texto.lastIndexOf(trecho) : texto.indexOf(trecho);
+  }
+
+  test('mensagem sem data legível ganha grupo próprio, não entra no dia anterior', () => {
+    comMensagens([
+      { id: 'm1', direction: 'inbound', content: 'Mensagem com data', createdAt: new Date().toISOString() },
+      { id: 'm2', direction: 'inbound', content: 'Mensagem sem data', createdAt: 'data-invalida' },
+    ]);
+    const { container } = render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getByText('Data desconhecida')).toBeInTheDocument();
+    expect(ordemDe(container, 'Hoje')).toBeLessThan(ordemDe(container, 'Mensagem com data'));
+    expect(ordemDe(container, 'Mensagem com data')).toBeLessThan(ordemDe(container, 'Data desconhecida'));
+    expect(ordemDe(container, 'Data desconhecida')).toBeLessThan(ordemDe(container, 'Mensagem sem data'));
+  });
+
+  // startOfDay(new Date('lixo')) devolve NaN em vez de lançar, e um createdAt
+  // nulo viraria 1970: os três casos têm que cair no mesmo grupo visível.
+  test('data ausente, nula ou vazia também cai no grupo desconhecido', () => {
+    for (const ruim of [undefined, null, '']) {
+      comMensagens([{ id: 'm1', direction: 'inbound', content: 'Sem data nenhuma', createdAt: ruim }]);
+      const { unmount } = render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+      expect(screen.getByText('Data desconhecida')).toBeInTheDocument();
+      expect(screen.queryByText('01/01/1970')).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  test('a mensagem válida seguinte volta para o agrupamento da data dela', () => {
+    comMensagens([
+      { id: 'm1', direction: 'inbound', content: 'Primeira', createdAt: new Date().toISOString() },
+      { id: 'm2', direction: 'inbound', content: 'Sem data', createdAt: 'data-invalida' },
+      { id: 'm3', direction: 'inbound', content: 'Terceira', createdAt: new Date().toISOString() },
+    ]);
+    const { container } = render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    // Dois cabeçalhos "Hoje": a terceira não ficou presa no grupo desconhecido.
+    expect(screen.getAllByText('Hoje')).toHaveLength(2);
+    expect(ordemDe(container, 'Sem data')).toBeLessThan(ordemDe(container, 'Hoje', true));
+    expect(ordemDe(container, 'Hoje', true)).toBeLessThan(ordemDe(container, 'Terceira'));
+  });
+
+  // É um GRUPO, não um cabeçalho por mensagem: duas seguidas sem data legível
+  // ficam sob o mesmo "Data desconhecida".
+  test('mensagens seguidas sem data dividem um único cabeçalho', () => {
+    comMensagens([
+      { id: 'm1', direction: 'inbound', content: 'Sem data A', createdAt: 'data-invalida' },
+      { id: 'm2', direction: 'inbound', content: 'Sem data B', createdAt: null },
+    ]);
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getAllByText('Data desconhecida')).toHaveLength(1);
+  });
+
+  test('mensagem de ontem com data válida continua com o cabeçalho normal', () => {
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+    comMensagens([{ id: 'm1', direction: 'inbound', content: 'De ontem', createdAt: ontem.toISOString() }]);
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getByText('Ontem')).toBeInTheDocument();
+    expect(screen.queryByText('Data desconhecida')).not.toBeInTheDocument();
+  });
+});
+
+// "Ontem" é o dia ANTERIOR no calendário, não "86.400.000 ms atrás". Nos dois
+// casos abaixo o relógio local anda 25 h entre uma meia-noite e a seguinte (fim
+// de horário de verão), e a subtração em milissegundos cai no dia errado. São
+// datas reais: Reino Unido em 31/10/2021 e Bangladesh em 31/12/2009.
+describe('cabeçalho "Ontem" na virada de mês e de ano', () => {
+  const MINHA = { id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', channelType: 'baileys' };
+  const TZ_ORIGINAL = process.env.TZ;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    if (TZ_ORIGINAL === undefined) delete process.env.TZ;
+    else process.env.TZ = TZ_ORIGINAL;
+  });
+
+  function renderizaCom(tz, hoje, ontem) {
+    // O fuso primeiro: as datas abaixo são construídas no calendário local.
+    process.env.TZ = tz;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(...hoje));
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'inbound', content: 'Mensagem', createdAt: new Date(...ontem).toISOString() }],
+      sendMessage: vi.fn(),
+    });
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+  }
+
+  test('virada de mês: 31/10 continua sendo "Ontem" em 1º/11', () => {
+    renderizaCom('Europe/London', [2021, 10, 1, 10, 0, 0], [2021, 9, 31, 20, 0, 0]);
+
+    expect(screen.getByText('Ontem')).toBeInTheDocument();
+  });
+
+  test('virada de ano: 31/12 continua sendo "Ontem" em 1º/01', () => {
+    renderizaCom('Asia/Dhaka', [2010, 0, 1, 10, 0, 0], [2009, 11, 31, 20, 0, 0]);
+
+    expect(screen.getByText('Ontem')).toBeInTheDocument();
+  });
+
+  test('o dia de hoje continua sendo "Hoje" nos mesmos fusos', () => {
+    renderizaCom('Europe/London', [2021, 10, 1, 10, 0, 0], [2021, 10, 1, 9, 0, 0]);
+
+    expect(screen.getByText('Hoje')).toBeInTheDocument();
+  });
+});
+
+// O estado da janela não pode ser decidido por um `now` capturado na
+// renderização: um chat aberto desde cedo continuava dizendo "aberta" muito
+// depois de a janela ter fechado, e só o F5 corrigia.
+describe('recálculo da janela de 24 horas', () => {
+  const MINHA = { id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', channelType: 'meta_cloud', channelId: 'ch-1' };
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function quaseFechando() {
+    // 23 h 59 min: falta um minuto para a janela fechar.
+    useConversationMessages.mockReturnValue({
+      messages: [
+        { id: 'm1', direction: 'inbound', content: 'Oi', createdAt: new Date(Date.now() - (24 * 60 - 1) * 60000).toISOString() },
+      ],
+      sendMessage: vi.fn(),
+    });
+  }
+
+  test('a passagem do tempo fecha a janela sem recarregar a página', async () => {
+    vi.useFakeTimers();
+    quaseFechando();
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.queryByText(/janela de 24h fechada/i)).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * 60000);
+    });
+
+    expect(screen.getByText(/janela de 24h fechada/i)).toBeInTheDocument();
+  });
+
+  // Aqui o relógio anda SEM nenhum disparo de temporizador: se o aviso aparecer
+  // depois do envio, foi o envio que refez a conta — não um `now` de render.
+  test('no envio, o estado é recalculado com a hora de agora', async () => {
+    vi.useFakeTimers();
+    const sendMessage = vi.fn();
+    useConversationMessages.mockReturnValue({
+      messages: [
+        { id: 'm1', direction: 'inbound', content: 'Oi', createdAt: new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString() },
+      ],
+      sendMessage,
+    });
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.queryByText(/janela de 24h fechada/i)).not.toBeInTheDocument();
+
+    // Duas horas passam sem que nenhum temporizador rode.
+    vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+    expect(screen.queryByText(/janela de 24h fechada/i)).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('Digite uma mensagem...'), { target: { value: 'Alguma coisa' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Enviar'));
+    });
+
+    expect(sendMessage).toHaveBeenCalled();
+    expect(screen.getByText(/janela de 24h fechada/i)).toBeInTheDocument();
+  });
+
+  // Nada aqui remonta ao trocar de conversa: sem limpar, o relógio do cliente
+  // anterior continuaria valendo para o próximo.
+  test('trocar de conversa reinicia o relógio em vez de herdar o anterior', async () => {
+    vi.useFakeTimers();
+    const inicio = Date.now();
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm1', direction: 'inbound', content: 'Oi', createdAt: new Date(inicio).toISOString() }],
+      sendMessage: vi.fn(),
+    });
+    const { rerender } = render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.queryByText(/janela de 24h fechada/i)).not.toBeInTheDocument();
+
+    // O tempo anda sem nenhum temporizador rodar: o relógio da tela envelhece.
+    vi.setSystemTime(new Date(inicio + 25 * 60 * 60 * 1000));
+
+    // Outro cliente, que falou pela última vez no mesmo instante — só que esse
+    // instante agora está a 25 h de distância.
+    useConversationMessages.mockReturnValue({
+      messages: [{ id: 'm9', direction: 'inbound', content: 'Oi', createdAt: new Date(inicio).toISOString() }],
+      sendMessage: vi.fn(),
+    });
+    await act(async () => {
+      rerender(<ConversationView conversation={{ ...MINHA, id: 'c2' }} onTransferClick={vi.fn()} />);
+    });
+
+    // Herdar o relógio do cliente anterior diria "aberta" para este.
+    expect(screen.getByText(/janela de 24h fechada/i)).toBeInTheDocument();
+  });
+});
+
+// O estado indeterminado existe para não mentir: a inbound mais recente está lá
+// mas a data dela não dá para ler. Nele a tela não bloqueia, não promete que a
+// janela está aberta e não anuncia que está fechada.
+describe('janela de 24 horas indeterminada', () => {
+  const MINHA = { id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', channelType: 'meta_cloud', channelId: 'ch-1' };
+
+  function comDataIlegivel(extras = []) {
+    useConversationMessages.mockReturnValue({
+      messages: [
+        { id: 'm1', direction: 'inbound', content: 'Oi', createdAt: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString() },
+        { id: 'm2', direction: 'inbound', content: 'Segunda', createdAt: 'data-invalida' },
+        ...extras,
+      ],
+      sendMessage: vi.fn(),
+    });
+  }
+
+  test('avisa de forma neutra, sem dizer aberta nem fechada', () => {
+    comDataIlegivel();
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getByText(/não foi possível conferir a janela de 24h/i)).toBeInTheDocument();
+    expect(screen.queryByText(/janela de 24h fechada/i)).not.toBeInTheDocument();
+  });
+
+  test('não bloqueia o campo de mensagem', () => {
+    comDataIlegivel();
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getByPlaceholderText('Digite uma mensagem...')).not.toBeDisabled();
+  });
+
+  // A decisão final é do canal: enquanto ele não recusou, não há por que
+  // empurrar o atendente para o template.
+  test('não oferece template só por estar indeterminada', () => {
+    comDataIlegivel();
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /enviar template/i })).not.toBeInTheDocument();
+  });
+
+  test('oferece o template depois de o canal recusar por janela de 24 h', () => {
+    comDataIlegivel([
+      {
+        id: 'm3',
+        direction: 'outbound',
+        content: 'Tentativa',
+        status: 'failed',
+        createdAt: new Date().toISOString(),
+        metadata: { motivoFalha: '(131047) Message failed to send because more than 24 hours have passed.' },
+      },
+    ]);
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /enviar template/i })).toBeInTheDocument();
+  });
+
+  // Outra falha qualquer não é recusa por janela e não muda nada.
+  test('falha por outro motivo não vira oferta de template', () => {
+    comDataIlegivel([
+      {
+        id: 'm3',
+        direction: 'outbound',
+        content: 'Tentativa',
+        status: 'failed',
+        createdAt: new Date().toISOString(),
+        metadata: { motivoFalha: '(131026) Número não recebe mensagens.' },
+      },
+    ]);
+    render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /enviar template/i })).not.toBeInTheDocument();
+  });
+
+  test('canal não oficial nunca entra em indeterminada', () => {
+    comDataIlegivel();
+    render(<ConversationView conversation={{ ...MINHA, channelType: 'baileys' }} onTransferClick={vi.fn()} />);
+
+    expect(screen.queryByText(/não foi possível conferir a janela de 24h/i)).not.toBeInTheDocument();
   });
 });

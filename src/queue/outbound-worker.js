@@ -11,7 +11,7 @@ const { isOfficialChannelType } = require('../channels/channel-types');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { cartaoPix } = require('../payments/payment-card');
 const { mensagemSegura } = require('../ai/safe-error-log');
-const { motivoDaResposta } = require('../whatsapp-adapters/meta-error');
+const { motivoDaResposta, ehErroPermanente } = require('../whatsapp-adapters/meta-error');
 
 const ADAPTERS_BY_CHANNEL_TYPE = {
   meta_cloud: metaCloudAdapter,
@@ -280,12 +280,19 @@ function startOutboundWorker() {
       // mensagemSegura + detalheDaApi: mesma disciplina do log do cartão de Pix logo
       // acima - nunca o conteúdo da mensagem, nunca o corpo da requisição.
       console.error(`Outbound message ${messageId} failed on channel ${channel.id}: ${mensagemSegura(err)}${detalheDaApi(err)}`);
-      const motivo = motivoDaResposta(err.response && err.response.data) || mensagemSegura(err);
+      const corpoDoErro = err.response && err.response.data;
+      const motivo = motivoDaResposta(corpoDoErro) || mensagemSegura(err);
       // Se markMessageFailed voltar null é porque o webhook de status já gravou um
       // motivoFalha antes (ver a guarda em message.repository) - busca a linha atual
       // para o emit não sair sem mensagem nenhuma.
       const message = (await markMessageFailed(messageId, motivo)) || (await findMessageById(messageId));
       avisarTela(conversation, conversationId, message);
+      // O Bull só retenta quando o handler lança. Num erro permanente (janela de
+      // 24 h fechada, por exemplo) as tentativas 2 e 3 dão o mesmo resultado:
+      // duas chamadas a mais à Meta e a falha demorando a aparecer na tela. A
+      // mensagem já foi marcada como falha e o atendente já foi avisado logo
+      // acima - nos DOIS casos -, então aqui só se decide retentar ou não.
+      if (ehErroPermanente(corpoDoErro)) return;
       throw err;
     }
   });

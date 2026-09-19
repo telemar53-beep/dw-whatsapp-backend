@@ -1610,6 +1610,113 @@ describe('ingestInboundMessage — hora informada pelo provedor', () => {
   });
 });
 
+// created_at guarda COALESCE(sentAt, now()) e o valor cru era jogado fora, entao
+// quando uma hora aparecia errada no chat o banco nao respondia a pergunta que
+// importa: o provedor mandou errado, ou nos transformamos errado?
+describe('ingestInboundMessage — rastro do timestamp do provedor', () => {
+  // A ultima gravacao, e nao a primeira: os mocks deste arquivo so sao limpos
+  // dentro do describe principal, entao as chamadas anteriores continuam na
+  // lista quando se chega ate aqui.
+  function ultimaMetadata() {
+    const chamadas = createMessage.mock.calls;
+    return chamadas[chamadas.length - 1][0].metadata;
+  }
+
+  test('guarda o valor bruto ao lado do interpretado, com a origem', async () => {
+    const enviadaEm = new Date('2026-09-16T23:31:00.000Z');
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      whatsappMessageId: 'wamid.RASTRO',
+      content: 'Ok',
+      messageType: 'text',
+      sentAt: enviadaEm,
+      sentAtRaw: '1789695060',
+      timestampSource: 'meta_cloud',
+    });
+
+    const metadata = ultimaMetadata();
+    expect(metadata).toEqual(expect.objectContaining({
+      providerTimestampRaw: '1789695060',
+      providerTimestampParsed: '2026-09-16T23:31:00.000Z',
+      timestampSource: 'meta_cloud',
+    }));
+    expect(typeof metadata.receivedAt).toBe('string');
+    expect(Number.isNaN(Date.parse(metadata.receivedAt))).toBe(false);
+  });
+
+  // A semantica de created_at nao muda: sentAt continua indo como sempre foi.
+  test('nao mexe no sentAt que a gravacao ja recebia', async () => {
+    const enviadaEm = new Date('2026-09-16T23:31:00.000Z');
+
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      whatsappMessageId: 'wamid.RASTRO2',
+      content: 'Ok',
+      messageType: 'text',
+      sentAt: enviadaEm,
+      sentAtRaw: '1789695060',
+      timestampSource: 'meta_cloud',
+    });
+
+    expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({ sentAt: enviadaEm }));
+  });
+
+  // O Baileys entrega messageTimestamp como Long ({ low, high }): o cru vira
+  // texto curto para a metadata nao crescer sem limite, mas continua legivel.
+  test('serializa o Long do Baileys em vez de perder o valor', async () => {
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      whatsappMessageId: 'wamid.LONG',
+      content: 'Ok',
+      messageType: 'text',
+      sentAt: new Date('2026-09-16T23:31:00.000Z'),
+      sentAtRaw: { low: 1789695060, high: 0, unsigned: false },
+      timestampSource: 'baileys',
+    });
+
+    const metadata = ultimaMetadata();
+    expect(metadata.providerTimestampRaw).toContain('1789695060');
+    expect(metadata.timestampSource).toBe('baileys');
+  });
+
+  // "O provedor nao mandou hora nenhuma" tambem e resposta, e precisa ficar
+  // gravada: sem isto o caso indistinguivel volta a ser indistinguivel.
+  test('provedor sem hora fica registrado como cru nulo e interpretado nulo', async () => {
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      whatsappMessageId: 'wamid.SEMCRU',
+      content: 'Ok',
+      messageType: 'text',
+      timestampSource: '360dialog',
+    });
+
+    const metadata = ultimaMetadata();
+    expect(metadata.providerTimestampRaw).toBeNull();
+    expect(metadata.providerTimestampParsed).toBeNull();
+    expect(metadata.timestampSource).toBe('360dialog');
+  });
+
+  // Quem ingere sem declarar a origem continua gravando exatamente o que
+  // gravava: nada de metadata inventada.
+  test('sem origem declarada, a gravacao nao ganha metadata nenhuma', async () => {
+    await ingestInboundMessage({
+      channelId: 'channel-1',
+      fromPhoneNumber: '5511999998888',
+      whatsappMessageId: 'wamid.SEMORIGEM',
+      content: 'Ok',
+      messageType: 'text',
+      sentAt: new Date('2026-09-16T23:31:00.000Z'),
+    });
+
+    expect(ultimaMetadata()).toBeUndefined();
+  });
+});
+
 // Comprimir video leva segundos a minutos: fica fora do webhook. O original
 // entra na hora, a mensagem aparece no chat, e o worker troca o arquivo depois.
 describe('ingestInboundMessage — compressao de video em segundo plano', () => {

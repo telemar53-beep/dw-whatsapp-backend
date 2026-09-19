@@ -24,7 +24,7 @@ const { findLatestInboundImage } = require('../conversations/message.repository'
 const { getAiConfig } = require('./ai-config.repository');
 const { analisarComprovante } = require('./receipt-analysis');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
-const { claimDelivery, markDeliverySent, releaseDelivery } = require('./billing-delivery.repository');
+const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('./billing-delivery.repository');
 const { descreverUsoAnterior } = require('./receipt-usage-text');
 
 // A imagem só sai do servidor depois de passar por estes dois filtros: o
@@ -292,33 +292,31 @@ async function limparEscopoDeTerceiro(contexto) {
  *
  * A guarda é um claim atômico no banco (ai_billing_deliveries), reivindicado
  * antes de qualquer efeito externo e confirmado só depois que todos voltaram.
- */
-
-/**
- * 'initial' na primeira entrega da fatura; 'resend:<messageId>' quando o
- * cliente pediu o reenvio com todas as letras NESTA mensagem.
  *
- * O messageId é o da mensagem inbound do turno: é o mesmo em todas as tool
- * calls e em todas as voltas internas do laço, e muda só quando o cliente
- * escreve de novo. Sem ele no contexto, o reenvio falha FECHADO e vira
- * 'initial' — nunca uma chave aleatória nem um relógio, porque uma chave nova a
- * cada chamada anularia a guarda inteira.
+ * O DESENHO (v2): a MENSAGEM INBOUND é a identidade da entrega; `reenviar` é
+ * só permissão. O desenho anterior punha `reenviar` na identidade ('initial'
+ * vs 'resend:<messageId>') e por isso a MESMA mensagem do cliente conseguia
+ * produzir duas entregas — uma tool call sem `reenviar` e outra com
+ * `reenviar: true` caíam em chaves diferentes. Medido em banco real.
+ *
+ * As duas propriedades são das DUAS restrições do Postgres, nunca de um
+ * SELECT antes do INSERT:
+ *   1. UNIQUE (conversa, ferramenta, contrato, fatura, message_id)
+ *      → uma entrega por mensagem do cliente, INDEPENDENTE de `reenviar`.
+ *   2. índice parcial único WHERE is_resend = false
+ *      → um único envio INICIAL, para sempre.
  */
-function chaveDoPedido(args, contexto) {
-  const messageId = contexto && contexto.messageId;
-  return args && args.reenviar === true && messageId ? `resend:${messageId}` : 'initial';
-}
 
 /**
  * A resposta quando o claim NÃO foi obtido. As duas situações não são a mesma
  * coisa, e a diferença é exatamente o que o modelo pode dizer ao cliente:
- * - com `sentAt`: a entrega se completou → `jaEnviado`.
+ * - com `enqueuedAt`: a entrega chegou a ser enfileirada → `jaEnviado`.
  * - só com `claimedAt` (ou registro ilegível): uma tentativa começou e nunca
  *   confirmou → `envioAnteriorIncerto`, e a instrução NÃO pode afirmar que o
  *   cliente recebeu, porque não sabemos.
  */
 function respostaDeDuplicata(registro, item) {
-  if (registro && registro.sentAt) {
+  if (registro && registro.enqueuedAt) {
     return {
       enviado: false,
       jaEnviado: true,
@@ -333,20 +331,65 @@ function respostaDeDuplicata(registro, item) {
 }
 
 /**
+ * FAIL-CLOSED: sem um identificador ESTÁVEL a guarda inteira deixa de existir,
+ * e o jeito de ela deixar de existir é silencioso — cada chamada geraria uma
+ * chave nova, tudo passaria, e pareceria que funciona. Então na falta de
+ * qualquer um dos dois identificadores a ferramenta NÃO envia. Nunca um
+ * fallback genérico, nunca um aleatório, nunca o relógio.
+ */
+function respostaSemIdentificador(item, campo) {
+  return {
+    enviado: false,
+    entregaSemIdentificador: campo,
+    motivo: campo === 'faturaId'
+      ? 'A fatura veio sem identificador, e sem ele não há como impedir um segundo envio da mesma cobrança.'
+      : 'Este turno não sabe qual mensagem do cliente o originou, e sem isso não há como impedir um segundo envio da mesma cobrança.',
+    // Sem nome de setor no texto (Task 19): os setores são cadastrados pelo
+    // provedor, e um nome fixo aqui quebraria em qualquer outra instalação.
+    instrucao: `NÃO houve envio: o cliente não recebeu nada. Não tente de novo por conta própria e não diga que enviou. Avise que você não conseguiu emitir o ${item} agora e conclua a triagem encaminhando para um atendente humano.`,
+  };
+}
+
+/** Só vale como identificador de fatura o que é não-nulo e não é string vazia. */
+function identificadorDeFatura(fatura) {
+  const id = fatura && fatura.id;
+  if (id === null || id === undefined) return null;
+  const texto = String(id).trim();
+  return texto === '' ? null : texto;
+}
+
+/**
  * Reivindica a entrega desta fatura. Devolve `{ claimId }` quando a ferramenta
- * pode seguir, ou `{ resposta }` pronta quando já havia um claim.
+ * pode seguir, ou `{ resposta }` pronta quando não pode.
+ *
+ * A identidade do claim é (conversa, ferramenta, contrato, fatura, MENSAGEM).
+ * `isResend` não entra na identidade: ele só libera a segunda restrição (o
+ * índice parcial do envio inicial). É essa separação que faz a mesma mensagem
+ * do cliente entregar uma vez só, tenha ela pedido o reenvio ou não.
  *
  * Um claim obtido mas sem id não teria como ser confirmado nem liberado depois:
  * vira duplicata incerta, porque bloquear é mais seguro do que arriscar
  * entregar dinheiro duas vezes.
  */
 async function reivindicarEntrega({ tool, item, contratoId, fatura, args, contexto }) {
+  const invoiceId = identificadorDeFatura(fatura);
+  if (!invoiceId) {
+    console.error(`${tool}: fatura sem id na conversa ${contexto.conversationId}; entrega recusada para não arriscar a duplicata.`);
+    return { resposta: respostaSemIdentificador(item, 'faturaId') };
+  }
+  const messageId = contexto && contexto.messageId;
+  if (!messageId) {
+    console.error(`${tool}: turno sem messageId na conversa ${contexto.conversationId}; entrega recusada para não arriscar a duplicata.`);
+    return { resposta: respostaSemIdentificador(item, 'messageId') };
+  }
+
   const { obtido, registro } = await claimDelivery({
     conversationId: contexto.conversationId,
     tool,
     contractId: contratoId,
-    invoiceId: fatura.id,
-    requestKey: chaveDoPedido(args, contexto),
+    invoiceId,
+    messageId,
+    isResend: args && args.reenviar === true,
   });
   if (!obtido) return { resposta: respostaDeDuplicata(registro, item) };
   if (!registro || !registro.id) return { resposta: respostaDeDuplicata(null, item) };
@@ -369,12 +412,12 @@ async function liberarEntrega(claimId, conversationId, onde) {
 
 /**
  * ZONA C — todos os efeitos externos voltaram. Uma falha aqui não desfaz a
- * entrega e não pode derrubar a ferramenta: o claim fica sem sent_at e a
+ * entrega e não pode derrubar a ferramenta: o claim fica sem enqueued_at e a
  * próxima chamada lê "incerto" em vez de "já enviado". Nunca o contrário.
  */
 async function confirmarEntrega(claimId, conversationId) {
   try {
-    await markDeliverySent(claimId);
+    await markDeliveryEnqueued(claimId);
   } catch (err) {
     console.error(`Falha ao confirmar a entrega ${claimId} na conversa ${conversationId}: ${mensagemSegura(err)}`);
   }
@@ -941,7 +984,8 @@ const TOOLS = [
       // Idempotência: o claim vem DEPOIS de faturaEmAlgumContrato (só aqui
       // primeira.id existe) e ANTES de qualquer trabalho externo. Fica também
       // depois do ramo assistente acima de propósito: lá nada é enviado, e
-      // reivindicar ali prenderia a chave 'initial' sem nunca usá-la.
+      // reivindicar ali gravaria o envio INICIAL da fatura sem nunca usá-lo —
+      // o índice parcial bloquearia a entrega de verdade logo depois.
       const entrega = await reivindicarEntrega({
         tool: 'gerar_pix', item: 'PIX', contratoId: busca.contratoId, fatura: primeira, args, contexto,
       });

@@ -43,7 +43,7 @@ const { preencherCidadePeloSgp } = require('../../cities/contact-city.service');
 const { enviarAvisoDeCidadeSePreciso } = require('../../city-notices/city-notice.service');
 const { motivoDeEncerramentoAtivo } = require('../triage-close-reason');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('../receipt-usage.repository');
-const { claimDelivery, markDeliverySent, releaseDelivery } = require('../billing-delivery.repository');
+const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('../billing-delivery.repository');
 
 const { IDENTIDADES, prepararSgpFalso, SETORES, MOTIVOS } = require('./sgp-falso');
 
@@ -224,23 +224,59 @@ function prepararMundo({ config, conversa, contact, historico, entregas }) {
   // A idempotência da entrega é uma GUARDA, não um detalhe de infraestrutura:
   // um mock que sempre concede o claim mascararia exatamente o defeito que a
   // simulação achou (o boleto entregue duas vezes). Então aqui ela é
-  // reimplementada em memória com a mesma unicidade das cinco colunas da
-  // tabela — a verificação e a escrita acontecem sem `await` entre elas, que é
-  // o que o `INSERT ... ON CONFLICT DO NOTHING` garante no banco.
-  const chaveDaEntrega = (e) => [e.conversationId, e.tool, e.contractId, String(e.invoiceId), e.requestKey].join('|');
+  // reimplementada em memória com as DUAS restrições da tabela, na mesma
+  // ordem em que o Postgres as aplicaria — e a verificação e a escrita
+  // acontecem sem `await` entre elas, que é o que o `INSERT ... ON CONFLICT DO
+  // NOTHING` garante no banco.
+  aplicarGuardaDeEntrega({ claimDelivery, markDeliveryEnqueued, releaseDelivery }, entregas);
+}
+
+/**
+ * As DUAS restrições de ai_billing_deliveries, em memória:
+ *   1. UNIQUE (conversa, ferramenta, contrato, fatura, message_id)
+ *      → uma entrega por mensagem do cliente, INDEPENDENTE de `reenviar`.
+ *   2. índice parcial único WHERE is_resend = false
+ *      → um único envio INICIAL, para sempre.
+ *
+ * tool-registry.test.js tem a MESMA guarda, escrita do mesmo jeito. Importar
+ * daqui arrastaria o grafo inteiro do harness (runAiTurn, prompts, fila) para
+ * dentro daquele arquivo, então as duas cópias andam juntas de propósito:
+ * mexeu numa, mexa na outra.
+ */
+function aplicarGuardaDeEntrega({ claimDelivery, markDeliveryEnqueued, releaseDelivery }, entregas) {
+  const chaveDaMensagem = (e) => [e.conversationId, e.tool, e.contractId, String(e.invoiceId), String(e.messageId)].join('|');
+  const chaveDaFatura = (e) => [e.conversationId, e.tool, e.contractId, String(e.invoiceId)].join('|');
+
   claimDelivery.mockImplementation(async (pedido) => {
-    const chave = chaveDaEntrega(pedido);
-    const existente = entregas.get(chave);
-    if (existente) return { obtido: false, registro: { ...existente } };
-    const registro = { id: `entrega-${entregas.size + 1}`, claimedAt: new Date(), sentAt: null };
-    entregas.set(chave, registro);
+    const porMensagem = chaveDaMensagem(pedido);
+    const porFatura = chaveDaFatura(pedido);
+    const isResend = pedido.isResend === true;
+    // Restrição 1: a mesma mensagem já reivindicou esta fatura.
+    const mesmaMensagem = entregas.get(porMensagem);
+    if (mesmaMensagem) return { obtido: false, registro: { ...mesmaMensagem.registro } };
+    // Restrição 2: já existe o envio inicial (só vale para quem NÃO é reenvio,
+    // porque o índice é parcial em is_resend = false).
+    if (!isResend) {
+      const inicial = [...entregas.values()].find((e) => e.porFatura === porFatura && !e.isResend);
+      if (inicial) return { obtido: false, registro: { ...inicial.registro } };
+    }
+    const registro = {
+      id: `entrega-${entregas.size + 1}`,
+      messageId: String(pedido.messageId),
+      isResend,
+      claimedAt: new Date(),
+      enqueuedAt: null,
+    };
+    entregas.set(porMensagem, { porFatura, isResend, registro });
     return { obtido: true, registro: { ...registro } };
   });
-  markDeliverySent.mockImplementation(async (id) => {
-    for (const registro of entregas.values()) if (registro.id === id) registro.sentAt = new Date();
+  markDeliveryEnqueued.mockImplementation(async (id) => {
+    for (const { registro } of entregas.values()) if (registro.id === id) registro.enqueuedAt = new Date();
   });
+  // Espelha o `AND enqueued_at IS NULL` do repositório: uma entrega já
+  // enfileirada nunca volta a ser reivindicável, nem por um chamador enganado.
   releaseDelivery.mockImplementation(async (id) => {
-    for (const [chave, registro] of entregas) if (registro.id === id && !registro.sentAt) entregas.delete(chave);
+    for (const [chave, { registro }] of entregas) if (registro.id === id && !registro.enqueuedAt) entregas.delete(chave);
   });
 }
 

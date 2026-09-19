@@ -43,7 +43,7 @@ const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
-const { claimDelivery, markDeliverySent, releaseDelivery } = require('./billing-delivery.repository');
+const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('./billing-delivery.repository');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
@@ -67,34 +67,58 @@ const ACAO_PRINCIPAL = {
   esquecer_identificacao: setContactSgpLink,
 };
 
-// IDEMPOTÊNCIA DA ENTREGA — o repositório é mockado, e o mock reproduz a
-// unicidade das cinco colunas da tabela (conversa, ferramenta, contrato,
-// fatura, chave do pedido). Sem isto o automock devolveria `undefined` de
-// claimDelivery e as duas ferramentas de entrega quebrariam em todo teste
-// deste arquivo. A verificação e a escrita acontecem sem `await` entre elas —
-// é o que o `INSERT ... ON CONFLICT DO NOTHING RETURNING` garante no banco.
+// IDEMPOTÊNCIA DA ENTREGA — o repositório é mockado, e o mock reproduz as DUAS
+// restrições da tabela:
+//   1. UNIQUE (conversa, ferramenta, contrato, fatura, message_id)
+//      → uma entrega por mensagem do cliente, INDEPENDENTE de `reenviar`.
+//   2. índice parcial único WHERE is_resend = false
+//      → um único envio INICIAL, para sempre.
+// Sem isto o automock devolveria `undefined` de claimDelivery e as duas
+// ferramentas de entrega quebrariam em todo teste deste arquivo. A verificação
+// e a escrita acontecem sem `await` entre elas — é o que o `INSERT ... ON
+// CONFLICT DO NOTHING RETURNING` garante no banco.
 // O armazenamento é recriado a cada teste (beforeEach de arquivo, que roda
 // ANTES dos beforeEach de cada describe).
+//
+// Esta guarda é GÊMEA da de simulacao/conversar.js (aplicarGuardaDeEntrega).
+// Mexeu numa, mexa na outra — importar de lá arrastaria o harness inteiro
+// para dentro deste arquivo.
 let entregas;
-const chaveDaEntrega = (p) => [p.conversationId, p.tool, p.contractId, String(p.invoiceId), p.requestKey].join('|');
+const chaveDaMensagem = (p) => [p.conversationId, p.tool, p.contractId, String(p.invoiceId), String(p.messageId)].join('|');
+const chaveDaFatura = (p) => [p.conversationId, p.tool, p.contractId, String(p.invoiceId)].join('|');
 
 beforeEach(() => {
   entregas = new Map();
   claimDelivery.mockImplementation(async (pedido) => {
-    const chave = chaveDaEntrega(pedido);
-    const existente = entregas.get(chave);
-    if (existente) return { obtido: false, registro: { ...existente } };
-    const registro = { id: `entrega-${entregas.size + 1}`, claimedAt: new Date(), sentAt: null };
-    entregas.set(chave, registro);
+    const porMensagem = chaveDaMensagem(pedido);
+    const porFatura = chaveDaFatura(pedido);
+    const isResend = pedido.isResend === true;
+    // Restrição 1: a mesma mensagem do cliente já reivindicou esta fatura.
+    const mesmaMensagem = entregas.get(porMensagem);
+    if (mesmaMensagem) return { obtido: false, registro: { ...mesmaMensagem.registro } };
+    // Restrição 2: já existe o envio inicial. Só alcança quem NÃO é reenvio,
+    // porque o índice do banco é parcial em is_resend = false.
+    if (!isResend) {
+      const inicial = [...entregas.values()].find((e) => e.porFatura === porFatura && !e.isResend);
+      if (inicial) return { obtido: false, registro: { ...inicial.registro } };
+    }
+    const registro = {
+      id: `entrega-${entregas.size + 1}`,
+      messageId: String(pedido.messageId),
+      isResend,
+      claimedAt: new Date(),
+      enqueuedAt: null,
+    };
+    entregas.set(porMensagem, { porFatura, isResend, registro });
     return { obtido: true, registro: { ...registro } };
   });
-  markDeliverySent.mockImplementation(async (id) => {
-    for (const registro of entregas.values()) if (registro.id === id) registro.sentAt = new Date();
+  markDeliveryEnqueued.mockImplementation(async (id) => {
+    for (const { registro } of entregas.values()) if (registro.id === id) registro.enqueuedAt = new Date();
   });
-  // Espelha o `AND sent_at IS NULL` do repositório: uma entrega confirmada
-  // nunca volta a ser reivindicável, nem por um chamador enganado.
+  // Espelha o `AND enqueued_at IS NULL` do repositório: uma entrega já
+  // enfileirada nunca volta a ser reivindicável, nem por um chamador enganado.
   releaseDelivery.mockImplementation(async (id) => {
-    for (const [chave, registro] of entregas) if (registro.id === id && !registro.sentAt) entregas.delete(chave);
+    for (const [chave, { registro }] of entregas) if (registro.id === id && !registro.enqueuedAt) entregas.delete(chave);
   });
 });
 
@@ -108,6 +132,10 @@ function contextoDeTriagemCom(extra = {}) {
     ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
     registroFerramentas: [], sgpCache: {}, terceiro: null,
     triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0, noturno: { ativo: false } },
+    // A mensagem do cliente que abriu o turno. Em produção a triagem sempre a
+    // tem (ai-worker.js) e sem ela a entrega falha FECHADO, então o fixture
+    // precisa dela para representar um turno de triagem de verdade.
+    messageId: 'msg-1',
     ...extra,
   };
 }
@@ -1559,7 +1587,9 @@ describe('buscar_cliente na triagem com a data de nascimento dispensada (padrao)
 describe('enviar_boleto', () => {
   // primeiroNome no fixture desde 2026-09-17: a instrução da entrega passa a
   // lembrar o modelo de chamar o cliente pelo nome.
-  const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte', primeiroNome: 'Willemberg' } });
+  // messageId: a entrega exige a identidade da mensagem do cliente e, sem
+  // ela, falha FECHADO. Em produção a triagem sempre a tem (ai-worker.js).
+  const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte', primeiroNome: 'Willemberg' }, messageId: 'msg-1' });
   beforeEach(() => {
     jest.clearAllMocks();
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix', barCode: '836100000012' }] });
@@ -1791,7 +1821,7 @@ describe('enviar_boleto', () => {
 describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / gerar_segunda_via)', () => {
   const CONTRATOS = [{ id: 17402, address: 'RUA J.K., 544' }, { id: 17405, address: 'AGENOR COSTA, 523' }];
   const ctx = (contracts = CONTRATOS) => ({
-    conversationId: 'c-1', channelId: 'ch-1', contracts, identidade: { nivel: 'forte' },
+    conversationId: 'c-1', channelId: 'ch-1', contracts, identidade: { nivel: 'forte' }, messageId: 'msg-1',
   });
   const comFatura = (id, valor) => ({
     hasOpenInvoice: true,
@@ -2094,7 +2124,7 @@ describe('tool-executor + consultar_faturas_todos_contratos (composição real, 
 describe('fatura entregue é sempre a mais antiga', () => {
   const SETOR_X = '11111111-1111-1111-1111-111111111111';
   const ctx = () => ({
-    conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte' },
+    conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte' }, messageId: 'msg-1',
   });
   // Ordem embaralhada de propósito: o SGP não garante ordenação.
   const DUAS = {
@@ -2169,7 +2199,7 @@ describe('concluir_triagem', () => {
     identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', nome: 'João Da Silva Pereira', client: { id: 9 } },
     contracts: [{ id: 17402, address: 'RUA X', plan: '600MB', statusCode: 1 }],
     triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0 },
-    origemMensagem: 'texto', resolvidoPelaIa: false, ...extra,
+    origemMensagem: 'texto', resolvidoPelaIa: false, messageId: 'msg-1', ...extra,
   });
   beforeEach(() => {
     jest.clearAllMocks();
@@ -3253,7 +3283,12 @@ describe('Task 19 — nenhum nome de setor fixo no código', () => {
 // Simulação real, roteiro 14: a IA entregou o boleto do titular no turno 2. No
 // turno 3 o cliente disse "Pode mandar" e ela executou enviar_boleto DE NOVO.
 // Em produção isso é o cliente recebendo dois boletos e podendo pagar duas
-// vezes. Os dez testes abaixo são os que o dono pediu, na ordem dele.
+// vezes.
+//
+// v2: a MENSAGEM INBOUND é a identidade da entrega; `reenviar` é só permissão.
+// O desenho anterior punha `reenviar` na identidade e, medido em banco real, a
+// MESMA mensagem entregava duas vezes — uma tool call sem `reenviar` e outra
+// com `reenviar: true` caíam em chaves diferentes (é o caso 3 abaixo).
 // ===========================================================================
 describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   const FATURA = {
@@ -3270,7 +3305,10 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   });
   const boleto = (args, contexto) => findTool('enviar_boleto').executar(args, contexto);
   const pix = (args, contexto) => findTool('gerar_pix').executar(args, contexto);
-  const chavesPedidas = () => claimDelivery.mock.calls.map(([p]) => p.requestKey);
+  // A identidade que cada claim pediu, na ordem. É o que separa "a mesma
+  // mensagem tentou de novo" de "o cliente escreveu outra vez".
+  const identidadesPedidas = () => claimDelivery.mock.calls.map(([p]) => `${p.messageId}${p.isResend ? '+reenvio' : ''}`);
+  const documentos = () => enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document');
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -3281,6 +3319,129 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
     enviarBoleto.mockResolvedValue([{ id: 'm-cartao' }, { id: 'm-linha' }]);
     enviarPix.mockResolvedValue([{ id: 'm-pix' }]);
     getConversationWithContact.mockResolvedValue({ id: 'c-idem', assignedAgentId: null, status: 'waiting', triageState: 'pending' });
+  });
+
+  // -------------------------------------------------------------------------
+  // OS SETE CASOS QUE PRECISAM VALER (a tabela do dono, na ordem dele)
+  //
+  //  1 primeiro envio .................................................. passa
+  //  2 segunda call na mesma mensagem ............................... bloqueia
+  //  3 mesma mensagem: sem reenviar, depois com reenviar: true ...... bloqueia
+  //  4 mensagem nova sem reenviar ................................... bloqueia
+  //  5 mensagem nova com reenviar: true ........................ passa 1 vez
+  //  6 duas calls de reenvio na mesma mensagem ................. passa 1 vez
+  //  7 outra mensagem futura pedindo reenvio ....................... passa
+  // -------------------------------------------------------------------------
+  describe('os sete casos', () => {
+    test('1. primeiro envio passa', async () => {
+      const r = await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      expect(r.enviado).toBe(true);
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1']);
+    });
+
+    test('2. segunda call na MESMA mensagem bloqueia', async () => {
+      const contexto = ctx({ messageId: 'msg-1' });
+      const primeira = await boleto({ contratoId: 17402 }, contexto);
+      const segunda = await boleto({ contratoId: 17402 }, contexto);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(segunda.envioAnteriorIncerto).toBeUndefined();
+      expect(segunda.instrucao).toMatch(/já foi enviado nesta conversa/);
+      expect(segunda.instrucao).toMatch(/com todas as letras/);
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-1']);
+    });
+
+    // ===== O MOTIVO DESTA RODADA =====================================
+    // O buraco medido em banco real na v1: a mesma mensagem do cliente, uma
+    // tool call sem `reenviar` e a seguinte com `reenviar: true`. A v1 gerava
+    // 'initial' e 'resend:msg-1' — duas chaves, DUAS entregas. Na v2 a
+    // identidade é a mensagem, então `reenviar` não abre chave nenhuma aqui:
+    // a UNIQUE composta com message_id bloqueia.
+    test('3. mesma mensagem: sem reenviar e depois com reenviar: true entrega UMA vez', async () => {
+      const contexto = ctx({ messageId: 'msg-1' });
+      const primeira = await boleto({ contratoId: 17402 }, contexto);
+      const segunda = await boleto({ contratoId: 17402, reenviar: true }, contexto);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      // Os dentes do teste: UM boleto, UM download, UM claim vencedor.
+      expect(documentos()).toHaveLength(1);
+      expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledTimes(1);
+      expect(enviarBoleto).toHaveBeenCalledTimes(1);
+      // As duas calls pediram a MESMA identidade, mudando só a permissão.
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-1+reenvio']);
+    });
+
+    test('3b. a ordem inversa na mesma mensagem também entrega UMA vez', async () => {
+      const contexto = ctx({ messageId: 'msg-1' });
+      const primeira = await boleto({ contratoId: 17402, reenviar: true }, contexto);
+      const segunda = await boleto({ contratoId: 17402 }, contexto);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1+reenvio', 'msg-1']);
+    });
+
+    test('3c. gerar_pix: mesma mensagem, sem e com reenviar, entrega UMA vez', async () => {
+      const contexto = ctx({ messageId: 'msg-1' });
+      expect((await pix({ contratoId: 17402 }, contexto)).enviado).toBe(true);
+      expect(await pix({ contratoId: 17402, reenviar: true }, contexto)).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(enviarPix).toHaveBeenCalledTimes(1);
+    });
+
+    // É o índice parcial `WHERE is_resend = false` quem bloqueia aqui: a
+    // mensagem é nova, então a UNIQUE composta deixaria passar. É o caso do
+    // "Pode mandar" no turno seguinte.
+    test('4. mensagem NOVA sem reenviar bloqueia, porque já houve o envio inicial', async () => {
+      expect((await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }))).enviado).toBe(true);
+      const segunda = await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-2' }));
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2']);
+    });
+
+    test('5. mensagem nova com reenviar: true passa uma vez', async () => {
+      expect((await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }))).enviado).toBe(true);
+      const reenvio = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+      expect(reenvio.enviado).toBe(true);
+      expect(documentos()).toHaveLength(2);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2+reenvio']);
+    });
+
+    test('6. duas calls de reenvio na mesma mensagem: uma passa', async () => {
+      await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      const contextoDoReenvio = ctx({ messageId: 'msg-2' });
+      const primeira = await boleto({ contratoId: 17402, reenviar: true }, contextoDoReenvio);
+      const segunda = await boleto({ contratoId: 17402, reenviar: true }, contextoDoReenvio);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(documentos()).toHaveLength(2);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2+reenvio', 'msg-2+reenvio']);
+    });
+
+    test('7. outra mensagem futura pedindo reenvio passa de novo', async () => {
+      await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+      const terceiro = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-3' }));
+      expect(terceiro.enviado).toBe(true);
+      expect(documentos()).toHaveLength(3);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2+reenvio', 'msg-3+reenvio']);
+    });
+
+    // A guarda é por FATURA, não por conversa: outra fatura do mesmo cliente
+    // continua entregável no mesmo turno.
+    test('outra fatura da mesma conversa não é bloqueada', async () => {
+      await boleto({ contratoId: 17402 }, ctx());
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: '10' }] });
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(documentos()).toHaveLength(2);
+    });
+
+    test('gerar_pix e enviar_boleto são entregas separadas da mesma fatura', async () => {
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -3326,76 +3487,28 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 2. Duas tool calls na MESMA mensagem do cliente
+  // 2. Corrida no envio INICIAL, com mensagens DIFERENTES
   // -------------------------------------------------------------------------
-  // Mesmo messageId, sem reenviar: a chave é 'initial' nas duas, então a
-  // segunda bate no claim. É o caso do "Pode mandar".
-  describe('2. duas tool calls na mesma mensagem', () => {
-    test('enviar_boleto: a segunda não envia e devolve jaEnviado', async () => {
-      const contexto = ctx();
-      const primeira = await boleto({ contratoId: 17402 }, contexto);
-      const segunda = await boleto({ contratoId: 17402 }, contexto);
-      expect(primeira.enviado).toBe(true);
-      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
-      expect(segunda.envioAnteriorIncerto).toBeUndefined();
-      expect(segunda.instrucao).toMatch(/já foi enviado nesta conversa/);
-      expect(segunda.instrucao).toMatch(/com todas as letras/);
-      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
-      expect(chavesPedidas()).toEqual(['initial', 'initial']);
+  // A segunda restrição (o índice parcial) sozinha. As duas execuções são de
+  // mensagens diferentes, então a UNIQUE composta não encosta nelas: quem
+  // decide é o índice parcial, e só uma pode ganhar.
+  describe('2. corrida no envio inicial com mensagens diferentes', () => {
+    const depois = (ms, valor) => new Promise((resolve) => { setTimeout(() => resolve(valor), ms); });
+
+    beforeEach(() => {
+      sgpClient.getDuplicateInvoice.mockImplementation(() => depois(5, { hasOpenInvoice: true, duplicates: [FATURA] }));
+      enqueueOutboundMessage.mockImplementation(() => depois(10, { id: 'm-9' }));
     });
 
-    test('gerar_pix: a segunda não envia e devolve jaEnviado', async () => {
-      const contexto = ctx();
-      expect((await pix({ contratoId: 17402 }, contexto)).enviado).toBe(true);
-      expect(await pix({ contratoId: 17402 }, contexto)).toMatchObject({ enviado: false, jaEnviado: true });
-      expect(enviarPix).toHaveBeenCalledTimes(1);
+    test('duas mensagens diferentes, nenhuma pedindo reenvio: um boleto só sai', async () => {
+      const [a, b] = await Promise.all([
+        boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' })),
+        boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-2' })),
+      ]);
+      expect([a.enviado, b.enviado].filter(Boolean)).toHaveLength(1);
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2']);
     });
-
-    // A guarda é por FATURA, não por conversa: outra fatura do mesmo cliente
-    // continua entregável no mesmo turno.
-    test('outra fatura da mesma conversa não é bloqueada', async () => {
-      await boleto({ contratoId: 17402 }, ctx());
-      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: '10' }] });
-      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
-      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // 3. Mensagem NOVA pedindo o reenvio com todas as letras
-  // -------------------------------------------------------------------------
-  test('3. nova mensagem de reenvio explícito permite uma nova entrega', async () => {
-    expect((await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }))).enviado).toBe(true);
-    const reenvio = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
-    expect(reenvio.enviado).toBe(true);
-    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
-    expect(chavesPedidas()).toEqual(['initial', 'resend:msg-2']);
-  });
-
-  // -------------------------------------------------------------------------
-  // 4. Duas tool calls DA MESMA mensagem de reenvio
-  // -------------------------------------------------------------------------
-  test('4. duas tool calls da mesma mensagem de reenvio entregam uma vez só', async () => {
-    await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
-    const contextoDoReenvio = ctx({ messageId: 'msg-2' });
-    const primeira = await boleto({ contratoId: 17402, reenviar: true }, contextoDoReenvio);
-    const segunda = await boleto({ contratoId: 17402, reenviar: true }, contextoDoReenvio);
-    expect(primeira.enviado).toBe(true);
-    expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
-    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
-    expect(chavesPedidas()).toEqual(['initial', 'resend:msg-2', 'resend:msg-2']);
-  });
-
-  // -------------------------------------------------------------------------
-  // 5. Mensagem POSTERIOR pedindo outro reenvio
-  // -------------------------------------------------------------------------
-  test('5. outro pedido de reenvio, em outra mensagem, é permitido', async () => {
-    await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
-    await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
-    const terceiro = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-3' }));
-    expect(terceiro.enviado).toBe(true);
-    expect(enqueueOutboundMessage).toHaveBeenCalledTimes(3);
-    expect(chavesPedidas()).toEqual(['initial', 'resend:msg-2', 'resend:msg-3']);
   });
 
   // -------------------------------------------------------------------------
@@ -3474,7 +3587,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       enqueueOutboundMessage.mockRejectedValueOnce(new Error('fila fora'));
       await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('fila fora');
       expect(releaseDelivery).not.toHaveBeenCalled();
-      expect(markDeliverySent).not.toHaveBeenCalled();
+      expect(markDeliveryEnqueued).not.toHaveBeenCalled();
 
       const repeticao = await boleto({ contratoId: 17402 }, ctx());
       expect(repeticao.enviado).toBe(false);
@@ -3497,13 +3610,13 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       const r = await boleto({ contratoId: 17402 }, ctx());
       expect(r).toMatchObject({ enviado: true, linhaDigitavelEnviada: false });
       expect(releaseDelivery).not.toHaveBeenCalled();
-      expect(markDeliverySent).toHaveBeenCalledTimes(1);
+      expect(markDeliveryEnqueued).toHaveBeenCalledTimes(1);
     });
 
-    // Uma falha ao gravar sent_at não desfaz a entrega nem derruba a
+    // Uma falha ao gravar enqueued_at não desfaz a entrega nem derruba a
     // ferramenta: o claim fica sem confirmação, que é o lado seguro.
-    test('markDeliverySent falhou: a entrega continua valendo e nada é liberado', async () => {
-      markDeliverySent.mockRejectedValueOnce(new Error('banco fora'));
+    test('markDeliveryEnqueued falhou: a entrega continua valendo e nada é liberado', async () => {
+      markDeliveryEnqueued.mockRejectedValueOnce(new Error('banco fora'));
       expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
       expect(releaseDelivery).not.toHaveBeenCalled();
       expect((await boleto({ contratoId: 17402 }, ctx())).envioAnteriorIncerto).toBe(true);
@@ -3511,9 +3624,9 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 8. Claim sem sent_at ≠ entrega confirmada
+  // 8. Claim sem enqueued_at ≠ entrega confirmada
   // -------------------------------------------------------------------------
-  describe('8. claim sem sent_at devolve envioAnteriorIncerto, nunca jaEnviado', () => {
+  describe('8. claim sem enqueued_at devolve envioAnteriorIncerto, nunca jaEnviado', () => {
     test('a instrução não afirma que o cliente recebeu', async () => {
       enqueueOutboundMessage.mockRejectedValueOnce(new Error('fila fora'));
       await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('fila fora');
@@ -3528,7 +3641,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       expect(r.instrucao).toMatch(/reenviar: true/);
     });
 
-    test('com sent_at, aí sim jaEnviado — e as duas respostas são diferentes', async () => {
+    test('com enqueued_at, aí sim jaEnviado — e as duas respostas são diferentes', async () => {
       await boleto({ contratoId: 17402 }, ctx());
       const r = await boleto({ contratoId: 17402 }, ctx());
       expect(r.jaEnviado).toBe(true);
@@ -3607,8 +3720,8 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
     });
 
     // gerar_pix fora da triagem só SUGERE o código ao atendente humano: não há
-    // efeito externo nenhum, e reivindicar ali prenderia a chave 'initial' sem
-    // nunca usá-la — bloqueando a entrega real depois.
+    // efeito externo nenhum, e reivindicar ali gravaria o envio INICIAL sem
+    // nunca usá-lo — o índice parcial bloquearia a entrega real depois.
     test('gerar_pix no perfil assistente não reivindica entrega', async () => {
       const r = await pix({ contratoId: 17402 }, { conversationId: 'c-idem', channelId: 'ch-1', contracts: [{ id: 17402 }] });
       expect(r).toMatchObject({ sucesso: true, pixCopiaCola: '000201-pix-emv' });
@@ -3617,25 +3730,84 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // A chave do pedido: como ela é montada é a guarda inteira
+  // FAIL-CLOSED: sem identificador estável, não envia
   // -------------------------------------------------------------------------
-  describe('chave do pedido', () => {
-    // Uma chave nova a cada chamada anularia tudo. Sem messageId o reenvio
-    // falha FECHADO e vira 'initial'.
-    test('reenviar sem messageId no contexto cai em initial, e a repetição é bloqueada', async () => {
+  // Os dois identificadores são a guarda inteira, e o jeito de ela sumir é
+  // SILENCIOSO: uma chave nova por chamada faria tudo passar e pareceria que
+  // funciona. Então na falta de qualquer um dos dois, a ferramenta recusa.
+  describe('fail-closed sem identificador estável', () => {
+    test.each([
+      ['null', null], ['undefined', undefined], ['string vazia', ''], ['só espaços', '   '],
+    ])('fatura com id %s: não reivindica, não envia e não inventa "undefined"', async (_nome, valor) => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: valor }] });
+      const r = await boleto({ contratoId: 17402 }, ctx());
+      expect(r).toMatchObject({ enviado: false, entregaSemIdentificador: 'faturaId' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+      expect(sgpClient.downloadBoletoPdf).not.toHaveBeenCalled();
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      expect(r.instrucao).toMatch(/NÃO houve envio/);
+      expect(JSON.stringify(r)).not.toContain('undefined');
+    });
+
+    test('gerar_pix com fatura sem id também recusa antes de qualquer envio', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: null }] });
+      expect(await pix({ contratoId: 17402 }, ctx())).toMatchObject({ enviado: false, entregaSemIdentificador: 'faturaId' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    // O ponto mais perigoso: sem messageId, qualquer fallback (um aleatório,
+    // o relógio, uma constante nova por chamada) faria as duas entregas
+    // passarem. Recusar é a única saída segura.
+    test.each([['ausente', {}], ['null', { messageId: null }], ['vazio', { messageId: '' }]])(
+      'turno com messageId %s: não reivindica e não envia',
+      async (_nome, extra) => {
+        const contexto = ctx(extra);
+        if (!('messageId' in extra)) delete contexto.messageId;
+        const r = await boleto({ contratoId: 17402 }, contexto);
+        expect(r).toMatchObject({ enviado: false, entregaSemIdentificador: 'messageId' });
+        expect(claimDelivery).not.toHaveBeenCalled();
+        expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      }
+    );
+
+    test('sem messageId, nem o reenvio explícito passa — e duas chamadas não entregam nada', async () => {
       const contexto = ctx({ messageId: null });
       const primeira = await boleto({ contratoId: 17402, reenviar: true }, contexto);
       const segunda = await boleto({ contratoId: 17402, reenviar: true }, contexto);
-      expect(primeira.enviado).toBe(true);
+      expect(primeira.enviado).toBe(false);
       expect(segunda.enviado).toBe(false);
-      expect(chavesPedidas()).toEqual(['initial', 'initial']);
+      expect(documentos()).toHaveLength(0);
+      expect(claimDelivery).not.toHaveBeenCalled();
     });
 
-    test('sem reenviar, o messageId não entra na chave: turnos diferentes continuam bloqueados', async () => {
+    // Para o terceiro, a projeção deixa passar só enviado + instrucao. A
+    // recusa continua legível para o modelo e continua não vazando nada.
+    test('a recusa atravessa a minimização de terceiro sem virar um falso enviado', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: null }] });
+      const r = await executeTool('enviar_boleto', { contratoId: 99 }, {
+        conversationId: 'c-idem', channelId: 'ch-1', contracts: [],
+        identidade: { nivel: 'fraca', primeiroNome: 'Willemberg' },
+        ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+        terceiro: { nome: 'Maria', contratos: [{ id: 99 }] },
+        registroFerramentas: [], sgpCache: {}, messageId: 'msg-1',
+      });
+      expect(r.resultado.enviado).toBe(false);
+      expect(Object.keys(r.resultado).sort()).toEqual(['enviado', 'instrucao']);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Identidade e permissão: o que entra no claim é a guarda inteira
+  // -------------------------------------------------------------------------
+  describe('identidade e permissão do claim', () => {
+    // A messageId é a IDENTIDADE e vai sempre; `reenviar` é só a PERMISSÃO e
+    // vai como isResend. Trocar os dois papéis foi o defeito da v1.
+    test('o claim leva a messageId do turno e o reenviar como permissão separada', async () => {
       await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
-      const segunda = await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-2' }));
-      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
-      expect(chavesPedidas()).toEqual(['initial', 'initial']);
+      await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+      expect(claimDelivery.mock.calls.map(([p]) => [p.messageId, p.isResend]))
+        .toEqual([['msg-1', false], ['msg-2', true]]);
     });
 
     // O validador é quem carrega `reenviar` até `executar` — validarContratoId
@@ -3655,7 +3827,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       await executeTool('enviar_boleto', { contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
       const segunda = await executeTool('enviar_boleto', { contratoId: 17402, reenviar: 'true' }, ctx({ messageId: 'msg-2' }));
       expect(segunda.resultado.enviado).toBe(false);
-      expect(chavesPedidas()).toEqual(['initial', 'initial']);
+      expect(claimDelivery.mock.calls.map(([p]) => p.isResend)).toEqual([false, false]);
     });
   });
 
@@ -3690,7 +3862,7 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
     await boleto({ contratoId: 17402 }, ctx());
     await pix({ contratoId: 17402 }, ctx());
     for (const [pedido] of claimDelivery.mock.calls) {
-      expect(Object.keys(pedido).sort()).toEqual(['contractId', 'conversationId', 'invoiceId', 'requestKey', 'tool']);
+      expect(Object.keys(pedido).sort()).toEqual(['contractId', 'conversationId', 'invoiceId', 'isResend', 'messageId', 'tool']);
       const serializado = JSON.stringify(pedido);
       expect(serializado).not.toContain('836100000012');
       expect(serializado).not.toContain('000201-pix-emv');

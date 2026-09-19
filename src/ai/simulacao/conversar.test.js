@@ -268,8 +268,11 @@ describe('idempotência da entrega no harness', () => {
     invariantes: {},
     revisaoHumana: [],
   };
-  const pedidos = () => claimDelivery.mock.calls.map(([p]) => p.requestKey);
-  const idsDeReenvio = () => pedidos().filter((c) => c.startsWith('resend:')).map((c) => c.slice('resend:'.length));
+  // A IDENTIDADE que cada claim pediu (a mensagem do cliente) e, separada
+  // dela, a PERMISSÃO (`reenviar`). Trocar os dois papéis foi o defeito da v1.
+  const pedidos = () => claimDelivery.mock.calls.map(([p]) => `${p.messageId}${p.isResend ? '+reenvio' : ''}`);
+  const idsDeReenvio = () => claimDelivery.mock.calls.filter(([p]) => p.isResend === true).map(([p]) => p.messageId);
+  const documentos = () => enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document');
 
   // Este arquivo não limpa os mocks entre os testes (os outros contam
   // chamadas de uma conversa só). Aqui a contagem é o objeto do teste, então
@@ -290,12 +293,13 @@ describe('idempotência da entrega no harness', () => {
 
     const resultado = await conversar(ROTEIRO_ENTREGA);
 
-    const documentos = enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document');
-    expect(documentos).toHaveLength(1);
+    expect(documentos()).toHaveLength(1);
     expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledTimes(1);
     // A segunda chamada rodou (o modelo pediu), mas não entregou nada.
     expect(resultado.turnos[1].toolsExecutadas.map((f) => f.nome)).toEqual(['enviar_boleto']);
-    expect(pedidos()).toEqual(['initial', 'initial']);
+    // Duas mensagens do cliente, dois ids, nenhum pedido de reenvio: quem
+    // bloqueou foi o índice parcial do envio inicial.
+    expect(pedidos()).toEqual(['sim-95-msg-1', 'sim-95-msg-2']);
   });
 
   test('duas tool calls da MESMA mensagem entregam uma vez', async () => {
@@ -307,8 +311,28 @@ describe('idempotência da entrega no harness', () => {
 
     await conversar({ ...ROTEIRO_ENTREGA, numero: 94, mensagens: ['Quero o boleto'] });
 
-    expect(enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document')).toHaveLength(1);
-    expect(pedidos()).toEqual(['initial', 'initial']);
+    expect(documentos()).toHaveLength(1);
+    expect(pedidos()).toEqual(['sim-94-msg-1', 'sim-94-msg-1']);
+  });
+
+  // ===== O MOTIVO DESTA RODADA, no harness ================================
+  // A MESMA mensagem do cliente, e o modelo chamando enviar_boleto uma vez sem
+  // `reenviar` e outra com `reenviar: true` — é o que um modelo faz quando
+  // "corrige" a si mesmo dentro do turno. Na v1 isso gerava 'initial' e
+  // 'resend:<id>', duas chaves, DOIS boletos. Um boleto só pode sair.
+  test('mesma mensagem, sem reenviar e depois com reenviar: entrega UMA vez', async () => {
+    enfileirar([
+      respostaComFerramenta('enviar_boleto', { contratoId: 101 }),
+      respostaComFerramenta('enviar_boleto', { contratoId: 101, reenviar: true }),
+      respostaComTexto('Enviei acima o boleto em PDF.'),
+    ]);
+
+    await conversar({ ...ROTEIRO_ENTREGA, numero: 89, mensagens: ['Quero o boleto'] });
+
+    expect(documentos()).toHaveLength(1);
+    expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledTimes(1);
+    // A identidade é a MESMA nas duas; só a permissão mudou.
+    expect(pedidos()).toEqual(['sim-89-msg-1', 'sim-89-msg-1+reenvio']);
   });
 
   // A prova de que o id é ESTÁVEL dentro do turno: duas chamadas de reenvio
@@ -323,7 +347,7 @@ describe('idempotência da entrega no harness', () => {
 
     await conversar({ ...ROTEIRO_ENTREGA, numero: 90, mensagens: ['Não recebi, manda de novo'] });
 
-    expect(enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document')).toHaveLength(1);
+    expect(documentos()).toHaveLength(1);
     const reenvios = idsDeReenvio();
     expect(reenvios).toHaveLength(2);
     expect(new Set(reenvios).size).toBe(1);
@@ -350,7 +374,7 @@ describe('idempotência da entrega no harness', () => {
     expect(reenvios).toHaveLength(2);
     expect(new Set(reenvios).size).toBe(2);
     // Cada pedido explícito de reenvio entregou de verdade.
-    expect(enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document')).toHaveLength(3);
+    expect(documentos()).toHaveLength(3);
   });
 
   // O roteiro encadeado continua a MESMA conversa: o boleto entregue lá atrás
@@ -368,6 +392,6 @@ describe('idempotência da entrega no harness', () => {
     ]);
     await conversar({ ...ROTEIRO_ENTREGA, numero: 91, identidade: undefined, continuaDe: 92, mensagens: ['Pode mandar'] }, primeiro);
 
-    expect(enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document')).toHaveLength(1);
+    expect(documentos()).toHaveLength(1);
   });
 });

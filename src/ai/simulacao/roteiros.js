@@ -11,7 +11,13 @@
 //  6. plano escolhido não faz a IA repetir toda a tabela ..................... 4, 5, 6
 //  7. terceiro consegue boleto/PIX só com o CPF do titular, sem dado privado .. 1, 14
 //  8. terceiro não consegue plano, conexão, status nem desbloqueio ........... 17, 21
-//  9. confiança baixa não cria pergunta artificial ............................ 19
+//  9. confiança baixa não cria pergunta artificial ... NÃO é exercitada aqui:
+//     a simulação não consegue forçar o modelo a relatar confiança baixa (na
+//     execução real de 2026-09-18 veio 0,98-0,99). A propriedade está provada
+//     deterministicamente em src/ai/tool-registry.test.js, no describe
+//     'tool-executor + concluir_triagem — confiança nunca bloqueia a conclusão
+//     (Task 9)'. O roteiro 19 continua cobrindo o que ELE consegue cobrir:
+//     pedido vago não vira pergunta artificial.
 // 10. data de nascimento nunca é solicitada ....... TODOS (invariante global do
 //     arquivo de teste, aplicado fora do que cada roteiro declara)
 // 11. endereço só é solicitado quando tecnicamente necessário ...
@@ -41,7 +47,7 @@ const {
   naoVazouDadoDeTerceiro, usouInfoDoAudio, mudouDeSetor, concluiuNoSetor,
   naoRepetiuTabelaDePlanos, naoMostrouTabelaDePlanos, resumoUtil,
   pediuEndereco, naoPediuEndereco, respondeuAntesDePedirEndereco, identidadeEstavel,
-  naoAfirmouSemFerramenta, resolveuOuConcluiu, baixaConfiancaAindaConcluiu,
+  naoAfirmouSemFerramenta, resolveuOuConcluiu, apresentouAMensagem,
 } = require('./invariantes');
 
 const SUPORTE = setorPorPapel('suporte').name;
@@ -58,6 +64,11 @@ const RESOLUCAO_DA_CONTA = [
   'consultar_faturas', 'consultar_faturas_todos_contratos', 'consultar_financeiro',
   'enviar_boleto', 'gerar_pix', 'gerar_segunda_via',
 ];
+
+// A mensagem do roteiro 16 em que o cliente troca de assunto. Fica em
+// constante porque dois invariantes precisam apontar para ELA, e não para uma
+// cópia do texto: se a mensagem mudar, os dois mudam junto.
+const MUDANCA_DE_INTENCAO_16 = 'Deixa a internet pra lá. O que eu preciso mesmo é negociar o atraso de duas faturas com alguém aí';
 
 // ---------------------------------------------------------------------------
 // Blocos reaproveitados
@@ -383,11 +394,21 @@ const ROTEIROS = [
     identidade: 'forte-ativo',
     mensagens: [
       'Minha internet tá lenta desde ontem',
-      'Deixa a internet pra lá. O que eu preciso mesmo é negociar o atraso de duas faturas com alguém aí',
+      MUDANCA_DE_INTENCAO_16,
       'Isso, pode encaminhar',
     ],
     invariantes: comuns({
-      'a conclusão seguiu a intenção nova, e não a antiga': (t) => mudouDeSetor(t, SUPORTE, FINANCEIRO),
+      // Rodada de correção 1 (execução real, 2026-09-18): quando a triagem
+      // concluía já no turno 1, o roteiro parava e a mensagem da mudança nunca
+      // era enviada — e o relatório reprovava 'a conclusão seguiu a intenção
+      // nova', acusando do defeito errado. O defeito real é ter concluído
+      // cedo demais, e agora é ele que aparece no relatório, com este nome.
+      'não concluiu antes de a mudança de intenção ser apresentada': (t) => apresentouAMensagem(t, MUDANCA_DE_INTENCAO_16),
+      // Só julga a intenção quando ela chegou a ser apresentada. Sem a
+      // condição, este invariante reprovaria junto, e o relatório traria duas
+      // acusações para um defeito só — uma delas falsa.
+      'a conclusão seguiu a intenção nova, e não a antiga': (t) => !apresentouAMensagem(t, MUDANCA_DE_INTENCAO_16)
+        || mudouDeSetor(t, SUPORTE, FINANCEIRO),
       'o resumo tem conteúdo': resumoUtil,
       'não pediu endereço': naoPediuEndereco,
     }),
@@ -448,7 +469,7 @@ const ROTEIROS = [
   },
   {
     numero: 19,
-    nome: 'pedido vago - confianca baixa nao vira pergunta',
+    nome: 'pedido vago nao vira pergunta artificial',
     identidade: 'forte-ativo',
     mensagens: [
       'Oi',
@@ -465,13 +486,20 @@ const ROTEIROS = [
       // artificial, e ela é justamente o que sobra quando não há nenhum dos
       // dois.
       'resolveu sozinha ou concluiu, em vez de ficar perguntando': (t) => resolveuOuConcluiu(t, RESOLUCAO_DA_CONTA),
-      // Segue aqui com a VACUIDADE DECLARADA de sempre (ver o JSDoc dele e a
-      // pergunta da revisão humana abaixo): quando o modelo não relata
-      // confiança baixa, este invariante devolve true sem ter julgado nada.
-      // Por isso ele nunca é o único — no desfecho "concluiu" quem julga é o
-      // resumo, e no desfecho "resolveu" quem julga é a linha acima, que exige
-      // ferramenta EXECUTADA.
-      'confiança baixa não impediu a conclusão nem virou pergunta': (t, r) => baixaConfiancaAindaConcluiu(t, r.config.triageConfidenceThreshold),
+      // Rodada de correção 1 (execução real, 2026-09-18): aqui havia
+      // 'confiança baixa não impediu a conclusão nem virou pergunta', um
+      // invariante de VACUIDADE DECLARADA — quando o modelo não relata
+      // confiança baixa, ele devolve true sem ter julgado nada. Na execução
+      // real a confiança veio 0,98-0,99 em todos os turnos, ou seja, o caso
+      // NUNCA foi exercitado, e mesmo assim o relatório o exibia como
+      // aprovado. Isso é fingir cobertura.
+      // A propriedade — confiança baixa nunca bloqueia a conclusão nem gera
+      // pergunta — está coberta DETERMINISTICAMENTE pelos testes da Task 9, em
+      // src/ai/tool-registry.test.js ('tool-executor + concluir_triagem —
+      // confiança nunca bloqueia a conclusão (Task 9)'), que varrem confiança
+      // de 0 a 1 e todos os estados de attempts. É lá que ela é provada, não
+      // aqui. O que este roteiro persegue é outra coisa, e continua nas linhas
+      // acima e abaixo: pedido vago não vira pergunta artificial.
       // Resumo só existe quando houve handoff: exigi-lo no desfecho "resolveu"
       // seria a mesma rigidez com outro nome, porque ali não há resumo nenhum
       // para julgar.
@@ -479,7 +507,6 @@ const ROTEIROS = [
       'não pediu endereço': naoPediuEndereco,
     }),
     revisaoHumana: [
-      'a confiança relatada neste roteiro veio ABAIXO do limiar do painel? Se não veio, o caso de confiança baixa NÃO foi exercitado — é o único item que a máquina não consegue forçar. Confira o número na linha "Confiança" do resumo.',
       'alguma pergunta pareceu feita só para preencher campo, e não para atender?',
       'se ela resolveu sozinha em vez de encaminhar, o que entregou bastava para o cliente? (a máquina só vê que a ferramenta rodou)',
     ],

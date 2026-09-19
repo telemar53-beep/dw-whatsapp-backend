@@ -1315,14 +1315,20 @@ const TOOLS = [
           description: 'Resumo para o atendente humano, em 2 a 4 frases: o que o cliente pediu COM AS PALAVRAS DELE, o que as consultas mostraram, o que você já resolveu, e o que falta. Bom: "Cliente relata quedas desde cedo. Cadastro localizado, contrato ativo e conexão online na consulta. Diz que acontece em todos os aparelhos." Ruim: "Cliente com problema de internet."',
         },
         confianca: { type: 'number', description: 'Confiança na classificação, de 0 a 1.' },
+        pendenciasObrigatorias: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'O que você AINDA precisa saber DO CLIENTE para resolver ou encaminhar corretamente o que ele pediu POR ÚLTIMO. Só o que é tecnicamente necessário: se o setor consegue agir sem o dado, não entra. Dado que apenas enriquece o resumo, o cadastro ou o relatório NÃO entra. Lista VAZIA quando não falta nada. Recalcule a cada tentativa, olhando a intenção MAIS RECENTE: se o cliente mudou de assunto, pendência do assunto anterior não entra. Uma informação por item, em poucas palavras.',
+        },
       },
-      required: ['setorId', 'resumo', 'confianca'],
+      required: ['setorId', 'resumo', 'confianca', 'pendenciasObrigatorias'],
     },
     validar(args) {
       const setorId = args && args.setorId;
       const motivoId = args && args.motivoId;
       const resumo = args && args.resumo;
       const confiancaBruta = args && args.confianca;
+      const pendenciasBrutas = args && args.pendenciasObrigatorias;
       if (typeof setorId !== 'string' || !UUID_PATTERN.test(setorId)) return erro('setorId must be a UUID');
       if (motivoId != null && (typeof motivoId !== 'string' || !UUID_PATTERN.test(motivoId))) return erro('motivoId must be a UUID or null');
       if (typeof resumo !== 'string' || !resumo.trim()) return erro('resumo is required');
@@ -1331,13 +1337,57 @@ const TOOLS = [
       if (typeof confiancaBruta !== 'number' && typeof confiancaBruta !== 'string') return erro('confianca must be a number');
       const confianca = Number(confiancaBruta);
       if (!Number.isFinite(confianca) || confianca < 0 || confianca > 1) return erro('confianca must be between 0 and 1');
-      return { ok: true, args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca } };
+      // SEM default: um argumento ausente é invalid_args como qualquer outro
+      // campo obrigatório, e NUNCA `[]`. "Não declarou" não pode significar
+      // "não falta nada" — seria exatamente a autorização implícita que esta
+      // guarda existe para tirar do caminho.
+      // Item vazio também é invalid_args, e não item a descartar: a guarda
+      // falha FECHADO. Uma declaração malformada não pode encolher para lista
+      // vazia e virar autorização para concluir.
+      if (!Array.isArray(pendenciasBrutas)) return erro('pendenciasObrigatorias must be an array of strings');
+      const pendenciasObrigatorias = [];
+      for (const pendencia of pendenciasBrutas) {
+        if (typeof pendencia !== 'string' || !pendencia.trim()) return erro('pendenciasObrigatorias must be an array of strings');
+        pendenciasObrigatorias.push(pendencia.trim());
+      }
+      return { ok: true, args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca, pendenciasObrigatorias } };
     },
     async executar(args, contexto) {
       // I6 (revisão final do branch inteiro): mesma guarda de
       // esquecer_identificacao — concluir_triagem só existe para a
       // recepcionista da triagem, nunca para o assistente clássico.
       if (!perfilTriagem(contexto)) return erro('concluir_triagem is only available during AI triage');
+      // GUARDA ESTRUTURAL (Task 20, cenários 16 e 20 da execução real): a IA
+      // identifica SEMANTICAMENTE o que ainda falta; o CÓDIGO decide se a ação
+      // terminal pode acontecer. Nada de ler o `resumo` com regex, nada de
+      // lista por motivo ou por setor, nada de gate de confiança: a única
+      // entrada é o que o próprio modelo declarou em pendenciasObrigatorias.
+      //
+      // Fica AQUI, no topo, antes de TODO efeito colateral — e por isso ANTES
+      // de limparEscopoDeTerceiro, lá embaixo. Uma conclusão recusada significa
+      // que a conversa CONTINUA: destruir o escopo temporário do terceiro numa
+      // recusa faria quem pediu o boleto do cônjuge perder a autorização no
+      // meio do atendimento e ter de informar o CPF do titular de novo. Seria a
+      // Fase 2 quebrada por efeito colateral de uma recusa.
+      //
+      // Incondicional de propósito: não há bypass por forcarConclusao. Quando o
+      // limite de perguntas estoura, quem encerra é o CÓDIGO, no worker
+      // (ai-worker.js, concluirEmCodigo) — o contador nunca autoriza a IA a
+      // concluir, então não existe deadlock.
+      //
+      // Só uma lista vazia EXPLÍCITA autoriza. Sem `|| []` em lugar nenhum: a
+      // ausência já voltou como invalid_args em validar(), e esta segunda
+      // leitura mantém a mesma regra caso alguém chame executar() por fora.
+      const pendencias = args.pendenciasObrigatorias;
+      if (!Array.isArray(pendencias)) return erro('pendenciasObrigatorias is required');
+      if (pendencias.length > 0) {
+        return {
+          concluido: false,
+          motivo: 'Há informação obrigatória pendente: sem ela o setor não consegue resolver nem encaminhar o que o cliente pediu.',
+          pendenciasObrigatorias: pendencias,
+          instrucao: 'NÃO conclua agora. Continue a conversa e pergunte ao cliente o que falta, no máximo UMA pergunta necessária por vez, começando pela primeira da lista.',
+        };
+      }
       // A entrega (boleto/PIX) pode ter sido num turno ANTERIOR, e
       // contexto.resolvidoPelaIa só conhece este turno. Leitura extra de
       // propósito: a releitura que já existe aqui embaixo acontece DEPOIS do
@@ -1414,9 +1464,9 @@ const TOOLS = [
       // está todo montado, inclusive o que uma tarefa futura vai ler de
       // contexto.terceiro para citar o pedido de terceiro no próprio resumo.
       // Montar o resumo não é a ação terminal; concluir é. As saídas
-      // antecipadas ACIMA (setor/motivo inválidos, baixa confiança) preservam
-      // contexto.terceiro de propósito: a triagem continua e a cliente não
-      // precisa informar de novo o CPF do titular.
+      // antecipadas ACIMA (pendência obrigatória declarada, setor/motivo
+      // inválidos) preservam contexto.terceiro de propósito: a triagem
+      // continua e a cliente não precisa informar de novo o CPF do titular.
       // Antes de concluir, e não depois: se a limpeza falhar, a triagem NÃO
       // conclui. Concluir com uma autorização de terceiro ainda viva deixaria
       // o escopo válido pelos 30 minutos seguintes numa conversa que já saiu

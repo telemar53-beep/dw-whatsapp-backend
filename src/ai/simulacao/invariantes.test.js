@@ -19,6 +19,7 @@ const {
   resumoUtil, resumoConcreto,
   pediuEndereco, naoPediuEndereco, respondeuAntesDePedirEndereco, identidadeEstavel,
   naoAfirmouSemFerramenta, resolveuOuConcluiu, baixaConfiancaAindaConcluiu,
+  apresentouAMensagem,
 } = require('./invariantes');
 
 /** Turno mínimo: só o que cada teste precisa, o resto no padrão vazio. */
@@ -230,6 +231,32 @@ describe('usouInfoDoAudio', () => {
       turno({ cliente: 'oi', texto: 'Para localizar seu cadastro, qual é o seu CPF?' }),
       turno({ audio: true, cliente: 'é 52998224725', texto: 'Obrigada! Já localizei.' }),
     ], dado)).toBe(true);
+  });
+});
+
+describe('apresentouAMensagem', () => {
+  const MUDANCA = 'Deixa a internet pra lá, quero negociar o atraso';
+
+  test('diz que não quando a conversa parou antes daquela mensagem', () => {
+    expect(apresentouAMensagem([turno({ cliente: 'Minha internet tá lenta' })], MUDANCA)).toBe(false);
+    expect(apresentouAMensagem([], MUDANCA)).toBe(false);
+  });
+
+  test('diz que sim quando o cliente chegou a dizer aquilo', () => {
+    expect(apresentouAMensagem([
+      turno({ cliente: 'Minha internet tá lenta' }),
+      turno({ cliente: MUDANCA }),
+    ], MUDANCA)).toBe(true);
+  });
+
+  test('compara com trim, e não por pedaço: outra frase parecida não conta', () => {
+    expect(apresentouAMensagem([turno({ cliente: `  ${MUDANCA}\n` })], MUDANCA)).toBe(true);
+    expect(apresentouAMensagem([turno({ cliente: `${MUDANCA} com alguém aí` })], MUDANCA)).toBe(false);
+  });
+
+  test('exige o texto da mensagem em vez de aprovar por engano', () => {
+    expect(() => apresentouAMensagem([turno({ cliente: MUDANCA })], '')).toThrow(/mensagem/);
+    expect(() => apresentouAMensagem([turno({ cliente: MUDANCA })], undefined)).toThrow(/mensagem/);
   });
 });
 

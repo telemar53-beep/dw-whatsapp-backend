@@ -270,6 +270,25 @@ function usouInfoDoAudio(turnos, dado) {
 // ---------------------------------------------------------------------------
 
 /**
+ * A conversa chegou até a mensagem indicada do roteiro — ou seja, o cliente
+ * REALMENTE chegou a dizer aquilo.
+ *
+ * Existe para separar dois desfechos que o relatório antigo confundia: "a IA
+ * não seguiu a intenção nova" e "a IA concluiu antes de a intenção nova ser
+ * apresentada". No segundo, o roteiro para de enviar mensagens assim que a
+ * triagem conclui (conversar.js: o resto vai para mensagensNaoEnviadas), então
+ * o modelo nunca viu o que deveria provocar a mudança — e culpá-lo por não ter
+ * seguido é acusar do defeito errado.
+ *
+ * Compara o texto do turno com o do roteiro; para mensagem de áudio, o turno
+ * guarda a transcrição, que é o mesmo texto.
+ */
+function apresentouAMensagem(turnos, texto) {
+  if (typeof texto !== 'string' || !texto.trim()) throw new TypeError('apresentouAMensagem exige o texto da mensagem do roteiro');
+  return (turnos || []).some((t) => String((t && t.cliente) || '').trim() === texto.trim());
+}
+
+/**
  * Depois de o cliente mudar de assunto, a conclusão aponta para o setor novo.
  * Exige que a triagem tenha concluído (sem conclusão não há setor a julgar),
  * que nenhuma conclusão tenha ido para o setor do assunto ANTIGO, e que a
@@ -623,8 +642,17 @@ function resolveuOuConcluiu(turnos, ferramentasDeResolucao) {
  *
  * VACUIDADE INEVITÁVEL: não há como obrigar o modelo a relatar confiança baixa.
  * Quando nenhuma conclusão vem abaixo do limiar, este invariante devolve true
- * sem ter julgado nada — por isso os roteiros que o usam levam a pergunta
- * correspondente para a revisão humana, e nunca o usam sozinho.
+ * sem ter julgado nada.
+ *
+ * NENHUM ROTEIRO O USA, de propósito (Task 20, 2026-09-18). Na execução real a
+ * confiança veio 0,98-0,99 em todos os turnos: o caso nunca foi exercitado e o
+ * relatório mesmo assim exibia o item como aprovado, o que é fingir cobertura.
+ * A propriedade está provada deterministicamente em src/ai/tool-registry.test.js
+ * ('tool-executor + concluir_triagem — confiança nunca bloqueia a conclusão
+ * (Task 9)'), que varre confiança de 0 a 1 e todos os estados de attempts.
+ * Antes de pendurar este invariante em algum roteiro, leia o parágrafo acima:
+ * ele só julga alguma coisa se o modelo, por conta própria, relatar confiança
+ * abaixo do limiar.
  */
 function baixaConfiancaAindaConcluiu(turnos, limiar) {
   if (typeof limiar !== 'number' || !Number.isFinite(limiar)) throw new TypeError('informe o limiar de confiança do painel');
@@ -648,7 +676,7 @@ module.exports = {
   // comportamento
   perguntasRepetidas, naoRepetiuPergunta,
   naoVazouDadoDeTerceiro, usouInfoDoAudio,
-  mudouDeSetor, concluiuNoSetor,
+  apresentouAMensagem, mudouDeSetor, concluiuNoSetor,
   tabelasDePlanos, linhasDeOferta, naoRepetiuTabelaDePlanos, naoMostrouTabelaDePlanos,
   resumoUtil, resumoConcreto,
   pediuEndereco, naoPediuEndereco, respondeuAntesDePedirEndereco,

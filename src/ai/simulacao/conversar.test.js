@@ -136,6 +136,7 @@ describe('conversar (harness com a OpenAI fingida)', () => {
         setorId: FINANCEIRO.id,
         resumo: 'Quem está falando não é a titular: pediu o boleto da esposa, localizado pelo CPF dela. Boleto entregue em PDF com a linha digitável.',
         confianca: 0.9,
+        pendenciasObrigatorias: [],
       }),
       respostaComTexto('Enviei acima o boleto em PDF e com a linha digitável.'),
     ]);

@@ -1067,7 +1067,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
     const ctx = noturno();
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
     expect(r.liberado).toBe(false);
-    await findTool('concluir_triagem').executar({ setorId: SETOR_FIN, motivoId: MOTIVO_COMP, resumo: 'Cliente mandou comprovante.', confianca: 0.95 }, ctx);
+    await findTool('concluir_triagem').executar({ setorId: SETOR_FIN, motivoId: MOTIVO_COMP, resumo: 'Cliente mandou comprovante.', confianca: 0.95, pendenciasObrigatorias: [] }, ctx);
     const summary = concludeAiTriage.mock.calls[0][1].summary;
     expect(summary).toContain(`Desbloqueio em confiança: RECUSADO: ${r.motivo}`);
     expect(summary).toContain('Pendente: conferir pagamento e dar baixa');
@@ -1343,7 +1343,7 @@ describe('escopo de terceiro', () => {
     async (nome) => {
       setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
       const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
-      const args = nome === 'concluir_triagem' ? { setorId: SETOR, resumo: 'x', confianca: 0.9 } : {};
+      const args = nome === 'concluir_triagem' ? { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] } : {};
 
       const r = await executeTool(nome, args, contexto);
 
@@ -1373,7 +1373,7 @@ describe('escopo de terceiro', () => {
   });
 
   test.each([
-    ['concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }],
+    ['concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }],
     ['encerrar_atendimento', {}],
     ['esquecer_identificacao', {}],
   ])('%s limpa o escopo de terceiro', async (nome, args) => {
@@ -2148,15 +2148,15 @@ describe('concluir_triagem', () => {
 
   test('validar exige setor UUID, confiança 0-1 e resumo', () => {
     const v = findTool('concluir_triagem').validar;
-    expect(v({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9 }).ok).toBe(true);
-    expect(v({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }).ok).toBe(true);
-    expect(v({ setorId: 'x', resumo: 'r', confianca: 0.9 }).ok).toBe(false);
-    expect(v({ setorId: SETOR, resumo: '', confianca: 0.9 }).ok).toBe(false);
-    expect(v({ setorId: SETOR, resumo: 'r', confianca: 1.5 }).ok).toBe(false);
-    expect(v({ setorId: SETOR, resumo: 'r', confianca: '0.9' }).ok).toBe(true);
+    expect(v({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }).ok).toBe(true);
+    expect(v({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }).ok).toBe(true);
+    expect(v({ setorId: 'x', resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: '', confianca: 0.9, pendenciasObrigatorias: [] }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: 'r', confianca: 1.5, pendenciasObrigatorias: [] }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: 'r', confianca: '0.9', pendenciasObrigatorias: [] }).ok).toBe(true);
     // Minor (fix round 1): Number(true) === 1, que passava batido na faixa
     // 0-1 antes desta checagem de tipo.
-    expect(v({ setorId: SETOR, resumo: 'r', confianca: true }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: 'r', confianca: true, pendenciasObrigatorias: [] }).ok).toBe(false);
   });
 
   // Task 9 (2026-09-17): o gate de baixa_confianca foi removido por completo
@@ -2172,7 +2172,7 @@ describe('concluir_triagem', () => {
 
   test('conclui: grava, prefixa o resumo com o que o código sabe, avisa a fila e instrui uma frase final', async () => {
     const c = ctx({ resolvidoPelaIa: true, origemMensagem: 'áudio' });
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, c);
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95, pendenciasObrigatorias: [] }, c);
     expect(r).toMatchObject({ concluido: true, setor: 'Financeiro' });
     expect(r.instrucao).toMatch(/uma frase/i);
     const args = concludeAiTriage.mock.calls[0][1];
@@ -2192,16 +2192,16 @@ describe('concluir_triagem', () => {
   // frase curta ("chave valor, chave valor") que um atendente lê sem esforço.
   test('o resumo lista as ferramentas usadas e o que devolveram, de forma legível', async () => {
     const c = ctx({ registroFerramentas: [{ nome: 'enviar_boleto', resultado: '{"enviado":false,"motivo":"Nenhuma fatura em aberto"}' }] });
-    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'Pediu boleto.', confianca: 0.9 }, c);
+    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'Pediu boleto.', confianca: 0.9, pendenciasObrigatorias: [] }, c);
     expect(concludeAiTriage.mock.calls[0][1].summary).toContain('Ferramentas: enviar_boleto → enviado false, motivo Nenhuma fatura em aberto');
   });
 
   test('setor desconhecido ou motivo inativo são recusados', async () => {
     listSectors.mockResolvedValue([]);
-    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx())).ok).toBe(false);
+    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, ctx())).ok).toBe(false);
     listSectors.mockResolvedValue([{ id: SETOR, name: 'F' }]);
     findReasonById.mockResolvedValue({ id: MOTIVO, active: false });
-    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9 }, ctx())).ok).toBe(false);
+    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, ctx())).ok).toBe(false);
   });
 
   // Correção 2026-09-18 (re-revisão): mesma prova que já existia para
@@ -2217,7 +2217,7 @@ describe('concluir_triagem', () => {
     armar();
     const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
     const c = ctx({ terceiro });
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9 }, c);
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, c);
     expect(r.ok).toBe(false);
     expect(setThirdPartyScope).not.toHaveBeenCalled();
     expect(c.terceiro).toBe(terceiro);
@@ -2225,7 +2225,7 @@ describe('concluir_triagem', () => {
 
   test('conversa que já saiu de pending (atendente assumiu) devolve concluido:false sem quebrar', async () => {
     concludeAiTriage.mockResolvedValue(null);
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx());
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, ctx());
     expect(r.concluido).toBe(false);
     expect(broadcast).not.toHaveBeenCalled();
   });
@@ -2235,7 +2235,7 @@ describe('concluir_triagem', () => {
   // nasce false a cada turno, então só a flag persistida sabe disso.
   test('resumo diz "Resolvido pela IA" quando a entrega foi num turno anterior', async () => {
     getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, aiTriageResolvedByAi: true });
-    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx({ resolvidoPelaIa: false }));
+    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, ctx({ resolvidoPelaIa: false }));
     const args = concludeAiTriage.mock.calls[0][1];
     expect(args.resolvedByAi).toBe(true);
     expect(args.summary).toContain('Resolvido pela IA');
@@ -2246,7 +2246,7 @@ describe('concluir_triagem', () => {
   // clássico bastaria para concluir uma "triagem" que nunca existiu.
   test('fora do perfil de triagem (sem lista fixa e sem identidade), recusa sem concluir nada', async () => {
     const c = { conversationId: 'c-1', contact: { id: 'ct-1' }, contracts: [], triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0 } };
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, c);
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, c);
     expect(r).toEqual({ ok: false, erro: 'concluir_triagem is only available during AI triage' });
     expect(concludeAiTriage).not.toHaveBeenCalled();
     expect(broadcast).not.toHaveBeenCalled();
@@ -2257,7 +2257,7 @@ describe('concluir_triagem', () => {
 
     test('à noite a frase final promete a equipe a partir da hora de retorno e o resumo abre com o turno noturno', async () => {
       const c = ctx({ triagem: NOTURNO });
-      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, c);
+      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       expect(r.concluido).toBe(true);
       expect(r.instrucao).toMatch(/a partir das 08:00/);
       expect(r.instrucao).not.toMatch(/um atendente continua daqui/);
@@ -2275,7 +2275,7 @@ describe('concluir_triagem', () => {
         comprovante: { valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '4321', contratoId: 17402, motivos: [] },
         desbloqueioResultado: { liberado: true, dias: 3 },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).toContain('Comprovante (visão): pix R$ 135,00 em 13/09/2026 — conferido, fatura 4321 do contrato 17402');
       expect(summary).toContain('Desbloqueio em confiança: REALIZADO (3 dias)');
@@ -2288,7 +2288,7 @@ describe('concluir_triagem', () => {
         comprovante: { valido: false, tipo: 'outro', valor: 90, data: '2026-09-13', faturaId: null, contratoId: null, motivos: ['valor não corresponde a nenhuma fatura em aberto'] },
         desbloqueioResultado: { liberado: false, motivo: 'Só é possível uma liberação em confiança a cada 30 dias.' },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).toContain('NÃO conferiu: valor não corresponde a nenhuma fatura em aberto');
       expect(summary).not.toContain('fatura null');
@@ -2302,7 +2302,7 @@ describe('concluir_triagem', () => {
         triagem: NOTURNO,
         comprovante: { valido: false, tipo: 'outro', valor: null, data: null, faturaId: null, contratoId: null, motivos: ['não parece um comprovante'] },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).not.toMatch(/R\$ 0,00/);
       expect(summary).not.toMatch(/em null/);
@@ -2310,7 +2310,7 @@ describe('concluir_triagem', () => {
     });
 
     test('sem comprovante e sem desbloqueio, o resumo noturno não ganha linhas novas', async () => {
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, ctx({ triagem: NOTURNO }));
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, ctx({ triagem: NOTURNO }));
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).not.toContain('Comprovante (visão)');
       expect(summary).not.toContain('Desbloqueio em confiança');
@@ -2318,7 +2318,7 @@ describe('concluir_triagem', () => {
     });
 
     test('de dia, a frase final e o resumo seguem como hoje', async () => {
-      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, ctx());
+      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95, pendenciasObrigatorias: [] }, ctx());
       expect(r.instrucao).toMatch(/um atendente continua daqui/);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary.startsWith('Setor: Financeiro')).toBe(true);
@@ -2333,7 +2333,7 @@ describe('concluir_triagem', () => {
       const c = ctx({
         comprovante: { valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '4321', contratoId: 17402, motivos: [] },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       const linhas = summary.split(String.fromCharCode(10));
       expect(linhas[0]).toBe('Comprovante (visão): pix R$ 135,00 em 13/09/2026 — conferido, fatura 4321 do contrato 17402');
@@ -2351,7 +2351,7 @@ describe('concluir_triagem', () => {
           usoAnterior: { contractId: 26515, usedAt: new Date('2026-09-14T02:12:00.000Z'), descricao: 'já utilizado no contrato 26515 em 13/09 às 23:12' },
         },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary.split(String.fromCharCode(10))[0]).toBe(
         'Comprovante (visão): pix R$ 135,00 em 13/09/2026 — conferido, fatura 98765 do contrato 26515 — ⚠ já utilizado no contrato 26515 em 13/09 às 23:12'
@@ -2362,12 +2362,12 @@ describe('concluir_triagem', () => {
       const c = ctx({
         comprovante: { valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '4321', contratoId: 17402, motivos: [], usoAnterior: null },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       expect(concludeAiTriage.mock.calls[0][1].summary).not.toContain('⚠');
     });
 
     test('sem comprovante, o resumo de dia não ganha linha nenhuma', async () => {
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, ctx());
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, ctx());
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).not.toContain('Comprovante (visão)');
       expect(summary).not.toContain('Pendente:');
@@ -2394,7 +2394,7 @@ describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)
 
   test('o resumo registra que o pedido era de outra pessoa, sem o documento dela', async () => {
     const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
-    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Boleto entregue.', confianca: 0.9 }, contexto);
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Boleto entregue.', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
     const { summary } = concludeAiTriage.mock.calls[0][1];
     expect(summary).toMatch(/Pedido de terceiro: titular Maria, contrato 77/);
     expect(summary).not.toMatch(/\d{11}/);
@@ -2404,7 +2404,7 @@ describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)
   // não pode aparecer — nem vazia, nem com "não informado".
   test('sem escopo de terceiro, o resumo não ganha a linha "Pedido de terceiro"', async () => {
     const contexto = contextoDeTriagemCom({ terceiro: null });
-    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }, contexto);
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
     const { summary } = concludeAiTriage.mock.calls[0][1];
     expect(summary).not.toContain('Pedido de terceiro');
   });
@@ -2413,7 +2413,7 @@ describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)
     const contexto = contextoDeTriagemCom({
       registroFerramentas: [{ nome: 'consultar_status_todos_contratos', resultado: '{"contratos":[{"status":"ativo","conexao":"online"}]}' }],
     });
-    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }, contexto);
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
     const { summary } = concludeAiTriage.mock.calls[0][1];
     expect(summary).toMatch(/consultar_status_todos_contratos →/);
     expect(summary).not.toMatch(/\{"contratos"/);
@@ -2434,7 +2434,7 @@ describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)
     const contexto = contextoDeTriagemCom({
       registroFerramentas: [{ nome: 'consultar_faturas_todos_contratos', resultado: truncado }],
     });
-    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }, contexto);
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
     expect(r.ok).toBe(true);
     const { summary } = concludeAiTriage.mock.calls[0][1];
     expect(summary).toContain(`Ferramentas: consultar_faturas_todos_contratos → ${truncado.slice(0, 160)}`);
@@ -2474,7 +2474,7 @@ describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)
       resultado: serializado.length > 2000 ? `${serializado.slice(0, 2000)}…(truncado)` : serializado,
     });
 
-    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9 }, contexto);
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
     const { summary } = concludeAiTriage.mock.calls[0][1];
     const linhaFerramentas = summary.split('\n').find((l) => l.startsWith('Ferramentas:'));
 
@@ -2509,7 +2509,7 @@ describe('tool-executor + concluir_triagem — confiança nunca bloqueia a concl
 
   test.each([0, 0.1, 0.5, 0.79, 0.8, 1])('confiança %s conclui a triagem e nunca gera pergunta', async (confianca) => {
     const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts: 0 } });
-    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente quer o boleto.', confianca }, contexto);
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente quer o boleto.', confianca, pendenciasObrigatorias: [] }, contexto);
     expect(r.ok).toBe(true);
     expect(r.resultado.concluido).not.toBe(false);
     expect(r.resultado.motivo).not.toBe('baixa_confianca');
@@ -2526,7 +2526,7 @@ describe('tool-executor + concluir_triagem — confiança nunca bloqueia a concl
   // é o caso em que o gate antigo disparava.
   test.each([0, 1, 4, 5, 6])('confiança baixa (0.1) nunca bloqueia, qualquer que seja attempts (%i)', async (attempts) => {
     const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts } });
-    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente quer o boleto.', confianca: 0.1 }, contexto);
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente quer o boleto.', confianca: 0.1, pendenciasObrigatorias: [] }, contexto);
     expect(r.ok).toBe(true);
     expect(r.resultado.concluido).toBe(true);
     expect(r.resultado.motivo).not.toBe('baixa_confianca');
@@ -2534,7 +2534,7 @@ describe('tool-executor + concluir_triagem — confiança nunca bloqueia a concl
 
   test('a confiança baixa continua marcada no resumo do atendente', async () => {
     const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts: 0 } });
-    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.4 }, contexto);
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.4, pendenciasObrigatorias: [] }, contexto);
     // O resumo vai no SEGUNDO argumento: concludeAiTriage(conversationId, { ..., summary }).
     expect(concludeAiTriage).toHaveBeenCalledWith(
       expect.any(String),
@@ -2542,6 +2542,231 @@ describe('tool-executor + concluir_triagem — confiança nunca bloqueia a concl
       // desse campo, e sumiu junto com o teste apagado que a exercitava.
       expect.objectContaining({ summary: expect.stringContaining('40% (BAIXA)'), lowConfidence: true })
     );
+  });
+});
+
+// Task 20 (2026-09-18). Nos cenários 16 e 20 da execução real com a OpenAI a
+// IA escreveu NO PRÓPRIO RESUMO que ainda faltava informação — e chamou
+// concluir_triagem assim mesmo. A conversa acabou cedo demais. A guarda
+// inverte isso: a IA declara em campo ESTRUTURADO o que falta, e o CÓDIGO
+// recusa a ação terminal enquanto houver item na lista. A IA identifica
+// semanticamente; o código decide.
+//
+// Nada aqui exercita regra de domínio: não existe lista por motivo nem por
+// setor, não se lê o texto do `resumo`, e a confiança não participa. Os
+// cenários 16 e 20 aparecem só como FORMATO de dado — o mecanismo é um só.
+//
+// Roda pelo executor de verdade (executeTool) pelo mesmo motivo dos outros
+// describes 'tool-executor + X': é na composição registro+executor que a
+// validação de argumentos entra no caminho, e é ela que barra a ausência.
+// beforeEach próprio de propósito: rodar isolado com `-t` tem que bastar.
+describe('tool-executor + concluir_triagem — guarda de pendência obrigatória (Task 20)', () => {
+  const ENDERECO_E_DATA = ['endereço completo do novo ponto', 'data prevista da mudança'];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+    concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null });
+  });
+
+  /** Os argumentos da conclusão, com a declaração de pendências que o teste quiser. */
+  function conclusao(pendenciasObrigatorias, extra = {}) {
+    return { setorId: SETOR, resumo: 'Cliente pediu ajuda.', confianca: 0.9, pendenciasObrigatorias, ...extra };
+  }
+
+  // 1
+  test('lista não vazia: concludeAiTriage NÃO é chamada, e o modelo recebe a lista com a ordem de perguntar uma coisa por vez', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao(ENDERECO_E_DATA), contexto);
+
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(broadcastToDashboard).not.toHaveBeenCalled();
+    expect(contexto.triagemConcluida).toBeUndefined();
+    expect(r.ok).toBe(true);
+    expect(r.resultado.concluido).toBe(false);
+    // A lista volta ao modelo: é ela que ele precisa reler para saber o que
+    // perguntar. Sem isso a recusa seria seca e ele improvisaria.
+    expect(r.resultado.pendenciasObrigatorias).toEqual(ENDERECO_E_DATA);
+    expect(r.resultado.instrucao).toMatch(/uma pergunta/i);
+    // "No topo, antes de QUALQUER efeito colateral": a recusa acontece antes
+    // até das LEITURAS do fluxo terminal. Mover a guarda para baixo da
+    // releitura da conversa, ou da busca do setor, quebra esta linha.
+    expect(getConversationWithContact).not.toHaveBeenCalled();
+    expect(listSectors).not.toHaveBeenCalled();
+  });
+
+  // 2 — o motivo pelo qual a ordem importa.
+  test('lista não vazia: o escopo de terceiro sobrevive à recusa, em memória e no banco', async () => {
+    const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
+    const contexto = contextoDeTriagemCom({ terceiro });
+
+    const r = await executeTool('concluir_triagem', conclusao(['qual das faturas em aberto ele quer']), contexto);
+
+    expect(r.resultado.concluido).toBe(false);
+    // Uma conclusão recusada significa que a conversa CONTINUA. Se o escopo
+    // morresse aqui, quem pediu o boleto do cônjuge teria de informar o CPF do
+    // titular de novo no meio do atendimento — a Fase 2 quebrada por efeito
+    // colateral de uma recusa.
+    expect(setThirdPartyScope).not.toHaveBeenCalled();
+    expect(contexto.terceiro).toBe(terceiro);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  // 3
+  test('lista vazia: a conclusão segue exatamente como antes', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao([]), contexto);
+
+    expect(r.ok).toBe(true);
+    expect(r.resultado).toMatchObject({ concluido: true, setor: 'Financeiro' });
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+    expect(broadcast).toHaveBeenCalledWith('queue:new', expect.objectContaining({ conversation: expect.any(Object) }));
+    expect(contexto.triagemConcluida).toEqual({ setor: 'Financeiro' });
+  });
+
+  // 4
+  test('argumento AUSENTE: invalid_args — ausência não é autorização implícita', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente pediu ajuda.', confianca: 0.9 }, contexto);
+
+    expect(r).toMatchObject({ ok: false, motivo: 'invalid_args' });
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+    // O outro jeito de a ausência virar autorização seria um default no
+    // schema: `[]` ali faria a OpenAI (e nós) lerem "não falta nada" de quem
+    // não declarou nada. O campo é obrigatório e não tem default.
+    const { parametros } = findTool('concluir_triagem');
+    expect(parametros.required).toContain('pendenciasObrigatorias');
+    expect(parametros.properties.pendenciasObrigatorias.default).toBeUndefined();
+  });
+
+  // 4b — falha FECHADO: declaração malformada não encolhe para lista vazia.
+  test.each([
+    ['string em vez de array', 'endereço novo'],
+    ['null', null],
+    ['item que não é string', [1]],
+    ['item em branco', ['   ']],
+    ['item vazio no meio de itens reais', ['endereço novo', '']],
+  ])('declaração malformada (%s): invalid_args, e nunca uma lista vazia por descarte', async (_nome, pendenciasObrigatorias) => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao(pendenciasObrigatorias), contexto);
+
+    expect(r).toMatchObject({ ok: false, motivo: 'invalid_args' });
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  // 5 — a guarda não é gate de confiança (o gate antigo foi removido na Task 9
+  // e não pode voltar por esta porta).
+  test.each([0, 0.1, 0.5, 0.79])('confiança baixa (%s) com lista VAZIA conclui', async (confianca) => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao([], { confianca }), contexto);
+
+    expect(r.resultado.concluido).toBe(true);
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([0.95, 0.99, 1])('confiança alta (%s) com lista CHEIA é bloqueada', async (confianca) => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao(['o que exatamente parou de funcionar'], { confianca }), contexto);
+
+    expect(r.resultado.concluido).toBe(false);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  // 6 — a decisão é por CHAMADA, não por conversa: nada fica guardado.
+  test('pendência da intenção anterior não persiste: a tentativa seguinte, com lista vazia, conclui', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const primeira = await executeTool('concluir_triagem', conclusao(
+      ['resultado do teste perto do equipamento'], { resumo: 'Cliente relata lentidão.' }
+    ), contexto);
+    expect(primeira.resultado.concluido).toBe(false);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+
+    // Mesmo contexto, assunto novo: o cliente mudou de ideia e agora quer
+    // negociar as faturas. A pendência do assunto ANTIGO não pode sobreviver.
+    const segunda = await executeTool('concluir_triagem', conclusao(
+      [], { resumo: 'Cliente desistiu do diagnóstico e quer negociar as faturas em atraso.' }
+    ), contexto);
+
+    expect(segunda.resultado.concluido).toBe(true);
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+  });
+
+  // 7 — cenário 20, como FORMATO de dado. Nenhuma regra de endereço existe no
+  // código de produção, e as duas metades deste teste provam isso: o mesmo
+  // resumo, palavra por palavra, conclui ou não conforme a DECLARAÇÃO.
+  test('mudança de endereço: declarar endereço e data como necessários bloqueia a conclusão', async () => {
+    const contexto = contextoDeTriagemCom();
+    const resumo = 'Cliente vai se mudar e quer levar a internet. Falta o endereço novo completo e a data prevista.';
+
+    const bloqueada = await executeTool('concluir_triagem', conclusao(ENDERECO_E_DATA, { resumo }), contexto);
+
+    expect(bloqueada.resultado.concluido).toBe(false);
+    expect(bloqueada.resultado.pendenciasObrigatorias).toEqual(ENDERECO_E_DATA);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+
+    // O MESMO texto de resumo, agora sem declaração de pendência, conclui: não
+    // há análise textual do resumo em lugar nenhum — se houvesse regex de
+    // "falta", esta metade reprovaria.
+    const liberada = await executeTool('concluir_triagem', conclusao([], { resumo }), contexto);
+
+    expect(liberada.resultado.concluido).toBe(true);
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+  });
+
+  // 8 — cenário 16, também só como formato. Suporte NÃO virou checklist: a
+  // segunda metade é um suporte que conclui sem passo nenhum obrigatório.
+  test('diagnóstico de suporte: a etapa necessária bloqueia, mas suporte sem pendência conclui normalmente', async () => {
+    const bloqueado = contextoDeTriagemCom();
+    const r1 = await executeTool('concluir_triagem', conclusao(
+      ['se o teste perto do equipamento também fica abaixo do contratado'],
+      { resumo: 'Cliente relata lentidão desde ontem; conexão online na consulta.' }
+    ), bloqueado);
+
+    expect(r1.resultado.concluido).toBe(false);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+
+    const livre = contextoDeTriagemCom();
+    const r2 = await executeTool('concluir_triagem', conclusao([], {
+      resumo: 'Cliente relata que a internet caiu de vez; conexão offline na consulta e todos os aparelhos sem sinal.',
+    }), livre);
+
+    expect(r2.resultado.concluido).toBe(true);
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+  });
+
+  // A guarda é INCONDICIONAL: não existe bypass por forçar conclusão. Quando o
+  // limite de perguntas estoura, quem encerra é o CÓDIGO, no worker
+  // (ai-worker.js, concluirEmCodigo) — o contador nunca autoriza a IA a
+  // concluir, então não há deadlock possível e a ferramenta não precisa ceder.
+  test.each([0, 1, 5, 6])('a lista cheia bloqueia em qualquer estado de attempts (%i)', async (attempts) => {
+    const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts, noturno: { ativo: false } } });
+
+    const r = await executeTool('concluir_triagem', conclusao(['o que ele quer negociar'], { confianca: 0.99 }), contexto);
+
+    expect(r.resultado.concluido).toBe(false);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  // O executor manda o resultado inteiro ao modelo (JSON.stringify), então a
+  // recusa chega como o texto que a instrução escreve — e não como um erro
+  // seco que o modelo tem de adivinhar.
+  test('a recusa vai ao modelo pelo caminho normal de resultado, com a lista e a instrução legíveis', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao(['o número do protocolo do outro atendimento']), contexto);
+
+    const paraOModelo = JSON.stringify(r.resultado);
+    expect(paraOModelo).toContain('o número do protocolo do outro atendimento');
+    expect(r.resultado.motivo).toMatch(/pendente/i);
   });
 });
 

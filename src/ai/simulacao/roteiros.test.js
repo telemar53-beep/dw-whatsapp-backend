@@ -15,6 +15,7 @@
 // Nada aqui chama a OpenAI: as conversas são fabricadas à mão.
 
 const { ROTEIROS } = require('./roteiros');
+const { setorPorPapel } = require('./sgp-falso');
 
 /** Turno mínimo, mesmo formato que conversar.js monta. */
 function turno(extra = {}) {
@@ -173,5 +174,88 @@ describe('roteiro 19 — resolver também é desfecho', () => {
     expect(verificar(19, DESFECHO, RESOLVEU)).toBe(true);
     expect(verificar(19, RESUMO, SO_PERGUNTAS)).toBe(true);
     expect(verificar(19, DESFECHO, SO_PERGUNTAS)).toBe(false);
+  });
+});
+
+// Rodada de correção 1 da Task 20: o relatório culpava o desfecho errado.
+// Quando a triagem concluía já no primeiro turno, o roteiro parava de enviar
+// mensagens (conversar.js) e a mudança de intenção NUNCA era apresentada — mas
+// o relatório dizia 'a conclusão seguiu a intenção nova' REPROVADO, como se o
+// modelo tivesse ignorado algo que ele nunca viu.
+describe('roteiro 16 — concluir cedo demais é acusado pelo próprio nome', () => {
+  const CEDO = 'não concluiu antes de a mudança de intenção ser apresentada';
+  const INTENCAO = 'a conclusão seguiu a intenção nova, e não a antiga';
+  const ROTEIRO_16 = ROTEIROS.find((r) => r.numero === 16);
+  const PRIMEIRA = ROTEIRO_16.mensagens[0];
+  const MUDANCA = ROTEIRO_16.mensagens[1];
+  const SUPORTE = setorPorPapel('suporte').name;
+  const FINANCEIRO = setorPorPapel('financeiro').name;
+
+  /** O turno em que o cliente diz `cliente` e a triagem conclui em `setor`. */
+  function concluiuEm(cliente, setor) {
+    return turno({ cliente, texto: 'Encaminhei seu atendimento.', triagemConcluida: { setor } });
+  }
+
+  // O defeito real da execução: concluiu no turno 1, para o Suporte, e a
+  // mudança de intenção ficou em mensagensNaoEnviadas.
+  const CONCLUIU_CEDO = [concluiuEm(PRIMEIRA, SUPORTE)];
+
+  test('a conclusão precoce reprova pelo nome certo', () => {
+    expect(verificar(16, CEDO, CONCLUIU_CEDO)).toBe(false);
+  });
+
+  test('e NÃO é acusada de ter ignorado a intenção nova, que nunca foi apresentada', () => {
+    expect(verificar(16, INTENCAO, CONCLUIU_CEDO)).toBe(true);
+  });
+
+  test('com a mudança apresentada, o invariante da intenção volta a julgar de verdade', () => {
+    const seguiu = [
+      turno({ cliente: PRIMEIRA, texto: 'Desde quando está lento?' }),
+      concluiuEm(MUDANCA, FINANCEIRO),
+    ];
+    const naoSeguiu = [
+      turno({ cliente: PRIMEIRA, texto: 'Desde quando está lento?' }),
+      concluiuEm(MUDANCA, SUPORTE),
+    ];
+
+    expect(verificar(16, CEDO, seguiu)).toBe(true);
+    expect(verificar(16, INTENCAO, seguiu)).toBe(true);
+    expect(verificar(16, CEDO, naoSeguiu)).toBe(true);
+    expect(verificar(16, INTENCAO, naoSeguiu)).toBe(false);
+  });
+
+  // O texto do turno vem do roteiro, mas por áudio ele vem da transcrição:
+  // comparar com trim evita reprovar por um espaço que ninguém digitou.
+  test('reconhece a mudança apresentada mesmo com espaço sobrando em volta', () => {
+    const comEspaco = [turno({ cliente: `  ${MUDANCA}  `, texto: 'Certo.' }), concluiuEm(MUDANCA, FINANCEIRO)];
+    expect(verificar(16, CEDO, comEspaco)).toBe(true);
+  });
+});
+
+// O roteiro 19 parou de alegar confiança baixa (Task 20): o invariante vazio
+// saiu, e o que sobrou tem de continuar julgando. Sem este teste, apagar
+// linhas de invariante passaria verde.
+describe('roteiro 19 — não sobrou alegação de confiança baixa', () => {
+  const ROTEIRO_19 = ROTEIROS.find((r) => r.numero === 19);
+
+  test('nenhum invariante nem pergunta de revisão alega confiança baixa', () => {
+    const nomes = Object.keys(ROTEIRO_19.invariantes).join(' | ');
+    expect(nomes).not.toMatch(/confian[çc]a/i);
+    expect(ROTEIRO_19.revisaoHumana.join(' | ')).not.toMatch(/confian[çc]a/i);
+  });
+
+  test('o nome do roteiro diz o que ele realmente persegue', () => {
+    expect(ROTEIRO_19.nome).not.toMatch(/confianca/i);
+    expect(ROTEIRO_19.nome).toMatch(/pergunta artificial/i);
+  });
+
+  // O que sobrou continua com dentes: o invariante que julga de verdade segue
+  // reprovando a conversa que só devolve pergunta.
+  test('o roteiro continua reprovando o pedido vago que vira só pergunta', () => {
+    const soPerguntas = [
+      turno({ cliente: 'Preciso resolver uma coisa aqui', texto: 'Claro! O que você precisa resolver?' }),
+      turno({ cliente: 'É sobre a minha conta', texto: 'Certo. O que você quer saber sobre a sua conta?' }),
+    ];
+    expect(verificar(19, 'resolveu sozinha ou concluiu, em vez de ficar perguntando', soPerguntas)).toBe(false);
   });
 });

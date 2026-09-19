@@ -66,6 +66,8 @@ router.post('/meta', async (req, res) => {
         locationLongitude: inboundMessage.longitude,
         repliedToWhatsappMessageId: inboundMessage.repliedToWhatsappMessageId,
         sentAt: inboundMessage.sentAt,
+        sentAtRaw: inboundMessage.sentAtRaw,
+        timestampSource: 'meta_cloud',
       });
     } catch (err) {
       console.error('Failed to process inbound WhatsApp message', err);

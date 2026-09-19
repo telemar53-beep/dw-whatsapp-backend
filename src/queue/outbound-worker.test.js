@@ -906,6 +906,99 @@ describe('startOutboundWorker', () => {
     });
   });
 
+  // A fila é { attempts: 3, backoff: exponential }, e o Bull só retenta quando o
+  // handler lança. Num erro permanente as tentativas 2 e 3 dão o mesmo
+  // resultado: duas chamadas extras à Meta e a falha demorando a chegar à tela.
+  describe('erro permanente da Meta não vira retentativa', () => {
+    function erroDaMeta(code, texto) {
+      const err = new Error('Request failed with status code 400');
+      err.response = { status: 400, data: { error: { code, error_user_msg: texto } } };
+      return err;
+    }
+
+    test('131047: marca a mensagem como falha uma vez e NÃO relança', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      metaCloudAdapter.sendTextMessage.mockRejectedValue(erroDaMeta(131047, 'Fora da janela de 24 horas.'));
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        handler({ messageId: 'msg-p1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+      ).resolves.toBeUndefined();
+
+      expect(markMessageFailed).toHaveBeenCalledTimes(1);
+      expect(markMessageFailed).toHaveBeenCalledWith('msg-p1', '(131047) Fora da janela de 24 horas.');
+      expect(recordMessageSent).not.toHaveBeenCalled();
+      erro.mockRestore();
+    });
+
+    // O atendente precisa ver a falha na tela nos DOIS casos - não relançar não
+    // pode significar sumir com o aviso.
+    test('131047: o atendente continua sendo avisado na tela', async () => {
+      getConversationWithContact.mockResolvedValue({
+        id: 'conv-1', contactPhoneNumber: '5511999998888', assignedAgentId: 'agent-1',
+      });
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      metaCloudAdapter.sendTextMessage.mockRejectedValue(erroDaMeta(131047, 'Fora da janela de 24 horas.'));
+      markMessageFailed.mockResolvedValue({
+        id: 'msg-p2', status: 'failed', metadata: { motivoFalha: '(131047) Fora da janela de 24 horas.' },
+      });
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await handler({ messageId: 'msg-p2', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' });
+
+      expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:updated', {
+        conversationId: 'conv-1',
+        message: { id: 'msg-p2', status: 'failed', metadata: { motivoFalha: '(131047) Fora da janela de 24 horas.' } },
+      });
+      erro.mockRestore();
+    });
+
+    test('erro de rede continua lançando: a retentativa da fila fica intacta', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      metaCloudAdapter.sendTextMessage.mockRejectedValue(new Error('socket hang up'));
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        handler({ messageId: 'msg-t1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+      ).rejects.toThrow('socket hang up');
+
+      expect(markMessageFailed).toHaveBeenCalledWith('msg-t1', 'socket hang up');
+      erro.mockRestore();
+    });
+
+    test('erro transitório da Meta (limite de marketing) continua lançando', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+      metaCloudAdapter.sendTextMessage.mockRejectedValue(erroDaMeta(131049, 'A Meta limitou marketing.'));
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        handler({ messageId: 'msg-t2', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+      ).rejects.toThrow('Request failed with status code 400');
+
+      expect(markMessageFailed).toHaveBeenCalledWith('msg-t2', '(131049) A Meta limitou marketing.');
+      erro.mockRestore();
+    });
+
+    // Um 403 do 360dialog não é o código 131047 da Meta; se alguém comparar
+    // http_code com a lista de permanentes, a mensagem para de ser retentada.
+    test('o formato do 360dialog não é confundido com código da Meta', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
+      findChannelById.mockResolvedValue({ id: 'channel-1', type: '360dialog', config: {} });
+      const err = new Error('Request failed with status code 403');
+      err.response = { status: 403, data: { meta: { success: false, http_code: 131047, developer_message: 'x' } } };
+      threeSixtyDialogAdapter.sendTextMessage.mockRejectedValue(err);
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        handler({ messageId: 'msg-t3', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+      ).rejects.toThrow('Request failed with status code 403');
+      erro.mockRestore();
+    });
+  });
+
   describe('automatic audio delivery check (Baileys only)', () => {
     beforeEach(() => {
       jest.useFakeTimers();

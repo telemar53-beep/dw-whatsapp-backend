@@ -105,7 +105,7 @@ function avaliarElegibilidade({ liberacoes = [], faturas = [], totalFaturas = nu
 
 const MENSAGENS = {
   ja_liberado_este_mes: 'Já houve uma liberação em confiança neste mês para este contrato.',
-  intervalo_minimo: 'Só é possível uma liberação em confiança a cada 30 dias.',
+  intervalo_minimo: `Só é possível uma liberação em confiança a cada ${DIAS_ENTRE_LIBERACOES} dias.`,
   promessa_quebrada: 'Há fatura em aberto anterior à última liberação em confiança. É preciso quitá-la antes de uma nova liberação.',
   historico_incompleto: 'Não foi possível verificar o histórico de faturas deste contrato. Encaminhe para um atendente.',
 };

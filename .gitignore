@@ -4,3 +4,19 @@ node_modules/
 .worktrees/
 .baileys-sessions*/
 .media-storage*/
+
+# Rascunho interno do processo de desenvolvimento (ledger, briefs, relatorios e
+# pacotes de revisao das sessoes). Nunca faz parte do produto.
+.superpowers/
+
+# Runtime Python vendorizado do gerador de audio da URA (site-packages inteiro,
+# ~390 arquivos). E ambiente local, nao entrega.
+artifacts/ura/tts-runtime/
+
+# Prompts renderizados por scripts/dump-prompt.js, para conferencia local.
+output/prompt/
+
+# Config local do harness de simulacao (copiada do painel, sem segredo) e as
+# transcricoes que ele gera ao rodar com a OpenAI de verdade.
+.local/
+output/simulacao/

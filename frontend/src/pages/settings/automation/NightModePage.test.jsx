@@ -40,9 +40,9 @@ describe('NightModePage', () => {
 
   // Contrato de gravação (spec regra 8): esta página divide o PUT /triage com
   // AiTriagePage e IdentificationPage; o backend trata campo ausente como
-  // "desligado", então salvar aqui precisa mandar os nove campos sempre, com
+  // "desligado", então salvar aqui precisa mandar os oito campos sempre, com
   // os valores das outras duas páginas preservados tal como vieram do GET.
-  test('contrato: salva os nove campos do PUT /triage, mesmo mexendo só na janela', async () => {
+  test('contrato: salva os oito campos do PUT /triage, mesmo mexendo só na janela', async () => {
     renderInShell(<NightModePage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: 'Salvar janela noturna' }));
@@ -58,7 +58,6 @@ describe('NightModePage', () => {
         // o padrão 20:00/08:00).
         nightStartTime: null,
         nightEndTime: null,
-        triageRequireBirthdate: false,
         triageReadReceiptsDaytime: false,
       },
       't'

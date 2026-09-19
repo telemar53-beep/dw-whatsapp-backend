@@ -19,7 +19,9 @@ const { listSectors } = require('../sectors/sector.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
 const { getCompanyConfig } = require('../company/company-config.repository');
-const { runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA } = require('./ai-orchestrator');
+const {
+  runAiTurn, FERRAMENTAS_TRIAGEM, FERRAMENTAS_TRIAGEM_NOTURNO, FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA,
+} = require('./ai-orchestrator');
 
 const CONVERSATION = { id: 'c-1', channelId: 'ch-1' };
 const CONTACT = { id: 'ct-1', sgpClientId: null, sgpContractId: null, sgpDocument: null };
@@ -346,12 +348,12 @@ describe('ai-orchestrator', () => {
         message: { tool_calls: [{ id: 'c1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] },
         usage: {},
       })
-      .mockResolvedValueOnce({ message: { content: 'Pode me informar sua data de nascimento?' }, usage: {} });
+      .mockResolvedValueOnce({ message: { content: 'Pode me informar seu CPF?' }, usage: {} });
     executeTool.mockResolvedValue({
       ok: false,
       motivo: 'identity_not_confirmed',
       detalhe: 'enviar_boleto',
-      instrucao: 'Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.',
+      instrucao: 'Identidade ainda não confirmada. Peça o CPF ou CNPJ e chame buscar_cliente; depois chame esta ferramenta de novo.',
     });
 
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
@@ -359,7 +361,7 @@ describe('ai-orchestrator', () => {
     const toolMessage = createChatCompletion.mock.calls[1][0].messages.find((m) => m.role === 'tool');
     expect(JSON.parse(toolMessage.content)).toEqual({
       erro: 'identity_not_confirmed',
-      instrucao: 'Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.',
+      instrucao: 'Identidade ainda não confirmada. Peça o CPF ou CNPJ e chame buscar_cliente; depois chame esta ferramenta de novo.',
     });
   });
 
@@ -439,35 +441,6 @@ describe('ai-orchestrator', () => {
     expect(JSON.stringify(toolsRequested)).not.toContain('52998224725');
   });
 
-  // I4 (fix round 1, ai-triage): confirmar_nascimento's argument is named
-  // "data", not "cpf"/"documento" — CHAVE_DOCUMENTO didn't cover it, so the
-  // customer's birth date reached ai_interactions unmasked. Widened the
-  // pattern to also catch "nascimento" and an exact "data" key.
-  // Fix round 2: maskDocument mantém os 3 primeiros e os 4 últimos
-  // caracteres — em '20/05/1990' isso ainda entrega o dia ('20/') e o ano
-  // ('1990') de nascimento. Uma data não é um documento parcialmente
-  // mascarável; o valor inteiro precisa virar um literal fixo.
-  test('replaces the data (birth date) argument of confirmar_nascimento with a fixed literal in the audit trail, but still passes the real value to the tool', async () => {
-    createChatCompletion
-      .mockResolvedValueOnce({
-        message: {
-          tool_calls: [{ id: 'c1', type: 'function', function: { name: 'confirmar_nascimento', arguments: '{"data":"20/05/1990"}' } }],
-        },
-        usage: {},
-      })
-      .mockResolvedValueOnce({ message: { content: 'Confirmado.' }, usage: {} });
-    executeTool.mockResolvedValue({ ok: true, resultado: { confirmado: true } });
-
-    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
-
-    expect(executeTool).toHaveBeenCalledWith('confirmar_nascimento', { data: '20/05/1990' }, expect.any(Object));
-    const { toolsRequested } = recordAiInteraction.mock.calls[0][0];
-    expect(toolsRequested).toEqual([{ nome: 'confirmar_nascimento', args: { data: '[data]' } }]);
-    const gravado = JSON.stringify(toolsRequested);
-    expect(gravado).not.toContain('1990');
-    expect(gravado).not.toContain('20/');
-  });
-
   test('never sends the api key inside the messages', async () => {
     createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
@@ -516,15 +489,12 @@ describe('perfil de triagem', () => {
   const IDENT_FORTE = {
     nivel: 'forte', origem: 'phone', primeiroNome: 'João', nome: 'João Da Silva Pereira',
     contracts: [{ id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X', login: 'joao.pppoe' }],
-    client: { id: 9, document: '11122233344' }, dataNascimento: '1990-05-20', contestado: false, nascimentoTentado: false,
+    client: { id: 9, document: '11122233344' }, contestado: false,
   };
   const TRIAGEM = { threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false };
 
   beforeEach(() => {
-    // triageRequireBirthdate: true em quase todo este bloco — ele descreve a
-    // triagem COM a confirmação por data de nascimento. O padrão de produção
-    // (desligada) tem bloco próprio mais abaixo.
-    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null, triageRequireBirthdate: true });
+    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null });
     listSectors.mockResolvedValue([{ id: 's-1', name: 'Financeiro', aiHint: 'Boleto, PIX, cobrança.' }, { id: 's-2', name: 'Suporte', aiHint: '' }]);
     listActiveReasons.mockResolvedValue([{ id: 'r-1', name: 'Segunda via' }]);
     listToolPermissions.mockResolvedValue([{ toolName: 'desbloqueio_confianca', enabled: true }]);
@@ -547,7 +517,7 @@ describe('perfil de triagem', () => {
     expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM].sort());
     expect(nomes).not.toContain('desbloqueio_confianca');
     // Nominal: nenhuma ferramenta do assistente clássico (fora da lista fixa
-    // de onze) pode vazar para a triagem por engano.
+    // de dez) pode vazar para a triagem por engano.
     expect(FERRAMENTAS_TRIAGEM).not.toEqual(expect.arrayContaining([
       'consultar_plano', 'transferir_atendimento', 'definir_motivo_atendimento',
       'desbloqueio_confianca', 'consultar_financeiro', 'consultar_faturas',
@@ -575,40 +545,17 @@ describe('perfil de triagem', () => {
       expect(dia.tools.map((t) => t.function.name)).not.toEqual(expect.arrayContaining(['desbloqueio_confianca', 'analisar_comprovante']));
     });
 
-    test('o bloco noturno do prompt cita a hora de retorno e proíbe prometer solução imediata', async () => {
+    // Task 18: o CONTEÚDO do bloco noturno (hora de retorno, nada de prometer
+    // solução imediata, as duas etapas da conexão, o roteiro do comprovante)
+    // é testado em src/ai/prompt/fluxos/noturno.test.js e comprovante.test.js;
+    // a SELEÇÃO (de dia o bloco não entra) em prompt/montar.test.js. Aqui fica
+    // só a fiação: o estado noturno do turno chega ao compositor.
+    test('o modo noturno do turno chega ao compositor, com a hora de retorno interpolada', async () => {
       const sys = (await contexto({ triagem: NOTURNO })).messages[0].content;
       expect(sys).toMatch(/MODO NOTURNO/);
       expect(sys).toMatch(/A equipe volta às 08:00/);
-      expect(sys).toMatch(/Nunca prometa solução imediata/);
-      expect(sys).toMatch(/nossa equipe dá continuidade a partir das 08:00/);
-    });
-
-    test('o roteiro do comprovante só existe à noite', async () => {
-      const sys = (await contexto({ triagem: NOTURNO })).messages[0].content;
-      expect(sys).toMatch(/COMPROVANTE À NOITE/);
-      expect(sys).toMatch(/chame analisar_comprovante/);
-      expect(sys).toMatch(/NUNCA diga "pagamento confirmado" nem "acesso liberado"/);
-      // O contrato do uso anterior é de outro cliente: à noite, como de dia, o
-      // cliente ouve o mesmo acolhimento e nada mais.
-      expect(sys).toMatch(/jaUtilizado/);
-      expect(sys).toMatch(/NÃO diga isso ao cliente nem cite outro contrato/);
-      jest.clearAllMocks();
-      createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
-      const dia = (await contexto()).messages[0].content;
-      expect(dia).not.toMatch(/COMPROVANTE À NOITE/);
-      expect(dia).not.toMatch(/chame analisar_comprovante/);
-    });
-
-    test('à noite o roteiro de conexão tem até duas etapas e o desfecho com a hora de retorno', async () => {
-      const sys = (await contexto({ triagem: NOTURNO })).messages[0].content;
-      expect(sys).toMatch(/CONEXÃO À NOITE/);
-      expect(sys).toMatch(/desligar o equipamento da tomada, esperar 30 segundos e ligar de novo/);
-      expect(sys).toMatch(/Vou deixar seu atendimento na fila do Suporte com tudo o que verificamos\. Nossa equipe dá continuidade a partir das 08:00/);
-    });
-
-    test('de dia o prompt não tem o bloco noturno', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).not.toMatch(/MODO NOTURNO/);
+      createChatCompletion.mockClear();
+      expect((await contexto()).messages[0].content).not.toMatch(/MODO NOTURNO/);
     });
   });
 
@@ -620,7 +567,7 @@ describe('perfil de triagem', () => {
       apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
       maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.',
       triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
-      triageRequireBirthdate: true, triageReadReceiptsDaytime: true,
+      triageReadReceiptsDaytime: true,
     };
 
     test('com a flag desligada, de dia a lista fixa não muda', async () => {
@@ -647,146 +594,140 @@ describe('perfil de triagem', () => {
       expect(nomes).toContain('desbloqueio_confianca');
     });
 
-    test('com a flag ligada, o prompt de dia manda chamar a ferramenta e nunca fala em desbloqueio', async () => {
+    // Task 18: os dois textos do comprovante (com e sem a ferramenta, de dia e
+    // de noite) são testados em prompt/fluxos/comprovante.test.js. Aqui fica a
+    // fiação: a lista de ferramentas DO TURNO é o que decide qual ramo o
+    // compositor emite — é ela que a flag muda.
+    test('a lista de ferramentas do turno chega ao compositor e decide o ramo do comprovante', async () => {
+      // Sem a flag (padrão de fábrica): a ferramenta não está na lista do turno.
+      const semFlag = (await contexto()).messages[0].content;
+      expect(semFlag).not.toMatch(/chame analisar_comprovante/);
+      expect(semFlag).toMatch(/Se o cliente enviou uma imagem, pergunte se é um comprovante/);
+
       getAiConfig.mockResolvedValue(configLendoDeDia);
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/COMPROVANTE: se o cliente enviar uma imagem/);
-      expect(sys).toMatch(/chame analisar_comprovante/);
-      expect(sys).toMatch(/NÃO confirme pagamento nem prometa liberação/);
-      // O cliente nunca pode ouvir que o comprovante dele "já foi utilizado":
-      // isso é conversa da equipe, não do atendimento.
-      expect(sys).toMatch(/NÃO diga isso ao cliente/);
-      expect(sys).not.toMatch(/desbloqueio/i);
-      expect(sys).not.toMatch(/MODO NOTURNO/);
-      // A linha antiga ("pergunte se é um comprovante") sai: perguntar antes
-      // de ler é justamente o que a flag elimina.
-      expect(sys).not.toMatch(/pergunte se é um comprovante/);
-    });
-
-    test('com a flag desligada, o prompt de dia mantém a linha antiga', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/Se o cliente enviou uma imagem, pergunte se é um comprovante/);
-      expect(sys).not.toMatch(/chame analisar_comprovante/);
+      createChatCompletion.mockClear();
+      const comFlag = (await contexto()).messages[0].content;
+      expect(comFlag).toMatch(/chame analisar_comprovante/);
     });
   });
 
-  test('o contexto traz setores com orientação, motivos, e identidade só com primeiro nome', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toContain('Financeiro');
-    expect(sys).toContain('Boleto, PIX, cobrança.');
-    expect(sys).toContain('r-1');
-    expect(sys).toContain('João');
-    expect(sys).toContain('RUA X');
-    expect(sys).toMatch(/primeiro nome/i);
-    // Teste real do Suporte: "vou encaminhar" sem concluir gastou um turno.
-    expect(sys).toMatch(/chame concluir_triagem NA MESMA resposta em que avisa o cliente/);
-    expect(sys).toContain('Seja breve.');
-    expect(sys).not.toContain('1990');
-    // Não é a PALAVRA "valor" que é proibida (ela aparece dentro da própria
-    // regra "nunca diga... valores") — é um valor em R$ ou uma fatura em
-    // aberto vazando de verdade para o texto do sistema.
-    // Pega valor/vencimento INTERPOLADO no contexto, não a palavra dentro de
-    // uma regra ("existe ou não fatura em aberto" é instrução, não dado).
-    // Os preços de exemplo do roteiro COMERCIAL ("• 500 Mega por R$ 100/mês")
-    // são texto fixo do prompt, não dado de fatura: saem antes da checagem.
-    const semPlanosDeExemplo = sys.split('\n').filter((l) => !/Mega por R\$/.test(l)).join('\n');
-    expect(semPlanosDeExemplo).not.toMatch(/R\$|\bvalor (da|de|em)\b|venc(e|imento) (em|dia) \d/i);
-  });
+  // =====================================================================
+  // Task 18 — a fiação entre o turno e o compositor de módulos
+  // =====================================================================
+  // O construtor monolítico montarContextoTriagem deixou de existir: quem
+  // monta o contexto da triagem agora é montarContexto(estado), em
+  // src/ai/prompt/montar.js. O TEXTO de cada regra é testado módulo a módulo
+  // (src/ai/prompt/**/*.test.js) e a seleção de módulo por estado em
+  // prompt/montar.test.js — nenhum assert de frase literal sobrou aqui.
+  //
+  // O que estes testes guardam é a outra metade do contrato, que nenhum teste
+  // de módulo alcança: que o turno entrega ao compositor, correto e completo,
+  // tudo o que ele precisa. Uma regressão nesta fiação não muda uma frase —
+  // apaga um bloco inteiro do prompt com todos os testes de módulo verdes.
+  describe('o contexto da triagem é montado pelo compositor de módulos', () => {
+    test('a ordem de montagem começa pelo prompt do painel e põe os princípios em seguida', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys.indexOf('Você é a assistente.')).toBe(0);
+      expect(sys).toContain('PRIORIDADE');
+      expect(sys.indexOf('PRIORIDADE')).toBeLessThan(sys.indexOf('Setores'));
+    });
 
-  // I1 (review): o endereço só pode ser dito de volta ao cliente quando a
-  // identidade já é FORTE — é o endereço do próprio cliente. Com identidade
-  // fraca (CPF ainda não confirmado por data de nascimento) o endereço
-  // pertence a quem quer que seja o dono do CPF digitado, que pode não ser
-  // quem está no WhatsApp.
-  test('com identidade forte, pode desambiguar contratos pelo endereço', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toContain('Rua X ou');
-  });
+    test('setores, motivos e instruções da operação chegam do banco ao compositor', async () => {
+      const sys = (await contexto()).messages[0].content;
+      // listSectors/listActiveReasons mockados no beforeEach deste describe.
+      expect(sys).toContain('s-1 = Financeiro — Boleto, PIX, cobrança.');
+      expect(sys).toContain('s-2 = Suporte');
+      expect(sys).toContain('r-1 = Segunda via');
+      // config.triageExtraInstructions, repassada verbatim pelo painel.
+      expect(sys).toContain('Seja breve.');
+    });
 
-  test('com identidade fraca, nunca cita endereço/plano/cadastro para desambiguar', async () => {
-    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
-    expect(sys).toContain('NUNCA cite endereço');
-    expect(sys).not.toContain('Rua X ou');
-  });
+    test('a identidade do turno chega ao compositor com o primeiro nome e os contratos', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).toContain('João');
+      expect(sys).toContain('RUA X');
+    });
 
-  // Defeito C (teste real 2026-09-14): o modelo citou "contrato 2354" e, com
-  // um contrato só, ainda perguntou "qual contrato/endereço".
-  test('com identidade fraca, o contexto não lista contratos — só a quantidade', async () => {
-    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
-    expect(sys).toContain('Contratos: 1');
-    expect(sys).not.toContain('Contratos dele:');
-    expect(sys).not.toContain('17402');
-    expect(sys).not.toContain('600MB');
-  });
+    // I3 (review): a fixture IDENT_FORTE carrega CPF, login PPPoE e sobrenome
+    // de verdade. Os contratos passam por normalizeContract ANTES de virarem
+    // estado do compositor (é o que tira login e senha PPPoE), e da identidade
+    // só o primeiro nome atravessa.
+    test('os contratos passam pelo normalizador, e da identidade só o primeiro nome atravessa', async () => {
+      const sys = (await contexto()).messages[0].content;
+      expect(sys).not.toContain('11122233344');
+      expect(sys).not.toContain('pppoe');
+      expect(sys).not.toContain('Silva');
+    });
 
-  test('com identidade forte, os contratos continuam listados com endereço', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toContain('Contratos dele:');
-    expect(sys).toContain('RUA X');
-  });
+    // Nenhum nome de provedor fica embutido no código (o chat será vendido): o
+    // nome vem do cartão Empresa, e sem cadastro a frase continua de pé.
+    test('o nome da empresa cadastrada chega ao compositor, e sem cadastro cai no genérico', async () => {
+      const comNome = (await contexto()).messages[0].content;
+      expect(comNome).toContain('Você é a primeira atendente virtual da Provedor X.');
+      expect(comNome).not.toMatch(/DW/);
 
-  test('os dois níveis proíbem citar o número do contrato ao cliente', async () => {
-    for (const nivel of ['forte', 'fraca']) {
-      jest.clearAllMocks();
-      createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
-      const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel, origem: nivel === 'forte' ? 'phone' : 'cpf' } })).messages[0].content;
-      expect(sys).toContain('NUNCA cite o número do contrato ao cliente.');
-    }
-  });
+      createChatCompletion.mockClear();
+      getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
+      const semNome = (await contexto()).messages[0].content;
+      expect(semNome).toContain('Você é a primeira atendente virtual da empresa.');
+    });
 
-  test('com um contrato só, os dois níveis mandam usá-lo sem perguntar qual', async () => {
-    for (const nivel of ['forte', 'fraca']) {
-      jest.clearAllMocks();
-      createChatCompletion.mockResolvedValue({ message: { content: 'Oi' }, usage: {} });
-      const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel, origem: nivel === 'forte' ? 'phone' : 'cpf' } })).messages[0].content;
-      expect(sys).toContain('Contrato único: use-o sem perguntar qual.');
-      // Unificado: a instrução aparece uma vez só, não duplicada por nível.
-      expect(sys.split('Contrato único: use-o sem perguntar qual.').length - 1).toBe(1);
-    }
-  });
+    // montarContexto é SÍNCRONA e determinística de propósito: quem lê o
+    // relógio é o turno, que passa `agora` no estado. Sem isso o modelo fica
+    // sem data (não conta dias de atraso) e sem hora (erra a saudação).
+    test('o relógio do turno chega ao compositor em agora', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-09-13T13:05:00-03:00'));
+      try {
+        const sys = (await contexto()).messages[0].content;
+        expect(sys).toContain('Hoje é 13/09/2026 e agora são 13:05 em Brasília.');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-  test('com mais de um contrato, não há a instrução de contrato único', async () => {
-    const dois = { ...IDENT_FORTE, contracts: [...IDENT_FORTE.contracts, { id: 17405, statusCode: 1, plan: '600MB', address: 'AV Y' }] };
-    const sys = (await contexto({ identidade: dois })).messages[0].content;
-    expect(sys).not.toContain('Contrato único');
-  });
+    // Sem esta passagem, a triagem pede reinício de equipamento a quem está no
+    // meio de uma falha regional que a empresa já conhece.
+    test('o aviso de cidade do turno chega ao compositor, com cidade e mensagem interpoladas', async () => {
+      const sys = (await contexto({
+        avisoCidade: { cidade: 'Cândido Mendes', mensagem: 'Rompimento de fibra; equipe em campo.' },
+      })).messages[0].content;
+      expect(sys).toContain('AVISO ATIVO NA CIDADE DO CLIENTE (Cândido Mendes): Rompimento de fibra; equipe em campo.');
+    });
 
-  // Print 1 (teste real 2026-09-14): quem JÁ é cliente e quer outro ponto caía
-  // no roteiro de cliente novo, e a IA listava todas as cidades atendidas.
-  test('o bloco COMERCIAL cobre quem já é cliente e não foi identificado', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toContain('Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF e data de nascimento) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.');
-  });
+    // Com o motivo de encerramento configurado, a triagem deixa de encaminhar
+    // o cliente que só queria o boleto/PIX: ela mesma fecha o atendimento. A
+    // chave é config.triageResolvedReasonId chegar ao compositor.
+    test('o motivo de encerramento configurado chega ao compositor e troca o ramo do fluxo financeiro', async () => {
+      expect((await contexto()).messages[0].content).not.toMatch(/chame encerrar_atendimento/);
 
-  test('preço e cobertura vêm só das instruções adicionais, rotuladas como fonte única', async () => {
-    // O admin cadastra cidades e planos no campo livre; a regra fixa precisa
-    // apontar para ele em vez de mandar tudo para o Comercial.
-    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'p', maxToolsPerInteraction: 8, triageExtraInstructions: 'PLANOS:\n- 500 Mega — R$ 100,00 por mês', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2 });
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS/);
-    expect(sys).toContain('INSTRUÇÕES ADICIONAIS DA OPERAÇÃO (única fonte para preço, planos e cobertura):');
-    expect(sys).toContain('500 Mega — R$ 100,00 por mês');
-    expect(sys).not.toMatch(/preços ou cobertura são com o Comercial/);
-  });
+      createChatCompletion.mockClear();
+      getAiConfig.mockResolvedValue({
+        apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
+        maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8,
+        triageMaxQuestions: 2, triageResolvedReasonId: 'rr-1',
+      });
+      expect((await contexto()).messages[0].content).toMatch(/chame encerrar_atendimento/);
+    });
 
-  test('sem instruções adicionais, preço e cobertura ficam com o Comercial', async () => {
-    getAiConfig.mockResolvedValue({ apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'p', maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2 });
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/Não há instruções adicionais da operação/);
-  });
-
-  test('identidade forte proíbe pedir CPF ou data de nascimento e manda dizer quando não há fatura', async () => {
-    // Observado em produção: cliente identificado pelo telefone foi cobrado da
-    // data de nascimento e depois encaminhado sem saber que não havia boleto.
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/NÃO peça CPF nem data de nascimento/);
-    // Round 2026-09-13: a instrução passou a falar de "nenhum contrato" (a
-    // ferramenta agora procura em todos) e a exigir concluir_triagem na mesma
-    // resposta, em vez de perguntar se o cliente quer ser encaminhado.
-    expect(sys).toMatch(/não há fatura em aberto em nenhum contrato, diga isso/i);
-    expect(sys).toMatch(/chame concluir_triagem para o Financeiro na mesma resposta/i);
-    expect(sys).toMatch(/contratosComFatura/);
-    expect(sys).toMatch(/nunca repita/i);
+    // Setores e motivos são duas consultas independentes e o turno inteiro
+    // espera pelas duas antes da primeira chamada à OpenAI: elas vão em
+    // paralelo. Sequenciá-las seria uma regressão de latência silenciosa —
+    // nenhum assert de conteúdo pegaria.
+    test('setores e motivos são consultados em paralelo, não em sequência', async () => {
+      let motivosPedidos = false;
+      let setoresTerminouAntesDeMotivosComecar = false;
+      listSectors.mockImplementation(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+        if (!motivosPedidos) setoresTerminouAntesDeMotivosComecar = true;
+        return [{ id: 's-1', name: 'Financeiro', aiHint: 'Boleto, PIX, cobrança.' }];
+      });
+      listActiveReasons.mockImplementation(async () => {
+        motivosPedidos = true;
+        return [{ id: 'r-1', name: 'Segunda via' }];
+      });
+      await contexto();
+      expect(setoresTerminouAntesDeMotivosComecar).toBe(false);
+    });
   });
 
   test('o registro de ferramentas do contexto recebe nome e resultado compactos', async () => {
@@ -799,59 +740,32 @@ describe('perfil de triagem', () => {
     expect(ctxVisto.registroFerramentas).toEqual([{ nome: 'enviar_boleto', resultado: '{"enviado":false,"motivo":"Nenhuma fatura em aberto"}' }]);
   });
 
-  test('identidade none instrui a pedir CPF só se o setor exigir', async () => {
-    const sys = (await contexto({ identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] } })).messages[0].content;
-    expect(sys).toMatch(/não identificado/i);
-    expect(sys).toMatch(/Comercial/);
-  });
-
-  // Teste real de 2026-09-13: cliente ja vinculado ouviu "me informe seu CPF"
-  // porque o SGP nao respondeu. Com sgpIndisponivel a identidade continua
-  // valendo — o que cai sao as consultas que dependem do SGP.
-  test('SGP indisponível: cumprimenta pelo nome da memória, sem pedir CPF e sem prometer consulta', async () => {
-    const sys = (await contexto({
-      identidade: {
-        nivel: 'forte', origem: 'memory', primeiroNome: 'Willemberg', contracts: [],
-        client: { id: 9, document: '11122233344' }, dataNascimento: null,
-        contestado: false, nascimentoTentado: false, sgpIndisponivel: true,
-      },
-    })).messages[0].content;
-    expect(sys).toContain('NÃO peça CPF');
-    expect(sys).toContain('SGP indisponível na triagem');
-    expect(sys).toContain('Willemberg');
-    expect(sys).not.toContain('me informe seu CPF');
-    // O ramo de identidade para por aqui: nada de contratos nem de entregar
-    // boleto/PIX, que precisariam do SGP que acabou de falhar.
-    expect(sys).not.toMatch(/Identidade JÁ confirmada/);
-  });
-
-  test('SGP indisponível sem nome guardado não escreve "null" no contexto', async () => {
-    const sys = (await contexto({
-      identidade: { nivel: 'forte', origem: 'memory', primeiroNome: null, contracts: [], sgpIndisponivel: true },
-    })).messages[0].content;
-    expect(sys).toContain('primeiro nome cliente');
-    expect(sys).not.toContain('primeiro nome null');
-  });
-
-  test('identidade fraca instrui a confirmar nascimento antes de entregar', async () => {
-    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
-    expect(sys).toMatch(/confirmar_nascimento/);
-  });
-
-  // Defeito A: com a identidade fraca chegando já pronta do resolvedor, o
-  // modelo não precisa (e não deve) chamar buscar_cliente de novo.
-  test('identidade fraca proíbe pedir o CPF outra vez', async () => {
-    const sys = (await contexto({ identidade: { ...IDENT_FORTE, nivel: 'fraca', origem: 'cpf' } })).messages[0].content;
-    expect(sys).toContain('O CPF já foi informado; NÃO peça o CPF de novo.');
-  });
-
-  // Minor (revisão final do branch inteiro): um cliente identificado (nível
-  // != none) mas sem primeiroNome no cadastro não pode virar "primeiro nome
-  // null" no contexto — o modelo repetiria isso de volta ao cliente.
-  test('identidade forte sem primeiroNome usa "cliente" em vez de null no contexto', async () => {
-    const sys = (await contexto({ identidade: { ...IDENT_FORTE, primeiroNome: null } })).messages[0].content;
-    expect(sys).toContain('primeiro nome cliente.');
-    expect(sys).not.toContain('primeiro nome null');
+  // Rodada de correção 1 (Task 11): enviar_boleto/gerar_pix carregam um
+  // `instrucao` longo (o texto do modelo de frase para o cliente) que sozinho
+  // já passa de 200 caracteres — o corte antigo cortava o JSON no meio, antes
+  // de legivel (tool-registry.js) poder filtrar esse campo para o resumo.
+  // Um resultado do TAMANHO REAL dessas ferramentas precisa sobreviver
+  // intacto aqui: é o texto de verdade que enviar_boleto.executar devolve
+  // (conferido em tool-registry.test.js), não um exagero artificial.
+  test('um resultado do tamanho real de enviar_boleto/gerar_pix não é truncado no registro', async () => {
+    const resultadoRealista = {
+      enviado: true,
+      valor: 89.9,
+      vencimento: '2026-09-20',
+      linhaDigitavelEnviada: true,
+      instrucao: 'O boleto já foi enviado ao cliente nesta conversa em PDF e com a linha digitável em mensagem separada. Comece pelo primeiro nome do cliente ("Prontinho, João!"). Responda EXATAMENTE no modelo, sem emoji: "Enviei acima o boleto referente ao seu contrato do endereço RUA X, em PDF e com a linha digitável. É só pagar pelo aplicativo do seu banco, copiando a linha digitável, ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!" NÃO repita a linha digitável nem o valor.',
+    };
+    expect(JSON.stringify(resultadoRealista).length).toBeGreaterThan(200);
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Prontinho!' }, usage: {} });
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: resultadoRealista }; });
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    const guardado = ctxVisto.registroFerramentas[0].resultado;
+    expect(guardado).toBe(JSON.stringify(resultadoRealista));
+    expect(guardado).not.toMatch(/…\(truncado\)/);
+    expect(() => JSON.parse(guardado)).not.toThrow();
   });
 
   // I3 (review): a fixture original (IDENT_FORTE) não tinha nenhum campo
@@ -960,7 +874,6 @@ describe('perfil de triagem', () => {
         apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
         maxToolsPerInteraction: 2, triageExtraInstructions: 'Seja breve.',
         triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
-        triageRequireBirthdate: true,
       });
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: null, tool_calls: [
@@ -990,7 +903,6 @@ describe('perfil de triagem', () => {
         apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
         maxToolsPerInteraction: 2, triageExtraInstructions: 'Seja breve.',
         triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
-        triageRequireBirthdate: true,
       });
       createChatCompletion
         .mockResolvedValueOnce({ message: { content: null, tool_calls: [
@@ -1017,55 +929,6 @@ describe('perfil de triagem', () => {
 
       expect(createChatCompletion).toHaveBeenCalledTimes(2);
     });
-  });
-
-  describe('com a data de nascimento dispensada (padrão)', () => {
-    beforeEach(() => {
-      getAiConfig.mockResolvedValue({
-        apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
-        maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.',
-        triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
-        triageRequireBirthdate: false,
-      });
-    });
-
-    // Descrever ao modelo uma ferramenta que não serve para nada é o jeito
-    // conhecido de ele afirmar que a usou.
-    test('confirmar_nascimento sai da lista de ferramentas da triagem', async () => {
-      const nomes = (await contexto()).tools.map((t) => t.function.name).sort();
-      expect(nomes).not.toContain('confirmar_nascimento');
-      expect(nomes).toEqual(FERRAMENTAS_TRIAGEM.filter((n) => n !== 'confirmar_nascimento').sort());
-    });
-
-    test('o prompt só fala em data de nascimento para PROIBIR que ela seja pedida', async () => {
-      const sys = (await contexto()).messages[0].content;
-      // Print 2026-09-17: a IA pediu a data mesmo com a exigência desligada,
-      // então a única menção que sobrou é a proibição explícita.
-      expect(sys).toMatch(/NUNCA peça data de nascimento/);
-      expect(sys.replace(/NUNCA peça data de nascimento[^\n]*/g, '')).not.toMatch(/data de nascimento/i);
-      // A linha do cliente ainda não identificado continua: o CPF segue sendo
-      // o que identifica.
-      const semIdentidade = (await (async () => {
-        createChatCompletion.mockClear();
-        return contexto({ identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] } });
-      })()).messages[0].content;
-      expect(semIdentidade).toContain('Cliente NÃO identificado.');
-      expect(semIdentidade.replace(/NUNCA peça data de nascimento[^\n]*/g, '')).not.toMatch(/data de nascimento/i);
-    });
-  });
-
-  test('com a exigência ligada, confirmar_nascimento continua na lista', async () => {
-    const nomes = (await contexto()).tools.map((t) => t.function.name).sort();
-    expect(nomes).toEqual([...FERRAMENTAS_TRIAGEM].sort());
-    expect(nomes).toContain('confirmar_nascimento');
-  });
-
-  test('não vaza cpf, login pppoe, sobrenome nem data de nascimento no contexto de sistema', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).not.toContain('11122233344');
-    expect(sys).not.toContain('pppoe');
-    expect(sys).not.toContain('Silva');
-    expect(sys).not.toContain('1990');
   });
 
   test('imagem e documento entram no histórico como placeholder', async () => {
@@ -1157,22 +1020,6 @@ describe('perfil de triagem', () => {
     expect(req.messages[0].content).not.toMatch(/LIMITE DE PERGUNTAS ATINGIDO/);
   });
 
-  test('com mais de um contrato, manda consultar as faturas de todos antes de perguntar', async () => {
-    const doisContratos = { ...IDENT_FORTE, contracts: [
-      { id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X', login: 'a' },
-      { id: 17405, statusCode: 1, plan: '300MB', address: 'AV Y', login: 'b' },
-    ] };
-    const sys = (await contexto({ identidade: doisContratos })).messages[0].content;
-    expect(sys).toMatch(/chame consultar_faturas_todos_contratos ANTES de perguntar/);
-    expect(sys).toMatch(/Se só um contrato tiver fatura em aberto, entregue dele sem perguntar/);
-    expect(sys).toMatch(/nem pergunte "qual contrato"/);
-  });
-
-  test('com um contrato só, não fala em consultar as faturas de todos', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).not.toMatch(/consultar_faturas_todos_contratos ANTES/);
-  });
-
   // I4c (review): o toolChoice forçado não pode "grudar" nas chamadas
   // seguintes do turno, senão o modelo nunca conseguiria fazer a pergunta de
   // esclarecimento que a própria concluir_triagem pede em baixa confiança.
@@ -1187,489 +1034,6 @@ describe('perfil de triagem', () => {
     await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } });
     expect(createChatCompletion.mock.calls[0][0].toolChoice).toBe('required');
     expect(createChatCompletion.mock.calls[1][0].toolChoice).toBeUndefined();
-  });
-
-  // Prints 2026-09-16 (dois atendimentos reais): "minha internet não pega no
-  // canto da rua" virou roteiro de falha + encaminhamento sem explicar nada, e
-  // "quero a senha do meu vizinho" virou chamado no Suporte. Encaminhar tinha
-  // virado a saída padrão para tudo.
-  describe('atender em vez de encaminhar', () => {
-    test('alcance do Wi-Fi não é falha de conexão e tem roteiro próprio', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/ALCANCE DO WI-FI/);
-      expect(sys).toMatch(/perda de sinal ao se AFASTAR/);
-      expect(sys).toMatch(/NÃO é falha de conexão/);
-      expect(sys).toMatch(/O Wi-Fi tem alcance limitado/);
-      expect(sys).toMatch(/Dentro de casa, perto do equipamento, a internet está funcionando bem\?/);
-      expect(sys).toMatch(/Nunca prometa visita técnica nem equipamento/);
-      expect(sys).toMatch(/siga exatamente o que está lá; se não disserem nada, não ofereça nada/);
-    });
-
-    test('pedido de dado de outra pessoa é recusado na hora e nunca vira chamado', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/DADOS DE OUTRA PESSOA/);
-      expect(sys).toMatch(/NUNCA são passados e NUNCA viram chamado/);
-      expect(sys).toMatch(/Não consigo passar dados de outro cliente, nem a senha da rede dele/);
-      expect(sys).toMatch(/Posso te ajudar com alguma coisa do seu contrato\?/);
-      expect(sys).toMatch(/Pedido de dado de outra pessoa; recusado na triagem/);
-    });
-
-    test('a regra de responder antes de encaminhar vale para todos os fluxos', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/Nunca encaminhe deixando a pergunta dele sem resposta/);
-      expect(sys).toMatch(/"Vou encaminhar" sozinho, sem nada antes, é atendimento ruim/);
-    });
-
-    test('o esclarecimento não anuncia o encaminhamento', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/pergunte direto o que você precisa saber/);
-      expect(sys).toMatch(/nunca "me diga qual problema para eu encaminhar ao setor correto"/);
-    });
-  });
-
-  // Quatro prints 2026-09-16: o roteiro de Suporte disparava para tudo
-  // ("posso mudar o roteador de lugar?" abriu com "contrato ativo e conexão
-  // online") e atropelava o relato ("contratei 500 mega e aparece 20" recebeu
-  // "está sem acesso, com lentidão ou caindo?").
-  describe('Suporte: dúvida não é falha, e nunca repetir o que o cliente já disse', () => {
-    test('dúvida não consulta nem cita status', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/DÚVIDA não é falha/);
-      expect(sys).toMatch(/NÃO chame status, NÃO cite status/);
-    });
-
-    test('problema já relatado pula a pergunta de diagnóstico', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/Se o cliente JÁ disse qual é o problema/);
-      expect(sys).toMatch(/Perguntar o que ele acabou de dizer é o pior erro de atendimento/);
-    });
-
-    test('velocidade abaixo da contratada tem roteiro próprio, com teste de velocidade', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/VELOCIDADE ABAIXO DA CONTRATADA/);
-      expect(sys).toMatch(/entregue até o equipamento e medida por cabo/);
-      expect(sys).toMatch(/você consegue fazer um teste de velocidade perto do equipamento\?/);
-      expect(sys).toMatch(/NUNCA diga que a velocidade está correta sem teste/);
-    });
-
-    test('reembolso e desconto não são prometidos nem recusados pela IA', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/REEMBOLSO, DESCONTO OU ABATIMENTO: nunca prometa e nunca recuse/);
-      expect(sys).toMatch(/Cliente pediu reembolso\/desconto/);
-    });
-
-    test('mudar o equipamento de lugar é respondido direto, sem status', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/MUDAR O EQUIPAMENTO DE LUGAR: responda direto, sem consultar status/);
-      expect(sys).toMatch(/Pode sim, e você mesma pode fazer/);
-      expect(sys).toMatch(/se ela só queria saber se pode, não encaminhe/);
-    });
-
-    test('alcance de Wi-Fi normal não abre chamado', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/está tudo normal: NÃO abra chamado/);
-      expect(sys).toMatch(/Só conclua para o Suporte se ele quiser melhorar o alcance/);
-      // O fecho antigo, que mandava concluir sempre, saiu.
-      expect(sys).not.toMatch(/conclua para o Suporte com "alcance de Wi-Fi" no resumo, sem prometer/);
-    });
-
-    test('fim de roteiro não é automático', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/Fim de roteiro NÃO é automático/);
-      expect(sys).toMatch(/só conclua quando não houver mais nada para responder/);
-      expect(sys).not.toMatch(/Depois da resposta dele, conclua para o Suporte com o relato no resumo\./);
-    });
-  });
-
-  // Três prints 2026-09-16 (já com o roteiro do dia no ar): onde não existe
-  // roteiro, a IA encaminha seco ou cai no modelo errado.
-  describe('roteiros que faltavam', () => {
-    test('mudança de endereço tem roteiro no Comercial', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/MUDANÇA DE ENDEREÇO/);
-      expect(sys).toMatch(/transferência do ponto/);
-      expect(sys).toMatch(/me diz o novo endereço \(cidade, bairro e rua\) e a data prevista da mudança/);
-      expect(sys).toMatch(/NÃO encaminhe sem pedir isso/);
-    });
-
-    test('problema sem roteiro específico não cai na lista fixa de diagnóstico', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/PROBLEMA JÁ RELATADO SEM ROTEIRO PRÓPRIO/);
-      expect(sys).toMatch(/repita o problema com as palavras dele/);
-      expect(sys).toMatch(/UMA pergunta que faça sentido para AQUELE problema/);
-      expect(sys).toMatch(/vídeo travando ou não carregando/);
-      expect(sys).toMatch(/só nesse aplicativo ou em tudo/);
-    });
-
-    test('fatura de outra pessoa: entrega com o CPF do titular, sem virar dona do contato', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/FATURA, BOLETO OU PIX DE OUTRA PESSOA/);
-      expect(sys).toMatch(/chame buscar_cliente com titularEOutraPessoa: true/);
-      expect(sys).toMatch(/NUNCA diga "seu contrato"/);
-    });
-  });
-
-  // Lote de prints 2026-09-16 (15:01–15:41), todos já com os roteiros do dia
-  // no ar: gatilho cego da regra de terceiros, conclusão junto com pergunta,
-  // funcionamento interno exposto e roteiros que ainda faltavam.
-  describe('lote de correções da tarde', () => {
-    test('a recusa de dado de terceiro só vale para PEDIDO de dado, não para relato', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/só quando ele PEDIR um dado de outra pessoa/);
-      expect(sys).toMatch(/Relatar problema do vizinho .* NÃO é pedido de dado/);
-      expect(sys).toMatch(/a senha da rede DELE mesmo, do contrato dele, é pedido legítimo/);
-    });
-
-    test('nunca concluir no mesmo turno em que pede algo ao cliente', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/NUNCA chame concluir_triagem no mesmo turno em que você pede alguma coisa ao cliente/);
-      expect(sys).toMatch(/depois que ele responder/);
-    });
-
-    test('nunca expor funcionamento interno', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/NUNCA cite o funcionamento interno/);
-      expect(sys).toMatch(/"aqui na triagem"/);
-    });
-
-    test('Reativação a partir de mais de 90 dias de atraso', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/REATIVAÇÃO/);
-      expect(sys).toMatch(/mais de 90 dias em atraso/);
-      expect(sys).toMatch(/nunca invente promoção, desconto ou valor/);
-    });
-
-    test('pode dizer há quanto tempo a fatura está em atraso, com identidade confirmada', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/pode dizer há quantos dias\/meses a fatura está vencida/);
-      expect(sys).toMatch(/Hoje é /);
-    });
-
-    test('quitando o débito a internet volta, sem prazo prometido', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/assim que o pagamento for confirmado, o acesso é liberado automaticamente/);
-      expect(sys).toMatch(/NUNCA prometa prazo/);
-    });
-
-    test('senha e QR code do Wi-Fi do próprio cliente: explica e encaminha', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/SENHA OU QR CODE DO WI-FI DO PRÓPRIO CLIENTE/);
-      expect(sys).toMatch(/a senha fica no equipamento/);
-    });
-
-    test('lentidão em horário de pico tem roteiro', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/PIORA EM HORÁRIO CERTO/);
-      expect(sys).toMatch(/quantos aparelhos costumam estar usando nesse horário/);
-    });
-
-    test('equipamento na casa de outra pessoa e dados móveis', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/EQUIPAMENTO NA CASA DE OUTRA PESSOA/);
-      expect(sys).toMatch(/DADOS MÓVEIS \(2G, 3G, 4G, 5G\)/);
-      expect(sys).toMatch(/não está usando a internet da casa/);
-    });
-  });
-
-  // Print 2026-09-17 (18:25): cliente COM contrato perguntou "normalizou o
-  // sinal da internet? estou perguntando pq não estou em Cândido Mendes" e
-  // recebeu a tabela de planos inteira — a IA leu a cidade como pergunta de
-  // cobertura e disparou o roteiro de cliente novo.
-  describe('acompanhamento de falha não é pergunta de cobertura', () => {
-    test('a tabela de planos é só para cliente não identificado', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/A tabela de planos é SÓ para cliente NÃO identificado/);
-      expect(sys).toMatch(/Cliente com contrato nunca recebe a lista de planos/);
-    });
-
-    test('perguntar se o sinal normalizou é acompanhamento de falha', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/JÁ NORMALIZOU\?/);
-      expect(sys).toMatch(/não é pergunta de cobertura/);
-      expect(sys).toMatch(/consultar_status_todos_contratos/);
-      expect(sys).toMatch(/citar a cidade não transforma o assunto em cobertura/);
-    });
-  });
-
-  test('o pedido de CPF acolhe antes de pedir o documento', async () => {
-    const sys = (await contexto({ identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] } })).messages[0].content;
-    expect(sys).toContain('"Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor."');
-  });
-
-  // Print 2026-09-17 (18:11): o dono reescreveu o modelo de "ativo e online" —
-  // a versão antiga tinha virado uma frase decorada, longa e impessoal.
-  test('o modelo de contrato ativo e conexão online usa a redação do dono, em três parágrafos', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toContain('Entendi. Vou verificar isso com você.');
-    expect(sys).toContain('Consultei seu cadastro e, neste momento, seu contrato está ativo e sua conexão aparece online.');
-    expect(sys).toContain('Me diz só uma coisa: você está sem internet, com lentidão ou a conexão está caindo?');
-    // A redação antiga saiu inteira.
-    expect(sys).not.toMatch(/Mesmo assim, você pode estar enfrentando alguma dificuldade/);
-    expect(sys).not.toMatch(/está totalmente sem acesso/);
-  });
-
-  // Print 2026-09-17 (17:53): cliente mandou o comprovante e a IA respondeu
-  // "Para seguir com a conferência, preciso confirmar a titularidade com a
-  // data de nascimento" — com a confirmação por data DESLIGADA, ou seja, sem
-  // nem ter como conferir a data. O prompt já proibia e foi ignorado.
-  test('comprovante de cliente não identificado pede o CPF primeiro', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/COMPROVANTE DE CLIENTE NÃO IDENTIFICADO: peça o CPF ou CNPJ primeiro/);
-    expect(sys).toMatch(/Sem o cadastro localizado não há o que conferir/);
-  });
-
-  describe('guarda contra pedir data de nascimento', () => {
-    const IDENT = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] };
-    const SEM_EXIGENCIA = {
-      apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
-      maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8,
-      triageMaxQuestions: 2, triageResolvedReasonId: null, triageRequireBirthdate: false,
-    };
-
-    test('pediu a data sem a ferramenta na lista: refaz a resposta', async () => {
-      getAiConfig.mockResolvedValue(SEM_EXIGENCIA);
-      createChatCompletion
-        .mockResolvedValueOnce({ message: { content: 'Boa tarde! Para seguir com a conferência, preciso confirmar a titularidade com a data de nascimento.' }, usage: {} })
-        .mockResolvedValueOnce({ message: { content: 'Boa tarde! Para localizar seu cadastro, me informe seu CPF, por favor.' }, usage: {} });
-
-      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
-
-      expect(r.texto).toBe('Boa tarde! Para localizar seu cadastro, me informe seu CPF, por favor.');
-      const segunda = createChatCompletion.mock.calls[1][0];
-      expect(segunda.tools).toEqual([]);
-      expect(segunda.messages[segunda.messages.length - 1].content).toMatch(/Você pediu a data de nascimento/);
-    });
-
-    test('se a reescrita ainda pedir, a frase da data é cortada', async () => {
-      getAiConfig.mockResolvedValue(SEM_EXIGENCIA);
-      createChatCompletion
-        .mockResolvedValueOnce({ message: { content: 'Boa tarde! Para seguir, preciso da data de nascimento. Me informe seu CPF, por favor.' }, usage: {} })
-        .mockResolvedValueOnce({ message: { content: 'Preciso da data de nascimento. Me informe seu CPF, por favor.' }, usage: {} });
-
-      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
-
-      expect(r.texto).toBe('Me informe seu CPF, por favor.');
-      expect(r.texto).not.toMatch(/nascimento/i);
-    });
-
-    test('com a exigência ligada (ferramenta na lista), pedir a data é legítimo', async () => {
-      createChatCompletion.mockResolvedValue({ message: { content: 'Me informe sua data de nascimento, por favor.' }, usage: {} });
-
-      const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
-
-      expect(r.texto).toBe('Me informe sua data de nascimento, por favor.');
-      expect(createChatCompletion).toHaveBeenCalledTimes(1);
-    });
-
-    test('texto sem menção à data não gera chamada extra', async () => {
-      getAiConfig.mockResolvedValue(SEM_EXIGENCIA);
-      createChatCompletion.mockResolvedValue({ message: { content: 'Me informe seu CPF, por favor.' }, usage: {} });
-
-      await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT, triagem: TRIAGEM, origemMensagem: 'texto' });
-
-      expect(createChatCompletion).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  // Print 2026-09-17 (16:56): entrega de boleto inteira sem chamar a cliente
-  // pelo nome, mesmo depois de identificar pelo CPF. "Está muito robô."
-  test('depois de identificar, a IA trata o cliente pelo primeiro nome', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/Assim que souber o primeiro nome do cliente .* use o nome dele/);
-    expect(sys).toMatch(/Entregar boleto, PIX ou resposta sem nunca chamar a pessoa pelo nome soa robótico/);
-  });
-
-  // Print 2026-09-17 (16:32): "quero pagar minha internet" + CPF → a IA
-  // respondeu com o roteiro do contrato suspenso e perguntou "você chegou a
-  // fazer esse pagamento?". Ela acabou de dizer que QUER pagar.
-  describe('pedido de pagamento tem prioridade', () => {
-    test('quem pede para pagar recebe a entrega, não o roteiro do suspenso', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/PEDIDO DE PAGAMENTO .* tem prioridade sobre qualquer roteiro de diagnóstico/);
-      expect(sys).toMatch(/entregue o boleto ou o PIX AGORA/);
-      expect(sys).toMatch(/NUNCA pergunte "você chegou a fazer esse pagamento\?" a quem acabou de dizer que quer pagar/);
-    });
-
-    test('o roteiro do suspenso fica restrito a quem relata falta de acesso', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/só quando ele RELATAR falta de acesso/);
-    });
-  });
-
-  // Print 2026-09-17 (16:05–16:06): a mesma pergunta de diagnóstico saiu três
-  // vezes seguidas, mesmo com o cliente respondendo "Lentidão" no meio.
-  describe('nunca repetir a mesma mensagem', () => {
-    test('o prompt proíbe repetir mensagem já enviada na conversa', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/NUNCA repita uma mensagem que você já enviou nesta conversa/);
-      expect(sys).toMatch(/Se ele já respondeu a sua pergunta, siga em frente/);
-    });
-
-    test('resposta de diagnóstico tem para onde ir', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/Quando ele responder à pergunta de diagnóstico/);
-      expect(sys).toMatch(/"lentidão" ou "está lento"/);
-      expect(sys).toMatch(/roteiro de VELOCIDADE ABAIXO DA CONTRATADA/);
-    });
-  });
-
-  // Prints 2026-09-17, três correções pedidas pelo dono.
-  describe('correções de 2026-09-17', () => {
-    test('com a exigência desligada (padrão da operação), o prompt PROÍBE pedir data de nascimento', async () => {
-      getAiConfig.mockResolvedValue({
-        apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.',
-        maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8,
-        triageMaxQuestions: 2, triageResolvedReasonId: null, triageRequireBirthdate: false,
-      });
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/NUNCA peça data de nascimento/);
-      expect(sys).toMatch(/nem para conferir comprovante/);
-    });
-
-    test('com a exigência ligada, a proibição não aparece', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).not.toMatch(/NUNCA peça data de nascimento/);
-    });
-
-    test('Reativação passa a ser mais de 90 dias de atraso', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/mais de 90 dias em atraso/);
-      expect(sys).not.toMatch(/DOIS meses ou mais em atraso/);
-    });
-
-    test('documentos para fazer o cadastro saem das instruções da operação', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/O QUE PRECISA PARA FAZER O CADASTRO/);
-      expect(sys).toMatch(/responda com a lista exatamente como está lá/);
-      expect(sys).toMatch(/NÃO encaminhe sem responder/);
-    });
-
-    test('nome de outra pessoa citado pelo cliente exige titularEOutraPessoa', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/Se ele citar o NOME de outra pessoa/);
-      expect(sys).toMatch(/nunca chame quem está falando pelo nome do titular/);
-    });
-  });
-
-  // Print 2026-09-16: "Bom dia!" em toda resposta da mesma conversa.
-  test('o prompt manda cumprimentar só na primeira resposta', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/Cumprimente só na primeira resposta da conversa; nas seguintes, não repita a saudação/);
-  });
-
-  test('o fluxo de Comercial traz os dois roteiros do dono e a regra de listar os planos das instruções', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/COMERCIAL \(cobertura, planos, contratar, mudar de plano\)/);
-    expect(sys).toMatch(/Que bom ter você por aqui 😊/);
-    expect(sys).toMatch(/• 500 Mega por R\$ 100\/mês/);
-    expect(sys).toMatch(/Para verificar a disponibilidade no seu endereço, me informe seu bairro e sua rua\./);
-    expect(sys).toMatch(/vou te ajudar a conhecer nossos planos 😊/);
-    expect(sys).toMatch(/encaminho para o Comercial verificar a alteração no seu contrato/);
-    expect(sys).toMatch(/Nunca peça CPF de cliente novo/);
-    expect(sys).toMatch(/Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma/);
-    // Emoji liberado no PIX e no Comercial; boleto e Suporte seguem sem.
-    expect(sys).toMatch(/SÓ nos fluxos do PIX e do COMERCIAL/);
-  });
-
-  // Teste real 2026-09-15 (print do dono): a IA pediu bairro/rua três vezes,
-  // e quando o cliente perguntou "qual é o melhor?" encaminhou sem responder.
-  // Roteiro ditado pelo dono: endereço é UMA pergunta (bairro e rua juntos),
-  // confirma o que veio e pede só o que falta uma vez; pergunta pendente é
-  // respondida antes de encaminhar; frases de encaminhamento de dia e de noite.
-  describe('roteiro COMERCIAL de cliente novo (2026-09-15)', () => {
-    test('abertura no modelo do dono, planos copiados das instruções, endereço numa pergunta só', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/copie o bloco de planos EXATAMENTE como está escrito nas instruções/);
-      expect(sys).toMatch(/Temos planos de internet 100% fibra óptica:/);
-      expect(sys).toMatch(/Instalação grátis\./);
-      expect(sys).toMatch(/atendemos em TODOS os bairros e ruas dela/);
-      expect(sys).toMatch(/Endereço é UMA pergunta só \(bairro e rua juntos\)/);
-      expect(sys).toMatch(/Perfeito, Centro de Godofredo Viana 👍 Qual é a rua onde deseja instalar\?/);
-      expect(sys).toMatch(/Nunca peça a mesma coisa uma terceira vez/);
-      expect(sys).toMatch(/Não é preciso ter o endereço completo para encaminhar/);
-      // O antigo modelo com a lista fixa de planos do cliente NOVO saiu: os
-      // planos são só os das instruções.
-      expect(sys).not.toMatch(/Atendemos em Godofredo Viana e temos estas opções/);
-      expect(sys).not.toMatch(/Algum desses planos chamou sua atenção\?/);
-    });
-
-    test('"qual é o melhor?": recomenda pelo critério das instruções ou explica e pergunta o uso; nunca encaminha sem responder', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/Se ele perguntar qual plano é o melhor ou pedir indicação/);
-      expect(sys).toMatch(/recomende um plano com uma frase de motivo/);
-      expect(sys).toMatch(/a diferença é só a velocidade/);
-      expect(sys).toMatch(/Nunca encaminhe deixando uma pergunta dele sem resposta/);
-    });
-
-    // Print 2026-09-15 (21:16): "vocês tem internet em Viseu?" → "Atendemos em
-    // Viseu. Certo! Vou encaminhar você para o Comercial." Confirmou e
-    // encaminhou na primeira resposta, sem planos nem endereço — e com um
-    // "Certo!" que não respondia a pedido nenhum.
-    test('pergunta de cobertura de cliente novo: confirma e emenda a venda; encaminha só no momento certo', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/Pergunta de cobertura de cliente novo \("tem internet em X\?"\): responda "Atendemos em X!" e, NA MESMA mensagem, emende a abertura/);
-      expect(sys).toMatch(/NUNCA encaminhe um cliente novo na primeira resposta/);
-      expect(sys).toMatch(/Encaminhe ao Comercial SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço; ou pedir para falar com um atendente; ou a cidade não estiver na lista/);
-      expect(sys).toMatch(/O "Certo!" do modelo é só quando ele pediu algo \(contratar, falar com atendente\); senão comece direto em "Vou encaminhar/);
-    });
-
-    test('de dia, o encaminhamento ao Comercial usa a frase do dia', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toContain('"Certo! 😊 Vou encaminhar você para o Comercial. Um atendente continuará o atendimento por aqui."');
-      expect(sys).not.toMatch(/fora do horário de atendimento, mas sua conversa ficará registrada/);
-    });
-
-    test('à noite, o encaminhamento ao Comercial usa a frase da noite', async () => {
-      const sys = (await contexto({ triagem: { ...TRIAGEM, noturno: { ativo: true, retornoAs: '08:00' } } })).messages[0].content;
-      expect(sys).toContain('"Certo! 😊 Vou encaminhar seu atendimento para nossa equipe Comercial. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar."');
-      expect(sys).not.toMatch(/Um atendente continuará o atendimento por aqui/);
-    });
-
-    test('emoji no Comercial: ícone por plano e 👍 liberados; boleto e Suporte seguem sem', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/SÓ nos fluxos do PIX e do COMERCIAL/);
-      expect(sys).toMatch(/No COMERCIAL.*um ícone por plano.*👍/);
-      expect(sys).toMatch(/NENHUM emoji — nem na saudação/);
-    });
-
-    test('conclusão forçada pelo limite responde a pergunta pendente antes de encaminhar', async () => {
-      const sys = (await contexto({ triagem: { ...TRIAGEM, attempts: 5, forcarConclusao: true } })).messages[0].content;
-      expect(sys).toMatch(/LIMITE DE PERGUNTAS ATINGIDO/);
-      expect(sys).toMatch(/Se ele fez uma pergunta nesta mensagem, responda-a ANTES de dizer que está encaminhando/);
-    });
-  });
-
-  test('o fluxo de Suporte traz os três roteiros do dono e manda consultar o status antes de responder', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/ANTES de responder, chame consultar_status_todos_contratos \(UMA chamada, cobre todos os contratos\) e siga a instrução que ela devolver/);
-    // Redação reescrita pelo dono em 2026-09-17.
-    expect(sys).toMatch(/seu contrato está ativo e sua conexão aparece online\./);
-    expect(sys).toMatch(/você está sem internet, com lentidão ou a conexão está caindo\?/);
-    expect(sys).toMatch(/sua conexão está offline no momento/);
-    expect(sys).toMatch(/Tem alguma luz vermelha acesa ou piscando\?/);
-    expect(sys).toMatch(/pendência na fatura que deixou o acesso à internet temporariamente suspenso/);
-    expect(sys).toMatch(/Você chegou a fazer esse pagamento\?/);
-    // A exceção de status vale só no Suporte com identidade confirmada.
-    expect(sys).toMatch(/dizer o status do contrato e da conexão no fluxo de SUPORTE/);
-    expect(sys).toMatch(/Sem identidade confirmada, o fluxo de Suporte não cita status nenhum/);
-  });
-
-  // Para o dono, "não consegui confirmar aqui o status da conexão... posso
-  // encaminhar para o suporte verificar" é inaceitável: a empresa É o suporte.
-  test('proíbe dizer ao cliente que não conseguiu verificar algo, citando a empresa cadastrada', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo/);
-    expect(sys).toMatch(/a Provedor X é o suporte/);
-    expect(sys).toMatch(/Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica/);
-  });
-
-  // Sem empresa cadastrada a frase continua fazendo sentido — e nenhum nome
-  // de provedor fica embutido no código.
-  test('sem nome cadastrado, a frase cai no genérico "a empresa"', async () => {
-    getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).toMatch(/a empresa é o suporte/);
-    expect(sys).not.toMatch(/DW/);
   });
 
   // Teste real (2026-09-13): com vários contratos o Suporte estourou o teto de
@@ -1939,99 +1303,9 @@ describe('perfil de triagem', () => {
     });
   });
 
-  // Com o motivo de encerramento configurado, a triagem deixa de encaminhar o
-  // cliente que só queria o boleto/PIX: ela mesma fecha o atendimento.
-  describe('encerramento pela própria IA (triageResolvedReasonId configurado)', () => {
-    const COM_MOTIVO = { apiKey: 'sk', model: 'gpt-x', mode: 'assistant', systemPrompt: 'Você é a assistente.', maxToolsPerInteraction: 8, triageExtraInstructions: '', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: 'rr-1' };
-
-    test('com motivo, traz os modelos de frase da entrega e da despedida, e manda chamar encerrar_atendimento', async () => {
-      getAiConfig.mockResolvedValue(COM_MOTIVO);
-      const sys = (await contexto()).messages[0].content;
-      // Modelos de frase pedidos pelo dono (2026-09-13). Os da ENTREGA saíram
-      // do prompt (teste real 2026-09-15: o modelo copiou "Enviei acima o
-      // boleto..." do exemplo sem chamar enviar_boleto): agora só a própria
-      // ferramenta devolve o modelo, depois de enviar de verdade.
-      expect(sys).toMatch(/responda EXATAMENTE no modelo que a ferramenta devolver no campo instrucao/);
-      expect(sys).toMatch(/NUNCA diga que enviou o boleto ou o PIX antes de a ferramenta confirmar o envio/);
-      expect(sys).not.toMatch(/Enviei acima o PIX/);
-      expect(sys).not.toMatch(/Enviei acima o boleto/);
-      expect(sys).not.toMatch(/Agenor Costa/);
-      expect(sys).toMatch(/Imagina, Willemberg! 😊/);
-      expect(sys).toMatch(/Tenha um ótimo dia!/);
-      expect(sys).toMatch(/Se responder só "ok"/);
-      expect(sys).toMatch(/No fluxo do BOLETO as mesmas despedidas valem, mas SEM emoji/);
-      expect(sys).toMatch(/chame encerrar_atendimento/);
-      expect(sys).toMatch(/Tom: caloroso e direto/);
-      // Emoji só no PIX; no boleto nenhum, nem na saudação; e uma mensagem só,
-      // sem colar o modelo depois da própria frase (2º teste real do boleto).
-      expect(sys).toMatch(/SÓ nos fluxos do PIX e do COMERCIAL/);
-      expect(sys).toMatch(/NENHUM emoji — nem na saudação/);
-      expect(sys).toMatch(/Escreva UMA mensagem por resposta/);
-      expect(sys).not.toMatch(/e depois conclua a triagem para o Financeiro/);
-    });
-
-    test('com mais de um contrato, o pedido de endereço segue o modelo de frase', async () => {
-      getAiConfig.mockResolvedValue(COM_MOTIVO);
-      const doisContratos = { ...IDENT_FORTE, contracts: [
-        { id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X', login: 'a' },
-        { id: 17405, statusCode: 1, plan: '300MB', address: 'AV Y', login: 'b' },
-      ] };
-      const sys = (await contexto({ identidade: doisContratos })).messages[0].content;
-      expect(sys).toMatch(/Vi que você tem mais de um contrato com a gente/);
-      expect(sys).toMatch(/Claro, vou te ajudar com o boleto\. Vi que você tem mais de um contrato/);
-    });
-
-    test('sem motivo, continua encaminhando ao Financeiro como hoje', async () => {
-      const sys = (await contexto()).messages[0].content;
-      expect(sys).toMatch(/e depois conclua a triagem para o Financeiro/);
-      expect(sys).not.toMatch(/chame encerrar_atendimento/);
-    });
-
-    test('no limite de perguntas com motivo, entrega e encerra em vez de concluir', async () => {
-      getAiConfig.mockResolvedValue(COM_MOTIVO);
-      const sys = (await contexto({ triagem: { ...TRIAGEM, attempts: 2, forcarConclusao: true } })).messages[0].content;
-      expect(sys).toMatch(/LIMITE DE PERGUNTAS ATINGIDO/);
-      expect(sys).toMatch(/entregue AGORA e chame encerrar_atendimento/);
-    });
-  });
-
-  // A IA cumprimentava sem saudação ("vou encaminhar...") porque nada no
-  // contexto dizia que horas são — o modelo não tem relógio.
-  // Sem esta linha, a triagem pede reinício de equipamento a quem está no meio
-  // de uma falha regional que a empresa já conhece.
-  test('com aviso de cidade, o contexto traz o aviso e a instrução da falha regional', async () => {
-    const sys = (await contexto({
-      avisoCidade: { cidade: 'Cândido Mendes', mensagem: 'Rompimento de fibra; equipe em campo.' },
-    })).messages[0].content;
-    expect(sys).toContain('AVISO ATIVO NA CIDADE DO CLIENTE (Cândido Mendes): Rompimento de fibra; equipe em campo.');
-    expect(sys).toMatch(/falha regional em andamento nessa cidade/);
-    expect(sys).toMatch(/NÃO peça verificações de equipamento/);
-    expect(sys).toMatch(/Se o assunto for outro, atenda normalmente/);
-  });
-
-  test('sem aviso de cidade, nenhuma das duas linhas aparece', async () => {
-    const sys = (await contexto()).messages[0].content;
-    expect(sys).not.toMatch(/AVISO ATIVO NA CIDADE DO CLIENTE/);
-    expect(sys).not.toMatch(/falha regional em andamento/);
-  });
-
-  test('o contexto informa a hora de Brasília e a regra de saudação', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-09-13T13:05:00-03:00'));
-    try {
-      const sys = (await contexto()).messages[0].content;
-      // A data entrou junto (2026-09-16): sem ela o modelo não conta os dias
-      // de atraso da fatura.
-      expect(sys).toContain('e agora são 13:05');
-      expect(sys).toMatch(/Hoje é \d{2}\/\d{2}\/\d{4} e agora são 13:05/);
-      expect(sys).toMatch(/Boa tarde/);
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
   test('encerrar_atendimento entra na lista fixa da triagem', async () => {
     expect(FERRAMENTAS_TRIAGEM).toContain('encerrar_atendimento');
-    expect(FERRAMENTAS_TRIAGEM).toHaveLength(11);
+    expect(FERRAMENTAS_TRIAGEM).toHaveLength(10);
   });
 
   // 2N chamadas (status do contrato + da conexão de cada contrato) estouravam
@@ -2066,11 +1340,132 @@ describe('perfil de triagem', () => {
     expect(recordAiInteraction).toHaveBeenCalledWith(expect.objectContaining({ mode: 'triage' }));
   });
 
+  // Task 6: o escopo do terceiro (boleto de outra pessoa) entra pelo mesmo
+  // parâmetro que a identidade e sai pelo mesmo caminho no retorno — quem
+  // persiste de verdade é a própria ferramenta (tool-registry.js), não o
+  // orquestrador; aqui só provamos a passagem contexto ida e volta.
+  test('recebe terceiro e o coloca no contexto do turno', async () => {
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: {} }; });
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'esquecer_identificacao', arguments: '{}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'ok' }, usage: {} });
+    const escopo = { nome: 'Maria', contratos: [{ id: 77 }] };
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM, terceiro: escopo });
+    expect(ctxVisto.terceiro).toEqual(escopo);
+  });
+
+  test('sem terceiro informado, o contexto do turno nasce com null', async () => {
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: {} }; });
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'esquecer_identificacao', arguments: '{}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'ok' }, usage: {} });
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    expect(ctxVisto.terceiro).toBeNull();
+  });
+
+  test('devolve terceiro no retorno do turno, refletindo o que a ferramenta deixou no contexto', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'buscar_cliente', arguments: '{"cpf":"52998224725","titularEOutraPessoa":true}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Localizei o contrato.' }, usage: {} });
+    const escopo = { nome: 'Maria', contratos: [{ id: 77 }] };
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctx.terceiro = escopo; return { ok: true, resultado: {} }; });
+    const r = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: IDENT_FORTE, triagem: TRIAGEM });
+    expect(r.terceiro).toEqual(escopo);
+  });
+
   test('perfil assistente continua igual: sem identidade, ferramentas do cartão', async () => {
     createChatCompletion.mockResolvedValue({ message: { content: 'ok' }, usage: {} });
     await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
     const req = createChatCompletion.mock.calls[0][0];
     expect(req.tools.map((t) => t.function.name)).toEqual(['desbloqueio_confianca']);
     expect(req.messages[0].content).not.toMatch(/recepcionista/i);
+  });
+});
+
+// Threading do messageId (idempotência de enviar_boleto/gerar_pix). O que
+// importa não é só o repasse: é que o MESMO id chegue a todas as tool calls do
+// turno e a todas as voltas internas do laço. Um id por tool call, ou por
+// chamada à OpenAI, anularia a guarda de reenvio inteira.
+describe('messageId no contexto do turno', () => {
+  const IDENTIDADE = {
+    nivel: 'forte', origem: 'phone', primeiroNome: 'João', nome: 'João Da Silva Pereira',
+    contracts: [{ id: 17402, statusCode: 1, plan: '600MB', address: 'RUA X' }],
+    client: { id: 9, document: '11122233344' }, contestado: false,
+  };
+  const TRIAGEM_LOCAL = { threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false };
+
+  beforeEach(() => {
+    getAiConfig.mockResolvedValue({
+      apiKey: 'sk', model: 'gpt-x', mode: 'triage', systemPrompt: 'Você é a assistente.',
+      maxToolsPerInteraction: 8, triageExtraInstructions: 'Seja breve.',
+      triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageResolvedReasonId: null,
+    });
+    createChatCompletion.mockReset();
+  });
+
+  const turno = (extra = {}) => runAiTurn({
+    conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem',
+    identidade: IDENTIDADE, triagem: TRIAGEM_LOCAL, origemMensagem: 'texto', ...extra,
+  });
+
+  test('o messageId do turno chega ao contexto das ferramentas', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Enviei acima o boleto.' }, usage: {} });
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: { enviado: true } }; });
+    await turno({ messageId: 'msg-42' });
+    expect(ctxVisto.messageId).toBe('msg-42');
+  });
+
+  test('duas tool calls do mesmo turno recebem o MESMO messageId', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: {
+          content: null,
+          tool_calls: [
+            { id: 't1', function: { name: 'consultar_status_contrato', arguments: '{"contratoId":17402}' } },
+            { id: 't2', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } },
+          ],
+        },
+        usage: {},
+      })
+      .mockResolvedValueOnce({ message: { content: 'Enviei acima o boleto.' }, usage: {} });
+    const vistos = [];
+    executeTool.mockImplementation(async (nome, args, ctx) => {
+      vistos.push(ctx.messageId);
+      return { ok: true, resultado: { enviado: true } };
+    });
+    await turno({ messageId: 'msg-42' });
+    expect(vistos).toEqual(['msg-42', 'msg-42']);
+  });
+
+  test('voltas seguidas do laço (três chamadas à OpenAI) mantêm o mesmo messageId', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'consultar_status_contrato', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't2', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Tudo certo por aqui.' }, usage: {} });
+    const vistos = [];
+    executeTool.mockImplementation(async (nome, args, ctx) => {
+      vistos.push(ctx.messageId);
+      return { ok: true, resultado: { enviado: true } };
+    });
+    await turno({ messageId: 'msg-42' });
+    expect(vistos).toEqual(['msg-42', 'msg-42']);
+    expect(createChatCompletion).toHaveBeenCalledTimes(3);
+  });
+
+  // Sem messageId o contexto carrega null — nunca um valor inventado: em
+  // tool-registry.js é isso que faz o reenvio falhar FECHADO.
+  test('sem messageId, o contexto carrega null (falha fechado)', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({ message: { content: null, tool_calls: [{ id: 't1', function: { name: 'enviar_boleto', arguments: '{"contratoId":17402}' } }] }, usage: {} })
+      .mockResolvedValueOnce({ message: { content: 'Enviei acima o boleto.' }, usage: {} });
+    let ctxVisto;
+    executeTool.mockImplementation(async (nome, args, ctx) => { ctxVisto = ctx; return { ok: true, resultado: { enviado: true } }; });
+    await turno();
+    expect(ctxVisto.messageId).toBeNull();
   });
 });

@@ -1,5 +1,3 @@
-const fs = require('fs');
-
 const sgpClient = require('../integrations/sgp-client');
 const { normalizeContract, normalizeConnection, normalizeInvoices } = require('./sgp-normalizer');
 const { setContactSgpLink } = require('../conversations/contact.repository');
@@ -7,13 +5,13 @@ const { findReasonById } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const {
   setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
-  incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
-  setTriagePendingDocument,
+  markPhoneContested, markTriageResolvedByAi, closeConversationByAi, setThirdPartyScope,
 } = require('../conversations/conversation.repository');
+const { montarEscopo, paraContexto } = require('./third-party-scope');
 const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
-const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO } = require('./trust-unlock-rules');
-const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
+const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO, DIAS_ENTRE_LIBERACOES } = require('./trust-unlock-rules');
+const { saveMediaFile } = require('../media/media-storage');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { enviarPix, enviarBoleto } = require('../payments/payment-sender');
 const { formatarData } = require('../payments/payment-card');
@@ -23,20 +21,22 @@ const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const { mensagemSegura } = require('./safe-error-log');
 const { findLatestInboundImage } = require('../conversations/message.repository');
-const { analyzeImage } = require('./openai-client');
 const { getAiConfig } = require('./ai-config.repository');
 const { analisarComprovante } = require('./receipt-analysis');
-const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
+const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('./billing-delivery.repository');
 const { descreverUsoAnterior } = require('./receipt-usage-text');
-// Mesmo normalizador que sgp-client.js usa no que vem do cadastro: os dois
-// lados da conferência da data precisam concordar sobre o que é uma data.
-const { normalizarDataNascimento } = require('./data-nascimento');
 
 // A imagem só sai do servidor depois de passar por estes dois filtros: o
 // que a OpenAI consegue ler de verdade, e um teto de bytes.
 const MIMES_COMPROVANTE = ['image/jpeg', 'image/png', 'image/webp'];
 const TAMANHO_MAXIMO_COMPROVANTE = 5 * 1024 * 1024;
+
+// Lista FECHADA: só o que o fluxo de pagamento de outra pessoa precisa. Tudo o
+// mais no contrato alheio é recusado — plano devolve o login de acesso do
+// titular, conexão diz se a casa dele está online, e o desbloqueio executa uma
+// ação de serviço no contrato de um estranho.
+const FERRAMENTAS_PERMITIDAS_EM_TERCEIRO = ['consultar_faturas', 'enviar_boleto', 'gerar_pix', 'gerar_segunda_via'];
 
 function erro(mensagem) {
   return { ok: false, erro: mensagem };
@@ -65,6 +65,30 @@ function validarContratoId(args) {
   if (!Number.isInteger(id) || id <= 0) return erro('contratoId must be a positive integer');
   return { ok: true, args: { contratoId: id } };
 }
+
+/**
+ * Validador das DUAS ferramentas que entregam a fatura ao cliente. Existe
+ * porque validarContratoId devolve só `{ contratoId }`: todo campo a mais é
+ * descartado antes de chegar em `executar`, e `reenviar` sumiria em silêncio.
+ *
+ * `=== true` é estrito de propósito. 'true', 1, 'sim' ou um objeto não abrem o
+ * caminho do reenvio: a ausência (e qualquer valor estranho) significa "não é
+ * reenvio", que já é o estado seguro. Falha FECHADO.
+ */
+function validarEntregaDeFatura(args) {
+  const base = validarContratoId(args);
+  if (!base.ok) return base;
+  return { ok: true, args: { ...base.args, reenviar: Boolean(args && args.reenviar === true) } };
+}
+
+// Opcional nas duas ferramentas, e não `required` como pendenciasObrigatorias:
+// lá a ausência significaria "nada pendente" (permissão) e por isso tinha de
+// ser obrigatório; aqui a ausência significa "não é reenvio" (bloqueio), que é
+// o estado seguro. Obrigá-lo normalizaria o modelo escrever `reenviar: true`.
+const PARAMETRO_REENVIAR = {
+  type: 'boolean',
+  description: 'Só true quando, NESTA mensagem, o cliente pediu o reenvio com todas as letras ("não recebi, manda de novo", "reenvia por favor"). Confirmar, agradecer ou dizer "pode mandar" NÃO é pedido de reenvio. Em qualquer outro caso, omita.',
+};
 
 /** Total informado pela paginação do SGP, ou null quando não há como saber. */
 function totalDaPaginacao(paginacao) {
@@ -104,15 +128,28 @@ async function saiuDaTriagem(conversationId) {
 }
 
 /**
+ * Onde este contrato pode ser resolvido. Os contratos do próprio contato e os
+ * de um terceiro consultado são dois conjuntos SEPARADOS, e nada — nem o
+ * fallback de fatura — atravessa de um para o outro.
+ */
+function escopoDoContrato(contexto, contratoId) {
+  const proprios = (contexto && contexto.contracts) || [];
+  if (proprios.some((c) => c.id === contratoId)) return { contratos: proprios, terceiro: false };
+  const deTerceiro = (contexto && contexto.terceiro && contexto.terceiro.contratos) || [];
+  if (deTerceiro.some((c) => c.id === contratoId)) return { contratos: deTerceiro, terceiro: true };
+  return null;
+}
+
+/**
  * Procura a fatura em aberto no contrato pedido e, se não houver, nos DEMAIS
  * contratos do cliente. Teste real 2026-09-13: cliente com dois contratos, o
  * modelo chamou gerar_pix no contrato sem fatura e respondeu "não encontrei
  * fatura em aberto" — mesmo com o prompt mandando consultar todos antes. A
  * garantia tem que estar no código, não na obediência do modelo.
  *
- * Propriedade: os contratos alternativos saem de contexto.contracts, que o
- * servidor carregou a partir do CPF do PRÓPRIO contato — a troca de contrato
- * nunca sai do dono, não há id vindo do modelo aqui.
+ * Propriedade: os contratos alternativos vêm de escopoDoContrato — o mesmo
+ * dono do contrato pedido (o próprio contato, ou o terceiro confirmado nesta
+ * conversa) — nunca do outro conjunto. Não há id vindo do modelo aqui.
  *
  * Devolve uma de quatro formas:
  * - fatura achada: { resultado, contratoId, trocouContrato, endereco? }
@@ -127,7 +164,8 @@ async function faturaEmAlgumContrato(contratoPedido, contexto) {
     return { resultado: principal, contratoId: contratoPedido, trocouContrato: false };
   }
 
-  const outros = ((contexto && contexto.contracts) || []).filter((c) => c.id !== contratoPedido);
+  const escopo = escopoDoContrato(contexto, contratoPedido);
+  const outros = ((escopo && escopo.contratos) || []).filter((c) => c.id !== contratoPedido);
   if (outros.length === 0) {
     return { resultado: principal, contratoId: contratoPedido, trocouContrato: false, semFaturaEmNenhum: true };
   }
@@ -211,7 +249,8 @@ function nomeParaTratar(contexto) {
  * pedido, ou o outro quando faturaEmAlgumContrato trocou).
  */
 function enderecoParaCitar(busca, contexto) {
-  const contratos = (contexto && contexto.contracts) || [];
+  const escopo = escopoDoContrato(contexto, busca.contratoId);
+  const contratos = (escopo && escopo.contratos) || [];
   if (contratos.length < 2) return null;
   if (busca.endereco) return busca.endereco;
   const usado = contratos.find((c) => c.id === busca.contratoId);
@@ -220,9 +259,182 @@ function enderecoParaCitar(busca, contexto) {
 
 /** Busca no cache do turno; só chama o SGP se ainda não houver nada. */
 async function contratoDoCache(contexto, contratoId) {
-  const achado = (contexto.contracts || []).find((c) => c.id === contratoId);
+  const escopo = escopoDoContrato(contexto, contratoId);
+  const achado = ((escopo && escopo.contratos) || []).find((c) => c.id === contratoId);
   if (!achado) throw new Error('contract_not_in_context');
   return achado;
+}
+
+/**
+ * Derruba a autorização sobre o contrato de terceiro. Falha FECHADO: se o banco
+ * não confirmar a limpeza, quem chamou precisa abortar. Um escopo que sobrevive
+ * a uma limpeza malsucedida é autorização viva sobre o contrato de um estranho,
+ * e reapareceria no próximo turno como se nada tivesse acontecido.
+ */
+async function limparEscopoDeTerceiro(contexto) {
+  try {
+    await setThirdPartyScope(contexto.conversationId, null);
+  } catch (err) {
+    console.error(`Failed to clear the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    return false;
+  }
+  contexto.terceiro = null;
+  return true;
+}
+
+/**
+ * IDEMPOTÊNCIA DA ENTREGA (boleto e PIX)
+ *
+ * Simulação real, roteiro 14: a IA entregou o boleto; no turno seguinte, diante
+ * de um "Pode mandar" ambíguo, entregou DE NOVO. Em produção isso é o cliente
+ * recebendo dois boletos e podendo pagar duas vezes. Nenhuma das duas
+ * ferramentas tinha qualquer checagem de já-enviado.
+ *
+ * A guarda é um claim atômico no banco (ai_billing_deliveries), reivindicado
+ * antes de qualquer efeito externo e confirmado só depois que todos voltaram.
+ *
+ * O DESENHO (v2): a MENSAGEM INBOUND é a identidade da entrega; `reenviar` é
+ * só permissão. O desenho anterior punha `reenviar` na identidade ('initial'
+ * vs 'resend:<messageId>') e por isso a MESMA mensagem do cliente conseguia
+ * produzir duas entregas — uma tool call sem `reenviar` e outra com
+ * `reenviar: true` caíam em chaves diferentes. Medido em banco real.
+ *
+ * As duas propriedades são das DUAS restrições do Postgres, nunca de um
+ * SELECT antes do INSERT:
+ *   1. UNIQUE (conversa, ferramenta, contrato, fatura, message_id)
+ *      → uma entrega por mensagem do cliente, INDEPENDENTE de `reenviar`.
+ *   2. índice parcial único WHERE is_resend = false
+ *      → um único envio INICIAL, para sempre.
+ */
+
+/**
+ * A resposta quando o claim NÃO foi obtido. As duas situações não são a mesma
+ * coisa, e a diferença é exatamente o que o modelo pode dizer ao cliente:
+ * - com `enqueuedAt`: a entrega chegou a ser enfileirada → `jaEnviado`.
+ * - só com `claimedAt` (ou registro ilegível): uma tentativa começou e nunca
+ *   confirmou → `envioAnteriorIncerto`, e a instrução NÃO pode afirmar que o
+ *   cliente recebeu, porque não sabemos.
+ */
+function respostaDeDuplicata(registro, item) {
+  if (registro && registro.enqueuedAt) {
+    return {
+      enviado: false,
+      jaEnviado: true,
+      instrucao: `O ${item} desta fatura já foi enviado nesta conversa. Não envie de novo, a menos que o cliente peça o reenvio com todas as letras. Se ele apenas confirmou, agradeceu ou disse "pode mandar", só responda: o ${item} já está com ele, logo acima.`,
+    };
+  }
+  return {
+    enviado: false,
+    envioAnteriorIncerto: true,
+    instrucao: `Uma tentativa anterior de enviar o ${item} desta fatura nesta conversa ficou SEM confirmação. Não afirme que o cliente recebeu, porque não sabemos. Não repita o envio por conta própria: pergunte a ele se o ${item} chegou. Se ele disser que não e pedir o reenvio com todas as letras, aí sim chame esta ferramenta de novo com reenviar: true.`,
+  };
+}
+
+/**
+ * FAIL-CLOSED: sem um identificador ESTÁVEL a guarda inteira deixa de existir,
+ * e o jeito de ela deixar de existir é silencioso — cada chamada geraria uma
+ * chave nova, tudo passaria, e pareceria que funciona. Então na falta de
+ * qualquer um dos dois identificadores a ferramenta NÃO envia. Nunca um
+ * fallback genérico, nunca um aleatório, nunca o relógio.
+ */
+function respostaSemIdentificador(item, campo) {
+  return {
+    enviado: false,
+    entregaSemIdentificador: campo,
+    motivo: campo === 'faturaId'
+      ? 'A fatura veio sem identificador, e sem ele não há como impedir um segundo envio da mesma cobrança.'
+      : 'Este turno não sabe qual mensagem do cliente o originou, e sem isso não há como impedir um segundo envio da mesma cobrança.',
+    // Sem nome de setor no texto (Task 19): os setores são cadastrados pelo
+    // provedor, e um nome fixo aqui quebraria em qualquer outra instalação.
+    instrucao: `NÃO houve envio: o cliente não recebeu nada. Não tente de novo por conta própria e não diga que enviou. Avise que você não conseguiu emitir o ${item} agora e conclua a triagem encaminhando para um atendente humano.`,
+  };
+}
+
+/** Só vale como identificador de fatura o que é não-nulo e não é string vazia. */
+function identificadorDeFatura(fatura) {
+  const id = fatura && fatura.id;
+  if (id === null || id === undefined) return null;
+  const texto = String(id).trim();
+  return texto === '' ? null : texto;
+}
+
+/**
+ * Reivindica a entrega desta fatura. Devolve `{ claimId }` quando a ferramenta
+ * pode seguir, ou `{ resposta }` pronta quando não pode.
+ *
+ * A identidade do claim é (conversa, ferramenta, contrato, fatura, MENSAGEM).
+ * `isResend` não entra na identidade: ele só libera a segunda restrição (o
+ * índice parcial do envio inicial). É essa separação que faz a mesma mensagem
+ * do cliente entregar uma vez só, tenha ela pedido o reenvio ou não.
+ *
+ * Um claim obtido mas sem id não teria como ser confirmado nem liberado depois:
+ * vira duplicata incerta, porque bloquear é mais seguro do que arriscar
+ * entregar dinheiro duas vezes.
+ */
+async function reivindicarEntrega({ tool, item, contratoId, fatura, args, contexto }) {
+  const invoiceId = identificadorDeFatura(fatura);
+  if (!invoiceId) {
+    console.error(`${tool}: fatura sem id na conversa ${contexto.conversationId}; entrega recusada para não arriscar a duplicata.`);
+    return { resposta: respostaSemIdentificador(item, 'faturaId') };
+  }
+  const messageId = contexto && contexto.messageId;
+  if (!messageId) {
+    console.error(`${tool}: turno sem messageId na conversa ${contexto.conversationId}; entrega recusada para não arriscar a duplicata.`);
+    return { resposta: respostaSemIdentificador(item, 'messageId') };
+  }
+
+  const { obtido, registro } = await claimDelivery({
+    conversationId: contexto.conversationId,
+    tool,
+    contractId: contratoId,
+    invoiceId,
+    messageId,
+    isResend: args && args.reenviar === true,
+  });
+  if (!obtido) return { resposta: respostaDeDuplicata(registro, item) };
+  if (!registro || !registro.id) return { resposta: respostaDeDuplicata(null, item) };
+  return { claimId: registro.id };
+}
+
+/**
+ * ZONA A — antes de qualquer efeito externo. Nada saiu do sistema, então
+ * devolver o claim é correto: a próxima tentativa TEM de poder entregar.
+ * Uma falha ao liberar não muda a resposta da ferramenta; no pior caso o claim
+ * fica de pé e a próxima chamada lê "incerto", que é o lado seguro.
+ */
+async function liberarEntrega(claimId, conversationId, onde) {
+  try {
+    await releaseDelivery(claimId);
+  } catch (err) {
+    console.error(`Falha ao liberar o claim de entrega (${onde}) na conversa ${conversationId}: ${mensagemSegura(err)}`);
+  }
+}
+
+/**
+ * ZONA C — todos os efeitos externos voltaram. Uma falha aqui não desfaz a
+ * entrega e não pode derrubar a ferramenta: o claim fica sem enqueued_at e a
+ * próxima chamada lê "incerto" em vez de "já enviado". Nunca o contrário.
+ */
+async function confirmarEntrega(claimId, conversationId) {
+  try {
+    await markDeliveryEnqueued(claimId);
+  } catch (err) {
+    console.error(`Falha ao confirmar a entrega ${claimId} na conversa ${conversationId}: ${mensagemSegura(err)}`);
+  }
+}
+
+/** Transforma o JSON gravado do resultado numa frase curta para o atendente. */
+function legivel(serializado) {
+  try {
+    const dado = JSON.parse(serializado);
+    if (dado && typeof dado === 'object') {
+      const partes = Object.entries(dado)
+        .filter(([chave]) => chave !== 'instrucao' && chave !== 'proximoPasso')
+        .map(([chave, valor]) => `${chave} ${typeof valor === 'object' ? JSON.stringify(valor) : valor}`);
+      if (partes.length > 0) return partes.join(', ').slice(0, 160);
+    }
+  } catch (err) { /* resultado truncado não é JSON válido: cai no texto cru */ }
+  return String(serializado).slice(0, 160);
 }
 
 const TOOLS = [
@@ -269,130 +481,78 @@ const TOOLS = [
       }
 
       const { client, contracts } = await sgpClient.lookupClientByCpf(args.cpf);
-      contexto.contracts = contracts;
 
-      // No perfil de triagem, CPF digitado por número desconhecido é identidade
-      // FRACA: classifica, mas não entrega nada até confirmar_nascimento. Por
-      // isso o vínculo do contato NÃO é persistido aqui — é
-      // confirmar_nascimento quem persiste, só depois de bater a data. Sem
-      // isso, um CPF errado (ou de outra pessoa) vazaria para o próximo turno
-      // como identidade forte via memória (contact.sgpDocument já setado).
+      // No perfil de triagem, o CPF digitado já deixa a identidade forte,
+      // com a cidade preenchida e o aviso de falha regional disparado aqui
+      // mesmo.
       if (perfilTriagem(contexto)) {
-        const configIa = await getAiConfig();
-        // Decisão do dono (2026-09-14): "o dado mais importante é o CPF; no
-        // site do SGP o cliente loga só com ele". Por padrão a confirmação por
-        // data de nascimento está DESLIGADA e o CPF digitado já identifica —
-        // mesmo caminho do ramo assistente, mais a cidade e o aviso que
-        // confirmar_nascimento fazia. Com a flag ligada, o comportamento
-        // antigo (identidade fraca até a data bater) volta inteiro.
-        if (!(configIa && configIa.triageRequireBirthdate)) {
-          const nome = primeiroNome(client.name);
-          // Fatura de outra pessoa (print 2026-09-16): o CPF do titular abre o
-          // contrato dele — igual à segunda via do site do SGP —, mas o
-          // contato de quem está falando NÃO vira o titular: nada é
-          // persistido, a cidade não é sobrescrita e quem fala continua sendo
-          // chamado pelo próprio nome.
-          if (args.titularEOutraPessoa) {
-            const nomeDeQuemFala = (contexto.identidade && contexto.identidade.primeiroNome) || null;
-            contexto.identidade = {
-              nivel: 'forte', origem: (contexto.identidade && contexto.identidade.origem) || 'cpf',
-              primeiroNome: nomeDeQuemFala, contracts,
-              client: { id: client.id, document: args.cpf }, dataNascimento: null,
-              contestado: false, nascimentoTentado: false,
-              titular: { nome, terceiro: true },
-            };
-            return {
-              cliente: { nome },
-              contratos: contracts.map((c) => {
-                const n = normalizeContract(c);
-                return { id: c.id, status: n.status, endereco: n.endereco };
-              }),
-              instrucao: `O CPF é de OUTRA pessoa (${nome}), não de quem está falando. Pode seguir com fatura, boleto ou PIX desse contrato normalmente, mas NUNCA diga "seu contrato" nem "sua fatura": diga "localizei o contrato no CPF informado" e, ao entregar, diga de quem é ("o boleto do contrato de ${nome}"). Continue chamando quem fala pelo nome dela. Ao concluir, registre no resumo que quem pediu não é o titular. Este cadastro NÃO fica guardado no contato: se precisar dele de novo no próximo turno, chame buscar_cliente de novo com o mesmo CPF e titularEOutraPessoa: true.`,
-            };
-          }
-          contexto.identidade = {
-            nivel: 'forte', origem: 'cpf', primeiroNome: nome, contracts,
-            client: { id: client.id, document: args.cpf }, dataNascimento: null,
-            contestado: false, nascimentoTentado: false,
-          };
-          await setContactSgpLink(contexto.contact.id, {
-            sgpClientId: client.id,
-            sgpContractId: contracts.length === 1 ? contracts[0].id : null,
-            sgpDocument: args.cpf,
-            // O nome guardado no contato salva o cumprimento quando o SGP não
-            // responder no próximo atendimento.
-            sgpFirstName: nome,
-          });
-          contexto.contact.sgpDocument = args.cpf;
-          // Try/catch: a identificação já está persistida e não pode virar
-          // recusa por causa de um campo acessório. O CPF nunca vai a log.
-          try {
-            await preencherCidadePeloSgp(contexto.contact, contracts);
-            await enviarAvisoDeCidadeSePreciso({
-              contact: contexto.contact,
-              conversationId: contexto.conversationId,
-              channelId: contexto.channelId,
-            });
-          } catch (err) {
-            console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
-          }
-          // Sem confirmação pendente não há CPF pendente: um resto na coluna
-          // faria o próximo turno reconstruir uma identidade fraca por cima de
-          // uma forte já gravada.
-          try {
-            await setTriagePendingDocument(contexto.conversationId, null);
-          } catch (err) {
-            console.error(`Failed to clear the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
-          }
-          return {
-            cliente: { nome },
-            contratos: contracts.map((c) => {
-              const n = normalizeContract(c);
-              return { id: c.id, status: n.status, endereco: n.endereco };
-            }),
-            instrucao: 'Cliente identificado. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
-          };
-        }
+        const nome = primeiroNome(client.name);
+        // Fatura de outra pessoa (print 2026-09-16): o CPF do titular abre o
+        // contrato dele — igual à segunda via do site do SGP —, mas o
+        // contato de quem está falando NÃO vira o titular: nada é
+        // persistido, a cidade não é sobrescrita e quem fala continua sendo
+        // chamado pelo próprio nome.
+        if (args.titularEOutraPessoa) {
+          // O CPF do titular abre o contrato dele — igual à segunda via do site do SGP —,
+          // mas NADA disso vira o contato: sem persistência no contato, sem cidade, sem
+          // trocar o nome de quem fala. E, principalmente, SEM MEXER EM
+          // contexto.identidade: quem está falando pode não ser cliente nenhum, e digitar
+          // o CPF de outra pessoa não pode elevar a identidade de ninguém. A autorização
+          // mora no escopo, não na identidade do solicitante.
+          const escopo = montarEscopo(nome, contracts);
 
-        let dataNascimento = null;
-        try {
-          const rec = await sgpClient.findClientRecord({ cpfcnpj: args.cpf });
-          dataNascimento = rec.cliente ? rec.cliente.dataNascimento : null;
-        } catch (err) {
-          console.error(`Birth date lookup failed: ${mensagemSegura(err)}`);
+          // Falha fechado: a gravação vem ANTES de o escopo valer neste turno. Sem
+          // persistência não há autorização — nem agora nem no turno seguinte. Deixar o
+          // turno seguir com um escopo que o banco não conhece é o começo de um escopo
+          // órfão. O documento nunca entra no log.
+          try {
+            await setThirdPartyScope(contexto.conversationId, escopo);
+          } catch (err) {
+            console.error(`Failed to store the third party scope for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+            return erro('third_party_scope_not_stored');
+          }
+          contexto.terceiro = paraContexto(escopo);
+
+          return {
+            titular: { nome },
+            contratos: contracts.map((c) => ({ id: c.id })),
+            instrucao: `O CPF é de OUTRA pessoa (${nome}), não de quem está falando. Você pode consultar a fatura e entregar o boleto ou o PIX desse contrato; plano, conexão e status do contrato dela não podem ser consultados. NUNCA diga "seu contrato" nem "sua fatura": diga que localizou o contrato no CPF informado e, ao entregar, diga de quem é ("o boleto do contrato de ${nome}"). Continue chamando quem fala pelo nome dela. Ao concluir, registre no resumo que quem pediu não é o titular.`,
+          };
         }
+        contexto.contracts = contracts;
+        if (!(await limparEscopoDeTerceiro(contexto))) return erro('third_party_scope_not_cleared');
         contexto.identidade = {
-          nivel: 'fraca', origem: 'cpf', primeiroNome: primeiroNome(client.name), contracts,
-          client: { id: client.id, document: args.cpf }, dataNascimento, contestado: false, nascimentoTentado: false,
+          nivel: 'forte', origem: 'cpf', primeiroNome: nome, contracts,
+          client: { id: client.id, document: args.cpf }, contestado: false,
         };
-        // A identidade FRACA precisa sobreviver ao fim do turno: sem isto,
-        // resolverIdentidade devolvia 'none' no turno seguinte e o modelo
-        // pedia o CPF outra vez (defeito A, teste real 2026-09-14). A coluna
-        // é dedicada e fica fora dos resumos.
-        //
-        // Try/catch: a identidade deste turno já está montada e vale. Perder a
-        // persistência é voltar ao comportamento antigo; derrubar o turno
-        // inteiro (execution_error) logo depois de o cliente digitar o CPF é
-        // pior. O CPF nunca entra na mensagem de log.
+        await setContactSgpLink(contexto.contact.id, {
+          sgpClientId: client.id,
+          sgpContractId: contracts.length === 1 ? contracts[0].id : null,
+          sgpDocument: args.cpf,
+          // O nome guardado no contato salva o cumprimento quando o SGP não
+          // responder no próximo atendimento.
+          sgpFirstName: nome,
+        });
+        contexto.contact.sgpDocument = args.cpf;
+        // Try/catch: a identificação já está persistida e não pode virar
+        // recusa por causa de um campo acessório. O CPF nunca vai a log.
         try {
-          await setTriagePendingDocument(contexto.conversationId, args.cpf);
+          await preencherCidadePeloSgp(contexto.contact, contracts);
+          await enviarAvisoDeCidadeSePreciso({
+            contact: contexto.contact,
+            conversationId: contexto.conversationId,
+            channelId: contexto.channelId,
+          });
         } catch (err) {
-          console.error(`Failed to store the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+          console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
         }
-        // As palavras do modelo vão direto ao cliente na triagem: nunca o
-        // sobrenome completo nem o login PPPoE, só o que já se apresentaria
-        // por telefone.
-        //
-        // Defeito C (teste real 2026-09-14): a lista de contratos saía daqui
-        // com id e status, e o modelo citava "contrato 2354" ao cliente e
-        // perguntava "qual contrato" mesmo com um contrato só. Antes da
-        // confirmação ele recebe só a quantidade — os contratos continuam em
-        // contexto.identidade.contracts, para o executor e para
-        // confirmar_nascimento devolvê-los depois.
         return {
-          cliente: { nome: primeiroNome(client.name) },
-          quantidadeContratos: contracts.length,
-          proximoPasso: 'Identificação por CPF ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento. NÃO cite contrato, endereço nem plano; NÃO pergunte qual contrato.',
+          cliente: { nome },
+          contratos: contracts.map((c) => {
+            const n = normalizeContract(c);
+            return { id: c.id, status: n.status, endereco: n.endereco };
+          }),
+          instrucao: 'Cliente identificado. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
         };
       }
 
@@ -400,6 +560,7 @@ const TOOLS = [
       // vínculo é persistido de imediato — o guard de "troca de cliente" do
       // executor (que lê contexto.contact.sgpDocument) depende disso para
       // disparar dentro do mesmo turno.
+      contexto.contracts = contracts;
       await setContactSgpLink(contexto.contact.id, {
         sgpClientId: client.id,
         sgpContractId: contracts.length === 1 ? contracts[0].id : null,
@@ -422,7 +583,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -439,7 +600,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -455,7 +616,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -472,7 +633,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -488,7 +649,7 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -556,7 +717,7 @@ const TOOLS = [
         } else if (contratosComFaturaEmAberto.length > 1) {
           instrucao = 'Mais de um contrato tem fatura em aberto: pergunte de qual endereço ele quer, citando os endereços de contratosComFaturaEmAberto, e entregue na resposta seguinte.';
         } else {
-          instrucao = 'Nenhum contrato tem fatura em aberto: diga isso em uma frase (sem valores) e chame concluir_triagem para o Financeiro.';
+          instrucao = 'Nenhum contrato tem fatura em aberto: diga isso em uma frase (sem valores) e chame concluir_triagem para o setor que cuidar de financeiro.';
         }
       }
       return {
@@ -689,7 +850,10 @@ const TOOLS = [
       type: 'object',
       properties: {
         setorId: { type: 'string', description: 'UUID de um setor existente.' },
-        resumo: { type: 'string', description: 'Resumo do atendimento para o atendente humano.' },
+        resumo: {
+          type: 'string',
+          description: 'Resumo para o atendente humano, em 2 a 4 frases: o que o cliente pediu COM AS PALAVRAS DELE, o que as consultas mostraram, o que você já resolveu, e o que falta. Bom: "Cliente relata quedas desde cedo. Cadastro localizado, contrato ativo e conexão online na consulta. Diz que acontece em todos os aparelhos." Ruim: "Cliente com problema de internet."',
+        },
       },
       required: ['setorId', 'resumo'],
     },
@@ -725,7 +889,7 @@ const TOOLS = [
     exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -776,10 +940,13 @@ const TOOLS = [
     exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: {
+        contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' },
+        reenviar: PARAMETRO_REENVIAR,
+      },
       required: ['contratoId'],
     },
-    validar: validarContratoId,
+    validar: validarEntregaDeFatura,
     async executar(args, contexto) {
       // Vale para os DOIS ramos (triagem e assistente): o atendente humano
       // também pedia o PIX do contrato errado e ouvia "não há fatura".
@@ -814,17 +981,46 @@ const TOOLS = [
         return resposta;
       }
 
-      // Regra do Financeiro: sem código PIX no SGP, não há o que enviar.
-      if (!primeira.pixCode) return { sucesso: false, motivo: 'Fatura sem código PIX no SGP' };
+      // Idempotência: o claim vem DEPOIS de faturaEmAlgumContrato (só aqui
+      // primeira.id existe) e ANTES de qualquer trabalho externo. Fica também
+      // depois do ramo assistente acima de propósito: lá nada é enviado, e
+      // reivindicar ali gravaria o envio INICIAL da fatura sem nunca usá-lo —
+      // o índice parcial bloquearia a entrega de verdade logo depois.
+      const entrega = await reivindicarEntrega({
+        tool: 'gerar_pix', item: 'PIX', contratoId: busca.contratoId, fatura: primeira, args, contexto,
+      });
+      if (entrega.resposta) return entrega.resposta;
+      const claimId = entrega.claimId;
 
-      // Mesma guarda de enviar_boleto: entre a consulta ao SGP e este ponto,
-      // um atendente pode ter assumido a conversa, ou ela pode ter sido
-      // fechada/silenciada/concluída.
-      if (await saiuDaTriagem(contexto.conversationId)) {
-        return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+      // ---- ZONA A: nada saiu do sistema. Toda saída daqui devolve o claim.
+      try {
+        // Regra do Financeiro: sem código PIX no SGP, não há o que enviar.
+        if (!primeira.pixCode) {
+          await liberarEntrega(claimId, contexto.conversationId, 'gerar_pix sem código PIX');
+          return { sucesso: false, motivo: 'Fatura sem código PIX no SGP' };
+        }
+
+        // Mesma guarda de enviar_boleto: entre a consulta ao SGP e este ponto,
+        // um atendente pode ter assumido a conversa, ou ela pode ter sido
+        // fechada/silenciada/concluída.
+        if (await saiuDaTriagem(contexto.conversationId)) {
+          await liberarEntrega(claimId, contexto.conversationId, 'gerar_pix fora da triagem');
+          return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+        }
+      } catch (err) {
+        // A releitura da conversa falhou: nada chegou ao cliente.
+        await liberarEntrega(claimId, contexto.conversationId, 'gerar_pix falhou antes do envio');
+        throw err;
       }
 
+      // ---- ZONA B: daqui em diante o claim NUNCA é liberado — nem em
+      // exceção, nem em timeout, nem em resultado incerto. enviarPix chama
+      // enqueueOutboundMessage, que GRAVA a linha da mensagem no banco (já
+      // visível na conversa) e só então enfileira: se estourar no meio, a
+      // mensagem existe, e devolver o claim autorizaria uma segunda.
       await enviarPix({ conversationId: contexto.conversationId, channelId: contexto.channelId, fatura: primeira, sentBy: 'ai' });
+      // ---- ZONA C: o efeito externo voltou. A entrega vira um fato gravado.
+      await confirmarEntrega(claimId, contexto.conversationId);
       contexto.resolvidoPelaIa = true;
       // Grava a entrega: contexto.resolvidoPelaIa nasce false a cada turno, e o
       // "nao preciso de mais nada" do cliente costuma vir no turno SEGUINTE.
@@ -847,17 +1043,17 @@ const TOOLS = [
   {
     nome: 'desbloqueio_confianca',
     categoria: 'ACAO_SENSIVEL',
-    descricao: 'Libera em confiança (promessa de pagamento) um contrato SUSPENSO por inadimplência, devolvendo a internet por alguns dias até o pagamento. Use só quando o cliente pedir a liberação e o contrato estiver suspenso. Regras da casa: uma liberação a cada 30 dias, e nunca se a liberação anterior não foi paga. Ao responder, informe o prazo devolvido pela ferramenta e que a fatura continua devida.',
+    descricao: `Libera em confiança (promessa de pagamento) um contrato SUSPENSO por inadimplência, devolvendo a internet por alguns dias até o pagamento. Use só quando o cliente pedir a liberação e o contrato estiver suspenso. Regras da casa: uma liberação a cada ${DIAS_ENTRE_LIBERACOES} dias, e nunca se a liberação anterior não foi paga. Ao responder, informe o prazo devolvido pela ferramenta e que a fatura continua devida.`,
     chaveProprietario: 'contratoId',
-    // À noite esta ferramenta entra na lista da triagem, e a identidade 'fraca'
-    // (CPF digitado, sem data de nascimento confirmada) também carrega
-    // contratos: sem este gate, quem digitasse o CPF de outra pessoa liberaria
-    // o contrato dela. O gate do tool-executor só vale no perfil de triagem,
-    // então o assistente clássico (humano no comando) não muda.
+    // À noite esta ferramenta entra na lista da triagem: o gate de identidade
+    // forte garante que só quem já teve o CPF confirmado pode liberar um
+    // contrato — sem ele, o CPF de outra pessoa liberaria o contrato dela. O
+    // gate do tool-executor só vale no perfil de triagem, então o assistente
+    // clássico (humano no comando) não muda.
     exigeIdentidadeForte: true,
     parametros: {
       type: 'object',
-      properties: { contratoId: { type: 'integer' } },
+      properties: { contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' } },
       required: ['contratoId'],
     },
     validar: validarContratoId,
@@ -918,7 +1114,7 @@ const TOOLS = [
         // provavelmente está com problema de conexão, e aí a conversa continua.
         if (noturno) {
           resposta.instrucao = comprovante && comprovante.valido === true
-            ? `Responda EXATAMENTE neste modelo: "Recebi seu comprovante, ${nome}! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das ${noturno.retornoAs}." — e chame concluir_triagem para o Financeiro NA MESMA resposta.`
+            ? `Responda EXATAMENTE neste modelo: "Recebi seu comprovante, ${nome}! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das ${noturno.retornoAs}." — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.`
             : `Responda EXATAMENTE neste modelo: "${nome}, seu contrato está ativo, então não há bloqueio para liberar. Se a internet não estiver funcionando, me conta o que está acontecendo." — não conclua ainda.`;
           registrarRecusa('contrato ativo, não há bloqueio para liberar');
         }
@@ -950,7 +1146,7 @@ const TOOLS = [
         // sempre termina em ponto: sem normalizar, "…judicial Assim que…".
         const motivoPontuado = String(motivo).replace(/[.\s]*$/, '.');
         const paraOCliente = `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivoPontuado} Assim que o pagamento for confirmado, a liberação é automática.`;
-        return `Responda EXATAMENTE neste modelo: "${paraOCliente}" — e chame concluir_triagem para o Financeiro NA MESMA resposta.`;
+        return `Responda EXATAMENTE neste modelo: "${paraOCliente}" — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.`;
       };
       // Comprovante que a visão já reprovou (Task 3): não há o que avaliar nem
       // o que pedir ao SGP — a recusa sai daqui, sem nenhuma chamada externa.
@@ -1113,7 +1309,7 @@ const TOOLS = [
         // deixar a frase passar. E o resultado vai para o resumo da fila.
         contexto.desbloqueioRealizado = true;
         contexto.desbloqueioResultado = { liberado: true, dias: resposta.dias || null };
-        resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?" — e chame concluir_triagem para o Financeiro NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
+        resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?" — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
       }
       return resposta;
     },
@@ -1175,121 +1371,6 @@ const TOOLS = [
     },
   },
   {
-    nome: 'confirmar_nascimento',
-    categoria: 'CONSULTA',
-    descricao: 'Confirma a identidade de um cliente identificado por CPF digitado, comparando a data de nascimento que ele informou. Use SÓ quando o contexto disser que a identificação por CPF ainda não foi confirmada; se o contexto disser que a identidade já está confirmada (telefone ou memória), NÃO use e não peça a data. No máximo duas tentativas por atendimento.',
-    isentoDeProprietario: true,
-    parametros: { type: 'object', properties: { data: { type: 'string', description: 'Data informada pelo cliente, ex.: 20/05/1990' } }, required: ['data'] },
-    validar(args) {
-      if (typeof (args && args.data) !== 'string' || !args.data.trim()) return erro('data is required');
-      return { ok: true, args: { data: args.data.trim() } };
-    },
-    async executar(args, contexto) {
-      const id = contexto.identidade;
-      // Identidade já forte (telefone, memória ou já confirmada): não há o que
-      // confirmar. Em código, e não só no prompt — foi o modelo desobedecer o
-      // prompt que fez um cliente identificado pelo telefone ser cobrado da
-      // data. Não conta tentativa nem sobrescreve a origem.
-      if (id && id.nivel === 'forte') return { confirmado: true, jaConfirmada: true, instrucao: 'A identidade já estava confirmada; não pergunte a data de nascimento. Siga o atendimento.' };
-      // Defeito B: o retorno seco ("Não há data de nascimento no cadastro")
-      // fazia o modelo encaminhar em silêncio, logo depois de o cliente ter
-      // informado a data. A instrução diz o que falar E o que chamar na mesma
-      // resposta.
-      if (!id || !id.dataNascimento) {
-        return {
-          confirmado: false,
-          semDataNoCadastro: true,
-          motivo: 'O cadastro não tem data de nascimento para conferir.',
-          instrucao: 'Diga ao cliente que não foi possível confirmar a identidade pelo chat e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.',
-        };
-      }
-      // O limite de tentativas é por conversa, gravado no banco — não no
-      // objeto de identidade em memória, que zera a cada turno e também com
-      // esquecer_identificacao. Sem isso, o cliente podia tentar de novo só
-      // chamando esquecer_identificacao e buscar_cliente outra vez.
-      const tentativas = await incrementBirthdateAttempts(contexto.conversationId);
-      // tentativas === 0 significa que a conversa não foi encontrada (a
-      // função devolve 0 nesse caso) — falha fechado: sem contador
-      // confiável, não há como saber se o limite já estourou, então trata
-      // como recusa em vez de deixar passar (0 > 2 é falso).
-      if (tentativas === 0 || tentativas > 2) {
-        return {
-          confirmado: false,
-          motivo: tentativas === 0
-            ? 'Não foi possível registrar a tentativa. Encaminhe sem entregar dados.'
-            : 'Limite de tentativas de confirmação atingido. Encaminhe sem entregar dados.',
-        };
-      }
-      const informada = normalizarDataNascimento(args.data);
-      if (informada && informada === id.dataNascimento) {
-        id.nivel = 'forte';
-        id.origem = 'cpf_confirmed';
-        // Só agora, com a confirmação batida, o vínculo do contato é
-        // persistido — antes disso (buscar_cliente) a identidade era só
-        // FRACA e não podia vazar como memória para o próximo turno.
-        await setContactSgpLink(contexto.contact.id, {
-          sgpClientId: id.client.id,
-          sgpContractId: id.contracts.length === 1 ? id.contracts[0].id : null,
-          sgpDocument: id.client.document,
-          // O nome guardado no contato é o que salva o cumprimento quando o
-          // SGP não responder no próximo atendimento.
-          sgpFirstName: primeiroNome(id.primeiroNome),
-        });
-        contexto.contact.sgpDocument = id.client.document;
-        // Com o vínculo gravado, o endereço do contrato pode preencher a
-        // cidade do contato. Try/catch pelo mesmo motivo do bloco abaixo: a
-        // confirmação já está persistida e não pode virar recusa por causa de
-        // um campo acessório.
-        try {
-          await preencherCidadePeloSgp(contexto.contact, id.contracts);
-          // Com a cidade recém-descoberta, o aviso de falha regional sai neste
-          // mesmo turno — quem já recebeu não recebe de novo.
-          await enviarAvisoDeCidadeSePreciso({
-            contact: contexto.contact,
-            conversationId: contexto.conversationId,
-            channelId: contexto.channelId,
-          });
-        } catch (err) {
-          console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
-        }
-        // Confirmada: a identidade passa a viver no vínculo do contato, então
-        // o CPF pendente não é mais necessário na conversa. Try/catch porque a
-        // confirmação (setContactSgpLink acima) já está persistida: um resto
-        // na coluna é inofensivo (a memória tem precedência no resolvedor) e
-        // não pode transformar uma confirmação bem-sucedida em recusa.
-        try {
-          await setTriagePendingDocument(contexto.conversationId, null);
-        } catch (err) {
-          console.error(`Failed to clear the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
-        }
-        // Só agora os contratos chegam ao modelo, e com o ENDEREÇO — que é o
-        // que o cliente reconhece. O número continua existindo só para as
-        // ferramentas.
-        return {
-          confirmado: true,
-          contratos: id.contracts.map((c) => {
-            const n = normalizeContract(c);
-            return { id: c.id, status: n.status, endereco: n.endereco };
-          }),
-          instrucao: 'Identidade confirmada. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
-        };
-      }
-      // Ainda há uma tentativa (o teto é 2): pedir a data de novo é melhor do
-      // que encaminhar quem só errou de digitar. Na última, encaminha.
-      if (tentativas < 2) {
-        return {
-          confirmado: false,
-          tentativasRestantes: 2 - tentativas,
-          instrucao: 'Diga que a data não confere e peça a data de nascimento mais uma vez.',
-        };
-      }
-      return {
-        confirmado: false,
-        instrucao: 'Diga que não foi possível confirmar a identidade e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.',
-      };
-    },
-  },
-  {
     nome: 'esquecer_identificacao',
     categoria: 'ACAO',
     descricao: 'Use quando o cliente disser que o nome pelo qual foi chamado não é dele. Descarta a identificação atual; em seguida peça o CPF.',
@@ -1301,7 +1382,14 @@ const TOOLS = [
       // permissões do assistente clássico bastaria para alcançar uma
       // ferramenta pensada só para a recepcionista da triagem.
       if (!perfilTriagem(contexto)) return erro('esquecer_identificacao is only available during AI triage');
-      contexto.identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], client: null, dataNascimento: null, contestado: true, nascimentoTentado: false };
+      // Antes de concluir/encerrar/esquecer, e não depois: se a limpeza falhar, o
+      // atendimento NÃO avança. Concluir com uma autorização de terceiro ainda viva
+      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
+      // da triagem.
+      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+        return erro('third_party_scope_not_cleared');
+      }
+      contexto.identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], client: null, contestado: true };
       contexto.contracts = [];
       if (contexto.contact) {
         contexto.contact.sgpDocument = null;
@@ -1320,16 +1408,6 @@ const TOOLS = [
       } catch (err) {
         console.error(`Failed to mark phone contested for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
       }
-      // Try/catch PRÓPRIO, e não junto do de cima: depois de buscar_cliente o
-      // CPF pendente É a identidade inteira. Se a falha de markPhoneContested
-      // levasse esta limpeza junto, o CPF que o cliente acabou de descartar
-      // ressuscitaria como identidade fraca no turno seguinte — exatamente o
-      // que esquecer_identificacao existe para desfazer.
-      try {
-        await setTriagePendingDocument(contexto.conversationId, null);
-      } catch (err) {
-        console.error(`Failed to clear the pending triage document for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
-      }
       return { esquecido: true };
     },
   },
@@ -1340,14 +1418,21 @@ const TOOLS = [
     chaveProprietario: 'contratoId',
     exigeIdentidadeForte: true,
     timeoutMs: 40000,
-    parametros: { type: 'object', properties: { contratoId: { type: 'integer' } }, required: ['contratoId'] },
-    validar: validarContratoId,
+    parametros: {
+      type: 'object',
+      properties: {
+        contratoId: { type: 'integer', description: 'Id de um contrato do cliente, como veio do contexto ou de uma consulta. Com um contrato só, o sistema preenche sozinho se você omitir.' },
+        reenviar: PARAMETRO_REENVIAR,
+      },
+      required: ['contratoId'],
+    },
+    validar: validarEntregaDeFatura,
     async executar(args, contexto) {
-      // Fora da triagem não há confirmar_nascimento no meio do caminho, nem
-      // instrução para o modelo saber quando é seguro entregar — enviar_boleto
-      // EXECUTA (entrega um arquivo real ao cliente), então não é uma
-      // ferramenta de assistente/humano-no-comando. perfilTriagem (não só
-      // contexto.identidade) para não reabrir com um identidade: null bugado.
+      // Fora da triagem não há gate nem instrução própria para o modelo saber
+      // quando é seguro entregar — enviar_boleto EXECUTA (entrega um arquivo
+      // real ao cliente), então não é uma ferramenta de assistente/
+      // humano-no-comando. perfilTriagem (não só contexto.identidade) para
+      // não reabrir com um identidade: null bugado.
       if (!perfilTriagem(contexto)) return erro('enviar_boleto is only available during AI triage');
       const busca = await faturaEmAlgumContrato(args.contratoId, contexto);
       if (busca.varios) {
@@ -1370,18 +1455,46 @@ const TOOLS = [
       const contratoUsado = busca.trocouContrato
         ? { contratoId: busca.contratoId, endereco: busca.endereco }
         : null;
-      if (!primeira.boletoLink) return { enviado: false, motivo: 'Boleto sem link para download' };
-      const buffer = await sgpClient.downloadBoletoPdf(primeira.boletoLink);
-      const mediaPath = await saveMediaFile(buffer, '.pdf');
+      // Idempotência: o claim vem DEPOIS de faturaEmAlgumContrato (só aqui
+      // primeira.id existe) e ANTES de qualquer trabalho externo — antes do
+      // download do PDF, antes de gravar o arquivo, antes de enfileirar.
+      const entrega = await reivindicarEntrega({
+        tool: 'enviar_boleto', item: 'boleto', contratoId: busca.contratoId, fatura: primeira, args, contexto,
+      });
+      if (entrega.resposta) return entrega.resposta;
+      const claimId = entrega.claimId;
 
-      // I1 (revisão final do branch inteiro): entre o início deste turno (a
-      // OpenAI, o download do PDF) e este ponto, um atendente humano pode ter
-      // assumido a conversa, ou ela pode ter sido fechada/silenciada — sem
-      // reler agora, o PDF sairia mesmo com um humano já no comando.
-      if (await saiuDaTriagem(contexto.conversationId)) {
-        return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+      // ---- ZONA A: nada saiu do sistema. Toda saída daqui devolve o claim, e
+      // a próxima tentativa tem de poder entregar de verdade.
+      let mediaPath;
+      try {
+        if (!primeira.boletoLink) {
+          await liberarEntrega(claimId, contexto.conversationId, 'enviar_boleto sem link');
+          return { enviado: false, motivo: 'Boleto sem link para download' };
+        }
+        const buffer = await sgpClient.downloadBoletoPdf(primeira.boletoLink);
+        mediaPath = await saveMediaFile(buffer, '.pdf');
+
+        // I1 (revisão final do branch inteiro): entre o início deste turno (a
+        // OpenAI, o download do PDF) e este ponto, um atendente humano pode ter
+        // assumido a conversa, ou ela pode ter sido fechada/silenciada — sem
+        // reler agora, o PDF sairia mesmo com um humano já no comando.
+        if (await saiuDaTriagem(contexto.conversationId)) {
+          await liberarEntrega(claimId, contexto.conversationId, 'enviar_boleto fora da triagem');
+          return { enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' };
+        }
+      } catch (err) {
+        // Download, gravação do arquivo ou releitura da conversa falharam:
+        // nada chegou ao cliente, então o claim volta.
+        await liberarEntrega(claimId, contexto.conversationId, 'enviar_boleto falhou antes do envio');
+        throw err;
       }
 
+      // ---- ZONA B: daqui em diante o claim NUNCA é liberado — nem em
+      // exceção, nem em timeout, nem em resultado incerto.
+      // enqueueOutboundMessage GRAVA a linha da mensagem no banco (já visível
+      // na conversa) e só então enfileira: se estourar no meio, a mensagem
+      // existe, e devolver o claim autorizaria uma segunda.
       await enqueueOutboundMessage({
         conversationId: contexto.conversationId, channelId: contexto.channelId,
         content: null, messageType: 'document', mediaPath,
@@ -1400,6 +1513,10 @@ const TOOLS = [
           console.error(`enviar_boleto: linha digitável não enviada na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
         }
       }
+      // ---- ZONA C: os dois efeitos externos voltaram. A entrega vira um fato
+      // gravado — antes de markTriageResolvedByAi, para que uma falha naquela
+      // escrita não deixe esta entrega registrada como incerta.
+      await confirmarEntrega(claimId, contexto.conversationId);
       contexto.resolvidoPelaIa = true;
       // Mesma razão de gerar_pix: a flag persistida é o que autoriza
       // encerrar_atendimento num turno posterior à entrega.
@@ -1430,16 +1547,25 @@ const TOOLS = [
       properties: {
         setorId: { type: 'string', description: 'UUID de um setor existente.' },
         motivoId: { type: ['string', 'null'], description: 'UUID de um motivo existente, ou null se nenhum se aplica.' },
-        resumo: { type: 'string', description: 'Resumo objetivo para o atendente: o que o cliente quer e o que já foi apurado.' },
+        resumo: {
+          type: 'string',
+          description: 'Resumo para o atendente humano, em 2 a 4 frases: o que o cliente pediu COM AS PALAVRAS DELE, o que as consultas mostraram, o que você já resolveu, e o que falta. Bom: "Cliente relata quedas desde cedo. Cadastro localizado, contrato ativo e conexão online na consulta. Diz que acontece em todos os aparelhos." Ruim: "Cliente com problema de internet."',
+        },
         confianca: { type: 'number', description: 'Confiança na classificação, de 0 a 1.' },
+        pendenciasObrigatorias: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'O que você AINDA precisa saber DO CLIENTE para resolver ou encaminhar corretamente o que ele pediu POR ÚLTIMO. Só o que é tecnicamente necessário: se o setor consegue agir sem o dado, não entra. Dado que apenas enriquece o resumo, o cadastro ou o relatório NÃO entra. Lista VAZIA quando não falta nada. Recalcule a cada tentativa, olhando a intenção MAIS RECENTE: se o cliente mudou de assunto, pendência do assunto anterior não entra. Uma informação por item, em poucas palavras.',
+        },
       },
-      required: ['setorId', 'resumo', 'confianca'],
+      required: ['setorId', 'resumo', 'confianca', 'pendenciasObrigatorias'],
     },
     validar(args) {
       const setorId = args && args.setorId;
       const motivoId = args && args.motivoId;
       const resumo = args && args.resumo;
       const confiancaBruta = args && args.confianca;
+      const pendenciasBrutas = args && args.pendenciasObrigatorias;
       if (typeof setorId !== 'string' || !UUID_PATTERN.test(setorId)) return erro('setorId must be a UUID');
       if (motivoId != null && (typeof motivoId !== 'string' || !UUID_PATTERN.test(motivoId))) return erro('motivoId must be a UUID or null');
       if (typeof resumo !== 'string' || !resumo.trim()) return erro('resumo is required');
@@ -1448,13 +1574,57 @@ const TOOLS = [
       if (typeof confiancaBruta !== 'number' && typeof confiancaBruta !== 'string') return erro('confianca must be a number');
       const confianca = Number(confiancaBruta);
       if (!Number.isFinite(confianca) || confianca < 0 || confianca > 1) return erro('confianca must be between 0 and 1');
-      return { ok: true, args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca } };
+      // SEM default: um argumento ausente é invalid_args como qualquer outro
+      // campo obrigatório, e NUNCA `[]`. "Não declarou" não pode significar
+      // "não falta nada" — seria exatamente a autorização implícita que esta
+      // guarda existe para tirar do caminho.
+      // Item vazio também é invalid_args, e não item a descartar: a guarda
+      // falha FECHADO. Uma declaração malformada não pode encolher para lista
+      // vazia e virar autorização para concluir.
+      if (!Array.isArray(pendenciasBrutas)) return erro('pendenciasObrigatorias must be an array of strings');
+      const pendenciasObrigatorias = [];
+      for (const pendencia of pendenciasBrutas) {
+        if (typeof pendencia !== 'string' || !pendencia.trim()) return erro('pendenciasObrigatorias must be an array of strings');
+        pendenciasObrigatorias.push(pendencia.trim());
+      }
+      return { ok: true, args: { setorId, motivoId: motivoId || null, resumo: resumo.trim(), confianca, pendenciasObrigatorias } };
     },
     async executar(args, contexto) {
       // I6 (revisão final do branch inteiro): mesma guarda de
       // esquecer_identificacao — concluir_triagem só existe para a
       // recepcionista da triagem, nunca para o assistente clássico.
       if (!perfilTriagem(contexto)) return erro('concluir_triagem is only available during AI triage');
+      // GUARDA ESTRUTURAL (Task 20, cenários 16 e 20 da execução real): a IA
+      // identifica SEMANTICAMENTE o que ainda falta; o CÓDIGO decide se a ação
+      // terminal pode acontecer. Nada de ler o `resumo` com regex, nada de
+      // lista por motivo ou por setor, nada de gate de confiança: a única
+      // entrada é o que o próprio modelo declarou em pendenciasObrigatorias.
+      //
+      // Fica AQUI, no topo, antes de TODO efeito colateral — e por isso ANTES
+      // de limparEscopoDeTerceiro, lá embaixo. Uma conclusão recusada significa
+      // que a conversa CONTINUA: destruir o escopo temporário do terceiro numa
+      // recusa faria quem pediu o boleto do cônjuge perder a autorização no
+      // meio do atendimento e ter de informar o CPF do titular de novo. Seria a
+      // Fase 2 quebrada por efeito colateral de uma recusa.
+      //
+      // Incondicional de propósito: não há bypass por forcarConclusao. Quando o
+      // limite de perguntas estoura, quem encerra é o CÓDIGO, no worker
+      // (ai-worker.js, concluirEmCodigo) — o contador nunca autoriza a IA a
+      // concluir, então não existe deadlock.
+      //
+      // Só uma lista vazia EXPLÍCITA autoriza. Sem `|| []` em lugar nenhum: a
+      // ausência já voltou como invalid_args em validar(), e esta segunda
+      // leitura mantém a mesma regra caso alguém chame executar() por fora.
+      const pendencias = args.pendenciasObrigatorias;
+      if (!Array.isArray(pendencias)) return erro('pendenciasObrigatorias is required');
+      if (pendencias.length > 0) {
+        return {
+          concluido: false,
+          motivo: 'Há informação obrigatória pendente: sem ela o setor não consegue resolver nem encaminhar o que o cliente pediu.',
+          pendenciasObrigatorias: pendencias,
+          instrucao: 'NÃO conclua agora. Continue a conversa e pergunte ao cliente o que falta, no máximo UMA pergunta necessária por vez, começando pela primeira da lista.',
+        };
+      }
       // A entrega (boleto/PIX) pode ter sido num turno ANTERIOR, e
       // contexto.resolvidoPelaIa só conhece este turno. Leitura extra de
       // propósito: a releitura que já existe aqui embaixo acontece DEPOIS do
@@ -1470,12 +1640,14 @@ const TOOLS = [
       }
       const t = contexto.triagem || { threshold: 0.8, maxQuestions: 2, attempts: 0 };
       const baixa = args.confianca < t.threshold;
-      if (baixa && t.attempts < t.maxQuestions) {
-        return { concluido: false, motivo: 'baixa_confianca', instrucao: 'Faça UMA pergunta curta de esclarecimento ao cliente e chame concluir_triagem de novo depois da resposta.' };
-      }
+      // A confiança é um palpite do modelo sobre si mesmo. Até 2026-09-17 um
+      // palpite baixo RECUSAVA a conclusão e forçava mais uma pergunta ao
+      // cliente — um número inventado virava pergunta na tela de quem estava
+      // esperando ser atendido. Agora ela só marca o resumo: quem decide se a
+      // classificação está ruim é o atendente, que tem a conversa na frente.
       const id = contexto.identidade || { nivel: 'none', origem: 'none' };
       const identifiedBy = id.origem === 'none' ? 'none' : id.origem;
-      const rotuloId = { memory: 'memória', phone: 'telefone', cpf: 'CPF (não confirmado)', cpf_confirmed: 'CPF + data de nascimento', none: 'não identificado' }[identifiedBy];
+      const rotuloId = { memory: 'memória', phone: 'telefone', cpf: 'CPF (não confirmado)', none: 'não identificado' }[identifiedBy];
       const linhas = [
         `Setor: ${setor.name}`,
         `Motivo: ${motivo ? motivo.name : 'não definido'}`,
@@ -1485,9 +1657,14 @@ const TOOLS = [
         `Origem: ${contexto.origemMensagem || 'texto'}`,
         `Confiança: ${Math.round(args.confianca * 100)}%${baixa ? ' (BAIXA)' : ''}`,
       ];
+      // O titular aparece pelo primeiro nome e pelo contrato; o documento dele nunca
+      // entra no resumo — não está nem guardado.
+      if (contexto.terceiro) {
+        linhas.push(`Pedido de terceiro: titular ${contexto.terceiro.nome || 'não informado'}, contrato ${contexto.terceiro.contratos.map((c) => c.id).join(', ')}`);
+      }
       if (resolvidoPelaIa) linhas.push('Resolvido pela IA: boleto/PIX enviado — só confirmar.');
       if (Array.isArray(contexto.registroFerramentas) && contexto.registroFerramentas.length > 0) {
-        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
+        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${legivel(r.resultado)}`).join('; ')}`);
       }
       linhas.push('', args.resumo);
       // Quem pega a conversa de manhã precisa ver, na PRIMEIRA linha, que ela
@@ -1519,6 +1696,21 @@ const TOOLS = [
       if (comp || desbloqueio) extras.push('Pendente: conferir pagamento e dar baixa');
       if (noturno) linhas.unshift(`Modo noturno · ${horaDeSaoPaulo()}`, ...extras);
       else if (extras.length > 0) linhas.unshift(...extras);
+      // Corrigido 2026-09-18: a guarda mora AQUI agora — imediatamente antes da
+      // escrita terminal —, não mais logo após o perfil. O resumo (linhas) já
+      // está todo montado, inclusive o que uma tarefa futura vai ler de
+      // contexto.terceiro para citar o pedido de terceiro no próprio resumo.
+      // Montar o resumo não é a ação terminal; concluir é. As saídas
+      // antecipadas ACIMA (pendência obrigatória declarada, setor/motivo
+      // inválidos) preservam contexto.terceiro de propósito: a triagem
+      // continua e a cliente não precisa informar de novo o CPF do titular.
+      // Antes de concluir, e não depois: se a limpeza falhar, a triagem NÃO
+      // conclui. Concluir com uma autorização de terceiro ainda viva deixaria
+      // o escopo válido pelos 30 minutos seguintes numa conversa que já saiu
+      // da triagem.
+      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+        return erro('third_party_scope_not_cleared');
+      }
       const conversa = await concludeAiTriage(contexto.conversationId, {
         sectorId: setor.id, reasonId: motivo ? motivo.id : null, confidence: args.confianca,
         summary: linhas.join('\n'), identifiedBy, lowConfidence: baixa, resolvedByAi: resolvidoPelaIa,
@@ -1566,8 +1758,25 @@ const TOOLS = [
         return { encerrado: false, motivo: 'Nada foi entregue neste atendimento. Conclua a triagem com concluir_triagem.' };
       }
       const linhas = ['Resolvido pela IA e encerrado sem atendente.'];
+      // Rodada de correção 1 (Task 11): mesma legibilidade de concluir_triagem
+      // — este resumo também é lido por gente (auditoria/histórico do
+      // atendimento fechado), então não há razão para ficar com JSON cru
+      // enquanto concluir_triagem ganhou o formato legível.
       if (Array.isArray(contexto.registroFerramentas) && contexto.registroFerramentas.length > 0) {
-        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${r.resultado}`).join('; ')}`);
+        linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${legivel(r.resultado)}`).join('; ')}`);
+      }
+      // Corrigido 2026-09-18: a guarda mora AQUI agora — imediatamente antes
+      // da escrita terminal —, não mais logo após o perfil. As três saídas
+      // antecipadas ACIMA (sem motivo configurado, saiu da triagem, nada
+      // entregue) preservam contexto.terceiro de propósito: o atendimento
+      // continua na triagem e a cliente não precisa informar de novo o CPF do
+      // titular.
+      // Antes de encerrar, e não depois: se a limpeza falhar, o encerramento
+      // NÃO acontece. Encerrar com uma autorização de terceiro ainda viva
+      // deixaria o escopo válido pelos 30 minutos seguintes numa conversa que
+      // já saiu da triagem.
+      if (contexto.terceiro && !(await limparEscopoDeTerceiro(contexto))) {
+        return erro('third_party_scope_not_cleared');
       }
       const conversa = await closeConversationByAi(contexto.conversationId, {
         reasonId, summary: linhas.join('\n'),
@@ -1608,4 +1817,7 @@ function toOpenAiTools(nomesHabilitados) {
   }));
 }
 
-module.exports = { listTools, findTool, toOpenAiTools, perfilTriagem };
+module.exports = {
+  listTools, findTool, toOpenAiTools, perfilTriagem, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO,
+  escopoDoContrato, faturaEmAlgumContrato,
+};

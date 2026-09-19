@@ -97,6 +97,7 @@ describe('POST /webhooks/360dialog/:webhookToken', () => {
       locationLongitude: undefined,
       repliedToWhatsappMessageId: null,
       sentAt: null,
+      timestampSource: '360dialog',
     });
   });
 

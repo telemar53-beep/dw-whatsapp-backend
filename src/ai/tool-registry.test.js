@@ -18,17 +18,17 @@ jest.mock('./openai-client');
 jest.mock('../cities/contact-city.service');
 jest.mock('../company/company-config.repository');
 jest.mock('./receipt-usage.repository');
+jest.mock('./billing-delivery.repository');
 jest.mock('../city-notices/city-notice.service');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
-const { listTools, findTool, toOpenAiTools } = require('./tool-registry');
+const { listTools, findTool, toOpenAiTools, faturaEmAlgumContrato, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
 const { listSectors } = require('../sectors/sector.repository');
 const { findReasonById } = require('../reasons/reason.repository');
 const {
   setConversationSector, setSuggestedReason, concludeAiTriage, getConversationWithContact,
-  incrementBirthdateAttempts, markPhoneContested, markTriageResolvedByAi, closeConversationByAi,
-  setTriagePendingDocument,
+  markPhoneContested, markTriageResolvedByAi, closeConversationByAi, setThirdPartyScope,
 } = require('../conversations/conversation.repository');
 const { setContactSgpLink } = require('../conversations/contact.repository');
 const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
@@ -43,17 +43,108 @@ const { PROMPT_VISAO } = require('./comprovante');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
+const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('./billing-delivery.repository');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
 const { executeTool } = require('./tool-executor');
+// FERRAMENTAS_TRIAGEM ainda não estava neste arquivo: é exportado por
+// ai-orchestrator.js, não por tool-registry.js.
+const { FERRAMENTAS_TRIAGEM } = require('./ai-orchestrator');
+
+const SETOR = '11111111-1111-1111-1111-111111111111';
+const FATURA_ABERTA = { id: 5, value: 135, dueDate: '2026-09-10', status: 'aberta' };
+
+// A ação principal de cada ferramenta que limpa o escopo de terceiro. Nenhuma
+// delas pode ter rodado quando a limpeza falha. Note que são três funções
+// diferentes, de dois módulos diferentes — `completeTriage` NÃO serve para
+// nenhuma das três: ela pertence ao menu numérico antigo (triage.service.js),
+// que é mutuamente exclusivo com a triagem por IA.
+const ACAO_PRINCIPAL = {
+  concluir_triagem: concludeAiTriage,
+  encerrar_atendimento: closeConversationByAi,
+  esquecer_identificacao: setContactSgpLink,
+};
+
+// IDEMPOTÊNCIA DA ENTREGA — o repositório é mockado, e o mock reproduz as DUAS
+// restrições da tabela:
+//   1. UNIQUE (conversa, ferramenta, contrato, fatura, message_id)
+//      → uma entrega por mensagem do cliente, INDEPENDENTE de `reenviar`.
+//   2. índice parcial único WHERE is_resend = false
+//      → um único envio INICIAL, para sempre.
+// Sem isto o automock devolveria `undefined` de claimDelivery e as duas
+// ferramentas de entrega quebrariam em todo teste deste arquivo. A verificação
+// e a escrita acontecem sem `await` entre elas — é o que o `INSERT ... ON
+// CONFLICT DO NOTHING RETURNING` garante no banco.
+// O armazenamento é recriado a cada teste (beforeEach de arquivo, que roda
+// ANTES dos beforeEach de cada describe).
+//
+// Esta guarda é GÊMEA da de simulacao/conversar.js (aplicarGuardaDeEntrega).
+// Mexeu numa, mexa na outra — importar de lá arrastaria o harness inteiro
+// para dentro deste arquivo.
+let entregas;
+const chaveDaMensagem = (p) => [p.conversationId, p.tool, p.contractId, String(p.invoiceId), String(p.messageId)].join('|');
+const chaveDaFatura = (p) => [p.conversationId, p.tool, p.contractId, String(p.invoiceId)].join('|');
+
+beforeEach(() => {
+  entregas = new Map();
+  claimDelivery.mockImplementation(async (pedido) => {
+    const porMensagem = chaveDaMensagem(pedido);
+    const porFatura = chaveDaFatura(pedido);
+    const isResend = pedido.isResend === true;
+    // Restrição 1: a mesma mensagem do cliente já reivindicou esta fatura.
+    const mesmaMensagem = entregas.get(porMensagem);
+    if (mesmaMensagem) return { obtido: false, registro: { ...mesmaMensagem.registro } };
+    // Restrição 2: já existe o envio inicial. Só alcança quem NÃO é reenvio,
+    // porque o índice do banco é parcial em is_resend = false.
+    if (!isResend) {
+      const inicial = [...entregas.values()].find((e) => e.porFatura === porFatura && !e.isResend);
+      if (inicial) return { obtido: false, registro: { ...inicial.registro } };
+    }
+    const registro = {
+      id: `entrega-${entregas.size + 1}`,
+      messageId: String(pedido.messageId),
+      isResend,
+      claimedAt: new Date(),
+      enqueuedAt: null,
+    };
+    entregas.set(porMensagem, { porFatura, isResend, registro });
+    return { obtido: true, registro: { ...registro } };
+  });
+  markDeliveryEnqueued.mockImplementation(async (id) => {
+    for (const { registro } of entregas.values()) if (registro.id === id) registro.enqueuedAt = new Date();
+  });
+  // Espelha o `AND enqueued_at IS NULL` do repositório: uma entrega já
+  // enfileirada nunca volta a ser reivindicável, nem por um chamador enganado.
+  releaseDelivery.mockImplementation(async (id) => {
+    for (const [chave, { registro }] of entregas) if (registro.id === id && !registro.enqueuedAt) entregas.delete(chave);
+  });
+});
+
+/** Contexto de um turno de triagem já identificado, com o que cada teste variar. */
+function contextoDeTriagemCom(extra = {}) {
+  return {
+    conversationId: 'c1',
+    contact: { id: 'ct1', sgpDocument: '11122233344' },
+    contracts: [{ id: 1, address: 'Minha rua' }],
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', client: { id: 5 } },
+    ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+    registroFerramentas: [], sgpCache: {}, terceiro: null,
+    triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0, noturno: { ativo: false } },
+    // A mensagem do cliente que abriu o turno. Em produção a triagem sempre a
+    // tem (ai-worker.js) e sem ela a entrega falha FECHADO, então o fixture
+    // precisa dela para representar um turno de triagem de verdade.
+    messageId: 'msg-1',
+    ...extra,
+  };
+}
 
 describe('tool-registry', () => {
   test('registers exactly the known tools, sensitive ones included', () => {
     const nomes = listTools().map((t) => t.nome).sort();
     expect(nomes).toEqual([
-      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento', 'consultar_faturas',
+      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'consultar_faturas',
       'consultar_faturas_todos_contratos', 'consultar_financeiro',
       'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
       'consultar_status_todos_contratos',
@@ -102,11 +193,11 @@ describe('tool-registry', () => {
     // consultar_faturas_todos_contratos entrou porque não recebe id nenhum do
     // modelo: percorre contexto.contracts, carregado pelo servidor a partir do
     // CPF do próprio contato — não há valor vindo do modelo para conferir.
-    // confirmar_nascimento, esquecer_identificacao e concluir_triagem entraram
-    // pela mesma razão: nenhuma das três recebe um contratoId (ou qualquer id
-    // de posse) do modelo — atuam sobre contexto.identidade/conversationId,
-    // que o servidor já resolveu, não sobre algo que precise ser conferido
-    // contra os contratos do cliente.
+    // esquecer_identificacao e concluir_triagem entraram pela mesma razão:
+    // nenhuma das duas recebe um contratoId (ou qualquer id de posse) do
+    // modelo — atuam sobre contexto.identidade/conversationId, que o servidor
+    // já resolveu, não sobre algo que precise ser conferido contra os
+    // contratos do cliente.
     // encerrar_atendimento entrou pelo mesmo motivo: nao recebe argumento
     // nenhum do modelo e so age sobre contexto.conversationId.
     // consultar_status_todos_contratos entrou pela mesma razao de
@@ -117,7 +208,7 @@ describe('tool-registry', () => {
     // mandou NESTA conversa, escolhida pelo servidor.
     const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
     expect(isentas).toEqual([
-      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'confirmar_nascimento',
+      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem',
       'consultar_faturas_todos_contratos',
       'consultar_status_todos_contratos', 'definir_motivo_atendimento', 'encerrar_atendimento',
       'esquecer_identificacao', 'transferir_atendimento',
@@ -180,6 +271,32 @@ describe('tool-registry', () => {
     const tool = findTool('transferir_atendimento');
     expect(tool.validar({ setorId: 'a'.repeat(36), resumo: 'resumo' }).ok).toBe(false);
     expect(tool.validar({ setorId: '11111111-1111-1111-1111-111111111111', resumo: 'resumo' }).ok).toBe(true);
+  });
+
+  // A ferramenta e o nível de identidade fraca foram removidos: o CPF digitado
+  // já basta para deixar a identidade forte (ver describe 'buscar_cliente na
+  // triagem' mais abaixo).
+  const todasAsFerramentas = () => toOpenAiTools(listTools().map((t) => t.nome));
+
+  test('confirmar_nascimento não existe mais no registro de ferramentas', () => {
+    expect(findTool('confirmar_nascimento')).toBeNull();
+    expect(todasAsFerramentas().map((t) => t.function.name)).not.toContain('confirmar_nascimento');
+  });
+
+  test('nenhuma descrição ou parâmetro de ferramenta menciona nascimento', () => {
+    expect(JSON.stringify(todasAsFerramentas())).not.toMatch(/nascimento/i);
+  });
+
+  test('buscar_cliente deixa a identidade forte e não devolve proximoPasso', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 9, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 1, status: 1, address: 'Rua A' }],
+    });
+    const contexto = { ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1', contact: { id: 'ct1' }, identidade: { nivel: 'none' } };
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725' }, contexto);
+    expect(r.ok).toBe(true);
+    expect(r.resultado.proximoPasso).toBeUndefined();
+    expect(contexto.identidade.nivel).toBe('forte');
   });
 });
 
@@ -954,7 +1071,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
     const abertura = 'Responda EXATAMENTE neste modelo: "';
     expect(r.instrucao.startsWith(abertura)).toBe(true);
-    const fecho = '" — e chame concluir_triagem para o Financeiro NA MESMA resposta.';
+    const fecho = '" — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.';
     expect(r.instrucao.endsWith(fecho)).toBe(true);
     const paraOCliente = r.instrucao.slice(abertura.length, r.instrucao.length - fecho.length);
     expect(paraOCliente).toBe(
@@ -1011,7 +1128,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
     const ctx = noturno();
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
     expect(r.liberado).toBe(false);
-    await findTool('concluir_triagem').executar({ setorId: SETOR_FIN, motivoId: MOTIVO_COMP, resumo: 'Cliente mandou comprovante.', confianca: 0.95 }, ctx);
+    await findTool('concluir_triagem').executar({ setorId: SETOR_FIN, motivoId: MOTIVO_COMP, resumo: 'Cliente mandou comprovante.', confianca: 0.95, pendenciasObrigatorias: [] }, ctx);
     const summary = concludeAiTriage.mock.calls[0][1].summary;
     expect(summary).toContain(`Desbloqueio em confiança: RECUSADO: ${r.motivo}`);
     expect(summary).toContain('Pendente: conferir pagamento e dar baixa');
@@ -1040,7 +1157,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
       const ctx = noturno({ contracts: [ATIVO] });
       const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, ctx);
       expect(r.liberado).toBe(false);
-      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Recebi seu comprovante, Willemberg! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das 08:00." — e chame concluir_triagem para o Financeiro NA MESMA resposta.');
+      expect(r.instrucao).toBe('Responda EXATAMENTE neste modelo: "Recebi seu comprovante, Willemberg! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das 08:00." — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.');
       expect(ctx.desbloqueioResultado).toEqual({ liberado: false, motivo: 'contrato ativo, não há bloqueio para liberar' });
       expect(sgpClient.requestTrustUnlock).not.toHaveBeenCalled();
       expect(enqueueOutboundMessage).not.toHaveBeenCalled();
@@ -1066,212 +1183,6 @@ describe('desbloqueio_confianca — modo noturno', () => {
     );
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
     expect(r).toEqual({ liberado: true, dias: 3, protocolo: '9999' });
-  });
-});
-
-describe('confirmar_nascimento', () => {
-  // client/contracts/document presentes: precisos para o setContactSgpLink
-  // que a confirmação bem-sucedida agora dispara (fix round 1, C1).
-  const ctx = (extra = {}) => ({
-    conversationId: 'conv-1', contact: { id: 'ct-1' },
-    identidade: {
-      nivel: 'fraca', origem: 'cpf', primeiroNome: 'Maria', dataNascimento: '1990-05-20', nascimentoTentado: false,
-      client: { id: 9, document: '11122233344' }, contracts: [{ id: 5 }],
-    },
-    ...extra,
-  });
-  beforeEach(() => {
-    jest.clearAllMocks();
-    incrementBirthdateAttempts.mockResolvedValue(1);
-    // confirmar_nascimento só existe com a exigência LIGADA: desligada (o
-    // padrão) o próprio buscar_cliente já deixa a identidade forte.
-    getAiConfig.mockResolvedValue({ triageRequireBirthdate: true });
-  });
-
-  test('data certa em DD/MM/AAAA eleva para forte e persiste o vínculo do contato', async () => {
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(true);
-    expect(c.identidade.nivel).toBe('forte');
-    expect(c.identidade.origem).toBe('cpf_confirmed');
-    // C1 (fix round 1): antes da confirmação o vínculo não existe; só agora,
-    // com a data batida, é seguro persistir (senão o próximo turno leria
-    // memory/forte de um CPF que nunca foi confirmado).
-    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', { sgpClientId: 9, sgpContractId: 5, sgpDocument: '11122233344', sgpFirstName: 'Maria' });
-    expect(c.contact.sgpDocument).toBe('11122233344');
-  });
-  test('sucesso preenche a cidade do contato com a do contrato', async () => {
-    // Só aqui, depois da data batida: antes disso o CPF podia ser de outra
-    // pessoa e a cidade dela não pode encostar neste contato.
-    const c = ctx();
-    await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(preencherCidadePeloSgp).toHaveBeenCalledWith(c.contact, c.identidade.contracts);
-  });
-  test('sucesso manda o aviso da cidade recém-descoberta, no mesmo turno', async () => {
-    // A cidade nasceu agora, no meio do turno: sem isto o cliente só receberia
-    // o aviso da falha regional na próxima mensagem que mandasse.
-    const c = { ...ctx(), channelId: 'ch-1' };
-    await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(enviarAvisoDeCidadeSePreciso).toHaveBeenCalledWith({
-      contact: c.contact, conversationId: 'conv-1', channelId: 'ch-1',
-    });
-  });
-  test('falha ao mandar o aviso da cidade não derruba a confirmação', async () => {
-    enviarAvisoDeCidadeSePreciso.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(true);
-    erroSpy.mockRestore();
-  });
-  test('data errada não preenche cidade nenhuma', async () => {
-    const c = ctx();
-    await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(preencherCidadePeloSgp).not.toHaveBeenCalled();
-    expect(enviarAvisoDeCidadeSePreciso).not.toHaveBeenCalled();
-  });
-  test('falha ao preencher a cidade não derruba a confirmação', async () => {
-    preencherCidadePeloSgp.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(true);
-    erroSpy.mockRestore();
-  });
-  test('sucesso limpa o CPF pendente da conversa (a identidade agora vive no vínculo do contato)', async () => {
-    const c = ctx();
-    await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
-  });
-  test('falha ao limpar o CPF pendente não derruba a confirmação já persistida', async () => {
-    setTriagePendingDocument.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(true);
-    expect(c.identidade.nivel).toBe('forte');
-    erroSpy.mockRestore();
-  });
-  test('data errada NÃO limpa o CPF pendente (o cliente ainda pode tentar de novo)', async () => {
-    const c = ctx();
-    await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(setTriagePendingDocument).not.toHaveBeenCalled();
-  });
-  // Defeito C: os contratos só chegam ao modelo DEPOIS da confirmação — e com
-  // endereço, que é o que o cliente reconhece. O número segue existindo só
-  // para as ferramentas.
-  test('sucesso devolve os contratos com endereço e a instrução de seguir', async () => {
-    const c = ctx();
-    c.identidade.contracts = [
-      { id: 5, statusCode: 1, address: 'RUA X, 10' },
-      { id: 6, statusCode: 4, address: 'AV Y, 20' },
-    ];
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.contratos).toEqual([
-      { id: 5, status: 'ativo', endereco: 'RUA X, 10' },
-      { id: 6, status: 'suspenso', endereco: 'AV Y, 20' },
-    ]);
-    expect(r.instrucao).toBe('Identidade confirmada. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.');
-  });
-
-  test('aceita AAAA-MM-DD e D/M/AA', async () => {
-    for (const data of ['1990-05-20', '20/5/90']) {
-      const c = ctx();
-      expect((await findTool('confirmar_nascimento').executar({ data }, c)).confirmado).toBe(true);
-    }
-  });
-  test('data errada mantém fraca e não persiste vínculo nenhum', async () => {
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(r.confirmado).toBe(false);
-    expect(c.identidade.nivel).toBe('fraca');
-    expect(setContactSgpLink).not.toHaveBeenCalled();
-  });
-  test('identidade já forte: confirma sem comparar, sem contar tentativa e sem mudar a origem', async () => {
-    const c = { conversationId: 'c-1', identidade: { nivel: 'forte', origem: 'phone', dataNascimento: '1990-05-20' } };
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(r.confirmado).toBe(true);
-    expect(r.jaConfirmada).toBe(true);
-    expect(c.identidade.origem).toBe('phone');
-    expect(incrementBirthdateAttempts).not.toHaveBeenCalled();
-  });
-
-  test('sem data de nascimento no cadastro, não confirma, explica e não conta tentativa', async () => {
-    const c = { identidade: { nivel: 'fraca', dataNascimento: null, nascimentoTentado: false } };
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(false);
-    expect(incrementBirthdateAttempts).not.toHaveBeenCalled();
-    // Defeito B: o retorno seco fazia o modelo encaminhar em silêncio. Agora
-    // ele recebe a instrução do que dizer E do que chamar na mesma resposta.
-    expect(r.semDataNoCadastro).toBe(true);
-    expect(r.motivo).toBe('O cadastro não tem data de nascimento para conferir.');
-    expect(r.instrucao).toBe('Diga ao cliente que não foi possível confirmar a identidade pelo chat e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.');
-  });
-
-  test('data errada com tentativa sobrando manda pedir a data de novo', async () => {
-    incrementBirthdateAttempts.mockResolvedValue(1);
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, ctx());
-    expect(r).toEqual({
-      confirmado: false,
-      tentativasRestantes: 1,
-      instrucao: 'Diga que a data não confere e peça a data de nascimento mais uma vez.',
-    });
-  });
-
-  test('data errada na última tentativa manda encaminhar na mesma resposta', async () => {
-    incrementBirthdateAttempts.mockResolvedValue(2);
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, ctx());
-    expect(r.confirmado).toBe(false);
-    expect(r.tentativasRestantes).toBeUndefined();
-    expect(r.instrucao).toBe('Diga que não foi possível confirmar a identidade e chame concluir_triagem para o Financeiro na mesma resposta, sem entregar dados.');
-  });
-  // Fix round 2: incrementBirthdateAttempts devolve 0 quando a conversa não
-  // é encontrada — e 0 > 2 é falso, então sem esta checagem extra o contador
-  // "falhando" deixaria passar como se fosse a primeira tentativa. Falha
-  // fechado: sem contador confiável, recusa.
-  test('contador devolvendo 0 (conversa não encontrada) recusa em vez de deixar passar', async () => {
-    incrementBirthdateAttempts.mockResolvedValue(0);
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(r.confirmado).toBe(false);
-    expect(r.motivo).toMatch(/não foi possível registrar/i);
-    expect(setContactSgpLink).not.toHaveBeenCalled();
-    expect(c.identidade.nivel).toBe('fraca');
-  });
-  test('o resultado nunca contém a data cadastrada', async () => {
-    const c = ctx();
-    const r = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(JSON.stringify(r)).not.toContain('1990');
-  });
-
-  // I2 (fix round 1): o limite de tentativas era um campo em memória
-  // (nascimentoTentado) que zerava com esquecer_identificacao — o cliente
-  // podia tentar de novo só chamando esquecer_identificacao + buscar_cliente.
-  // Agora é contado no banco, por conversationId, e sobrevive a isso.
-  test('terceira tentativa é recusada mesmo depois de esquecer_identificacao + buscar_cliente de novo', async () => {
-    incrementBirthdateAttempts
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce(3);
-    const c = ctx();
-
-    const primeira = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(primeira.confirmado).toBe(false);
-
-    await findTool('esquecer_identificacao').executar({}, c);
-
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'Maria Souza', document: '11122233344' }, contracts: [{ id: 5 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1990-05-20' } });
-    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-
-    const segunda = await findTool('confirmar_nascimento').executar({ data: '01/01/2000' }, c);
-    expect(segunda.confirmado).toBe(false);
-
-    const terceira = await findTool('confirmar_nascimento').executar({ data: '20/05/1990' }, c);
-    expect(terceira.confirmado).toBe(false);
-    expect(terceira.motivo).toMatch(/limite de tentativas/i);
-    expect(incrementBirthdateAttempts).toHaveBeenCalledTimes(3);
-    expect(incrementBirthdateAttempts).toHaveBeenCalledWith('conv-1');
   });
 });
 
@@ -1312,35 +1223,6 @@ describe('esquecer_identificacao', () => {
     expect(markPhoneContested).toHaveBeenCalledWith('conv-1');
   });
 
-  test('limpa também o CPF pendente da conversa', async () => {
-    const c = {
-      identidade: { nivel: 'fraca', origem: 'cpf', primeiroNome: 'João' },
-      contracts: [],
-      contact: { id: 'ct-1', sgpDocument: null, sgpClientId: null, sgpContractId: null },
-      conversationId: 'conv-1',
-    };
-    await findTool('esquecer_identificacao').executar({}, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
-  });
-
-  // O CPF pendente é a identidade inteira depois de buscar_cliente: se
-  // markPhoneContested falhar e levar a limpeza dele junto, o CPF descartado
-  // ressuscita como identidade fraca no turno seguinte — exatamente o que
-  // esquecer_identificacao acabou de desfazer.
-  test('markPhoneContested falhando ainda assim limpa o CPF pendente', async () => {
-    markPhoneContested.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = {
-      identidade: { nivel: 'fraca', origem: 'cpf', primeiroNome: 'João' },
-      contracts: [],
-      contact: { id: 'ct-1', sgpDocument: null, sgpClientId: null, sgpContractId: null },
-      conversationId: 'conv-1',
-    };
-    await findTool('esquecer_identificacao').executar({}, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
-    erroSpy.mockRestore();
-  });
-
   test('markPhoneContested falhando não derruba a limpeza em memória nem do vínculo', async () => {
     markPhoneContested.mockRejectedValue(new Error('db fora'));
     const c = {
@@ -1376,7 +1258,6 @@ describe('esquecer_identificacao', () => {
 describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    getAiConfig.mockResolvedValue({ triageRequireBirthdate: false });
     sgpClient.lookupClientByCpf.mockResolvedValue({
       client: { id: 77, name: 'JUREILDSON SOUZA', document: '90460835315' },
       contracts: [{ id: 51, login: 'l', plan: 'p', statusCode: 1, address: 'RUA B, 2' }],
@@ -1397,23 +1278,20 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     expect(c.identidade.primeiroNome).toBe('Agnieska');
   });
 
-  test('a identidade fica forte com os contratos do titular, para o boleto poder ser entregue', async () => {
-    const c = ctxTerceiro();
-    await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, c);
-    expect(c.identidade.nivel).toBe('forte');
-    expect(c.identidade.contracts).toEqual([{ id: 51, login: 'l', plan: 'p', statusCode: 1, address: 'RUA B, 2' }]);
-    expect(c.contracts).toEqual(c.identidade.contracts);
-  });
+  // Substituída em 2026-09-18 (Task 6): até então este teste provava a
+  // elevação indevida (nivel forte + contratos do titular dentro de
+  // contexto.identidade), que era exatamente o bug. Agora contexto.identidade
+  // sai intocado — ver describe('escopo de terceiro') logo abaixo, teste
+  // "buscar_cliente de terceiro NUNCA eleva a identidade de quem está
+  // falando", que prova o objeto inteiro intocado, e "buscar_cliente de
+  // terceiro cria o escopo..." para onde os contratos passaram a ir
+  // (contexto.terceiro, não contexto.identidade).
 
   test('a instrução proíbe "seu contrato" e manda dizer de quem é', async () => {
     const r = await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, ctxTerceiro());
     expect(r.instrucao).toMatch(/NUNCA diga "seu contrato"/);
     expect(r.instrucao).toMatch(/Jureildson/);
     expect(r.instrucao).toMatch(/registre no resumo que quem pediu não é o titular/);
-    // Print 2026-09-16: o cadastro do terceiro não é guardado, então no turno
-    // seguinte a IA pedia o CPF de novo. Ela precisa saber que basta rechamar.
-    expect(r.instrucao).toMatch(/Este cadastro NÃO fica guardado/);
-    expect(r.instrucao).toMatch(/chame buscar_cliente de novo com o mesmo CPF/);
   });
 
   test('sem o parâmetro, nada muda: o vínculo continua sendo gravado', async () => {
@@ -1431,93 +1309,160 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
   });
 });
 
+// Ciclo de vida do escopo de terceiro (Task 6): criado por buscar_cliente com
+// titularEOutraPessoa, persistido na conversa por 30 minutos, e limpo ao
+// identificar o próprio contato, esquecer a identificação, concluir a triagem
+// ou encerrar o atendimento. Nunca eleva contexto.identidade nem substitui
+// contexto.contracts (que continua sendo só os contratos do próprio contato).
+describe('escopo de terceiro', () => {
+  // Arma explicitamente o caminho feliz de concluir_triagem/encerrar_atendimento/
+  // esquecer_identificacao: sem isto, os testes deste describe dependiam de mocks
+  // NÃO-Once deixados por describes de ~200 linhas acima (ex.: um
+  // listSectors.mockResolvedValue de um teste de desbloqueio_confianca cujo id de
+  // setor coincidia com SETOR por acaso — jest.clearAllMocks() reseta contagem de
+  // chamadas, não a implementação). Rodando com `-t` (sem os describes anteriores)
+  // esse acaso não acontece e concluir_triagem estourava em listSectors().find.
+  // markPhoneContested precisa de mockReset() porque describe('esquecer_identificacao',
+  // ...), mais acima, deixa um mockRejectedValue (não-Once) armado num teste próprio.
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+    getConversationWithContact.mockResolvedValue({
+      id: 'c1', status: 'waiting', triageState: 'pending', assignedAgentId: null, aiTriageResolvedByAi: true,
+    });
+    concludeAiTriage.mockResolvedValue({ id: 'c1' });
+    closeConversationByAi.mockResolvedValue({ id: 'c1' });
+    motivoDeEncerramentoAtivo.mockResolvedValue('motivo-1');
+    markPhoneContested.mockReset().mockResolvedValue();
+  });
+
+  test('buscar_cliente de terceiro cria o escopo e NÃO toca em contexto.contracts', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 77, status: 1, address: 'Rua da Maria' }],
+    });
+    const proprios = [{ id: 1, address: 'Minha rua' }];
+    const contexto = {
+      ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1',
+      contact: { id: 'ct1', sgpDocument: null }, contracts: proprios,
+      identidade: { nivel: 'forte', primeiroNome: 'João', origem: 'phone' },
+    };
+
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+    expect(r.ok).toBe(true);
+    expect(contexto.contracts).toBe(proprios);                 // intocado
+    expect(contexto.terceiro.contratos).toEqual([{ id: 77 }]);
+    expect(contexto.identidade.primeiroNome).toBe('João');     // quem fala continua sendo quem fala
+    expect(setContactSgpLink).not.toHaveBeenCalled();          // o terceiro nao vira dono do contato
+    expect(setThirdPartyScope).toHaveBeenCalledWith('c1', expect.objectContaining({ nome: 'Maria', contratos: [77] }));
+  });
+
+  // Digitar o CPF de outra pessoa nao pode promover ninguem. Ate 2026-09-17 este
+  // ramo escrevia nivel: 'forte' em contexto.identidade, elevando quem nem era
+  // cliente. A autorizacao mora no escopo, nunca na identidade do solicitante.
+  test('buscar_cliente de terceiro NUNCA eleva a identidade de quem está falando', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 77, status: 1 }],
+    });
+    const identidade = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
+    // Cópia congelada ANTES da chamada: contexto.identidade é o MESMO objeto
+    // que `identidade` referencia, então comparar contra `identidade` depois
+    // seria comparar o objeto com ele mesmo — passaria sempre, mesmo que o
+    // executor mutasse os campos in place (ex.: contexto.identidade.contracts
+    // = contracts). `original` é o único jeito de provar "intocado" de verdade.
+    const original = structuredClone(identidade);
+    const contexto = {
+      ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1',
+      contact: { id: 'ct1', sgpDocument: null }, contracts: [], identidade,
+    };
+
+    await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+    expect(contexto.identidade).toEqual(original);   // objeto inteiro intocado
+    expect(contexto.identidade.nivel).toBe('none');
+  });
+
+  // Falha fechado: sem gravacao no banco nao ha autorizacao neste turno.
+  test('se a gravação do escopo falhar, a ferramenta falha e o escopo não vale', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 77, status: 1 }],
+    });
+    setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+    const contexto = contextoDeTriagemCom({ contracts: [] });
+
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+    expect(r.ok).toBe(false);
+    expect(contexto.terceiro).toBeNull();
+  });
+
+  test.each(['concluir_triagem', 'encerrar_atendimento', 'esquecer_identificacao'])(
+    'se a limpeza do escopo falhar, %s aborta em vez de seguir com a autorização viva',
+    async (nome) => {
+      setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+      const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+      const args = nome === 'concluir_triagem' ? { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] } : {};
+
+      const r = await executeTool(nome, args, contexto);
+
+      expect(r.ok).toBe(false);
+      // A ação principal NÃO pode ter rodado: é isso que prova que o abort
+      // acontece ANTES dela, e não depois. `r.ok === false` sozinho não provaria
+      // — a ferramenta poderia ter concluído a triagem e falhado em seguida,
+      // deixando a conversa fora da triagem com a autorização de terceiro viva.
+      expect(ACAO_PRINCIPAL[nome]).not.toHaveBeenCalled();
+      expect(contexto.terceiro).not.toBeNull();   // nada foi dado por limpo
+    }
+  );
+
+  // Endereco do titular e dado cadastral de outra pessoa: nao vai ao modelo.
+  test('o retorno do buscar_cliente de terceiro não traz endereço nem status do titular', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 99, name: 'MARIA SILVA', document: '52998224725' },
+      contracts: [{ id: 77, status: 4, address: 'Rua da Maria' }],
+    });
+    const contexto = {
+      ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1',
+      contact: { id: 'ct1' }, contracts: [], identidade: { nivel: 'forte', primeiroNome: 'João' },
+    };
+    const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+    expect(JSON.stringify(r.resultado)).not.toMatch(/Rua da Maria/);
+    expect(r.resultado.contratos).toEqual([{ id: 77 }]);
+  });
+
+  test.each([
+    ['concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }],
+    ['encerrar_atendimento', {}],
+    ['esquecer_identificacao', {}],
+  ])('%s limpa o escopo de terceiro', async (nome, args) => {
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+    const r = await executeTool(nome, args, contexto);
+    expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, null);
+    // Caminho feliz de verdade, não só "não travou": a ferramenta precisa ter
+    // concluído a própria ação (não parado em algum mock desarmado por acaso) e
+    // deixado a limpeza refletida no contexto.
+    expect(r.ok).toBe(true);
+    expect(contexto.terceiro).toBeNull();
+    expect(ACAO_PRINCIPAL[nome]).toHaveBeenCalled();
+  });
+
+  test('buscar_cliente sem a marcação de terceiro limpa um escopo anterior', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({
+      client: { id: 5, name: 'JOAO', document: '11122233344' }, contracts: [{ id: 1, status: 1 }],
+    });
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+    await executeTool('buscar_cliente', { cpf: '11122233344' }, contexto);
+    expect(contexto.terceiro).toBeNull();
+    expect(setThirdPartyScope).toHaveBeenCalledWith(contexto.conversationId, null);
+  });
+});
+
 describe('buscar_cliente no perfil de triagem', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Este bloco cobre o comportamento com a EXIGENCIA LIGADA: CPF digitado
-    // vale como identidade fraca ate a data de nascimento bater. Com a flag
-    // desligada (o padrao) o ramo e outro, no bloco logo abaixo.
-    getAiConfig.mockResolvedValue({ triageRequireBirthdate: true });
-  });
-
-  test('atualiza a identidade para fraca com primeiro nome e data de nascimento no servidor, sem persistir vínculo', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, login: 'l', plan: 'p', statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(c.identidade).toMatchObject({ nivel: 'fraca', origem: 'cpf', primeiroNome: 'Maria', dataNascimento: '1985-01-02', nascimentoTentado: false });
-    expect(JSON.stringify(r)).not.toContain('1985');
-    // C1 (fix round 1): CPF ainda não confirmado — nada é persistido. Sem
-    // isto, o próximo turno leria contact.sgpDocument e resolveria
-    // identidade FORTE por memória, pulando confirmar_nascimento de vez.
-    expect(setContactSgpLink).not.toHaveBeenCalled();
-    expect(c.contact.sgpDocument).toBeUndefined();
-  });
-
-  test('grava o CPF digitado na conversa, para o próximo turno reconstruir a identidade fraca', async () => {
-    // Defeito A: sem isto, resolverIdentidade devolvia 'none' no turno
-    // seguinte e o modelo pedia o CPF de novo.
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', '11122233344');
-  });
-
-  test('falha ao gravar o CPF pendente não derruba a busca (o turno atual ainda vale)', async () => {
-    // Perder a persistência é voltar ao comportamento antigo; perder o turno
-    // inteiro é pior — o cliente acabou de digitar o CPF.
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    setTriagePendingDocument.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(r.cliente).toEqual({ nome: 'Maria' });
-    expect(c.identidade.nivel).toBe('fraca');
-    // O CPF nunca vai a log.
-    expect(erroSpy.mock.calls.map((a) => JSON.stringify(a)).join(' ')).not.toContain('11122233344');
-    erroSpy.mockRestore();
-  });
-
-  test('no perfil assistente NÃO grava CPF pendente (a coluna é só da triagem)', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'X SOBRENOME', document: '1' }, contracts: [] });
-    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' } };
-    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(setTriagePendingDocument).not.toHaveBeenCalled();
-  });
-
-  // C2 (fix round 1): na triagem as palavras do modelo vão direto ao
-  // cliente — o sobrenome completo e o login PPPoE não podem vazar ali.
-  test('não devolve sobrenome nem login PPPoE ao modelo', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, login: 'joao123', plan: '600MB', statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    // I5 (revisão final do branch inteiro): a triagem não devolve mais o
-    // plano contratado ao modelo — só id e status, o suficiente para
-    // classificar sem entregar dado sensível a uma identidade ainda fraca.
-    // Defeito C (teste real 2026-09-14): com a lista de contratos na mão, o
-    // modelo citava "contrato 2354" e perguntava "qual contrato" mesmo com um
-    // contrato só. Antes da confirmação ele recebe só a quantidade.
-    expect(r).toEqual({
-      cliente: { nome: 'Maria' },
-      quantidadeContratos: 1,
-      proximoPasso: 'Identificação por CPF ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento. NÃO cite contrato, endereço nem plano; NÃO pergunte qual contrato.',
-    });
-    expect(JSON.stringify(r)).not.toContain('SOUZA');
-    expect(JSON.stringify(r)).not.toContain('joao123');
-    expect(JSON.stringify(r)).not.toContain('5');
-  });
-
-  test('os contratos continuam no contexto (o executor e o pós-confirmação precisam deles)', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1 }, { id: 6, statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { conversationId: 'conv-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' } };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(r.quantidadeContratos).toBe(2);
-    expect(c.contracts).toEqual([{ id: 5, statusCode: 1 }, { id: 6, statusCode: 1 }]);
-    expect(c.identidade.contracts).toEqual([{ id: 5, statusCode: 1 }, { id: 6, statusCode: 1 }]);
   });
 
   test('sem identidade no contexto (assistente) não muda nada e persiste o vínculo de imediato', async () => {
@@ -1563,34 +1508,16 @@ describe('buscar_cliente no perfil de triagem', () => {
     expect(r3.cliente).toBeDefined();
     expect(sgpClient.lookupClientByCpf).toHaveBeenCalledTimes(3);
   });
-
-  // Fix round 2 (discriminator alignment): a checagem antiga usava
-  // `contexto.identidade` diretamente. Se o runner de triagem (Task 4)
-  // algum dia passasse `identidade: null` (falsy, mas o perfil ainda É de
-  // triagem, porque ferramentasPermitidas está presente), buscar_cliente
-  // cairia no ramo assistente por engano — persistindo o vínculo e
-  // devolvendo o nome completo. perfilTriagem() usa o mesmo discriminador do
-  // executor (ferramentasPermitidas OU identidade) para não reabrir C1/C2.
-  test('com ferramentasPermitidas e identidade: null, ainda usa o ramo de triagem', async () => {
-    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, login: 'l', plan: 'p', statusCode: 1 }] });
-    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 9, cpfcnpj: '11122233344', dataNascimento: '1985-01-02' } });
-    const c = { contact: { id: 'ct-1' }, ferramentasPermitidas: ['buscar_cliente'], identidade: null };
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(r).toEqual({ cliente: { nome: 'Maria' }, quantidadeContratos: 1, proximoPasso: expect.stringContaining('confirmar_nascimento') });
-    expect(setContactSgpLink).not.toHaveBeenCalled();
-    expect(c.contact.sgpDocument).toBeUndefined();
-  });
 });
 
 describe('buscar_cliente na triagem com a data de nascimento dispensada (padrao)', () => {
   // Decisao do dono (2026-09-14): "o dado mais importante e o CPF; no site do
-  // SGP o cliente loga so com ele". Com triageRequireBirthdate desligado, o CPF
-  // digitado ja identifica e libera boleto/PIX.
+  // SGP o cliente loga so com ele". O CPF digitado ja identifica e libera
+  // boleto/PIX direto, sem confirmação nenhuma.
   const CLIENTE = { client: { id: 9, name: 'MARIA SOUZA', document: '1' }, contracts: [{ id: 5, statusCode: 1, address: 'RUA X, 10' }] };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    getAiConfig.mockResolvedValue({ triageRequireBirthdate: false });
     sgpClient.lookupClientByCpf.mockResolvedValue(CLIENTE);
   });
 
@@ -1624,12 +1551,6 @@ describe('buscar_cliente na triagem com a data de nascimento dispensada (padrao)
     });
   });
 
-  test('limpa qualquer CPF pendente: nao ha mais o que confirmar', async () => {
-    const c = ctx();
-    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(setTriagePendingDocument).toHaveBeenCalledWith('conv-1', null);
-  });
-
   test('devolve os contratos com endereco e a instrucao de seguir', async () => {
     sgpClient.lookupClientByCpf.mockResolvedValue({
       client: { id: 9, name: 'MARIA SOUZA', document: '1' },
@@ -1661,22 +1582,14 @@ describe('buscar_cliente na triagem com a data de nascimento dispensada (padrao)
     expect(erroSpy.mock.calls.map((a) => JSON.stringify(a)).join(' ')).not.toContain('11122233344');
     erroSpy.mockRestore();
   });
-
-  test('falha ao limpar o CPF pendente nao derruba a identificacao', async () => {
-    setTriagePendingDocument.mockRejectedValueOnce(new Error('db fora'));
-    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const c = ctx();
-    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
-    expect(c.identidade.nivel).toBe('forte');
-    expect(r.cliente).toEqual({ nome: 'Maria' });
-    erroSpy.mockRestore();
-  });
 });
 
 describe('enviar_boleto', () => {
   // primeiroNome no fixture desde 2026-09-17: a instrução da entrega passa a
   // lembrar o modelo de chamar o cliente pelo nome.
-  const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte', primeiroNome: 'Willemberg' } });
+  // messageId: a entrega exige a identidade da mensagem do cliente e, sem
+  // ela, falha FECHADO. Em produção a triagem sempre a tem (ai-worker.js).
+  const ctx = () => ({ conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte', primeiroNome: 'Willemberg' }, messageId: 'msg-1' });
   beforeEach(() => {
     jest.clearAllMocks();
     sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix', barCode: '836100000012' }] });
@@ -1908,7 +1821,7 @@ describe('enviar_boleto', () => {
 describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / gerar_segunda_via)', () => {
   const CONTRATOS = [{ id: 17402, address: 'RUA J.K., 544' }, { id: 17405, address: 'AGENOR COSTA, 523' }];
   const ctx = (contracts = CONTRATOS) => ({
-    conversationId: 'c-1', channelId: 'ch-1', contracts, identidade: { nivel: 'forte' },
+    conversationId: 'c-1', channelId: 'ch-1', contracts, identidade: { nivel: 'forte' }, messageId: 'msg-1',
   });
   const comFatura = (id, valor) => ({
     hasOpenInvoice: true,
@@ -2064,6 +1977,52 @@ describe('fatura em qualquer contrato do cliente (gerar_pix / enviar_boleto / ge
       expect(r).toEqual({ temFaturaAberta: false, faturas: [], motivo: 'Nenhuma fatura em aberto em nenhum contrato do cliente.' });
     });
   });
+
+  // O fallback procura a fatura em OUTROS contratos quando o pedido não tem.
+  // Com contexto.contracts (próprios) e contexto.terceiro.contratos (de um
+  // terceiro consultado) povoados ao mesmo tempo no turno — o caso real de
+  // uma conversa que já resolveu os dois —, ele não pode atravessar a
+  // fronteira em NENHUM sentido: nem entregar o boleto do próprio cliente
+  // quando o pedido era do terceiro, nem o contrário. Chama
+  // faturaEmAlgumContrato direto (não uma ferramenta), para testar o
+  // resolvedor de escopo sem depender de qual ferramenta o usa.
+  describe('a fronteira entre o escopo próprio e o de terceiro nunca é atravessada pelo fallback', () => {
+    test('pedido no contrato do terceiro não cai para os contratos próprios', async () => {
+      const contexto = {
+        contracts: [{ id: 1 }, { id: 2 }],
+        terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
+      };
+      // Um dos contratos PRÓPRIOS (id 2) tem fatura em aberto: se a fronteira
+      // vazasse, seria exatamente essa fatura — a do cliente, não a do
+      // terceiro — que sairia como resposta ao pedido do contrato 77.
+      sgpClient.getDuplicateInvoice.mockImplementation((id) => Promise.resolve(
+        id === 2 ? comFatura(2, 50) : semFatura,
+      ));
+      const busca = await faturaEmAlgumContrato(77, contexto);
+      expect(busca.trocouContrato).toBe(false);
+      expect(busca.semFaturaEmNenhum).toBe(true);
+      expect(busca.contratoId).toBe(77);
+      expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalledWith(1);
+      expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalledWith(2);
+    });
+
+    test('pedido num contrato próprio não cai para o contrato do terceiro', async () => {
+      const contexto = {
+        contracts: [{ id: 1 }],
+        terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
+      };
+      // O único contrato do TERCEIRO (id 77) tem fatura em aberto: se a
+      // fronteira vazasse, o cliente receberia o boleto do marido/esposa ao
+      // pedir o próprio.
+      sgpClient.getDuplicateInvoice.mockImplementation((id) => Promise.resolve(
+        id === 77 ? comFatura(77, 50) : semFatura,
+      ));
+      const busca = await faturaEmAlgumContrato(1, contexto);
+      expect(busca.trocouContrato).toBe(false);
+      expect(busca.semFaturaEmNenhum).toBe(true);
+      expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalledWith(77);
+    });
+  });
 });
 
 describe('tool-executor + enviar_boleto (composição real, I3 fix round 1)', () => {
@@ -2165,7 +2124,7 @@ describe('tool-executor + consultar_faturas_todos_contratos (composição real, 
 describe('fatura entregue é sempre a mais antiga', () => {
   const SETOR_X = '11111111-1111-1111-1111-111111111111';
   const ctx = () => ({
-    conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte' },
+    conversationId: 'c-1', channelId: 'ch-1', contracts: [{ id: 17402 }], identidade: { nivel: 'forte' }, messageId: 'msg-1',
   });
   // Ordem embaralhada de propósito: o SGP não garante ordenação.
   const DUAS = {
@@ -2240,7 +2199,7 @@ describe('concluir_triagem', () => {
     identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'João', nome: 'João Da Silva Pereira', client: { id: 9 } },
     contracts: [{ id: 17402, address: 'RUA X', plan: '600MB', statusCode: 1 }],
     triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0 },
-    origemMensagem: 'texto', resolvidoPelaIa: false, ...extra,
+    origemMensagem: 'texto', resolvidoPelaIa: false, messageId: 'msg-1', ...extra,
   });
   beforeEach(() => {
     jest.clearAllMocks();
@@ -2252,34 +2211,31 @@ describe('concluir_triagem', () => {
 
   test('validar exige setor UUID, confiança 0-1 e resumo', () => {
     const v = findTool('concluir_triagem').validar;
-    expect(v({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9 }).ok).toBe(true);
-    expect(v({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }).ok).toBe(true);
-    expect(v({ setorId: 'x', resumo: 'r', confianca: 0.9 }).ok).toBe(false);
-    expect(v({ setorId: SETOR, resumo: '', confianca: 0.9 }).ok).toBe(false);
-    expect(v({ setorId: SETOR, resumo: 'r', confianca: 1.5 }).ok).toBe(false);
-    expect(v({ setorId: SETOR, resumo: 'r', confianca: '0.9' }).ok).toBe(true);
+    expect(v({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }).ok).toBe(true);
+    expect(v({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }).ok).toBe(true);
+    expect(v({ setorId: 'x', resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: '', confianca: 0.9, pendenciasObrigatorias: [] }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: 'r', confianca: 1.5, pendenciasObrigatorias: [] }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: 'r', confianca: '0.9', pendenciasObrigatorias: [] }).ok).toBe(true);
     // Minor (fix round 1): Number(true) === 1, que passava batido na faixa
     // 0-1 antes desta checagem de tipo.
-    expect(v({ setorId: SETOR, resumo: 'r', confianca: true }).ok).toBe(false);
+    expect(v({ setorId: SETOR, resumo: 'r', confianca: true, pendenciasObrigatorias: [] }).ok).toBe(false);
   });
 
-  test('confiança baixa com pergunta sobrando: não conclui e manda perguntar', async () => {
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.5 }, ctx());
-    expect(r.concluido).toBe(false);
-    expect(r.instrucao).toMatch(/UMA pergunta/);
-    expect(concludeAiTriage).not.toHaveBeenCalled();
-  });
-
-  test('confiança baixa sem pergunta sobrando: conclui e marca baixa confiança', async () => {
-    const c = ctx({ triagem: { threshold: 0.8, maxQuestions: 2, attempts: 2 } });
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.5 }, c);
-    expect(r.concluido).toBe(true);
-    expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ lowConfidence: true, sectorId: SETOR }));
-  });
+  // Task 9 (2026-09-17): o gate de baixa_confianca foi removido por completo
+  // de concluir_triagem.executar — confiança baixa nunca mais bloqueia a
+  // conclusão nem gera pergunta ao cliente. Os três testes que exercitavam
+  // esse gate (bloqueia com pergunta sobrando; preserva o escopo de terceiro
+  // na saída antecipada por baixa_confianca; conclui só quando attempts
+  // esgota) testavam um comportamento que deixou de existir e foram
+  // apagados. A garantia nova — confiança baixa nunca bloqueia, em nenhum
+  // estado de attempts, e continua marcada como (BAIXA) no resumo — está em
+  // 'tool-executor + concluir_triagem — confiança nunca bloqueia a conclusão
+  // (Task 9)', mais abaixo neste arquivo.
 
   test('conclui: grava, prefixa o resumo com o que o código sabe, avisa a fila e instrui uma frase final', async () => {
     const c = ctx({ resolvidoPelaIa: true, origemMensagem: 'áudio' });
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, c);
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95, pendenciasObrigatorias: [] }, c);
     expect(r).toMatchObject({ concluido: true, setor: 'Financeiro' });
     expect(r.instrucao).toMatch(/uma frase/i);
     const args = concludeAiTriage.mock.calls[0][1];
@@ -2295,38 +2251,54 @@ describe('concluir_triagem', () => {
     expect(c.triagemConcluida).toEqual({ setor: 'Financeiro' });
   });
 
-  test('o resumo lista as ferramentas usadas e o que devolveram', async () => {
+  // Task 11: a linha deixou de despejar o JSON cru do registro — vira uma
+  // frase curta ("chave valor, chave valor") que um atendente lê sem esforço.
+  test('o resumo lista as ferramentas usadas e o que devolveram, de forma legível', async () => {
     const c = ctx({ registroFerramentas: [{ nome: 'enviar_boleto', resultado: '{"enviado":false,"motivo":"Nenhuma fatura em aberto"}' }] });
-    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'Pediu boleto.', confianca: 0.9 }, c);
-    expect(concludeAiTriage.mock.calls[0][1].summary).toContain('Ferramentas: enviar_boleto → {"enviado":false,"motivo":"Nenhuma fatura em aberto"}');
+    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'Pediu boleto.', confianca: 0.9, pendenciasObrigatorias: [] }, c);
+    expect(concludeAiTriage.mock.calls[0][1].summary).toContain('Ferramentas: enviar_boleto → enviado false, motivo Nenhuma fatura em aberto');
   });
 
   test('setor desconhecido ou motivo inativo são recusados', async () => {
     listSectors.mockResolvedValue([]);
-    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx())).ok).toBe(false);
+    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, ctx())).ok).toBe(false);
     listSectors.mockResolvedValue([{ id: SETOR, name: 'F' }]);
     findReasonById.mockResolvedValue({ id: MOTIVO, active: false });
-    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9 }, ctx())).ok).toBe(false);
+    expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, ctx())).ok).toBe(false);
+  });
+
+  // Correção 2026-09-18 (re-revisão): mesma prova que já existia para
+  // encerrar_atendimento, agora simétrica — cobre as outras duas saídas
+  // antecipadas que ficam ANTES da guarda (setor desconhecido, motivo
+  // inativo), não só baixa_confianca. Sem isto, uma regressão que movesse a
+  // guarda para entre a checagem de motivo e a de confiança baixa destruiria
+  // o escopo nestes dois ramos sem quebrar nenhum teste.
+  test.each([
+    ['setor desconhecido', () => listSectors.mockResolvedValue([])],
+    ['motivo inativo', () => findReasonById.mockResolvedValue({ id: MOTIVO, active: false })],
+  ])('recusado por %s: preserva o escopo de terceiro e não chama setThirdPartyScope', async (_nome, armar) => {
+    armar();
+    const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
+    const c = ctx({ terceiro });
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, c);
+    expect(r.ok).toBe(false);
+    expect(setThirdPartyScope).not.toHaveBeenCalled();
+    expect(c.terceiro).toBe(terceiro);
   });
 
   test('conversa que já saiu de pending (atendente assumiu) devolve concluido:false sem quebrar', async () => {
     concludeAiTriage.mockResolvedValue(null);
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx());
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, ctx());
     expect(r.concluido).toBe(false);
     expect(broadcast).not.toHaveBeenCalled();
   });
 
-  test('cpf_confirmed é gravado como identificação quando a origem for essa', async () => {
-    const c = ctx({ identidade: { nivel: 'forte', origem: 'cpf_confirmed', primeiroNome: 'Ana', client: { id: 1 } } });
-    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, c);
-    expect(concludeAiTriage.mock.calls[0][1].identifiedBy).toBe('cpf_confirmed');
-  });
 
   // A entrega pode ter acontecido num turno ANTERIOR: contexto.resolvidoPelaIa
   // nasce false a cada turno, então só a flag persistida sabe disso.
   test('resumo diz "Resolvido pela IA" quando a entrega foi num turno anterior', async () => {
     getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null, aiTriageResolvedByAi: true });
-    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, ctx({ resolvidoPelaIa: false }));
+    await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, ctx({ resolvidoPelaIa: false }));
     const args = concludeAiTriage.mock.calls[0][1];
     expect(args.resolvedByAi).toBe(true);
     expect(args.summary).toContain('Resolvido pela IA');
@@ -2337,7 +2309,7 @@ describe('concluir_triagem', () => {
   // clássico bastaria para concluir uma "triagem" que nunca existiu.
   test('fora do perfil de triagem (sem lista fixa e sem identidade), recusa sem concluir nada', async () => {
     const c = { conversationId: 'c-1', contact: { id: 'ct-1' }, contracts: [], triagem: { threshold: 0.8, maxQuestions: 2, attempts: 0 } };
-    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9 }, c);
+    const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, c);
     expect(r).toEqual({ ok: false, erro: 'concluir_triagem is only available during AI triage' });
     expect(concludeAiTriage).not.toHaveBeenCalled();
     expect(broadcast).not.toHaveBeenCalled();
@@ -2348,7 +2320,7 @@ describe('concluir_triagem', () => {
 
     test('à noite a frase final promete a equipe a partir da hora de retorno e o resumo abre com o turno noturno', async () => {
       const c = ctx({ triagem: NOTURNO });
-      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, c);
+      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       expect(r.concluido).toBe(true);
       expect(r.instrucao).toMatch(/a partir das 08:00/);
       expect(r.instrucao).not.toMatch(/um atendente continua daqui/);
@@ -2366,7 +2338,7 @@ describe('concluir_triagem', () => {
         comprovante: { valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '4321', contratoId: 17402, motivos: [] },
         desbloqueioResultado: { liberado: true, dias: 3 },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).toContain('Comprovante (visão): pix R$ 135,00 em 13/09/2026 — conferido, fatura 4321 do contrato 17402');
       expect(summary).toContain('Desbloqueio em confiança: REALIZADO (3 dias)');
@@ -2379,7 +2351,7 @@ describe('concluir_triagem', () => {
         comprovante: { valido: false, tipo: 'outro', valor: 90, data: '2026-09-13', faturaId: null, contratoId: null, motivos: ['valor não corresponde a nenhuma fatura em aberto'] },
         desbloqueioResultado: { liberado: false, motivo: 'Só é possível uma liberação em confiança a cada 30 dias.' },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).toContain('NÃO conferiu: valor não corresponde a nenhuma fatura em aberto');
       expect(summary).not.toContain('fatura null');
@@ -2393,7 +2365,7 @@ describe('concluir_triagem', () => {
         triagem: NOTURNO,
         comprovante: { valido: false, tipo: 'outro', valor: null, data: null, faturaId: null, contratoId: null, motivos: ['não parece um comprovante'] },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).not.toMatch(/R\$ 0,00/);
       expect(summary).not.toMatch(/em null/);
@@ -2401,7 +2373,7 @@ describe('concluir_triagem', () => {
     });
 
     test('sem comprovante e sem desbloqueio, o resumo noturno não ganha linhas novas', async () => {
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, ctx({ triagem: NOTURNO }));
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, ctx({ triagem: NOTURNO }));
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).not.toContain('Comprovante (visão)');
       expect(summary).not.toContain('Desbloqueio em confiança');
@@ -2409,7 +2381,7 @@ describe('concluir_triagem', () => {
     });
 
     test('de dia, a frase final e o resumo seguem como hoje', async () => {
-      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95 }, ctx());
+      const r = await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente pediu boleto.', confianca: 0.95, pendenciasObrigatorias: [] }, ctx());
       expect(r.instrucao).toMatch(/um atendente continua daqui/);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary.startsWith('Setor: Financeiro')).toBe(true);
@@ -2424,7 +2396,7 @@ describe('concluir_triagem', () => {
       const c = ctx({
         comprovante: { valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '4321', contratoId: 17402, motivos: [] },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'Cliente mandou comprovante.', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       const linhas = summary.split(String.fromCharCode(10));
       expect(linhas[0]).toBe('Comprovante (visão): pix R$ 135,00 em 13/09/2026 — conferido, fatura 4321 do contrato 17402');
@@ -2442,7 +2414,7 @@ describe('concluir_triagem', () => {
           usoAnterior: { contractId: 26515, usedAt: new Date('2026-09-14T02:12:00.000Z'), descricao: 'já utilizado no contrato 26515 em 13/09 às 23:12' },
         },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary.split(String.fromCharCode(10))[0]).toBe(
         'Comprovante (visão): pix R$ 135,00 em 13/09/2026 — conferido, fatura 98765 do contrato 26515 — ⚠ já utilizado no contrato 26515 em 13/09 às 23:12'
@@ -2453,16 +2425,411 @@ describe('concluir_triagem', () => {
       const c = ctx({
         comprovante: { valido: true, tipo: 'pix', valor: 135, data: '2026-09-13', faturaId: '4321', contratoId: 17402, motivos: [], usoAnterior: null },
       });
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, c);
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, c);
       expect(concludeAiTriage.mock.calls[0][1].summary).not.toContain('⚠');
     });
 
     test('sem comprovante, o resumo de dia não ganha linha nenhuma', async () => {
-      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95 }, ctx());
+      await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: MOTIVO, resumo: 'r', confianca: 0.95, pendenciasObrigatorias: [] }, ctx());
       const summary = concludeAiTriage.mock.calls[0][1].summary;
       expect(summary).not.toContain('Comprovante (visão)');
       expect(summary).not.toContain('Pendente:');
     });
+  });
+});
+
+// Task 11: o resumo que a IA entrega ao atendente ganha duas melhorias —
+// registra quando o pedido era de um terceiro (pelo primeiro nome e pelo
+// contrato, nunca pelo documento do titular, que nem chega a ficar guardado
+// em contexto.terceiro) e troca o despejo de JSON cru da linha "Ferramentas:"
+// por uma frase legível. Roda pelo executor de verdade (executeTool), não só
+// tool.executar, seguindo o mesmo padrão dos outros describes 'tool-executor +
+// X (composição real)' deste arquivo. beforeEach próprio de propósito: nada
+// aqui depende de mock armado em outro describe (rodar isolado com `-t` tem
+// que bastar).
+describe('tool-executor + concluir_triagem — resumo para o atendente (Task 11)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+    concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'c1', assignedAgentId: null });
+  });
+
+  test('o resumo registra que o pedido era de outra pessoa, sem o documento dela', async () => {
+    const contexto = contextoDeTriagemCom({ terceiro: { nome: 'Maria', contratos: [{ id: 77 }] } });
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Boleto entregue.', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    expect(summary).toMatch(/Pedido de terceiro: titular Maria, contrato 77/);
+    expect(summary).not.toMatch(/\d{11}/);
+  });
+
+  // O `if (contexto.terceiro)` é condicional: sem escopo de terceiro, a linha
+  // não pode aparecer — nem vazia, nem com "não informado".
+  test('sem escopo de terceiro, o resumo não ganha a linha "Pedido de terceiro"', async () => {
+    const contexto = contextoDeTriagemCom({ terceiro: null });
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    expect(summary).not.toContain('Pedido de terceiro');
+  });
+
+  test('a linha de ferramentas do resumo é legível, não JSON cru', async () => {
+    const contexto = contextoDeTriagemCom({
+      registroFerramentas: [{ nome: 'consultar_status_todos_contratos', resultado: '{"contratos":[{"status":"ativo","conexao":"online"}]}' }],
+    });
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    expect(summary).toMatch(/consultar_status_todos_contratos →/);
+    expect(summary).not.toMatch(/\{"contratos"/);
+  });
+
+  // O registro AINDA PODE gravar um resultado truncado (ai-orchestrator.js só
+  // corta acima de 2000 caracteres desde a Rodada de correção 1 — ver o
+  // comentário lá —, com "…(truncado)" colado no fim), o que deixa de ser
+  // JSON válido no meio de uma string ou de um array. legivel precisa cair no
+  // texto cru sem lançar: um resultado grande não pode derrubar a conclusão
+  // da triagem. Simulado aqui com um corte de 200 só para manter o teste
+  // pequeno — o fallback não depende do tamanho exato do corte.
+  test('resultado truncado (JSON inválido) não derruba a ferramenta: cai no texto cru', async () => {
+    const original = JSON.stringify({
+      faturas: Array.from({ length: 10 }, (_, i) => ({ id: i, valor: 100 + i, vencimento: '2026-09-10' })),
+    });
+    const truncado = `${original.slice(0, 200)}…(truncado)`;
+    const contexto = contextoDeTriagemCom({
+      registroFerramentas: [{ nome: 'consultar_faturas_todos_contratos', resultado: truncado }],
+    });
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
+    expect(r.ok).toBe(true);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    expect(summary).toContain(`Ferramentas: consultar_faturas_todos_contratos → ${truncado.slice(0, 160)}`);
+  });
+
+  // Rodada de correção 1 (achado da revisão): "Ferramentas: fica legível" não
+  // valia para enviar_boleto/gerar_pix — as duas ferramentas mais comuns em
+  // produção —, porque o `instrucao` real delas (o modelo de frase para o
+  // cliente) já passa fácil de 200 caracteres sozinho, e o corte antigo
+  // cortava o JSON no meio ANTES de legivel poder filtrar esse campo. Prova
+  // fim a fim: roda enviar_boleto de VERDADE (não um resultado inventado),
+  // reproduz a contabilização real de ai-orchestrator.js (corte acima de
+  // 2000) e confere a linha final do resumo.
+  test('enviar_boleto de verdade (com instrucao longa): a linha de ferramentas sai legível de ponta a ponta', async () => {
+    sgpClient.getDuplicateInvoice.mockResolvedValue({
+      hasOpenInvoice: true,
+      duplicates: [{ id: '9', dueDate: '2026-09-20', value: 89.9, boletoLink: 'https://x/b.pdf', pixCode: 'pix', barCode: '836100000012' }],
+    });
+    sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+    saveMediaFile.mockResolvedValue('abc.pdf');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-9' });
+    enviarBoleto.mockResolvedValue([{ id: 'm-cartao' }, { id: 'm-linha' }]);
+    getConversationWithContact.mockResolvedValue({ id: 'c1', status: 'waiting', triageState: 'pending', assignedAgentId: null });
+
+    const contexto = contextoDeTriagemCom({ contracts: [{ id: 17402, address: 'RUA X' }] });
+    const respostaEnvio = await executeTool('enviar_boleto', { contratoId: 17402 }, contexto);
+    expect(respostaEnvio.ok).toBe(true);
+    // instrucao de verdade: mais de 200 caracteres sozinha — é exatamente o
+    // caso que o corte antigo (200) cortava no meio.
+    expect(respostaEnvio.resultado.instrucao.length).toBeGreaterThan(200);
+
+    // Mesma contabilização de ai-orchestrator.js (linha ~876): registra
+    // nome+resultado serializado, truncando só acima de 2000 caracteres.
+    const serializado = JSON.stringify(respostaEnvio.resultado);
+    contexto.registroFerramentas.push({
+      nome: 'enviar_boleto',
+      resultado: serializado.length > 2000 ? `${serializado.slice(0, 2000)}…(truncado)` : serializado,
+    });
+
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.9, pendenciasObrigatorias: [] }, contexto);
+    const { summary } = concludeAiTriage.mock.calls[0][1];
+    const linhaFerramentas = summary.split('\n').find((l) => l.startsWith('Ferramentas:'));
+
+    expect(linhaFerramentas).toMatch(/enviar_boleto → /);
+    expect(linhaFerramentas).toMatch(/\benviado true\b/);
+    expect(linhaFerramentas).not.toContain('{"');
+    expect(linhaFerramentas).not.toContain('instrucao');
+    // Formato exato: prova, de uma vez, que nada ficou cortado no meio de uma
+    // palavra — a linha termina numa palavra inteira ("true"), não num
+    // fragmento.
+    expect(linhaFerramentas).toBe(
+      'Ferramentas: enviar_boleto → enviado true, valor 89.9, vencimento 2026-09-20, linhaDigitavelEnviada true'
+    );
+  });
+});
+
+// A confiança é um palpite do modelo sobre si mesmo. Até 2026-09-17 um
+// palpite baixo bloqueava concluir_triagem e forçava mais uma pergunta ao
+// cliente (o gate removido em tool-registry.js). Roda pelo executor de
+// verdade (executeTool), não só tool.executar, porque é na composição
+// registro+executor que a checagem de perfil de triagem entra no caminho —
+// mesmo motivo dos outros describes 'tool-executor + X (composição real)'
+// deste arquivo. beforeEach próprio de propósito: nada aqui depende de mock
+// armado em outro describe (rodar isolado com `-t` tem que bastar).
+describe('tool-executor + concluir_triagem — confiança nunca bloqueia a conclusão (Task 9)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+    concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null });
+  });
+
+  test.each([0, 0.1, 0.5, 0.79, 0.8, 1])('confiança %s conclui a triagem e nunca gera pergunta', async (confianca) => {
+    const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts: 0 } });
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente quer o boleto.', confianca, pendenciasObrigatorias: [] }, contexto);
+    expect(r.ok).toBe(true);
+    expect(r.resultado.concluido).not.toBe(false);
+    expect(r.resultado.motivo).not.toBe('baixa_confianca');
+    // Divergência mecânica com o brief: /pergunta/i sobre o resultado inteiro
+    // colide com "Não faça mais perguntas." — frase legítima da instrução de
+    // sucesso, sem relação com o gate antigo. O alvo real é a pergunta de
+    // esclarecimento que baixa_confianca mandava fazer.
+    expect(JSON.stringify(r.resultado)).not.toMatch(/pergunta curta de esclarecimento/i);
+  });
+
+  // O gate antigo só bloqueava quando t.attempts < t.maxQuestions — com o
+  // gate inteiro removido, nenhum estado de attempts pode voltar a bloquear:
+  // nem esgotado (attempts === maxQuestions), nem além do limite. attempts:0
+  // é o caso em que o gate antigo disparava.
+  test.each([0, 1, 4, 5, 6])('confiança baixa (0.1) nunca bloqueia, qualquer que seja attempts (%i)', async (attempts) => {
+    const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts } });
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente quer o boleto.', confianca: 0.1, pendenciasObrigatorias: [] }, contexto);
+    expect(r.ok).toBe(true);
+    expect(r.resultado.concluido).toBe(true);
+    expect(r.resultado.motivo).not.toBe('baixa_confianca');
+  });
+
+  test('a confiança baixa continua marcada no resumo do atendente', async () => {
+    const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts: 0 } });
+    await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'x', confianca: 0.4, pendenciasObrigatorias: [] }, contexto);
+    // O resumo vai no SEGUNDO argumento: concludeAiTriage(conversationId, { ..., summary }).
+    expect(concludeAiTriage).toHaveBeenCalledWith(
+      expect.any(String),
+      // lowConfidence somado à checagem do brief: era a única cobertura direta
+      // desse campo, e sumiu junto com o teste apagado que a exercitava.
+      expect.objectContaining({ summary: expect.stringContaining('40% (BAIXA)'), lowConfidence: true })
+    );
+  });
+});
+
+// Task 20 (2026-09-18). Nos cenários 16 e 20 da execução real com a OpenAI a
+// IA escreveu NO PRÓPRIO RESUMO que ainda faltava informação — e chamou
+// concluir_triagem assim mesmo. A conversa acabou cedo demais. A guarda
+// inverte isso: a IA declara em campo ESTRUTURADO o que falta, e o CÓDIGO
+// recusa a ação terminal enquanto houver item na lista. A IA identifica
+// semanticamente; o código decide.
+//
+// Nada aqui exercita regra de domínio: não existe lista por motivo nem por
+// setor, não se lê o texto do `resumo`, e a confiança não participa. Os
+// cenários 16 e 20 aparecem só como FORMATO de dado — o mecanismo é um só.
+//
+// Roda pelo executor de verdade (executeTool) pelo mesmo motivo dos outros
+// describes 'tool-executor + X': é na composição registro+executor que a
+// validação de argumentos entra no caminho, e é ela que barra a ausência.
+// beforeEach próprio de propósito: rodar isolado com `-t` tem que bastar.
+describe('tool-executor + concluir_triagem — guarda de pendência obrigatória (Task 20)', () => {
+  const ENDERECO_E_DATA = ['endereço completo do novo ponto', 'data prevista da mudança'];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listSectors.mockResolvedValue([{ id: SETOR, name: 'Financeiro' }]);
+    concludeAiTriage.mockResolvedValue({ id: 'c-1', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'c-1', assignedAgentId: null });
+  });
+
+  /** Os argumentos da conclusão, com a declaração de pendências que o teste quiser. */
+  function conclusao(pendenciasObrigatorias, extra = {}) {
+    return { setorId: SETOR, resumo: 'Cliente pediu ajuda.', confianca: 0.9, pendenciasObrigatorias, ...extra };
+  }
+
+  // 1
+  test('lista não vazia: concludeAiTriage NÃO é chamada, e o modelo recebe a lista com a ordem de perguntar uma coisa por vez', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao(ENDERECO_E_DATA), contexto);
+
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(broadcastToDashboard).not.toHaveBeenCalled();
+    expect(contexto.triagemConcluida).toBeUndefined();
+    expect(r.ok).toBe(true);
+    expect(r.resultado.concluido).toBe(false);
+    // A lista volta ao modelo: é ela que ele precisa reler para saber o que
+    // perguntar. Sem isso a recusa seria seca e ele improvisaria.
+    expect(r.resultado.pendenciasObrigatorias).toEqual(ENDERECO_E_DATA);
+    expect(r.resultado.instrucao).toMatch(/uma pergunta/i);
+    // "No topo, antes de QUALQUER efeito colateral": a recusa acontece antes
+    // até das LEITURAS do fluxo terminal. Mover a guarda para baixo da
+    // releitura da conversa, ou da busca do setor, quebra esta linha.
+    expect(getConversationWithContact).not.toHaveBeenCalled();
+    expect(listSectors).not.toHaveBeenCalled();
+  });
+
+  // 2 — o motivo pelo qual a ordem importa.
+  test('lista não vazia: o escopo de terceiro sobrevive à recusa, em memória e no banco', async () => {
+    const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
+    const contexto = contextoDeTriagemCom({ terceiro });
+
+    const r = await executeTool('concluir_triagem', conclusao(['qual das faturas em aberto ele quer']), contexto);
+
+    expect(r.resultado.concluido).toBe(false);
+    // Uma conclusão recusada significa que a conversa CONTINUA. Se o escopo
+    // morresse aqui, quem pediu o boleto do cônjuge teria de informar o CPF do
+    // titular de novo no meio do atendimento — a Fase 2 quebrada por efeito
+    // colateral de uma recusa.
+    expect(setThirdPartyScope).not.toHaveBeenCalled();
+    expect(contexto.terceiro).toBe(terceiro);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  // 3
+  test('lista vazia: a conclusão segue exatamente como antes', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao([]), contexto);
+
+    expect(r.ok).toBe(true);
+    expect(r.resultado).toMatchObject({ concluido: true, setor: 'Financeiro' });
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+    expect(broadcast).toHaveBeenCalledWith('queue:new', expect.objectContaining({ conversation: expect.any(Object) }));
+    expect(contexto.triagemConcluida).toEqual({ setor: 'Financeiro' });
+  });
+
+  // 4
+  test('argumento AUSENTE: invalid_args — ausência não é autorização implícita', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', { setorId: SETOR, resumo: 'Cliente pediu ajuda.', confianca: 0.9 }, contexto);
+
+    expect(r).toMatchObject({ ok: false, motivo: 'invalid_args' });
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+    // O outro jeito de a ausência virar autorização seria um default no
+    // schema: `[]` ali faria a OpenAI (e nós) lerem "não falta nada" de quem
+    // não declarou nada. O campo é obrigatório e não tem default.
+    const { parametros } = findTool('concluir_triagem');
+    expect(parametros.required).toContain('pendenciasObrigatorias');
+    expect(parametros.properties.pendenciasObrigatorias.default).toBeUndefined();
+  });
+
+  // 4b — falha FECHADO: declaração malformada não encolhe para lista vazia.
+  test.each([
+    ['string em vez de array', 'endereço novo'],
+    ['null', null],
+    ['item que não é string', [1]],
+    ['item em branco', ['   ']],
+    ['item vazio no meio de itens reais', ['endereço novo', '']],
+  ])('declaração malformada (%s): invalid_args, e nunca uma lista vazia por descarte', async (_nome, pendenciasObrigatorias) => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao(pendenciasObrigatorias), contexto);
+
+    expect(r).toMatchObject({ ok: false, motivo: 'invalid_args' });
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  // 5 — a guarda não é gate de confiança (o gate antigo foi removido na Task 9
+  // e não pode voltar por esta porta).
+  test.each([0, 0.1, 0.5, 0.79])('confiança baixa (%s) com lista VAZIA conclui', async (confianca) => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao([], { confianca }), contexto);
+
+    expect(r.resultado.concluido).toBe(true);
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([0.95, 0.99, 1])('confiança alta (%s) com lista CHEIA é bloqueada', async (confianca) => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao(['o que exatamente parou de funcionar'], { confianca }), contexto);
+
+    expect(r.resultado.concluido).toBe(false);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  // 6 — a decisão é por CHAMADA, não por conversa: nada fica guardado.
+  test('pendência da intenção anterior não persiste: a tentativa seguinte, com lista vazia, conclui', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const primeira = await executeTool('concluir_triagem', conclusao(
+      ['resultado do teste perto do equipamento'], { resumo: 'Cliente relata lentidão.' }
+    ), contexto);
+    expect(primeira.resultado.concluido).toBe(false);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+
+    // Mesmo contexto, assunto novo: o cliente mudou de ideia e agora quer
+    // negociar as faturas. A pendência do assunto ANTIGO não pode sobreviver.
+    const segunda = await executeTool('concluir_triagem', conclusao(
+      [], { resumo: 'Cliente desistiu do diagnóstico e quer negociar as faturas em atraso.' }
+    ), contexto);
+
+    expect(segunda.resultado.concluido).toBe(true);
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+  });
+
+  // 7 — cenário 20, como FORMATO de dado. Nenhuma regra de endereço existe no
+  // código de produção, e as duas metades deste teste provam isso: o mesmo
+  // resumo, palavra por palavra, conclui ou não conforme a DECLARAÇÃO.
+  test('mudança de endereço: declarar endereço e data como necessários bloqueia a conclusão', async () => {
+    const contexto = contextoDeTriagemCom();
+    const resumo = 'Cliente vai se mudar e quer levar a internet. Falta o endereço novo completo e a data prevista.';
+
+    const bloqueada = await executeTool('concluir_triagem', conclusao(ENDERECO_E_DATA, { resumo }), contexto);
+
+    expect(bloqueada.resultado.concluido).toBe(false);
+    expect(bloqueada.resultado.pendenciasObrigatorias).toEqual(ENDERECO_E_DATA);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+
+    // O MESMO texto de resumo, agora sem declaração de pendência, conclui: não
+    // há análise textual do resumo em lugar nenhum — se houvesse regex de
+    // "falta", esta metade reprovaria.
+    const liberada = await executeTool('concluir_triagem', conclusao([], { resumo }), contexto);
+
+    expect(liberada.resultado.concluido).toBe(true);
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+  });
+
+  // 8 — cenário 16, também só como formato. Suporte NÃO virou checklist: a
+  // segunda metade é um suporte que conclui sem passo nenhum obrigatório.
+  test('diagnóstico de suporte: a etapa necessária bloqueia, mas suporte sem pendência conclui normalmente', async () => {
+    const bloqueado = contextoDeTriagemCom();
+    const r1 = await executeTool('concluir_triagem', conclusao(
+      ['se o teste perto do equipamento também fica abaixo do contratado'],
+      { resumo: 'Cliente relata lentidão desde ontem; conexão online na consulta.' }
+    ), bloqueado);
+
+    expect(r1.resultado.concluido).toBe(false);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+
+    const livre = contextoDeTriagemCom();
+    const r2 = await executeTool('concluir_triagem', conclusao([], {
+      resumo: 'Cliente relata que a internet caiu de vez; conexão offline na consulta e todos os aparelhos sem sinal.',
+    }), livre);
+
+    expect(r2.resultado.concluido).toBe(true);
+    expect(concludeAiTriage).toHaveBeenCalledTimes(1);
+  });
+
+  // A guarda é INCONDICIONAL: não existe bypass por forçar conclusão. Quando o
+  // limite de perguntas estoura, quem encerra é o CÓDIGO, no worker
+  // (ai-worker.js, concluirEmCodigo) — o contador nunca autoriza a IA a
+  // concluir, então não há deadlock possível e a ferramenta não precisa ceder.
+  test.each([0, 1, 5, 6])('a lista cheia bloqueia em qualquer estado de attempts (%i)', async (attempts) => {
+    const contexto = contextoDeTriagemCom({ triagem: { threshold: 0.8, maxQuestions: 5, attempts, noturno: { ativo: false } } });
+
+    const r = await executeTool('concluir_triagem', conclusao(['o que ele quer negociar'], { confianca: 0.99 }), contexto);
+
+    expect(r.resultado.concluido).toBe(false);
+    expect(concludeAiTriage).not.toHaveBeenCalled();
+  });
+
+  // O executor manda o resultado inteiro ao modelo (JSON.stringify), então a
+  // recusa chega como o texto que a instrução escreve — e não como um erro
+  // seco que o modelo tem de adivinhar.
+  test('a recusa vai ao modelo pelo caminho normal de resultado, com a lista e a instrução legíveis', async () => {
+    const contexto = contextoDeTriagemCom();
+
+    const r = await executeTool('concluir_triagem', conclusao(['o número do protocolo do outro atendimento']), contexto);
+
+    const paraOModelo = JSON.stringify(r.resultado);
+    expect(paraOModelo).toContain('o número do protocolo do outro atendimento');
+    expect(r.resultado.motivo).toMatch(/pendente/i);
   });
 });
 
@@ -2536,13 +2903,34 @@ describe('encerrar_atendimento', () => {
     expect(closeConversationByAi).not.toHaveBeenCalled();
   });
 
+  // Correção 2026-09-18: a guarda do escopo de terceiro passou a ficar
+  // imediatamente antes de closeConversationByAi (a ação terminal), não mais
+  // logo após o perfil. Antes desta correção, qualquer um destes três
+  // { encerrado: false } já tinha destruído a autorização mesmo sem encerrar
+  // nada — a cliente teria que informar de novo o CPF do titular.
+  test.each([
+    ['sem motivo configurado', () => motivoDeEncerramentoAtivo.mockResolvedValue(null)],
+    ['saiu da triagem', () => getConversationWithContact.mockResolvedValue({ ...emTriagemComEntrega, assignedAgentId: 'ag-1' })],
+    ['nada entregue', () => getConversationWithContact.mockResolvedValue({ ...emTriagemComEntrega, aiTriageResolvedByAi: false })],
+  ])('sai por { encerrado: false } (%s): preserva o escopo de terceiro e não chama setThirdPartyScope', async (_nome, armar) => {
+    armar();
+    const terceiro = { nome: 'Maria', contratos: [{ id: 77 }] };
+    const c = ctx({ terceiro });
+    const r = await findTool('encerrar_atendimento').executar({}, c);
+    expect(r.encerrado).toBe(false);
+    expect(setThirdPartyScope).not.toHaveBeenCalled();
+    expect(c.terceiro).toBe(terceiro);
+  });
+
+  // Rodada de correção 1 (Task 11): a linha de ferramentas ganhou o mesmo
+  // formato legível de concluir_triagem — deixou de despejar o JSON cru.
   test('caminho feliz: fecha com o motivo configurado, resume, avisa o painel e marca o turno', async () => {
     const c = ctx({ registroFerramentas: [{ nome: 'gerar_pix', resultado: '{"enviado":true}' }] });
     const r = await findTool('encerrar_atendimento').executar({}, c);
 
     expect(closeConversationByAi).toHaveBeenCalledWith('c-1', {
       reasonId: MOTIVO_RESOLVIDO,
-      summary: 'Resolvido pela IA e encerrado sem atendente.\nFerramentas: gerar_pix → {"enviado":true}',
+      summary: 'Resolvido pela IA e encerrado sem atendente.\nFerramentas: gerar_pix → enviado true',
     });
     expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', expect.objectContaining({
       conversation: expect.any(Object), closedAt: expect.any(String),
@@ -2861,5 +3249,625 @@ describe('analisar_comprovante', () => {
     expect(r).toEqual({ analisado: false, motivo: 'Nenhum nome de favorecido cadastrado em Empresa; não é possível conferir comprovantes.' });
     expect(analyzeImage).not.toHaveBeenCalled();
     expect(c.comprovante).toBeUndefined();
+  });
+});
+
+// Task 19: nomes de setor (Financeiro, Comercial, Reativação...) vêm do painel
+// (sector.repository), nunca escritos à mão numa ferramenta ou instrução —
+// outro provedor pode não ter um setor com esse nome.
+describe('Task 19 — nenhum nome de setor fixo no código', () => {
+  test('nenhuma descrição de ferramenta cita nome de setor como texto fixo', () => {
+    const serializado = JSON.stringify(toOpenAiTools(listTools().map((t) => t.nome)));
+    expect(serializado).not.toMatch(/\b(Financeiro|Comercial|Reativação)\b/);
+  });
+
+  // As `instrucao` de retorno não passam por toOpenAiTools (só descricao e
+  // parametros vão para a OpenAI) — varre o FONTE de tool-registry.js e de
+  // ai-orchestrator.js, que também injeta uma instrução por `content` de
+  // mensagem 'system' fora do registro de ferramentas.
+  test('nenhuma instrução de retorno cita nome de setor como texto fixo', () => {
+    const fonteToolRegistry = fs.readFileSync(require.resolve('./tool-registry'), 'utf8');
+    const fonteOrchestrator = fs.readFileSync(require.resolve('./ai-orchestrator'), 'utf8');
+    const trechos = [
+      ...(fonteToolRegistry.match(/instrucao\s*[:=]\s*[`'"][^`'"]*/g) || []),
+      ...(fonteOrchestrator.match(/content:\s*[`'"][^`'"]*/g) || []),
+    ];
+    expect(trechos.length).toBeGreaterThan(0);
+    expect(trechos.filter((t) => /\b(Financeiro|Comercial|Reativação)\b/.test(t))).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// IDEMPOTÊNCIA DE enviar_boleto E gerar_pix
+//
+// Simulação real, roteiro 14: a IA entregou o boleto do titular no turno 2. No
+// turno 3 o cliente disse "Pode mandar" e ela executou enviar_boleto DE NOVO.
+// Em produção isso é o cliente recebendo dois boletos e podendo pagar duas
+// vezes.
+//
+// v2: a MENSAGEM INBOUND é a identidade da entrega; `reenviar` é só permissão.
+// O desenho anterior punha `reenviar` na identidade e, medido em banco real, a
+// MESMA mensagem entregava duas vezes — uma tool call sem `reenviar` e outra
+// com `reenviar: true` caíam em chaves diferentes (é o caso 3 abaixo).
+// ===========================================================================
+describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
+  const FATURA = {
+    id: '9', dueDate: '2026-09-20', value: 89.9,
+    boletoLink: 'https://x/b.pdf', pixCode: '000201-pix-emv', barCode: '836100000012',
+  };
+  const ctx = (extra = {}) => ({
+    conversationId: 'c-idem', channelId: 'ch-1', contracts: [{ id: 17402 }],
+    identidade: { nivel: 'forte', primeiroNome: 'Willemberg' },
+    ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+    registroFerramentas: [], sgpCache: {}, terceiro: null,
+    messageId: 'msg-1',
+    ...extra,
+  });
+  const boleto = (args, contexto) => findTool('enviar_boleto').executar(args, contexto);
+  const pix = (args, contexto) => findTool('gerar_pix').executar(args, contexto);
+  // A identidade que cada claim pediu, na ordem. É o que separa "a mesma
+  // mensagem tentou de novo" de "o cliente escreveu outra vez".
+  const identidadesPedidas = () => claimDelivery.mock.calls.map(([p]) => `${p.messageId}${p.isResend ? '+reenvio' : ''}`);
+  const documentos = () => enqueueOutboundMessage.mock.calls.filter(([m]) => m.messageType === 'document');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA] });
+    sgpClient.downloadBoletoPdf.mockResolvedValue(Buffer.from('%PDF'));
+    saveMediaFile.mockResolvedValue('abc.pdf');
+    enqueueOutboundMessage.mockResolvedValue({ id: 'm-9' });
+    enviarBoleto.mockResolvedValue([{ id: 'm-cartao' }, { id: 'm-linha' }]);
+    enviarPix.mockResolvedValue([{ id: 'm-pix' }]);
+    getConversationWithContact.mockResolvedValue({ id: 'c-idem', assignedAgentId: null, status: 'waiting', triageState: 'pending' });
+  });
+
+  // -------------------------------------------------------------------------
+  // OS SETE CASOS QUE PRECISAM VALER (a tabela do dono, na ordem dele)
+  //
+  //  1 primeiro envio .................................................. passa
+  //  2 segunda call na mesma mensagem ............................... bloqueia
+  //  3 mesma mensagem: sem reenviar, depois com reenviar: true ...... bloqueia
+  //  4 mensagem nova sem reenviar ................................... bloqueia
+  //  5 mensagem nova com reenviar: true ........................ passa 1 vez
+  //  6 duas calls de reenvio na mesma mensagem ................. passa 1 vez
+  //  7 outra mensagem futura pedindo reenvio ....................... passa
+  // -------------------------------------------------------------------------
+  describe('os sete casos', () => {
+    test('1. primeiro envio passa', async () => {
+      const r = await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      expect(r.enviado).toBe(true);
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1']);
+    });
+
+    test('2. segunda call na MESMA mensagem bloqueia', async () => {
+      const contexto = ctx({ messageId: 'msg-1' });
+      const primeira = await boleto({ contratoId: 17402 }, contexto);
+      const segunda = await boleto({ contratoId: 17402 }, contexto);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(segunda.envioAnteriorIncerto).toBeUndefined();
+      expect(segunda.instrucao).toMatch(/já foi enviado nesta conversa/);
+      expect(segunda.instrucao).toMatch(/com todas as letras/);
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-1']);
+    });
+
+    // ===== O MOTIVO DESTA RODADA =====================================
+    // O buraco medido em banco real na v1: a mesma mensagem do cliente, uma
+    // tool call sem `reenviar` e a seguinte com `reenviar: true`. A v1 gerava
+    // 'initial' e 'resend:msg-1' — duas chaves, DUAS entregas. Na v2 a
+    // identidade é a mensagem, então `reenviar` não abre chave nenhuma aqui:
+    // a UNIQUE composta com message_id bloqueia.
+    test('3. mesma mensagem: sem reenviar e depois com reenviar: true entrega UMA vez', async () => {
+      const contexto = ctx({ messageId: 'msg-1' });
+      const primeira = await boleto({ contratoId: 17402 }, contexto);
+      const segunda = await boleto({ contratoId: 17402, reenviar: true }, contexto);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      // Os dentes do teste: UM boleto, UM download, UM claim vencedor.
+      expect(documentos()).toHaveLength(1);
+      expect(sgpClient.downloadBoletoPdf).toHaveBeenCalledTimes(1);
+      expect(enviarBoleto).toHaveBeenCalledTimes(1);
+      // As duas calls pediram a MESMA identidade, mudando só a permissão.
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-1+reenvio']);
+    });
+
+    test('3b. a ordem inversa na mesma mensagem também entrega UMA vez', async () => {
+      const contexto = ctx({ messageId: 'msg-1' });
+      const primeira = await boleto({ contratoId: 17402, reenviar: true }, contexto);
+      const segunda = await boleto({ contratoId: 17402 }, contexto);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1+reenvio', 'msg-1']);
+    });
+
+    test('3c. gerar_pix: mesma mensagem, sem e com reenviar, entrega UMA vez', async () => {
+      const contexto = ctx({ messageId: 'msg-1' });
+      expect((await pix({ contratoId: 17402 }, contexto)).enviado).toBe(true);
+      expect(await pix({ contratoId: 17402, reenviar: true }, contexto)).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(enviarPix).toHaveBeenCalledTimes(1);
+    });
+
+    // É o índice parcial `WHERE is_resend = false` quem bloqueia aqui: a
+    // mensagem é nova, então a UNIQUE composta deixaria passar. É o caso do
+    // "Pode mandar" no turno seguinte.
+    test('4. mensagem NOVA sem reenviar bloqueia, porque já houve o envio inicial', async () => {
+      expect((await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }))).enviado).toBe(true);
+      const segunda = await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-2' }));
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2']);
+    });
+
+    test('5. mensagem nova com reenviar: true passa uma vez', async () => {
+      expect((await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }))).enviado).toBe(true);
+      const reenvio = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+      expect(reenvio.enviado).toBe(true);
+      expect(documentos()).toHaveLength(2);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2+reenvio']);
+    });
+
+    test('6. duas calls de reenvio na mesma mensagem: uma passa', async () => {
+      await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      const contextoDoReenvio = ctx({ messageId: 'msg-2' });
+      const primeira = await boleto({ contratoId: 17402, reenviar: true }, contextoDoReenvio);
+      const segunda = await boleto({ contratoId: 17402, reenviar: true }, contextoDoReenvio);
+      expect(primeira.enviado).toBe(true);
+      expect(segunda).toMatchObject({ enviado: false, jaEnviado: true });
+      expect(documentos()).toHaveLength(2);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2+reenvio', 'msg-2+reenvio']);
+    });
+
+    test('7. outra mensagem futura pedindo reenvio passa de novo', async () => {
+      await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+      const terceiro = await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-3' }));
+      expect(terceiro.enviado).toBe(true);
+      expect(documentos()).toHaveLength(3);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2+reenvio', 'msg-3+reenvio']);
+    });
+
+    // A guarda é por FATURA, não por conversa: outra fatura do mesmo cliente
+    // continua entregável no mesmo turno.
+    test('outra fatura da mesma conversa não é bloqueada', async () => {
+      await boleto({ contratoId: 17402 }, ctx());
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: '10' }] });
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(documentos()).toHaveLength(2);
+    });
+
+    test('gerar_pix e enviar_boleto são entregas separadas da mesma fatura', async () => {
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 1. Duas execuções SIMULTÂNEAS do envio inicial
+  // -------------------------------------------------------------------------
+  // Não são duas chamadas em sequência: as duas ficam EM VOO ao mesmo tempo. O
+  // atraso no SGP garante que ambas passem de faturaEmAlgumContrato antes de
+  // qualquer uma chegar ao claim — é a corrida de verdade, a mesma que dois
+  // workers fariam em produção.
+  describe('1. duas execuções simultâneas do envio inicial', () => {
+    const depois = (ms, valor) => new Promise((resolve) => { setTimeout(() => resolve(valor), ms); });
+
+    beforeEach(() => {
+      // A consulta ao SGP leva 5 ms nas duas, e o envio leva 10 ms: quando a
+      // segunda execução chega ao claim, a primeira AINDA ESTÁ enviando. É a
+      // sobreposição real de dois workers, e é o que faz a perdedora cair no
+      // ramo "sem confirmação" em vez do ramo "já enviado".
+      sgpClient.getDuplicateInvoice.mockImplementation(() => depois(5, { hasOpenInvoice: true, duplicates: [FATURA] }));
+      enqueueOutboundMessage.mockImplementation(() => depois(10, { id: 'm-9' }));
+      enviarPix.mockImplementation(() => depois(10, [{ id: 'm-pix' }]));
+    });
+
+    test('enviar_boleto: só uma ganha o claim e só um boleto sai', async () => {
+      const [a, b] = await Promise.all([boleto({ contratoId: 17402 }, ctx()), boleto({ contratoId: 17402 }, ctx())]);
+      expect(claimDelivery).toHaveBeenCalledTimes(2);
+      expect([a.enviado, b.enviado].filter(Boolean)).toHaveLength(1);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+      expect(enviarBoleto).toHaveBeenCalledTimes(1);
+      // A perdedora chegou enquanto a vencedora ainda enviava: ninguém pode
+      // afirmar que o cliente recebeu.
+      const perdedora = [a, b].find((r) => !r.enviado);
+      expect(perdedora.envioAnteriorIncerto).toBe(true);
+      expect(perdedora.jaEnviado).toBeUndefined();
+      expect(releaseDelivery).not.toHaveBeenCalled();
+    });
+
+    test('gerar_pix: só uma ganha o claim e só um PIX sai', async () => {
+      const [a, b] = await Promise.all([pix({ contratoId: 17402 }, ctx()), pix({ contratoId: 17402 }, ctx())]);
+      expect([a.enviado, b.enviado].filter(Boolean)).toHaveLength(1);
+      expect(enviarPix).toHaveBeenCalledTimes(1);
+      expect([a, b].find((r) => !r.enviado).envioAnteriorIncerto).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 2. Corrida no envio INICIAL, com mensagens DIFERENTES
+  // -------------------------------------------------------------------------
+  // A segunda restrição (o índice parcial) sozinha. As duas execuções são de
+  // mensagens diferentes, então a UNIQUE composta não encosta nelas: quem
+  // decide é o índice parcial, e só uma pode ganhar.
+  describe('2. corrida no envio inicial com mensagens diferentes', () => {
+    const depois = (ms, valor) => new Promise((resolve) => { setTimeout(() => resolve(valor), ms); });
+
+    beforeEach(() => {
+      sgpClient.getDuplicateInvoice.mockImplementation(() => depois(5, { hasOpenInvoice: true, duplicates: [FATURA] }));
+      enqueueOutboundMessage.mockImplementation(() => depois(10, { id: 'm-9' }));
+    });
+
+    test('duas mensagens diferentes, nenhuma pedindo reenvio: um boleto só sai', async () => {
+      const [a, b] = await Promise.all([
+        boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' })),
+        boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-2' })),
+      ]);
+      expect([a.enviado, b.enviado].filter(Boolean)).toHaveLength(1);
+      expect(documentos()).toHaveLength(1);
+      expect(identidadesPedidas()).toEqual(['msg-1', 'msg-2']);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 6. Falha na ZONA A → o claim é LIBERADO
+  // -------------------------------------------------------------------------
+  // Nada saiu do sistema, então a próxima tentativa TEM de poder entregar.
+  describe('6. falha na Zona A libera o claim', () => {
+    test('boleto sem link: libera, e com link a chamada seguinte envia', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, boletoLink: null }] });
+      expect(await boleto({ contratoId: 17402 }, ctx())).toEqual({ enviado: false, motivo: 'Boleto sem link para download' });
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA] });
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+    });
+
+    test('downloadBoletoPdf falhou: libera, e a chamada seguinte envia', async () => {
+      sgpClient.downloadBoletoPdf.mockRejectedValueOnce(new Error('SGP fora'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('SGP fora');
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+
+    test('saveMediaFile falhou: libera, e a chamada seguinte envia', async () => {
+      saveMediaFile.mockRejectedValueOnce(new Error('disco cheio'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('disco cheio');
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+
+    test('a conversa saiu da triagem: libera, e de volta à triagem a seguinte envia', async () => {
+      getConversationWithContact.mockResolvedValueOnce({ id: 'c-idem', assignedAgentId: 'ag-1', status: 'waiting', triageState: 'pending' });
+      expect(await boleto({ contratoId: 17402 }, ctx())).toEqual({ enviado: false, motivo: 'A conversa saiu da triagem; não envie nada. Encaminhe.' });
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+
+    test('a releitura da conversa lançou: libera e propaga o erro', async () => {
+      getConversationWithContact.mockRejectedValueOnce(new Error('banco fora'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('banco fora');
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('gerar_pix sem código PIX: libera, e com código a seguinte envia', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, pixCode: null }] });
+      expect(await pix({ contratoId: 17402 }, ctx())).toEqual({ sucesso: false, motivo: 'Fatura sem código PIX no SGP' });
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [FATURA] });
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(enviarPix).toHaveBeenCalledTimes(1);
+    });
+
+    test('gerar_pix fora da triagem: recusa e libera o claim', async () => {
+      getConversationWithContact.mockResolvedValueOnce({ id: 'c-idem', assignedAgentId: 'ag-1', status: 'waiting', triageState: 'pending' });
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(false);
+      expect(releaseDelivery).toHaveBeenCalledTimes(1);
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 7. Falha DEPOIS de iniciar o envio → o claim é PRESERVADO
+  // -------------------------------------------------------------------------
+  // enqueueOutboundMessage grava a linha da mensagem no banco ANTES de
+  // enfileirar: se estourar no meio, a mensagem já existe na conversa. Liberar
+  // aqui autorizaria uma segunda.
+  describe('7. falha na Zona B preserva o claim', () => {
+    test('enqueueOutboundMessage falhou: não libera, e a repetição não envia', async () => {
+      enqueueOutboundMessage.mockRejectedValueOnce(new Error('fila fora'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('fila fora');
+      expect(releaseDelivery).not.toHaveBeenCalled();
+      expect(markDeliveryEnqueued).not.toHaveBeenCalled();
+
+      const repeticao = await boleto({ contratoId: 17402 }, ctx());
+      expect(repeticao.enviado).toBe(false);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+    });
+
+    test('enviarPix falhou: não libera, e a repetição não envia', async () => {
+      enviarPix.mockRejectedValueOnce(new Error('fila fora'));
+      await expect(pix({ contratoId: 17402 }, ctx())).rejects.toThrow('fila fora');
+      expect(releaseDelivery).not.toHaveBeenCalled();
+
+      expect((await pix({ contratoId: 17402 }, ctx())).enviado).toBe(false);
+      expect(enviarPix).toHaveBeenCalledTimes(1);
+    });
+
+    // A linha digitável é melhor esforço e já era: o PDF saiu, então o claim
+    // continua de pé e a entrega é confirmada.
+    test('a linha digitável falhou depois do PDF: confirma a entrega mesmo assim', async () => {
+      enviarBoleto.mockRejectedValueOnce(new Error('fila fora'));
+      const r = await boleto({ contratoId: 17402 }, ctx());
+      expect(r).toMatchObject({ enviado: true, linhaDigitavelEnviada: false });
+      expect(releaseDelivery).not.toHaveBeenCalled();
+      expect(markDeliveryEnqueued).toHaveBeenCalledTimes(1);
+    });
+
+    // Uma falha ao gravar enqueued_at não desfaz a entrega nem derruba a
+    // ferramenta: o claim fica sem confirmação, que é o lado seguro.
+    test('markDeliveryEnqueued falhou: a entrega continua valendo e nada é liberado', async () => {
+      markDeliveryEnqueued.mockRejectedValueOnce(new Error('banco fora'));
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(releaseDelivery).not.toHaveBeenCalled();
+      expect((await boleto({ contratoId: 17402 }, ctx())).envioAnteriorIncerto).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 8. Claim sem enqueued_at ≠ entrega confirmada
+  // -------------------------------------------------------------------------
+  describe('8. claim sem enqueued_at devolve envioAnteriorIncerto, nunca jaEnviado', () => {
+    test('a instrução não afirma que o cliente recebeu', async () => {
+      enqueueOutboundMessage.mockRejectedValueOnce(new Error('fila fora'));
+      await expect(boleto({ contratoId: 17402 }, ctx())).rejects.toThrow('fila fora');
+
+      const r = await boleto({ contratoId: 17402 }, ctx());
+      expect(r.envioAnteriorIncerto).toBe(true);
+      expect(r.jaEnviado).toBeUndefined();
+      expect(r.instrucao).toMatch(/ficou SEM confirmação/);
+      expect(r.instrucao).toMatch(/[Nn]ão afirme que o cliente recebeu/);
+      expect(r.instrucao).not.toMatch(/já foi enviado nesta conversa/);
+      // E diz ao modelo o caminho legítimo de sair do impasse.
+      expect(r.instrucao).toMatch(/reenviar: true/);
+    });
+
+    test('com enqueued_at, aí sim jaEnviado — e as duas respostas são diferentes', async () => {
+      await boleto({ contratoId: 17402 }, ctx());
+      const r = await boleto({ contratoId: 17402 }, ctx());
+      expect(r.jaEnviado).toBe(true);
+      expect(r.envioAnteriorIncerto).toBeUndefined();
+      expect(r.instrucao).not.toMatch(/sem confirmação/i);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 9. Titular e terceiro seguem o MESMO mecanismo
+  // -------------------------------------------------------------------------
+  describe('9. o boleto de terceiro segue o mesmo mecanismo', () => {
+    const ctxTerceiro = () => ({
+      conversationId: 'c-idem', channelId: 'ch-1', contracts: [],
+      identidade: { nivel: 'fraca', primeiroNome: 'Willemberg' },
+      ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+      terceiro: { nome: 'Maria', contratos: [{ id: 99 }] },
+      registroFerramentas: [], sgpCache: {}, messageId: 'msg-1',
+    });
+
+    test('a segunda entrega do mesmo boleto de terceiro é bloqueada', async () => {
+      const primeira = await executeTool('enviar_boleto', { contratoId: 99 }, ctxTerceiro());
+      const segunda = await executeTool('enviar_boleto', { contratoId: 99 }, ctxTerceiro());
+      expect(primeira.resultado.enviado).toBe(true);
+      expect(segunda.resultado.enviado).toBe(false);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(1);
+      // MINIMIZAÇÃO (Fase 3) intacta: jaEnviado não atravessa a projeção — o
+      // que chega ao modelo continua sendo só enviado + instrucao.
+      expect(Object.keys(segunda.resultado).sort()).toEqual(['enviado', 'instrucao']);
+      expect(segunda.resultado.instrucao).toMatch(/já foi enviado nesta conversa/);
+    });
+
+    test('o claim do terceiro e o do titular são entregas separadas', async () => {
+      await executeTool('enviar_boleto', { contratoId: 99 }, ctxTerceiro());
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(true);
+      expect(enqueueOutboundMessage).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 10. Fases 2-3 intactas
+  // -------------------------------------------------------------------------
+  describe('10. allowlist, identidade, escopo e minimização seguem intactos', () => {
+    test('a allowlist de terceiro não mudou', () => {
+      expect(FERRAMENTAS_PERMITIDAS_EM_TERCEIRO)
+        .toEqual(['consultar_faturas', 'enviar_boleto', 'gerar_pix', 'gerar_segunda_via']);
+    });
+
+    test('identidade não confirmada recusa ANTES de reivindicar qualquer entrega', async () => {
+      const r = await executeTool('enviar_boleto', { contratoId: 17402 }, ctx({ identidade: { nivel: 'fraca' } }));
+      expect(r).toMatchObject({ ok: false, motivo: 'identity_not_confirmed' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+
+    test('contrato de outra pessoa recusa ANTES de reivindicar qualquer entrega', async () => {
+      const r = await executeTool('enviar_boleto', { contratoId: 404 }, ctx());
+      expect(r).toMatchObject({ ok: false, motivo: 'contract_not_owned' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+
+    test('nenhuma fatura: nada é reivindicado', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: false, duplicates: [] });
+      expect((await boleto({ contratoId: 17402 }, ctx())).enviado).toBe(false);
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+
+    test('vários contratos com fatura: nada é reivindicado antes da escolha', async () => {
+      const contexto = ctx({ contracts: [{ id: 17402 }, { id: 17405 }, { id: 17408 }] });
+      sgpClient.getDuplicateInvoice.mockImplementation(async (id) => (
+        id === 17402
+          ? { hasOpenInvoice: false, duplicates: [] }
+          : { hasOpenInvoice: true, duplicates: [FATURA] }
+      ));
+      expect(await boleto({ contratoId: 17402 }, contexto)).toMatchObject({ enviado: false });
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+
+    // gerar_pix fora da triagem só SUGERE o código ao atendente humano: não há
+    // efeito externo nenhum, e reivindicar ali gravaria o envio INICIAL sem
+    // nunca usá-lo — o índice parcial bloquearia a entrega real depois.
+    test('gerar_pix no perfil assistente não reivindica entrega', async () => {
+      const r = await pix({ contratoId: 17402 }, { conversationId: 'c-idem', channelId: 'ch-1', contracts: [{ id: 17402 }] });
+      expect(r).toMatchObject({ sucesso: true, pixCopiaCola: '000201-pix-emv' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // FAIL-CLOSED: sem identificador estável, não envia
+  // -------------------------------------------------------------------------
+  // Os dois identificadores são a guarda inteira, e o jeito de ela sumir é
+  // SILENCIOSO: uma chave nova por chamada faria tudo passar e pareceria que
+  // funciona. Então na falta de qualquer um dos dois, a ferramenta recusa.
+  describe('fail-closed sem identificador estável', () => {
+    test.each([
+      ['null', null], ['undefined', undefined], ['string vazia', ''], ['só espaços', '   '],
+    ])('fatura com id %s: não reivindica, não envia e não inventa "undefined"', async (_nome, valor) => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: valor }] });
+      const r = await boleto({ contratoId: 17402 }, ctx());
+      expect(r).toMatchObject({ enviado: false, entregaSemIdentificador: 'faturaId' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+      expect(sgpClient.downloadBoletoPdf).not.toHaveBeenCalled();
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      expect(r.instrucao).toMatch(/NÃO houve envio/);
+      expect(JSON.stringify(r)).not.toContain('undefined');
+    });
+
+    test('gerar_pix com fatura sem id também recusa antes de qualquer envio', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: null }] });
+      expect(await pix({ contratoId: 17402 }, ctx())).toMatchObject({ enviado: false, entregaSemIdentificador: 'faturaId' });
+      expect(claimDelivery).not.toHaveBeenCalled();
+      expect(enviarPix).not.toHaveBeenCalled();
+    });
+
+    // O ponto mais perigoso: sem messageId, qualquer fallback (um aleatório,
+    // o relógio, uma constante nova por chamada) faria as duas entregas
+    // passarem. Recusar é a única saída segura.
+    test.each([['ausente', {}], ['null', { messageId: null }], ['vazio', { messageId: '' }]])(
+      'turno com messageId %s: não reivindica e não envia',
+      async (_nome, extra) => {
+        const contexto = ctx(extra);
+        if (!('messageId' in extra)) delete contexto.messageId;
+        const r = await boleto({ contratoId: 17402 }, contexto);
+        expect(r).toMatchObject({ enviado: false, entregaSemIdentificador: 'messageId' });
+        expect(claimDelivery).not.toHaveBeenCalled();
+        expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+      }
+    );
+
+    test('sem messageId, nem o reenvio explícito passa — e duas chamadas não entregam nada', async () => {
+      const contexto = ctx({ messageId: null });
+      const primeira = await boleto({ contratoId: 17402, reenviar: true }, contexto);
+      const segunda = await boleto({ contratoId: 17402, reenviar: true }, contexto);
+      expect(primeira.enviado).toBe(false);
+      expect(segunda.enviado).toBe(false);
+      expect(documentos()).toHaveLength(0);
+      expect(claimDelivery).not.toHaveBeenCalled();
+    });
+
+    // Para o terceiro, a projeção deixa passar só enviado + instrucao. A
+    // recusa continua legível para o modelo e continua não vazando nada.
+    test('a recusa atravessa a minimização de terceiro sem virar um falso enviado', async () => {
+      sgpClient.getDuplicateInvoice.mockResolvedValue({ hasOpenInvoice: true, duplicates: [{ ...FATURA, id: null }] });
+      const r = await executeTool('enviar_boleto', { contratoId: 99 }, {
+        conversationId: 'c-idem', channelId: 'ch-1', contracts: [],
+        identidade: { nivel: 'fraca', primeiroNome: 'Willemberg' },
+        ferramentasPermitidas: FERRAMENTAS_TRIAGEM,
+        terceiro: { nome: 'Maria', contratos: [{ id: 99 }] },
+        registroFerramentas: [], sgpCache: {}, messageId: 'msg-1',
+      });
+      expect(r.resultado.enviado).toBe(false);
+      expect(Object.keys(r.resultado).sort()).toEqual(['enviado', 'instrucao']);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Identidade e permissão: o que entra no claim é a guarda inteira
+  // -------------------------------------------------------------------------
+  describe('identidade e permissão do claim', () => {
+    // A messageId é a IDENTIDADE e vai sempre; `reenviar` é só a PERMISSÃO e
+    // vai como isResend. Trocar os dois papéis foi o defeito da v1.
+    test('o claim leva a messageId do turno e o reenviar como permissão separada', async () => {
+      await boleto({ contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      await boleto({ contratoId: 17402, reenviar: true }, ctx({ messageId: 'msg-2' }));
+      expect(claimDelivery.mock.calls.map(([p]) => [p.messageId, p.isResend]))
+        .toEqual([['msg-1', false], ['msg-2', true]]);
+    });
+
+    // O validador é quem carrega `reenviar` até `executar` — validarContratoId
+    // devolvia só { contratoId } e o campo sumiria em silêncio.
+    test('o validador carrega reenviar e só aceita o booleano true', () => {
+      const validar = findTool('enviar_boleto').validar;
+      expect(validar({ contratoId: 17402, reenviar: true })).toEqual({ ok: true, args: { contratoId: 17402, reenviar: true } });
+      expect(validar({ contratoId: 17402 })).toEqual({ ok: true, args: { contratoId: 17402, reenviar: false } });
+      for (const valor of ['true', 1, 'sim', {}, [], 'yes']) {
+        expect(validar({ contratoId: 17402, reenviar: valor }).args.reenviar).toBe(false);
+      }
+      expect(findTool('gerar_pix').validar({ contratoId: 17402, reenviar: true }).args.reenviar).toBe(true);
+      expect(validar({ contratoId: 0, reenviar: true }).ok).toBe(false);
+    });
+
+    test('reenviar: "true" (string) pelo executor não abre reenvio nenhum', async () => {
+      await executeTool('enviar_boleto', { contratoId: 17402 }, ctx({ messageId: 'msg-1' }));
+      const segunda = await executeTool('enviar_boleto', { contratoId: 17402, reenviar: 'true' }, ctx({ messageId: 'msg-2' }));
+      expect(segunda.resultado.enviado).toBe(false);
+      expect(claimDelivery.mock.calls.map(([p]) => p.isResend)).toEqual([false, false]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // O schema que a OpenAI vê
+  // -------------------------------------------------------------------------
+  describe('schema de reenviar', () => {
+    test.each(['enviar_boleto', 'gerar_pix'])('%s declara reenviar booleano e OPCIONAL', (nome) => {
+      const { parametros } = findTool(nome);
+      expect(parametros.properties.reenviar.type).toBe('boolean');
+      expect(parametros.required).toEqual(['contratoId']);
+      expect(parametros.required).not.toContain('reenviar');
+      // A ausência já significa "não é reenvio": um default no schema faria o
+      // modelo normalizar o campo.
+      expect(parametros.properties.reenviar.default).toBeUndefined();
+      expect(parametros.properties.reenviar.description).toMatch(/com todas as letras/);
+    });
+
+    test('a descrição chega à OpenAI nas duas ferramentas', () => {
+      const declaradas = toOpenAiTools(['enviar_boleto', 'gerar_pix']);
+      for (const t of declaradas) {
+        expect(t.function.parameters.properties.reenviar).toBeDefined();
+        expect(t.function.parameters.required).not.toContain('reenviar');
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // O que a tabela guarda
+  // -------------------------------------------------------------------------
+  test('o claim leva só ids: nenhum valor, linha digitável ou código PIX', async () => {
+    await boleto({ contratoId: 17402 }, ctx());
+    await pix({ contratoId: 17402 }, ctx());
+    for (const [pedido] of claimDelivery.mock.calls) {
+      expect(Object.keys(pedido).sort()).toEqual(['contractId', 'conversationId', 'invoiceId', 'isResend', 'messageId', 'tool']);
+      const serializado = JSON.stringify(pedido);
+      expect(serializado).not.toContain('836100000012');
+      expect(serializado).not.toContain('000201-pix-emv');
+      expect(serializado).not.toContain('89.9');
+      expect(serializado).not.toContain('Willemberg');
+    }
   });
 });

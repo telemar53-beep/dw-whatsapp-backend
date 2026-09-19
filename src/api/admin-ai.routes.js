@@ -31,7 +31,6 @@ function toConfigResponse(config) {
     triageExtraInstructions: config.triageExtraInstructions,
     triageResolvedReasonId: config.triageResolvedReasonId || null,
     assistantSuggestionsEnabled: Boolean(config.assistantSuggestionsEnabled),
-    triageRequireBirthdate: Boolean(config.triageRequireBirthdate),
     triageReadReceiptsDaytime: Boolean(config.triageReadReceiptsDaytime),
     nightStartTime: config.nightStartTime || null,
     nightEndTime: config.nightEndTime || null,
@@ -155,12 +154,6 @@ router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
   if (Boolean(inicioNoturno) !== Boolean(fimNoturno)) {
     return res.status(400).json({ error: 'nightStartTime and nightEndTime must be provided together' });
   }
-  // A confirmacao por data de nascimento e OPCIONAL: ausente = desligada, que
-  // e o padrao. Um payload antigo nunca liga a exigencia sem querer.
-  const { triageRequireBirthdate } = req.body || {};
-  if (triageRequireBirthdate !== undefined && typeof triageRequireBirthdate !== 'boolean') {
-    return res.status(400).json({ error: 'triageRequireBirthdate must be a boolean' });
-  }
   // A leitura de comprovante de dia tambem e OPCIONAL, e ausente = desligada:
   // cada leitura e uma chamada de visao paga, e um payload antigo nao pode
   // ligar isso sem querer.
@@ -168,7 +161,7 @@ router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
   if (triageReadReceiptsDaytime !== undefined && typeof triageReadReceiptsDaytime !== 'boolean') {
     return res.status(400).json({ error: 'triageReadReceiptsDaytime must be a boolean' });
   }
-  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido, nightStartTime: inicioNoturno, nightEndTime: fimNoturno, triageRequireBirthdate: triageRequireBirthdate === true, triageReadReceiptsDaytime: triageReadReceiptsDaytime === true });
+  const config = await updateTriageConfig({ triageConfidenceThreshold: t, triageMaxQuestions, triageTimeoutMinutes, triageExtraInstructions, triageResolvedReasonId: motivoResolvido, nightStartTime: inicioNoturno, nightEndTime: fimNoturno, triageReadReceiptsDaytime: triageReadReceiptsDaytime === true });
   res.json(toConfigResponse(config));
 });
 

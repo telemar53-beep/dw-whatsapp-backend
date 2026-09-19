@@ -322,6 +322,8 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         locationLongitude: location.longitude,
         repliedToWhatsappMessageId,
         sentAt: sentAtFromBaileys(msg.messageTimestamp),
+        sentAtRaw: msg.messageTimestamp,
+        timestampSource: 'baileys',
       });
       scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
       continue;
@@ -345,6 +347,8 @@ async function handleMessagesUpsert(channel, { messages, type }) {
         audioDurationSeconds: mediaInfo.durationSeconds || null,
         repliedToWhatsappMessageId,
         sentAt: sentAtFromBaileys(msg.messageTimestamp),
+        sentAtRaw: msg.messageTimestamp,
+        timestampSource: 'baileys',
       });
       scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
       continue;
@@ -368,6 +372,8 @@ async function handleMessagesUpsert(channel, { messages, type }) {
       content,
       repliedToWhatsappMessageId,
       sentAt: sentAtFromBaileys(msg.messageTimestamp),
+      sentAtRaw: msg.messageTimestamp,
+      timestampSource: 'baileys',
     });
     scheduleContactAvatarRefresh(channel, entry, phoneJid, result.contact);
   }

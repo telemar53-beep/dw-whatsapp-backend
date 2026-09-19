@@ -171,6 +171,7 @@ describe('baileys.manager', () => {
         content: 'Oi, preciso de ajuda',
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -200,6 +201,7 @@ describe('baileys.manager', () => {
         content: 'Respondendo aqui',
         repliedToWhatsappMessageId: 'BAILEYS_ORIGINAL_1',
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -230,6 +232,7 @@ describe('baileys.manager', () => {
         content: 'Seu cartao foi aprovado. Toque no botao abaixo para ativar.',
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -261,6 +264,7 @@ describe('baileys.manager', () => {
         content: 'Sua fatura vence em 3 dias.',
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -290,6 +294,7 @@ describe('baileys.manager', () => {
         content: 'Seu treino de hoje esta liberado.',
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -382,6 +387,7 @@ describe('baileys.manager', () => {
         content: 'Oi, preciso de suporte',
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -435,6 +441,7 @@ describe('baileys.manager', () => {
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -466,6 +473,7 @@ describe('baileys.manager', () => {
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -500,6 +508,7 @@ describe('baileys.manager', () => {
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -575,6 +584,7 @@ describe('baileys.manager', () => {
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -610,6 +620,7 @@ describe('baileys.manager', () => {
         audioDurationSeconds: null,
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
 
@@ -675,6 +686,7 @@ describe('baileys.manager', () => {
         locationLongitude: -60.021,
         repliedToWhatsappMessageId: null,
         sentAt: null,
+        timestampSource: 'baileys',
       });
     });
   });

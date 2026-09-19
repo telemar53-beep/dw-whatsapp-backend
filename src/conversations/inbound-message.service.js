@@ -4,6 +4,7 @@ const {
   findRecentAiClosedConversation,
 } = require('./conversation.repository');
 const { ehMensagemDeCortesia } = require('./courtesy-message');
+const { getCompanyConfig } = require('../company/company-config.repository');
 
 // Janela de cortesia depois de um encerramento pela IA: um "obrigado" ou
 // "ótimo dia pra você também" que chega neste intervalo fica no histórico da
@@ -31,6 +32,47 @@ const { mensagemSegura } = require('../ai/safe-error-log');
 
 const UNIQUE_VIOLATION = '23505';
 
+// created_at guarda COALESCE(sentAt, now()) e o valor CRU do provedor era
+// jogado fora, então o banco não sabia responder a pergunta que interessa
+// quando uma hora aparece errada no chat: o provedor mandou errado, ou nós
+// transformamos errado? Os três adaptadores convergem em ingestInboundMessage,
+// então a metadata é montada num lugar só - aqui.
+//
+// Só o timestamp e a origem: nada de conteúdo do cliente. E a semântica de
+// created_at não muda em nada por causa disto.
+const TAMANHO_MAXIMO_DO_CRU = 200;
+
+// O Baileys entrega messageTimestamp como number, texto ou Long ({ low, high }).
+// Primitivo vai como veio (é exatamente isso que se quer conferir depois);
+// qualquer objeto vira texto curto, para a metadata não crescer sem limite.
+function valorCru(valor) {
+  if (valor === undefined || valor === null) return null;
+  const tipo = typeof valor;
+  if (tipo === 'number' || tipo === 'string' || tipo === 'boolean') return valor;
+  try {
+    return JSON.stringify(valor).slice(0, TAMANHO_MAXIMO_DO_CRU);
+  } catch (err) {
+    return String(valor).slice(0, TAMANHO_MAXIMO_DO_CRU);
+  }
+}
+
+// Devolve undefined - e não null - quando o chamador não declarou a origem:
+// assim createMessage recebe exatamente o que recebia antes, e quem ingere por
+// outro caminho não ganha metadata inventada.
+function metadataDoTimestamp({ base, sentAt, sentAtRaw, timestampSource }) {
+  if (!timestampSource) return base || undefined;
+  const parsed = sentAt instanceof Date && Number.isFinite(sentAt.getTime()) ? sentAt.toISOString() : null;
+  // Mescla em vez de substituir: messages.metadata já é usada para outras
+  // coisas (motivoFalha, no outbound) e inbound não pode passar por cima.
+  return {
+    ...(base || {}),
+    providerTimestampRaw: valorCru(sentAtRaw),
+    providerTimestampParsed: parsed,
+    timestampSource,
+    receivedAt: new Date().toISOString(),
+  };
+}
+
 async function ingestInboundMessage({
   channelId,
   fromPhoneNumber,
@@ -47,7 +89,12 @@ async function ingestInboundMessage({
   repliedToWhatsappMessageId,
   // A hora que o provedor informou. Ausente cai no now() da gravacao.
   sentAt,
+  // O valor CRU do provedor, antes de virar Date, e qual adaptador o entregou.
+  // Só vão para messages.metadata (observabilidade); created_at não muda.
+  sentAtRaw,
+  timestampSource,
 }) {
+  const metadataDeTempo = metadataDoTimestamp({ sentAt, sentAtRaw, timestampSource });
   const { wasCreated, ...contact } = await findOrCreateContactByPhoneNumber(fromPhoneNumber, contactDisplayName);
   const contactJustCreated = Boolean(wasCreated);
 
@@ -69,29 +116,43 @@ async function ingestInboundMessage({
   // (triagemIa) para não chamar shouldStartAiTriage duas vezes quando a
   // conversa acabou de nascer.
   let aiTriage = false;
-  if (!conversation && ehMensagemDeCortesia({ content, messageType })) {
-    const encerradaPelaIa = await findRecentAiClosedConversation(contact.id, channelId, JANELA_DE_CORTESIA_MS);
-    if (encerradaPelaIa) {
-      // Só o histórico: a conversa continua encerrada, ninguém é avisado e
-      // nada responde — para "pra você também", silêncio é a resposta certa.
-      let message = null;
-      try {
-        message = await createMessage({
-          conversationId: encerradaPelaIa.id,
-          direction: 'inbound',
-          content,
-          whatsappMessageId,
-          status: 'received',
-          messageType,
-          mediaPath,
-          mediaMimeType,
-          mediaFilename,
-          sentAt,
-        });
-      } catch (err) {
-        if (err.code !== UNIQUE_VIOLATION) throw err;
+  if (!conversation) {
+    // Só busca a config da empresa neste caminho (sem conversa aberta): a
+    // maioria das mensagens chega dentro de uma conversa já existente, e ali
+    // ehMensagemDeCortesia nem é chamada — não vale acrescentar leitura de
+    // banco ao caminho quente de toda mensagem recebida. Falha aqui não pode
+    // derrubar a ingestão: segue sem o nome, que é opcional.
+    let nomeDaEmpresa;
+    try {
+      ({ name: nomeDaEmpresa } = await getCompanyConfig());
+    } catch (err) {
+      console.error('Failed to load company config for courtesy check', err);
+    }
+    if (ehMensagemDeCortesia({ content, messageType, nomeDaEmpresa })) {
+      const encerradaPelaIa = await findRecentAiClosedConversation(contact.id, channelId, JANELA_DE_CORTESIA_MS);
+      if (encerradaPelaIa) {
+        // Só o histórico: a conversa continua encerrada, ninguém é avisado e
+        // nada responde — para "pra você também", silêncio é a resposta certa.
+        let message = null;
+        try {
+          message = await createMessage({
+            conversationId: encerradaPelaIa.id,
+            direction: 'inbound',
+            content,
+            whatsappMessageId,
+            status: 'received',
+            messageType,
+            mediaPath,
+            mediaMimeType,
+            mediaFilename,
+            sentAt,
+            metadata: metadataDeTempo,
+          });
+        } catch (err) {
+          if (err.code !== UNIQUE_VIOLATION) throw err;
+        }
+        return { contact, conversation: encerradaPelaIa, message, contactJustCreated, cortesia: true };
       }
-      return { contact, conversation: encerradaPelaIa, message, contactJustCreated, cortesia: true };
     }
   }
   if (!conversation) {
@@ -158,6 +219,7 @@ async function ingestInboundMessage({
       locationLongitude,
       repliedToMessageId: repliedTo ? repliedTo.id : null,
       sentAt,
+      metadata: metadataDeTempo,
     });
     // Comprimir vídeo leva segundos a minutos: fica fora do webhook, que
     // precisa responder rápido ao provedor. O original já está gravado e a

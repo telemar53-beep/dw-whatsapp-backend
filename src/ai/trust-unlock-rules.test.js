@@ -1,4 +1,5 @@
-const { avaliarElegibilidade, DIAS_ENTRE_LIBERACOES } = require('./trust-unlock-rules');
+const fs = require('fs');
+const { avaliarElegibilidade, DIAS_ENTRE_LIBERACOES, MENSAGENS } = require('./trust-unlock-rules');
 
 // Meio-dia UTC = 9h em São Paulo: o dia é o mesmo nos dois fusos, então os
 // testes de contagem não dependem do TZ da máquina. O teste de fuso, abaixo,
@@ -149,5 +150,27 @@ describe('avaliarElegibilidade (desbloqueio em confiança)', () => {
   test('aceita createdAt como texto vindo do banco', () => {
     const r = avaliarElegibilidade({ liberacoes: [{ createdAt: '2026-09-10 08:00:00' }], faturas: [], hoje: HOJE });
     expect(r.motivo).toBe('intervalo_minimo');
+  });
+});
+
+// Task 19: o prazo tinha três fontes (a constante e dois números escritos à
+// mão). A regra continua fixa no código — só a duplicação sai.
+describe('MENSAGENS.intervalo_minimo', () => {
+  test('a mensagem do intervalo entre liberações usa a constante, não um número escrito à mão', () => {
+    expect(MENSAGENS.intervalo_minimo).toContain(String(DIAS_ENTRE_LIBERACOES));
+  });
+
+  // O assert acima sozinho não tem dentes: com a constante em 30, um "30 dias"
+  // escrito à mão na mensagem passaria por ele igual. O que prova a fonte
+  // única é o fonte não ter número solto ao lado de "dias" — só a
+  // interpolação. Vale para os DOIS arquivos que citam o prazo ao cliente e
+  // ao modelo.
+  test('nenhum dos arquivos que citam o prazo traz o número escrito à mão', () => {
+    for (const arquivo of ['./trust-unlock-rules', './tool-registry']) {
+      const fonte = fs.readFileSync(require.resolve(arquivo), 'utf8');
+      const semComentarios = fonte.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+      expect(semComentarios).not.toMatch(/\ba cada \d+ dias\b/);
+      expect(semComentarios).not.toMatch(/\bliberação em confiança a cada \d+\b/);
+    }
   });
 });

@@ -72,7 +72,6 @@ describe('AiTriagePage', () => {
         // o padrão 20:00/08:00 — essa página não mostra a janela).
         nightStartTime: null,
         nightEndTime: null,
-        triageRequireBirthdate: false,
         triageReadReceiptsDaytime: false,
       },
       't'

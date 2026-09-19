@@ -23,7 +23,7 @@ const ENFEITE = new Set([
   'muito', 'muita', 'mto', 'bem', 'tudo', 'ai', 'ta', 'tá', 'esta', 'estar', 'ne', 'viu', 'meu', 'minha', 'seu', 'sua',
   'querido', 'querida', 'amigo', 'amiga', 'moco', 'moca', 'senhor', 'senhora', 'tenha', 'tenham', 'mesmo', 'mesma', 'sim',
   'entao', 'ja', 'agora', 'foi', 'tudo', 'certo', 'isso', 'aqui', 'la', 'que', 'q', 'kk', 'kkk', 'kkkk', 'rs', 'rsrs', 'haha',
-  'gente', 'equipe', 'pessoal', 'todos', 'todas', 'vou', 'vamos', 'fazer', 'ir', 'la', 'ver', 'assim', 'dw', 'telecom',
+  'gente', 'equipe', 'pessoal', 'todos', 'todas', 'vou', 'vamos', 'fazer', 'ir', 'la', 'ver', 'assim',
 ]);
 
 const MAXIMO_DE_PALAVRAS = 12;
@@ -44,8 +44,13 @@ function normalizar(texto) {
  * curta, despedida, "pra você também", emoji/figurinha. Qualquer pergunta,
  * número (protocolo, CPF, valor), texto mais longo ou mídia real (áudio,
  * imagem, documento) NÃO é cortesia — pode ser um pedido novo.
+ *
+ * nomeDaEmpresa é OPCIONAL: sem ele a função funciona normalmente, só sem
+ * reconhecer o nome comercial como enfeite (o produto é vendido para mais de
+ * um provedor — nenhuma marca fica escrita no código; quem chama busca o
+ * nome no painel, ex. getCompanyConfig().name).
  */
-function ehMensagemDeCortesia({ content, messageType }) {
+function ehMensagemDeCortesia({ content, messageType, nomeDaEmpresa }) {
   if (messageType === 'sticker') return true;
   if (messageType && messageType !== 'text') return false;
   const bruto = String(content || '');
@@ -57,8 +62,11 @@ function ehMensagemDeCortesia({ content, messageType }) {
   if (/\d/.test(texto)) return false;
   const palavras = texto.split(/\s+/);
   if (palavras.length > MAXIMO_DE_PALAVRAS) return false;
+  // Palavras do nome da empresa contam como enfeite só nesta checagem — não
+  // entram no Set do módulo, que é compartilhado por toda chamada.
+  const enfeiteDaEmpresa = new Set(normalizar(nomeDaEmpresa).split(/\s+/).filter(Boolean));
   const temCortesia = palavras.some((p) => CORTESIA.has(p));
-  const todasConhecidas = palavras.every((p) => CORTESIA.has(p) || ENFEITE.has(p));
+  const todasConhecidas = palavras.every((p) => CORTESIA.has(p) || ENFEITE.has(p) || enfeiteDaEmpresa.has(p));
   return temCortesia && todasConhecidas;
 }
 

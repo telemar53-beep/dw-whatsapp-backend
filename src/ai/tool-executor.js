@@ -1,4 +1,5 @@
-const { findTool, perfilTriagem } = require('./tool-registry');
+const { findTool, perfilTriagem, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
+const { minimizarParaTerceiro } = require('./third-party-minimize');
 const { isToolEnabled } = require('./ai-config.repository');
 const { mensagemSegura } = require('./safe-error-log');
 
@@ -20,9 +21,17 @@ function recusa(motivo, detalhe, instrucao) {
   };
 }
 
-// Defeito D (teste real 2026-09-14): a recusa chegava ao modelo como
-// { erro: 'identity_not_confirmed' } seco e ele improvisava.
-const INSTRUCAO_IDENTIDADE = 'Identidade ainda não confirmada. Pergunte a data de nascimento e chame confirmar_nascimento; depois chame esta ferramenta de novo. Não peça o CPF de novo.';
+// A recusa chegava ao modelo como { erro: 'identity_not_confirmed' } seco e ele
+// improvisava (defeito D, teste real 2026-09-14). Era esta linha, e não o
+// prompt, que fazia a IA pedir um dado errado em produção: resultado de
+// ferramenta o modelo lê como fato apurado.
+const INSTRUCAO_IDENTIDADE = 'Ainda não sei quem é o cliente. Peça o CPF ou CNPJ e chame buscar_cliente; depois chame esta ferramenta de novo.';
+
+// Só entra em jogo quando o contrato pedido é o do terceiro (contexto.terceiro)
+// e a ferramenta NÃO está em FERRAMENTAS_PERMITIDAS_EM_TERCEIRO — as demais
+// recusas (contract_not_owned, identity_not_confirmed) já têm a própria
+// instrução, ou não precisam de uma.
+const INSTRUCAO_TERCEIRO = 'Este contrato é de outra pessoa. Nesse caso você só pode consultar a fatura e entregar o boleto ou o PIX. Plano, conexão, status e liberação não podem ser consultados nem executados no contrato de terceiro. Se o cliente pediu uma dessas coisas, explique que só o titular pode solicitar.';
 
 function comTimeout(promise, ms) {
   let timer;
@@ -53,6 +62,11 @@ function logFalha(nome, err) {
  */
 async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS } = {}) {
   try {
+    // Fica true só quando o contrato pedido é o de contexto.terceiro E a
+    // ferramenta está em FERRAMENTAS_PERMITIDAS_EM_TERCEIRO — as duas coisas
+    // juntas, decidido mais abaixo. É a marca que abre a exceção estreita ao
+    // gate de identidade forte, logo depois. A Task 8 também lê esta marca.
+    let emTerceiro = false;
     const tool = findTool(nome);
     if (!tool) return recusa('unknown_tool', nome);
 
@@ -62,6 +76,17 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       if (!contexto.ferramentasPermitidas.includes(nome)) return recusa('tool_not_in_profile', nome);
     } else if (!(await isToolEnabled(nome))) {
       return recusa('tool_disabled', nome);
+    }
+
+    // Com um contrato só, o contratoId é dedutível — e obrigar o modelo a escolher
+    // um número que ele não vê direito é de onde vinham escolhas erradas e
+    // perguntas desnecessárias ao cliente. Só os contratos PRÓPRIOS entram aqui: um
+    // contrato de terceiro sempre exige escolha explícita.
+    const proprios = (contexto && contexto.contracts) || [];
+    if (tool.chaveProprietario === 'contratoId'
+        && (!args || args.contratoId === undefined || args.contratoId === null)
+        && proprios.length === 1) {
+      args = { ...(args || {}), contratoId: proprios[0].id };
     }
 
     const validacao = tool.validar(args);
@@ -91,8 +116,20 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       // registro incompleto, não uma decisão de segurança que alguém tomou.
       if (typeof tool.chaveProprietario !== 'string') return recusa('tool_misconfigured', nome);
       const valor = argsValidados[tool.chaveProprietario];
-      const pertence = (contexto.contracts || []).some((c) => c.id === valor);
-      if (!pertence) return recusa('contract_not_owned', valor);
+      const proprio = (contexto.contracts || []).some((c) => c.id === valor);
+      if (!proprio) {
+        // Não é do contato. Antes de recusar de vez, confere se é o contrato
+        // do terceiro registrado nesta conversa (buscar_cliente com
+        // titularEOutraPessoa) — e, mesmo assim, só uma lista FECHADA de
+        // ferramentas pode tocar nele: o resto (plano, conexão, status,
+        // financeiro, desbloqueio) é recusado, mesmo que o contrato exista.
+        const deTerceiro = ((contexto.terceiro && contexto.terceiro.contratos) || []).some((c) => c.id === valor);
+        if (!deTerceiro) return recusa('contract_not_owned', valor);
+        if (!FERRAMENTAS_PERMITIDAS_EM_TERCEIRO.includes(nome)) {
+          return recusa('third_party_tool_not_allowed', nome, INSTRUCAO_TERCEIRO);
+        }
+        emTerceiro = true;
+      }
     }
 
     // Entrega de dado (boleto, PIX) só com identidade forte — regra em código,
@@ -103,8 +140,20 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     // resolução de identidade — um humano acompanha ali). Mesmo
     // discriminador usado em tool-registry.js, importado em vez de duplicado
     // aqui, para as duas checagens nunca divergirem.
-    if (tool.exigeIdentidadeForte && perfilTriagem(contexto)
-        && !(contexto.identidade && contexto.identidade.nivel === 'forte')) return recusa('identity_not_confirmed', nome, INSTRUCAO_IDENTIDADE);
+    //
+    // A exceção (!emTerceiro) vale EXCLUSIVAMENTE para contrato dentro do
+    // escopo de terceiro E ferramenta da lista de permissão — as duas
+    // condições juntas são o que emTerceiro significa, porque qualquer outra
+    // combinação já voltou acima (contract_not_owned ou
+    // third_party_tool_not_allowed). A identidade de quem está falando NÃO é
+    // elevada em momento nenhum aqui: a autorização vem do escopo do
+    // terceiro, e morre com ele. Quem pede o boleto da esposa pode não ser
+    // cliente nenhum, e não pode ser promovido a cliente por digitar o CPF
+    // dela.
+    if (tool.exigeIdentidadeForte && perfilTriagem(contexto) && !emTerceiro
+        && !(contexto.identidade && contexto.identidade.nivel === 'forte')) {
+      return recusa('identity_not_confirmed', nome, INSTRUCAO_IDENTIDADE);
+    }
 
     // Uma ferramenta pode declarar o próprio orçamento (tool.timeoutMs): a
     // de liberação em confiança faz duas leituras E uma escrita no SGP, cada
@@ -114,6 +163,10 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     const resultado = await comTimeout(tool.executar(argsValidados, contexto), tool.timeoutMs || timeoutMs);
     if (resultado === Symbol.for('timeout')) return recusa('timeout', nome);
     if (resultado && resultado.ok === false) return recusa('execution_error', resultado.erro);
+    // Minimização: o resultado de um contrato de terceiro passa pela projeção antes
+    // de chegar ao modelo. Aplicada aqui, e não em cada ferramenta, para que uma
+    // ferramenta futura na lista de permissão não possa esquecer de aplicá-la.
+    if (emTerceiro) return { ok: true, resultado: minimizarParaTerceiro(nome, resultado) };
     return { ok: true, resultado };
   } catch (err) {
     logFalha(nome, err);

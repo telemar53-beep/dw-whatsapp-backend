@@ -74,6 +74,10 @@ function parseInboundMessages(webhookBody) {
           whatsappMessageId: message.id,
           repliedToWhatsappMessageId: (message.context && message.context.id) || null,
           sentAt: sentAtFrom(message.timestamp),
+          // O valor cru, do lado do interpretado: sem ele o banco não responde
+          // se a hora errada veio do provedor ou da nossa conversão. Não muda
+          // nada no que sentAt já era.
+          sentAtRaw: message.timestamp,
         };
         if (message.type === 'text') {
           messages.push({ ...base, messageType: 'text', content: message.text.body });

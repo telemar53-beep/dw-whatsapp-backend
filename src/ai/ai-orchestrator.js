@@ -1,6 +1,7 @@
 const { createChatCompletion } = require('./openai-client');
 const { executeTool } = require('./tool-executor');
 const { toOpenAiTools } = require('./tool-registry');
+const { montarContexto } = require('./prompt/montar');
 const { getAiConfig, listToolPermissions } = require('./ai-config.repository');
 const { recordAiInteraction } = require('./ai-interaction.repository');
 const { listRecentMessagesByConversation } = require('../conversations/message.repository');
@@ -19,18 +20,12 @@ const { temAlfabetoEstranho, semAlfabetoEstranho } = require('./idioma');
 // nome da ferramenta) de propósito: cobre qualquer ferramenta futura que
 // receba um documento, não só a de hoje.
 const CHAVE_DOCUMENTO = /cpf|documento/i;
-// Data de nascimento (confirmar_nascimento) não é um documento — maskDocument
-// mantém os 3 primeiros e os 4 últimos caracteres, o que em '20/05/1990'
-// ainda entrega o dia e o ano de nascimento (fix round 2). Aqui não há nada
-// para preservar parcialmente: o valor inteiro vira '[data]'.
-const CHAVE_DATA_NASCIMENTO = /nascimento|^data$/i;
 
 function mascararArgsParaAuditoria(args) {
   if (!args || typeof args !== 'object') return args;
   const mascarado = { ...args };
   for (const chave of Object.keys(mascarado)) {
-    if (CHAVE_DATA_NASCIMENTO.test(chave)) mascarado[chave] = '[data]';
-    else if (CHAVE_DOCUMENTO.test(chave)) mascarado[chave] = maskDocument(mascarado[chave]);
+    if (CHAVE_DOCUMENTO.test(chave)) mascarado[chave] = maskDocument(mascarado[chave]);
   }
   return mascarado;
 }
@@ -90,52 +85,6 @@ function afirmaEnvio(texto) { return AFIRMA_ENVIO.test(String(texto || '')); }
 // (ou a chamada falhar, ou o tempo do turno tiver acabado), as palavras
 // estranhas são cortadas: pior uma palavra a menos do que árabe no WhatsApp.
 const INSTRUCAO_PORTUGUES = 'Sua resposta contém palavras ou letras de outro idioma/alfabeto. Reescreva a MESMA resposta, com o mesmo sentido, inteiramente em português do Brasil, sem nenhuma palavra de outro idioma.';
-
-// Print 2026-09-17 (17:53): cliente mandou o comprovante e a IA respondeu
-// "Para seguir com a conferência, preciso confirmar a titularidade com a data
-// de nascimento" — com a confirmação por data desligada, ou seja, sem nem ter
-// a ferramenta para conferir. O prompt já proibia e foi ignorado duas vezes,
-// então a garantia é em código. O critério não é a flag e sim a ferramenta:
-// pedir um dado que você não tem como verificar é sempre erro.
-const PEDE_NASCIMENTO = /\bnascimento\b/i;
-const INSTRUCAO_SEM_NASCIMENTO = 'Você pediu a data de nascimento, e isso é proibido: não há como conferi-la. Reescreva a resposta sem pedir a data — se ainda precisar identificar o cliente, peça o CPF ou CNPJ.';
-
-function pedeDataDeNascimento(texto) {
-  return PEDE_NASCIMENTO.test(String(texto || ''));
-}
-
-/** Rede final: tira as frases que falam em nascimento, preservando o resto. */
-function semFraseDeNascimento(texto) {
-  const frases = String(texto || '').split(/(?<=[.!?])\s+/);
-  const limpas = frases.filter((f) => !PEDE_NASCIMENTO.test(f));
-  const junto = limpas.join(' ').replace(/\s{2,}/g, ' ').trim();
-  return junto || texto;
-}
-
-async function garantirSemDataDeNascimento({ texto, messages, config, tools, iniciadoEm, conversationId }) {
-  const tokens = { prompt: 0, completion: 0 };
-  // Com confirmar_nascimento na lista do turno, pedir a data é legítimo.
-  const podeConferir = Array.isArray(tools)
-    && tools.some((t) => t && t.function && t.function.name === 'confirmar_nascimento');
-  if (!texto || podeConferir || !pedeDataDeNascimento(texto)) return { texto, tokens };
-  if (Date.now() - iniciadoEm < TURNO_MAX_MS) {
-    try {
-      const r = await createChatCompletion({
-        apiKey: config.apiKey, model: config.model, tools: [],
-        messages: [...messages, { role: 'assistant', content: texto }, { role: 'system', content: INSTRUCAO_SEM_NASCIMENTO }],
-      });
-      tokens.prompt += (r.usage && r.usage.promptTokens) || 0;
-      tokens.completion += (r.usage && r.usage.completionTokens) || 0;
-      const reescrito = r.message && r.message.content;
-      if (reescrito && !pedeDataDeNascimento(reescrito)) return { texto: reescrito, tokens };
-      if (reescrito) return { texto: semFraseDeNascimento(reescrito), tokens };
-    } catch (err) {
-      console.error(`Reescrita sem data de nascimento falhou na conversa ${conversationId}: ${mensagemSegura(err)}`);
-    }
-  }
-  console.error(`Pedido de data de nascimento removido da resposta na conversa ${conversationId}`);
-  return { texto: semFraseDeNascimento(texto), tokens };
-}
 
 async function garantirPortugues({ texto, messages, config, iniciadoEm, conversationId }) {
   const tokens = { prompt: 0, completion: 0 };
@@ -268,7 +217,7 @@ async function carregarContratos(contact) {
 }
 
 const FERRAMENTAS_TRIAGEM = [
-  'buscar_cliente', 'confirmar_nascimento', 'esquecer_identificacao',
+  'buscar_cliente', 'esquecer_identificacao',
   'consultar_status_contrato', 'consultar_status_conexao',
   'consultar_status_todos_contratos', 'consultar_faturas_todos_contratos',
   // gerar_segunda_via fica de fora de propósito (teste real 2026-09-15): na
@@ -298,375 +247,10 @@ function ferramentasDaTriagem(triagem, config) {
   const lista = noturno
     ? FERRAMENTAS_TRIAGEM_NOTURNO
     : (leDeDia ? FERRAMENTAS_TRIAGEM_COMPROVANTE_DIA : FERRAMENTAS_TRIAGEM);
-  // Sem exigência de data de nascimento (o padrão) não há o que confirmar: o
-  // próprio buscar_cliente já deixa a identidade forte. Deixar a ferramenta
-  // descrita seria convidar o modelo a pedir a data — ou a afirmar que a usou.
-  if (config && config.triageRequireBirthdate) return lista;
-  return lista.filter((n) => n !== 'confirmar_nascimento');
+  return lista;
 }
 
-// Sem empresa cadastrada a frase precisa continuar de pé: "a empresa é o
-// suporte" diz a mesma coisa sem nome nenhum embutido no código.
-const NOME_GENERICO_EMPRESA = 'empresa';
-
-function horaDeBrasilia() {
-  return new Intl.DateTimeFormat('pt-BR', {
-    timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false,
-  }).format(new Date());
-}
-
-// O modelo não tem calendário: sem a data ele não consegue dizer há quantos
-// dias a fatura venceu (decisão do dono, 2026-09-16: pode dizer).
-function dataDeBrasilia() {
-  return new Intl.DateTimeFormat('pt-BR', {
-    timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
-  }).format(new Date());
-}
-
-// O contexto de sistema da triagem é deliberadamente separado de
-// montarContextoSistema (o do assistente): a recepcionista tem outro
-// objetivo (classificar e encaminhar, não resolver), outra postura (uma
-// pergunta por vez) e proibições próprias (nunca revelar fatura, valor,
-// endereço ou "pagamento confirmado" — isso vai só no resumo interno para o
-// atendente humano).
-async function montarContextoTriagem(config, identidade, triagem, avisoCidade, empresa) {
-  // Com a confirmação por data de nascimento desligada (o padrão), a data
-  // não é citada em lugar nenhum do prompt: o CPF sozinho identifica.
-  const exigeNascimento = Boolean(config && config.triageRequireBirthdate);
-  const eDataDeNascimento = exigeNascimento ? ' e data de nascimento' : '';
-  const nemDataDeNascimento = exigeNascimento ? ' nem data de nascimento' : '';
-  // Guarda defensiva: um identidade null/undefined não pode derrubar a
-  // montagem do contexto — cai no mesmo tratamento de "não identificado".
-  identidade = identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
-  const [setores, motivos] = await Promise.all([listSectors(), listActiveReasons()]);
-  const linhas = [
-    config.systemPrompt, '',
-    'Você está na TRIAGEM: é a recepcionista. Objetivo: entender → identificar (se preciso) → classificar setor e motivo → coletar o mínimo → resumir → encaminhar com concluir_triagem. Não tente resolver o atendimento inteiro.',
-    'Uma pergunta por vez. Faça só perguntas indispensáveis. A mensagem mais recente manda quando o cliente muda de assunto.',
-    // Print 2026-09-17: a mesma pergunta de diagnóstico saiu três vezes
-    // seguidas, mesmo com o cliente respondendo "Lentidão" no meio.
-    'NUNCA repita uma mensagem que você já enviou nesta conversa, nem com outras palavras. Se ele já respondeu a sua pergunta, siga em frente a partir da resposta dele — repetir a pergunta é o sinal mais claro de atendimento quebrado.',
-    // Teste real (2026-09-13, Suporte): o modelo escreveu "vou encaminhar para
-    // o Suporte" sem chamar concluir_triagem, e só encaminhou no turno
-    // seguinte, depois de um "OK" do cliente — um turno inteiro perdido.
-    'Quando decidir encaminhar, chame concluir_triagem NA MESMA resposta em que avisa o cliente. Nunca escreva "vou encaminhar" sem concluir; nunca espere um "ok" para encaminhar.',
-    // Print 2026-09-16: a IA pediu "me encaminhe a mensagem da promoção" E
-    // concluiu no mesmo turno. Fora da triagem ela não responde mais, então a
-    // imagem que a cliente mandou em seguida ficou sem ninguém.
-    'NUNCA chame concluir_triagem no mesmo turno em que você pede alguma coisa ao cliente (um dado, uma foto, uma confirmação). Ou você pergunta, ou você encaminha — depois que ele responder, aí sim encaminhe. Encaminhar logo depois de pedir algo deixa a resposta dele sem ninguém para ler.',
-    // Mesmo dia: "não trabalho com promoções aqui na triagem".
-    'NUNCA cite o funcionamento interno ao cliente: nada de "aqui na triagem", "sou a triagem", "meu sistema", "minha ferramenta", "não tenho acesso a isso". Fale do que você pode fazer, não de como você funciona por dentro.',
-    // Tom pedido pelo dono depois dos testes reais (2026-09-13): recepcionista
-    // simpática, frases completas, um emoji leve — não telegramas.
-    'Tom: caloroso e direto, como uma recepcionista simpática. Frases completas e educadas.',
-    // Print 2026-09-17: entrega de boleto inteira sem chamar a cliente pelo
-    // nome, logo depois de identificar pelo CPF.
-    'Assim que souber o primeiro nome do cliente (pelo cadastro ou porque ele acabou de se identificar), use o nome dele na resposta seguinte e continue usando de vez em quando. Entregar boleto, PIX ou resposta sem nunca chamar a pessoa pelo nome soa robótico.',
-    // Emoji do COMERCIAL ampliado pelo dono (2026-09-15): ícone por plano
-    // (como vier nas instruções) e 👍 ao confirmar o endereço.
-    'Emoji SÓ nos fluxos do PIX e do COMERCIAL. No PIX: no máximo um 😊 por mensagem (na saudação ou no agradecimento). No COMERCIAL: um 😊 na saudação ou no encaminhamento, um ícone por plano se as instruções trouxerem, e 👍 ao confirmar o endereço. No BOLETO, no SUPORTE e em qualquer outro assunto, NENHUM emoji — nem na saudação.',
-    'Escreva UMA mensagem por resposta. Os modelos de frase abaixo são base para adaptar (nome, endereço, PIX ou boleto), não texto para colar: nunca escreva uma frase sua e depois o modelo com o mesmo sentido.',
-    // Teste real (2026-09-13): estourado o teto de ferramentas, o modelo
-    // escreveu "não consegui confirmar aqui o status da conexão... posso
-    // encaminhar para o suporte verificar". Para o dono, inaceitável: a
-    // empresa É o suporte, não há para quem encaminhar "a verificação".
-    `NUNCA diga ao cliente que não conseguiu verificar, confirmar ou consultar algo: a ${empresa || NOME_GENERICO_EMPRESA} é o suporte. Se uma consulta falhar, responda com o que tem e encaminhe ao setor dizendo que a equipe verifica.`,
-    // O modelo não tem relógio: sem esta linha ele cumprimenta sem saudação
-    // (ou chuta a errada). Fuso de São Paulo, que é o da operação.
-    // Print 2026-09-17: com a exigência desligada, a IA ainda pediu "sua data
-    // de nascimento" para conferir um comprovante — e insistiu quando a
-    // cliente respondeu. O dono: nunca peça, em nenhum fluxo.
-    ...(exigeNascimento ? [] : ['NUNCA peça data de nascimento ao cliente, em nenhuma situação — nem para identificar, nem para conferir comprovante, nem para "seguir com a conferência". O CPF já identifica.']),
-    `Hoje é ${dataDeBrasilia()} e agora são ${horaDeBrasilia()} em Brasília. Saudação: "Bom dia" até 11:59, "Boa tarde" de 12:00 a 17:59, "Boa noite" depois. Cumprimente só na primeira resposta da conversa; nas seguintes, não repita a saudação: vá direto ao assunto.`,
-  ];
-  // A empresa já sabe da falha: mandar o cliente reiniciar o roteador é perder
-  // o tempo dele e o nosso. O aviso entra cedo no contexto, antes de qualquer
-  // roteiro de suporte, porque é ele que muda o roteiro.
-  if (avisoCidade) {
-    linhas.push(
-      `AVISO ATIVO NA CIDADE DO CLIENTE (${avisoCidade.cidade}): ${avisoCidade.mensagem}`,
-      'Se ele reclamar de internet lenta, caindo ou sem acesso: informe que há uma falha regional em andamento nessa cidade (use o aviso acima), NÃO peça verificações de equipamento, NÃO prometa previsão, e conclua para o Suporte na mesma resposta com "falha regional" no resumo. Se o assunto for outro, atenda normalmente.',
-    );
-  }
-  // Fora do horário comercial não há ninguém para "continuar daqui": o modelo
-  // precisa saber disso ANTES de escrever qualquer promessa ao cliente.
-  if (triagem && triagem.noturno && triagem.noturno.ativo) {
-    linhas.push(
-      '',
-      `MODO NOTURNO: estamos fora do horário comercial e NÃO há atendente agora. Você atende sozinha o que as ferramentas permitem e deixa na fila, com resumo, o que precisa de gente. A equipe volta às ${triagem.noturno.retornoAs}. Nunca prometa solução imediata, técnico ou prazo.`,
-      `Ao concluir para um setor à noite, diga que "nossa equipe dá continuidade a partir das ${triagem.noturno.retornoAs}" — nunca "um atendente continua daqui".`,
-      // O roteiro do comprovante só existe à noite porque as duas ferramentas
-      // que ele usa (analisar_comprovante e desbloqueio_confianca) também só
-      // entram na lista da triagem à noite.
-      'COMPROVANTE À NOITE: se o cliente enviar uma imagem e disser (ou parecer) que é o pagamento, chame analisar_comprovante (sem perguntar nada antes). Se conferir e o contrato estiver SUSPENSO, chame desbloqueio_confianca do contrato indicado — a ferramenta já avisa o cliente antes de executar; depois responda EXATAMENTE com a frase que ela devolver e conclua para o Financeiro na mesma resposta. Se o comprovante não conferir, ou o contrato estiver ativo, não desbloqueie: agradeça, diga que a equipe confere a partir do horário de retorno e conclua para o Financeiro (motivo "Comprovante" se existir). Se ele pedir liberação SEM comprovante ("paguei, libera"), chame desbloqueio_confianca direto: a regra da casa decide. NUNCA diga "pagamento confirmado" nem "acesso liberado" sem a ferramenta ter devolvido liberado: true. Se a ferramenta devolver jaUtilizado: true, NÃO diga isso ao cliente nem cite outro contrato: responda o mesmo acolhimento (comprovante registrado para a equipe conferir a partir do horário de retorno) e conclua para o Financeiro.',
-      // O roteiro de conexão só existe à noite e usa as duas ferramentas
-      // básicas de diagnóstico (consultar_status_todos_contratos) e, quando
-      // aplicável, desbloqueio em confiança.
-      `CONEXÃO À NOITE: os mesmos roteiros de Suporte (consulte consultar_status_todos_contratos antes). Depois da pergunta de diagnóstico, faça ATÉ DUAS etapas simples, uma por mensagem: "Pode desligar o equipamento da tomada, esperar 30 segundos e ligar de novo?" e depois "A luz voltou a ficar verde?". Se resolver, conclua para o Suporte dizendo que ficou registrado que a conexão voltou. Se não resolver, conclua para o Suporte respondendo no modelo: "Vou deixar seu atendimento na fila do Suporte com tudo o que verificamos. Nossa equipe dá continuidade a partir das ${triagem.noturno.retornoAs}." Sem prometer técnico nem prazo. Contrato suspenso por pendência: roteiro do suspenso e, se vier comprovante, o roteiro do comprovante.`,
-    );
-  }
-  linhas.push('', 'Setores (use o id exato em concluir_triagem):');
-  for (const s of setores) linhas.push(`- ${s.id} = ${s.name}${s.aiHint ? ` — ${s.aiHint}` : ''}`);
-  linhas.push('', 'Motivos (use o id exato, ou null se nenhum se aplica):');
-  for (const m of motivos) linhas.push(`- ${m.id} = ${m.name}`);
-  linhas.push('');
-  const contratos = (identidade.contracts || []).map(normalizeContract);
-  if (identidade.sgpIndisponivel) {
-    // Vínculo gravado + SGP fora do ar (identity-resolver). O cliente continua
-    // identificado — pedir CPF de novo a quem já foi chamado pelo nome é o
-    // pior desfecho —, mas não há contratos nem consultas possíveis, então o
-    // único caminho é cumprimentar, avisar e encaminhar.
-    linhas.push(`Cliente identificado pela memória (primeiro nome ${identidade.primeiroNome || 'cliente'}), mas o sistema do SGP NÃO respondeu agora. NÃO peça CPF${nemDataDeNascimento} e NÃO tente boleto, PIX nem status de conexão. Cumprimente pelo primeiro nome, diga em uma frase que o sistema de consulta está instável neste momento, e chame concluir_triagem para o setor adequado ao que ele pediu, com o resumo começando por "SGP indisponível na triagem".`);
-  } else if (identidade.nivel === 'none') {
-    // Redação reescrita pelo dono em 2026-09-17: a frase seca virou padrão e
-    // soava impessoal; acolher antes de pedir o documento.
-    linhas.push('Cliente NÃO identificado. Peça o CPF/CNPJ só se o setor exigir identificação (Financeiro, Suporte, Reativação), no modelo: "Vou verificar isso para você. Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor." Comercial de cliente novo nunca exige CPF. Depois de buscar_cliente, continue a triagem.');
-    if (identidade.contestado) linhas.push('O cliente disse que o nome anterior não era dele: a identificação foi descartada. Peça o CPF.');
-  } else {
-    // Minor (revisão final do branch inteiro): identidade.primeiroNome pode
-    // vir falsy (registro do SGP sem nome) mesmo com o cliente já
-    // identificado — sem o fallback, o contexto de sistema instruía "primeiro
-    // nome null", que o modelo podia repetir de volta ao cliente.
-    linhas.push(`Cliente identificado (${identidade.origem === 'memory' ? 'memória' : identidade.origem === 'phone' ? 'telefone' : 'CPF'}): primeiro nome ${identidade.primeiroNome || 'cliente'}. A PRIMEIRA resposta desta conversa começa SEMPRE com a saudação da hora e o primeiro nome ("Bom dia, ${identidade.primeiroNome || 'cliente'}!"), mesmo quando você já entregou algo por ferramenta. Se ele disser que não é ele ou que o nome está errado, chame esquecer_identificacao e peça o CPF.`);
-    if (contratos.length > 0) {
-      // O endereço (e o próprio fato de existirem dois pontos) só pode ser
-      // falado de volta ao cliente quando a identidade já é FORTE: é o
-      // endereço do próprio cliente. Com identidade fraca (CPF ainda não
-      // confirmado por data de nascimento) o cadastro pertence a quem quer
-      // que seja o dono do CPF digitado — pode não ser quem está no WhatsApp.
-      // Defeito C: listar os contratos também com identidade fraca era o que
-      // dava ao modelo o número que ele acabava citando ("contrato 2354").
-      if (identidade.nivel === 'forte') {
-        linhas.push('Contratos dele:');
-        for (const c of contratos) linhas.push(`- ${descreverContrato(c)}`);
-        linhas.push('Se precisar saber de qual ponto ele fala, pergunte de uma vez pelo endereço, citando os endereços ("é o da Rua X ou o da Av. Y?"). Pergunte SÓ quando a resposta depender do ponto.');
-      } else {
-        linhas.push(`Contratos: ${contratos.length}.`);
-        linhas.push('NUNCA cite endereço, plano ou qualquer dado do cadastro ao cliente: a identificação ainda não foi confirmada. Se precisar desambiguar, peça que ELE descreva o local, sem você citar nada.');
-      }
-      // Vale para os DOIS níveis, e aparece uma vez só: o cliente não conhece
-      // o número do contrato, nem com a identidade já confirmada.
-      linhas.push('Nunca peça o número do contrato nem pergunte "qual contrato": o cliente não sabe. NUNCA cite o número do contrato ao cliente.');
-      if (contratos.length === 1) linhas.push('Contrato único: use-o sem perguntar qual.');
-    }
-    if (identidade.nivel === 'fraca') {
-      linhas.push('Identificação por CPF ainda NÃO confirmada: para entregar boleto ou PIX, pergunte a data de nascimento e chame confirmar_nascimento. Se não confirmar, apenas encaminhe. O CPF já foi informado; NÃO peça o CPF de novo.');
-    } else {
-      linhas.push(
-        // Com um motivo de encerramento configurado, o atendimento que começou
-        // e terminou em "quero o boleto" não vai mais para a fila: a própria
-        // IA fecha. Sem motivo, tudo continua como antes.
-        config.triageResolvedReasonId
-          ? [
-            `Identidade JÁ confirmada: NÃO peça CPF${nemDataDeNascimento}. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix. NÃO conclua a triagem nesse momento.`,
-            // Os modelos de frase da entrega NÃO ficam aqui (teste real
-            // 2026-09-15: com o exemplo "Enviei acima o boleto..." no prompt, o
-            // modelo copiou a frase sem chamar enviar_boleto e o cliente não
-            // recebeu nada). A frase sai da própria ferramenta, no campo
-            // instrucao, só depois de ela ter enviado de verdade.
-            'Depois de entregar, responda EXATAMENTE no modelo que a ferramenta devolver no campo instrucao. NUNCA diga que enviou o boleto ou o PIX antes de a ferramenta confirmar o envio (enviado: true): sem essa confirmação, nada chegou ao cliente.',
-            'Se depois disso ele agradecer ("obrigado", "valeu"): chame encerrar_atendimento e responda no modelo: "Imagina, Willemberg! 😊 Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" (à noite, "Tenha uma boa noite!"). Se responder só "ok", "certo" ou um joinha: chame encerrar_atendimento e responda: "Qualquer dúvida sobre o pagamento ou se precisar de ajuda com a internet, pode chamar a gente por aqui. Tenha um ótimo dia!" Se pedir outra coisa, siga a triagem normalmente e encerre só quando ele agradecer ou confirmar que está tudo certo. No fluxo do BOLETO as mesmas despedidas valem, mas SEM emoji ("Imagina, Willemberg! Qualquer dúvida…").',
-          ].join('\n')
-          : `Identidade JÁ confirmada: NÃO peça CPF${nemDataDeNascimento}. Se o cliente pedir apenas o boleto ou o PIX, entregue com enviar_boleto ou gerar_pix e depois conclua a triagem para o Financeiro.`,
-        ...(contratos.length > 1
-          ? ['Pedido de boleto ou PIX com mais de um contrato: chame consultar_faturas_todos_contratos ANTES de perguntar qualquer coisa. Se só um contrato tiver fatura em aberto, entregue dele sem perguntar. Se mais de um tiver, pergunte de uma vez pelo endereço, no modelo: "Claro, vou te ajudar com o PIX 😊 Vi que você tem mais de um contrato com a gente. Para eu te enviar os dados do pagamento certinho, pode me confirmar de qual endereço você precisa?" (cite os endereços se ajudar) e entregue na resposta seguinte. Para BOLETO, o mesmo pedido sem emoji: "Claro, vou te ajudar com o boleto. Vi que você tem mais de um contrato com a gente. Para eu te enviar o boleto certinho, pode me confirmar de qual endereço você precisa?"']
-          : []),
-        // A ferramenta agora procura a fatura em TODOS os contratos do cliente
-        // antes de dizer que não há: quando ela diz "em nenhum contrato", é
-        // definitivo e não há o que perguntar — só avisar e encaminhar.
-        'Se a ferramenta responder que não há fatura em aberto em nenhum contrato, diga isso em uma frase (sem valores) e chame concluir_triagem para o Financeiro na mesma resposta — não pergunte se ele quer ser encaminhado. Se ela devolver contratosComFatura, pergunte pelo endereço e entregue na resposta seguinte.'
-      );
-    }
-  }
-  linhas.push(
-    '',
-    // Decisão do dono (2026-09-16): "quantos dias estou em atraso?" pode ser
-    // respondido — ficou sem resposta num print e o cliente só queria saber.
-    'Com identidade confirmada você pode dizer há quantos dias/meses a fatura está vencida e quantas faturas estão em aberto (use a data de hoje, no alto, para contar). Continua proibido dizer o VALOR.',
-    'NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
-    'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que o Comercial confirma e encaminhe.',
-    // Prints 2026-09-16 (dois atendimentos reais): "quero a senha do meu
-    // vizinho" virou chamado no Suporte, e "minha internet não pega no canto
-    // da rua" virou encaminhamento sem explicação nenhuma. Encaminhar tinha
-    // virado a saída padrão para tudo o que a IA não sabia resolver.
-    // Prints 2026-09-16: "tem uma luz vermelha no roteador do meu vizinho" e
-    // "quero tirar o QR code porque fica passando a senha do MEU Wi-Fi"
-    // receberam os dois a recusa de dado de terceiro. A regra virou gatilho
-    // cego para qualquer menção a outra pessoa ou à palavra senha.
-    'A recusa abaixo vale só quando ele PEDIR um dado de outra pessoa. Relatar problema do vizinho ("o roteador dele está com luz vermelha", "ele me pediu para falar com vocês") NÃO é pedido de dado: atenda o relato normalmente. E a senha da rede DELE mesmo, do contrato dele, é pedido legítimo — nunca recuse.',
-    'DADOS DE OUTRA PESSOA: senha do Wi-Fi, dados cadastrais, endereço ou informação de vizinho, parente ou outro cliente NUNCA são passados e NUNCA viram chamado — não encaminhe nem diga que a equipe vai ver. Recuse na hora, no modelo: "Não consigo passar dados de outro cliente, nem a senha da rede dele — só o titular pode informar isso. Posso te ajudar com alguma coisa do seu contrato?" Se ele insistir em falar com um atendente, conclua com o resumo começando por "Pedido de dado de outra pessoa; recusado na triagem".',
-    // Decisão do dono (2026-09-16): a segunda via no site do SGP sai só com o
-    // CPF, então pedir o boleto do amigo é atendimento normal. O que não pode
-    // é o contato de quem pediu virar o titular (print do mesmo dia).
-    // Print 2026-09-17: "o boleto da cliente Laureny Araújo" + CPF → a IA
-    // respondeu "Laureny, seu atendimento vai para o Financeiro", chamando
-    // quem estava falando pelo nome do titular.
-    'Se ele citar o NOME de outra pessoa junto com o pedido ("a fatura da cliente Laureny", "o boleto do meu marido"), isso já é pedido de terceiro: passe titularEOutraPessoa: true e nunca chame quem está falando pelo nome do titular.',
-    'FATURA, BOLETO OU PIX DE OUTRA PESSOA é a exceção: se ele disser que é de outra pessoa ("quero a fatura do Jureildson", "o boleto do meu marido"), peça o CPF do titular e chame buscar_cliente com titularEOutraPessoa: true. Depois siga normalmente (consultar fatura, enviar boleto ou PIX). NUNCA diga "seu contrato" nem "sua fatura" nesse caso: diga que localizou o contrato no CPF informado e, ao entregar, diga de quem é o boleto. Continue chamando quem fala pelo nome dela, nunca pelo nome do titular.',
-    'Nunca encaminhe deixando a pergunta dele sem resposta: responda primeiro com o que você sabe (ou com o que dizem as instruções da operação) e só então diga que está encaminhando. "Vou encaminhar" sozinho, sem nada antes, é atendimento ruim.',
-    'Ao pedir um esclarecimento, pergunte direto o que você precisa saber — nunca "me diga qual problema para eu encaminhar ao setor correto". O encaminhamento não se anuncia antes de acontecer.',
-    // Com a leitura de dia ligada, perguntar antes de ler é exatamente o que
-    // a flag elimina: a ferramenta abre a imagem e a conferência vai para o
-    // resumo. O que a ferramenta apurar NUNCA vira promessa ao cliente — de
-    // dia não existe liberação nenhuma.
-    config.triageReadReceiptsDaytime && !(triagem && triagem.noturno && triagem.noturno.ativo)
-      ? 'COMPROVANTE: se o cliente enviar uma imagem e disser (ou parecer) que é o pagamento, chame analisar_comprovante (sem perguntar nada antes). Qualquer que seja o resultado, NÃO confirme pagamento nem prometa liberação: agradeça, diga que a equipe confere e dá baixa, e conclua para o Financeiro (motivo "Comprovante" se existir). Se a ferramenta disser que o comprovante já foi utilizado, NÃO diga isso ao cliente: responda o mesmo acolhimento e conclua — a equipe trata.'
-      : 'Se o cliente enviou uma imagem, pergunte se é um comprovante e, se for, classifique Financeiro / Comprovante sem confirmar pagamento.',
-    // Print 2026-09-17: comprovante de cliente não identificado virou pedido
-    // de data de nascimento; a cliente respondeu a data e só então ouviu
-    // "me informe seu CPF".
-    'COMPROVANTE DE CLIENTE NÃO IDENTIFICADO: peça o CPF ou CNPJ primeiro, nunca outro dado. Sem o cadastro localizado não há o que conferir.',
-    '',
-    // Roteiros de SUPORTE ditados pelo dono (2026-09-13) depois do teste real
-    // em que a IA encaminhou sem consultar nada: primeiro o status, depois
-    // UMA pergunta de diagnóstico, e só então o encaminhamento.
-    // Print 2026-09-17 (16:32): "quero pagar minha internet" + CPF recebeu o
-    // roteiro do contrato suspenso, com "você chegou a fazer esse pagamento?"
-    // — a cliente acabou de dizer que QUER pagar, não que pagou.
-    // Print 2026-09-17 (18:25): cliente COM contrato perguntou "normalizou o
-    // sinal da internet? estou perguntando pq não estou em Cândido Mendes" e
-    // recebeu a tabela de planos — a IA leu a cidade como pergunta de
-    // cobertura e disparou o roteiro de cliente novo.
-    'JÁ NORMALIZOU? ("normalizou o sinal?", "o sinal voltou?", "já resolveram?", "ainda está fora?") é ACOMPANHAMENTO de falha, não é pergunta de cobertura nem de contratação. Chame consultar_status_todos_contratos e responda pelo que ela devolver; se houver aviso ativo na cidade dele, use o aviso. O cliente citar a cidade não transforma o assunto em cobertura — ele está falando do ponto que já tem.',
-    'PEDIDO DE PAGAMENTO ("quero pagar", "quero o boleto", "quero o PIX", "quero quitar", "como faço para pagar") tem prioridade sobre qualquer roteiro de diagnóstico: entregue o boleto ou o PIX AGORA (enviar_boleto ou gerar_pix), mesmo com o contrato suspenso — a pendência é justamente o que ele está resolvendo. NUNCA pergunte "você chegou a fazer esse pagamento?" a quem acabou de dizer que quer pagar.',
-    'SUPORTE — RELATO DE FALHA (internet lenta, caindo, sem acesso, velocidade abaixo da contratada, "está com problema"), cliente com identidade confirmada: ANTES de responder, chame consultar_status_todos_contratos (UMA chamada, cobre todos os contratos) e siga a instrução que ela devolver. Sem emoji. Depois responda por UM destes modelos, adaptando o nome:',
-    // Print 2026-09-16: "posso mudar o roteador de lugar?" abriu com
-    // "verifiquei que seu contrato está ativo e sua conexão aparece online".
-    // Status é para falha; dúvida se responde direto.
-    'DÚVIDA não é falha ("posso mudar o equipamento de lugar?", "quantos aparelhos aguenta?", "como troco a senha?", "o que é X?"): NÃO chame status, NÃO cite status ("contrato ativo", "conexão online") e responda a dúvida direto. Explicação geral de como o serviço funciona você pode dar; qualquer coisa específica da operação (preço, prazo, política, equipamento fornecido) só se estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO.',
-    // Mesmo dia: a cliente disse "contratei 500 mega e aparece 20" e a IA
-    // perguntou "está sem acesso, com lentidão ou caindo?".
-    'Se o cliente JÁ disse qual é o problema (lentidão, velocidade menor que a contratada, cai à noite, sem acesso em um cômodo), NÃO repita a pergunta de diagnóstico ("você está sem internet, com lentidão ou a conexão está caindo?"): vá direto ao roteiro daquele problema. Perguntar o que ele acabou de dizer é o pior erro de atendimento.',
-    // Redação reescrita pelo dono em 2026-09-17: a anterior tinha virado uma
-    // frase decorada, longa e impessoal. Três parágrafos: acolher, contar o
-    // que foi consultado, perguntar.
-    [
-      '- Contrato ativo e conexão online, responda EXATAMENTE neste modelo, com as quebras de linha:',
-      '',
-      '"Entendi. Vou verificar isso com você.',
-      '',
-      'Consultei seu cadastro e, neste momento, seu contrato está ativo e sua conexão aparece online.',
-      '',
-      'Me diz só uma coisa: você está sem internet, com lentidão ou a conexão está caindo?"',
-      '',
-      'Depois da resposta dele, se não houver mais nada para responder, conclua para o Suporte com o relato no resumo.',
-    ].join('\n'),
-    '- Conexão offline: "Verifiquei aqui que sua conexão está offline no momento. Vou te ajudar a verificar o que está acontecendo. Os equipamentos da internet estão ligados? Tem alguma luz vermelha acesa ou piscando?" Depois da resposta dele, se não houver mais nada para responder, conclua para o Suporte com o relato no resumo.',
-    '- Contrato suspenso por falta de pagamento, só quando ele RELATAR falta de acesso (nunca quando ele pediu para pagar): "Verifiquei aqui e consta uma pendência na fatura que deixou o acesso à internet temporariamente suspenso. Pode ser que você já tenha pago e a confirmação ainda não tenha chegado ao sistema. Você chegou a fazer esse pagamento? Assim consigo te orientar no próximo passo." Se ele disser que pagou, peça o comprovante e conclua para o Financeiro (motivo Comprovante, se existir); se disser que não pagou, ofereça o PIX ou o boleto (entregue se ele quiser) e conclua para o Financeiro.',
-    // Print 2026-09-16: "não pega no canto da rua" / "some quando saio de
-    // casa" caiu no roteiro de falha (conexão online → uma pergunta →
-    // encaminhar) e o cliente saiu sem entender nada. Alcance de Wi-Fi é
-    // comportamento normal e merece explicação, não chamado cego.
-    'ALCANCE DO WI-FI: perda de sinal ao se AFASTAR (quintal, portão, canto da rua, cômodo distante, "some quando saio de casa") NÃO é falha de conexão — é o alcance normal do Wi-Fi. Não peça reinício de equipamento nem trate como defeito. Responda no modelo: "O Wi-Fi tem alcance limitado: a distância e as paredes vão enfraquecendo o sinal, por isso ele some quando você se afasta. Dentro de casa, perto do equipamento, a internet está funcionando bem?" Se ele confirmar que dentro de casa funciona, está tudo normal: NÃO abra chamado — diga que é o comportamento esperado do Wi-Fi e pergunte se precisa de mais alguma coisa. Só conclua para o Suporte se ele quiser melhorar o alcance (resumo: "quer melhorar o alcance do Wi-Fi") ou se disser que dentro de casa também está ruim. Nunca prometa visita técnica nem equipamento. Se as INSTRUÇÕES ADICIONAIS DA OPERAÇÃO disserem o que a empresa oferece nesse caso (repetidor, ponto extra), siga exatamente o que está lá; se não disserem nada, não ofereça nada.',
-    // Print 2026-09-16: "contratei 500 mega, no celular aparece 20, quero o
-    // restante e o reembolso" — a IA ignorou o relato E o pedido de reembolso.
-    'VELOCIDADE ABAIXO DA CONTRATADA ("contratei 500 e aparece 20", "não chega a velocidade que pago"): responda no modelo: "A velocidade do plano é entregue até o equipamento e medida por cabo. No Wi-Fi ela sempre chega menor, porque a distância, as paredes e o próprio aparelho limitam o sinal — por isso o número que aparece no celular fica abaixo do contratado. Para a gente comparar direito: você consegue fazer um teste de velocidade perto do equipamento?" Depois da resposta, conclua para o Suporte com o valor medido e o relato no resumo. NUNCA diga que a velocidade está correta sem teste, nem prometa técnico.',
-    'REEMBOLSO, DESCONTO OU ABATIMENTO: nunca prometa e nunca recuse — quem decide é a equipe. Diga que registrou o pedido para o atendente avaliar, escreva "Cliente pediu reembolso/desconto" no resumo, e siga atendendo o problema técnico normalmente.',
-    // Mesmo dia: "quero mudar meu roteador de lugar, posso?" virou consulta de
-    // status + uma pergunta inútil + encaminhamento sem responder.
-    'MUDAR O EQUIPAMENTO DE LUGAR: responda direto, sem consultar status: "Pode sim, e você mesma pode fazer: só precisa de uma tomada no novo ponto e que o cabo alcance. Quanto mais central o equipamento ficar, melhor o Wi-Fi na casa toda. Se o cabo não alcançar ou precisar passar por parede, é serviço técnico e nossa equipe avalia." Se ela disser que o cabo não alcança ou pedir ajuda para mudar, conclua para o Suporte com isso no resumo; se ela só queria saber se pode, não encaminhe — pergunte se precisa de mais alguma coisa.',
-    // Print 2026-09-16: "tô tentando assistir um filme há uma hora, não carrega
-    // no Globoplay" recebeu "está sem acesso, com lentidão ou caindo?" — o
-    // relato não tinha roteiro próprio e o modelo voltou para a lista fixa.
-    // Mesmo print: ele respondeu "Lentidão" e a IA não tinha para onde ir.
-    'Quando ele responder à pergunta de diagnóstico, SIGA a partir da resposta: "lentidão" ou "está lento" leva ao roteiro de VELOCIDADE ABAIXO DA CONTRATADA (peça o teste de velocidade perto do equipamento); "sem acesso" leva às verificações de equipamento; "fica caindo" leva a perguntar se cai em todos os aparelhos e em que horário. Em nenhum caso repita a pergunta.',
-    'PROBLEMA JÁ RELATADO SEM ROTEIRO PRÓPRIO (vídeo travando ou não carregando, jogo com travamento, aplicativo que não abre, cai só em um cômodo): NÃO use a lista fixa de diagnóstico. Comece pelo que ele disse — repita o problema com as palavras dele para mostrar que entendeu —, diga o que você verificou, e faça UMA pergunta que faça sentido para AQUELE problema. Para vídeo travando ou não carregando: "acontece só nesse aplicativo ou em tudo (outros vídeos, sites)?" e, se ajudar, "os outros aparelhos da casa estão iguais?". Depois da resposta, conclua para o Suporte com o relato no resumo.',
-    // Decisão do dono (2026-09-16): existe o setor Reativação para quem está
-    // com vários meses em atraso, e é lá que as promoções acontecem.
-    // Regra do dono ajustada em 2026-09-17: o corte é 90 dias, não dois meses.
-    'REATIVAÇÃO: cliente com mais de 90 dias em atraso (a fatura mais antiga venceu há mais de 90 dias, conte pela data de hoje), ou com o contrato já cancelado, vai para o setor de Reativação (se ele existir na lista de setores) — não para o Financeiro. Até 90 dias continua sendo Financeiro. Se ele perguntar por promoção, condição especial ou desconto para voltar, diga que a Reativação cuida disso e encaminha; nunca invente promoção, desconto ou valor, e nunca diga que "não trabalha com promoções".',
-    // Mesmo dia: "quitando o débito a internet já volta a funcionar?" ficou
-    // sem resposta e a IA mandou o Pix por cima da pergunta.
-    'Se o cliente suspenso perguntar se a internet volta depois de pagar, responda: "Sim — assim que o pagamento for confirmado, o acesso é liberado automaticamente." NUNCA prometa prazo (minutos, horas, "na hora"), e nunca diga que o pagamento foi confirmado.',
-    // Mesmo dia: pedido do QR code da própria rede recebeu a recusa de dado
-    // de terceiro, e outro pedido igual virou encaminhamento seco.
-    'SENHA OU QR CODE DO WI-FI DO PRÓPRIO CLIENTE: é pedido normal de Suporte. Responda que a senha fica no equipamento (normalmente numa etiqueta atrás dele) e que a equipe ajuda a trocar a senha ou a gerar o QR code da rede, e conclua para o Suporte com o pedido no resumo. Nunca trate isso como dado de outra pessoa.',
-    // Mesmo dia: "fica ruim de noite, das nove em diante trava tudo na TV"
-    // caiu na lista fixa de diagnóstico.
-    'PIORA EM HORÁRIO CERTO ("ruim só de noite", "depois das 9 trava", "de dia é boa"): não trate como falha geral. Reconheça o padrão e pergunte quantos aparelhos costumam estar usando nesse horário e se acontece em todos eles ou só na TV. Depois da resposta, conclua para o Suporte com o horário e o relato no resumo.',
-    // Mesmo dia: "eu e minha vizinha dividimos internet, o roteador fica na
-    // casa dela" virou encaminhamento seco.
-    'EQUIPAMENTO NA CASA DE OUTRA PESSOA (internet dividida com vizinho ou parente, roteador em outra casa): é alcance de Wi-Fi, não falha. Explique que o sinal precisa atravessar a distância e as paredes entre as duas casas e que por isso chega fraco, e que o contrato é atendido no endereço onde o equipamento está instalado. Conclua para o Suporte com isso no resumo.',
-    'DADOS MÓVEIS (2G, 3G, 4G, 5G): se ele disser que está conectado nos dados do celular, avise com cuidado que aí ele não está usando a internet da casa, e peça que teste conectado ao Wi-Fi antes de qualquer diagnóstico.',
-    'Fim de roteiro NÃO é automático: só conclua quando não houver mais nada para responder. Se a última mensagem dele traz uma pergunta, responda-a na mesma mensagem em que encaminha.',
-    `Sem identidade confirmada, o fluxo de Suporte não cita status nenhum: identifique primeiro (CPF${eDataDeNascimento}) ou apenas encaminhe.`,
-    '',
-    // Roteiros de COMERCIAL ditados pelo dono (2026-09-13) depois do teste real
-    // em que a IA confirmou a cobertura, engoliu os planos que estavam nas
-    // instruções adicionais e encaminhou. Planos e cidades vêm SÓ de lá.
-    // Teste real 2026-09-15 (print do dono): a IA pediu bairro/rua três vezes
-    // e, quando o cliente perguntou "qual é o melhor?", encaminhou sem
-    // responder (era o turno forçado pelo limite). Roteiro ditado pelo dono:
-    // endereço é UMA pergunta, confirma o que veio e pede só o que falta uma
-    // vez, responde antes de encaminhar, frases de encaminhamento de dia e de
-    // noite. Planos e cidades continuam vindo SÓ das instruções.
-    'A tabela de planos é SÓ para cliente NÃO identificado que pergunta sobre contratar, preço ou cobertura. Cliente com contrato nunca recebe a lista de planos, a menos que peça preço ou upgrade com todas as letras — para ele, cidade e endereço são o ponto que ele já tem, não cobertura nova.',
-    'COMERCIAL (cobertura, planos, contratar, mudar de plano): responda com o que estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO. Planos: copie o bloco de planos EXATAMENTE como está escrito nas instruções (mesmas linhas, mesmos ícones, mesmos preços); se lá não houver um bloco pronto, liste um plano por linha no formato "• 500 Mega por R$ 100/mês". Nunca peça CPF de cliente novo. Cobertura: se a cidade estiver nas instruções, atendemos em TODOS os bairros e ruas dela. Pergunta de cobertura de cliente novo ("tem internet em X?"): responda "Atendemos em X!" e, NA MESMA mensagem, emende a abertura de cliente novo (planos e a pergunta de endereço) — a pergunta de cobertura é o começo da venda, não o fim. NUNCA encaminhe um cliente novo na primeira resposta se a cidade estiver na lista. Se a cidade NÃO estiver na lista de cobertura, diga que o Comercial confirma a cobertura e conclua para o Comercial, sem inventar. Modelos:',
-    // Print 1 (teste real 2026-09-14): quem já é cliente e queria outro ponto
-    // caía no roteiro de cliente novo, e a IA despejava a lista inteira de
-    // cidades atendidas em vez de confirmar a dele.
-    `Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique primeiro (CPF${eDataDeNascimento}) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.`,
-    [
-      '- Cliente NOVO (não identificado): "Boa noite! 😊 Temos planos de internet 100% fibra óptica:',
-      '',
-      '[bloco de planos copiado das instruções]',
-      '',
-      'Instalação grátis.',
-      '',
-      'Para verificar a disponibilidade no seu endereço, me informe seu bairro e sua rua." (saudação da hora; "Que bom ter você por aqui 😊" pode entrar depois da saudação).',
-      'Endereço é UMA pergunta só (bairro e rua juntos). Se ele responder só uma parte, confirme o que veio e peça só o que falta, UMA vez: "Perfeito, Centro de Godofredo Viana 👍 Qual é a rua onde deseja instalar?" Nunca peça a mesma coisa uma terceira vez. Se ele mudar de assunto ou perguntar algo, responda e siga sem voltar a cobrar o endereço. Não é preciso ter o endereço completo para encaminhar.',
-      'Se ele perguntar qual plano é o melhor ou pedir indicação: se as instruções trouxerem critério de recomendação, recomende um plano com uma frase de motivo; se não trouxerem, explique que a diferença é só a velocidade (todos fibra) e pergunte quantas pessoas ou aparelhos vão usar, para o Comercial já receber isso. Nunca encaminhe deixando uma pergunta dele sem resposta: responda primeiro, na mesma mensagem.',
-    ].join('\n'),
-    [
-      '- Cliente JÁ identificado: "Boa tarde, Willemberg! Claro, vou te ajudar a conhecer nossos planos 😊 Temos estas opções:',
-      '',
-      '• 500 Mega por R$ 100/mês',
-      '• 600 Mega por R$ 135/mês',
-      '• 800 Mega por R$ 185/mês',
-      '',
-      'Qual deles você tem interesse em contratar? Com sua escolha, encaminho para o Comercial verificar a alteração no seu contrato e continuar o atendimento por aqui." Depois da escolha, conclua para o Comercial com o plano escolhido no resumo.',
-    ].join('\n'),
-    // Print 2026-09-15 (21:16): "tem internet em Viseu?" → "Atendemos em Viseu.
-    // Certo! Vou encaminhar você para o Comercial." — encaminhou na primeira
-    // resposta, sem planos nem endereço, e com um "Certo!" solto. O momento de
-    // encaminhar fica explícito, e o "Certo!" só responde a um pedido.
-    // Print 2026-09-17: "quais dados preciso para fazer meu cadastro?" virou
-    // encaminhamento seco. A lista fica nas instruções da operação.
-    'O QUE PRECISA PARA FAZER O CADASTRO ("quais dados/documentos preciso", "o que preciso levar"): se as INSTRUÇÕES ADICIONAIS DA OPERAÇÃO trouxerem a lista de documentos ou dados necessários, responda com a lista exatamente como está lá e pergunte se ele quer seguir com a contratação. Se lá não houver nada sobre isso, diga em uma frase que o Comercial confirma a documentação e encaminhe — mas NÃO encaminhe sem responder alguma coisa.',
-    // Print 2026-09-16: "quero mudar minha internet de endereço, vou embora
-    // pra outra casa, o que eu faço?" recebeu só "o atendimento vai para o
-    // Comercial" — pergunta sem resposta, e é um dos pedidos mais comuns.
-    'MUDANÇA DE ENDEREÇO ("vou me mudar", "quero levar a internet para outra casa"): isso é a transferência do ponto. Responda no modelo: "Claro! Mudança de endereço a gente chama de transferência do ponto. Para o Comercial já adiantar, me diz o novo endereço (cidade, bairro e rua) e a data prevista da mudança?" NÃO encaminhe sem pedir isso — com a resposta, conclua para o Comercial com o endereço novo e a data no resumo. Prazo, custo e disponibilidade quem confirma é o Comercial: não invente nenhum dos três.',
-    'Encaminhe ao Comercial SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço; ou pedir para falar com um atendente; ou a cidade não estiver na lista. Antes disso, continue a venda (planos, endereço, dúvidas). O "Certo!" do modelo é só quando ele pediu algo (contratar, falar com atendente); senão comece direto em "Vou encaminhar...".',
-    // Frases de encaminhamento ao Comercial ditadas pelo dono (2026-09-15);
-    // a da noite não cita hora de retorno de propósito.
-    (triagem && triagem.noturno && triagem.noturno.ativo)
-      ? 'Ao encaminhar para o Comercial (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar seu atendimento para nossa equipe Comercial. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem. Resumo: plano de interesse, cidade, bairro/rua se tiver, e o que ele contou.'
-      : 'Ao encaminhar para o Comercial (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar você para o Comercial. Um atendente continuará o atendimento por aqui." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem. Resumo: plano de interesse, cidade, bairro/rua se tiver, e o que ele contou.',
-    'Ao concluir, o resumo é para o atendente: o que o cliente quer e o que você apurou.',
-  );
-  if (triagem && triagem.forcarConclusao) {
-    // O limite barra PERGUNTAS, não entregas: no 1º teste real com dois
-    // contratos, o modelo gastou as duas perguntas ("qual contrato", "qual
-    // endereço") e, forçado a concluir_triagem, encaminhou sem mandar o PIX
-    // que já podia mandar.
-    linhas.push(
-      '',
-      config.triageResolvedReasonId
-        ? 'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA e chame encerrar_atendimento, dizendo que qualquer outra coisa é só chamar de novo. Se não tem, chame concluir_triagem com o que apurou. Se ele fez uma pergunta nesta mensagem, responda-a ANTES de dizer que está encaminhando, na mesma mensagem.'
-        : 'LIMITE DE PERGUNTAS ATINGIDO: NÃO faça mais nenhuma pergunta ao cliente. Se você já tem o que precisa para entregar boleto ou PIX, entregue AGORA (enviar_boleto ou gerar_pix) e em seguida chame concluir_triagem. Se não tem, chame concluir_triagem com o que apurou. Se ele fez uma pergunta nesta mensagem, responda-a ANTES de dizer que está encaminhando, na mesma mensagem.'
-    );
-  }
-  if (config.triageExtraInstructions) {
-    linhas.push('', 'INSTRUÇÕES ADICIONAIS DA OPERAÇÃO (única fonte para preço, planos e cobertura):', config.triageExtraInstructions);
-  } else {
-    linhas.push('', 'Não há instruções adicionais da operação: preço, planos e cobertura são sempre com o Comercial.');
-  }
-  linhas.push('', 'Formatação: WhatsApp. Negrito com *um asterisco*. Nunca markdown. Responda uma vez só: nunca repita uma frase ou parágrafo que você já escreveu.');
-  return linhas.join('\n');
-}
-
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, messageId = null }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -679,9 +263,10 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
 
   if (perfil === 'triagem') {
     tools = toOpenAiTools(ferramentasDaTriagem(triagem, config));
-    // Guarda defensiva: mesmo fallback usado em montarContextoTriagem — um
-    // identidade null/undefined não pode derrubar o turno nem deixar
-    // contexto.contracts inconsistente com o que o contexto de sistema viu.
+    // Guarda defensiva: um identidade null/undefined não pode derrubar o turno
+    // nem deixar contexto.contracts inconsistente com o que o contexto de
+    // sistema viu. O compositor (src/ai/prompt) tem o mesmo fallback por
+    // dentro, mas a lista de contratos que vai para o prompt é montada aqui.
     const identidadeEfetiva = identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
     // Perfil fixo: os contratos vêm da identidade já resolvida (Task 2), não
     // de uma nova consulta ao SGP via carregarContratos — o cache do turno
@@ -689,10 +274,32 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // propriedade (chaveProprietario).
     contexto = {
       conversationId: conversation.id, contact, contracts: identidadeEfetiva.contracts || [], sgpCache: {},
-      identidade: identidadeEfetiva, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem, config), registroFerramentas: [],
+      identidade: identidadeEfetiva, terceiro, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem, config), registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
+      // A mensagem do cliente que abriu este turno. É a MESMA em todas as tool
+      // calls do turno e em todas as voltas internas do laço — é isso que faz a
+      // chave de reenvio de enviar_boleto/gerar_pix valer por pedido do
+      // cliente, e não por chamada de ferramenta.
+      messageId,
     };
-    systemContent = await montarContextoTriagem(config, identidadeEfetiva, triagem, avisoCidade, empresa.name);
+    // Setores e motivos em paralelo: são duas consultas independentes e o
+    // turno inteiro espera por elas antes da primeira chamada à OpenAI.
+    const [setores, motivos] = await Promise.all([listSectors(), listActiveReasons()]);
+    // montarContexto é SÍNCRONA — todo o I/O do prompt acontece aqui em cima,
+    // no estado que ela recebe pronto.
+    systemContent = montarContexto({
+      config,
+      identidade: identidadeEfetiva,
+      contratos: (identidadeEfetiva.contracts || []).map(normalizeContract),
+      triagem: triagem || { noturno: { ativo: false }, forcarConclusao: false },
+      avisoCidade,
+      empresa: empresa.name,
+      ferramentas: ferramentasDaTriagem(triagem, config),
+      setores,
+      motivos,
+      terceiro,
+      agora: new Date(),
+    });
   } else {
     const permissoes = await listToolPermissions();
     const habilitadas = permissoes.filter((p) => p.enabled).map((p) => p.toolName);
@@ -817,7 +424,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
               messages.push({ role: 'assistant', content: texto });
               messages.push({
                 role: 'system',
-                content: 'Agora chame concluir_triagem para o Financeiro com o resumo (comprovante/desbloqueio recusado) e responda ao cliente em uma frase.',
+                content: 'Agora chame concluir_triagem para o setor que cuidar de financeiro com o resumo (comprovante/desbloqueio recusado) e responda ao cliente em uma frase.',
               });
               proximoToolChoice = 'concluir_triagem';
               continue;
@@ -942,12 +549,27 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           toolsExecuted.push({ nome });
           // Registro compacto para o resumo da triagem: o atendente precisa ver
           // o que a IA consultou e o que veio ("enviar_boleto → nenhuma fatura
-          // em aberto"), senão um encaminhamento parece vazio.
+          // em aberto"), senão um encaminhamento parece vazio. Este valor NUNCA
+          // volta para o modelo — o que alimenta `messages`, duas linhas abaixo,
+          // é JSON.stringify(resposta.resultado) por inteiro, sem corte nenhum.
+          // O único consumidor de contexto.registroFerramentas é a linha
+          // "Ferramentas:" do resumo (concluir_triagem/encerrar_atendimento em
+          // tool-registry.js), e quem de fato enxuga esse texto para o
+          // atendente é a função legivel() de lá: ela faz o parse, descarta os
+          // campos `instrucao`/`proximoPasso` (texto para o MODELO, não para o
+          // atendente) e corta o que sobra em 160 caracteres. O corte aqui
+          // embaixo é só uma salvaguarda contra uma ferramenta futura devolver
+          // algo gigante — Rodada de correção 1 (Task 11): 200 era estreito
+          // demais e cortava no MEIO do JSON de enviar_boleto/gerar_pix (que
+          // têm um `instrucao` longo), antes de legivel poder filtrar esse
+          // campo; o resultado chegava a legivel já não sendo mais JSON
+          // válido, e a linha do resumo virava fragmento cru. 2000 é folgado
+          // o bastante para o formato real de qualquer ferramenta hoje.
           if (Array.isArray(contexto.registroFerramentas)) {
             const serializado = JSON.stringify(resposta.resultado);
             contexto.registroFerramentas.push({
               nome,
-              resultado: serializado.length > 200 ? `${serializado.slice(0, 200)}…(truncado)` : serializado,
+              resultado: serializado.length > 2000 ? `${serializado.slice(0, 2000)}…(truncado)` : serializado,
             });
           }
           messages.push({ role: 'tool', tool_call_id: chamada.id, content: JSON.stringify(resposta.resultado) });
@@ -975,13 +597,6 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
 
   // Depois do laço, antes da auditoria: vale para os dois perfis, e o que fica
   // gravado (finalResponse) é o que o cliente/atendente recebe de fato.
-  const semNascimento = await garantirSemDataDeNascimento({
-    texto, messages, config, tools, iniciadoEm, conversationId: conversation.id,
-  });
-  texto = semNascimento.texto;
-  promptTokens += semNascimento.tokens.prompt;
-  completionTokens += semNascimento.tokens.completion;
-
   const portugues = await garantirPortugues({ texto, messages, config, iniciadoEm, conversationId: conversation.id });
   texto = portugues.texto;
   promptTokens += portugues.tokens.prompt;
@@ -1008,6 +623,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // código quando o turno estoura o tempo antes da resposta final.
     desbloqueioRealizado: Boolean(contexto.desbloqueioRealizado),
     identidade: contexto.identidade || null,
+    // O harness de simulação encadeia roteiros e precisa do escopo de saída; o
+    // worker ignora este campo, porque quem persiste é a própria ferramenta.
+    terceiro: contexto.terceiro || null,
   };
 }
 

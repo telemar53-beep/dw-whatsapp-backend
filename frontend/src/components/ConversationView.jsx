@@ -27,24 +27,63 @@ import {
   IconSearch,
   IconInfo,
 } from './icons/WaIcons';
-import { isServiceWindowClosed } from '../utils/serviceWindow';
+import { estadoDaJanela, JANELA_FECHADA, JANELA_INDETERMINADA } from '../utils/serviceWindow';
 
 const OVERLAY_TYPES = ['image', 'video', 'sticker'];
 const BLOCK_TYPES = ['document', 'location', 'pix'];
+
+// De quanto em quanto tempo o estado da janela é recalculado sozinho. Sem isto
+// a conta ficava presa no `now` do primeiro render: um chat aberto desde cedo
+// continuava dizendo "aberta" muito depois de a janela ter fechado, e só um F5
+// corrigia.
+const RECALCULO_DA_JANELA_MS = 60000;
+
+// A recusa do canal por janela de 24 h (131047). É a única autoridade de
+// verdade sobre a janela; o nosso estado é palpite ao lado dela.
+const RECUSA_POR_JANELA = '(131047)';
+
+function foiRecusadaPorJanela(messages) {
+  return messages.some((message) => {
+    if (!message || message.direction !== 'outbound' || message.status !== 'failed') return false;
+    const motivo = message.metadata && message.metadata.motivoFalha;
+    return typeof motivo === 'string' && motivo.startsWith(RECUSA_POR_JANELA);
+  });
+}
 
 function startOfDay(value) {
   const date = new Date(value);
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
+// De que dia é esta mensagem, ou null quando não dá para saber. Duas
+// armadilhas: startOfDay(new Date('lixo')) devolve NaN em vez de lançar (por
+// isso Number.isNaN, e não só "valor falso"), e um createdAt nulo viraria 1970
+// — uma data válida e absurda — em vez de "sem data".
+function diaDaMensagem(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const dia = startOfDay(value);
+  return Number.isNaN(dia) ? null : dia;
+}
+
+function mesmoDiaDoCalendario(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 function dayLabel(value) {
-  const day = startOfDay(value);
-  const today = startOfDay(Date.now());
-  const oneDay = 86400000;
-  if (day === today) return 'Hoje';
-  if (day === today - oneDay) return 'Ontem';
-  if (today - day < oneDay * 7) return new Date(value).toLocaleDateString('pt-BR', { weekday: 'long' });
-  return new Date(value).toLocaleDateString('pt-BR');
+  const data = new Date(value);
+  const hoje = new Date();
+  if (mesmoDiaDoCalendario(data, hoje)) return 'Hoje';
+  // "Ontem" é o dia ANTERIOR no calendário, não "86.400.000 ms atrás": num dia
+  // de mudança de horário de verão a distância entre duas meias-noites locais é
+  // de 23 h ou 25 h, e a subtração erra o dia. new Date(ano, mês, dia - 1) vira
+  // o mês e o ano sozinho, então a conta funciona em 1º de janeiro também.
+  const ontem = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1);
+  if (mesmoDiaDoCalendario(data, ontem)) return 'Ontem';
+  // Mesma regra de antes (os últimos 7 dias do calendário, incluindo hoje),
+  // só que contada em dias do calendário em vez de em milissegundos.
+  const seisDiasAtras = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 6).getTime();
+  if (startOfDay(data) >= seisDiasAtras) return data.toLocaleDateString('pt-BR', { weekday: 'long' });
+  return data.toLocaleDateString('pt-BR');
 }
 
 function clockLabel(value) {
@@ -52,19 +91,33 @@ function clockLabel(value) {
   return new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
+// Uma mensagem sem data legível não pode ficar escondida sob o cabeçalho do dia
+// ANTERIOR, que é o que acontecia: sem separador, a bolha aparecia num dia que
+// não é o dela, em silêncio. Ela ganha um grupo próprio e visível — e a próxima
+// mensagem com data válida volta ao agrupamento da data dela, sem ficar presa
+// aqui dentro.
+const DIA_DESCONHECIDO = 'desconhecido';
+
 function buildTimeline(messages) {
   const rows = [];
   let previousDay = null;
   let previousDirection = null;
 
   messages.forEach((message) => {
-    const day = message.createdAt ? startOfDay(message.createdAt) : null;
-    const dayChanged = day !== null && day !== previousDay;
+    const day = diaDaMensagem(message.createdAt);
+    const grupo = day === null ? DIA_DESCONHECIDO : day;
+    const dayChanged = grupo !== previousDay;
 
     if (dayChanged) {
-      rows.push({ kind: 'day', key: `day-${day}`, label: dayLabel(message.createdAt) });
+      rows.push({
+        kind: 'day',
+        // A posição entra na chave porque o mesmo dia pode voltar depois de um
+        // grupo desconhecido, e dois cabeçalhos não podem dividir a mesma chave.
+        key: `day-${grupo}-${rows.length}`,
+        label: day === null ? 'Data desconhecida' : dayLabel(message.createdAt),
+      });
       previousDirection = null;
-      previousDay = day;
+      previousDay = grupo;
     }
 
     rows.push({
@@ -132,7 +185,13 @@ function HeaderIconButton({ label, onClick, children }) {
 function ConversationView({ conversation, onTransferClick, onBack }) {
   const { token, agent } = useAuth();
   const { messages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
-  const windowClosed = isServiceWindowClosed({ channelType: conversation.channelType, messages });
+  // O relógio do cálculo da janela vive em estado, e não num `new Date()` solto
+  // no corpo do render: assim a passagem do tempo (e o envio) conseguem
+  // refazer a conta sem recarregar a página.
+  const [agora, setAgora] = useState(() => new Date());
+  const janela = estadoDaJanela({ channelType: conversation.channelType, messages, now: agora });
+  const janelaFechada = janela === JANELA_FECHADA;
+  const janelaIndeterminada = janela === JANELA_INDETERMINADA;
   const { quickReplies, status: quickRepliesStatus } = useQuickReplies();
   // O nome do provedor é configuração: o sistema roda em mais de uma empresa.
   // Pela rota pública, e não pela de admin: esta tela é do atendente comum.
@@ -170,6 +229,18 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     setSgpPanelOpen(Boolean(conversation.contactSgpDocument));
     setClosingReason(false);
     setEditedSuggestion(null);
+    // ConversationView e MessageInput NÃO remontam ao trocar de conversa: sem
+    // esta linha o relógio do cliente anterior continuaria valendo para o
+    // próximo, e a janela dele seria julgada por um instante que não é o dele.
+    setAgora(new Date());
+  }, [conversation.id]);
+
+  // O temporizador é recriado a cada conversa (mesmo motivo acima: nada aqui
+  // remonta sozinho) e limpo ao desmontar — um setInterval esquecido continuaria
+  // chamando setState de uma conversa que ninguém está mais vendo.
+  useEffect(() => {
+    const relogio = setInterval(() => setAgora(new Date()), RECALCULO_DA_JANELA_MS);
+    return () => clearInterval(relogio);
   }, [conversation.id]);
 
   useEffect(() => {
@@ -193,6 +264,11 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const status = conversationStatus(conversation);
 
   async function handleSend(content, file, repliedToMessageId, isVoiceNote) {
+    // Obrigatório, e não um detalhe: entre o render e o clique pode ter passado
+    // tempo suficiente para a janela fechar. O aviso que o atendente vê ao
+    // enviar tem que ser o de AGORA, nunca o `now` de quando a tela foi montada.
+    // Continua sem bloquear nada — quem decide é o canal.
+    setAgora(new Date());
     const pending = editedSuggestion;
     setEditedSuggestion(null);
 
@@ -540,7 +616,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           {/* Avisa, mas não bloqueia: o nosso relógio pode divergir do da Meta
               por alguns minutos, e impedir um envio que passaria seria pior do
               que deixar tentar. */}
-          {windowClosed && (
+          {janelaFechada && (
             <p className="mx-3 mb-1 flex items-start gap-2 rounded-[12px] border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] leading-[18px] text-chat-muted md:mx-5">
               <span aria-hidden="true" className="shrink-0 text-chat-copper">
                 <IconInfo size={16} />
@@ -556,6 +632,35 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 >
                   Enviar template
                 </button>
+              </span>
+            </p>
+          )}
+          {/* Indeterminado: não bloqueia, não promete que está aberta e não
+              anuncia fechada. Diz só o que se sabe — que não deu para conferir.
+              O caminho do template aparece quando o canal já recusou por janela
+              de 24 h: aí a dúvida acabou, e a recusa é dele, não nossa. */}
+          {janelaIndeterminada && (
+            <p className="mx-3 mb-1 flex items-start gap-2 rounded-[12px] border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] leading-[18px] text-chat-muted md:mx-5">
+              <span aria-hidden="true" className="shrink-0 text-chat-copper">
+                <IconInfo size={16} />
+              </span>
+              <span>
+                <strong className="font-semibold text-chat-text">Não foi possível conferir a janela de 24h.</strong> A
+                hora da última mensagem do cliente veio ilegível, então não dá para dizer se a janela está aberta ou
+                fechada. Você pode enviar normalmente — quem decide é o WhatsApp.
+                {foiRecusadaPorJanela(messages) && (
+                  <>
+                    {' '}
+                    Uma mensagem já foi recusada por estar fora da janela:
+                    <button
+                      type="button"
+                      onClick={() => setSendingTemplate(true)}
+                      className="ml-1 font-semibold text-chat-orange underline underline-offset-2 hover:brightness-110"
+                    >
+                      Enviar template
+                    </button>
+                  </>
+                )}
               </span>
             </p>
           )}

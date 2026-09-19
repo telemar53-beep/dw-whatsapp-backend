@@ -1,0 +1,25 @@
+{
+  "_leia": "Config da SIMULACAO (Task 20). NUNCA acrescente apiKey aqui: a chave vem so de OPENAI_API_KEY, no ambiente, e o harness recusa rodar se encontrar esse campo.",
+
+  "_substituir": "Os numeros abaixo precisam ser os do SEU painel. Eles nao sao cosmeticos: triageMaxQuestions decide em que turno a conclusao e forcada, maxToolsPerInteraction decide quando o turno para de consultar, e triageConfidenceThreshold decide o que conta como confianca baixa. Um valor diferente do painel faz a simulacao validar outra coisa. Os atuais sao os do exemplo, NAO os seus.",
+
+  "model": "coloque-aqui-o-modelo-do-painel",
+  "mode": "triage",
+
+  "maxToolsPerInteraction": 8,
+  "triageMaxQuestions": 5,
+  "triageConfidenceThreshold": 0.8,
+  "triageTimeoutMinutes": 10,
+
+  "_triageResolvedReasonId": "SIMULATION-ONLY. Este UUID nao existe em banco nenhum e nunca deve ser copiado para o painel: no harness, reason.repository e mocado e resolve contra .local/setores-motivos.json, entao o ID e so chave de ligacao. Precisa ser IDENTICO ao id do motivo com papel 'resolvido-pela-ia' naquele arquivo. Com ele preenchido, a IA entrega o boleto e NAO conclui a triagem -- que e o estado de que o roteiro 17 precisa para continuar o 14.",
+  "triageResolvedReasonId": "ffffffff-0000-4000-8000-000000000020",
+
+  "triageReadReceiptsDaytime": false,
+
+  "_noturno": "Mesma janela do painel, HH:MM. So vale quando o roteiro pede modo noturno.",
+  "nightStartTime": "20:00",
+  "nightEndTime": "08:00",
+
+  "_empresa": "Nome da empresa como esta no cartao Empresa do painel. Entra no prompt e a IA pode repeti-lo ao cliente.",
+  "empresa": "Provedor de Teste"
+}

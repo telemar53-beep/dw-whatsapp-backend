@@ -21,7 +21,7 @@ const { getAiConfig } = require('../ai/ai-config.repository');
 const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
 const {
   getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
-  closeConversationByAi, getTriagePendingDocument,
+  closeConversationByAi, getThirdPartyScope, setThirdPartyScope,
 } = require('../conversations/conversation.repository');
 const { findContactById } = require('../conversations/contact.repository');
 const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation } = require('../conversations/message.repository');
@@ -181,7 +181,6 @@ describe('ai-worker — triagem', () => {
     findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text' });
     findLatestInboundMessageId.mockResolvedValue('m-1');
     isPhoneContested.mockResolvedValue(false);
-    getTriagePendingDocument.mockResolvedValue(null);
     // Default: concludeAiTriage "ganha a corrida" (devolve a conversa
     // atualizada) — sem isto, concluirEmCodigo's guard (if (!conversa) return)
     // descartaria o broadcast em qualquer teste que não mocke isto por conta
@@ -196,6 +195,52 @@ describe('ai-worker — triagem', () => {
     enviarAvisoDeCidadeSePreciso.mockReset().mockResolvedValue(null);
     findActiveCityNoticeByCityId.mockReset().mockResolvedValue(null);
     findCityById.mockReset().mockResolvedValue(null);
+    // Default benigno para o bloco de carga do escopo de terceiro (logo depois
+    // de resolverIdentidade em ai-worker.js): sem isto, só o describe('escopo
+    // de terceiro') abaixo configurava getThirdPartyScope, e um
+    // mockRejectedValue (não-Once, sem Once) de um dos quatro testes ali
+    // vazava para TODOS os testes seguintes do describe inteiro — 17 chamadas
+    // de "Failed to load the third party scope" de mentira poluindo o log de
+    // testes sem nenhuma relação com terceiro. Mesma classe de problema do
+    // Achado 2 em tool-registry.test.js. "Não há escopo" é o estado normal da
+    // esmagadora maioria das conversas, então é o default certo aqui; os
+    // quatro testes do describe abaixo continuam sobrescrevendo localmente.
+    getThirdPartyScope.mockResolvedValue(null);
+    // setThirdPartyScope nunca é feito rejeitar em lugar nenhum do arquivo
+    // hoje, então não há vazamento em cima dela ainda — mas ela é chamada por
+    // dentro do mesmo bloco (quando o escopo carregado está expirado) e era a
+    // única função nova desta lista sem default explícito, dependendo do
+    // automock puro. Mesmo raciocínio de defesa que getThirdPartyScope acima:
+    // um default benigno aqui evita que um mockRejectedValue esquecido em
+    // teste futuro vaze pelo mesmo motivo.
+    setThirdPartyScope.mockResolvedValue();
+  });
+
+  // Idempotência de enviar_boleto/gerar_pix: o turno precisa saber QUAL
+  // mensagem do cliente o abriu. É esse id que separa "o cliente pediu o
+  // reenvio agora" de "o modelo chamou a ferramenta duas vezes na mesma
+  // mensagem". O worker já o tem em mãos, e já conferiu (logo acima) que é a
+  // mensagem inbound mais recente.
+  describe('messageId repassado ao turno', () => {
+    test('runAiTurn recebe o messageId do job', async () => {
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'm-1' }));
+    });
+
+    test('o id repassado é o da mensagem do job, não outro qualquer', async () => {
+      findLatestInboundMessageId.mockReset().mockResolvedValue('m-77');
+      findMessageById.mockResolvedValue({ id: 'm-77', messageType: 'text' });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-77' });
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'm-77' }));
+    });
+
+    // O job que não é mais o mais novo sai antes do turno: não há messageId
+    // para repassar porque não há turno nenhum.
+    test('job ultrapassado não roda turno', async () => {
+      findLatestInboundMessageId.mockReset().mockResolvedValue('m-2');
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(runAiTurn).not.toHaveBeenCalled();
+    });
   });
 
   // Print 2026-09-16: "Ah" e "Pai!" em rajada → duas respostas idênticas
@@ -558,30 +603,15 @@ describe('ai-worker — triagem', () => {
     expect(resolverIdentidade).toHaveBeenCalledWith(expect.objectContaining({ ignorarTelefone: false }));
   });
 
-  test('o resolutor de identidade recebe o CPF pendente gravado na conversa', async () => {
-    // Defeito A: sem isto, a identidade fraca morria no fim do turno e o
-    // modelo pedia o CPF de novo no turno seguinte.
-    getTriagePendingDocument.mockResolvedValue('52998224725');
-    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
-    expect(getTriagePendingDocument).toHaveBeenCalledWith('c-1');
-    expect(resolverIdentidade).toHaveBeenCalledWith(expect.objectContaining({ documentoPendente: '52998224725' }));
-  });
-
-  test('sem CPF pendente, o resolutor recebe documentoPendente null', async () => {
-    await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
-    expect(resolverIdentidade).toHaveBeenCalledWith(expect.objectContaining({ documentoPendente: null }));
-  });
-
-  test('a identidade devolvida pelo turno (com data de nascimento e CPF) nunca é logada nem persistida pelo worker', async () => {
+  test('a identidade devolvida pelo turno (com o CPF do cliente) nunca é logada nem persistida pelo worker', async () => {
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     runAiTurn.mockResolvedValue({
       texto: 'Perfeito.', toolsExecutadas: [], erro: null, triagemConcluida: null,
-      identidade: { nivel: 'forte', origem: 'cpf_confirmed', dataNascimento: '1990-05-20', client: { document: '52998224725' } },
+      identidade: { nivel: 'forte', origem: 'cpf', client: { document: '52998224725' } },
     });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     const tudoLogado = [...logSpy.mock.calls, ...errorSpy.mock.calls].map((args) => JSON.stringify(args)).join(' ');
-    expect(tudoLogado).not.toContain('1990-05-20');
     expect(tudoLogado).not.toContain('52998224725');
     logSpy.mockRestore();
     errorSpy.mockRestore();
@@ -600,6 +630,56 @@ describe('ai-worker — triagem', () => {
     getConversationWithContact.mockResolvedValueOnce(PENDING).mockResolvedValueOnce({ ...PENDING, status: 'silent' });
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+  });
+
+  // Task 6, achado 3 da revisão: o bloco que carrega o escopo de terceiro
+  // (ai-worker.js, logo depois de resolverIdentidade) não tinha nenhum teste.
+  // Quatro caminhos: válido, expirado (descarta E limpa a coluna), ausente
+  // (não faz UPDATE à toa) e leitura falhando (o turno não pode travar por
+  // causa de um escopo que nem chegou a carregar).
+  describe('escopo de terceiro', () => {
+    const FUTURO = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const PASSADO = new Date(Date.now() - 60 * 1000).toISOString();
+
+    test('escopo válido: runAiTurn recebe terceiro preenchido, e nada é limpo', async () => {
+      getThirdPartyScope.mockResolvedValue({ nome: 'Maria', contratos: [77], expiraEm: FUTURO });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+        terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
+      }));
+      expect(setThirdPartyScope).not.toHaveBeenCalled();
+    });
+
+    test('escopo expirado: descarta (terceiro: null) e limpa a coluna', async () => {
+      getThirdPartyScope.mockResolvedValue({ nome: 'Maria', contratos: [77], expiraEm: PASSADO });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null }));
+      expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null);
+    });
+
+    test('sem escopo: terceiro null, e nenhuma chamada de limpeza (não faz UPDATE à toa)', async () => {
+      getThirdPartyScope.mockResolvedValue(null);
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null }));
+      expect(setThirdPartyScope).not.toHaveBeenCalled();
+    });
+
+    test('leitura do escopo falhando: o turno acontece mesmo assim, com terceiro null', async () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      getThirdPartyScope.mockRejectedValue(new Error('banco fora'));
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null }));
+      expect(setThirdPartyScope).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
   });
 
   describe('encerramento pela própria IA', () => {

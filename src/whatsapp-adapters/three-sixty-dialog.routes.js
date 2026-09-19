@@ -46,6 +46,11 @@ router.post('/360dialog/:webhookToken', async (req, res) => {
         locationLongitude: inboundMessage.longitude,
         repliedToWhatsappMessageId: inboundMessage.repliedToWhatsappMessageId,
         sentAt: inboundMessage.sentAt,
+        sentAtRaw: inboundMessage.sentAtRaw,
+        // O 360dialog reusa o parseInboundMessages da Meta, então a origem não
+        // dá para deduzir do formato: quem sabe por qual webhook a mensagem
+        // entrou é esta rota.
+        timestampSource: '360dialog',
       });
     } catch (err) {
       // Só a mensagem e o status HTTP: o erro cru do axios carrega os

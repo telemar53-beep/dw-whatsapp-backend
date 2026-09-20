@@ -7,7 +7,8 @@ import { useNavCollapsed } from '../hooks/useNavCollapsed';
 import { NAV_ITEMS, hasLevel } from '../navigation/navItems';
 import ClosedConversationsModal from './ClosedConversationsModal';
 import AgentAvatar from './AgentAvatar';
-import { IconBellOn, IconBellOff, IconUser, IconLogout, IconCheckCircle, IconChevronDown } from './icons/WaIcons';
+import { IconBellOn, IconBellOff, IconUser, IconLogout, IconCheckCircle, IconChevronDown, IconWarning } from './icons/WaIcons';
+import { useSocketConnection } from '../contexts/SocketContext';
 import './side-nav.css';
 import dwHorizontal from '../assets/brands/dw-telecom-transparent.png';
 import dwMark from '../assets/brands/dw-mark.png';
@@ -39,6 +40,7 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
   const { name: companyName } = useCompanyName();
   const inChat = Boolean(useMatch({ path: '/', end: true }));
   const { collapsed, toggle } = useNavCollapsed({ context: inChat ? 'chat' : 'administration', defaultCollapsed: inChat });
+  const connectionState = useSocketConnection();
   const [closedOpen, setClosedOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
@@ -80,6 +82,16 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
         </section>;
       })}</div>
       <div className="worknav-personal">
+        {/* Estado persistente da conexão: fica aqui, no rodapé do menu, para
+            não cobrir tabela nem ação nas páginas densas. A faixa da casca é
+            só o alerta momentâneo. */}
+        {connectionState === 'reconnecting' && (
+          <div className="worknav-connection" role="status" tabIndex={0} aria-label="Reconectando. As mensagens novas podem demorar a aparecer.">
+            <IconWarning size={17} />
+            <span className="worknav-label">Reconectando…</span>
+            <span className="worknav-connection-tip" aria-hidden="true">Reconectando… As mensagens novas podem demorar a aparecer.</span>
+          </div>
+        )}
         <button type="button" className="worknav-sound" onClick={toggleMuted} title={`Som da fila: ${muted ? 'desativado' : 'ativado'}`} aria-label={`Som da fila — ${muted ? 'Som desativado' : 'Som ativado'}`}>
           {muted ? <IconBellOff size={19} /> : <IconBellOn size={19} />}<span className="worknav-label">Som da fila <small>{muted ? 'Desativado' : 'Ativado'}</small></span>
         </button>

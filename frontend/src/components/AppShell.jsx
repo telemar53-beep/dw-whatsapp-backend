@@ -25,7 +25,7 @@ function AppShell({ dense = false }) {
     estadoAnteriorRef.current = connectionState;
     if (connectionState === 'reconnecting' && anterior !== 'reconnecting') {
       setAvisoConexao('caiu');
-      const t = setTimeout(() => setAvisoConexao(null), 6000);
+      const t = setTimeout(() => setAvisoConexao(null), 3000);
       return () => clearTimeout(t);
     }
     if (connectionState === 'connected' && anterior === 'reconnecting') {

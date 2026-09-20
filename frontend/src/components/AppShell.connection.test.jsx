@@ -36,8 +36,12 @@ describe('aviso momentâneo de conexão', () => {
     rerender(<MemoryRouter><AppShell /></MemoryRouter>);
     expect(screen.getByText(/reconectando/i)).toBeInTheDocument();
 
-    // Depois de alguns segundos a faixa sai de cena e nao volta sozinha.
-    act(() => { vi.advanceTimersByTime(6500); });
+    // Antes dos 3s combinados ela ainda está lá.
+    act(() => { vi.advanceTimersByTime(2500); });
+    expect(screen.getByText(/reconectando/i)).toBeInTheDocument();
+
+    // Passados os 3s, sai de cena e não volta sozinha.
+    act(() => { vi.advanceTimersByTime(1000); });
     expect(screen.queryByText(/reconectando/i)).not.toBeInTheDocument();
 
     act(() => { vi.advanceTimersByTime(30000); });
@@ -47,7 +51,7 @@ describe('aviso momentâneo de conexão', () => {
   test('ao reconectar mostra confirmação curta e discreta, que também some', () => {
     useSocketConnection.mockReturnValue('reconnecting');
     const { rerender } = renderShell();
-    act(() => { vi.advanceTimersByTime(6500); });
+    act(() => { vi.advanceTimersByTime(3500); });
 
     useSocketConnection.mockReturnValue('connected');
     rerender(<MemoryRouter><AppShell /></MemoryRouter>);

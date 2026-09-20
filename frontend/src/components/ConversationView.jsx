@@ -618,8 +618,11 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
                 metaMode === 'overlay' ? 'text-white' : 'text-chat-faint'
               }`}
             >
+              {/* Selo permanente: o filete diz o autor pela borda, este selo
+                  diz "IA" por escrito. Os dois no mesmo idioma cromático, para
+                  não pedir análise de tonalidade. */}
               {outbound && message.sentBy === 'ai' && (
-                <span className={`mr-1 rounded px-1 text-[10px] uppercase tracking-wide ${workspace ? 'bg-[#ffd0a8] font-bold text-[#422719]' : 'bg-white/20'}`}>IA</span>
+                <span className={`mr-1 rounded px-1 text-[10px] uppercase tracking-wide ${workspace ? 'bg-[var(--chat-ai-chip)] font-bold text-[var(--chat-ai-chip-ink)]' : 'bg-white/20'}`}>IA</span>
               )}
               {clockLabel(message.createdAt)}
               {outbound && <MessageStatusTicks status={message.status} />}

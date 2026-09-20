@@ -31,14 +31,16 @@ function MessageStatusTicks({ status }) {
 
   if (status === 'sent') {
     return (
-      <span title="Enviado" className="inline-flex shrink-0 text-white/45">
+      <span title="Enviado" className="inline-flex shrink-0 text-white/60">
         <Tick />
       </span>
     );
   }
 
   if (status === 'delivered' || status === 'read') {
-    const colorClass = status === 'read' ? 'text-white/85' : 'text-white/45';
+    // Entregue e lido usavam a MESMA cor, e a diferenca ficava so em um tique a
+    // mais num glifo de 12px: pela lista, nao dava para saber se o cliente leu.
+    const colorClass = status === 'read' ? 'text-chat-online' : 'text-white/60';
     const label = status === 'read' ? 'Lido' : 'Entregue';
     return (
       <span title={label} className={`inline-flex shrink-0 ${colorClass}`}>

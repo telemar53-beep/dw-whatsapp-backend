@@ -219,6 +219,15 @@
   --chat-accent-soft: #e5a16d;
   --chat-ai-ink: #c4b2dc;
   --chat-ai-line: #b9a1d733;
+
+  /* Filete do autor: a distincao das bolhas nao pode depender so de matiz.
+     Cliente, atendente e IA tinham 1,047:1 e 1,11:1 de diferenca — em monitor
+     com brilho baixo, quem falou o que sumia. O filete nao gasta altura. */
+  --chat-edge-in: #7f95a3;
+  --chat-edge-out: #d99055;
+  --chat-edge-ai: #b9a1d7;
+  --chat-ai-chip: #cbb9e6;
+  --chat-ai-chip-ink: #2b2038;
 }
 
 /* ---------- Foco por teclado ----------

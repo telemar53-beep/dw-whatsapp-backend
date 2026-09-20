@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAiConfig } from '../hooks/useAiConfig';
 import { updateTranscriptionConfig, testAiConnection } from '../services/api';
-import { AsyncState, Field } from './ui';
+import { AsyncState, Button, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -152,15 +152,15 @@ function AudioTranscriptionConfigCard() {
             />
           </Field>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={handleFetchModels}
-          disabled={testing || !config.configured}
+          loading={testing}
+          disabled={!config.configured}
           title={!config.configured ? 'Salve a chave da OpenAI primeiro' : undefined}
-          className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel disabled:cursor-not-allowed disabled:opacity-50"
         >
           Buscar modelos
-        </button>
+        </Button>
         </section>
 
         <section aria-labelledby="transcription-ai-title" className="space-y-3 pb-3">
@@ -191,13 +191,9 @@ function AudioTranscriptionConfigCard() {
         )}
 
         <div className="flex">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <Button type="submit" loading={saving}>
             Salvar transcrição
-          </button>
+          </Button>
         </div>
       </AsyncState>
     </form>

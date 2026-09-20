@@ -200,15 +200,15 @@ function ChannelConnectionTab() {
               <DataRow
                 label="Nome"
                 action={
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setEditingName(true)}
                     disabled={!canManage}
                     title={!canManage ? PERMISSION_REASON : undefined}
-                    className="shrink-0 text-[13px] font-medium text-wa-link hover:underline disabled:opacity-50"
                   >
                     Editar nome
-                  </button>
+                  </Button>
                 }
               >
                 {channel.name}
@@ -226,15 +226,15 @@ function ChannelConnectionTab() {
               <DataRow
                 label="Identificador da conta (WABA)"
                 action={
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setEditingWaba(true)}
                     disabled={!canManage}
                     title={!canManage ? PERMISSION_REASON : undefined}
-                    className="shrink-0 text-[13px] font-medium text-wa-link hover:underline disabled:opacity-50"
                   >
                     Editar
-                  </button>
+                  </Button>
                 }
               >
                 {channel.wabaId || <span className="text-wa-meta">não informado</span>}

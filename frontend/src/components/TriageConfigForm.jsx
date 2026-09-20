@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { updateTriageConfig } from '../services/api';
-import { Field } from './ui';
+import { Button, Field } from './ui';
 
 const inputClass =
   'rounded-xl border border-wa-border bg-wa-field px-3.5 py-2 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -86,13 +86,9 @@ function TriageConfigForm({ config, onSaved }) {
           />
           </Field>
         </div>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-[12px] bg-accent px-5 py-2 text-[14px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        <Button type="submit" size="sm" loading={submitting}>
           Salvar
-        </button>
+        </Button>
       </div>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       {success && (

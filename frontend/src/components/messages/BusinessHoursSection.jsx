@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBusinessHoursConfig } from '../../hooks/useBusinessHoursConfig';
 import { updateBusinessHoursConfig } from '../../services/api';
-import { inputClass, AsyncState, Field } from '../ui';
+import { inputClass, AsyncState, Button, Field } from '../ui';
 import CityStatusDot from './StatusDot';
 
 function BusinessHoursSection() {
@@ -102,20 +102,12 @@ function BusinessHoursSection() {
         </Field>
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
+          <Button variant="secondary" size="sm" onClick={handleCancel}>
             Cancelar
-          </button>
+          </Button>
+          <Button type="submit" size="sm" loading={saving}>
+            Salvar
+          </Button>
         </div>
       </form>
     );
@@ -127,9 +119,9 @@ function BusinessHoursSection() {
         {config.id === null ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><h2 className="font-display text-[16px] font-semibold text-wa-text">Horário de atendimento</h2><p className="mt-1 text-[13px] text-wa-muted">Nenhum horário configurado ainda.</p></div>
-            <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+            <Button variant="ghost" size="sm" onClick={handleEditClick}>
               Criar horário de atendimento
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -138,9 +130,9 @@ function BusinessHoursSection() {
             </p></div>
             <div className="flex items-center gap-3">
               <CityStatusDot enabled={config.enabled} />
-              <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+              <Button variant="ghost" size="sm" onClick={handleEditClick}>
                 Editar
-              </button>
+              </Button>
             </div>
           </div>
         )}

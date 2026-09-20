@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCompanyConfig } from '../hooks/useCompanyConfig';
 import { updateCompanyConfig } from '../services/api';
-import { AsyncState, Field } from './ui';
+import { AsyncState, Button, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -70,14 +70,9 @@ function CompanyConfigCard() {
               {(config.acceptedPayeeNames || []).length > 0 ? <ul>{config.acceptedPayeeNames.map((name,index) => <li key={index}>{name}</li>)}</ul> : <p>nenhum</p>}
             </div>
             {/* A aba tem vários "Editar": o rótulo acessível diz qual é este. */}
-            <button
-              type="button"
-              onClick={handleEditClick}
-              aria-label="Editar dados da empresa"
-              className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline"
-            >
+            <Button variant="secondary" size="sm" onClick={handleEditClick} aria-label="Editar dados da empresa">
               Editar
-            </button>
+            </Button>
           </div>
         </AsyncState>
       </div>
@@ -111,20 +106,12 @@ function CompanyConfigCard() {
       </div>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text lg:col-span-2">{error}</p>}
       <div className="flex gap-2 lg:col-span-2">
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Salvar
-        </button>
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-        >
+        <Button variant="secondary" onClick={handleCancel}>
           Cancelar
-        </button>
+        </Button>
+        <Button type="submit" loading={saving}>
+          Salvar
+        </Button>
       </div>
     </form>
   );

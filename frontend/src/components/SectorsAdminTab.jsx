@@ -125,21 +125,12 @@ function SectorRow({ sector, onSaved, onDeleted }) {
       </td>
       <td className={`${CELL} whitespace-nowrap`}>
         <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={handleEditClick}
-            className={`${SMALL_BTN} border-wa-border bg-wa-field text-wa-text hover:bg-wa-panel`}
-          >
+          <Button variant="secondary" size="sm" onClick={handleEditClick}>
             Editar
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
-            className={`${SMALL_BTN} border-wa-error-text/30 bg-wa-error-bg text-wa-error-text hover:brightness-110`}
-          >
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting}>
             Excluir
-          </button>
+          </Button>
         </div>
         {confirmDialog}
       </td>

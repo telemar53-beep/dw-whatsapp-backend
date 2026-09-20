@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSgpQueryConfig } from '../hooks/useSgpQueryConfig';
 import { updateSgpQueryConfig } from '../services/api';
-import { AsyncState, Field } from './ui';
+import { AsyncState, Button, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -100,13 +100,9 @@ function SgpQueryConfigCard() {
                 O chat ainda não consulta o SGP. Informe o endereço, o app e o token para o painel da conversa e a IA
                 buscarem cliente, contrato e fatura.
               </p>
-              <button
-                type="button"
-                onClick={handleEditClick}
-                className="inline-flex h-9 items-center rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[13.5px] font-medium text-wa-text transition hover:bg-wa-panel"
-              >
+              <Button variant="secondary" onClick={handleEditClick}>
                 Criar integração
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -137,13 +133,9 @@ function SgpQueryConfigCard() {
                   </dd>
                 </div>
               </dl>
-              <button
-                type="button"
-                onClick={handleEditClick}
-                className="mt-3 inline-flex h-9 items-center rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[13.5px] font-medium text-wa-text transition hover:bg-wa-panel"
-              >
+              <Button variant="secondary" className="mt-3" onClick={handleEditClick}>
                 Editar conexão
-              </button>
+              </Button>
             </>
           )}
         </AsyncState>
@@ -167,9 +159,9 @@ function SgpQueryConfigCard() {
         {config.configured && !changingToken ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-wa-muted">Token terminando em ...{config.tokenLast4}</span>
-            <button type="button" onClick={() => setChangingToken(true)} className="text-sm font-medium text-wa-link underline">
+            <Button variant="secondary" size="sm" onClick={() => setChangingToken(true)}>
               Trocar token
-            </button>
+            </Button>
           </div>
         ) : (
           <Field id="sgp-query-token" label="Token">
@@ -183,20 +175,12 @@ function SgpQueryConfigCard() {
       </label>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Salvar consulta ao SGP
-        </button>
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-        >
+        <Button variant="secondary" onClick={handleCancel}>
           Cancelar
-        </button>
+        </Button>
+        <Button type="submit" loading={saving}>
+          Salvar consulta ao SGP
+        </Button>
       </div>
     </form>
   );

@@ -43,16 +43,16 @@ function CityRow({ city, onDeleted, onError }) {
       <td className={`${CELL} text-[14px] font-medium text-wa-text`}>{city.name}</td>
       <td className={`${CELL} whitespace-nowrap`}>
         <div className="flex items-center justify-end">
-          <button
-            type="button"
+          <Button
+            variant="danger"
+            size="sm"
             onClick={handleDelete}
-            disabled={deleting}
+            loading={deleting}
             aria-label={`Excluir ${city.name}`}
             title={`Excluir ${city.name}`}
-            className={DANGER_BTN}
           >
             Excluir
-          </button>
+          </Button>
         </div>
         {confirmDialog}
       </td>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../hooks/useConfirm';
 import { setChannelWelcomeMessage } from '../../services/api';
+import { Button } from '../ui';
 
 function ChannelWelcomeMessageRow({ channel, onSaved, readOnly = false }) {
   const { token } = useAuth();
@@ -69,20 +70,12 @@ function ChannelWelcomeMessageRow({ channel, onSaved, readOnly = false }) {
           />
           {error && <p className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">{error}</p>}
           <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-[10px] bg-accent px-3 py-1.5 text-[13px] font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Salvar
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="rounded-[10px] border border-wa-border bg-wa-surface px-3 py-1.5 text-[13px] font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-            >
+            <Button variant="secondary" size="sm" onClick={handleCancel}>
               Cancelar
-            </button>
+            </Button>
+            <Button type="submit" size="sm" loading={saving}>
+              Salvar
+            </Button>
           </div>
         </form>
       </li>
@@ -96,9 +89,9 @@ function ChannelWelcomeMessageRow({ channel, onSaved, readOnly = false }) {
         {readOnly ? (
           <span className="shrink-0 text-[12.5px] text-wa-warn-text">Requer permissão de Canais e Integrações</span>
         ) : (
-          <button onClick={handleEditClick} className="shrink-0 text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+          <Button variant="ghost" size="sm" onClick={handleEditClick}>
             Criar boas-vindas
-          </button>
+          </Button>
         )}
       </li>
     );
@@ -115,16 +108,12 @@ function ChannelWelcomeMessageRow({ channel, onSaved, readOnly = false }) {
           <span className="shrink-0 text-[12.5px] text-wa-warn-text">Requer permissão de Canais e Integrações</span>
         ) : (
           <div className="flex shrink-0 items-center gap-3">
-            <button onClick={handleEditClick} className="text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+            <Button variant="ghost" size="sm" onClick={handleEditClick}>
               Editar
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={deleting}
-              className="text-[13px] font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
-            >
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting}>
               Excluir
-            </button>
+            </Button>
           </div>
         )}
       </div>

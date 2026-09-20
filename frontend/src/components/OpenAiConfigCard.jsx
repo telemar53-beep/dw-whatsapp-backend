@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAiConfig } from '../hooks/useAiConfig';
 import { updateAiConfig, testAiConnection } from '../services/api';
-import { AsyncState, Field } from './ui';
+import { AsyncState, Button, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -115,13 +115,9 @@ function OpenAiConfigCard() {
           {!showKeyInput ? (
             <div className="flex items-center gap-2">
               <span className="text-sm text-wa-muted">Chave terminando em ...{config.apiKeyLast4}</span>
-              <button
-                type="button"
-                onClick={() => setChangingKey(true)}
-                className="text-sm font-medium text-wa-link underline"
-              >
+              <Button variant="secondary" size="sm" onClick={() => setChangingKey(true)}>
                 Trocar chave
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -157,21 +153,12 @@ function OpenAiConfigCard() {
         {testError && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{testError}</p>}
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handleTestConnection}
-            disabled={testing}
-            className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <Button variant="secondary" onClick={handleTestConnection} loading={testing}>
             Testar conexão
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          </Button>
+          <Button type="submit" loading={saving}>
             Salvar OpenAI
-          </button>
+          </Button>
         </div>
       </AsyncState>
     </form>

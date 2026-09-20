@@ -7,7 +7,7 @@ import { updateTriageOption, deleteTriageOption } from '../services/api';
 import TriageConfigForm from './TriageConfigForm';
 import CreateTriageOptionForm from './CreateTriageOptionForm';
 import SectionHelp from './SectionHelp';
-import { AsyncState, Field } from './ui';
+import { AsyncState, Button, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -120,20 +120,12 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
         </Field>
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
+          <Button variant="secondary" size="sm" onClick={handleCancel}>
             Cancelar
-          </button>
+          </Button>
+          <Button type="submit" size="sm" loading={submitting}>
+            Salvar
+          </Button>
         </div>
       </form>
     );
@@ -149,16 +141,12 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
           <p className="mt-0.5 break-words text-[12.5px] text-wa-muted">{option.keywords.join(', ') || 'Sem frases-gatilho'}</p>
         </div>
         <div className="flex items-center gap-3 self-start">
-          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+          <Button variant="ghost" size="sm" onClick={handleEditClick}>
             Editar
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
-          >
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting}>
             Excluir
-          </button>
+          </Button>
         </div>
       </div>
       {deleteError && (
@@ -194,13 +182,9 @@ function TriageAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
               </div>
               <div className="flex items-center gap-2">
               {!controlled && (
-                <button
-                  type="button"
-                  onClick={() => setCreatingOption(true)}
-                  className="rounded-lg border border-wa-border bg-wa-field px-3 py-1.5 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
-                >
+                <Button variant="secondary" size="sm" onClick={() => setCreatingOption(true)}>
                   Criar opção
-                </button>
+                </Button>
               )}
               <SectionHelp label="Triagem" title="Triagem">
                 <p>

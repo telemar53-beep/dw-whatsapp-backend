@@ -4,7 +4,7 @@ import { useAgentsAdmin } from '../../hooks/useAgentsAdmin';
 import { useChannels } from '../../hooks/useChannels';
 import { useAssignmentMessageConfig } from '../../hooks/useAssignmentMessageConfig';
 import { updateAssignmentMessageConfig } from '../../services/api';
-import { inputClass, AsyncState } from '../ui';
+import { inputClass, AsyncState, Button } from '../ui';
 import CityStatusDot from './StatusDot';
 
 function AssignmentMessageSection() {
@@ -146,20 +146,12 @@ function AssignmentMessageSection() {
         </div>
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
+          <Button variant="secondary" size="sm" onClick={handleCancel}>
             Cancelar
-          </button>
+          </Button>
+          <Button type="submit" size="sm" loading={saving}>
+            Salvar
+          </Button>
         </div>
       </form>
     );
@@ -171,9 +163,9 @@ function AssignmentMessageSection() {
         {config.id === null ? (
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-wa-muted">Nenhuma mensagem configurada ainda.</p>
-            <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+            <Button variant="ghost" size="sm" onClick={handleEditClick}>
               Configurar mensagens
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
@@ -183,9 +175,9 @@ function AssignmentMessageSection() {
             </div>
             <div className="flex items-center gap-3">
               <CityStatusDot enabled={config.enabled} />
-              <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+              <Button variant="ghost" size="sm" onClick={handleEditClick}>
                 Editar
-              </button>
+              </Button>
             </div>
           </div>
         )}

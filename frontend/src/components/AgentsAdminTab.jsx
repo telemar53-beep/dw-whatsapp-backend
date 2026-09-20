@@ -177,15 +177,15 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
         </td>
         <td className={`${CELL} whitespace-nowrap`}>
           <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleEditSectorsClick}
               aria-label={`Editar setores de ${agentRow.name}`}
               aria-expanded={editingSectors}
-              className={SMALL_BTN}
             >
               Editar
-            </button>
+            </Button>
             {!isSelf && (
               <RowMenu label={`Mais ações para ${agentRow.name}`}>
                 <button type="button" onClick={handleGeneratePassword} disabled={generatingPassword} className={MENU_ITEM}>

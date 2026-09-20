@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createCity } from '../services/api';
+import { Button } from './ui';
 
 // `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
 function CreateCityForm({ onCreated, onCancel, embedded = false }) {
@@ -40,21 +41,13 @@ function CreateCityForm({ onCreated, onCancel, embedded = false }) {
           required
         />
         {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="h-10 shrink-0 rounded-[10px] border border-wa-border bg-wa-surface px-3 text-[13.5px] font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
+          <Button variant="secondary" onClick={onCancel}>
             Cancelar
-          </button>
+          </Button>
         )}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="h-10 shrink-0 rounded-[10px] bg-accent px-4 text-[13.5px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        <Button type="submit" loading={submitting}>
           Cadastrar
-        </button>
+        </Button>
       </form>
       {error && (
         <p className="mt-2 rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">

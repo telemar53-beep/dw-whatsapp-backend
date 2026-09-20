@@ -162,10 +162,10 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
         </td>
         <td className={`${CELL} whitespace-nowrap`}>
           <div className="flex items-center justify-end gap-2">
-            <button type="button" onClick={handleEditClick} aria-expanded={editing} className={LINK_BTN}>
+            <Button variant="ghost" size="sm" onClick={handleEditClick} aria-expanded={editing}>
               <IconEdit size={15} />
               Editar
-            </button>
+            </Button>
             <RowMenu label={`Mais ações para ${reason.name}`}>
               <button type="button" onClick={handleToggleActive} disabled={toggling} className={MENU_ITEM}>
                 {reason.active ? 'Desativar' : 'Ativar'}

@@ -40,7 +40,7 @@ function Count({ value, look, active, size }) {
     return (
       <span
         className={`absolute -right-1 -top-1.5 flex h-[20px] min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11.5px] font-bold leading-none shadow-[0_2px_6px_rgba(0,0,0,0.35)] ${
-          active ? 'bg-white text-chat-orange' : 'bg-chat-orange text-on-accent'
+          active ? 'bg-white text-on-accent' : 'bg-white/[0.14] text-chat-muted'
         }`}
       >
         {value}

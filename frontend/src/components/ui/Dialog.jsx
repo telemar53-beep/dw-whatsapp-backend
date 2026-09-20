@@ -48,6 +48,40 @@ function alvoDoFocoInicial(painel) {
   return primeiro;
 }
 
+// Para overlays que JA funcionam e nao devem ser reconstruidos — o
+// visualizador de imagem, com zoom, pan, roda e teclado proprios. Eles entram
+// na mesma pilha (camada e ESC do topo) sem herdar a moldura do Dialog.
+export function useDialogLayer(aberto, aoFechar, { fecharComEsc = true } = {}) {
+  const fecharRef = useRef(aoFechar);
+  fecharRef.current = aoFechar;
+
+  const entrada = useMemo(
+    () => ({ fechar: () => fecharRef.current && fecharRef.current(), fecharComEsc, painel: null }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  entrada.fecharComEsc = fecharComEsc;
+
+  const [camada, setCamada] = useState(() => posicaoDe(entrada));
+
+  useLayoutEffect(() => {
+    if (!aberto) return undefined;
+    const sair = entrar(entrada);
+    setCamada(posicaoDe(entrada));
+    const desinscrever = inscrever(() => setCamada(posicaoDe(entrada)));
+    return () => {
+      desinscrever();
+      sair();
+    };
+  }, [aberto, entrada]);
+
+  return {
+    profundidade: camada.profundidade,
+    topo: camada.topo,
+    zIndex: `calc(var(--z-dialog) + ${camada.profundidade * PASSO_DE_CAMADA})`,
+  };
+}
+
 export function DialogBody({ className = '', children, ...rest }) {
   return (
     <div className={`dw-dialog-body wa-scroll ${className}`} {...rest}>

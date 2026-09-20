@@ -4,6 +4,7 @@ import { mediaUrl } from '../services/api';
 import { receiptVerdict } from '../utils/receiptVerdict';
 import { IconPlay, IconPause, IconMic, IconDownload, IconPin, IconAttach } from './icons/WaIcons';
 import PixCardMessage from './PixCardMessage';
+import { useDialogLayer } from './ui/Dialog';
 
 // Tipos que guardam arquivo no disco — os únicos que a retenção pode esvaziar.
 const MEDIA_TYPES_COM_ARQUIVO = ['image', 'video', 'audio', 'document', 'sticker'];
@@ -294,6 +295,10 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
     resetView();
   }
 
+  // So a camada e o ESC vem da base. Zoom, pan, roda, duplo clique e a guarda
+  // de arrasto continuam exatamente como estavam.
+  const camadaDoVisualizador = useDialogLayer(open, closeViewer);
+
   // Sempre a partir do valor atual: zoom e offset andam juntos, e voltar ao
   // ajuste tem que recentralizar, senão a imagem some para fora da tela.
   function applyZoom(next) {
@@ -305,7 +310,8 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event) => {
-      if (event.key === 'Escape') closeViewer();
+      // ESC nao e tratado aqui: quem decide e a pilha de dialogos, e so o
+      // nivel do topo responde. Zoom e reenquadramento continuam locais.
       if (event.key === '+' || event.key === '=') applyZoom(zoom + ZOOM_STEP);
       if (event.key === '-') applyZoom(zoom - ZOOM_STEP);
       if (event.key === '0') resetView();
@@ -375,7 +381,8 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
             closeViewer();
           }}
           onWheel={(event) => applyZoom(zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP))}
-          className="dialog-image-viewer fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#0b141a]/95 p-4"
+          style={{ zIndex: camadaDoVisualizador.zIndex }}
+          className="dialog-image-viewer fixed inset-0 flex items-center justify-center overflow-hidden bg-[#0b141a]/95 p-4"
         >
           <button
             type="button"

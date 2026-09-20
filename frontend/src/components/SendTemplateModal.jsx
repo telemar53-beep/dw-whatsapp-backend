@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listTemplatesForChannel, sendConversationTemplate } from '../services/api';
 import { substituirVariaveis } from '../utils/templatePreview';
+import { Dialog, DialogBody, DialogFooter } from './ui/Dialog';
 
 // Com a janela de 24h fechada, template aprovado é a única coisa que o WhatsApp
 // entrega. Isto não contorna a regra: o texto continua sendo o pré-aprovado,
@@ -51,12 +52,16 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
   const pronto = selected && variables.every((v) => v.trim());
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Enviar template" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="dialog-send-template max-h-[85vh] w-[min(92vw,54rem)] overflow-y-auto rounded-[16px] border border-white/10 bg-chat-panel p-5">
-        <h2 className="font-display text-[17px] font-semibold text-chat-text">Enviar template</h2>
-        <p className="mt-1 text-[13px] text-chat-muted">
-          A janela de 24h está fechada. Só template aprovado é entregue até o cliente responder.
-        </p>
+    <Dialog
+      variant="send-template"
+      size="max-w-[54rem]"
+      title="Enviar template"
+      description="A janela de 24h está fechada. Só template aprovado é entregue até o cliente responder."
+      onClose={onClose}
+      // Ha variavel digitada aqui dentro: nao fecha por clique no fundo.
+      closeOnBackdrop={false}
+    >
+      <DialogBody className="dialog-send-template">
 
         {status === 'loading' && <p className="mt-4 text-[13.5px] text-chat-muted">Carregando templates…</p>}
         {status === 'error' && <p className="mt-4 text-[13.5px] text-wa-error-text">Não foi possível carregar os templates.</p>}
@@ -133,27 +138,26 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
         )}
 
         </div>
-        {error && <p className="mt-3 text-[13px] text-wa-error-text">{error}</p>}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-[10px] border border-white/10 bg-white/[0.06] px-3.5 py-2 text-[13.5px] text-chat-text transition hover:bg-white/[0.12]"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={enviar}
-            disabled={!pronto || sending}
-            className="rounded-[10px] bg-chat-orange px-3.5 py-2 text-[13.5px] font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sending ? 'Enviando…' : 'Enviar'}
-          </button>
-        </div>
-      </div>
-    </div>
+        {error && <p className="dialog-send-template-error mt-3 text-[13px] text-wa-error-text">{error}</p>}
+      </DialogBody>
+      <DialogFooter>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-[10px] border border-white/10 bg-white/[0.06] px-3.5 py-2 text-[13.5px] text-chat-text transition hover:bg-white/[0.12]"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={enviar}
+          disabled={!pronto || sending}
+          className="rounded-[10px] bg-chat-orange px-3.5 py-2 text-[13.5px] font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {sending ? 'Enviando…' : 'Enviar'}
+        </button>
+      </DialogFooter>
+    </Dialog>
   );
 }
 

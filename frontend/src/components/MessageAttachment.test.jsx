@@ -155,6 +155,18 @@ describe('visualizador de imagem com zoom', () => {
     expect(screen.getByText('100%')).toBeInTheDocument();
   });
 
+  // O ESC deixou de ser tratado dentro do visualizador e passou a vir da pilha
+  // de dialogos, que so entrega a tecla ao nivel do topo. Zoom, pan e a guarda
+  // de arrasto continuam locais e seguem cobertos pelos testes abaixo.
+  test('ESC fecha o visualizador pela pilha de dialogos', async () => {
+    await abrirVisualizador();
+    expect(screen.getByRole('dialog', { name: 'Visualizar imagem' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Visualizar imagem' })).not.toBeInTheDocument();
+  });
+
   test('aumenta e diminui o zoom pelos botoes', async () => {
     await abrirVisualizador();
 

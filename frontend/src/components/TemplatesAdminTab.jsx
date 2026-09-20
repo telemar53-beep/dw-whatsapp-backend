@@ -362,11 +362,11 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
 
       {error && <p className={waErrorClass}>{error}</p>}
       <div className="flex gap-2">
-        <Button type="submit" loading={submitting}>
-          Cadastrar
-        </Button>
         <Button variant="secondary" onClick={onCancel}>
           Cancelar
+        </Button>
+        <Button type="submit" loading={submitting}>
+          Cadastrar
         </Button>
       </div>
     </form>
@@ -450,11 +450,11 @@ function RegisterExistingTemplateForm({ officialChannels, initialChannelId, onRe
       </div>
       {error && <p className={waErrorClass}>{error}</p>}
       <div className="flex gap-2">
-        <Button type="submit" loading={submitting}>
-          Registrar
-        </Button>
         <Button variant="secondary" onClick={onCancel}>
           Cancelar
+        </Button>
+        <Button type="submit" loading={submitting}>
+          Registrar
         </Button>
       </div>
     </form>

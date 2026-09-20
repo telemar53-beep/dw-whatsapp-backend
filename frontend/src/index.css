@@ -139,39 +139,41 @@
 }
 
 /* ---------- Escalas do produto ----------
-   Vocabulário declarado, não imposto. Ficam com prefixo `dw-` de propósito:
-   redefinir `--text-sm` ou `--radius-lg` mudaria de uma vez os 113 `text-sm` e
-   os 57 `rounded-lg` que já existem, e isso é convergência, não consolidação.
+   Vocabulário declarado, não imposto. Existe um prefixo porque redefinir
+   `--text-sm` ou `--radius-lg` mudaria de uma vez os 113 `text-sm` e os 57
+   `rounded-lg` que já existem, e isso é convergência, não consolidação. E o
+   prefixo é `ui-`, neutro: o produto é white-label, então a fundação visual
+   não carrega nome de empresa nem de tenant.
    Cada área adota estes valores quando for a vez dela. */
 :root {
   /* Tipografia — piso de 12px para texto lido; 11px só para número e selo. */
-  --dw-text-2xs: 11px;
-  --dw-text-xs: 12px;
-  --dw-text-sm: 13px;   /* o corpo real do produto */
-  --dw-text-base: 14px;
-  --dw-text-lg: 16px;
-  --dw-text-xl: 20px;
-  --dw-text-2xl: 26px;
+  --ui-text-2xs: 11px;
+  --ui-text-xs: 12px;
+  --ui-text-sm: 13px;   /* o corpo real do produto */
+  --ui-text-base: 14px;
+  --ui-text-lg: 16px;
+  --ui-text-xl: 20px;
+  --ui-text-2xl: 26px;
 
   /* Espaçamento — escala de 4, onde o produto já vive. */
-  --dw-space-1: 4px;
-  --dw-space-2: 8px;
-  --dw-space-3: 12px;
-  --dw-space-4: 16px;
-  --dw-space-6: 24px;
-  --dw-space-8: 32px;
-  --dw-space-12: 48px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  --ui-space-12: 48px;
 
   /* Raio — painel 22 > cartão 16 > controle 12 > chip 8. */
-  --dw-radius-sm: 8px;
-  --dw-radius-md: 12px;
-  --dw-radius-lg: 16px;
-  --dw-radius-xl: 22px;
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 12px;
+  --ui-radius-lg: 16px;
+  --ui-radius-xl: 22px;
 
   /* Largura de campo pelo dado que ele guarda (ver ui/Field). */
-  --dw-field-xs: 96px;
-  --dw-field-sm: 180px;
-  --dw-field-md: 320px;
+  --ui-field-xs: 96px;
+  --ui-field-sm: 180px;
+  --ui-field-md: 320px;
 }
 
 /* ---------- Foco por teclado ----------

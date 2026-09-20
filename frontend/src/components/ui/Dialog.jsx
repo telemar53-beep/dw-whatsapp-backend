@@ -51,6 +51,19 @@ function alvoDoFocoInicial(painel) {
 // Para overlays que JA funcionam e nao devem ser reconstruidos — o
 // visualizador de imagem, com zoom, pan, roda e teclado proprios. Eles entram
 // na mesma pilha (camada e ESC do topo) sem herdar a moldura do Dialog.
+// No instante em que o diálogo de cima desmonta, o de baixo AINDA tem `inert`:
+// o React só tira o atributo no render seguinte, e focar dentro de uma subárvore
+// inerte simplesmente não acontece — o foco cai no <body>. Isso só aparece no
+// navegador (o jsdom ignora `inert` por completo), e foi exatamente o que a
+// validação da pilha mostrou. Como este nível está prestes a virar o topo, tirar
+// o atributo aqui é antecipar o que o render seguinte faria.
+function destravarNivelDeBaixo(alvo) {
+  const preso = alvo.closest && alvo.closest('[inert]');
+  if (!preso) return;
+  const topo = topoDaPilha();
+  if (topo && topo.painel && preso.contains(topo.painel)) preso.removeAttribute('inert');
+}
+
 export function useDialogLayer(aberto, aoFechar, { fecharComEsc = true } = {}) {
   const fecharRef = useRef(aoFechar);
   fecharRef.current = aoFechar;
@@ -112,6 +125,7 @@ export function Dialog({
   closeOnBackdrop = false,
   closeOnEsc = true,
   dismissible = true,
+  initialFocus = 'auto',
   closeLabel = 'Fechar',
   className = '',
   children,
@@ -161,13 +175,14 @@ export function Dialog({
     abridorRef.current = ativo && typeof ativo.focus === 'function' ? ativo : null;
     const painel = painelRef.current;
     if (painel) {
-      const alvo = alvoDoFocoInicial(painel);
+      const alvo = initialFocus === 'dialog' ? painel : alvoDoFocoInicial(painel);
       if (alvo && typeof alvo.focus === 'function') alvo.focus();
     }
 
     return () => {
       const abridor = abridorRef.current;
       if (abridor && document.contains(abridor)) {
+        destravarNivelDeBaixo(abridor);
         abridor.focus();
         return;
       }
@@ -175,6 +190,7 @@ export function Dialog({
       // exemplo): o foco volta para o diálogo que passou a ser o topo.
       const topo = topoDaPilha();
       if (topo && topo !== entrada && topo.painel && document.contains(topo.painel)) {
+        destravarNivelDeBaixo(topo.painel);
         topo.painel.focus();
       }
     };

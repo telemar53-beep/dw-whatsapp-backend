@@ -13,6 +13,9 @@ function ConversationModal({ conversation, onClose, onTransferClick }) {
       orientation="row"
       size="max-w-6xl"
       ariaLabel="Conversa"
+      // Superficie de leitura e trabalho, nao formulario: o foco inicial e o
+      // proprio dialogo, e nao o primeiro campo que aparecer no painel lateral.
+      initialFocus="dialog"
       onClose={onClose}
       dismissible
       closeLabel="Fechar conversa"

@@ -58,7 +58,7 @@
 [data-dialog=templates] #template-body {min-height:120px}
 [data-dialog=templates] fieldset {grid-column:2;grid-row:3/6;border-left:1px solid #ffffff10;padding-left:16px}
 [data-dialog=templates] form > p,[data-dialog=templates] form > div:last-child,[data-dialog=templates] form[aria-label='Registrar template existente'] > div:has(#existing-template-language) {grid-column:1/-1}
-.dw-dialog[data-dialog=templates] form > div:last-child {justify-content:flex-end;padding:12px 0 0}
+.dw-dialog[data-dialog=templates] form > div:last-child {justify-content:flex-end;padding:12px 0;position:sticky;bottom:0;z-index:1;background:var(--color-wa-panel);backdrop-filter:blur(8px);border-top:1px solid #ffffff10}
 /* Envio de template: biblioteca a esquerda, variaveis e previa a direita.
    Antes a caixa inteira rolava (titulo junto) E a lista tinha o proprio
    max-height:45vh por dentro — dois eixos disputando. Agora o cabecalho e o

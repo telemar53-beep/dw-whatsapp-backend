@@ -42,13 +42,6 @@ function CreateReasonForm({ onCreated, onCancel, embedded = false }) {
       </div>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cadastrar
-        </button>
         {onCancel && (
           <button
             type="button"
@@ -58,6 +51,13 @@ function CreateReasonForm({ onCreated, onCancel, embedded = false }) {
             Cancelar
           </button>
         )}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Cadastrar
+        </button>
       </div>
     </form>
   );

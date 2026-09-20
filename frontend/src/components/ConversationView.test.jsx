@@ -50,6 +50,29 @@ beforeEach(() => {
 });
 
 describe('ConversationView', () => {
+  test('mostra apenas os dados disponíveis do cliente no painel contextual', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Ana', contactCityName: 'São Paulo', sectorName: 'Financeiro', protocolNumber: '123' }}
+        onTransferClick={vi.fn()}
+        workspace
+      />
+    );
+    const panel = screen.getByRole('complementary', { name: 'Dados do cliente' });
+    expect(within(panel).getByText('São Paulo')).toBeInTheDocument();
+    expect(within(panel).getByText('Financeiro')).toBeInTheDocument();
+    expect(within(panel).getByText('123')).toBeInTheDocument();
+    expect(within(panel).queryByText('CPF')).not.toBeInTheDocument();
+  });
+
+  test('permite fechar e reabrir os dados do cliente sem alterar a conversa', async () => {
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', contactDisplayName: 'Ana' }} onTransferClick={vi.fn()} workspace />);
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar dados do cliente' }));
+    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).toHaveClass('is-dismissed');
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).not.toHaveClass('is-dismissed');
+  });
+
   // O nome do provedor e configuracao: o sistema roda em mais de uma empresa.
   test('o aviso do topo cita a empresa cadastrada', async () => {
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);

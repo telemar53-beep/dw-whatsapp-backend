@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import ContactAvatar from './ContactAvatar';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -15,6 +15,13 @@ describe('ContactAvatar', () => {
     render(<ContactAvatar contactId="c1" avatarPath="avatars/c1.jpg" displayName="Carlos" phoneNumber="+5511999990000" />);
     const img = screen.getByRole('img');
     expect(img.src).toBe('http://localhost:3000/api/contacts/c1/avatar?token=tok-123&v=avatars%2Fc1.jpg');
+  });
+
+  test('shows initials when a stored photo cannot be loaded', () => {
+    render(<ContactAvatar contactId="c1" avatarPath="missing.jpg" displayName="Carlos Lima" />);
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(screen.getByText('CL')).toBeInTheDocument();
   });
 
   test('changes the image URL when the avatarPath changes, so the browser does not reuse the cached photo', () => {

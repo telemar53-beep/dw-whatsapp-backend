@@ -1,28 +1,22 @@
-import { Card } from '../../../components/ui';
 import AssignmentMessageSection from '../../../components/messages/AssignmentMessageSection';
 
 function AssignmentPage() {
   return (
-    <>
-      <Card title="Abertura e encerramento" description="Mensagens automáticas ao assumir e ao encerrar um atendimento.">
-        <p>
-          Enviada automaticamente para o cliente quando um atendente assume o
-          atendimento, e uma segunda mensagem quando ele é encerrado. Escolha
-          abaixo quais atendentes e quais canais disparam essas mensagens.
-        </p>
-        <p className="mt-2">Placeholders disponíveis:</p>
-        <ul className="mt-1 list-disc pl-5">
-          <li><code>@chat_saudacao_maiusculo</code> — Bom dia / Boa tarde / Boa noite, automático</li>
-          <li><code>@chat_atendente</code> — primeiro nome de quem assumiu</li>
-          <li><code>@chat_protocolo</code> — número do protocolo do atendimento</li>
-        </ul>
-        <p className="mt-2 italic">
-          Exemplo: "Bom dia, meu nome é Geovanna. Irei iniciar seu atendimento,
-          como posso te ajudar? O protocolo do seu atendimento é 1042"
-        </p>
-      </Card>
+    <div className="settings-message-editor">
+      <div className="border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
+        <p>Defina as mensagens enviadas ao assumir e ao encerrar um atendimento, por canal e atendente.</p>
+        <details className="mt-2">
+          <summary className="w-fit cursor-pointer text-chat-orange">Ver variáveis e exemplo</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li><code>@chat_saudacao_maiusculo</code> — Bom dia / Boa tarde / Boa noite, automático</li>
+            <li><code>@chat_atendente</code> — primeiro nome de quem assumiu</li>
+            <li><code>@chat_protocolo</code> — número do protocolo do atendimento</li>
+          </ul>
+          <p className="mt-2 italic">Exemplo: “Bom dia, meu nome é Geovanna. Irei iniciar seu atendimento, como posso te ajudar? O protocolo do seu atendimento é 1042”</p>
+        </details>
+      </div>
       <AssignmentMessageSection />
-    </>
+    </div>
   );
 }
 

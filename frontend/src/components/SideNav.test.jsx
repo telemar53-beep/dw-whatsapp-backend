@@ -83,11 +83,11 @@ describe('SideNav', () => {
   });
 
   test('recolher esconde os nomes e mantém o rótulo acessível', async () => {
-    renderNav({ role: 'admin' });
+    renderNav({ role: 'admin' }, '/relatorios');
     await userEvent.click(screen.getByRole('button', { name: /recolher menu/i }));
     expect(screen.getByRole('button', { name: /expandir menu/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /supervisão/i })).toHaveAttribute('title', 'Supervisão');
-    expect(localStorage.getItem('dw_nav_collapsed')).toBe('1');
+    expect(localStorage.getItem('dw_nav_collapsed_administration')).toBe('1');
   });
 
   test('em modo painel, escolher um item fecha o painel', async () => {
@@ -104,15 +104,16 @@ describe('SideNav', () => {
     expect(onMobileClose).toHaveBeenCalled();
   });
 
-  test('mostra as iniciais da empresa e o botão de som', () => {
+  test('mostra a logo oficial e o botão de som', () => {
     renderNav({ role: 'agent' });
-    expect(screen.getByText('DW')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'DW Telecom' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /som ativado/i })).toBeInTheDocument();
   });
 
   test('clica em "Meu perfil" chama onProfileClick', async () => {
     const onProfileClick = vi.fn();
     renderNav({ role: 'agent' }, '/', { onProfileClick });
+    await userEvent.click(screen.getByRole('button', { name: /^conta:/i }));
     await userEvent.click(screen.getByRole('button', { name: /^meu perfil$/i }));
     expect(onProfileClick).toHaveBeenCalledTimes(1);
   });
@@ -130,4 +131,20 @@ describe('SideNav', () => {
     await userEvent.click(screen.getByRole('button', { name: /som ativado/i }));
     expect(toggleMuted).toHaveBeenCalledTimes(1);
   });
+});
+
+test('chat defaults to compact while administration defaults to expanded', () => {
+  const view = renderNav({ role: 'admin' });
+  expect(screen.getByRole('button', { name: 'Expandir menu' })).toBeInTheDocument();
+  view.unmount();
+  renderNav({ role: 'admin' }, '/relatorios');
+  expect(screen.getByRole('button', { name: 'Recolher menu' })).toBeInTheDocument();
+});
+test('account exposes logout and closes with Escape', async () => {
+  renderNav({ role: 'admin' });
+  expect(screen.queryByRole('button', { name: 'Sair' })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: /^conta:/i }));
+  expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+  await userEvent.keyboard('{Escape}');
+  expect(screen.queryByRole('button', { name: 'Sair' })).not.toBeInTheDocument();
 });

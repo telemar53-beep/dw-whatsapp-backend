@@ -17,14 +17,12 @@ beforeEach(() => {
 });
 
 describe('QuickRepliesPage', () => {
-  // Restaura o antigo popup "O que é isso: respostas rápidas" (SectionHelp) do
-  // MessagesAdminTab como um Card sempre visível no topo da página — mesmo texto
-  // e mesmo exemplo, sem precisar clicar em nada para revelá-los.
-  test('shows the explanation and example for the quick-reply feature directly, without a popup', () => {
+  test('mostra a explicação curta e revela o exemplo sob demanda', async () => {
     useQuickReplies.mockReturnValue({ quickReplies: [], status: 'ready', refresh: vi.fn() });
     renderInShell(<QuickRepliesPage />, { path: '/configuracoes/mensagens/respostas-rapidas' });
 
-    expect(screen.getByText(/mensagens prontas que o atendente pode inserir com um clique/i)).toBeInTheDocument();
+    expect(screen.getByText(/textos prontos que o atendente insere/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Ver exemplo'));
     expect(screen.getByText(/poderia me informar seu/i)).toBeInTheDocument();
   });
 

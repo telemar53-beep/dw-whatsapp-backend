@@ -49,18 +49,18 @@
 
   /* Vidro fumê da página de chat (Atendimento) — escopo isolado dos tokens wa-*,
      que continuam servindo os modais claros. Ver output/design-chat/LEIA-ME-DESIGN.md */
-  --color-chat-canvas: #100e0d;
-  --color-chat-rail: #17140f;
-  --color-chat-text: #f4f1ed;
-  --color-chat-muted: #c7c2bd;
-  --color-chat-faint: #8b8682;
-  --color-chat-icon: #b0aba6;
-  --color-chat-copper: #b97a55;
+  --color-chat-canvas: #20272d;
+  --color-chat-rail: #252d33;
+  --color-chat-text: #f4f6f7;
+  --color-chat-muted: #bec8ce;
+  --color-chat-faint: #97a4ad;
+  --color-chat-icon: #b9c4cb;
+  --color-chat-copper: #f29a58;
   --color-chat-mauve: #6c5b77;
-  --color-chat-orange: #f4531f;
-  --color-chat-orange-ink: #2a1a0e;
+  --color-chat-orange: #f28c45;
+  --color-chat-orange-ink: #2a1b12;
   --color-chat-online: #33d9a6;
-  --color-chat-cream: #efe7ce;
+  --color-chat-cream: #f28c45;
 }
 
 /* ---------- Vidro fumê nos pop-ups da página de atendimento ----------
@@ -76,35 +76,35 @@
   --wa-dialog-border: rgba(255, 255, 255, 0.1);
   --wa-dialog-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.75);
   --wa-dialog-blur: 28px;
-  --wa-overlay: rgba(8, 7, 6, 0.62);
+  --wa-overlay: rgba(13, 20, 24, 0.68);
   --wa-overlay-blur: 6px;
   --scroll-thumb: rgba(255, 255, 255, 0.26);
   --scroll-thumb-hover: rgba(255, 255, 255, 0.42);
 
-  --color-wa-text: #f4f1ed;
-  --color-wa-muted: #b6b0ab;
-  --color-wa-meta: #8b8682;
-  --color-wa-icon: #c7c2bd;
+  --color-wa-text: #f4f6f7;
+  --color-wa-muted: #bac5cc;
+  --color-wa-meta: #97a4ad;
+  --color-wa-icon: #bec8ce;
   --color-wa-border: rgba(255, 255, 255, 0.1);
   --color-wa-border-strong: rgba(255, 255, 255, 0.2);
-  --color-wa-panel: rgba(36, 32, 30, 0.92);
+  --color-wa-panel: rgba(45, 54, 60, 0.96);
   --color-wa-panel-header: rgba(255, 255, 255, 0.07);
-  --color-wa-page: #171513;
-  --color-wa-chat: #171513;
+  --color-wa-page: #20272d;
+  --color-wa-chat: #293136;
   --color-wa-in: rgba(255, 255, 255, 0.14);
   --color-wa-out: rgba(255, 255, 255, 0.12);
   --color-wa-out-deep: rgba(255, 255, 255, 0.12);
   --color-wa-hover: rgba(255, 255, 255, 0.07);
   --color-wa-active: rgba(255, 255, 255, 0.12);
-  --color-wa-green: #f4531f;
-  --color-wa-green-dark: #d8441a;
+  --color-wa-green: #f28c45;
+  --color-wa-green-dark: #dd7835;
   --color-wa-badge: #33d9a6;
   --color-wa-tick: #33d9a6;
-  --color-wa-quote: #f4531f;
+  --color-wa-quote: #f28c45;
   --color-wa-chip: rgba(51, 217, 166, 0.16);
   --color-wa-chip-text: #33d9a6;
   --color-wa-avatar: rgba(255, 255, 255, 0.13);
-  --color-wa-avatar-text: #c7c2bd;
+  --color-wa-avatar-text: #c7d0d5;
   --color-wa-error-bg: rgba(234, 67, 53, 0.18);
   --color-wa-error-text: #ff9d93;
   --color-wa-warn-bg: rgba(242, 169, 60, 0.16);
@@ -112,12 +112,23 @@
   --color-wa-surface: rgba(255, 255, 255, 0.06);
   --color-wa-surface-soft: rgba(255, 255, 255, 0.04);
   --color-wa-surface-line: rgba(255, 255, 255, 0.08);
-  --color-wa-field: rgba(255, 255, 255, 0.06);
-  --color-wa-link: #ff9a6b;
+  --color-wa-field: #354047;
+  --color-wa-link: #ffb078;
   --color-sgp-blue: #7ab0ff;
   --color-sgp-red: #ff8d82;
   --color-sgp-gray: #c7c2bd;
 }
+
+/* O laranja aprovado usa texto escuro: branco sobre esse tom perde contraste,
+   especialmente em botões pequenos e indicadores de contagem. */
+.chat-theme :is(button, a, span)[class~="bg-wa-green"][class~="text-white"],
+.chat-theme :is(button, a, span)[class~="bg-chat-orange"][class~="text-white"] {
+  color: var(--color-chat-orange-ink);
+}
+
+/* Tabelas de canais, usuários e cadastros preservam a densidade de trabalho. */
+.chat-theme table tbody tr:hover { background-color: rgba(255, 255, 255, 0.035); }
+.chat-theme table th { color: var(--color-chat-muted); }
 
 /* Valores claros equivalentes, para o mesmo componente fora do chat. */
 :root {
@@ -220,6 +231,94 @@
 .chat-theme select optgroup {
   background-color: #241f1d;
   color: #f4f1ed;
+}
+
+/* Configurações: uma área de trabalho contínua, com seções legíveis em vez de
+   uma pilha de cartões independentes. Os controles e formulários seguem iguais. */
+.settings-workspace > aside {
+  background: linear-gradient(165deg, rgba(54, 61, 65, .96), rgba(37, 45, 50, .97));
+}
+.settings-workspace > section {
+  background: #283137;
+}
+.settings-workspace .settings-detail-header,
+.settings-workspace .settings-group-header {
+  background: linear-gradient(100deg, rgba(255, 145, 68, .075), transparent 56%);
+}
+.settings-workspace .settings-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.settings-workspace .settings-section-list > .settings-section,
+.settings-workspace .settings-section-list > form > .settings-section {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 15px 2px 17px;
+  box-shadow: none;
+}
+.settings-workspace .settings-section-list > .settings-section + .settings-section,
+.settings-workspace .settings-section-list > form + .settings-section,
+.settings-workspace .settings-section-list > form > .settings-section + .settings-section {
+  border-top: 1px solid rgba(255,255,255,.09);
+}
+.settings-workspace .settings-section-list .settings-section > div:first-child h2 {
+  font-size: 17px;
+  letter-spacing: -.015em;
+}
+.settings-workspace .settings-section-list .settings-section > div:first-child h2::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 16px;
+  margin-right: 11px;
+  border-radius: 5px;
+  background: var(--color-chat-orange);
+  vertical-align: -2px;
+}
+.settings-workspace .settings-section-list .settings-section > div:last-child:not(:first-child) {
+  max-width: none;
+}
+.settings-workspace input[type="number"],
+.settings-workspace input[type="time"] {
+  max-width: 168px;
+}
+.settings-workspace .settings-open-form:not(.grid).space-y-4 > :not([hidden]) ~ :not([hidden]),
+.settings-workspace .settings-open-form:not(.grid).space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 12px;
+}
+.settings-workspace .settings-section-list .settings-section[aria-labelledby] > div:last-child:has(table) {
+  max-width: none;
+}
+.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 16px 0 20px;
+}
+.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section + .settings-section {
+  border-top: 1px solid rgba(255,255,255,.09);
+}
+.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section h2::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 15px;
+  margin-right: 10px;
+  border-radius: 4px;
+  background: var(--color-chat-orange);
+  vertical-align: -2px;
+}
+.settings-workspace .settings-section-list section[aria-labelledby$="-card-title"] > div > p:first-child:last-child {
+  padding-left: 18px;
+  padding-right: 18px;
+}
+@media (min-width: 1024px) {
+  .settings-workspace .settings-detail-header,
+  .settings-workspace .settings-group-header { padding-left: 32px; padding-right: 32px; }
+  .settings-workspace .settings-detail-body,
+  .settings-workspace .settings-group-body { padding-left: 34px; padding-right: 34px; }
 }
 
 /* ---------- Animações ---------- */

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import WaDialog from '../WaDialog';
 import { Button } from './Button';
+import { IconWarning, IconInfo } from '../icons/WaIcons';
 
 export function ConfirmDialog({ open, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false, onConfirm, onCancel }) {
   const cancelRef = useRef(null);
@@ -39,8 +40,9 @@ export function ConfirmDialog({ open, message, confirmLabel = 'Confirmar', cance
   }
 
   return (
-    <WaDialog onClose={onCancel} size="max-w-sm">
+    <WaDialog variant="confirm" onClose={onCancel} size="max-w-sm">
       <div role="alertdialog" aria-modal="true" aria-describedby={messageId} className="px-6 pb-4 pt-5" onKeyDown={trapTab}>
+        <span className="dialog-confirm-icon" data-danger={danger} aria-hidden="true">{danger ? <IconWarning size={22} /> : <IconInfo size={22} />}</span>
         <p id={messageId} className="text-[15px] leading-[22px] text-wa-text">{message}</p>
         <div className="mt-5 flex justify-end gap-2">
           <Button ref={cancelRef} variant="ghost" onClick={onCancel}>{cancelLabel}</Button>

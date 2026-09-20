@@ -115,9 +115,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
 
   if (step === 'review') {
     return (
-      <WaDialog title="Nova campanha" onClose={onClose} size="max-w-sm">
+      <WaDialog variant="campaign" title="Nova campanha" onClose={onClose} size="max-w-4xl">
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="wa-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-3">
+          <div className="dialog-campaign-fields wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-3">
             <h3 className="text-[16px] font-medium text-wa-text">Revisar campanha</h3>
             <dl className="space-y-2 text-[14px]">
               <div>
@@ -183,9 +183,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
   }
 
   return (
-    <WaDialog title="Nova campanha" onClose={onClose} size="max-w-sm">
+    <WaDialog variant="campaign" title="Nova campanha" onClose={onClose} size="max-w-4xl">
       <form onSubmit={handleReview} className="flex min-h-0 flex-1 flex-col">
-        <div className="wa-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-3">
+        <div className="dialog-campaign-fields wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-3">
           <div>
             <label htmlFor="campaign-name" className={waLabelClass}>
               Nome (opcional)
@@ -224,6 +224,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
               </p>
             )}
           </div>
+          <section className="dialog-campaign-content">
           {isOfficialChannel ? (
             <>
               <p className="rounded-[10px] bg-wa-warn-bg px-3 py-2 text-[13.5px] leading-[19px] text-wa-warn-text">
@@ -299,6 +300,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
               )}
             </div>
           )}
+          </section>
           <div>
             <label htmlFor="campaign-recipients" className={waLabelClass}>
               Destinatários (um por linha: telefone ou telefone,nome)

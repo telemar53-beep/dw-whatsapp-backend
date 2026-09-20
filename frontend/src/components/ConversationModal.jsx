@@ -21,7 +21,7 @@ function ConversationModal({ conversation, onClose, onTransferClick }) {
         role="dialog"
         aria-modal="true"
         onClick={(event) => event.stopPropagation()}
-        className="animate-wa-pop relative flex h-[85vh] max-h-[880px] w-full max-w-6xl overflow-hidden rounded-[28px] border border-wa-surface-line bg-wa-panel shadow-[0_40px_100px_-30px_rgba(15,35,60,0.55)] backdrop-blur-2xl"
+        className="dialog-conversation chat-workspace animate-wa-pop relative flex h-[85vh] max-h-[880px] w-full max-w-6xl overflow-hidden rounded-[22px] border border-wa-surface-line bg-wa-panel shadow-[0_40px_100px_-30px_rgba(0,0,0,0.55)] backdrop-blur-md"
       >
         <button
           type="button"

@@ -37,41 +37,43 @@ function CreateTriageOptionForm({ onCreated, onCancel }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      className="settings-open-form space-y-3 border-t border-white/[0.09] px-0 pb-4 pt-4"
     >
       <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar nova opção</h3>
-      <div>
-        <label htmlFor="option-number" className={labelClass}>
-          Número da opção
-        </label>
-        <input
-          id="option-number"
-          type="number"
-          min="1"
-          value={optionNumber}
-          onChange={(e) => setOptionNumber(e.target.value)}
-          className={`w-32 ${inputClass}`}
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="option-sector" className={labelClass}>
-          Setor
-        </label>
-        <select
-          id="option-sector"
-          value={sectorId}
-          onChange={(e) => setSectorId(e.target.value)}
-          className={inputClass}
-          required
-        >
-          <option value="">Selecione um setor</option>
-          {sectors.map((sector) => (
-            <option key={sector.id} value={sector.id}>
-              {sector.name}
-            </option>
-          ))}
-        </select>
+      <div className="grid gap-3 sm:grid-cols-[130px_minmax(0,1fr)]">
+        <div>
+          <label htmlFor="option-number" className={labelClass}>
+            Número da opção
+          </label>
+          <input
+            id="option-number"
+            type="number"
+            min="1"
+            value={optionNumber}
+            onChange={(e) => setOptionNumber(e.target.value)}
+            className={`max-w-[130px] ${inputClass}`}
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="option-sector" className={labelClass}>
+            Setor
+          </label>
+          <select
+            id="option-sector"
+            value={sectorId}
+            onChange={(e) => setSectorId(e.target.value)}
+            className={inputClass}
+            required
+          >
+            <option value="">Selecione um setor</option>
+            {sectors.map((sector) => (
+              <option key={sector.id} value={sector.id}>
+                {sector.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <div>
         <label htmlFor="option-keywords" className={labelClass}>

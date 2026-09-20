@@ -12,6 +12,8 @@ import {
   closeConversation,
 } from '../services/api';
 import ConversationListItem from '../components/ConversationListItem';
+import { usePresence } from '../hooks/usePresence';
+import './supervision.css';
 import ConversationModal from '../components/ConversationModal';
 import TransferModal from '../components/TransferModal';
 import { PageHeader, Tabs } from '../components/ui';
@@ -63,13 +65,13 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
         type="button"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
-        className="h-[38px] shrink-0 rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-muted transition hover:border-white/25 hover:bg-white/[0.10] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+        className="h-[38px] shrink-0 rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-muted transition hover:border-white/25 hover:bg-white/[0.10] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
       >
         {label}
         {selected.length > 0 && <span className="ml-1.5 font-medium text-chat-orange">{selected.length}</span>}
       </button>
       {open && (
-        <div className="chat-scroll absolute z-10 mt-2 max-h-64 w-56 overflow-y-auto rounded-[16px] border border-white/[0.10] bg-wa-panel p-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
+        <div className="dialog-filter-options chat-scroll absolute z-10 mt-2 max-h-64 w-56 overflow-y-auto rounded-[16px] border border-white/[0.10] bg-wa-panel p-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
           {options.length === 0 ? (
             <p className="px-2 py-1 text-[13px] text-wa-muted">Nenhuma opção</p>
           ) : (
@@ -86,42 +88,32 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
   );
 }
 
-function DashboardColumn({ title, count, conversations, onSelect, onQuickClose, emptyMessage, footer }) {
-  return (
-    <div className="flex max-h-[40vh] flex-1 flex-col overflow-clip rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl md:max-h-none md:min-w-[300px]">
-      <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] px-5 py-4">
-        <h2 className="min-w-0 truncate font-display text-[16px] font-semibold text-chat-text">{title}</h2>
-        <span className="rounded-full border border-white/10 bg-white/[0.07] px-2.5 py-[2px] text-[12px] font-medium text-chat-muted">
-          {count}
-        </span>
-      </div>
-      <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-0.5">
-        {conversations.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">{emptyMessage}</p>
-        ) : (
-          <ul>
-            {conversations.map((conversation) => (
-              <ConversationListItem
-                key={conversation.id}
-                conversation={conversation}
-                onSelect={onSelect}
-                onQuickClose={onQuickClose}
-                selected={false}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
-      {footer}
-    </div>
-  );
+function DashboardColumn({ title, count, conversations, onSelect, onQuickClose, emptyMessage }) {
+  return <section className="supervision-group">
+    <div className="supervision-group-heading"><h2>{title}</h2><span>{count}</span></div>
+    {conversations.length === 0 ? <p className="supervision-empty">{emptyMessage}</p> :
+      <ul>{conversations.map(conversation => <SupervisionRow key={conversation.id} conversation={conversation} onSelect={onSelect} onQuickClose={onQuickClose} stateLabel={title} />)}</ul>}
+  </section>;
+}
+
+function SupervisionRow({ conversation, onSelect, onQuickClose, stateLabel }) {
+  const date = conversation.closedAt || conversation.lastMessageAt || conversation.createdAt;
+  return <li className="supervision-record">
+    <div className="supervision-record-contact"><ul><ConversationListItem conversation={{ ...conversation, contactCityName: null, sectorName: null, assignedAgentName: null }} onSelect={onSelect} compact onQuickClose={onQuickClose} /></ul></div>
+    <div className="supervision-record-location"><span>{conversation.contactCityName || 'Cidade não informada'}</span><small>{conversation.sectorName || 'Sem setor'}</small></div>
+    <div className="supervision-record-owner">{conversation.assignedAgentName || 'Sem responsável'}</div>
+    <div className="supervision-record-state"><span>{stateLabel || (conversation.status === 'closed' ? 'Encerrado' : conversation.status === 'assigned' ? 'Em atendimento' : conversation.triageState === 'pending' ? 'Em automação' : 'Em espera')}</span><small>{date ? new Date(date).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : 'Horário não informado'}</small><small>{conversation.closedAt ? 'Encerramento' : conversation.lastMessageAt ? 'Última mensagem' : conversation.createdAt ? 'Abertura' : ''}</small></div>
+    <button type="button" className="supervision-open" onClick={() => onSelect(conversation.id)} aria-label={'Abrir conversa de ' + (conversation.contactDisplayName || conversation.contactPhoneNumber || 'cliente')}>Abrir →</button>
+  </li>;
 }
 
 function SupervisionPage() {
   const { token } = useAuth();
   const { inProgress, waiting, inAutomation, closedTodayCount } = useAttendanceDashboard();
   const { channels } = useChannels(true);
-  const { agents } = useAgents();
+  const { agents, status: agentsStatus } = useAgents();
+  const onlineIds = usePresence(agents);
+  const [operationView, setOperationView] = useState('all');
   const { sectors } = useSectors();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -273,10 +265,10 @@ function SupervisionPage() {
     null;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <PageHeader title="Supervisão" description="Acompanhe os atendimentos da equipe em tempo real" />
+    <div className="supervision-workspace flex min-h-0 min-w-0 flex-1 flex-col">
+      <PageHeader title="Supervisão" description="Central de operação · equipe, carga e atendimentos" />
 
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2.5 px-2 pb-4">
+      <div className="supervision-toolbar flex shrink-0 flex-col gap-3 border-y border-white/[0.07] bg-white/[0.025] px-4 py-3 xl:flex-row xl:items-center">
         <Tabs
           label="Atendimentos"
           active={activeTab}
@@ -286,7 +278,7 @@ function SupervisionPage() {
             { key: 'closed', label: 'Encerrados hoje', count: closedCount },
           ]}
         />
-        <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10" />
+        <div className="flex flex-wrap items-center gap-2 xl:ml-auto">
         <FilterDropdown
           label="Canais"
           options={channels.map((c) => ({ value: c.id, label: c.name }))}
@@ -311,7 +303,7 @@ function SupervisionPage() {
           open={openFilterMenu === 'sectors'}
           onOpenChange={(next) => setOpenFilterMenu(next ? 'sectors' : null)}
         />
-        <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10" />
+        <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10 max-xl:hidden" />
         <form onSubmit={handleProtocolSearch} className="min-w-0 max-w-full shrink-0">
           <input
             type="text"
@@ -319,7 +311,7 @@ function SupervisionPage() {
             onChange={(e) => setProtocolQuery(e.target.value)}
             placeholder="Buscar por protocolo"
             aria-label="Buscar por protocolo"
-            className="h-[38px] w-[205px] max-w-full rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+            className="h-[38px] w-[205px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
           />
         </form>
         <form onSubmit={handlePhoneSearch} className="min-w-0 max-w-full shrink-0">
@@ -329,14 +321,38 @@ function SupervisionPage() {
             onChange={(e) => setPhoneQuery(e.target.value)}
             placeholder="Buscar por telefone do cliente"
             aria-label="Buscar por telefone do cliente"
-            className="h-[38px] w-[262px] max-w-full rounded-full border border-white/[0.12] bg-white/[0.06] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+            className="h-[38px] w-[262px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
           />
         </form>
+        </div>
       </div>
       {(protocolError || phoneError) && (
         <p role="alert" className="px-2 pb-2 text-[13px] text-wa-error-text">{protocolError || phoneError}</p>
       )}
 
+      <div className="supervision-central">
+        <aside className="supervision-team" aria-label="Equipe e carga">
+          <header><h2>Equipe e carga</h2><span>{agents.filter(a => onlineIds.has(a.id)).length} online</span></header>
+          <p>Carga total ativa · clique para filtrar</p>
+          {agentsStatus === 'loading' && <p role="status">Carregando equipe...</p>}
+          {agentsStatus === 'error' && <p role="alert">Não foi possível carregar a equipe.</p>}
+          <ul>{agents.map(agent => {
+            const count = inProgress.filter(c => c.assignedAgentId === agent.id).length;
+            const max = Math.max(1, ...agents.map(a => inProgress.filter(c => c.assignedAgentId === a.id).length));
+            const online = onlineIds.has(agent.id);
+            return <li key={agent.id}><button type="button" aria-pressed={agentFilter.includes(agent.id)} onClick={() => toggleFilterValue('atendente', agentFilter, agent.id)}>
+              <span className="supervision-agent-name">{agent.name || agent.email}</span><strong>{count}<small> ativos</small></strong>
+              <span className="supervision-presence"><i className={online ? 'is-online' : ''} />{online ? count ? 'Online · Em atendimento' : 'Online · Sem atendimentos' : 'Offline'}</span>
+              <span className="supervision-load" aria-hidden="true"><span style={{width: (count / max * 100) + '%'}} /></span>
+            </button></li>;
+          })}</ul>
+          {agentsStatus === 'ready' && agents.length === 0 && <p>Nenhum atendente cadastrado.</p>}
+        </aside>
+        <main className="supervision-operation" aria-label="Operação">
+          {!phoneSearchResult && activeTab === 'all' && <nav className="supervision-states" aria-label="Estados dos atendimentos">
+            {[['all','Visão geral',totalActiveCount],['progress','Andamento',filteredInProgress.length],['waiting','Espera',filteredWaiting.length],['automation','Automação',filteredInAutomation.length]].map(([key,label,count]) => <button type="button" key={key} aria-pressed={operationView === key} onClick={() => setOperationView(key)}>{label}<strong>{count}</strong></button>)}
+          </nav>}
+          <div className="supervision-column-labels" aria-hidden="true"><span>Cliente / última mensagem</span><span>Cidade / setor</span><span>Responsável</span><span>Estado / horário</span><span /></div>
       {phoneSearchResult ? (
         <div role="tabpanel" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
@@ -355,9 +371,9 @@ function SupervisionPage() {
           {phoneSearchResult.conversations.length === 0 ? (
             <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">Esse cliente ainda não teve nenhum atendimento.</p>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08] [&>li]:backdrop-blur-2xl">
+            <ul className="supervision-history">
               {phoneSearchResult.conversations.map(withAgentName).map((conversation) => (
-                <ConversationListItem
+                <SupervisionRow
                   key={conversation.id}
                   conversation={conversation}
                   onSelect={openConversation}
@@ -369,39 +385,39 @@ function SupervisionPage() {
           )}
         </div>
       ) : activeTab === 'all' ? (
-        <div id="tabpanel-all" role="tabpanel" aria-labelledby="tab-all" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 pb-4 md:flex-row md:overflow-x-auto">
-          <DashboardColumn
+        <div id="tabpanel-all" role="tabpanel" aria-labelledby="tab-all" className="supervision-live chat-scroll">
+          {(operationView === 'all' || operationView === 'progress') && (          <DashboardColumn
             title="Em andamento"
             count={filteredInProgress.length}
             conversations={displayInProgress}
             onSelect={openConversation}
             emptyMessage="Nenhum atendimento em andamento."
-          />
-          <DashboardColumn
+          />)}
+          {(operationView === 'all' || operationView === 'waiting') && (          <DashboardColumn
             title="Em espera"
             count={filteredWaiting.length}
             conversations={displayWaiting}
             onSelect={openConversation}
             onQuickClose={quickCloseConversation}
             emptyMessage="Nenhum atendimento em espera."
-          />
-          <DashboardColumn
+          />)}
+          {(operationView === 'all' || operationView === 'automation') && (          <DashboardColumn
             title="Em automação"
             count={filteredInAutomation.length}
             conversations={displayInAutomation}
             onSelect={openConversation}
             onQuickClose={quickCloseConversation}
             emptyMessage="Nenhum atendimento em automação."
-          />
+          />)}
         </div>
       ) : (
         <div id="tabpanel-closed" role="tabpanel" aria-labelledby="tab-closed" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {displayClosed.length === 0 ? (
             <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">Nenhum atendimento encerrado hoje.</p>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08] [&>li]:backdrop-blur-2xl">
+            <ul className="supervision-history">
               {displayClosed.map((conversation) => (
-                <ConversationListItem
+                <SupervisionRow
                   key={conversation.id}
                   conversation={conversation}
                   onSelect={openConversation}
@@ -423,9 +439,11 @@ function SupervisionPage() {
           )}
         </div>
       )}
+        </main>
+      </div>
       {selectedConversation && (
         <ConversationModal
-          conversation={selectedConversation}
+          conversation={withAgentName(selectedConversation)}
           onClose={() => setSelectedConversationId(null)}
           onTransferClick={setTransferringId}
         />

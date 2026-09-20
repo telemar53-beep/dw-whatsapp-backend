@@ -74,12 +74,13 @@ function AssignmentMessageSection() {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-4"
       >
         <label className="flex items-center gap-2 text-sm text-wa-muted">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
           Ativo
         </label>
+        <div className="grid gap-3 lg:grid-cols-2">
         <div className="space-y-1">
           <label htmlFor="assignment-opening-message" className="text-sm font-medium text-wa-text">
             Mensagem de abertura
@@ -89,7 +90,8 @@ function AssignmentMessageSection() {
             value={openingMessage}
             onChange={(e) => setOpeningMessage(e.target.value)}
             placeholder="@chat_saudacao_maiusculo, meu nome é @chat_atendente. Irei iniciar seu atendimento, como posso te ajudar? O protocolo do seu atendimento é @chat_protocolo"
-            className={inputClass}
+            rows={2}
+            className={`${inputClass} min-h-[72px] max-h-56 resize-y [field-sizing:content]`}
             required
           />
         </div>
@@ -102,10 +104,13 @@ function AssignmentMessageSection() {
             value={closingMessage}
             onChange={(e) => setClosingMessage(e.target.value)}
             placeholder="Estou encerrando seu atendimento! Qualquer dúvida coloco-me prontamente à disposição."
-            className={inputClass}
+            rows={2}
+            className={`${inputClass} min-h-[72px] max-h-56 resize-y [field-sizing:content]`}
             required
           />
         </div>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
         <div className="space-y-1">
           <p className="text-sm font-medium text-wa-text">Atendentes</p>
           <div className="space-y-1">
@@ -138,6 +143,7 @@ function AssignmentMessageSection() {
             ))}
           </div>
         </div>
+        </div>
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button
@@ -160,20 +166,21 @@ function AssignmentMessageSection() {
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-5">
       <AsyncState status={status} skeletonLines={2}>
         {config.id === null ? (
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-wa-muted">Nenhuma configuração criada ainda.</p>
+            <p className="text-sm text-wa-muted">Nenhuma mensagem configurada ainda.</p>
             <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
-              Criar atribuição
+              Configurar mensagens
             </button>
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-wa-muted">
-              {config.agentIds.length} atendentes, {config.channelIds.length} canais
-            </p>
+            <div className="settings-assignment-summary">
+              <p className="text-sm text-wa-muted">{config.agentIds.length} atendentes, {config.channelIds.length} canais</p>
+              <div className="settings-message-pair"><section><h3>Mensagem de abertura</h3><p>{config.openingMessage || 'Não informada'}</p></section><section><h3>Mensagem de encerramento</h3><p>{config.closingMessage || 'Não informada'}</p></section></div>
+            </div>
             <div className="flex items-center gap-3">
               <CityStatusDot enabled={config.enabled} />
               <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">

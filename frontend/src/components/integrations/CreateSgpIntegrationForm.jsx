@@ -6,7 +6,7 @@ import { isOfficialChannelType } from '../../utils/channelTypes';
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
-const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+const cardClass = 'settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-4';
 
 function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated, onCancel }) {
   const { token } = useAuth();
@@ -69,6 +69,7 @@ function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated
   return (
     <form onSubmit={handleCreate} className={cardClass}>
       <h3 className="font-display text-base font-semibold text-wa-text">Nova integração SGP</h3>
+      <div className="grid gap-3 md:grid-cols-2">
       <div>
         <label htmlFor="sgp-description" className={labelClass}>Descrição</label>
         <input id="sgp-description" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
@@ -81,6 +82,7 @@ function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated
             <option key={channel.id} value={channel.id}>{channel.name}</option>
           ))}
         </select>
+      </div>
       </div>
       {isTemplateMode && (
         <div>

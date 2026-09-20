@@ -12,7 +12,7 @@ function AiSuggestionCard({ suggestion, onSend, onEdit, onDiscard }) {
   if (!suggestion) return null;
   const acoes = (suggestion.acoesExecutadas || []).filter((nome) => ROTULO_ACAO[nome]);
   return (
-    <div className="mx-3 mb-2 rounded-2xl border border-wa-border bg-wa-field p-3">
+    <div className="chat-ai-suggestion mx-3 mb-2 rounded-2xl border border-wa-border bg-wa-field p-3">
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-wa-muted">Sugestão da IA</p>
       {acoes.length > 0 && (
         <ul className="mb-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-wa-text">

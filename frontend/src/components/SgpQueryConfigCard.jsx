@@ -154,6 +154,7 @@ function SgpQueryConfigCard() {
   return (
     <form onSubmit={handleSave} className={cardClass}>
       <h3 className="text-[15px] font-semibold text-wa-text">Conexão para consultas</h3>
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(180px,0.6fr)]">
       <div>
         <label htmlFor="sgp-query-base-url" className={labelClass}>URL de acesso ao SGP</label>
         <input id="sgp-query-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className={inputClass} />
@@ -161,6 +162,7 @@ function SgpQueryConfigCard() {
       <div>
         <label htmlFor="sgp-query-app" className={labelClass}>App</label>
         <input id="sgp-query-app" value={app} onChange={(e) => setApp(e.target.value)} className={inputClass} />
+      </div>
       </div>
       <div>
         {config.configured && !changingToken ? (

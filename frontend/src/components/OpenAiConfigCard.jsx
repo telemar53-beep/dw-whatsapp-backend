@@ -7,7 +7,7 @@ import { AsyncState } from './ui';
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
-const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+const cardClass = 'settings-open-form space-y-3 px-0 pb-4 pt-2';
 
 // Rótulos no masculino ("o modo") — evita colidir, em getByText, com o selo de
 // status no feminino ("a integração"), que usa "Desativada"/"Conectada".
@@ -105,7 +105,7 @@ function OpenAiConfigCard() {
   return (
     <form onSubmit={handleSave} className={cardClass}>
       <div className="flex items-center justify-between gap-3">
-        <h3 className="font-display text-base font-semibold text-wa-text">Integração com OpenAI</h3>
+        <h2 className="font-display text-base font-semibold text-wa-text">Conexão e modelo</h2>
         {loadStatus === 'ready' && (
           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_BADGE_CLASS[status]}`}>{status}</span>
         )}
@@ -136,6 +136,7 @@ function OpenAiConfigCard() {
             </>
           )}
         </div>
+        <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor="ai-model" className={labelClass}>Modelo</label>
           <select id="ai-model" value={model} onChange={(e) => setModel(e.target.value)} className={inputClass}>
@@ -152,6 +153,7 @@ function OpenAiConfigCard() {
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
+        </div>
         </div>
         {testError && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{testError}</p>}
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}

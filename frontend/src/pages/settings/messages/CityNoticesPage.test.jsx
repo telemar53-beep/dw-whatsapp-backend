@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderInShell } from '../../../test-utils/renderInShell';
 import CityNoticesPage from './CityNoticesPage';
 import { useCityNotices } from '../../../hooks/useCityNotices';
@@ -15,14 +16,12 @@ beforeEach(() => {
 });
 
 describe('CityNoticesPage', () => {
-  // Restaura o antigo popup "O que é isso: avisos por cidade" (SectionHelp) do
-  // MessagesAdminTab como um Card sempre visível no topo da página — mesmo texto
-  // e mesmo exemplo, sem precisar clicar em nada para revelá-los.
-  test('shows the explanation and example for the city-notice feature directly, without a popup', () => {
+  test('mostra a explicação curta e revela o exemplo sob demanda', async () => {
     useCityNotices.mockReturnValue({ cityNotices: [], status: 'ready', refresh: vi.fn() });
     renderInShell(<CityNoticesPage />, { path: '/configuracoes/mensagens/avisos-cidade' });
 
-    expect(screen.getByText(/enviado automaticamente para clientes daquela cidade/i)).toBeInTheDocument();
+    expect(screen.getByText(/aviso aos clientes de uma cidade/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Ver exemplo'));
     expect(screen.getByText(/nossa rede está passando por uma instabilidade/i)).toBeInTheDocument();
   });
 
@@ -31,6 +30,6 @@ describe('CityNoticesPage', () => {
     renderInShell(<CityNoticesPage />, { path: '/configuracoes/mensagens/avisos-cidade' });
 
     expect(screen.getByText(/nenhuma cidade cadastrada ainda/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /cadastros › cidades/i })).toHaveAttribute('href', '/configuracoes/cadastros/cidades');
+    expect(screen.getByRole('link', { name: 'Cidades' })).toHaveAttribute('href', '/configuracoes/cadastros/cidades');
   });
 });

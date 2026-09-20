@@ -13,7 +13,7 @@ describe('RolesPage', () => {
     const supervisao = screen.getByRole('row', { name: /supervisão/i });
     expect(within(supervisao).getAllByText('Sim')).toHaveLength(3); // gerente, gerente+flag, admin
     expect(within(supervisao).getAllByText('Não')).toHaveLength(1); // atendente
-    const openai = screen.getByRole('row', { name: /integrações/i });
+    const openai = screen.getByRole('row', { name: /SGP: consultas/i });
     const cells = within(openai).getAllByRole('cell').map((c) => c.textContent);
     expect(cells).toEqual(['Não', 'Não', 'Sim', 'Sim']);
   });

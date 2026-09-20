@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { renderInShell } from '../test-utils/renderInShell';
 import CampaignDetailPage from './CampaignDetailPage';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,7 +51,7 @@ describe('CampaignDetailPage', () => {
     renderPage();
 
     await screen.findByRole('heading', { name: 'Aviso' });
-    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 5000);
+    await waitFor(() => expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 5000));
   });
 
   test('does not poll once every recipient is already processed', async () => {

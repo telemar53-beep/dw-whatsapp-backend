@@ -63,15 +63,15 @@ beforeEach(() => {
 });
 
 describe('SupervisionPage', () => {
-  test('shows the "Todos atendimentos" tab active by default, with the 3 live columns', async () => {
+  test('shows the "Todos atendimentos" tab active by default, with the three operation groups', async () => {
     renderPage();
     expect(screen.getByRole('tab', { name: /todos atendimentos/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'false');
-    expect(screen.getByText('Em andamento')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Em andamento', exact: true })).toBeInTheDocument();
     expect(await screen.findByText('Carlos')).toBeInTheDocument();
-    expect(screen.getByText('Em espera')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Em espera', exact: true })).toBeInTheDocument();
     expect(screen.getByText('Maria')).toBeInTheDocument();
-    expect(screen.getByText('Em automação')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Em automação', exact: true })).toBeInTheDocument();
     expect(screen.getByText('Joao')).toBeInTheDocument();
   });
 
@@ -86,7 +86,7 @@ describe('SupervisionPage', () => {
     renderPage();
     expect(await screen.findByText('Maria')).toBeInTheDocument();
 
-    const waitingColumn = screen.getByText('Em espera').closest('div').parentElement;
+    const waitingColumn = screen.getByRole('heading', { name: 'Em espera', exact: true }).closest('div').parentElement;
     await userEvent.click(within(waitingColumn).getByRole('button', { name: /finalizar/i }));
 
     expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
@@ -98,7 +98,7 @@ describe('SupervisionPage', () => {
     renderPage();
     expect(await screen.findByText('Joao')).toBeInTheDocument();
 
-    const automationColumn = screen.getByText('Em automação').closest('div').parentElement;
+    const automationColumn = screen.getByRole('heading', { name: 'Em automação', exact: true }).closest('div').parentElement;
     await userEvent.click(within(automationColumn).getByRole('button', { name: /finalizar/i }));
 
     expect(closeConversation).toHaveBeenCalledWith('c3', null, 'tok-123');
@@ -109,7 +109,7 @@ describe('SupervisionPage', () => {
     renderPage();
     expect(await screen.findByText('Carlos')).toBeInTheDocument();
 
-    const inProgressColumn = screen.getByText('Em andamento').closest('div').parentElement;
+    const inProgressColumn = screen.getByRole('heading', { name: 'Em andamento', exact: true }).closest('div').parentElement;
     expect(within(inProgressColumn).queryByRole('button', { name: /finalizar/i })).not.toBeInTheDocument();
   });
 
@@ -129,10 +129,10 @@ describe('SupervisionPage', () => {
     expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('shows the assigned agent name on a card', async () => {
+  test('shows the assigned agent name in the operation row', async () => {
     renderPage();
     expect(await screen.findByText('Carlos')).toBeInTheDocument();
-    expect(screen.getByText('Ana')).toBeInTheDocument();
+    expect(within(screen.getByRole('main', { name: 'Operação' })).getByText('Ana')).toBeInTheDocument();
   });
 
   test('clicking a card opens the conversation in a popup, without navigating away', async () => {
@@ -142,6 +142,7 @@ describe('SupervisionPage', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getAllByText('Carlos').length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Ana')).toBeInTheDocument();
   });
 
   test('closing the conversation popup returns to the dashboard view', async () => {
@@ -431,6 +432,24 @@ describe('SupervisionPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /limpar busca/i }));
 
     expect(screen.queryByText(/atendimento\(s\) de/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Em andamento')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Em andamento', exact: true })).toBeInTheDocument();
   });
+});
+
+
+test('team selection reuses the agent filter and operation navigation keeps the same conversations', async () => {
+  renderPage();
+  await screen.findByText('Carlos');
+  const team = screen.getByRole('complementary', { name: 'Equipe e carga' });
+  expect(within(team).getByText('1')).toBeInTheDocument();
+  const agent = within(team).getByRole('button', { name: /Ana/ });
+  await userEvent.click(agent);
+  expect(agent).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByText('Carlos')).toBeInTheDocument();
+  expect(screen.queryByText('Maria')).not.toBeInTheDocument();
+  await userEvent.click(agent);
+  const states = screen.getByRole('navigation', { name: 'Estados dos atendimentos' });
+  await userEvent.click(within(states).getByRole('button', { name: /Espera/ }));
+  expect(screen.getByText('Maria')).toBeInTheDocument();
+  expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
 });

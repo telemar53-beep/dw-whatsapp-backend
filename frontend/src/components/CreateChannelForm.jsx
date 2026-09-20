@@ -44,7 +44,7 @@ function CreateChannelForm({ type, onCreated, onCancel }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="dialog-channel-form">
       <div>
         <label htmlFor="name" className={labelClass}>
           Nome
@@ -79,6 +79,12 @@ function CreateChannelForm({ type, onCreated, onCancel }) {
             />
           </div>
           <div>
+            <label htmlFor="wabaId" className={labelClass}>
+              WABA ID
+            </label>
+            <input id="wabaId" value={wabaId} onChange={(e) => setWabaId(e.target.value)} className={inputClass} required />
+          </div>
+          <div>
             <label htmlFor="accessToken" className={labelClass}>
               Access Token
             </label>
@@ -89,12 +95,6 @@ function CreateChannelForm({ type, onCreated, onCancel }) {
               className={inputClass}
               required
             />
-          </div>
-          <div>
-            <label htmlFor="wabaId" className={labelClass}>
-              WABA ID
-            </label>
-            <input id="wabaId" value={wabaId} onChange={(e) => setWabaId(e.target.value)} className={inputClass} required />
           </div>
         </>
       )}

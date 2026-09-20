@@ -1,19 +1,19 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 
-const KEY = 'dw_nav_collapsed';
-
-function read() {
-  try { return localStorage.getItem(KEY) === '1'; } catch { return false; }
+function read(key, fallback) {
+  try { const saved = localStorage.getItem(key); return saved === null ? fallback : saved === '1'; }
+  catch { return fallback; }
 }
 
-export function useNavCollapsed() {
-  const [collapsed, setCollapsed] = useState(read);
-  const toggle = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try { localStorage.setItem(KEY, next ? '1' : '0'); } catch { /* sem storage: só não persiste */ }
-      return next;
-    });
-  }, []);
+// Independent visual preferences keep the chat compact without narrowing administration.
+export function useNavCollapsed({ context = 'general', defaultCollapsed = false } = {}) {
+  const key = context === 'general' ? 'dw_nav_collapsed' : `dw_nav_collapsed_${context}`;
+  const [preferences, setPreferences] = useState({});
+  const collapsed = preferences[key] ?? read(key, defaultCollapsed);
+  function toggle() {
+    const next = !collapsed;
+    try { localStorage.setItem(key, next ? '1' : '0'); } catch { /* visual preference remains in memory */ }
+    setPreferences(previous => ({ ...previous, [key]: next }));
+  }
   return { collapsed, toggle };
 }

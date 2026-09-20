@@ -160,9 +160,9 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
     <>
       <section
         aria-labelledby="sectors-card-title"
-        className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+        className="overflow-clip"
       >
-        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-4 pt-5 sm:px-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 pb-4 pt-1">
           <div className="min-w-0">
             <h2 id="sectors-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
               Setores
@@ -178,9 +178,9 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           )}
         </div>
 
-        <div className="px-4 pb-1 sm:px-5">
+        <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={sectors.length === 0} emptyMessage="Nenhum setor cadastrado ainda.">
-            <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
+            <div className="chat-scroll overflow-x-auto">
               <table className="w-full min-w-[560px] border-collapse text-[13.5px]">
                 <thead>
                   <tr className="bg-black/[0.16]">
@@ -205,13 +205,13 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </AsyncState>
         </div>
 
-        <div className="border-t border-wa-border px-4 py-3 text-[12.5px] text-wa-muted sm:px-5">
+        <div className="px-1 py-3 text-[12.5px] text-wa-muted">
           {sectors.length} {sectors.length === 1 ? 'setor' : 'setores'}
         </div>
       </section>
 
       {controlled && creating && (
-        <WaDialog title="Adicionar setor" onClose={() => setCreating(false)} size="max-w-md">
+        <WaDialog variant="sector" title="Adicionar setor" onClose={() => setCreating(false)} size="max-w-md">
           <div className="px-6 pb-5 pt-2">
             <CreateSectorForm
               embedded

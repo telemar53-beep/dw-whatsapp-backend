@@ -191,7 +191,7 @@ function ChannelConnectionTab() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {!canManage && (
         <p className="rounded-[12px] bg-wa-warn-bg px-3 py-2.5 text-[13.5px] text-wa-warn-text">{PERMISSION_REASON}</p>
       )}
@@ -199,8 +199,8 @@ function ChannelConnectionTab() {
       <ErrorNote>{actions.errors.wabaId}</ErrorNote>
       <ErrorNote>{actions.errors.action}</ErrorNote>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        <section aria-labelledby="connection-data-title" className="rounded-[14px] border border-wa-border bg-black/[0.12] px-4 pb-2 pt-4 sm:px-5">
+      <div className="settings-channel-connection grid gap-3">
+        <section aria-labelledby="connection-data-title" className="order-2 rounded-[14px] border border-wa-border bg-black/[0.08] px-4 pb-2 pt-4 sm:px-5">
           <h3 id="connection-data-title" className="text-[15px] font-semibold text-wa-text">
             Dados da conexão
           </h3>
@@ -303,8 +303,9 @@ function ChannelConnectionTab() {
           )}
         </section>
 
-        <section className="rounded-[14px] border border-wa-border bg-black/[0.12] px-4 py-4 sm:px-5">
-          <div className="flex items-start gap-3">
+        <section className="order-1 rounded-[14px] border border-chat-orange/25 bg-chat-orange/[0.045] px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
             <span className="mt-0.5 shrink-0 text-wa-muted">
               <IconInfo size={18} />
             </span>
@@ -320,6 +321,8 @@ function ChannelConnectionTab() {
                       : 'O WhatsApp deste número não está ligado. Use "Reconectar" em Ações avançadas para gerar um novo QR code.'}
               </p>
             </div>
+          </div>
+          <div className="shrink-0 rounded-full border border-wa-border bg-wa-surface px-3 py-1.5"><ConnectionStatus channel={channel} /></div>
           </div>
           <QrCodeView channel={channel} onRefresh={refresh} />
         </section>

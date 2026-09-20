@@ -56,13 +56,17 @@ function BusinessHoursSection() {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-4"
       >
+        <div>
+          <h2 className="font-display text-[16px] font-semibold text-wa-text">Editar horário de atendimento</h2>
+          <p className="mt-1 text-[12.5px] text-wa-muted">Disponibilidade humana e aviso fora do expediente.</p>
+        </div>
         <label className="flex items-center gap-2 text-sm text-wa-muted">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
           Ativo
         </label>
-        <div className="flex gap-3">
+        <div className="grid max-w-[380px] grid-cols-2 gap-3">
           <div className="space-y-1">
             <label htmlFor="business-hours-start" className="text-sm font-medium text-wa-text">
               Hora de início
@@ -99,7 +103,8 @@ function BusinessHoursSection() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Nosso horário de atendimento é de segunda a sexta, das 08:00 às 18:00. Sua mensagem será respondida assim que possível."
-            className={inputClass}
+            rows={2}
+            className={`${inputClass} min-h-[72px] max-h-56 resize-y [field-sizing:content]`}
             required
           />
         </div>
@@ -125,20 +130,20 @@ function BusinessHoursSection() {
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-5">
       <AsyncState status={status} skeletonLines={2}>
         {config.id === null ? (
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-wa-muted">Nenhum horário configurado ainda.</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="font-display text-[16px] font-semibold text-wa-text">Horário de atendimento</h2><p className="mt-1 text-[13px] text-wa-muted">Nenhum horário configurado ainda.</p></div>
             <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
               Criar horário de atendimento
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-wa-muted">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="font-display text-[16px] font-semibold text-wa-text">Horário de atendimento</h2><p className="mt-1 text-sm text-wa-muted">
               Das {config.startTime} às {config.endTime}, segunda a sexta
-            </p>
+            </p></div>
             <div className="flex items-center gap-3">
               <CityStatusDot enabled={config.enabled} />
               <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">

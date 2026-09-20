@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { IconEmoji, IconAttach, IconQuickReply, IconMic, IconSend, IconTrash, IconStop } from './icons/WaIcons';
 import { AsyncState } from './ui';
+import RecordingPreview from './RecordingPreview';
 
 // O campo cresce com o conteúdo, como o WhatsApp: com altura fixa, reler um
 // texto longo antes de enviar virava rolar dentro de uma caixa de 4 linhas.
@@ -276,7 +277,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
   const canSend = Boolean(content.trim() || file);
 
   return (
-    <div className="shrink-0 font-wa">
+    <div className="chat-workspace-composer shrink-0 font-wa">
       {replyingTo && (
         <div className="px-3 pt-2 md:px-5">
           <div className="flex items-stretch overflow-hidden rounded-2xl bg-white/[0.10]">
@@ -298,7 +299,11 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
         </div>
       )}
 
-      {!recording && file && (
+      {!recording && file && fileIsRecording && (
+        <RecordingPreview file={file} seconds={recordingSeconds} sending={sending}
+          onRemove={clearAttachment} onRecordAgain={startRecording} onSend={submit} />
+      )}
+      {!recording && file && !fileIsRecording && (
         <div className="px-3 pt-2 md:px-5">
           <p className="flex items-center gap-2 rounded-2xl bg-white/[0.10] px-3 py-2 text-[13px] text-chat-muted">
             {previewUrl ? (
@@ -399,7 +404,8 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               />
 
               {showingEmojis && (
-                <div className="animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-[#232325]/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                <div className="dialog-emoji-picker animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-[#30383d]/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                  <p className="dialog-popover-heading">Emojis</p>
                   <div className="grid grid-cols-8 gap-1">
                     {EMOJIS.map((emoji) => (
                       <button
@@ -416,7 +422,8 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               )}
 
               {showingQuickReplies && (
-                <div className="animate-wa-pop chat-scroll absolute bottom-full left-0 z-20 mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-[#232325]/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                <div className="dialog-quick-replies animate-wa-pop chat-scroll absolute bottom-full left-0 z-20 mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-[#30383d]/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                  <p className="dialog-popover-heading">Respostas rápidas</p>
                   <AsyncState
                     status={quickRepliesStatus}
                     isEmpty={quickReplies.length === 0}
@@ -435,7 +442,8 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                             }}
                             className="block w-full truncate px-3.5 py-2.5 text-left text-[14.5px] text-chat-text transition-colors hover:bg-white/[0.06]"
                           >
-                            {quickReply.title}
+                            <span className="block font-medium">{quickReply.title}</span>
+                            <span className="dialog-quick-reply-preview">{quickReply.content}</span>
                           </button>
                         </li>
                       ))}
@@ -445,7 +453,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               )}
             </div>
 
-            {canSend ? (
+            {file && fileIsRecording ? null : canSend ? (
               <button
                 type="submit"
                 disabled={sending}

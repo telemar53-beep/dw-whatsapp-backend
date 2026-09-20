@@ -56,6 +56,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
   const [speedIndex, setSpeedIndex] = useState(0);
+  const [unavailable, setUnavailable] = useState(false);
   const bars = useMemo(() => waveformBars(seed), [seed]);
 
   useEffect(() => {
@@ -84,7 +85,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
     if (!element) return;
     if (element.paused) {
       const played = element.play();
-      if (played && typeof played.catch === 'function') played.catch(() => {});
+      if (played && typeof played.catch === 'function') played.catch(() => { setPlaying(false); setUnavailable(true); });
       setPlaying(true);
     } else {
       element.pause();
@@ -107,20 +108,26 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
 
   const progress = duration > 0 ? Math.min(current / duration, 1) : 0;
   const playedBars = Math.round(progress * BAR_COUNT);
-  const trackColor = dark ? 'rgba(255,255,255,0.60)' : outbound ? '#a9cec7' : '#c7d3d0';
-  const playedColor = dark ? '#efe7ce' : '#0d9488';
+  const trackColor = dark ? (outbound ? 'rgba(255,237,223,0.55)' : 'rgba(224,233,236,0.48)') : outbound ? '#a9cec7' : '#c7d3d0';
+  const playedColor = dark ? (outbound ? '#fff5ec' : '#f7a56f') : '#0d9488';
+
+  if (unavailable) {
+    return <div role="status" className={dark
+      ? 'chat-voice-note inline-flex min-h-[52px] min-w-[172px] items-center gap-2 rounded-[12px] border border-white/[0.14] bg-black/[0.10] px-3 text-[12.5px] font-medium text-white'
+      : 'inline-flex min-h-[58px] min-w-[172px] items-start gap-2 rounded-[8px] border border-wa-border bg-wa-hover px-3 pb-6 pt-2 text-[12.5px] font-medium text-wa-text'}><IconMic size={16} /> Áudio indisponível</div>;
+  }
 
   if (dark) {
     return (
-      <div>
-        <audio ref={audioRef} src={url} preload="metadata" className="max-w-full hidden" />
-        <div className="flex w-[min(20.625rem,62vw)] items-center gap-[10px]">
+      <div className={`chat-voice-note ${outbound ? 'is-outbound' : 'is-inbound'}`}>
+        <audio ref={audioRef} src={url} preload="metadata" onError={() => setUnavailable(true)} className="max-w-full hidden" />
+        <div className="flex w-[min(19rem,72vw)] max-w-full min-w-0 items-center gap-[10px]">
           <button
             type="button"
             onClick={togglePlay}
             aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'}
             title={playing ? 'Pausar' : 'Reproduzir'}
-            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-[#131110] text-white transition-colors hover:bg-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70 ${outbound ? 'bg-[#fff0e2] text-[#573823] hover:bg-white' : 'bg-[#eef2f1] text-[#344047] hover:bg-white'}`}
           >
             {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
           </button>
@@ -132,12 +139,12 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
               const rect = event.currentTarget.getBoundingClientRect();
               seekTo(Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1));
             }}
-            className="relative flex h-8 items-center gap-[3px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
+            className="relative flex h-8 min-w-0 flex-1 items-center gap-[2px] overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
           >
             {bars.map((height, index) => (
               <span
                 key={index}
-                className="w-[2px] shrink-0 rounded-full"
+                className="min-w-0 flex-1 rounded-full"
                 style={{
                   height: `${Math.round(height * 22)}px`,
                   backgroundColor: index < playedBars ? playedColor : trackColor,
@@ -146,13 +153,13 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             ))}
             {progress > 0 && (
               <span
-                className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-chat-cream shadow-[0_1px_3px_rgba(0,0,0,.4)]"
+                className="absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,.3)]"
                 style={{ left: `calc(${progress * 100}% - 6px)` }}
               />
             )}
           </button>
 
-          <span className="relative ml-auto shrink-0">
+          <span className="relative shrink-0">
             {avatar || (
               <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white/[0.22] text-white/85">
                 <IconMic size={20} />
@@ -169,7 +176,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             )}
           </span>
         </div>
-        <div className="mt-[3px] flex items-center gap-2 pl-1 text-[12px] leading-[16px] text-chat-faint">
+        <div className="mt-1 flex items-center gap-2 pl-[50px] text-[11px] leading-[16px] tabular-nums text-white/70">
           <span>{formatClock(current > 0 ? current : duration)}</span>
           {(playing || current > 0) && (
             <button
@@ -188,7 +195,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
 
   return (
     <div className="pt-0.5">
-      <audio ref={audioRef} src={url} preload="metadata" className="max-w-full hidden" />
+      <audio ref={audioRef} src={url} preload="metadata" onError={() => setUnavailable(true)} className="max-w-full hidden" />
       <div className="flex w-[min(17.5rem,62vw)] items-start gap-2">
         <button
           type="button"
@@ -271,6 +278,7 @@ function clampZoom(value) {
 
 function ImageBubble({ url, alt, filename, hasCaption, dark }) {
   const [open, setOpen] = useState(false);
+  const [failedUrl, setFailedUrl] = useState(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragRef = useRef(null);
@@ -331,7 +339,12 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
 
   return (
     <>
-      <button
+      {failedUrl === url ? (
+        <div role="img" aria-label="Imagem indisponível" className={`flex min-h-[88px] min-w-[160px] items-center gap-2 rounded-[8px] border px-3 text-[12.5px] ${dark ? 'border-white/[0.15] bg-white/[0.08] text-chat-cream' : 'border-wa-border bg-wa-hover text-wa-muted'} ${hasCaption ? 'mb-1' : ''}`}>
+          <IconAttach size={17} />
+          Imagem indisponível
+        </div>
+      ) : <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Abrir imagem em tela cheia"
@@ -342,11 +355,12 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
         <img
           src={url}
           alt={alt || 'Imagem'}
+          onError={() => { setFailedUrl(url); setOpen(false); }}
           className="max-w-full rounded-[6px] object-contain transition-[filter] hover:brightness-[.97]"
           style={{ maxHeight: 340, maxWidth: 330, minWidth: 120 }}
         />
-      </button>
-      {open && (
+      </button>}
+      {open && failedUrl !== url && (
         <div
           role="dialog"
           aria-modal="true"
@@ -361,7 +375,7 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
             closeViewer();
           }}
           onWheel={(event) => applyZoom(zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP))}
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#0b141a]/95 p-4"
+          className="dialog-image-viewer fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#0b141a]/95 p-4"
         >
           <button
             type="button"
@@ -375,6 +389,7 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
           <img
             src={url}
             alt={alt || 'Imagem'}
+            onError={() => { setFailedUrl(url); setOpen(false); }}
             draggable={false}
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={() => (zoom > ZOOM_MIN ? resetView() : applyZoom(2))}

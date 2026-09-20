@@ -17,9 +17,10 @@ import StartConversationModal from '../components/StartConversationModal';
 import TeamPanel from '../components/TeamPanel';
 import { Tabs } from '../components/ui/Tabs';
 import { IconNewChat, IconSearch, IconLock, IconEmptyChat } from '../components/icons/WaIcons';
+import './dashboard.css';
 
 const TABS = [
-  { value: 'inProgress', label: 'Andamento' },
+  { value: 'inProgress', label: 'Atendimento' },
   { value: 'waiting', label: 'Espera' },
   { value: 'automation', label: 'Automação' },
 ];
@@ -113,31 +114,31 @@ function DashboardPage() {
   }, []);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div data-testid="channel-banner-wrapper" className={`relative ${selectedConversation ? 'hidden md:block' : ''}`}>
+    <div className="chat-workspace flex min-h-0 flex-1 flex-col">
+      <div data-testid="channel-banner-wrapper" className={`relative ${selectedConversation ? 'hidden lg:block' : ''}`}>
         <ChannelStatusBanner />
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-0 md:gap-3">
+      <div className="chat-workspace-columns flex min-h-0 flex-1 gap-0">
         <aside
           className={`${
             selectedConversation ? 'hidden' : 'flex'
-          } w-full min-w-0 flex-col bg-white/[0.09] backdrop-blur-2xl md:flex md:w-[380px] md:shrink-0 md:overflow-clip md:rounded-[22px] md:border md:border-white/[0.07] lg:w-[28%] lg:min-w-[360px] lg:max-w-[440px]`}
+          } chat-workspace-list w-full min-w-0 flex-col lg:flex lg:shrink-0 lg:overflow-clip`}
         >
-          <div className="flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-4">
+          <div className="chat-inbox-heading flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-4">
             <h1 className="font-display text-[20px] font-semibold leading-7 text-chat-text">Atendimento</h1>
             <button
               onClick={() => setStartingConversation(true)}
               aria-label="Nova conversa"
               title="Nova conversa"
-              className="flex h-9 shrink-0 items-center gap-1 rounded-[10px] bg-chat-orange pl-2.5 pr-3.5 text-[13.5px] font-semibold text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+              className="chat-new-conversation flex h-9 shrink-0 items-center gap-1 rounded-[10px] bg-chat-orange pl-2.5 pr-3.5 text-[13.5px] font-semibold text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
             >
               <IconNewChat size={18} />
               Nova
             </button>
           </div>
 
-          <div className="shrink-0 px-4 pb-3">
+          <div className="chat-inbox-search shrink-0 px-4 pb-3">
             <label className="flex h-[42px] min-w-0 items-center gap-2.5 rounded-[12px] border border-white/[0.09] bg-white/[0.06] px-3.5 transition focus-within:border-white/20 focus-within:bg-white/[0.10]">
               <span className="shrink-0 text-chat-faint">
                 <IconSearch size={18} />
@@ -153,7 +154,7 @@ function DashboardPage() {
             </label>
           </div>
 
-          <div className="shrink-0 px-4 pb-3 pt-1">
+          <div className="chat-inbox-tabs shrink-0 px-4 pb-1 pt-1">
             <Tabs
               look="segmented"
               label="Filas"
@@ -167,7 +168,7 @@ function DashboardPage() {
             role="tabpanel"
             id={`tabpanel-${activeTab}`}
             aria-labelledby={`tab-${activeTab}`}
-            className="chat-scroll min-h-0 flex-1 overflow-y-auto pt-3"
+            className="chat-scroll min-h-0 flex-1 overflow-y-auto pt-1"
           >
             {activeTab === 'inProgress' && (
               <MyConversationsList
@@ -176,6 +177,7 @@ function DashboardPage() {
                 onSelect={selectConversation}
                 unreadIds={unreadIds}
                 selectedId={selectedId}
+                compact
               />
             )}
             {activeTab === 'waiting' && (
@@ -186,6 +188,7 @@ function DashboardPage() {
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
                 emptyMessage="Nenhum atendimento em espera."
+                compact
               />
             )}
             {activeTab === 'automation' && (
@@ -196,6 +199,7 @@ function DashboardPage() {
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
                 emptyMessage="Nenhum atendimento em automação."
+                compact
               />
             )}
           </div>
@@ -204,18 +208,19 @@ function DashboardPage() {
         </aside>
 
         <main
-          className={`${
+          className={`chat-workspace-main ${
             selectedConversation ? 'block' : 'hidden'
-          } min-w-0 flex-1 md:block md:overflow-clip md:rounded-[22px] md:border md:border-white/[0.07]`}
+          } min-w-0 flex-1 lg:block lg:overflow-clip`}
         >
           {selectedConversation ? (
             <ConversationView
               conversation={selectedConversation}
               onTransferClick={setTransferringId}
               onBack={() => setSelectedId(null)}
+              workspace
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center bg-white/[0.08] px-6 text-center backdrop-blur-2xl md:rounded-[22px]">
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <span className="text-white/10">
                 <IconEmptyChat width={320} height={190} />
               </span>

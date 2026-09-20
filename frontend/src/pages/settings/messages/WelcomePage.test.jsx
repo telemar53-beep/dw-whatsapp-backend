@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderInShell } from '../../../test-utils/renderInShell';
 import WelcomePage from './WelcomePage';
 import { useChannels } from '../../../hooks/useChannels';
@@ -15,14 +16,12 @@ beforeEach(() => {
 });
 
 describe('WelcomePage', () => {
-  // Restaura o antigo popup "O que é isso: boas-vindas por canal" (SectionHelp) do
-  // MessagesAdminTab como um Card sempre visível no topo da página — mesmo texto
-  // e mesmo exemplo, sem precisar clicar em nada para revelá-los.
-  test('shows the explanation and example for the welcome-message feature directly, without a popup', () => {
+  test('mostra a explicação curta e revela o exemplo sob demanda', async () => {
     useChannels.mockReturnValue({ channels: [], status: 'ready', refresh: vi.fn() });
     renderInShell(<WelcomePage />, { path: '/configuracoes/mensagens/boas-vindas' });
 
-    expect(screen.getByText(/enviada automaticamente para o cliente assim que ele manda/i)).toBeInTheDocument();
+    expect(screen.getByText(/após o primeiro contato do cliente/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Ver exemplo'));
     expect(screen.getByText(/Bem-vindo à nossa empresa/i)).toBeInTheDocument();
   });
 

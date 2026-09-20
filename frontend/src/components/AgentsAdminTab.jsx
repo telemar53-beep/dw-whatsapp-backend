@@ -38,7 +38,7 @@ function StatusBadge({ active }) {
   return (
     <span
       className={`inline-flex items-center rounded-[8px] px-2.5 py-[3px] text-[12.5px] font-medium ${
-        active ? 'bg-[#1f8f4e] text-white' : 'bg-white/[0.08] text-wa-muted'
+        active ? 'border border-chat-online/20 bg-chat-online/[0.14] text-chat-online' : 'border border-white/[0.08] bg-white/[0.08] text-wa-muted'
       }`}
     >
       {active ? 'Ativo' : 'Inativo'}
@@ -83,7 +83,7 @@ function RowMenu({ label, children }) {
       {open && (
         <div
           onClick={() => setOpen(false)}
-          className="absolute right-0 top-[calc(100%+4px)] z-20 min-w-[190px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
+          className="dialog-context-menu absolute right-0 top-[calc(100%+4px)] z-20 min-w-[190px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
         >
           {children}
         </div>
@@ -161,7 +161,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       <tr className={`border-t border-wa-border ${agentRow.active ? '' : 'opacity-80'}`}>
         <td className={CELL}>
           <div className="flex items-center gap-3">
-            <AgentAvatar agentId={agentRow.id} avatarPath={agentRow.avatarPath} name={agentRow.name} size={36} colorful />
+            <AgentAvatar agentId={agentRow.id} avatarPath={agentRow.avatarPath} name={agentRow.name} size={36} />
             <div className="min-w-0">
               <p className="truncate text-[14px] font-medium text-wa-text">{agentRow.name}</p>
               <p className="truncate text-[12.5px] text-wa-muted">{agentRow.email}</p>
@@ -205,7 +205,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
           <td colSpan={5} className="px-4 pb-4 pt-3">
             {passwordError && <p className={`mb-3 ${waErrorClass}`}>{passwordError}</p>}
             {editingSectors && (
-              <div className="space-y-3">
+              <div className="dialog-sector-assignment space-y-3">
                 <p className="text-[13px] font-medium text-wa-muted">Setores de {agentRow.name}</p>
                 {sectors.length === 0 ? (
                   <p className="text-[13px] text-wa-muted">Nenhum setor cadastrado. Cadastre um na aba Setores.</p>
@@ -240,7 +240,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       )}
 
       {generatedPassword && (
-        <WaDialog title="Nova senha gerada" onClose={() => setGeneratedPassword(null)} size="max-w-sm">
+        <WaDialog variant="users" title="Nova senha gerada" onClose={() => setGeneratedPassword(null)} size="max-w-sm">
           <div className="space-y-3 px-6 py-4">
             <p className="text-sm text-wa-muted">
               Copie e repasse essa senha pro atendente — ela só aparece essa vez.
@@ -308,9 +308,9 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
     <>
       <section
         aria-labelledby="users-card-title"
-        className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+        className="overflow-clip"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4 pt-5 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 pt-1">
           <h2 id="users-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
             Usuários
           </h2>
@@ -320,7 +320,7 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 px-4 pb-4 sm:px-5">
+        <div className="flex flex-wrap items-center gap-3 pb-4">
           <label
             className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
           >
@@ -362,9 +362,13 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </select>
         </div>
 
-        <div className="px-4 pb-1 sm:px-5">
+        <div className="settings-register-summary flex flex-wrap items-center justify-between gap-2 px-1 py-3 text-[12.5px] text-wa-muted">
+          <span>{countLabel}</span>
+          <span>A situação da conta é diferente do status online.</span>
+        </div>
+        <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={agents.length === 0} emptyMessage="Nenhum usuário cadastrado ainda.">
-            <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
+            <div className="chat-scroll overflow-x-auto">
               <table className="w-full min-w-[720px] border-collapse text-[13.5px]">
                 <thead>
                   <tr className="bg-black/[0.16]">
@@ -410,14 +414,11 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </AsyncState>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-wa-border px-4 py-3 text-[12.5px] text-wa-muted sm:px-5">
-          <span>{countLabel}</span>
-          <span>A situação da conta é diferente do status online.</span>
-        </div>
+
       </section>
 
       {creatingAgent && (
-        <WaDialog title="Adicionar usuário" onClose={() => setCreatingAgent(false)} size="max-w-md">
+        <WaDialog variant="users" title="Adicionar usuário" onClose={() => setCreatingAgent(false)} size="max-w-2xl">
           <div className="px-6 pb-5 pt-2">
             <CreateAgentForm
               embedded

@@ -52,7 +52,7 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Enviar template" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[85vh] w-[min(92vw,34rem)] overflow-y-auto rounded-[16px] border border-white/10 bg-chat-panel p-5">
+      <div className="dialog-send-template max-h-[85vh] w-[min(92vw,54rem)] overflow-y-auto rounded-[16px] border border-white/10 bg-chat-panel p-5">
         <h2 className="font-display text-[17px] font-semibold text-chat-text">Enviar template</h2>
         <p className="mt-1 text-[13px] text-chat-muted">
           A janela de 24h está fechada. Só template aprovado é entregue até o cliente responder.
@@ -87,6 +87,7 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
           </ul>
         )}
 
+        <div className="dialog-template-compose">
         {selected && selected.variableCount > 0 && (
           <div className="mt-4 space-y-3">
             {variables.map((valor, i) => (
@@ -131,6 +132,7 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
           </div>
         )}
 
+        </div>
         {error && <p className="mt-3 text-[13px] text-wa-error-text">{error}</p>}
 
         <div className="mt-5 flex justify-end gap-2">

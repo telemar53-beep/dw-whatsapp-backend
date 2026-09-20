@@ -90,7 +90,7 @@ describe('DashboardPage', () => {
     expect(within(screen.getByRole('main')).getByText('Atendimento')).toBeInTheDocument();
   });
 
-  test('shows my conversations in the Andamento tab by default', () => {
+  test('shows my conversations in the Atendimento tab by default', () => {
     useQueue.mockReturnValue({ queue: [{ id: 'c1', contactDisplayName: 'Carlos' }], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [{ id: 'c2', contactDisplayName: 'Maria' }], status: 'ready' });
     renderDashboard();
@@ -104,12 +104,12 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     expect(screen.getByRole('tablist')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /andamento/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /atendimento/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /espera/i })).toHaveAttribute('aria-selected', 'false');
 
     await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
 
-    expect(screen.getByRole('tab', { name: /andamento/i })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tab', { name: /atendimento/i })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('tab', { name: /espera/i })).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -118,7 +118,7 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
 
-    const tab = screen.getByRole('tab', { name: /andamento/i });
+    const tab = screen.getByRole('tab', { name: /atendimento/i });
     const panel = screen.getByRole('tabpanel');
     expect(panel).toHaveAttribute('aria-labelledby', tab.id);
   });
@@ -205,7 +205,7 @@ describe('DashboardPage', () => {
     window.confirm.mockRestore();
   });
 
-  test('does not show a quick-close button in the Andamento tab', () => {
+  test('does not show a quick-close button in the Atendimento tab', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [{ id: 'c3', contactDisplayName: 'Minha' }], status: 'ready' });
     renderDashboard();
@@ -221,7 +221,7 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue({ conversations: [{ id: 'c3', contactDisplayName: 'Minha' }], status: 'ready' });
     renderDashboard();
 
-    expect(screen.getByRole('tab', { name: /andamento/i }).textContent).toContain('1');
+    expect(screen.getByRole('tab', { name: /atendimento/i }).textContent).toContain('1');
     expect(screen.getByRole('tab', { name: /espera/i }).textContent).toContain('1');
     expect(screen.getByRole('tab', { name: /automação/i }).textContent).toContain('1');
   });
@@ -232,7 +232,7 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     // Só o rótulo: nenhum número de contagem junto (o traço laranja da aba ativa não tem texto).
-    expect(screen.getByRole('tab', { name: /andamento/i }).textContent).toBe('Andamento');
+    expect(screen.getByRole('tab', { name: /atendimento/i }).textContent).toBe('Atendimento');
   });
 
   test('selecting a conversation from the Espera tab opens the conversation view', async () => {
@@ -445,7 +445,7 @@ describe('DashboardPage', () => {
         },
       ],
     });
-    expect(screen.getByText('Cliente de Outro Atendente')).toBeInTheDocument();
+    expect(screen.getAllByText('Cliente de Outro Atendente').length).toBeGreaterThan(0);
   });
 });
 

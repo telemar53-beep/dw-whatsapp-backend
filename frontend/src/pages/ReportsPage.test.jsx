@@ -9,28 +9,6 @@ import * as api from '../services/api';
 vi.mock('../contexts/AuthContext');
 vi.mock('../services/api');
 
-// Recharts' ResponsiveContainer relies on real DOM layout (getBoundingClientRect),
-// which jsdom doesn't provide — it renders nothing in tests. Stub the pieces this
-// page uses with simple elements that expose the data as visible text, so tests can
-// assert on what data reached the chart without fighting jsdom's lack of layout.
-vi.mock('recharts', () => ({
-  ResponsiveContainer: ({ children }) => <div>{children}</div>,
-  BarChart: ({ data }) => (
-    <div data-testid="bar-chart">
-      {data.map((item, i) => (
-        <div key={i}>{JSON.stringify(item)}</div>
-      ))}
-    </div>
-  ),
-  Bar: () => null,
-  Cell: () => null,
-  XAxis: () => null,
-  YAxis: () => null,
-  CartesianGrid: () => null,
-  Tooltip: () => null,
-  Legend: () => null,
-}));
-
 function renderPage() {
   return renderInShell(<ReportsPage />, { path: '/relatorios' });
 }
@@ -66,7 +44,7 @@ describe('ReportsPage', () => {
     expect(screen.getAllByText('—')).toHaveLength(2);
   });
 
-  test('shows the per-agent and per-sector charts for an admin', async () => {
+  test('shows agent volumes and times together with sector distribution for an admin', async () => {
     useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
     api.getMetrics.mockResolvedValue({
       period: 'today',
@@ -77,12 +55,10 @@ describe('ReportsPage', () => {
     });
     renderPage();
 
-    // "Ana" appears in two chart sections (atendimentos por atendente AND tempo médio
-    // por atendente both render `data.byAgent`) — the sector chart uses a different
-    // array and appears exactly once.
-    await screen.findAllByText(/"agentName":"Ana"/);
-    expect(screen.getAllByText(/"agentName":"Ana"/)).toHaveLength(2);
-    expect(screen.getByText(/"sectorName":"Financeiro"/)).toBeInTheDocument();
+    expect(await screen.findByRole('rowheader', { name: 'Ana' })).toBeInTheDocument();
+    expect(screen.getByText('Financeiro')).toBeInTheDocument();
+    expect(screen.getByRole('table')).toHaveTextContent('10 min');
+    expect(screen.getByRole('table')).toHaveTextContent('2 min');
   });
 
   test('shows an empty-state message instead of charts when an admin has no data', async () => {
@@ -96,11 +72,11 @@ describe('ReportsPage', () => {
     });
     renderPage();
 
-    expect(await screen.findAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(4);
-    expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
+    expect(await screen.findAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(1);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  test('shows charts for byAgent but an empty-state for bySector when only bySector is empty', async () => {
+  test('keeps the agent comparison when sector and reason distributions are empty', async () => {
     useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
     api.getMetrics.mockResolvedValue({
       period: 'today',
@@ -111,14 +87,13 @@ describe('ReportsPage', () => {
     });
     renderPage();
 
-    await screen.findAllByText(/"agentName":"Ana"/);
-    expect(screen.getAllByText(/"agentName":"Ana"/)).toHaveLength(2);
+    expect(await screen.findByRole('rowheader', { name: 'Ana' })).toBeInTheDocument();
     // Both bySector and byReason are empty here, so their charts each render their
     // own empty state.
     expect(screen.getAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(2);
   });
 
-  test('shows the per-reason chart for an admin', async () => {
+  test('shows the reason distribution for an admin', async () => {
     useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
     api.getMetrics.mockResolvedValue({
       period: 'today',
@@ -129,7 +104,7 @@ describe('ReportsPage', () => {
     });
     renderPage();
 
-    expect(await screen.findByText(/"reasonName":"Troca de senha"/)).toBeInTheDocument();
+    expect(await screen.findByText('Troca de senha')).toBeInTheDocument();
   });
 
   test('switching period refetches metrics with the new period', async () => {
@@ -325,7 +300,7 @@ describe('ReportsPage', () => {
       byReason: [],
     });
     renderInShell(<ReportsPage />, { path: '/relatorios' });
-    expect(await screen.findByText(/"sectorName":"Sem setor"/)).toBeInTheDocument();
+    expect(await screen.findByText('Sem setor')).toBeInTheDocument();
     expect(screen.getByText(/encerradas sem setor definido/i)).toBeInTheDocument();
   });
 });

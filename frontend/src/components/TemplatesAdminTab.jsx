@@ -54,7 +54,7 @@ function languageLabel(language) {
 }
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10 > item de menu 8.
-const CARD = 'overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl';
+const CARD = 'overflow-clip rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95';
 const CELL = 'px-3 py-3 align-middle';
 const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const CONTROL =
@@ -112,7 +112,7 @@ function RowMenu({ label, children }) {
       {open && (
         <div
           onClick={() => setOpen(false)}
-          className="absolute right-0 top-[calc(100%+4px)] z-20 min-w-[170px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
+          className="dialog-context-menu absolute right-0 top-[calc(100%+4px)] z-20 min-w-[170px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
         >
           {children}
         </div>
@@ -615,7 +615,7 @@ function TemplatesAdminTab() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-3 sm:p-4">
         <label
           className={`${CONTROL} flex min-w-[200px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
         >
@@ -659,26 +659,28 @@ function TemplatesAdminTab() {
             </option>
           ))}
         </select>
-        <Button
-          variant="secondary"
-          onClick={handleSync}
-          loading={syncing}
-          disabled={!channel?.wabaId}
-          title={channel?.wabaId ? `Buscar na Meta os templates da conta ${channel.wabaId}` : 'O canal selecionado não tem WABA ID'}
-          className="!py-2"
-        >
-          <IconRefresh size={17} />
-          Sincronizar
-        </Button>
-        <Button onClick={() => setCreating(true)} className="!py-2">
-          <IconNewChat size={18} />
-          Novo template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={handleSync}
+            loading={syncing}
+            disabled={!channel?.wabaId}
+            title={channel?.wabaId ? `Buscar na Meta os templates da conta ${channel.wabaId}` : 'O canal selecionado não tem WABA ID'}
+            className="!py-2"
+          >
+            <IconRefresh size={17} />
+            Sincronizar
+          </Button>
+          <Button onClick={() => setCreating(true)} className="!py-2">
+            <IconNewChat size={18} />
+            Novo template
+          </Button>
+        </div>
       </div>
       {syncError && <p className={waErrorClass}>{syncError}</p>}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <div className="space-y-5">
+      <div className="settings-template-library grid items-start gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+        <div>
           <section aria-labelledby="templates-card-title" className={CARD}>
             <div className="flex items-center gap-2.5 px-4 pb-3 pt-5 sm:px-5">
               <h2 id="templates-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
@@ -738,12 +740,8 @@ function TemplatesAdminTab() {
               <IconInfo size={14} />
               Status de aprovação informado pela Meta.
             </p>
-          </section>
-
-          <section className={`${CARD} flex flex-wrap items-center gap-4 px-4 py-4 sm:px-5`}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-white/[0.06] text-wa-muted">
-              <IconFile size={22} />
-            </span>
+            <div className="flex flex-wrap items-center gap-4 border-t border-white/[0.08] bg-black/[0.08] px-4 py-4 sm:px-5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white/[0.06] text-wa-muted"><IconFile size={19} /></span>
             <div className="min-w-0 flex-1 basis-[14rem]">
               <p className="text-[14.5px] font-medium text-wa-text">Já tem um template cadastrado?</p>
               <p className="mt-0.5 text-[13px] text-wa-muted">Vincule um modelo existente ao canal selecionado.</p>
@@ -751,6 +749,7 @@ function TemplatesAdminTab() {
             <Button variant="secondary" onClick={() => setRegistering(true)} aria-label="Registrar template existente" className="!py-2">
               Registrar existente
             </Button>
+            </div>
           </section>
         </div>
 
@@ -758,7 +757,7 @@ function TemplatesAdminTab() {
       </div>
 
       {creating && (
-        <WaDialog title="Novo template" onClose={() => setCreating(false)} size="max-w-lg">
+        <WaDialog variant="templates" title="Novo template" onClose={() => setCreating(false)} size="max-w-4xl">
           <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-2">
             <CreateTemplateForm
               officialChannels={officialChannels}
@@ -773,7 +772,7 @@ function TemplatesAdminTab() {
         </WaDialog>
       )}
       {registering && (
-        <WaDialog title="Registrar template existente" onClose={() => setRegistering(false)} size="max-w-lg">
+        <WaDialog variant="templates" title="Registrar template existente" onClose={() => setRegistering(false)} size="max-w-4xl">
           <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-2">
             <RegisterExistingTemplateForm
               officialChannels={officialChannels}

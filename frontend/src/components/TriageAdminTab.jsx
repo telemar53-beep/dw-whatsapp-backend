@@ -77,8 +77,11 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="space-y-3 rounded-[14px] border border-chat-orange/35 bg-white/[0.035] p-4"
       >
+        <p className="text-[13px] font-semibold text-wa-text">Editar opção {option.optionNumber}</p>
+        <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
+          <label className="text-[12px] text-wa-muted">Número da opção
         <input
           type="number"
           min="1"
@@ -87,6 +90,8 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
           className={`w-32 ${inputClass}`}
           required
         />
+          </label>
+          <label className="text-[12px] text-wa-muted">Setor
         <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className={inputClass} required>
           {sectors.map((sector) => (
             <option key={sector.id} value={sector.id}>
@@ -94,12 +99,16 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
             </option>
           ))}
         </select>
+          </label>
+        </div>
+        <label className="block text-[12px] text-wa-muted">Frases-gatilho
         <input
           value={keywords}
           onChange={(e) => setKeywords(e.target.value)}
           className={inputClass}
           placeholder="financeiro, conta, fatura, boleto"
         />
+        </label>
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button
@@ -122,15 +131,15 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="border-b border-white/[0.08] px-1 py-3.5 last:border-b-0">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <p className="font-medium text-wa-text">
             {option.optionNumber} - {option.sectorName}
           </p>
-          <p className="text-sm text-wa-muted">{option.keywords.join(', ') || 'Sem frases-gatilho'}</p>
+          <p className="mt-0.5 break-words text-[12.5px] text-wa-muted">{option.keywords.join(', ') || 'Sem frases-gatilho'}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 self-start">
           <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
             Editar
           </button>
@@ -161,15 +170,20 @@ function TriageAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
   return (
     <AsyncState status={status} skeletonLines={4}>
       {config && (
-        <div className="space-y-6">
+        <div className="settings-triage-menu-layout space-y-4">
           {options.length === 0 && (
             <p className="rounded-lg border border-wa-warn-text/30 bg-wa-warn-bg px-3 py-2 text-sm text-wa-warn-text">
               Nenhuma opção cadastrada: a triagem por menu não roda em nenhum canal, mesmo com o interruptor ligado.
             </p>
           )}
           <TriageConfigForm config={config} onSaved={refresh} />
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
+          <section aria-label="Opções do menu" className="rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 px-4 py-3 sm:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] pb-2.5">
+              <div>
+                <h3 className="font-display text-[16px] font-semibold text-wa-text">Opções do menu</h3>
+                <p className="mt-0.5 text-[12.5px] text-wa-muted">Direcionamento por número ou frase-gatilho</p>
+              </div>
+              <div className="flex items-center gap-2">
               {!controlled && (
                 <button
                   type="button"
@@ -190,6 +204,7 @@ function TriageAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                   pagamento.
                 </p>
               </SectionHelp>
+              </div>
             </div>
             {creatingOption && (
               <CreateTriageOptionForm
@@ -200,12 +215,12 @@ function TriageAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                 onCancel={() => setCreatingOption(false)}
               />
             )}
-          </div>
-          <div className="space-y-3">
+          <div className="grid gap-x-5 lg:grid-cols-2">
             {options.map((option) => (
               <TriageOptionRow key={option.id} option={option} onSaved={refresh} onDeleted={refresh} />
             ))}
           </div>
+          </section>
         </div>
       )}
     </AsyncState>

@@ -17,7 +17,7 @@ function AppShell({ dense = false }) {
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
   // Telas densas ficam com 40% do brilho do chat (45%->18%, 25%->10%): o texto
   // sobre painel de vidro precisa de um fundo mais parado que o do Atendimento.
-  const glow = dense ? ['bg-chat-copper/[0.18]', 'bg-chat-copper/10'] : ['bg-chat-copper/45', 'bg-chat-copper/25'];
+  const glow = dense ? ['bg-chat-copper/[0.06]', 'bg-[#8296a4]/[0.05]'] : ['bg-chat-copper/[0.10]', 'bg-[#8296a4]/[0.07]'];
 
   return (
     <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">

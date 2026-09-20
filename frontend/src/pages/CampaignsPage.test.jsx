@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderInShell } from '../test-utils/renderInShell';
 import CampaignsPage from './CampaignsPage';
@@ -27,7 +27,7 @@ describe('CampaignsPage', () => {
     renderPage();
 
     expect(await screen.findByText('Aviso setembro')).toBeInTheDocument();
-    expect(screen.getByText(/42/)).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Aviso setembro/ })).getByText(/42/)).toBeInTheDocument();
     expect(await screen.findByText(/Berg/)).toBeInTheDocument();
   });
 

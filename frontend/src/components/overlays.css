@@ -1,0 +1,164 @@
+/* Temporary UI surfaces: common scale, individual compositions below. */
+.dw-dialog {border-radius:14px;max-height:calc(100dvh - 40px);color:var(--color-wa-text);box-shadow:0 24px 80px #0006}
+.dw-dialog .dw-dialog-heading {padding:17px 22px 12px;border-bottom:1px solid #ffffff10;flex:none}
+.dw-dialog .dw-dialog-heading h2 {font-size:18px;font-weight:600;line-height:24px;letter-spacing:-.02em}
+.dw-dialog .dw-dialog-heading p {font-size:12px;line-height:18px;margin-top:4px;max-width:75ch}
+.dw-dialog :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) {font-size:13px;line-height:19px;border-radius:7px;padding:7px 10px;min-width:0}
+.dw-dialog textarea {resize:vertical}
+.dw-dialog label,.dw-dialog legend {font-size:12px}
+.dw-dialog button {font-size:12px;line-height:18px}
+.dw-dialog :is(button,a,input,select,textarea,summary):focus-visible {outline:2px solid #d5a176;outline-offset:2px}
+.dw-dialog button:disabled {opacity:.45}
+.dw-dialog form > div:last-child:has(> button),.dw-dialog > div:last-child:has(> button) {border-top:1px solid #ffffff10;padding:12px 22px;gap:8px}
+.dw-dialog form > div:last-child:has(> button) button,.dw-dialog > div:last-child:has(> button) button {padding:7px 13px;border-radius:7px}
+.dialog-provider-options {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:18px 22px;gap:12px}
+.dialog-provider-option {display:flex;flex-direction:column;align-items:start;gap:8px;padding:14px;text-align:left;border:1px solid #ffffff14;border-radius:9px;background:#ffffff03;transition:background .15s,border-color .15s}
+.dialog-provider-option:hover {background:#ffffff07;border-color:#c39b7566}
+.dialog-provider-option p:first-of-type {font-size:13px;font-weight:600;line-height:19px}
+.dialog-provider-option p:last-of-type {font-size:12px;line-height:18px;margin:0;color:#adbeca}
+.dialog-provider-symbol {width:32px;height:32px;display:grid;place-items:center;border-radius:7px;background:#ffffff05;color:#b5c8d7;flex:none}
+.dialog-provider-symbol[data-provider=meta_cloud] {color:#8bbaff}
+.dialog-provider-symbol[data-provider=baileys] {color:#91cfb7}
+.dialog-provider-symbol[data-provider='360dialog'] {color:#ceb4e8}
+.dialog-channel-workspace {display:grid;grid-template-columns:185px minmax(0,1fr);gap:22px;padding:18px 22px;min-height:0;overflow-y:auto}
+.dialog-channel-context {border-right:1px solid #ffffff10;padding-right:18px}
+.dialog-channel-context h3 {font-size:13px;font-weight:600;margin:10px 0 6px}
+.dialog-channel-context p {font-size:12px;line-height:18px;color:#acbfcc;margin-bottom:16px}
+.dialog-channel-form {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:start;min-width:0}
+.dialog-channel-form > :is(p,div:last-child),.dialog-channel-form > div:has(#accessToken),.dialog-channel-form > div:has(#apiKey) {grid-column:1/-1}
+.dw-dialog .dialog-channel-form > div:last-child {padding:12px 0 0;justify-content:flex-end;display:flex}
+.dialog-contact-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding-top:18px;padding-bottom:18px}
+.dialog-contact-fields > :nth-child(n+3) {grid-column:1/-1}
+@media(max-width:600px){.dw-dialog{max-height:calc(100dvh - 24px)}.dialog-provider-options{grid-template-columns:1fr;gap:8px}.dialog-provider-option{display:grid;grid-template-columns:32px 1fr;padding:10px}.dialog-provider-option p:last-child{grid-column:2}.dialog-provider-symbol{grid-row:1/3}.dialog-channel-workspace{grid-template-columns:1fr;gap:14px}.dialog-channel-context{border-right:0;border-bottom:1px solid #ffffff10;padding:0 0 10px}.dialog-channel-context p{margin-bottom:8px}.dialog-contact-fields{grid-template-columns:1fr}.dialog-contact-fields>*{grid-column:1!important}}
+/* Campaign: compact identity strip, message and recipients side by side. */
+[data-dialog=campaign] .dialog-campaign-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px;padding:18px 22px}
+[data-dialog=campaign] .dialog-campaign-fields > p {grid-column:1/-1}
+[data-dialog=campaign] textarea {min-height:130px}
+[data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-recipients) {grid-column:2;grid-row:2/6;border-left:1px solid #ffffff12;padding-left:20px}
+[data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-recipients) textarea {min-height:180px}
+[data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-message),[data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-template),[data-dialog=campaign] .dialog-campaign-fields > :has([id^=campaign-variable]) {grid-column:1}
+[data-dialog=campaign] .dialog-campaign-fields:has(dl) {display:block}
+[data-dialog=campaign] dl {display:grid;grid-template-columns:1fr 1fr;gap:14px 22px;margin-top:12px}
+[data-dialog=campaign] dl > div:last-child {grid-column:1/-1;border-top:1px solid #ffffff12;padding-top:12px}
+/* Template creation: metadata on left, text and response buttons on right. */
+[data-dialog=templates] > div:last-child {overflow-y:auto;min-height:0}
+[data-dialog=templates] form {display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:12px 24px}
+[data-dialog=templates] form > * {margin:0;min-width:0}
+[data-dialog=templates] form[aria-label='Cadastrar novo template'] > div:nth-child(-n+4) {grid-column:1}
+[data-dialog=templates] form > div:has(#template-body) {grid-column:2;grid-row:1/3}
+[data-dialog=templates] #template-body {min-height:120px}
+[data-dialog=templates] fieldset {grid-column:2;grid-row:3/6;border-left:1px solid #ffffff10;padding-left:16px}
+[data-dialog=templates] form > p,[data-dialog=templates] form > div:last-child,[data-dialog=templates] form[aria-label='Registrar template existente'] > div:has(#existing-template-language) {grid-column:1/-1}
+.dw-dialog[data-dialog=templates] form > div:last-child {justify-content:flex-end;padding:12px 0 0}
+/* Sending: library left, variables and message preview right. */
+.dialog-send-template {display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:12px 20px;background:#2b3740;border-radius:14px;padding:20px 22px}
+.dialog-send-template > :is(h2,p),.dialog-send-template > div:last-child {grid-column:1/-1;margin:0}
+.dialog-send-template > ul {grid-column:1;grid-row:3;max-height:45vh;overflow-y:auto;margin:0;padding-right:8px}
+.dialog-send-template > ul button {border-radius:6px;font-size:12px}
+.dialog-send-template > ul button span:last-child {display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px}
+.dialog-template-compose {grid-column:2;grid-row:3;min-width:0;border-left:1px solid #ffffff12;padding-left:18px}
+.dialog-template-compose:empty {display:none}
+.dialog-template-compose > div:first-child {margin-top:0}
+.dialog-send-template > div:last-child {border-top:1px solid #ffffff12;padding-top:12px}
+/* History: aligned chronology and a persistent contextual summary. */
+[data-dialog=history]:has(.dialog-history-heading) {max-width:540px;min-height:0;height:auto;max-height:min(620px,calc(100dvh - 40px))}
+[data-dialog=history] .dialog-history-heading {padding:14px 18px 6px}
+[data-dialog=history] .dialog-history-heading h2 {font-size:17px;line-height:24px}
+[data-dialog=history] .dialog-history-results {flex:0 1 auto;min-height:0;padding:0 18px 4px;overflow-y:auto}
+[data-dialog=history]:has(.dialog-history-heading) > div:last-child {padding:8px 18px}
+[data-dialog=history] .dialog-history-list > li {border-bottom:1px solid #ffffff0d}
+[data-dialog=history] .dialog-history-list > li:last-child {border-bottom:0}
+[data-dialog=history] .dialog-history-list button {padding:9px 2px;align-items:start}
+[data-dialog=closed] {height:auto;min-height:0;max-height:min(70dvh,640px);max-width:1100px}
+[data-dialog=closed]:not(:has(.dialog-closed-content ul)) {max-width:520px}
+[data-dialog=closed] .dw-dialog-heading {padding:13px 18px 10px}
+[data-dialog=closed] .dw-dialog-heading h2 {display:flex;align-items:center;gap:8px}
+.dialog-closed-count {font-size:13px;line-height:20px;font-variant-numeric:tabular-nums;color:var(--color-wa-muted);font-weight:500}
+[data-dialog=closed] .dialog-closed-content {flex:0 1 auto;min-height:0;padding:10px 18px 14px;overflow-y:auto}
+[data-dialog=closed] .dialog-closed-content > p {padding:8px 0;margin:0}
+.dialog-history-record {display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-items:start}
+.dialog-history-record > span:first-child {font-size:13px;font-variant-numeric:tabular-nums;font-weight:600}
+.dialog-history-record > span:last-child {white-space:normal;font-size:12px;line-height:18px;overflow-wrap:anywhere}
+.dialog-history-summary {display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:12px 22px;border-bottom:1px solid #ffffff10;background:#ffffff02}
+.dialog-history-summary dt {font-size:11px;color:#a1b4c0}
+.dialog-history-summary dd {font-size:12px;margin-top:3px}
+[data-dialog=history] .wa-wallpaper {min-height:220px}
+/* Single-field dialogs stay small; user creation keeps paired identity/access. */
+[data-dialog=users]:has(#agent-name) {max-width:640px}
+[data-dialog=users] form:has(#agent-name) {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+[data-dialog=users] form:has(#agent-name)>* {margin:0}
+[data-dialog=users] form:has(#agent-name)>:is(label,p,h3),[data-dialog=users] form:has(#agent-name)>div:last-child {grid-column:1/-1}
+[data-dialog=users] form > div:last-child,[data-dialog=city] form > div:last-child,[data-dialog=sector] form > div:last-child,[data-dialog=reason] form > div:last-child {justify-content:flex-end;padding:12px 0 0}
+[data-dialog=users]:not(:has(#agent-name)) {max-width:480px}
+/* Confirmation: consequence on a dedicated column, actions below. */
+[data-dialog=confirm] {max-width:480px}
+[data-dialog=confirm] [role=alertdialog] {display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;padding:20px}
+.dialog-confirm-icon {width:36px;height:36px;display:grid;place-items:center;border-radius:8px;background:#ffffff06;color:#b3c5d0}
+.dialog-confirm-icon[data-danger=true] {color:#e7aaa0;background:#d97c7210}
+[data-dialog=confirm] [role=alertdialog] > p {font-size:14px;line-height:21px;align-self:center}
+[data-dialog=confirm] [role=alertdialog] > div {grid-column:1/-1;margin:0;padding-top:12px;border-top:1px solid #ffffff12}
+/* Already structured operational dialogs: finish, without replacing their layout. */
+[data-dialog=profile] > div:nth-child(2) {padding-top:16px}
+[data-dialog=profile] details summary {padding:10px 14px}
+[data-dialog=profile] [id=profile-info-form] {margin-top:12px;gap:12px}
+[data-dialog=team] [role=group] button {padding:5px 8px;border-radius:6px}
+[data-dialog=transfer] > div:first-child > span {width:36px;height:36px;border-radius:9px;background:#ffffff05;color:#d9b695}
+[data-dialog=transfer] > div:first-child > span svg {width:21px;height:21px}
+[data-dialog=transfer] > div:first-child h2,[data-dialog=close-reason] h2,[data-dialog=team] h2 {font-size:18px;line-height:24px}
+[data-dialog=transfer] > div:nth-child(2) label {height:36px}
+[data-dialog=transfer] ul {border:0;border-radius:0;background:transparent}
+[data-dialog=close-reason] [role=radiogroup] {gap:8px}
+[data-dialog=help] {max-width:600px}
+[data-dialog=help] > div:nth-child(2) {font-size:13px;line-height:20px}
+/* Context drawers retain the existing resize/non-overlap behavior. */
+.dialog-conversation-info {padding:18px 16px}
+.dialog-conversation-info > div:first-child {display:grid;grid-template-columns:44px minmax(0,1fr);gap:3px 10px;text-align:left;align-items:center}
+.dialog-conversation-info > div:first-child > div {grid-row:1/4;box-shadow:none}
+.dialog-conversation-info > div:first-child > div > * {width:44px!important;height:44px!important;font-size:16px!important}
+.dialog-conversation-info > div:first-child h2,.dialog-conversation-info > div:first-child p,.dialog-conversation-info > div:first-child > span {margin:0}
+.dialog-conversation-info > div:first-child > span {justify-self:start;padding:2px 7px;font-size:10px}
+.dialog-conversation-info > .border-t {margin:14px 0}
+.dialog-conversation-info > div.flex-col {gap:12px}
+.dialog-conversation-info > div.flex-col > div.flex-col {display:grid;grid-template-columns:80px minmax(0,1fr);gap:8px;align-items:baseline}
+.dialog-conversation-info > div.flex-col > div.flex-col > span:last-child {font-size:12px;overflow-wrap:anywhere}
+.dialog-sgp-panel > div:first-child {height:46px}
+.dialog-sgp-panel form input,.dialog-sgp-panel form button {height:34px;border-radius:7px}
+.dialog-sgp-panel button {font-size:12px}
+.dialog-sgp-panel select {font-size:12px}
+/* Context menus: compact command lists with clear focus/destructive action. */
+.dialog-context-menu {border-radius:8px;background:#303d46;border-color:#64778466;padding:5px;box-shadow:0 10px 28px #0005}
+.dialog-context-menu button {font-size:12px;padding:7px 10px;border-radius:4px;line-height:18px}
+.dialog-context-menu button:hover {background:#ffffff08}
+.dialog-context-menu button:focus-visible {outline:2px solid #d5a176;outline-offset:-2px}
+.dialog-context-menu button.text-wa-error-text {border-top:1px solid #ffffff10;margin-top:4px}
+.dialog-popover-heading {padding:7px 10px;font-size:11px;color:#a5bac8;border-bottom:1px solid #ffffff12;margin-bottom:4px;font-weight:600}
+.dialog-quick-replies {width:340px;border-radius:10px}
+.dialog-quick-replies li + li {border-top:1px solid #ffffff08}
+.dialog-quick-replies li button {font-size:12px;padding:9px 12px}
+.dialog-quick-reply-preview {display:block;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:#a6bac7;line-height:17px;margin-top:2px}
+.dialog-emoji-picker {border-radius:10px}
+.dialog-transfer-notice > div {border-radius:10px;border-left:3px solid #d5a176}
+.dialog-image-viewer > button:first-child {border:1px solid #ffffff20;border-radius:8px;width:34px;height:34px;padding:0;font-size:18px}
+@media(max-width:680px){[data-dialog=campaign] .dialog-campaign-fields,[data-dialog=templates] form,.dialog-send-template {grid-template-columns:minmax(0,1fr)}[data-dialog=campaign] .dialog-campaign-fields > *,[data-dialog=templates] form > *,.dialog-send-template > *{grid-column:1!important;grid-row:auto!important}[data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-recipients),[data-dialog=templates] fieldset,.dialog-template-compose{border:0;padding-left:0}.dialog-send-template > ul{max-height:180px}.dialog-history-record{grid-template-columns:1fr;gap:3px}.dialog-history-summary{grid-template-columns:1fr;gap:8px}[data-dialog=users] form:has(#agent-name){grid-template-columns:1fr}}
+.dialog-filter-options {width:260px;border-radius:9px;padding:6px;box-shadow:0 10px 28px #0005}
+.dialog-filter-options label {font-size:12px;border-radius:5px;padding:7px 8px}
+.dialog-filter-options label:has(input:checked) {background:#d5a17612;color:#efd4ba}
+.dialog-filter-options label:focus-within {outline:2px solid #d5a176;outline-offset:-2px}
+.dialog-sector-assignment {display:grid;grid-template-columns:180px minmax(0,1fr) auto;gap:14px;align-items:start}
+.dialog-sector-assignment > * {margin:0!important}
+.dialog-sector-assignment > p:first-child {font-size:12px}
+.dialog-sector-assignment > div:last-child {justify-self:end}
+.dialog-sector-assignment > p.text-wa-error-text {grid-column:1/-1}
+[data-dialog=templates] .dw-dialog-heading {display:flex;align-items:center;gap:10px}
+[data-dialog=templates] .dw-dialog-heading:before {content:'';display:block;flex:none;width:22px;height:22px;background:#8bbaff;mask:url('../assets/brands/meta.svg') center/contain no-repeat}
+.chat-workspace-customer-panel .chat-workspace-panel-heading button {width:28px;height:28px;display:grid;place-items:center;border-radius:6px}
+.chat-workspace-customer-panel .chat-workspace-panel-heading button:focus-visible {outline:2px solid #d5a176;outline-offset:2px}
+.dialog-conversation {border-radius:14px}
+@media(max-width:680px){.dialog-sector-assignment{grid-template-columns:1fr}.dialog-sector-assignment>div:last-child{justify-self:start}}
+[data-dialog=campaign] .dialog-campaign-fields > .dialog-campaign-content {grid-column:1;grid-row:2;min-width:0;display:flex;flex-direction:column;gap:12px}
+[data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-recipients) {grid-row:2}
+[data-dialog=templates]:has(form[aria-label='Registrar template existente']) {max-width:740px}
+@media(max-width:680px){[data-dialog=campaign] .dialog-campaign-fields > .dialog-campaign-content,[data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-recipients){grid-column:1;grid-row:auto}}
+/* Short viewports still allow necessary content scrolling without losing fields. */
+[data-dialog=help] > div:nth-child(2),[data-dialog=users] > div:last-child,[data-dialog=city] > div:last-child,[data-dialog=sector] > div:last-child,[data-dialog=reason] > div:last-child,[data-dialog=confirm] > div {min-height:0;overflow-y:auto}
+.dialog-provider-symbol .channel-brand-mark {display:block;width:20px;height:20px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}

@@ -11,11 +11,11 @@ export function Card({ title, description, scope, scopeDetail, footer, tone = 'd
   return (
     <Tag
       aria-labelledby={title ? headingId : undefined}
-      className={`rounded-2xl border p-5 backdrop-blur-xl sm:p-6 ${TONES[tone] || TONES.default}`}
+      className={`settings-section rounded-[16px] border p-3.5 sm:p-4 ${TONES[tone] || TONES.default}`}
       {...rest}
     >
       {(title || scope) && (
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
           <div className="min-w-0 flex-1 basis-[14rem]">
             {title && (
               <h2 id={headingId} className="font-display text-[16px] font-semibold leading-[22px] text-wa-text">
@@ -27,8 +27,8 @@ export function Card({ title, description, scope, scopeDetail, footer, tone = 'd
           {scope && <ScopeBadge scope={scope} detail={scopeDetail} />}
         </div>
       )}
-      <div className="space-y-4">{children}</div>
-      {footer && <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-wa-border pt-4">{footer}</div>}
+      <div className="space-y-3">{children}</div>
+      {footer && <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-wa-border pt-3">{footer}</div>}
     </Tag>
   );
 }

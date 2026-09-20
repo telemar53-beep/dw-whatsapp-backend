@@ -98,7 +98,7 @@ const TONES = {
   violet: { color: '#a678f0', bg: 'rgba(166, 120, 240, 0.14)' },
   indigo: { color: '#8b7cf6', bg: 'rgba(139, 124, 246, 0.14)' },
   gray: { color: '#d8d3ce', bg: 'rgba(216, 211, 206, 0.12)' },
-  orange: { color: '#f4531f', bg: 'rgba(244, 83, 31, 0.14)' },
+  orange: { color: '#f28c45', bg: 'rgba(242, 140, 69, 0.14)' },
   pink: { color: '#f2647f', bg: 'rgba(242, 100, 127, 0.14)' },
   neutral: { color: '#b6b0ab', bg: 'rgba(182, 176, 171, 0.12)' },
 };

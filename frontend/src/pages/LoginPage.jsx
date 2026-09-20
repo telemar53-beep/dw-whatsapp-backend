@@ -11,7 +11,7 @@ function SignalMark() {
       stroke="currentColor"
       strokeWidth="1.75"
       strokeLinecap="round"
-      className="h-6 w-6 text-chat-orange"
+      className="h-6 w-6 text-[#f29a58]"
       aria-hidden="true"
     >
       <circle cx="6" cy="18" r="1.4" fill="currentColor" stroke="none" />
@@ -23,7 +23,7 @@ function SignalMark() {
 }
 
 const FIELD_CLASS =
-  'h-[48px] w-full rounded-[14px] border border-white/[0.10] bg-white/[0.06] px-4 text-[15px] text-chat-text outline-none transition placeholder:text-chat-faint focus:border-chat-orange/60 focus:bg-white/[0.10]';
+  'h-12 w-full rounded-xl border border-white/[0.13] bg-[#222a30] px-4 text-[15px] text-white outline-none transition-colors placeholder:text-[#aeb8c0] hover:border-white/25 focus:border-[#f29a58] focus:ring-2 focus:ring-[#f29a58]/25';
 
 function LoginPage() {
   const { login } = useAuth();
@@ -51,84 +51,73 @@ function LoginPage() {
   }
 
   return (
-    <div className="chat-theme relative flex min-h-dvh items-center justify-center overflow-hidden bg-chat-canvas px-4 py-10 font-sans text-chat-text">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[40rem] w-[44rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-chat-copper/50 blur-[150px]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-[18%] -right-[6%] h-[28rem] w-[30rem] rounded-full bg-chat-copper/30 blur-[150px]"
-      />
+    <div className="chat-theme relative isolate flex min-h-dvh overflow-hidden bg-[#20272d] px-4 py-6 font-sans text-chat-text sm:px-8 lg:px-12">
+      <div aria-hidden="true" className="pointer-events-none absolute -left-40 -top-48 h-[32rem] w-[32rem] rounded-full bg-[#f18442]/[0.08] blur-[110px]" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 right-[-12rem] h-[35rem] w-[35rem] rounded-full bg-[#8296a4]/[0.08] blur-[120px]" />
 
-      <div className="relative w-full max-w-sm animate-login-rise">
-        <div className="relative overflow-hidden rounded-[28px] border border-white/[0.10] bg-white/[0.10] p-8 shadow-[0_40px_100px_-30px_rgba(0,0,0,0.85)] backdrop-blur-2xl sm:p-10">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-chat-orange/60 to-transparent"
-          />
-          <div className="mb-8 flex flex-col items-center text-center">
-            <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.08]">
+      <div className="relative mx-auto grid w-full max-w-[1360px] items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(400px,480px)] lg:gap-16">
+        <section className="hidden max-w-[620px] flex-col items-start lg:flex" aria-label="Apresentação do atendimento">
+          <div className="mb-16 flex items-center gap-3 text-[12px] font-semibold uppercase tracking-[0.18em] text-[#d7dfe4]">
+            <span className="flex h-11 w-11 items-center justify-center rounded-[13px] border border-[#f29a58]/30 bg-[#f29a58]/10">
               <SignalMark />
             </span>
-            <h1 className="font-display text-[22px] font-semibold leading-tight tracking-[-0.01em] text-chat-text">
-              {companyNameStatus === 'loading' ? '' : companyName || 'Atendimento'}
-            </h1>
-            <p className="mt-1.5 text-[14px] text-chat-muted">Painel de atendimento</p>
+            Plataforma de atendimento
+          </div>
+          <span className="mb-6 h-1 w-14 rounded-full bg-[#f29a58]" aria-hidden="true" />
+          <p className="max-w-[13ch] font-display text-[clamp(2.6rem,4vw,4.25rem)] font-semibold leading-[1.12] tracking-[-0.045em] text-[#f4f6f7]">
+            Um lugar claro para cada conversa.
+          </p>
+          <p className="mt-7 max-w-[43ch] text-[17px] leading-7 text-[#b9c3ca]">
+            Entre no painel e continue seus atendimentos com o contexto de que precisa para trabalhar bem.
+          </p>
+          <div className="mt-14 flex items-center gap-3 text-[13px] font-medium text-[#b9c3ca]">
+            <span className="rounded-full border border-white/[0.12] bg-white/[0.04] px-4 py-2">Conversas</span>
+            <span className="rounded-full border border-white/[0.12] bg-white/[0.04] px-4 py-2">Contexto</span>
+            <span className="rounded-full border border-white/[0.12] bg-white/[0.04] px-4 py-2">Equipe</span>
+          </div>
+        </section>
+
+        <main className="w-full animate-login-rise">
+          <div className="rounded-[22px] border border-white/[0.12] bg-[#2b333a]/95 px-6 py-8 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.65)] backdrop-blur-md sm:px-10 sm:py-10">
+            <div className="mb-8">
+              <span className="mb-6 flex h-12 w-12 items-center justify-center rounded-[13px] border border-[#f29a58]/25 bg-[#f29a58]/10 lg:hidden">
+                <SignalMark />
+              </span>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#f5a366]">Acesso à plataforma</p>
+              <h1 className="font-display text-[clamp(1.55rem,3vw,2rem)] font-semibold leading-tight tracking-[-0.025em] text-[#f5f7f8]">
+                {companyNameStatus === 'loading' ? '' : companyName || 'Atendimento'}
+              </h1>
+              <p className="mt-3 text-[14px] leading-6 text-[#bdc6cd]">Entre com seu email e senha para continuar.</p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5" aria-busy={submitting}>
+              <div>
+                <label htmlFor="email" className="mb-2 block text-[13px] font-medium text-[#e5eaed]">Email</label>
+                <input id="email" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className={FIELD_CLASS} required />
+              </div>
+              <div>
+                <label htmlFor="password" className="mb-2 block text-[13px] font-medium text-[#e5eaed]">Senha</label>
+                <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={FIELD_CLASS} required />
+              </div>
+
+              {error && <p role="alert" className="rounded-xl border border-[#ef8f85]/25 bg-[#b94237]/15 px-3 py-2.5 text-[13.5px] leading-5 text-[#ffb2a9]">{error}</p>}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-[#f28c45] text-[15px] font-semibold text-[#201c19] shadow-[0_8px_20px_-12px_rgba(242,140,69,0.8)] transition-colors hover:bg-[#ffa260] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffbd8d] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? 'Entrando...' : 'Entrar'}
+              </button>
+            </form>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="mb-1.5 block text-[13px] font-medium text-chat-muted">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={FIELD_CLASS}
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="mb-1.5 block text-[13px] font-medium text-chat-muted">
-                Senha
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={FIELD_CLASS}
-                required
-              />
-            </div>
-
-            {error && (
-              <p
-                role="alert"
-                className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text"
-              >
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="h-[48px] w-full rounded-[14px] bg-chat-orange text-[15px] font-medium text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {submitting ? 'Entrando...' : 'Entrar'}
-            </button>
-          </form>
-        </div>
-
-        <p className="mt-6 text-center text-[12.5px] text-chat-faint">
-          {companyName
-            ? `Acesso restrito à equipe de atendimento da ${companyName}.`
-            : 'Acesso restrito à equipe de atendimento.'}
-        </p>
+          <p className="mt-5 px-2 text-center text-[12px] leading-5 text-[#aeb9c1]">
+            {companyName
+              ? `Acesso restrito à equipe de atendimento da ${companyName}.`
+              : 'Acesso restrito à equipe de atendimento.'}
+          </p>
+        </main>
       </div>
     </div>
   );

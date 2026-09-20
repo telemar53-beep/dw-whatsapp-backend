@@ -66,7 +66,7 @@ function ConversationInfoPanel({ conversation }) {
   const confidenceLabel = conversation.aiTriageConfidence != null ? `${Math.round(conversation.aiTriageConfidence * 100)}%` : '—';
 
   return (
-    <aside className="hidden w-[272px] shrink-0 flex-col overflow-y-auto border-l border-wa-surface-line bg-wa-surface-soft px-6 py-8 md:flex">
+    <aside className="dialog-conversation-info hidden w-[272px] shrink-0 flex-col overflow-y-auto border-l border-wa-surface-line bg-wa-surface-soft px-6 py-8 md:flex">
       <div className="flex flex-col items-center text-center">
         <div className="rounded-full ring-4 ring-wa-green/25">
           <ContactAvatar

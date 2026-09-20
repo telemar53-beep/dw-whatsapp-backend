@@ -68,7 +68,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
   }
 
   return (
-    <WaDialog onClose={onClose} size="max-w-[820px]">
+    <WaDialog variant="close-reason" onClose={onClose} size="max-w-[820px]">
       <div className="flex shrink-0 items-start gap-3 px-6 pb-4 pt-5">
         <span aria-hidden="true" className="mt-0.5 shrink-0 text-wa-green">
           {closeReasonHeaderIcon}

@@ -1,0 +1,33 @@
+.campaigns-workspace{container-type:inline-size}
+.campaigns-body{min-height:0;flex:1;overflow:auto;padding:0 20px 24px;color:var(--color-chat-text,#edf0f2)}
+.campaign-summary{display:flex;align-items:center;gap:0;border-block:1px solid #ffffff12;background:#ffffff03;padding:14px 0;margin-bottom:12px}
+.campaign-summary>div{min-width:0;flex:1;padding:0 20px;border-right:1px solid #ffffff12;display:flex;flex-direction:column;gap:3px}
+.campaign-summary>div:first-child{padding-left:0}.campaign-summary>div:last-child{border:0}
+.campaign-summary strong{font-size:23px;line-height:1.2;font-weight:600;font-variant-numeric:tabular-nums}.campaign-summary span{font-size:11px;color:#aeb8bf}
+.campaign-summary .campaign-channel{flex:1.6}.campaign-summary .campaign-channel strong{font-size:15px;overflow-wrap:anywhere}
+.campaign-section-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0 10px}.campaign-section-heading h2{font-size:14px;font-weight:600}.campaign-section-heading>span{font-size:12px;color:#aeb8bf}
+.campaign-columns,.campaign-row{display:grid;grid-template-columns:minmax(190px,2.6fr) repeat(4,minmax(65px,.75fr)) minmax(100px,1fr);gap:16px;align-items:center}
+.campaign-columns,.campaign-recipient-columns{position:sticky;top:0;z-index:2;background:#293238;border-block:1px solid #ffffff14;padding:11px 14px;color:#b6bfc5;font-size:11px;font-weight:500}
+.campaign-columns>span:not(:first-child){text-align:right}.campaign-list{margin:0;padding:0;list-style:none}.campaign-list>li{border-bottom:1px solid #ffffff10}
+.campaign-row{padding:13px 14px;text-decoration:none;color:inherit;border-left:2px solid transparent;cursor:pointer;transition:background .15s,border-color .15s}
+.campaign-row:hover{background:#ffffff09;border-left-color:#d99055}.campaign-row:focus-visible{outline:2px solid #ff913d;outline-offset:-2px;background:#ffffff08}
+.campaign-identity{min-width:0;display:flex;flex-direction:column;gap:4px}.campaign-identity strong{font-size:13px;font-weight:600;overflow-wrap:anywhere}.campaign-identity>span{font-size:11px;color:#aeb8bf;overflow-wrap:anywhere}.campaign-identity i{font-style:normal;padding:0 7px;color:#76828b}
+.campaign-number{text-align:right;font-size:14px;font-variant-numeric:tabular-nums}.campaign-number small{display:none}.campaign-sent{color:#80d9ab}.campaign-failed{color:#ff9990}.campaign-skipped{color:#b6bfc5}
+.campaign-progress{display:flex;flex-direction:column;gap:7px;text-align:right;font-size:11px;color:#b6bfc5;font-variant-numeric:tabular-nums}.campaign-track{display:block;height:3px;overflow:hidden;background:#ffffff12;border-radius:3px}.campaign-track>span{display:block;height:100%;background:#d99055;border-radius:3px}
+.campaign-empty{padding:28px 0;border-top:1px solid #ffffff12}.campaign-eyebrow{font-size:10px;letter-spacing:.1em;color:#db9a65}.campaign-empty h2{font-size:20px;margin:9px 0}.campaign-empty p{max-width:540px;font-size:13px;line-height:1.7;color:#aeb8bf}
+.campaign-detail-progress{display:flex;align-items:center;gap:16px;font-size:12px;color:#b6bfc5}.campaign-detail-progress>.campaign-track{flex:1}
+.campaign-recipient-columns,.campaign-recipient-row{display:grid;grid-template-columns:minmax(180px,1.2fr) 100px minmax(220px,2fr);gap:24px;align-items:center}.campaign-recipient-row{padding:12px 14px}.campaign-recipient-status{font-size:11px;padding:3px 7px;border:1px solid;border-radius:5px;justify-self:start}.campaign-error{font-size:12px;line-height:1.6;color:#ffb0a8;overflow-wrap:anywhere;white-space:pre-wrap}.campaign-no-error{color:#78858f}
+@container(max-width:800px){.campaign-columns{display:none}.campaign-row{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 14px}.campaign-identity{grid-column:1/-1}.campaign-number{text-align:left}.campaign-number small{display:block;font-size:10px;color:#aeb8bf;margin-bottom:2px}.campaign-progress{grid-column:1/-1;flex-direction:row;align-items:center}.campaign-progress .campaign-track{flex:1}.campaign-summary>div{padding:0 10px}.campaign-summary strong{font-size:19px}.campaign-recipient-columns{display:none}.campaign-recipient-row{grid-template-columns:1fr auto;gap:8px}.campaign-recipient-row .campaign-identity{grid-column:1}.campaign-error,.campaign-no-error{grid-column:1/-1}}
+@container(max-width:480px){.campaigns-body{padding-inline:12px}.campaign-summary{flex-wrap:wrap;row-gap:12px}.campaign-summary>div:first-child{flex-basis:100%;border:0;padding:0}.campaign-summary>div{padding:0 8px}.campaign-summary strong{font-size:17px}.campaign-summary span{font-size:10px}.campaign-section-heading>span{display:none}}
+
+@container(max-width:480px){.campaign-summary>div:not(:first-child){flex:1 1 40%;padding:0;border:0}.campaign-summary span{overflow-wrap:anywhere}}
+
+/* Finishing details: preserve row dimensions and align headings to row content. */
+.campaign-columns{border-left:2px solid transparent}
+.campaign-provider-mark{display:inline-block;width:14px;height:12px;margin-right:5px;vertical-align:-2px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
+.campaign-identity i{color:#98a4ad}
+@media(prefers-reduced-motion:reduce){.campaign-row{transition:none}}
+
+/* Local action sizing: do not change the shared Button or other pages. */
+.campaigns-workspace .campaign-create-button{height:32px;min-height:32px;padding:0 10px;gap:6px;border-radius:7px;font-size:12px;line-height:16px;white-space:nowrap}
+.campaigns-workspace .campaign-create-button svg{flex:none;width:14px;height:14px}

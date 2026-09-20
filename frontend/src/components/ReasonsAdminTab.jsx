@@ -75,7 +75,7 @@ function RowMenu({ label, children }) {
       {open && (
         <div
           onClick={() => setOpen(false)}
-          className="absolute right-0 top-[calc(100%+4px)] z-20 min-w-[170px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
+          className="dialog-context-menu absolute right-0 top-[calc(100%+4px)] z-20 min-w-[170px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
         >
           {children}
         </div>
@@ -228,9 +228,9 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
     <>
       <section
         aria-labelledby="reasons-card-title"
-        className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+        className="overflow-clip"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4 pt-5 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 pt-1">
           <h2 id="reasons-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
             Motivos de atendimento
           </h2>
@@ -240,7 +240,7 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 px-4 pb-4 sm:px-5">
+        <div className="flex flex-wrap items-center gap-3 pb-4">
           <label
             className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
           >
@@ -270,9 +270,13 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
           </select>
         </div>
 
-        <div className="px-4 pb-1 sm:px-5">
+        <div className="settings-register-summary flex flex-wrap items-center justify-between gap-2 px-1 py-3 text-[12.5px] text-wa-muted">
+          <span>{countLabel}</span>
+          <span>O motivo fica registrado no histórico e agrupado em Relatórios.</span>
+        </div>
+        <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={reasons.length === 0} emptyMessage="Nenhum motivo cadastrado ainda.">
-            <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
+            <div className="chat-scroll overflow-x-auto">
               <table className="w-full min-w-[560px] border-collapse text-[13.5px]">
                 <thead>
                   <tr className="bg-black/[0.16]">
@@ -308,14 +312,11 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
           </AsyncState>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-wa-border px-4 py-3 text-[12.5px] text-wa-muted sm:px-5">
-          <span>{countLabel}</span>
-          <span>O motivo fica registrado no histórico e agrupado em Relatórios.</span>
-        </div>
+
       </section>
 
       {creatingReason && (
-        <WaDialog title="Novo motivo" onClose={() => setCreatingReason(false)} size="max-w-md">
+        <WaDialog variant="reason" title="Novo motivo" onClose={() => setCreatingReason(false)} size="max-w-md">
           <div className="px-6 pb-5 pt-2">
             <CreateReasonForm
               embedded

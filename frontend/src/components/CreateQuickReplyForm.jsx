@@ -32,9 +32,10 @@ function CreateQuickReplyForm({ onCreated, onCancel }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+      className="settings-open-form space-y-3 border-t border-white/[0.09] px-0 pb-4 pt-4"
     >
       <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar nova resposta rápida</h3>
+      <div className="grid items-start gap-3 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
       <div>
         <label htmlFor="quick-reply-title" className={labelClass}>
           Título
@@ -55,9 +56,11 @@ function CreateQuickReplyForm({ onCreated, onCancel }) {
           id="quick-reply-content"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          className={inputClass}
+          rows={2}
+          className={`${inputClass} min-h-[72px] max-h-56 resize-y [field-sizing:content]`}
           required
         />
+      </div>
       </div>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">

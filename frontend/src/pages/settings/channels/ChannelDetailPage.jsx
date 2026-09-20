@@ -1,5 +1,6 @@
+import { SettingsTitle, SettingsIcon } from '../SettingsVisuals';
 import { useEffect } from 'react';
-import { useParams, Outlet, Link } from 'react-router-dom';
+import { useParams, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import ProtectedRoute from '../../../components/ProtectedRoute';
 import { AsyncState, PageHeader, ScopeBadge, Tabs } from '../../../components/ui';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -7,19 +8,18 @@ import { useChannels } from '../../../hooks/useChannels';
 import { hasLevel } from '../../../navigation/navItems';
 import { formatPhone } from '../../../utils/phone';
 import { useChannelActions } from './useChannelActions';
-import { ChannelsTable, ChannelIcon } from './ChannelsTable';
-import { useChannelSummaryContext } from './ChannelsListPage';
+import { ChannelIcon, ConnectionStatus, providerLabel } from './ChannelsTable';
 
-// A mesma tela da lista, com o canal escolhido marcado na tabela e o seu
-// cartão de configuração logo abaixo — como no print de referência.
 function ChannelDetailPage() {
   const { id } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { agent } = useAuth();
   const canManage = hasLevel(agent, 'integrations');
   const { channels, status, refresh } = useChannels(true, true);
-  const summaryContext = useChannelSummaryContext();
   const actions = useChannelActions(refresh);
   const channel = channels.find((c) => c.id === id);
+  const currentTab = location.pathname.endsWith('/atendimento') ? 'atendimento' : 'conexao';
 
   // Enquanto o canal está mostrando um QR code, atualiza sozinho a cada 5s
   // para que a aba passe a "Conectado" assim que o celular termina de ler.
@@ -32,17 +32,30 @@ function ChannelDetailPage() {
   return (
     <ProtectedRoute level="admin" areaLabel="Canais WhatsApp">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="px-4">
+        <div className="settings-group-header border-b border-white/[0.07] px-4">
           <PageHeader
             crumbs={[{ label: 'Configurações', to: '/configuracoes' }]}
-            title="Canais WhatsApp"
+            title={<SettingsTitle name="canais">Canais WhatsApp</SettingsTitle>}
             description="Gerencie os números e o atendimento de cada canal."
           />
         </div>
-        <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-2 sm:px-6">
-          <div className="max-w-6xl space-y-5">
+        <div className="settings-group-body chat-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-7 pt-4 sm:px-6">
+          <div className="max-w-6xl space-y-3">
             <AsyncState status={status} onRetry={refresh}>
-              <ChannelsTable channels={channels} selectedId={id} summaryContext={summaryContext} actions={actions} canManage={canManage} />
+              <div className="settings-channel-switch flex flex-wrap items-center justify-between gap-3">
+                <Link to="/configuracoes/canais" className="text-[13px] font-medium text-wa-link hover:underline">← Todos os canais</Link>
+                <label className="flex min-w-[220px] flex-col gap-1 text-[11px] font-medium uppercase tracking-[0.08em] text-wa-muted">
+                  <span>Trocar de canal ({channels.length})</span>
+                  <select
+                    aria-label="Trocar de canal"
+                    value={id}
+                    onChange={(event) => navigate(`/configuracoes/canais/${event.target.value}/${currentTab}`)}
+                    className="h-9 min-w-0 rounded-[10px] border border-wa-border bg-wa-field px-3 text-[13px] font-medium normal-case tracking-normal text-wa-text outline-none focus:border-wa-green/60 focus:ring-2 focus:ring-wa-green/25"
+                  >
+                    {channels.map((item) => <option key={item.id} value={item.id}>{item.name} · {formatPhone(item.phoneNumber)}</option>)}
+                  </select>
+                </label>
+              </div>
 
               {!channel ? (
                 <div className="rounded-[16px] border border-wa-surface-line bg-wa-surface px-6 py-10 text-center text-[14px] text-wa-muted">
@@ -54,9 +67,9 @@ function ChannelDetailPage() {
               ) : (
                 <section
                   aria-labelledby="channel-detail-title"
-                  className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+                  className="overflow-clip rounded-[18px] border border-wa-surface-line bg-wa-surface"
                 >
-                  <div className="flex items-center gap-3 px-4 pb-1 pt-5 sm:px-5">
+                  <div className="flex flex-wrap items-center gap-3 border-b border-wa-border px-4 py-4 sm:px-5">
                     <ChannelIcon size={40} />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -65,8 +78,9 @@ function ChannelDetailPage() {
                         </h2>
                         <ScopeBadge scope="channel" />
                       </div>
-                      <p className="mt-0.5 text-[13px] text-wa-muted">{formatPhone(channel.phoneNumber)}</p>
+                      <p className="mt-0.5 text-[13px] text-wa-muted">{formatPhone(channel.phoneNumber)} · {providerLabel(channel.type)}</p>
                     </div>
+                    <div className="ml-auto"><ConnectionStatus channel={channel} /></div>
                   </div>
                   <div className="px-2 sm:px-3">
                     <Tabs

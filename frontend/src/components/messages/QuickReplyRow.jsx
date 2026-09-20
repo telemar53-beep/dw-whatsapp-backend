@@ -63,7 +63,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="space-y-3 rounded-[14px] border border-chat-orange/30 bg-white/[0.04] p-4"
       >
         <input
           value={title}
@@ -99,7 +99,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="border-b border-white/[0.08] px-2 py-3.5 last:border-b-0">
       <div className="flex items-center justify-between">
         <div>
           <p className="font-medium text-wa-text">{quickReply.title}</p>

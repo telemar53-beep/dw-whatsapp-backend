@@ -136,6 +136,20 @@ describe('visualizador de imagem com zoom', () => {
     expect(screen.getByAltText('comprovante.jpg')).toHaveClass('object-contain');
   });
 
+  test('shows a readable state when an audio file fails to load', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm4', messageType: 'audio', mediaPath: 'missing.ogg' }} />);
+    fireEvent.error(container.querySelector('audio'));
+    expect(screen.getByRole('status')).toHaveTextContent('Áudio indisponível');
+    expect(screen.queryByRole('button', { name: 'Reproduzir áudio' })).not.toBeInTheDocument();
+  });
+
+  test('shows a readable fallback if the stored image cannot be loaded', () => {
+    render(<MessageAttachment message={{ id: 'm2', messageType: 'image', mediaPath: 'missing.jpg' }} />);
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.getByRole('img', { name: 'Imagem indisponível' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Abrir imagem em tela cheia' })).not.toBeInTheDocument();
+  });
+
   test('abre com a imagem ajustada a tela', async () => {
     await abrirVisualizador();
     expect(screen.getByText('100%')).toBeInTheDocument();

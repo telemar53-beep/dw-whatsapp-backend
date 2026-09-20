@@ -7,7 +7,7 @@ import { AsyncState } from './ui';
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
-const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+const cardClass = 'settings-transcription-form settings-open-form space-y-3 pb-4';
 
 const BYTES_POR_MB = 1048576;
 
@@ -96,18 +96,25 @@ function AudioTranscriptionConfigCard() {
 
   return (
     <form onSubmit={handleSave} className={cardClass}>
-      <h3 className="font-display text-base font-semibold text-wa-text">Transcrição de áudio</h3>
-      <p className="text-sm text-wa-muted">
-        Converte os áudios recebidos em texto e entrega o texto à IA, que responde como se o
-        cliente tivesse digitado.
+      <p className="text-[13.5px] leading-5 text-wa-muted">
+        O texto transcrito fica disponível ao atendente e pode ser usado pela IA na resposta.
       </p>
 
       <AsyncState status={status} skeletonLines={4}>
-        <label className="flex items-center gap-2 text-sm text-wa-text">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-          Transcrever áudios automaticamente
-        </label>
+        <div className="grid items-start gap-x-5 gap-y-3 lg:grid-cols-2">
+        <section aria-label="Ativação da transcrição" className="border-b border-white/[0.09] pb-3 lg:col-span-2">
+          <label className="flex items-center gap-3 text-[14px] font-medium text-wa-text">
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            Transcrever áudios automaticamente
+          </label>
+          <p className="ml-7 mt-1 text-[12.5px] text-wa-muted">Áudios recebidos serão convertidos em texto dentro dos limites abaixo.</p>
+        </section>
 
+        <section aria-labelledby="transcription-processing-title" className="space-y-3 border-b border-white/[0.09] pb-3 lg:border-b-0 lg:border-r lg:pr-5">
+        <div>
+          <h2 id="transcription-processing-title" className="font-display text-[16px] font-semibold text-wa-text">Processamento</h2>
+          <p className="mt-1 text-[12.5px] text-wa-muted">Modelo e limites aplicados a cada áudio.</p>
+        </div>
         <div>
           <label htmlFor="transcription-model" className={labelClass}>Modelo</label>
           <select
@@ -123,7 +130,7 @@ function AudioTranscriptionConfigCard() {
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="transcription-max-minutes" className={labelClass}>Duração máxima (minutos)</label>
             <input
@@ -132,7 +139,7 @@ function AudioTranscriptionConfigCard() {
               min="1"
               value={maxMinutes}
               onChange={(e) => setMaxMinutes(e.target.value)}
-              className={inputClass}
+              className={`${inputClass} max-w-32`}
             />
           </div>
           <div>
@@ -143,11 +150,23 @@ function AudioTranscriptionConfigCard() {
               min="1"
               value={maxMb}
               onChange={(e) => setMaxMb(e.target.value)}
-              className={inputClass}
+              className={`${inputClass} max-w-32`}
             />
           </div>
         </div>
+        <button
+          type="button"
+          onClick={handleFetchModels}
+          disabled={testing || !config.configured}
+          title={!config.configured ? 'Salve a chave da OpenAI primeiro' : undefined}
+          className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Buscar modelos
+        </button>
+        </section>
 
+        <section aria-labelledby="transcription-ai-title" className="space-y-3 pb-3">
+        <h2 id="transcription-ai-title" className="font-display text-[16px] font-semibold text-wa-text">Uso pela IA</h2>
         <label className="flex items-center gap-2 text-sm text-wa-text">
           <input type="checkbox" checked={feedAi} onChange={(e) => setFeedAi(e.target.checked)} />
           Enviar transcrição para a IA
@@ -157,30 +176,23 @@ function AudioTranscriptionConfigCard() {
           <label htmlFor="transcription-vocabulary" className={labelClass}>Vocabulário da operação</label>
           <textarea
             id="transcription-vocabulary"
-            rows={3}
+            rows={2}
             value={vocabulary}
             onChange={(e) => setVocabulary(e.target.value)}
-            className={inputClass}
+            className={`${inputClass} min-h-[72px] max-h-56 resize-y [field-sizing:content]`}
           />
           <p className="mt-1 text-xs text-wa-muted">
             Termos que o modelo costuma errar: nomes técnicos, marcas, jargão da operação.
           </p>
         </div>
+        </section>
 
+        </div>
         {error && (
           <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>
         )}
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handleFetchModels}
-            disabled={testing || !config.configured}
-            title={!config.configured ? 'Salve a chave da OpenAI primeiro' : undefined}
-            className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Buscar modelos
-          </button>
+        <div className="flex">
           <button
             type="submit"
             disabled={saving}

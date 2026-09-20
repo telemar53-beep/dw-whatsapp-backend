@@ -34,9 +34,9 @@ function EditContactModal({ conversation, onClose, onSaved }) {
   }
 
   return (
-    <WaDialog title="Editar cliente" onClose={onClose} size="max-w-sm">
+    <WaDialog title="Editar cliente" onClose={onClose} size="max-w-2xl" variant="contact-edit">
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="wa-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-3">
+        <div className="dialog-contact-fields wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-3">
           <div>
             <label htmlFor="contact-name" className={waLabelClass}>
               Nome

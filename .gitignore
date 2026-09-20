@@ -20,3 +20,7 @@ output/prompt/
 # transcricoes que ele gera ao rodar com a OpenAI de verdade.
 .local/
 output/simulacao/
+
+# Configuracao pessoal do Claude Code neste projeto (diretorios extras da
+# sessao). E de cada maquina, nao do time.
+.claude/settings.local.json

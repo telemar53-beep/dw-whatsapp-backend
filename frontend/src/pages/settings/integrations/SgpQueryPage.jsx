@@ -12,7 +12,7 @@ const USES = [
 function SgpQueryPage() {
   return (
     <ProtectedRoute level="integrations" areaLabel="Consulta ao SGP">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <div className="settings-service-detail grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <SgpQueryConfigCard />
         <div className="space-y-4">
           <section className="rounded-[14px] border border-wa-border bg-black/[0.12] px-4 py-4 sm:px-5">

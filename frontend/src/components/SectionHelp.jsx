@@ -14,7 +14,7 @@ function SectionHelp({ label, title, children }) {
         O que é isso?
       </button>
       {open && (
-        <WaDialog title={title} onClose={() => setOpen(false)} size="max-w-md">
+        <WaDialog variant="help" title={title} onClose={() => setOpen(false)} size="max-w-md">
           <div className="px-6 py-4 text-[14.5px] leading-[20px] text-wa-text">{children}</div>
           <div className="flex shrink-0 justify-end px-4 py-3">
             <button type="button" onClick={() => setOpen(false)} className={waPrimaryButtonClass}>

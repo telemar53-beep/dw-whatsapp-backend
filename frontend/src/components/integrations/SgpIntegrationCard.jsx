@@ -7,7 +7,7 @@ import { Button, DangerZone } from '../ui';
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
-const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+const cardClass = 'space-y-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-4';
 
 const MODE_LABELS = { freetext: 'Texto livre (Baileys)', template: 'Template (oficial)' };
 
@@ -136,6 +136,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
           aria-label={`Editar integração: ${integration.description}`}
           className="space-y-3 rounded-xl border border-wa-surface-line bg-wa-surface-soft p-4"
         >
+          <div className="grid gap-3 md:grid-cols-2">
           <div>
             <label htmlFor={`sgp-edit-description-${integration.id}`} className={labelClass}>Descrição</label>
             <input
@@ -158,6 +159,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+          </div>
           </div>
           {editIsTemplateMode && (
             <div>

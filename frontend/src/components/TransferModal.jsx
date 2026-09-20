@@ -84,7 +84,7 @@ function AgentRow({ agent, online, busy, onTransfer }) {
         <AgentAvatar agentId={agent.id} avatarPath={agent.avatarPath} name={displayName} size={46} />
         <span
           title={online ? 'Online' : 'Offline'}
-          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#1c1a18] ${DOT_CLASSES[level.tone]}`}
+          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#30383d] ${DOT_CLASSES[level.tone]}`}
         />
       </span>
       <span className="flex min-w-0 flex-1 basis-0 flex-col gap-1.5">
@@ -166,7 +166,7 @@ function TransferModal({ conversationId, onClose }) {
   const hasOthers = allAgents.some((a) => a.id !== agent.id);
 
   return (
-    <WaDialog onClose={onClose} size="max-w-[760px]">
+    <WaDialog variant="transfer" onClose={onClose} size="max-w-[760px]">
       <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5">
         <span aria-hidden="true" className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-chat-orange/20 text-chat-orange">
           <IconTransfer size={30} />
@@ -210,7 +210,7 @@ function TransferModal({ conversationId, onClose }) {
               className="cursor-pointer appearance-none bg-transparent pr-2 text-[13.5px] font-medium leading-[19px] text-wa-text outline-none"
             >
               {SORTS.map((item) => (
-                <option key={item.key} value={item.key} className="bg-[#26221f] text-white">
+                <option key={item.key} value={item.key} className="bg-[#30383d] text-white">
                   {item.label}
                 </option>
               ))}

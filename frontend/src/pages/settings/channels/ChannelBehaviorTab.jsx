@@ -1,5 +1,5 @@
 import { Link, useOutletContext } from 'react-router-dom';
-import { Card, Toggle } from '../../../components/ui';
+import { Toggle } from '../../../components/ui';
 import { useTriage } from '../../../hooks/useTriage';
 import { useAiConfig } from '../../../hooks/useAiConfig';
 import { useBusinessHoursConfig } from '../../../hooks/useBusinessHoursConfig';
@@ -14,7 +14,7 @@ function ErrorNote({ children }) {
 
 function SummaryRow({ to, label, value }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-wa-border py-2.5 last:border-b-0">
       <Link to={to} className="text-[13.5px] font-medium text-wa-link hover:underline">
         {label}
       </Link>
@@ -57,7 +57,7 @@ function ChannelBehaviorTab() {
         : undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="settings-channel-behavior space-y-3">
       {!canManage && (
         <p className="rounded-[12px] bg-wa-warn-bg px-3 py-2.5 text-[13.5px] text-wa-warn-text">{PERMISSION_REASON}</p>
       )}
@@ -66,7 +66,9 @@ function ChannelBehaviorTab() {
       <ErrorNote>{actions.errors.aiTriage}</ErrorNote>
       <ErrorNote>{actions.errors.aiNightMode}</ErrorNote>
 
-      <Card title="Automações deste canal">
+      <section aria-labelledby="channel-automation-title" className="rounded-[14px] border border-wa-border bg-black/[0.08] px-4 py-4 sm:px-5">
+        <h3 id="channel-automation-title" className="mb-3 text-[15px] font-semibold text-wa-text">Automações deste canal</h3>
+        <div className="grid items-start gap-x-5 gap-y-0 md:grid-cols-2 [&>*]:border-b [&>*]:border-wa-border [&>*]:py-3">
         <Toggle
           id="channel-triage"
           checked={Boolean(channel.triageEnabled)}
@@ -100,17 +102,19 @@ function ChannelBehaviorTab() {
           disabledReason={nightModeDisabledReason}
           label="Atendimento noturno"
         />
-      </Card>
+        </div>
+      </section>
 
-      <Card title="Configurações globais que valem para este canal">
-        <div className="divide-y divide-wa-border">
+      <section aria-labelledby="channel-global-title" className="rounded-[14px] border border-wa-border bg-black/[0.08] px-4 py-4 sm:px-5">
+        <h3 id="channel-global-title" className="mb-2 text-[15px] font-semibold text-wa-text">Configurações globais que valem para este canal</h3>
+        <div className="grid gap-x-6 md:grid-cols-2">
           <SummaryRow to="/configuracoes/automacao/triagem-menu" label="Triagem por menu" value={triageOptionsLabel} />
           <SummaryRow to="/configuracoes/mensagens/boas-vindas" label="Boas-vindas" value={welcomeLabel} />
           <SummaryRow to="/configuracoes/regras/horario" label="Horário de atendimento" value={businessHoursLabel} />
           <SummaryRow to="/configuracoes/automacao/noturno" label="Janela noturna" value={nightWindowLabel} />
           <SummaryRow to="/configuracoes/integracoes/openai" label="OpenAI" value={openAiStatus} />
         </div>
-      </Card>
+      </section>
     </div>
   );
 }

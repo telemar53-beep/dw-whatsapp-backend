@@ -65,7 +65,7 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
         type="button"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
-        className="h-[38px] shrink-0 rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-muted transition hover:border-white/25 hover:bg-white/[0.10] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+        className="h-[38px] shrink-0 rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-muted transition hover:border-white/25 hover:bg-white/[0.10] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         {label}
         {selected.length > 0 && <span className="ml-1.5 font-medium text-chat-orange">{selected.length}</span>}
@@ -77,7 +77,7 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
           ) : (
             options.map((option) => (
               <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded-[10px] px-2 py-1.5 text-[13.5px] text-chat-muted hover:bg-white/[0.07] hover:text-chat-text">
-                <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} className="h-4 w-4 shrink-0 accent-chat-orange focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70" />
+                <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} className="h-4 w-4 shrink-0 accent-chat-orange focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring" />
                 <span className="min-w-0 truncate">{option.label}</span>
               </label>
             ))
@@ -336,7 +336,7 @@ function SupervisionPage() {
             onChange={(e) => setProtocolQuery(e.target.value)}
             placeholder="Buscar por protocolo"
             aria-label="Buscar por protocolo"
-            className="h-[38px] w-[205px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+            className="h-[38px] w-[205px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           />
         </form>
         <form onSubmit={handlePhoneSearch} className="min-w-0 max-w-full shrink-0">
@@ -346,7 +346,7 @@ function SupervisionPage() {
             onChange={(e) => setPhoneQuery(e.target.value)}
             placeholder="Buscar por telefone do cliente"
             aria-label="Buscar por telefone do cliente"
-            className="h-[38px] w-[262px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+            className="h-[38px] w-[262px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           />
         </form>
         </div>
@@ -390,7 +390,7 @@ function SupervisionPage() {
             <button
               type="button"
               onClick={clearPhoneSearch}
-              className="shrink-0 rounded-[8px] text-[13px] font-medium text-chat-orange hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+              className="shrink-0 rounded-[8px] text-[13px] font-medium text-chat-orange hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
               Limpar busca
             </button>
@@ -425,7 +425,7 @@ function SupervisionPage() {
               <button
                 type="button"
                 onClick={refreshDashboard}
-                className="rounded-[8px] border border-wa-error-text/40 px-2.5 py-1 text-[13px] font-medium transition hover:bg-wa-error-text/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-error-text"
+                className="rounded-[8px] border border-wa-error-text/40 px-2.5 py-1 text-[13px] font-medium transition hover:bg-wa-error-text/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
               >
                 Tentar de novo
               </button>
@@ -477,7 +477,7 @@ function SupervisionPage() {
               type="button"
               onClick={loadMoreClosed}
               disabled={loadingClosed}
-              className="mt-3 w-full rounded-[16px] border border-white/[0.10] bg-white/[0.06] px-4 py-3 text-[14px] font-medium text-chat-text transition hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 w-full rounded-[16px] border border-white/[0.10] bg-white/[0.06] px-4 py-3 text-[14px] font-medium text-chat-text transition hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loadingClosed ? 'Carregando...' : 'Carregar mais'}
             </button>

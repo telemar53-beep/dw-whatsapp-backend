@@ -77,7 +77,7 @@ function AssignmentMessageSection() {
         className="settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-4"
       >
         <label className="flex items-center gap-2 text-sm text-wa-muted">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-accent" />
           Ativo
         </label>
         <div className="grid gap-3 lg:grid-cols-2">
@@ -120,7 +120,7 @@ function AssignmentMessageSection() {
                   type="checkbox"
                   checked={agentIds.includes(agent.id)}
                   onChange={() => toggleAgent(agent.id)}
-                  className="h-4 w-4 accent-wa-green"
+                  className="h-4 w-4 accent-accent"
                 />
                 {agent.name}
               </label>
@@ -136,7 +136,7 @@ function AssignmentMessageSection() {
                   type="checkbox"
                   checked={channelIds.includes(channel.id)}
                   onChange={() => toggleChannel(channel.id)}
-                  className="h-4 w-4 accent-wa-green"
+                  className="h-4 w-4 accent-accent"
                 />
                 {channel.name}
               </label>
@@ -149,7 +149,7 @@ function AssignmentMessageSection() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>

@@ -80,7 +80,7 @@ function AppShell({ dense = false }) {
             aria-controls="sidenav"
             aria-expanded={mobileNavOpen}
             data-testid="open-mobile-nav"
-            className={`m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.10] text-chat-text transition hover:bg-white/[0.16] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${conversationOpen ? 'hidden' : 'md:hidden'}`}
+            className={`m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.10] text-chat-text transition hover:bg-white/[0.16] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring ${conversationOpen ? 'hidden' : 'md:hidden'}`}
           >
             <IconChats size={22} />
           </button>

@@ -117,7 +117,7 @@ function AgentRow({ agent, online, busy, onTransfer }) {
         onClick={onTransfer}
         disabled={busy}
         aria-label={`Transferir para ${displayName}`}
-        className="flex shrink-0 items-center gap-2 rounded-[10px] border border-chat-orange/60 bg-chat-orange/20 px-3.5 py-2 text-[13.5px] font-semibold text-[#ffb08a] transition-colors hover:bg-chat-orange/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-orange disabled:opacity-50"
+        className="flex shrink-0 items-center gap-2 rounded-[10px] border border-chat-orange/60 bg-chat-orange/20 px-3.5 py-2 text-[13.5px] font-semibold text-[#ffb08a] transition-colors hover:bg-chat-orange/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50"
       >
         <span className="text-chat-orange">
           <IconArrowRight size={15} />
@@ -180,7 +180,7 @@ function TransferModal({ conversationId, onClose }) {
           onClick={onClose}
           aria-label="Fechar o popup de transferência"
           title="Fechar"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-white/[0.06] text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-white/[0.06] text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <IconClose size={17} />
         </button>
@@ -245,7 +245,7 @@ function TransferModal({ conversationId, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 rounded-[10px] border border-wa-border-strong bg-white/[0.06] px-6 py-2 text-[13.5px] font-medium text-wa-text transition-colors hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="shrink-0 rounded-[10px] border border-wa-border-strong bg-white/[0.06] px-6 py-2 text-[13.5px] font-medium text-wa-text transition-colors hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           Cancelar
         </button>

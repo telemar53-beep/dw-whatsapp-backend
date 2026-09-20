@@ -68,7 +68,7 @@ function CityNoticeRow({ city, onSaved }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={2}
-            className="w-full rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-[13.5px] text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60"
+            className="w-full rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-[13.5px] text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60"
             required
           />
           <label className="flex items-center gap-2 text-[13px] text-wa-muted">
@@ -76,7 +76,7 @@ function CityNoticeRow({ city, onSaved }) {
               type="checkbox"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 accent-wa-green"
+              className="h-4 w-4 accent-accent"
             />
             Ativo
           </label>
@@ -85,7 +85,7 @@ function CityNoticeRow({ city, onSaved }) {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-[10px] bg-wa-green px-3 py-1.5 text-[13px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[10px] bg-accent px-3 py-1.5 text-[13px] font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Salvar
             </button>

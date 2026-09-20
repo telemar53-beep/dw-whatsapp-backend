@@ -35,7 +35,7 @@ function ConversationModal({ conversation, onClose, onTransferClick }) {
           onClick={onClose}
           aria-label="Fechar conversa"
           title="Fechar"
-          className="absolute right-3 top-3 z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-wa-surface-line bg-wa-panel text-wa-muted shadow-sm backdrop-blur-md transition hover:bg-wa-hover hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green md:flex"
+          className="absolute right-3 top-3 z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-wa-surface-line bg-wa-panel text-wa-muted shadow-sm backdrop-blur-md transition hover:bg-wa-hover hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring md:flex"
         >
           <IconClose size={16} />
         </button>

@@ -10,7 +10,7 @@ import SectionHelp from './SectionHelp';
 import { AsyncState } from './ui';
 
 const inputClass =
-  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
 
 function TriageOptionRow({ option, onSaved, onDeleted }) {
   const { token } = useAuth();
@@ -114,7 +114,7 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>

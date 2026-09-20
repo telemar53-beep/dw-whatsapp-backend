@@ -77,7 +77,7 @@ function ChannelsListPage() {
                       type="checkbox"
                       checked={showHidden}
                       onChange={(e) => toggleShowHidden(e.target.checked)}
-                      className="h-4 w-4 accent-wa-green"
+                      className="h-4 w-4 accent-accent"
                     />
                     Mostrar ocultos
                   </label>

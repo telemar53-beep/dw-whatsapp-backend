@@ -10,10 +10,6 @@
   /* Base clara dos componentes: continua valendo fora de `.chat-theme`, que
      hoje é declarado por todas as páginas. Manter os dois lados faz o mesmo
      componente servir aos dois temas sem fork. */
-  --color-wa-green: #0d9488;
-  --color-wa-green-dark: #0b7d73;
-  --color-wa-badge: #0d9488;
-  --color-wa-tick: #0d9488;
   --color-wa-text: #0b1220;
   --color-wa-muted: #5b6472;
   --color-wa-meta: #808a97;
@@ -22,14 +18,12 @@
   --color-wa-border-strong: #c3d2cd;
   --color-wa-panel: #ffffff;
   --color-wa-panel-header: #eef4f2;
-  --color-wa-page: #eef5f3;
   --color-wa-chat: #eef5f3;
   --color-wa-in: #ffffff;
   --color-wa-out: #ffffff;
   --color-wa-out-deep: #eef4f2;
   --color-wa-hover: #eef4f2;
   --color-wa-active: #e6efec;
-  --color-wa-quote: #0d9488;
   --color-wa-chip: #dcefe9;
   --color-wa-chip-text: #0f766e;
   --color-wa-avatar: #dfe5e7;
@@ -47,20 +41,31 @@
   --color-sgp-red: #d93025;
   --color-sgp-gray: #57626d;
 
+  /* ---------- Acento ----------
+     `accent` pinta laranja dentro de `.chat-theme` — o nome mente sobre o
+     que renderiza. `accent` é o mesmo valor com o nome certo; `on-accent` é a
+     tinta que fica legível em cima dele (branco sobre o teal claro, grafite
+     sobre o laranja escuro). Trocar a cor da marca passa a ser mudar estes
+     três valores, não caçar dezenas de tons espalhados. */
+  --color-accent: #0d9488;
+  --color-accent-strong: #0b7d73;
+  --color-on-accent: #ffffff;
+
+  /* ---------- Anel de foco ----------
+     Um valor só, no lugar das nove cores de contorno que conviviam. */
+  --color-focus-ring: #e5a16d;
+
   /* Vidro fumê da página de chat (Atendimento) — escopo isolado dos tokens wa-*,
      que continuam servindo os modais claros. Ver output/design-chat/LEIA-ME-DESIGN.md */
   --color-chat-canvas: #20272d;
-  --color-chat-rail: #252d33;
   --color-chat-text: #f4f6f7;
   --color-chat-muted: #bec8ce;
   --color-chat-faint: #97a4ad;
   --color-chat-icon: #b9c4cb;
   --color-chat-copper: #f29a58;
-  --color-chat-mauve: #6c5b77;
   --color-chat-orange: #f28c45;
   --color-chat-orange-ink: #2a1b12;
   --color-chat-online: #33d9a6;
-  --color-chat-cream: #f28c45;
 }
 
 /* ---------- Vidro fumê nos pop-ups da página de atendimento ----------
@@ -89,22 +94,19 @@
   --color-wa-border-strong: rgba(255, 255, 255, 0.2);
   --color-wa-panel: rgba(45, 54, 60, 0.96);
   --color-wa-panel-header: rgba(255, 255, 255, 0.07);
-  --color-wa-page: #20272d;
   --color-wa-chat: #293136;
   --color-wa-in: rgba(255, 255, 255, 0.14);
   --color-wa-out: rgba(255, 255, 255, 0.12);
   --color-wa-out-deep: rgba(255, 255, 255, 0.12);
   --color-wa-hover: rgba(255, 255, 255, 0.07);
   --color-wa-active: rgba(255, 255, 255, 0.12);
-  --color-wa-green: #f28c45;
-  --color-wa-green-dark: #dd7835;
-  --color-wa-badge: #33d9a6;
-  --color-wa-tick: #33d9a6;
-  --color-wa-quote: #f28c45;
   --color-wa-chip: rgba(51, 217, 166, 0.16);
   --color-wa-chip-text: #33d9a6;
   --color-wa-avatar: rgba(255, 255, 255, 0.13);
   --color-wa-avatar-text: #c7d0d5;
+  --color-accent: #f28c45;
+  --color-accent-strong: #dd7835;
+  --color-on-accent: #2a1b12;
   --color-wa-error-bg: rgba(234, 67, 53, 0.18);
   --color-wa-error-text: #ff9d93;
   --color-wa-warn-bg: rgba(242, 169, 60, 0.16);
@@ -119,12 +121,6 @@
   --color-sgp-gray: #c7c2bd;
 }
 
-/* O laranja aprovado usa texto escuro: branco sobre esse tom perde contraste,
-   especialmente em botões pequenos e indicadores de contagem. */
-.chat-theme :is(button, a, span)[class~="bg-wa-green"][class~="text-white"],
-.chat-theme :is(button, a, span)[class~="bg-chat-orange"][class~="text-white"] {
-  color: var(--color-chat-orange-ink);
-}
 
 /* Tabelas de canais, usuários e cadastros preservam a densidade de trabalho. */
 .chat-theme table tbody tr:hover { background-color: rgba(255, 255, 255, 0.035); }
@@ -142,20 +138,50 @@
   --scroll-thumb-hover: rgba(11, 20, 26, 0.34);
 }
 
+/* ---------- Escalas do produto ----------
+   Vocabulário declarado, não imposto. Ficam com prefixo `dw-` de propósito:
+   redefinir `--text-sm` ou `--radius-lg` mudaria de uma vez os 113 `text-sm` e
+   os 57 `rounded-lg` que já existem, e isso é convergência, não consolidação.
+   Cada área adota estes valores quando for a vez dela. */
+:root {
+  /* Tipografia — piso de 12px para texto lido; 11px só para número e selo. */
+  --dw-text-2xs: 11px;
+  --dw-text-xs: 12px;
+  --dw-text-sm: 13px;   /* o corpo real do produto */
+  --dw-text-base: 14px;
+  --dw-text-lg: 16px;
+  --dw-text-xl: 20px;
+  --dw-text-2xl: 26px;
+
+  /* Espaçamento — escala de 4, onde o produto já vive. */
+  --dw-space-1: 4px;
+  --dw-space-2: 8px;
+  --dw-space-3: 12px;
+  --dw-space-4: 16px;
+  --dw-space-6: 24px;
+  --dw-space-8: 32px;
+  --dw-space-12: 48px;
+
+  /* Raio — painel 22 > cartão 16 > controle 12 > chip 8. */
+  --dw-radius-sm: 8px;
+  --dw-radius-md: 12px;
+  --dw-radius-lg: 16px;
+  --dw-radius-xl: 22px;
+
+  /* Largura de campo pelo dado que ele guarda (ver ui/Field). */
+  --dw-field-xs: 96px;
+  --dw-field-sm: 180px;
+  --dw-field-md: 320px;
+}
+
 /* ---------- Foco por teclado ----------
-   Rede de segurança: todo link e botão ganha um anel visível mesmo quando a
-   classe do componente não declara um. Fica na camada base, então qualquer
-   utilitário `focus-visible:outline-*` do próprio componente continua vencendo
-   e mantém a cor certa (laranja no CTA, verde no formulário). */
-@layer base {
-  .chat-theme a:focus-visible,
-  .chat-theme button:focus-visible,
-  .chat-theme summary:focus-visible,
-  .chat-theme [role="button"]:focus-visible,
-  .chat-theme [tabindex]:not([tabindex="-1"]):focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.7);
-    outline-offset: 2px;
-  }
+   Uma regra, uma cor, para todo elemento que recebe foco — inclusive campos,
+   que antes ficavam de fora. Fica FORA de @layer de propósito: regra sem
+   layer vence utilitário em layer, e é isso que alcança os 42 `outline-none`
+   espalhados pelos campos. O `outline-offset` não faz parte do atalho
+   `outline`, então cada componente mantém o recuo que já escolheu. */
+.chat-theme :is(a, button, summary, input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
 }
 
 /* ---------- Fundo do chat ---------- */

@@ -131,7 +131,7 @@ function DashboardPage() {
               onClick={() => setStartingConversation(true)}
               aria-label="Nova conversa"
               title="Nova conversa"
-              className="chat-new-conversation flex h-9 shrink-0 items-center gap-1 rounded-[10px] bg-chat-orange pl-2.5 pr-3.5 text-[13.5px] font-semibold text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+              className="chat-new-conversation flex h-9 shrink-0 items-center gap-1 rounded-[10px] bg-chat-orange pl-2.5 pr-3.5 text-[13.5px] font-semibold text-on-accent transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
               <IconNewChat size={18} />
               Nova

@@ -44,11 +44,11 @@
 .settings-workspace input[type=search] {min-height:0;padding:0;background:transparent;border:0;border-radius:0}
 .settings-workspace label:has(> input[type=search]) {min-height:34px;height:34px;border-radius:6px;max-width:420px;font-size:12px}
 .settings-workspace textarea {min-height:76px;resize:vertical;line-height:1.5}
-.settings-workspace :is(input,select,textarea):focus-visible {outline:2px solid #d5a176;outline-offset:2px}
+.settings-workspace :is(input,select,textarea):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 .settings-workspace input:is([type=checkbox],[type=radio]) {accent-color:#d5a176}
 .settings-workspace :is(form,section,.settings-detail-header,.settings-group-header,.settings-group-body) button:not([role=tab]) {font-size:12px;line-height:18px;border-radius:6px;padding:5px 10px;min-height:30px;box-shadow:none}
 .settings-workspace button:disabled {opacity:.45;cursor:not-allowed}
-.settings-workspace :is(button,a,summary):focus-visible {outline:2px solid #d5a176;outline-offset:2px}
+.settings-workspace :is(button,a,summary):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 .settings-workspace :is(form,section) label {font-size:12px}
 .settings-workspace :is(form,section) p.text-sm {font-size:12px;line-height:18px}
 .settings-workspace table {font-size:12px}

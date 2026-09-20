@@ -17,7 +17,7 @@ function AccessDeniedPage({ areaLabel = 'esta área', level = 'admin' }) {
       <p className="mt-2 max-w-[44ch] text-[14px] leading-[20px] text-chat-muted">{LEVEL_TEXT[level] || LEVEL_TEXT.admin}</p>
       <Link
         to="/"
-        className="mt-6 rounded-full bg-chat-orange px-5 py-2.5 text-[14px] font-medium text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-orange"
+        className="mt-6 rounded-full bg-chat-orange px-5 py-2.5 text-[14px] font-medium text-on-accent transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       >
         Ir para o Atendimento
       </Link>

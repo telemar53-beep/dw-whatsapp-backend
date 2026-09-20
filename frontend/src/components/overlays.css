@@ -7,7 +7,7 @@
 .dw-dialog textarea {resize:vertical}
 .dw-dialog label,.dw-dialog legend {font-size:12px}
 .dw-dialog button {font-size:12px;line-height:18px}
-.dw-dialog :is(button,a,input,select,textarea,summary):focus-visible {outline:2px solid #d5a176;outline-offset:2px}
+.dw-dialog :is(button,a,input,select,textarea,summary):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 .dw-dialog button:disabled {opacity:.45}
 .dw-dialog form > div:last-child:has(> button),.dw-dialog > div:last-child:has(> button) {border-top:1px solid #ffffff10;padding:12px 22px;gap:8px}
 .dw-dialog form > div:last-child:has(> button) button,.dw-dialog > div:last-child:has(> button) button {padding:7px 13px;border-radius:7px}
@@ -129,7 +129,7 @@
 .dialog-context-menu {border-radius:8px;background:#303d46;border-color:#64778466;padding:5px;box-shadow:0 10px 28px #0005}
 .dialog-context-menu button {font-size:12px;padding:7px 10px;border-radius:4px;line-height:18px}
 .dialog-context-menu button:hover {background:#ffffff08}
-.dialog-context-menu button:focus-visible {outline:2px solid #d5a176;outline-offset:-2px}
+.dialog-context-menu button:focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:-2px}
 .dialog-context-menu button.text-wa-error-text {border-top:1px solid #ffffff10;margin-top:4px}
 .dialog-popover-heading {padding:7px 10px;font-size:11px;color:#a5bac8;border-bottom:1px solid #ffffff12;margin-bottom:4px;font-weight:600}
 .dialog-quick-replies {width:340px;border-radius:10px}
@@ -143,7 +143,7 @@
 .dialog-filter-options {width:260px;border-radius:9px;padding:6px;box-shadow:0 10px 28px #0005}
 .dialog-filter-options label {font-size:12px;border-radius:5px;padding:7px 8px}
 .dialog-filter-options label:has(input:checked) {background:#d5a17612;color:#efd4ba}
-.dialog-filter-options label:focus-within {outline:2px solid #d5a176;outline-offset:-2px}
+.dialog-filter-options label:focus-within {outline: 2px solid var(--color-focus-ring);outline-offset:-2px}
 .dialog-sector-assignment {display:grid;grid-template-columns:180px minmax(0,1fr) auto;gap:14px;align-items:start}
 .dialog-sector-assignment > * {margin:0!important}
 .dialog-sector-assignment > p:first-child {font-size:12px}
@@ -152,7 +152,7 @@
 [data-dialog=templates] .dw-dialog-heading {display:flex;align-items:center;gap:10px}
 [data-dialog=templates] .dw-dialog-heading:before {content:'';display:block;flex:none;width:22px;height:22px;background:#8bbaff;mask:url('../assets/brands/meta.svg') center/contain no-repeat}
 .chat-workspace-customer-panel .chat-workspace-panel-heading button {width:28px;height:28px;display:grid;place-items:center;border-radius:6px}
-.chat-workspace-customer-panel .chat-workspace-panel-heading button:focus-visible {outline:2px solid #d5a176;outline-offset:2px}
+.chat-workspace-customer-panel .chat-workspace-panel-heading button:focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 .dialog-conversation {border-radius:14px}
 @media(max-width:680px){.dialog-sector-assignment{grid-template-columns:1fr}.dialog-sector-assignment>div:last-child{justify-self:start}}
 [data-dialog=campaign] .dialog-campaign-fields > .dialog-campaign-content {grid-column:1;grid-row:2;min-width:0;display:flex;flex-direction:column;gap:12px}

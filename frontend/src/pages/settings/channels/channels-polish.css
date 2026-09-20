@@ -31,7 +31,7 @@
 .settings-channel-center .settings-channel-record > div:last-child a,.settings-workspace .settings-channel-center .settings-channel-record > div:last-child button[aria-haspopup] {height:30px;min-height:30px;border-radius:6px;background:#ffffff03;border-color:#ffffff12;font-size:11px;padding:4px 9px;color:#cbd6dd;gap:6px}
 .settings-workspace .settings-channel-center .settings-channel-record > div:last-child button[aria-haspopup] {width:30px;padding:0;background:transparent;border-color:transparent}
 .settings-channel-center .settings-channel-record > div:last-child a:hover,.settings-workspace .settings-channel-center button[aria-haspopup]:hover,.settings-workspace .settings-channel-center button[aria-expanded=true] {background:#ffffff08;border-color:#ffffff22;color:#edf2f5}
-.settings-channel-center :is(a,button,select):focus-visible {outline:2px solid #d5a176;outline-offset:2px}
+.settings-channel-center :is(a,button,select):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 .settings-channel-center .channel-row-menu {border-radius:8px;background:#303d46;border-color:#64778466;box-shadow:0 10px 28px #0005;min-width:172px}
 .settings-workspace .settings-channel-center .channel-row-menu button {display:flex;align-items:center;gap:8px;min-height:30px;padding:6px 9px;font-size:12px;border-radius:4px}
 .settings-channel-center .channel-row-menu button:hover {background:#ffffff08}

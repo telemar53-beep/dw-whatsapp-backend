@@ -106,7 +106,7 @@ function AiToolsPage() {
                               }
                             />
                             <details className="text-[12px] leading-[17px] text-wa-muted">
-                              <summary className="absolute right-1 top-[9px] cursor-pointer list-none text-[11.5px] font-medium text-chat-copper hover:text-chat-orange focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-orange [&::-webkit-details-marker]:hidden">Quando usar</summary>
+                              <summary className="absolute right-1 top-[9px] cursor-pointer list-none text-[11.5px] font-medium text-chat-copper hover:text-chat-orange focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring [&::-webkit-details-marker]:hidden">Quando usar</summary>
                               <div className="mt-2 border-l-2 border-chat-copper/50 pl-2.5">
                                 <p>{tool.descricao}</p>
                                 <p className="mt-1 text-[11px] text-wa-muted">Identificador técnico: <code>{tool.nome}</code></p>

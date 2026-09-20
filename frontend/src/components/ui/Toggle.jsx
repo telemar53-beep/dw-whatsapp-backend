@@ -11,7 +11,7 @@ export function Toggle({ id, checked, onChange, label, description, disabled = f
         disabled={disabled}
         onChange={onChange}
         aria-describedby={describedBy}
-        className="mt-[3px] h-4 w-4 shrink-0 cursor-pointer accent-wa-green focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed"
+        className="mt-[3px] h-4 w-4 shrink-0 cursor-pointer accent-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed"
       />
       <div className="min-w-0">
         <label htmlFor={id} className={`block text-[14px] leading-[20px] ${disabled ? 'cursor-not-allowed text-wa-muted' : 'cursor-pointer text-wa-text'}`}>

@@ -72,8 +72,8 @@ function SendAction({ label, color, icon, onClick, busy, done, pressed }) {
       onClick={onClick}
       disabled={busy}
       aria-pressed={pressed}
-      className={`flex h-9 items-center gap-2 rounded-[10px] border px-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green disabled:opacity-60 ${
-        pressed || done ? 'border-wa-chip-text bg-wa-chip' : 'border-wa-border bg-wa-surface hover:border-wa-green/50 hover:bg-wa-hover'
+      className={`flex h-9 items-center gap-2 rounded-[10px] border px-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring disabled:opacity-60 ${
+        pressed || done ? 'border-wa-chip-text bg-wa-chip' : 'border-wa-border bg-wa-surface hover:border-accent/50 hover:bg-wa-hover'
       }`}
     >
       <span
@@ -131,7 +131,7 @@ function FinanceiroSection({ contractId, onSendMessage, onSendPdf, onSendPix, on
         <button
           type="button"
           onClick={onGenerate}
-          className="w-full rounded-[12px] bg-wa-green px-3 py-2.5 text-[13.5px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
+          className="w-full rounded-[12px] bg-accent px-3 py-2.5 text-[13.5px] font-medium text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           Consultar fatura em aberto
         </button>
@@ -312,13 +312,13 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
             placeholder="CPF ou CNPJ"
             aria-label="CPF do cliente"
             inputMode="numeric"
-            className="h-10 min-w-0 flex-1 rounded-[12px] border border-wa-border bg-wa-field px-3 text-[14px] text-wa-text outline-none placeholder:text-wa-muted focus:border-wa-green focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-wa-green/40"
+            className="h-10 min-w-0 flex-1 rounded-[12px] border border-wa-border bg-wa-field px-3 text-[14px] text-wa-text outline-none placeholder:text-wa-muted focus:border-accent focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-accent/40"
           />
           <button
             type="submit"
             aria-label="Buscar"
             title="Buscar"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-wa-green text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-accent text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
             <IconSearch size={18} />
           </button>
@@ -362,7 +362,7 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
                     id="sgp-contract-select"
                     value={selectedContractId || ''}
                     onChange={(e) => setSelectedContractId(e.target.value)}
-                    className="h-9 w-full appearance-none rounded-[10px] border border-wa-border bg-wa-field pl-3 pr-8 text-[13.5px] text-wa-text outline-none focus:border-wa-green"
+                    className="h-9 w-full appearance-none rounded-[10px] border border-wa-border bg-wa-field pl-3 pr-8 text-[13.5px] text-wa-text outline-none focus:border-accent"
                   >
                     {contracts.map((contract) => (
                       <option key={contract.id} value={contract.id}>

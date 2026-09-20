@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 const CRUMB_LINK =
-  'rounded-[6px] hover:text-chat-text hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
+  'rounded-[6px] hover:text-chat-text hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 
 export function PageHeader({ title, description, action, crumbs = [] }) {
   return (

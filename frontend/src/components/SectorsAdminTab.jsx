@@ -11,7 +11,7 @@ import { AsyncState, Button, inputClass } from './ui';
 const CELL = 'px-3 py-3 align-middle';
 const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const SMALL_BTN =
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border px-3 text-[13px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:opacity-50';
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border px-3 text-[13px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50';
 
 function SectorRow({ sector, onSaved, onDeleted }) {
   const { token } = useAuth();

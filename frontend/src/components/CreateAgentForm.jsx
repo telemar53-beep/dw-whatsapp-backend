@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { createAgent } from '../services/api';
 
 const inputClass =
-  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 
 // `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
@@ -105,7 +105,7 @@ function CreateAgentForm({ onCreated, onCancel, embedded = false }) {
             type="checkbox"
             checked={canManageIntegrations}
             onChange={(e) => setCanManageIntegrations(e.target.checked)}
-            className="h-4 w-4 accent-wa-green"
+            className="h-4 w-4 accent-accent"
           />
           Pode gerenciar Canais e Integrações
         </label>
@@ -115,7 +115,7 @@ function CreateAgentForm({ onCreated, onCancel, embedded = false }) {
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
         >
           Cadastrar
         </button>

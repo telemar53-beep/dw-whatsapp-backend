@@ -3,15 +3,15 @@ import { createPortal } from 'react-dom';
 import './overlays.css';
 
 export const waInputClass =
-  'w-full rounded-[10px] bg-wa-panel-header px-3.5 py-2.5 text-[14.5px] text-wa-text outline-none transition-colors placeholder:text-wa-muted focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-wa-green/60';
+  'w-full rounded-[10px] bg-wa-panel-header px-3.5 py-2.5 text-[14.5px] text-wa-text outline-none transition-colors placeholder:text-wa-muted focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-accent/60';
 
 export const waLabelClass = 'mb-1.5 block text-[13px] font-medium text-wa-muted';
 
 export const waPrimaryButtonClass =
-  'rounded-[12px] bg-wa-green px-6 py-2 text-[14px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark disabled:opacity-50';
+  'rounded-[12px] bg-accent px-6 py-2 text-[14px] font-medium text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50';
 
 export const waGhostButtonClass =
-  'rounded-[12px] px-6 py-2 text-[14px] font-medium text-wa-icon transition-colors hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
+  'rounded-[12px] px-6 py-2 text-[14px] font-medium text-wa-icon transition-colors hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 
 export const waErrorClass = 'rounded-[10px] bg-wa-error-bg px-3 py-2 text-[13.5px] text-wa-error-text';
 

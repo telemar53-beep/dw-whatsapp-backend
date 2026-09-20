@@ -58,9 +58,9 @@ const CARD = 'overflow-clip rounded-[16px] border border-white/[0.09] bg-[#2b343
 const CELL = 'px-3 py-3 align-middle';
 const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const CONTROL =
-  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-wa-green/60 focus:ring-2 focus:ring-wa-green/25';
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-accent/25';
 const ICON_BTN =
-  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
+  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 const MENU_ITEM =
   'flex w-full items-center rounded-[8px] px-3 py-2 text-left text-[13.5px] transition hover:bg-wa-hover disabled:opacity-50';
 const LABEL = 'mb-1.5 block text-[13px] font-medium text-wa-muted';
@@ -169,7 +169,7 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
         <button
           type="button"
           onClick={onSelect}
-          className="block max-w-[260px] truncate text-left text-[14px] font-medium text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="block max-w-[260px] truncate text-left text-[14px] font-medium text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           title={template.name}
         >
           {template.name}
@@ -492,7 +492,7 @@ function TemplatePreview({ template, channel }) {
       <div className="px-4 sm:px-5">
         <div className="overflow-hidden rounded-[14px] border border-white/[0.06] bg-[#0b141a]">
           <div className="flex items-center gap-3 border-b border-white/[0.06] bg-[#1f2c34] px-4 py-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chat-orange text-[13px] font-semibold text-white">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chat-orange text-[13px] font-semibold text-on-accent">
               {iniciais(channel?.name)}
             </span>
             <span className="min-w-0 flex-1">
@@ -617,7 +617,7 @@ function TemplatesAdminTab() {
     <>
       <div className="flex flex-wrap items-center gap-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-3 sm:p-4">
         <label
-          className={`${CONTROL} flex min-w-[200px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
+          className={`${CONTROL} flex min-w-[200px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/25`}
         >
           <span className="shrink-0 text-wa-muted">
             <IconSearch size={17} />

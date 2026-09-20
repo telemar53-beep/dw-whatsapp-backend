@@ -37,7 +37,7 @@ function pickSupportedAudioMimeType() {
 }
 
 function ComposerButton({ label, onClick, disabled, active, children, as = 'button', htmlFor }) {
-  const className = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${
+  const className = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring ${
     active ? 'bg-white/10 text-chat-text' : 'text-chat-icon'
   } ${disabled ? 'pointer-events-none opacity-40' : 'cursor-pointer hover:bg-white/[0.08]'}`;
 
@@ -365,7 +365,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               onClick={stopRecording}
               aria-label="Parar gravação"
               title="Parar gravação"
-              className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95"
+              className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-orange text-chat-orange-ink transition-colors hover:brightness-95"
             >
               <IconStop size={20} />
             </button>
@@ -468,7 +468,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 disabled={sending}
                 aria-label="Enviar"
                 title="Enviar"
-                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 disabled:opacity-40"
+                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-orange text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring disabled:opacity-40"
               >
                 <IconSend size={24} />
               </button>
@@ -478,7 +478,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 onClick={startRecording}
                 aria-label="Gravar áudio"
                 title="Gravar áudio"
-                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.08] text-chat-icon transition-colors hover:bg-white/[0.13] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.08] text-chat-icon transition-colors hover:bg-white/[0.13] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
               >
                 <IconMic size={24} />
               </button>

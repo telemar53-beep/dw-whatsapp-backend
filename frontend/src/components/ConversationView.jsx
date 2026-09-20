@@ -149,7 +149,7 @@ function conversationStatus(conversation) {
 }
 
 const ACTION =
-  'flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[8px] text-[12.5px] font-medium leading-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
+  'flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[8px] text-[12.5px] font-medium leading-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 const ACTION_GHOST = `${ACTION} border border-white/[0.14] bg-transparent text-chat-text hover:bg-white/[0.08]`;
 const ACTION_PRIMARY = `${ACTION} bg-chat-orange px-3.5 text-[#271d17] shadow-[0_2px_10px_rgba(255,141,64,.16)] hover:brightness-110`;
 
@@ -438,7 +438,7 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
         </button>
         <button
           onClick={() => setEditingContact(true)}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-1 py-1 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-1 py-1 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
           aria-label={`Editar cliente: ${headerLabel}`}
         >
           <ContactAvatar
@@ -565,7 +565,7 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
             <button
               type="button"
               onClick={reloadMessages}
-              className="rounded-[8px] border border-wa-error-text/40 px-2.5 py-1 text-[12.5px] font-medium transition hover:bg-wa-error-text/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-error-text"
+              className="rounded-[8px] border border-wa-error-text/40 px-2.5 py-1 text-[12.5px] font-medium transition hover:bg-wa-error-text/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
               Tentar de novo
             </button>

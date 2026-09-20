@@ -147,7 +147,7 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
             type="button"
             onClick={enviar}
             disabled={!pronto || sending}
-            className="rounded-[10px] bg-chat-orange px-3.5 py-2 text-[13.5px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-[10px] bg-chat-orange px-3.5 py-2 text-[13.5px] font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {sending ? 'Enviando…' : 'Enviar'}
           </button>

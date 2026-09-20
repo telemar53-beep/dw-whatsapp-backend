@@ -11,7 +11,7 @@ function ReasonCard({ reason, checked, onSelect, groupName }) {
     <label
       htmlFor={id}
       className={`flex cursor-pointer items-center gap-3 rounded-[12px] border bg-wa-panel-header px-3 py-3 transition-colors ${
-        checked ? 'border-wa-green' : 'border-wa-border hover:border-wa-border-strong'
+        checked ? 'border-accent' : 'border-wa-border hover:border-wa-border-strong'
       }`}
     >
       <span
@@ -40,7 +40,7 @@ function ReasonCard({ reason, checked, onSelect, groupName }) {
         onChange={onSelect}
         aria-labelledby={`${id}-name`}
         aria-describedby={look.hint ? `${id}-hint` : undefined}
-        className="h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-full border-2 border-wa-border-strong transition-colors checked:border-[5px] checked:border-wa-green focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+        className="h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-full border-2 border-wa-border-strong transition-colors checked:border-[5px] checked:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       />
     </label>
   );
@@ -70,7 +70,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
   return (
     <WaDialog variant="close-reason" onClose={onClose} size="max-w-[820px]">
       <div className="flex shrink-0 items-start gap-3 px-6 pb-4 pt-5">
-        <span aria-hidden="true" className="mt-0.5 shrink-0 text-wa-green">
+        <span aria-hidden="true" className="mt-0.5 shrink-0 text-accent">
           {closeReasonHeaderIcon}
         </span>
         <div className="min-w-0 flex-1">
@@ -82,7 +82,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
           onClick={onClose}
           aria-label="Fechar"
           title="Fechar"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-wa-border bg-wa-panel-header text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-wa-border bg-wa-panel-header text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           {closeIcon}
         </button>
@@ -113,7 +113,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
         <button
           type="button"
           onClick={onClose}
-          className="rounded-[12px] border border-wa-border-strong bg-wa-panel-header px-7 py-2.5 text-[14px] font-medium text-wa-text transition-colors hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="rounded-[12px] border border-wa-border-strong bg-wa-panel-header px-7 py-2.5 text-[14px] font-medium text-wa-text transition-colors hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           Cancelar
         </button>
@@ -121,7 +121,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
           type="button"
           onClick={handleConfirm}
           disabled={!reasonId || submitting}
-          className="flex items-center gap-2 rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark disabled:opacity-50"
+          className="flex items-center gap-2 rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50"
         >
           <span aria-hidden="true">{checkCircleIcon}</span>
           Encerrar atendimento

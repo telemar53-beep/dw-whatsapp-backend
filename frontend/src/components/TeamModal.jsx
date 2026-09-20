@@ -113,7 +113,7 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
           onClick={onClose}
           aria-label="Fechar o popup da equipe"
           title="Fechar"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-white/[0.06] text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-white/[0.06] text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           <IconClose size={17} />
         </button>
@@ -143,7 +143,7 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
                 type="button"
                 onClick={() => setFilter(item.key)}
                 aria-pressed={active}
-                className={`flex items-center gap-1.5 rounded-[9px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green ${
+                className={`flex items-center gap-1.5 rounded-[9px] border px-2.5 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring ${
                   active
                     ? 'border-chat-orange bg-chat-orange/15 text-wa-text'
                     : 'border-wa-border bg-white/[0.04] text-wa-text hover:bg-white/[0.08]'
@@ -159,7 +159,7 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
                 {item.label}
                 <span
                   className={`rounded-full px-1.5 py-[1px] text-[11px] font-semibold ${
-                    active ? 'bg-chat-orange text-white' : 'bg-white/[0.12] text-wa-text'
+                    active ? 'bg-chat-orange text-on-accent' : 'bg-white/[0.12] text-wa-text'
                   }`}
                 >
                   {counts[item.key]}
@@ -201,7 +201,7 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="rounded-[10px] border border-wa-border-strong bg-white/[0.06] px-7 py-2 text-[13.5px] font-medium text-wa-text transition-colors hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="rounded-[10px] border border-wa-border-strong bg-white/[0.06] px-7 py-2 text-[13.5px] font-medium text-wa-text transition-colors hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           Fechar
         </button>

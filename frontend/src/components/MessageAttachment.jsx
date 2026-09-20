@@ -127,7 +127,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             onClick={togglePlay}
             aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'}
             title={playing ? 'Pausar' : 'Reproduzir'}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70 ${outbound ? 'bg-[#fff0e2] text-[#573823] hover:bg-white' : 'bg-[#eef2f1] text-[#344047] hover:bg-white'}`}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring ${outbound ? 'bg-[#fff0e2] text-[#573823] hover:bg-white' : 'bg-[#eef2f1] text-[#344047] hover:bg-white'}`}
           >
             {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
           </button>
@@ -139,7 +139,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
               const rect = event.currentTarget.getBoundingClientRect();
               seekTo(Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1));
             }}
-            className="relative flex h-8 min-w-0 flex-1 items-center gap-[2px] overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
+            className="relative flex h-8 min-w-0 flex-1 items-center gap-[2px] overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring"
           >
             {bars.map((height, index) => (
               <span
@@ -168,7 +168,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             {avatar && (
               <span
                 className={`absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-chat-canvas ${
-                  progress > 0 ? 'text-chat-faint' : 'text-chat-cream'
+                  progress > 0 ? 'text-chat-faint' : 'text-chat-orange'
                 }`}
               >
                 <IconMic size={13} />
@@ -202,7 +202,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
           onClick={togglePlay}
           aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'}
           title={playing ? 'Pausar' : 'Reproduzir'}
-          className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green"
+          className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring"
         >
           {playing ? <IconPause size={26} /> : <IconPlay size={26} />}
         </button>
@@ -214,7 +214,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             const rect = event.currentTarget.getBoundingClientRect();
             seekTo(Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1));
           }}
-          className="relative mt-1 flex h-8 flex-1 items-center gap-[2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green"
+          className="relative mt-1 flex h-8 flex-1 items-center gap-[2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring"
         >
           {bars.map((height, index) => (
             <span
@@ -227,7 +227,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             />
           ))}
           <span
-            className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-wa-green shadow-[0_1px_2px_rgba(11,20,26,.25)]"
+            className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-accent shadow-[0_1px_2px_rgba(11,20,26,.25)]"
             style={{ left: `calc(${progress * 100}% - 6px)` }}
           />
         </button>
@@ -240,7 +240,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
           )}
           <span
             className={`absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full ${
-              progress > 0 ? 'text-wa-meta' : 'text-wa-green'
+              progress > 0 ? 'text-wa-meta' : 'text-accent'
             }`}
           >
             <IconMic size={18} />
@@ -340,7 +340,7 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
   return (
     <>
       {failedUrl === url ? (
-        <div role="img" aria-label="Imagem indisponível" className={`flex min-h-[88px] min-w-[160px] items-center gap-2 rounded-[8px] border px-3 text-[12.5px] ${dark ? 'border-white/[0.15] bg-white/[0.08] text-chat-cream' : 'border-wa-border bg-wa-hover text-wa-muted'} ${hasCaption ? 'mb-1' : ''}`}>
+        <div role="img" aria-label="Imagem indisponível" className={`flex min-h-[88px] min-w-[160px] items-center gap-2 rounded-[8px] border px-3 text-[12.5px] ${dark ? 'border-white/[0.15] bg-white/[0.08] text-chat-orange' : 'border-wa-border bg-wa-hover text-wa-muted'} ${hasCaption ? 'mb-1' : ''}`}>
           <IconAttach size={17} />
           Imagem indisponível
         </div>
@@ -349,7 +349,7 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
         onClick={() => setOpen(true)}
         aria-label="Abrir imagem em tela cheia"
         className={`block overflow-hidden rounded-[6px] focus-visible:outline focus-visible:outline-2 ${
-          dark ? 'focus-visible:outline-white/70' : 'focus-visible:outline-wa-green'
+          dark ? 'focus-visible:outline-focus-ring' : 'focus-visible:outline-focus-ring'
         } ${hasCaption ? 'mb-1' : ''}`}
       >
         <img

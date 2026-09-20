@@ -36,13 +36,13 @@ function CreateCityForm({ onCreated, onCancel, embedded = false }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nome da cidade"
-          className="h-10 min-w-0 flex-1 rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[14px] text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60"
+          className="h-10 min-w-0 flex-1 rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[14px] text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60"
           required
         />
         <button
           type="submit"
           disabled={submitting}
-          className="h-10 shrink-0 rounded-[10px] bg-wa-green px-4 text-[13.5px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-10 shrink-0 rounded-[10px] bg-accent px-4 text-[13.5px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
         >
           Cadastrar
         </button>

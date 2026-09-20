@@ -48,7 +48,7 @@
 .supervision-record .chat-conversation-context {font-size:10px;color:#c0b1d5;line-height:14px;margin-top:3px}
 .supervision-record .chat-conversation-context > span+span:before {content:'·';padding:0 4px;color:#8c9ca8}
 .supervision-record .chat-conversation-close {position:absolute;right:0;top:0;color:#b4b6b8;padding:3px}
-.supervision-workspace button:focus-visible,.supervision-workspace [role=button]:focus-visible {outline:2px solid #e5a16d;outline-offset:2px}
+.supervision-workspace button:focus-visible,.supervision-workspace [role=button]:focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 @media(max-width:1200px){.supervision-central{grid-template-columns:210px minmax(0,1fr)}.supervision-column-labels,.supervision-record{grid-template-columns:minmax(150px,1.5fr) minmax(95px,1fr) minmax(85px,.8fr) 105px 42px;gap:8px;padding:8px 10px}}
 @media(max-width:950px){.supervision-column-labels{display:none}.supervision-record{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 50px;gap:6px 12px}.supervision-record-contact{grid-column:1/3}.supervision-open{grid-column:3;grid-row:1/3}.supervision-record-state{grid-column:1/3;flex-direction:row;flex-wrap:wrap;gap:8px}}
 @media(max-width:650px){.supervision-central{display:flex;flex-direction:column;overflow:auto}.supervision-team{flex:none;max-height:180px;border-right:0;border-bottom:1px solid var(--supervision-line)}.supervision-team ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.supervision-operation{min-height:300px;flex:1}.supervision-toolbar input[type=text]{width:100%}.supervision-toolbar form{flex:1;min-width:140px}}

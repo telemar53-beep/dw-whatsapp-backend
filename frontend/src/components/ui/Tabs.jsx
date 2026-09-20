@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 
 const FOCUS =
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 
 // Duas aparências para o mesmo componente:
 // - pills (padrão): pílulas com borda, bolinha de contagem no canto — Supervisão.
@@ -21,7 +21,7 @@ const LINE_IDLE = 'text-chat-muted hover:text-chat-text';
 // Segmentado: um trilho arredondado onde a aba ativa vira uma pílula laranja cheia
 // e a contagem fica na quina de cada segmento — a faixa do Atendimento.
 const SEG_BASE = `relative flex min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-full px-3 py-2 text-[14px] leading-5 transition ${FOCUS}`;
-const SEG_ACTIVE = 'bg-chat-orange font-semibold text-white shadow-[0_6px_16px_-8px_rgba(244,83,31,0.9)]';
+const SEG_ACTIVE = 'bg-chat-orange font-semibold text-on-accent shadow-[0_6px_16px_-8px_rgba(244,83,31,0.9)]';
 const SEG_IDLE = 'text-chat-muted hover:text-chat-text';
 
 function tabClass(look, active, size) {
@@ -40,7 +40,7 @@ function Count({ value, look, active, size }) {
     return (
       <span
         className={`absolute -right-1 -top-1.5 flex h-[20px] min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11.5px] font-bold leading-none shadow-[0_2px_6px_rgba(0,0,0,0.35)] ${
-          active ? 'bg-white text-chat-orange' : 'bg-chat-orange text-white'
+          active ? 'bg-white text-chat-orange' : 'bg-chat-orange text-on-accent'
         }`}
       >
         {value}
@@ -52,7 +52,7 @@ function Count({ value, look, active, size }) {
     return (
       <span
         className={`flex ${dims} items-center justify-center rounded-full font-semibold leading-none ${
-          active ? 'bg-chat-orange text-white' : 'bg-white/[0.10] text-chat-muted'
+          active ? 'bg-chat-orange text-on-accent' : 'bg-white/[0.10] text-chat-muted'
         }`}
       >
         {value}
@@ -60,7 +60,7 @@ function Count({ value, look, active, size }) {
     );
   }
   return (
-    <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-chat-orange px-1 text-[11px] font-semibold leading-none text-white">
+    <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-chat-orange px-1 text-[11px] font-semibold leading-none text-on-accent">
       {value}
     </span>
   );

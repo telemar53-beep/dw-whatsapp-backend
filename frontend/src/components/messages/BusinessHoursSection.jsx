@@ -63,7 +63,7 @@ function BusinessHoursSection() {
           <p className="mt-1 text-[12.5px] text-wa-muted">Disponibilidade humana e aviso fora do expediente.</p>
         </div>
         <label className="flex items-center gap-2 text-sm text-wa-muted">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-accent" />
           Ativo
         </label>
         <div className="grid max-w-[380px] grid-cols-2 gap-3">
@@ -113,7 +113,7 @@ function BusinessHoursSection() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Salvar
           </button>

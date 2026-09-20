@@ -64,7 +64,7 @@ function ChannelWelcomeMessageRow({ channel, onSaved, readOnly = false }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={2}
-            className="w-full rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-[13.5px] text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60"
+            className="w-full rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-[13.5px] text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60"
             required
           />
           {error && <p className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">{error}</p>}
@@ -72,7 +72,7 @@ function ChannelWelcomeMessageRow({ channel, onSaved, readOnly = false }) {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-[10px] bg-wa-green px-3 py-1.5 text-[13px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[10px] bg-accent px-3 py-1.5 text-[13px] font-medium text-on-accent transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Salvar
             </button>

@@ -26,11 +26,11 @@ const STATUS_OPTIONS = [
 const CELL = 'px-3 py-3 align-middle';
 const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const SMALL_BTN =
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field px-3 text-[13px] font-medium text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:opacity-50';
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field px-3 text-[13px] font-medium text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50';
 const ICON_BTN =
-  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
+  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 const CONTROL =
-  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-wa-green/60 focus:ring-2 focus:ring-wa-green/25';
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-accent/25';
 const MENU_ITEM =
   'flex w-full items-center rounded-[8px] px-3 py-2 text-left text-[13.5px] text-wa-text transition hover:bg-wa-hover disabled:opacity-50';
 
@@ -217,7 +217,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
                           type="checkbox"
                           checked={selectedIds.includes(sector.id)}
                           onChange={() => toggleSector(sector.id)}
-                          className="h-4 w-4 accent-wa-green"
+                          className="h-4 w-4 accent-accent"
                         />
                         {sector.name}
                       </label>
@@ -322,7 +322,7 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
 
         <div className="flex flex-wrap items-center gap-3 pb-4">
           <label
-            className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
+            className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/25`}
           >
             <span className="shrink-0 text-wa-muted">
               <IconSearch size={17} />

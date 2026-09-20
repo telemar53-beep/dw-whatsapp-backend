@@ -19,7 +19,7 @@ function matchesTerm(item, term) {
 // O raio diz a profundidade: casca 26 > painel 22 > cartão 16 > controle 12.
 const PANEL = 'overflow-clip rounded-[22px] border border-white/[0.07] backdrop-blur-2xl';
 const ITEM =
-  'relative flex items-center gap-2 rounded-[12px] px-2.5 py-[7px] text-[14px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70';
+  'relative flex items-center gap-2 rounded-[12px] px-2.5 py-[7px] text-[14px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring';
 
 function SettingsLayout() {
   const { agent } = useAuth();
@@ -54,7 +54,7 @@ function SettingsLayout() {
             id="settings-section"
             value={selectValue}
             onChange={(e) => navigate(e.target.value)}
-            className="w-full rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 py-2.5 text-[14px] text-chat-text outline-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+            className="w-full rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 py-2.5 text-[14px] text-chat-text outline-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
           >
             {selectValue === '' && <option value="" disabled>Seção</option>}
             {SETTINGS_SECTIONS.map((group) => (
@@ -85,7 +85,7 @@ function SettingsLayout() {
             if (group.items.length === 1 && group.items[0].label === group.group) {
               const item = group.items[0];
               const allowed = hasLevel(agent, item.level);
-              return <NavLink key={group.groupKey} to={item.to} aria-disabled={allowed ? undefined : 'true'} title={allowed ? item.description : 'Acesso restrito'} className={({ isActive }) => `mb-1 flex items-center gap-2 rounded-[12px] px-2.5 py-2.5 text-[13px] font-medium transition hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70 ${isActive ? 'bg-white/[0.07] text-chat-text' : 'text-chat-muted'}`}>
+              return <NavLink key={group.groupKey} to={item.to} aria-disabled={allowed ? undefined : 'true'} title={allowed ? item.description : 'Acesso restrito'} className={({ isActive }) => `mb-1 flex items-center gap-2 rounded-[12px] px-2.5 py-2.5 text-[13px] font-medium transition hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus-ring ${isActive ? 'bg-white/[0.07] text-chat-text' : 'text-chat-muted'}`}>
                 <span aria-hidden="true" className="shrink-0 text-chat-copper"><SettingsIcon name={group.groupKey} size={19}/></span>
                 <span className="min-w-0">{item.label}</span>
                 {!allowed && <IconLock size={13} />}
@@ -100,7 +100,7 @@ function SettingsLayout() {
                   aria-expanded={expanded}
                   aria-controls={`settings-group-${group.groupKey}`}
                   onClick={() => setOpenGroup(expanded ? '' : group.groupKey)}
-                  className={`flex w-full items-center gap-2 rounded-[12px] px-2.5 py-2.5 text-left text-[13px] font-medium transition hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70 ${expanded ? 'bg-white/[0.07] text-chat-text' : 'text-chat-muted'}`}
+                  className={`flex w-full items-center gap-2 rounded-[12px] px-2.5 py-2.5 text-left text-[13px] font-medium transition hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus-ring ${expanded ? 'bg-white/[0.07] text-chat-text' : 'text-chat-muted'}`}
                 >
                   {GroupIcon && (
                     <span aria-hidden="true" className="shrink-0 text-chat-copper">

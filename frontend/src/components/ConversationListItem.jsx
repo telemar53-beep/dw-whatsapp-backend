@@ -102,7 +102,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
         tabIndex={0}
         onClick={handleSelect}
         onKeyDown={handleKeyDown}
-        className={`flex w-full items-center text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${compact ? 'gap-3 rounded-[12px] border-l-[3px] px-3 py-2.5' : 'gap-4 rounded-[18px] p-4'} ${
+        className={`flex w-full items-center text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring ${compact ? 'gap-3 rounded-[12px] border-l-[3px] px-3 py-2.5' : 'gap-4 rounded-[18px] p-4'} ${
           selected ? compact ? 'border-chat-orange bg-chat-orange/[0.10]' : 'bg-white/[0.08]' : compact ? 'border-transparent hover:bg-white/[0.05]' : 'hover:bg-white/[0.04]'
         }`}
       >
@@ -180,7 +180,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
             onClick={handleQuickClose}
             aria-label="Finalizar sem motivo"
             title="Finalizar sem motivo"
-            className={`flex shrink-0 items-center justify-center bg-chat-orange/12 text-chat-orange transition hover:bg-chat-orange/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-orange ${compact ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-full'}`}
+            className={`flex shrink-0 items-center justify-center bg-chat-orange/12 text-chat-orange transition hover:bg-chat-orange/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring ${compact ? 'h-8 w-8 rounded-lg' : 'h-9 w-9 rounded-full'}`}
           >
             <IconCheckCircle size={20} />
           </button>

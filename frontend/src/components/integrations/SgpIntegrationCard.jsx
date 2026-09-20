@@ -5,7 +5,7 @@ import { isOfficialChannelType } from '../../utils/channelTypes';
 import { Button, DangerZone } from '../ui';
 
 const inputClass =
-  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 const cardClass = 'space-y-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-4';
 
@@ -114,7 +114,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
             checked={integration.enabled}
             onChange={handleToggleEnabled}
             aria-label={`Ativo: ${integration.description}`}
-            className="h-4 w-4 accent-wa-green"
+            className="h-4 w-4 accent-accent"
           />
           Ativo
         </label>
@@ -181,7 +181,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
             <button
               type="submit"
               disabled={savingEdit}
-              className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-medium text-on-accent transition hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               Salvar
             </button>

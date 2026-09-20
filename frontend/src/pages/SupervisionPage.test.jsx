@@ -492,3 +492,53 @@ describe('estados de carregamento da central de operação', () => {
     expect(screen.queryByText(/não foi possível carregar os atendimentos/i)).not.toBeInTheDocument();
   });
 });
+
+describe('contadores confiáveis', () => {
+  test('em erro, os contadores mostram — em vez de 0', () => {
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
+      status: 'error', loading: false, refresh: vi.fn(),
+    });
+    renderPage();
+
+    // Nenhum zero pode aparecer como se fosse confirmado.
+    const estados = screen.getByRole('navigation', { name: /estados dos atendimentos/i });
+    ['Visão geral', 'Andamento', 'Espera', 'Automação'].forEach((rotulo) => {
+      const botao = within(estados).getByRole('button', { name: new RegExp(rotulo, 'i') });
+      expect(botao).toHaveTextContent('—');
+      expect(botao).not.toHaveTextContent('0');
+    });
+
+    expect(screen.getByRole('tab', { name: /todos atendimentos/i })).toHaveTextContent('—');
+    expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveTextContent('—');
+
+    // A carga da equipe vem da mesma requisição que falhou.
+    const equipe = screen.getByRole('complementary', { name: /equipe e carga/i });
+    expect(within(equipe).getAllByText('—').length).toBeGreaterThan(0);
+    expect(within(equipe).queryByText(/sem atendimentos/i)).not.toBeInTheDocument();
+  });
+
+  test('em carregamento, os contadores também mostram —', () => {
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
+      status: 'loading', loading: true, refresh: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByRole('tab', { name: /todos atendimentos/i })).toHaveTextContent('—');
+  });
+
+  test('zero confirmado continua sendo 0', () => {
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
+      status: 'ready', loading: false, refresh: vi.fn(),
+    });
+    renderPage();
+
+    const estados = screen.getByRole('navigation', { name: /estados dos atendimentos/i });
+    const visaoGeral = within(estados).getByRole('button', { name: /visão geral/i });
+    expect(visaoGeral).toHaveTextContent('0');
+    expect(visaoGeral).not.toHaveTextContent('—');
+    expect(screen.getByText(/online · sem atendimentos/i)).toBeInTheDocument();
+  });
+});

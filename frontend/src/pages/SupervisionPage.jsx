@@ -117,6 +117,10 @@ function SupervisionPage() {
   // carregando ou que falhou. Assim um status ausente mostra a operação em vez
   // de uma tela vazia — o erro que esta correção existe para acabar.
   const dashboardDataVisible = dashboardStatus !== 'loading' && dashboardStatus !== 'error' && dashboardStatus !== 'forbidden';
+  // `0` significa "o sistema carregou e confirmou que nao ha nenhum".
+  // Quando a requisicao nao respondeu, o numero nao e confiavel e vira `—`:
+  // erro nao pode se passar por operacao vazia.
+  const numero = (valor) => (dashboardDataVisible ? valor : '—');
   const { channels } = useChannels(true);
   const { agents, status: agentsStatus } = useAgents();
   const onlineIds = usePresence(agents);
@@ -293,8 +297,10 @@ function SupervisionPage() {
           active={activeTab}
           onChange={setActiveTab}
           tabs={[
-            { key: 'all', label: 'Todos atendimentos', count: totalActiveCount },
-            { key: 'closed', label: 'Encerrados hoje', count: closedCount },
+            { key: 'all', label: 'Todos atendimentos', count: numero(totalActiveCount) },
+            // Com filtro o numero vem da lista de encerrados (outra requisicao);
+            // sem filtro vem do painel. Cada um responde pela propria falha.
+            { key: 'closed', label: 'Encerrados hoje', count: hasActiveFilter ? (closedError ? '—' : closedCount) : numero(closedCount) },
           ]}
         />
         <div className="flex flex-wrap items-center gap-2 xl:ml-auto">
@@ -360,16 +366,18 @@ function SupervisionPage() {
             const max = Math.max(1, ...agents.map(a => inProgress.filter(c => c.assignedAgentId === a.id).length));
             const online = onlineIds.has(agent.id);
             return <li key={agent.id}><button type="button" aria-pressed={agentFilter.includes(agent.id)} onClick={() => toggleFilterValue('atendente', agentFilter, agent.id)}>
-              <span className="supervision-agent-name">{agent.name || agent.email}</span><strong>{count}<small> ativos</small></strong>
-              <span className="supervision-presence"><i className={online ? 'is-online' : ''} />{online ? count ? 'Online · Em atendimento' : 'Online · Sem atendimentos' : 'Offline'}</span>
-              <span className="supervision-load" aria-hidden="true"><span style={{width: (count / max * 100) + '%'}} /></span>
+              {/* A carga vem da mesma requisicao do painel: sem ela, nao da
+                  para afirmar que o atendente esta sem atendimentos. */}
+              <span className="supervision-agent-name">{agent.name || agent.email}</span><strong>{numero(count)}<small> ativos</small></strong>
+              <span className="supervision-presence"><i className={online ? 'is-online' : ''} />{online ? (dashboardDataVisible ? (count ? 'Online · Em atendimento' : 'Online · Sem atendimentos') : 'Online') : 'Offline'}</span>
+              <span className="supervision-load" aria-hidden="true"><span style={{width: (dashboardDataVisible ? count / max * 100 : 0) + '%'}} /></span>
             </button></li>;
           })}</ul>
           {agentsStatus === 'ready' && agents.length === 0 && <p>Nenhum atendente cadastrado.</p>}
         </aside>
         <main className="supervision-operation" aria-label="Operação">
           {!phoneSearchResult && activeTab === 'all' && <nav className="supervision-states" aria-label="Estados dos atendimentos">
-            {[['all','Visão geral',totalActiveCount],['progress','Andamento',filteredInProgress.length],['waiting','Espera',filteredWaiting.length],['automation','Automação',filteredInAutomation.length]].map(([key,label,count]) => <button type="button" key={key} aria-pressed={operationView === key} onClick={() => setOperationView(key)}>{label}<strong>{count}</strong></button>)}
+            {[['all','Visão geral',totalActiveCount],['progress','Andamento',filteredInProgress.length],['waiting','Espera',filteredWaiting.length],['automation','Automação',filteredInAutomation.length]].map(([key,label,count]) => <button type="button" key={key} aria-pressed={operationView === key} onClick={() => setOperationView(key)}>{label}<strong>{numero(count)}</strong></button>)}
           </nav>}
           <div className="supervision-column-labels" aria-hidden="true"><span>Cliente / última mensagem</span><span>Cidade / setor</span><span>Responsável</span><span>Estado / horário</span><span /></div>
       {phoneSearchResult ? (

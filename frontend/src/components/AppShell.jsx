@@ -23,13 +23,19 @@ function AppShell({ dense = false }) {
 
   return (
     <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
-      {/* Flutua sobre o conteúdo: avisar não pode empurrar o layout da mesa. */}
+      {/* Canto inferior direito: avisar não pode empurrar o layout nem cobrir
+          trabalho. O topo era ocupado pelo aviso de canal e o rodapé central
+          pelo aviso de transferência (TransferNotice, bottom-5). O compositor
+          em repouso tem ~61px e o shell reserva 12px embaixo, então 96px
+          deixam ~23px de folga e ainda cobrem uma linha extra digitada.
+          `pointer-events-none` garante que nada abaixo deixe de ser clicável
+          mesmo se a faixa passar por perto. */}
       {connectionState === 'reconnecting' && (
         <div
           role="status"
-          className="pointer-events-none absolute inset-x-0 top-2 z-30 flex justify-center px-3"
+          className="pointer-events-none absolute bottom-24 right-5 z-30 flex max-w-[min(92vw,26rem)] justify-end"
         >
-          <span className="flex items-center gap-2 rounded-full border border-wa-warn-text/40 bg-wa-warn-bg px-3.5 py-1.5 text-[13px] font-medium text-wa-warn-text shadow-[0_10px_30px_-12px_rgba(0,0,0,0.6)]">
+          <span className="flex items-center gap-2 rounded-full border border-wa-warn-text/40 bg-wa-warn-bg px-3.5 py-1.5 text-left text-[13px] font-medium text-wa-warn-text shadow-[0_10px_30px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm">
             <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-wa-warn-text animate-wa-rec" />
             Reconectando… as mensagens novas podem demorar a aparecer.
           </span>

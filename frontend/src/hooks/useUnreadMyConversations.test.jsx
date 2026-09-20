@@ -148,3 +148,74 @@ describe('useUnreadMyConversations', () => {
     expect(() => renderHook(() => useUnreadMyConversations(MY_CONVERSATIONS, null))).not.toThrow();
   });
 });
+
+describe('sinal de mensagem nova em Espera e Automação', () => {
+  test('conversa observada acende sem tocar o som da fila', () => {
+    const socket = createFakeSocket();
+    useSocket.mockReturnValue(socket);
+    const fila = [{ id: 'fila-1' }];
+
+    const { result } = renderHook(() => useUnreadMyConversations([], null, fila));
+
+    act(() => {
+      socket.trigger('queue:new', {
+        conversation: { id: 'fila-1' },
+        message: { id: 'm1', direction: 'inbound' },
+      });
+    });
+
+    expect(result.current.unreadIds.has('fila-1')).toBe(true);
+    // O som da fila é do useQueueNotificationSound; aqui seria som dobrado.
+    expect(FakeAudioContext.instances).toHaveLength(0);
+  });
+
+  test('message:new numa conversa observada também acende', () => {
+    const socket = createFakeSocket();
+    useSocket.mockReturnValue(socket);
+    const fila = [{ id: 'fila-2' }];
+
+    const { result } = renderHook(() => useUnreadMyConversations([], null, fila));
+
+    act(() => {
+      socket.trigger('message:new', {
+        conversation: { id: 'fila-2' },
+        message: { id: 'm2', direction: 'inbound' },
+      });
+    });
+
+    expect(result.current.unreadIds.has('fila-2')).toBe(true);
+  });
+
+  test('conversa que não é minha nem observada é ignorada', () => {
+    const socket = createFakeSocket();
+    useSocket.mockReturnValue(socket);
+
+    const { result } = renderHook(() => useUnreadMyConversations([], null, []));
+
+    act(() => {
+      socket.trigger('message:new', {
+        conversation: { id: 'outra' },
+        message: { id: 'm3', direction: 'inbound' },
+      });
+    });
+
+    expect(result.current.unreadIds.size).toBe(0);
+  });
+
+  test('a conversa aberta nunca acende', () => {
+    const socket = createFakeSocket();
+    useSocket.mockReturnValue(socket);
+    const fila = [{ id: 'fila-3' }];
+
+    const { result } = renderHook(() => useUnreadMyConversations([], 'fila-3', fila));
+
+    act(() => {
+      socket.trigger('queue:new', {
+        conversation: { id: 'fila-3' },
+        message: { id: 'm4', direction: 'inbound' },
+      });
+    });
+
+    expect(result.current.unreadIds.size).toBe(0);
+  });
+});

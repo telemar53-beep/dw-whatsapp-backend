@@ -49,7 +49,9 @@ function DashboardPage() {
   const [activeTab, setActiveTab] = useState('inProgress');
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState('');
-  const { unreadIds, clearUnread } = useUnreadMyConversations(myConversations, selectedId);
+  // Espera e Automação também acendem o sinal de mensagem nova. `queue` já é
+  // referência estável, então o hook não reassina os eventos a cada render.
+  const { unreadIds, clearUnread } = useUnreadMyConversations(myConversations, selectedId, queue);
   const { notice: transferNotice, dismiss: dismissTransferNotice } = useTransferNotice();
 
   function selectConversation(conversationId) {
@@ -184,7 +186,8 @@ function DashboardPage() {
               <QueueList
                 conversations={visibleWaiting}
                 status={queueStatus}
-                onSelect={setSelectedId}
+                onSelect={selectConversation}
+                unreadIds={unreadIds}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
                 emptyMessage="Nenhum atendimento em espera."
@@ -195,7 +198,8 @@ function DashboardPage() {
               <QueueList
                 conversations={visibleAutomation}
                 status={queueStatus}
-                onSelect={setSelectedId}
+                onSelect={selectConversation}
+                unreadIds={unreadIds}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
                 emptyMessage="Nenhum atendimento em automação."

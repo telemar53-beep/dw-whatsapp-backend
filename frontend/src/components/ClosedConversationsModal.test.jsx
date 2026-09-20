@@ -101,7 +101,8 @@ describe('empilhamento da conversa aberta a partir de Encerrados', () => {
 
     await userEvent.click(screen.getByText('Ana Encerrada'));
 
-    const camadaDaConversa = screen.getAllByRole('dialog').find((el) => el.className.includes('dialog-conversation'));
+    const camadaDaConversa = document.querySelector('[data-dialog="conversation"]');
+    const camadaDeEncerrados = document.querySelector('[data-dialog="closed"]');
 
     expect(camadaDaConversa).toBeTruthy();
     // Fora da árvore do componente pai: foi para o portal no body.
@@ -109,6 +110,14 @@ describe('empilhamento da conversa aberta a partir de Encerrados', () => {
     expect(document.body.contains(camadaDaConversa)).toBe(true);
     // E o tema escuro acompanha o portal, senão o modal sairia claro.
     expect(camadaDaConversa.closest('.chat-theme')).not.toBeNull();
-    expect(camadaDaConversa.parentElement.className).toContain('z-[60]');
+    // A camada não é mais um número escrito à mão: vem da profundidade na
+    // pilha. A conversa está um nível acima de quem a abriu, e o nível de
+    // baixo fica inerte enquanto ela existir.
+    const fundoDaConversa = camadaDaConversa.parentElement;
+    const fundoDeEncerrados = camadaDeEncerrados.parentElement;
+    expect(Number(fundoDaConversa.dataset.dialogDepth)).toBeGreaterThan(Number(fundoDeEncerrados.dataset.dialogDepth));
+    expect(fundoDeEncerrados).toHaveAttribute('inert');
+    expect(fundoDaConversa).not.toHaveAttribute('inert');
+
   });
 });

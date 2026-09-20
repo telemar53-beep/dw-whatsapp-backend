@@ -1,6 +1,12 @@
 /* Temporary UI surfaces: common scale, individual compositions below. */
 .dw-dialog {border-radius:14px;max-height:calc(100dvh - 40px);color:var(--color-wa-text);box-shadow:0 24px 80px #0006}
 .dw-dialog .dw-dialog-heading {padding:17px 22px 12px;border-bottom:1px solid #ffffff10;flex:none}
+/* Botao fechar da base: um so, mesma posicao em todo dialogo, visivel tambem
+   no celular (o do ConversationModal era hidden md:flex e sumia justamente
+   onde ele mais faz falta). Alvo de 32px. */
+.dw-dialog-close {position:absolute;right:12px;top:12px;z-index:2;width:32px;height:32px;display:grid;place-items:center;padding:0;border-radius:999px;border:1px solid var(--color-wa-surface-line);background:var(--color-wa-panel);color:var(--color-wa-muted);transition:background-color .15s,color .15s}
+.dw-dialog-close:hover {background:var(--color-wa-hover);color:var(--color-wa-text)}
+.dw-dialog:has(.dw-dialog-close) .dw-dialog-heading {padding-right:56px}
 .dw-dialog .dw-dialog-heading h2 {font-size:18px;font-weight:600;line-height:24px;letter-spacing:-.02em}
 .dw-dialog .dw-dialog-heading p {font-size:12px;line-height:18px;margin-top:4px;max-width:75ch}
 .dw-dialog :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) {font-size:13px;line-height:19px;border-radius:7px;padding:7px 10px;min-width:0}
@@ -153,7 +159,12 @@
 [data-dialog=templates] .dw-dialog-heading:before {content:'';display:block;flex:none;width:22px;height:22px;background:#8bbaff;mask:url('../assets/brands/meta.svg') center/contain no-repeat}
 .chat-workspace-customer-panel .chat-workspace-panel-heading button {width:28px;height:28px;display:grid;place-items:center;border-radius:6px}
 .chat-workspace-customer-panel .chat-workspace-panel-heading button:focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
-.dialog-conversation {border-radius:14px}
+/* A conversa aberta por cima de outro dialogo. Era h-[85vh] fixo: numa tela
+   alta sobrava vazio e numa baixa nao cabia, e uma conversa de duas mensagens
+   ocupava o mesmo tanto que uma de duzentas. Agora cresce com o conteudo, com
+   piso para nao virar uma faixa e teto pela viewport. A folga de 64px mantem
+   o enquadramento que o modal ja tinha (p-4 sm:p-8). */
+[data-dialog=conversation] {border-radius:14px;height:auto;min-height:min(420px,calc(100dvh - 64px));max-height:min(880px,calc(100dvh - 64px))}
 @media(max-width:680px){.dialog-sector-assignment{grid-template-columns:1fr}.dialog-sector-assignment>div:last-child{justify-self:start}}
 [data-dialog=campaign] .dialog-campaign-fields > .dialog-campaign-content {grid-column:1;grid-row:2;min-width:0;display:flex;flex-direction:column;gap:12px}
 [data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-recipients) {grid-row:2}

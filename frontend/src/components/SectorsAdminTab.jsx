@@ -5,11 +5,9 @@ import { useConfirm } from '../hooks/useConfirm';
 import { updateSector, deleteSector } from '../services/api';
 import CreateSectorForm from './CreateSectorForm';
 import WaDialog, { waErrorClass } from './WaDialog';
-import { AsyncState, Button, inputClass } from './ui';
+import { AsyncState, Button, CABECALHO, CELULA, DataTable, inputClass } from './ui';
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
-const CELL = 'px-3 py-3 align-middle';
-const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const SMALL_BTN =
   'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border px-3 text-[13px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50';
 
@@ -116,14 +114,14 @@ function SectorRow({ sector, onSaved, onDeleted }) {
 
   return (
     <tr className="border-t border-wa-border">
-      <td className={`${CELL} whitespace-nowrap font-medium text-wa-text`}>{sector.name}</td>
-      <td className={`${CELL} max-w-[380px] text-wa-muted`}>
+      <td className={`${CELULA} whitespace-nowrap font-medium text-wa-text`}>{sector.name}</td>
+      <td className={`${CELULA} max-w-[380px] text-wa-muted`}>
         <span className="block truncate" title={sector.aiHint || undefined}>
           {sector.aiHint || <span className="text-wa-meta">Sem orientação</span>}
         </span>
         {deleteError && <p className={`mt-2 ${waErrorClass}`}>{deleteError}</p>}
       </td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <div className="flex items-center justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={handleEditClick}>
             Editar
@@ -171,17 +169,16 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
 
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={sectors.length === 0} emptyMessage="Nenhum setor cadastrado ainda.">
-            <div className="chat-scroll overflow-x-auto">
-              <table className="w-full min-w-[560px] border-collapse text-[13.5px]">
+            <DataTable>
                 <thead>
                   <tr className="bg-black/[0.16]">
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Nome
                     </th>
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Orientação para a IA
                     </th>
-                    <th scope="col" className={`${HEAD} text-right`}>
+                    <th scope="col" className={`${CABECALHO} text-right`}>
                       Ações
                     </th>
                   </tr>
@@ -191,8 +188,7 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                     <SectorRow key={sector.id} sector={sector} onSaved={refresh} onDeleted={refresh} />
                   ))}
                 </tbody>
-              </table>
-            </div>
+              </DataTable>
           </AsyncState>
         </div>
 

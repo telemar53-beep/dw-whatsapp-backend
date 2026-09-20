@@ -5,12 +5,10 @@ import { useConfirm } from '../hooks/useConfirm';
 import { deleteCity } from '../services/api';
 import CreateCityForm from './CreateCityForm';
 import WaDialog, { waErrorClass } from './WaDialog';
-import { AsyncState, Button } from './ui';
+import { AsyncState, Button, CABECALHO, CELULA, DataTable } from './ui';
 import { IconSearch, IconNewChat } from './icons/WaIcons';
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
-const CELL = 'px-3 py-3 align-middle';
-const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const CONTROL =
   'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-accent/25';
 const DANGER_BTN =
@@ -40,8 +38,8 @@ function CityRow({ city, onDeleted, onError }) {
 
   return (
     <tr className="border-t border-wa-border">
-      <td className={`${CELL} text-[14px] font-medium text-wa-text`}>{city.name}</td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} text-[14px] font-medium text-wa-text`}>{city.name}</td>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <div className="flex items-center justify-end">
           <Button
             variant="danger"
@@ -130,14 +128,13 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         <div className="settings-register-summary text-wa-muted">{countLabel}</div>
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={cities.length === 0} emptyMessage="Nenhuma cidade cadastrada ainda.">
-            <div className="chat-scroll overflow-x-auto">
-              <table className="w-full min-w-[420px] border-collapse text-[13.5px]">
+            <DataTable className="min-w-[420px]">
                 <thead>
                   <tr className="bg-black/[0.16]">
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Cidade
                     </th>
-                    <th scope="col" className={`${HEAD} text-right`}>
+                    <th scope="col" className={`${CABECALHO} text-right`}>
                       Ações
                     </th>
                   </tr>
@@ -153,8 +150,7 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                     visible.map((city) => <CityRow key={city.id} city={city} onDeleted={refresh} onError={setCityError} />)
                   )}
                 </tbody>
-              </table>
-            </div>
+              </DataTable>
           </AsyncState>
           {errorMessages.map((message, index) => (
             <p key={index} className={`mb-3 ${waErrorClass}`}>

@@ -1,4 +1,4 @@
-import { Card } from '../../../components/ui';
+import { Card, DataTable } from '../../../components/ui';
 import { NAV_ITEMS, SETTINGS_SECTIONS, hasLevel } from '../../../navigation/navItems';
 
 const PROFILES = [
@@ -33,8 +33,7 @@ function RolesPage() {
   return (
     <div className="settings-permissions">
       <Card title="Páginas e ações" description="O que cada perfil pode ver e fazer. Esta tabela é gerada da mesma lista que controla o menu e as rotas.">
-        <div className="chat-scroll -mx-1 overflow-x-auto px-1 pb-1">
-          <table className="w-full min-w-[560px] text-[13.5px]">
+        <DataTable className="min-w-[560px]" label="Permissões por perfil">
             <thead>
               <tr className="text-left text-wa-muted">
                 <th scope="col" className="py-2 pr-3 font-medium">Área</th>
@@ -55,8 +54,7 @@ function RolesPage() {
                 </tr>
                 ))}
               </tbody>)}
-          </table>
-        </div>
+        </DataTable>
       </Card>
       <Card title="Regras que não dependem de página" description="Vêm do backend e valem em qualquer tela.">
         <ul className="list-disc space-y-1 pl-5 text-[13.5px] text-wa-text">

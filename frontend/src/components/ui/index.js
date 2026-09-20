@@ -11,6 +11,7 @@ export { AsyncState } from './AsyncState';
 export { ConfirmDialog } from './ConfirmDialog';
 export { AlertDialog } from './AlertDialog';
 export { Dialog, DialogBody, DialogFooter } from './Dialog';
+export { DataTable, DataTableEmpty, RowMenu, CELULA, CABECALHO, ITEM_DE_MENU } from './DataTable';
 
 // Raio 12px: o controle é o nível mais interno da escala (painel 22 > cartão 16 > controle 12).
 export const inputClass =

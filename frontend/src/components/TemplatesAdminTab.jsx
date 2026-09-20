@@ -6,7 +6,7 @@ import { useChannels } from '../hooks/useChannels';
 import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin, setTemplatePurpose } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
 import WaDialog, { waErrorClass } from './WaDialog';
-import { AsyncState, Button, inputClass } from './ui';
+import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu, inputClass } from './ui';
 import { IconSearch, IconRefresh, IconNewChat, IconMore, IconInfo, IconFile } from './icons/WaIcons';
 
 const STATUS_META = {
@@ -55,14 +55,8 @@ function languageLabel(language) {
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10 > item de menu 8.
 const CARD = 'overflow-clip rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95';
-const CELL = 'px-3 py-3 align-middle';
-const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const CONTROL =
   'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-accent/25';
-const ICON_BTN =
-  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
-const MENU_ITEM =
-  'flex w-full items-center rounded-[8px] px-3 py-2 text-left text-[13.5px] transition hover:bg-wa-hover disabled:opacity-50';
 const LABEL = 'mb-1.5 block text-[13px] font-medium text-wa-muted';
 
 function StatusChip({ status }) {
@@ -76,51 +70,6 @@ function StatusChip({ status }) {
 }
 
 // Botão de reticências com um pop-up de ações; fecha ao clicar fora, no Esc ou ao escolher.
-function RowMenu({ label, children }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function onDown(event) {
-      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
-    }
-    function onKey(event) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative inline-block" onClick={(event) => event.stopPropagation()}>
-      <button
-        type="button"
-        aria-label={label}
-        title={label}
-        aria-haspopup="true"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        className={ICON_BTN}
-      >
-        <IconMore size={18} />
-      </button>
-      {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className="dialog-context-menu absolute right-0 top-[calc(100%+4px)] z-[var(--z-popover)] min-w-[170px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function TemplateRow({ template, selected, onSelect, onDeleted }) {
   const { token } = useAuth();
   const { confirm, confirmDialog } = useConfirm();
@@ -165,7 +114,7 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
         selected ? 'bg-chat-orange/[0.08] shadow-[inset_3px_0_0_var(--color-chat-orange)]' : 'hover:bg-wa-hover'
       }`}
     >
-      <td className={CELL}>
+      <td className={CELULA}>
         <button
           type="button"
           onClick={onSelect}
@@ -177,20 +126,20 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
         {template.rejectionReason && <p className="mt-0.5 text-[12px] text-wa-error-text">{template.rejectionReason}</p>}
         {deleteError && <p className={`mt-2 ${waErrorClass}`}>{deleteError}</p>}
       </td>
-      <td className={`${CELL} whitespace-nowrap text-wa-text`}>{categoryLabel(template.category)}</td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} whitespace-nowrap text-wa-text`}>{categoryLabel(template.category)}</td>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <PurposeChip purpose={template.purpose} />
       </td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <StatusChip status={template.status} />
       </td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <div className="flex items-center justify-end">
           <RowMenu label={`Mais ações para ${template.name}`}>
-            <button type="button" onClick={handleTogglePurpose} disabled={switching} className={MENU_ITEM}>
+            <button type="button" onClick={handleTogglePurpose} disabled={switching} className={ITEM_DE_MENU}>
               {template.purpose === 'disparo' ? 'Usar para atendimento' : 'Usar para disparo'}
             </button>
-            <button type="button" onClick={handleDelete} disabled={deleting} className={`${MENU_ITEM} text-wa-error-text`}>
+            <button type="button" onClick={handleDelete} disabled={deleting} className={`${ITEM_DE_MENU} text-wa-error-text`}>
               Excluir
             </button>
           </RowMenu>
@@ -692,23 +641,22 @@ function TemplatesAdminTab() {
             </div>
             <div className="px-4 pb-1 sm:px-5">
               <AsyncState status={status} onRetry={refresh} isEmpty={templates.length === 0} emptyMessage="Nenhum template cadastrado ainda.">
-                <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
-                  <table className="w-full min-w-[480px] border-collapse text-[13.5px]">
+                <DataTable className="min-w-[480px]">
                     <thead>
                       <tr className="bg-black/[0.16]">
-                        <th scope="col" className={HEAD}>
+                        <th scope="col" className={CABECALHO}>
                           Nome
                         </th>
-                        <th scope="col" className={HEAD}>
+                        <th scope="col" className={CABECALHO}>
                           Categoria
                         </th>
-                        <th scope="col" className={HEAD}>
+                        <th scope="col" className={CABECALHO}>
                           Finalidade
                         </th>
-                        <th scope="col" className={HEAD}>
+                        <th scope="col" className={CABECALHO}>
                           Status
                         </th>
-                        <th scope="col" className={`${HEAD} text-right`}>
+                        <th scope="col" className={`${CABECALHO} text-right`}>
                           Ações
                         </th>
                       </tr>
@@ -732,8 +680,7 @@ function TemplatesAdminTab() {
                         ))
                       )}
                     </tbody>
-                  </table>
-                </div>
+                  </DataTable>
               </AsyncState>
             </div>
             <p className="flex items-center gap-1.5 border-t border-wa-border px-4 py-3 text-[12px] text-wa-muted sm:px-5">

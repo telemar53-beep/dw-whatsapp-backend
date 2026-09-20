@@ -44,19 +44,16 @@
 .chat-workspace .chat-conversation-close:hover { background: var(--chat-line); }
 .chat-workspace .chat-workspace-conversation { min-width: 0; min-height: 0; position: relative; background: var(--chat-surface-canvas); }
 .chat-workspace .chat-workspace-conversation > div:first-child { min-width: 0; min-height: 0; }
-.chat-workspace .chat-workspace-header { padding: 10px 16px; gap: 8px; min-height: 66px; border-bottom: 0; background: linear-gradient(90deg,var(--chat-header-tint),transparent); }
+.chat-workspace .chat-workspace-header { padding: 10px 16px; gap: 8px; min-height: 66px; border-bottom: 1px solid var(--chat-line-soft); background: linear-gradient(90deg,var(--chat-header-tint),transparent); }
 .chat-workspace .chat-workspace-header-identity { min-width: 160px; }
 .chat-workspace .chat-workspace-header-identity button > span > span:first-child { flex-wrap: wrap; gap: 4px 8px; }
 .chat-workspace .chat-workspace-header-identity button > span > span:first-child > span:first-child { font-size: 15px; }
 .chat-workspace .chat-workspace-header-actions { margin-left: auto; gap: 6px; }
-.chat-workspace .chat-workspace-header-actions > button { min-height: 31px; border-radius: 7px; font-size: 12px; padding: 6px 9px; background: #ffffff04; border: 1px solid var(--chat-line); color: var(--chat-ink); }
-.chat-workspace .chat-workspace-header-actions > button[aria-label='Encerrar atendimento'] { background: #d69b6c0a; border-color: #d69b6c40; color: #efbb90; }
 .chat-workspace .chat-workspace-context { display: flex; align-items: center; gap: 8px; margin: 0 16px; padding: 4px 0; min-height: 33px; border-block: 1px solid var(--chat-line-soft); }
 .chat-workspace .chat-workspace-context-label { flex: 1; min-width: 0; font-size: 11px; color: var(--chat-ink); overflow-wrap: anywhere; }
 .chat-workspace .chat-workspace-context-actions > div { border: 0; background: none; gap: 4px; padding: 0; }
 .chat-workspace .chat-workspace-context-actions button { width: auto; height: 26px; padding: 3px 6px; display: flex; align-items: center; gap: 5px; color: var(--chat-ink); border-radius: 5px; }
-.chat-workspace .chat-workspace-context-actions button[aria-label='Consultar SGP']:after { content: 'SGP'; font-size: 11px; }
-.chat-workspace .chat-workspace-context-actions button[aria-label='Dados do cliente']:after { content: 'Cliente'; font-size: 11px; }
+.chat-workspace .chat-context-label { font-size: 11.5px; }
 .chat-workspace .chat-workspace-context-actions svg { width: 15px; height: 15px; }
 .chat-workspace .chat-workspace-timeline { padding: 12px 20px; background: linear-gradient(180deg,var(--chat-timeline-top),var(--chat-surface-canvas)); }
 .chat-workspace .chat-workspace-system-note { background: none; border: 0; border-radius: 0; padding: 3px 0; color: var(--chat-ink-faint); font-size: 10px; }

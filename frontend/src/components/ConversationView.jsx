@@ -151,7 +151,11 @@ function conversationStatus(conversation) {
 const ACTION =
   'flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[8px] text-[12.5px] font-medium leading-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 const ACTION_GHOST = `${ACTION} border border-white/[0.14] bg-transparent text-chat-text hover:bg-white/[0.08]`;
-const ACTION_PRIMARY = `${ACTION} bg-chat-orange px-3.5 text-[#271d17] shadow-[0_2px_10px_rgba(255,141,64,.16)] hover:brightness-110`;
+// Tres categorias distintas de propósito: assumir e a acao principal,
+// transferir e secundaria, encerrar e irreversivel. Antes, assumir e encerrar
+// compartilhavam o mesmo primario.
+const ACTION_PRIMARY = `${ACTION} bg-accent px-3.5 text-on-accent shadow-[0_2px_10px_rgba(255,141,64,.16)] hover:bg-accent-strong`;
+const ACTION_DANGER = `${ACTION} border border-wa-error-text/40 bg-wa-error-bg px-3.5 text-wa-error-text hover:brightness-110`;
 
 function HeaderChip({ children, title, strong = false, className = '' }) {
   return (
@@ -486,11 +490,10 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
           <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
             <IconSearch size={20} />
           </HeaderIconButton>
-          {workspace && (
-            <HeaderIconButton label="Dados do cliente" onClick={() => { setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false); }}>
-              <IconInfo size={20} />
-            </HeaderIconButton>
-          )}
+          {/* Este grupo é do modal (`!workspace`). Havia aqui um
+              `{workspace && ...}` para "Dados do cliente" que nunca podia
+              renderizar, por estar dentro de `{!workspace && ...}` — o botão
+              de verdade vive na barra de contexto, abaixo. */}
           </div>
           <span aria-hidden="true" className="h-6 w-px bg-white/[0.12]" />
 </>}
@@ -517,7 +520,7 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
                 onClick={() => setClosingReason(true)}
                 aria-label="Encerrar atendimento"
                 title="Encerrar atendimento"
-                className={isUnassigned ? `${ACTION_GHOST} w-8` : ACTION_PRIMARY}
+                className={isUnassigned ? `${ACTION_GHOST} w-8` : ACTION_DANGER}
               >
                 <IconCheckCircle size={18} />
                 {!isUnassigned && 'Encerrar'}
@@ -536,10 +539,12 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
           </HeaderIconButton>
           <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
             <IconSearch size={20} />
+            <span className="chat-context-label">SGP</span>
           </HeaderIconButton>
           {workspace && (
             <HeaderIconButton label="Dados do cliente" onClick={() => { setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false); }}>
               <IconInfo size={20} />
+              <span className="chat-context-label">Cliente</span>
             </HeaderIconButton>
           )}
           </div>

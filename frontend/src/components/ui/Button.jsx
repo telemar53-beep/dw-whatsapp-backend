@@ -26,6 +26,8 @@ export const Button = forwardRef(function Button({ variant = 'primary', size = '
       ref={ref}
       type={type}
       aria-busy={loading || undefined}
+      // Marca a acao destrutiva para que o foco inicial de um dialogo nunca caia nela.
+      data-danger={variant === 'danger' ? '' : undefined}
       disabled={disabled || loading}
       className={`${BASE} ${SIZES[size] || SIZES.md} ${VARIANTS[variant] || VARIANTS.primary} ${className}`}
       {...rest}

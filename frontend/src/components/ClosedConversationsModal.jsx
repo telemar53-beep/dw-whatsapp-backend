@@ -10,7 +10,7 @@ function ClosedConversationsModal({ onClose }) {
 
   return (
     <>
-      <WaDialog variant="closed" title={<>Encerrados{items.length > 0 && <span className="dialog-closed-count" title={hasMore ? 'Atendimentos carregados; há mais registros disponíveis' : 'Atendimentos encerrados'}>{items.length}{hasMore ? '+' : ''}</span>}</>} onClose={onClose} size="max-w-[1500px]">
+      <WaDialog variant="closed" title={<>Encerrados{items.length > 0 && <span className="dialog-closed-count" title={hasMore ? 'Atendimentos carregados; há mais registros disponíveis' : 'Atendimentos encerrados'}>{items.length}{hasMore ? '+' : ''}</span>}</>} onClose={onClose} closeOnBackdrop size="max-w-[1500px]">
         <div className="dialog-closed-content wa-scroll min-h-0 overflow-y-auto">
           <ClosedConversationsList
             conversations={items}

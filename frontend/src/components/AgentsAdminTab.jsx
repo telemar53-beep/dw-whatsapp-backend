@@ -240,7 +240,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       )}
 
       {generatedPassword && (
-        <WaDialog variant="users" title="Nova senha gerada" onClose={() => setGeneratedPassword(null)} size="max-w-sm">
+        <WaDialog variant="users" title="Nova senha gerada" onClose={() => setGeneratedPassword(null)} closeOnBackdrop size="max-w-sm">
           <div className="space-y-3 px-6 py-4">
             <p className="text-sm text-wa-muted">
               Copie e repasse essa senha pro atendente — ela só aparece essa vez.

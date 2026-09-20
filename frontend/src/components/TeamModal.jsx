@@ -102,7 +102,7 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
   const columns = filter === 'all' ? 'md:grid-cols-3' : filter === 'online' ? 'md:grid-cols-2' : 'md:grid-cols-1';
 
   return (
-    <WaDialog variant="team" onClose={onClose} size="max-w-[980px]">
+    <WaDialog variant="team" onClose={onClose} closeOnBackdrop size="max-w-[980px]">
       <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5 sm:px-6">
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold leading-[26px] text-wa-text">Nossa equipe</h2>

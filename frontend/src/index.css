@@ -42,11 +42,11 @@
   --color-sgp-gray: #57626d;
 
   /* ---------- Acento ----------
-     `accent` pinta laranja dentro de `.chat-theme` — o nome mente sobre o
-     que renderiza. `accent` é o mesmo valor com o nome certo; `on-accent` é a
-     tinta que fica legível em cima dele (branco sobre o teal claro, grafite
-     sobre o laranja escuro). Trocar a cor da marca passa a ser mudar estes
-     três valores, não caçar dezenas de tons espalhados. */
+     Antes isto se chamava `wa-green` e pintava laranja dentro de
+     `.chat-theme`: o nome mentia sobre o que renderizava. `on-accent` é a
+     tinta que fica legível em cima do acento — branco sobre o teal claro,
+     grafite sobre o laranja escuro. Trocar a cor da marca passa a ser mudar
+     estes três valores, não caçar dezenas de tons espalhados. */
   --color-accent: #0d9488;
   --color-accent-strong: #0b7d73;
   --color-on-accent: #ffffff;
@@ -174,6 +174,51 @@
   --ui-field-xs: 96px;
   --ui-field-sm: 180px;
   --ui-field-md: 320px;
+}
+
+/* ---------- Superfícies e tinta da mesa de atendimento ----------
+   A mesa tinha 67 cores distintas em 85 literais, contra 8 usos de token.
+   Aqui elas viram papéis: superfície pelo nível de elevação, tinta pelo peso
+   da informação, linha pela força da separação. Tons quase idênticos foram
+   convergidos — a mesa é a área autorizada a mudar nesta etapa.
+   Escopo `.chat-workspace`: não vaza para as outras telas, que fazem a
+   própria consolidação quando for a vez delas. */
+.chat-workspace {
+  /* Elevação: do mais fundo (busca, trilho) ao mais alto (campo, painel). */
+  --chat-surface-sunken: #202a31;
+  --chat-surface-canvas: #242f36;
+  --chat-surface-list: #263139;
+  --chat-surface-raised: #2a353d;
+  --chat-surface-panel: #2d3a43;
+  --chat-surface-panel-raised: #34424b;
+  --chat-surface-input: #33414a;
+  --chat-surface-ai: #303843;
+
+  /* Bolhas: o valor fica, a distinção passa a vir do filete (ver abaixo). */
+  --chat-bubble-in: #35434c;
+  --chat-bubble-out: #394742;
+  --chat-bubble-ai: #393f4b;
+
+  /* Tinta por peso: título, corpo, apoio, metadado. */
+  --chat-ink-strong: #f1f4f6;
+  --chat-ink: #cbd7df;
+  --chat-ink-muted: #a9bcc8;
+  --chat-ink-faint: #93a7b5;
+
+  /* Linhas e estados. O hover era #ffffff04 — 1,05:1, invisível na prática. */
+  --chat-line: #ffffff12;
+  --chat-line-soft: #ffffff0a;
+  --chat-line-strong: #ffffff1f;
+  --chat-state-hover: #ffffff0d;
+  --chat-state-selected: #b7835924;
+  --chat-state-selected-soft: #b783590b;
+  --chat-header-tint: #2e3b4388;
+  --chat-timeline-top: #222e35;
+
+  /* Acento e IA. */
+  --chat-accent-soft: #e5a16d;
+  --chat-ai-ink: #c4b2dc;
+  --chat-ai-line: #b9a1d733;
 }
 
 /* ---------- Foco por teclado ----------

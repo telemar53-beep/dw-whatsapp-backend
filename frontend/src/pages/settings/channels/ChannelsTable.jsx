@@ -151,7 +151,7 @@ function RowMenu({ label, children }) {
       {open && (
         <div
           onClick={() => setOpen(false)}
-          className="channel-row-menu absolute right-0 top-[calc(100%+4px)] z-20 min-w-[180px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
+          className="channel-row-menu absolute right-0 top-[calc(100%+4px)] z-[var(--z-popover)] min-w-[180px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
         >
           {children}
         </div>

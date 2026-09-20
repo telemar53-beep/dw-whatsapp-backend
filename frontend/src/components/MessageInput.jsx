@@ -413,7 +413,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               />
 
               {showingEmojis && (
-                <div className="dialog-emoji-picker animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-[#30383d]/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                <div className="dialog-emoji-picker animate-wa-pop absolute bottom-full left-0 z-[var(--z-popover)] mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-[#30383d]/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
                   <p className="dialog-popover-heading">Emojis</p>
                   <div className="grid grid-cols-8 gap-1">
                     {EMOJIS.map((emoji) => (
@@ -431,7 +431,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               )}
 
               {showingQuickReplies && (
-                <div className="dialog-quick-replies animate-wa-pop chat-scroll absolute bottom-full left-0 z-20 mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-[#30383d]/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                <div className="dialog-quick-replies animate-wa-pop chat-scroll absolute bottom-full left-0 z-[var(--z-popover)] mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-[#30383d]/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
                   <p className="dialog-popover-heading">Respostas rápidas</p>
                   <AsyncState
                     status={quickRepliesStatus}

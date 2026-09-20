@@ -71,7 +71,7 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
         {selected.length > 0 && <span className="ml-1.5 font-medium text-chat-orange">{selected.length}</span>}
       </button>
       {open && (
-        <div className="dialog-filter-options chat-scroll absolute z-10 mt-2 max-h-64 w-56 overflow-y-auto rounded-[16px] border border-white/[0.10] bg-wa-panel p-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
+        <div className="dialog-filter-options chat-scroll absolute z-[var(--z-popover)] mt-2 max-h-64 w-56 overflow-y-auto rounded-[16px] border border-white/[0.10] bg-wa-panel p-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
           {options.length === 0 ? (
             <p className="px-2 py-1 text-[13px] text-wa-muted">Nenhuma opção</p>
           ) : (

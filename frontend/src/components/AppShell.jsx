@@ -53,7 +53,7 @@ function AppShell({ dense = false }) {
       {avisoConexao && (
         <div
           role="status"
-          className="pointer-events-none absolute bottom-24 right-5 z-30 flex max-w-[min(92vw,26rem)] justify-end"
+          className="pointer-events-none absolute bottom-24 right-5 z-[var(--z-toast)] flex max-w-[min(92vw,26rem)] justify-end"
         >
           {avisoConexao === 'caiu' ? (
             <span className="animate-wa-pop flex items-center gap-2 rounded-full border border-wa-warn-text/40 bg-wa-warn-bg px-3.5 py-1.5 text-left text-[13px] font-medium text-wa-warn-text shadow-[0_10px_30px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm">

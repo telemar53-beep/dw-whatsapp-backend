@@ -285,7 +285,7 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
     : [];
 
   return (
-    <aside className="dialog-sgp-panel fixed inset-0 z-30 flex flex-col bg-wa-surface-soft font-wa backdrop-blur-2xl lg:static lg:z-auto lg:my-2.5 lg:mr-2.5 lg:h-auto lg:w-[300px] lg:shrink-0 lg:rounded-[20px] lg:border lg:border-wa-surface-line lg:bg-wa-surface lg:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.85)]">
+    <aside className="dialog-sgp-panel fixed inset-0 z-[var(--z-nav)] flex flex-col bg-wa-surface-soft font-wa backdrop-blur-2xl lg:static lg:z-auto lg:my-2.5 lg:mr-2.5 lg:h-auto lg:w-[300px] lg:shrink-0 lg:rounded-[20px] lg:border lg:border-wa-surface-line lg:bg-wa-surface lg:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.85)]">
       <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-wa-surface-line px-3">
         <span className="text-wa-icon">
           <IconIdCard size={18} />

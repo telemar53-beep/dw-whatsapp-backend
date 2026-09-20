@@ -62,7 +62,7 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [accountOpen]);
   return <>
-    {mobileOpen && <div aria-hidden="true" onClick={onMobileClose} className="fixed inset-0 z-30 bg-black/50 md:hidden" />}
+    {mobileOpen && <div aria-hidden="true" onClick={onMobileClose} className="fixed inset-0 z-[var(--z-nav)] bg-black/50 md:hidden" />}
     <nav id="sidenav" aria-label="Navegação principal" className={`worknav ${compact ? 'is-compact' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
       <div className="worknav-brand" title={companyName || 'DW Telecom'}>
         {compact ? <img className="worknav-logo" src={dwMark} alt="DW Telecom" width={40} height={40} /> :

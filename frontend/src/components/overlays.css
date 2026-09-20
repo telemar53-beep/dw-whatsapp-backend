@@ -103,12 +103,12 @@
 [data-dialog=users] form > div:last-child,[data-dialog=city] form > div:last-child,[data-dialog=sector] form > div:last-child,[data-dialog=reason] form > div:last-child {justify-content:flex-end;padding:12px 0 0}
 [data-dialog=users]:not(:has(#agent-name)) {max-width:480px}
 /* Confirmation: consequence on a dedicated column, actions below. */
-[data-dialog=confirm] {max-width:480px}
-[data-dialog=confirm] .dialog-confirm-body {display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;padding:20px}
+[data-dialog=confirm],[data-dialog=alert] {max-width:480px}
+[data-dialog=confirm] .dialog-confirm-body,[data-dialog=alert] .dialog-confirm-body {display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;padding:20px}
 .dialog-confirm-icon {width:36px;height:36px;display:grid;place-items:center;border-radius:8px;background:#ffffff06;color:#b3c5d0}
 .dialog-confirm-icon[data-danger=true] {color:#e7aaa0;background:#d97c7210}
-[data-dialog=confirm] .dialog-confirm-body > p {font-size:14px;line-height:21px;align-self:center}
-[data-dialog=confirm] .dialog-confirm-body > div {grid-column:1/-1;margin:0;padding-top:12px;border-top:1px solid #ffffff12}
+[data-dialog=confirm] .dialog-confirm-body > p,[data-dialog=alert] .dialog-confirm-body > p {font-size:14px;line-height:21px;align-self:center}
+[data-dialog=confirm] .dialog-confirm-body > div,[data-dialog=alert] .dialog-confirm-body > div {grid-column:1/-1;margin:0;padding-top:12px;border-top:1px solid #ffffff12}
 /* Already structured operational dialogs: finish, without replacing their layout. */
 [data-dialog=profile] > div:nth-child(2) {padding-top:16px}
 [data-dialog=profile] details summary {padding:10px 14px}
@@ -177,5 +177,5 @@
 [data-dialog=templates]:has(form[aria-label='Registrar template existente']) {max-width:740px}
 @media(max-width:680px){[data-dialog=campaign] .dialog-campaign-fields > .dialog-campaign-content,[data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-recipients){grid-column:1;grid-row:auto}}
 /* Short viewports still allow necessary content scrolling without losing fields. */
-[data-dialog=help] > div:nth-child(2),[data-dialog=users] > div:last-child,[data-dialog=city] > div:last-child,[data-dialog=sector] > div:last-child,[data-dialog=reason] > div:last-child,[data-dialog=confirm] > div {min-height:0;overflow-y:auto}
+[data-dialog=help] > div:nth-child(2),[data-dialog=users] > div:last-child,[data-dialog=city] > div:last-child,[data-dialog=sector] > div:last-child,[data-dialog=reason] > div:last-child,[data-dialog=confirm] > div,[data-dialog=alert] > div {min-height:0;overflow-y:auto}
 .dialog-provider-symbol .channel-brand-mark {display:block;width:20px;height:20px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}

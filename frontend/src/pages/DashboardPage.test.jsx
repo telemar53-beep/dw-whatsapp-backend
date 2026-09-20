@@ -190,27 +190,25 @@ describe('DashboardPage', () => {
   test('quick-closes a conversation from the Espera tab without asking for a reason', async () => {
     useQueue.mockReturnValue({ queue: [{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderDashboard();
 
     await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c1', null, 'tok-123');
-    window.confirm.mockRestore();
   });
 
   test('quick-closes a conversation from the Automação tab without asking for a reason', async () => {
     useQueue.mockReturnValue({ queue: [{ id: 'c2', contactDisplayName: 'Em Triagem', triageState: 'pending', assignedAgentId: null }], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderDashboard();
 
     await userEvent.click(screen.getByRole('tab', { name: /automação/i }));
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
-    window.confirm.mockRestore();
   });
 
   test('does not show a quick-close button in the Atendimento tab', () => {

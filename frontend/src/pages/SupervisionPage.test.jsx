@@ -82,27 +82,25 @@ describe('SupervisionPage', () => {
   });
 
   test('quick-closes a conversation from the "Em espera" column without asking for a reason', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderPage();
     expect(await screen.findByText('Maria')).toBeInTheDocument();
 
     const waitingColumn = screen.getByRole('heading', { name: 'Em espera', exact: true }).closest('div').parentElement;
     await userEvent.click(within(waitingColumn).getByRole('button', { name: /finalizar/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
-    window.confirm.mockRestore();
   });
 
   test('quick-closes a conversation from the "Em automação" column without asking for a reason', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderPage();
     expect(await screen.findByText('Joao')).toBeInTheDocument();
 
     const automationColumn = screen.getByRole('heading', { name: 'Em automação', exact: true }).closest('div').parentElement;
     await userEvent.click(within(automationColumn).getByRole('button', { name: /finalizar/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c3', null, 'tok-123');
-    window.confirm.mockRestore();
   });
 
   test('does not show a quick-close button in the "Em andamento" column', async () => {

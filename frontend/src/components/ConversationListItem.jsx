@@ -1,6 +1,7 @@
 import ContactAvatar from './ContactAvatar';
 import MessageStatusTicks from './MessageStatusTicks';
 import { IconCheckCircle } from './icons/WaIcons';
+import { useConfirm } from '../hooks/useConfirm';
 
 const MEDIA_TYPE_LABELS = {
   image: '📷 Foto',
@@ -27,6 +28,9 @@ function formatMessageTime(lastMessageAt) {
 }
 
 function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected, divided = true, showArrivalTime = false, compact = false, rail = false }) {
+  // A confirmacao e do proprio item: o dialogo vai para o portal, entao nao
+  // precisa de Provider nenhum para existir em qualquer lista.
+  const { confirm, confirmDialog } = useConfirm();
   // A cidade já foi colada no nome ("Fulano - Cidade"), mas os dois dividiam um
   // `truncate` só: nome comprido comia a cidade inteira. Com cada atendente
   // puxando uma cidade diferente, era justamente o dado que sumia — então ela
@@ -51,11 +55,10 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
     }
   }
 
-  function handleQuickClose(event) {
+  async function handleQuickClose(event) {
     event.stopPropagation();
-    if (window.confirm('Encerrar esse atendimento sem motivo?')) {
-      onQuickClose(conversation.id);
-    }
+    const ok = await confirm('Encerrar esse atendimento sem motivo?', { danger: true, confirmLabel: 'Encerrar' });
+    if (ok) onQuickClose(conversation.id);
   }
 
   // Rail: o espaço não comporta a lista inteira, mas o atendente precisa
@@ -121,6 +124,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
             </button>
           )}
         </div>
+      {confirmDialog}
       </li>
     );
   }
@@ -218,6 +222,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
       </div>
       {/* A conversa aberta é um cartão inteiro; as demais ficam separadas por um fio. */}
       {divided && !selected && <span aria-hidden="true" className="mx-4 block h-px bg-white/[0.07]" />}
+      {confirmDialog}
     </li>
   );
 }

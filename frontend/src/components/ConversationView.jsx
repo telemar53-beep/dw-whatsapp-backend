@@ -16,6 +16,7 @@ import EditContactModal from './EditContactModal';
 import SgpLookupPanel from './SgpLookupPanel';
 import AiSuggestionCard from './AiSuggestionCard';
 import SendTemplateModal from './SendTemplateModal';
+import { useAlert } from '../hooks/useAlert';
 import {
   IconArrowLeft,
   IconChevronDown,
@@ -262,6 +263,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const [editingContact, setEditingContact] = useState(false);
   const [contactOverride, setContactOverride] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
+  const { avisar, alertDialog } = useAlert();
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
   const [customerPanelOpen, setCustomerPanelOpen] = useState(false);
   const [customerPanelDismissed, setCustomerPanelDismissed] = useState(false);
@@ -411,7 +413,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     try {
       await claimConversation(conversation.id, token);
     } catch (err) {
-      window.alert((err.body && err.body.error) || 'Não foi possível assumir este atendimento.');
+      avisar((err.body && err.body.error) || 'Não foi possível assumir este atendimento.');
     }
   }
 
@@ -424,7 +426,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     try {
       await sendSuggestion(item);
     } catch (err) {
-      window.alert((err.body && err.body.error) || 'Não foi possível enviar a sugestão da IA.');
+      avisar((err.body && err.body.error) || 'Não foi possível enviar a sugestão da IA.');
     }
   }
 
@@ -437,7 +439,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     try {
       await discardSuggestion(item);
     } catch (err) {
-      window.alert((err.body && err.body.error) || 'Não foi possível descartar a sugestão da IA.');
+      avisar((err.body && err.body.error) || 'Não foi possível descartar a sugestão da IA.');
     }
   }
 
@@ -847,6 +849,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           Voltar à conversa
         </button>
       )}
+      {alertDialog}
       {sgpPanelOpen ? (
         <SgpLookupPanel
           onSendMessage={(content) => sendMessage(content)}

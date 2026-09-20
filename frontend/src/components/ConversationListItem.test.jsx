@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationListItem from './ConversationListItem';
 import { useAuth } from '../contexts/AuthContext';
@@ -391,7 +391,6 @@ describe('ConversationListItem', () => {
   test('clicking the quick-close button asks for confirmation and calls onQuickClose without opening the conversation', async () => {
     const onQuickClose = vi.fn();
     const onSelect = vi.fn();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(
       <ul>
         <ConversationListItem
@@ -404,15 +403,16 @@ describe('ConversationListItem', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
 
-    expect(window.confirm).toHaveBeenCalledWith('Encerrar esse atendimento sem motivo?');
+    const confirmacao = await screen.findByRole('alertdialog');
+    expect(confirmacao).toHaveTextContent('Encerrar esse atendimento sem motivo?');
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Encerrar' }));
+
     expect(onQuickClose).toHaveBeenCalledWith('c1');
     expect(onSelect).not.toHaveBeenCalled();
-    window.confirm.mockRestore();
   });
 
   test('clicking the quick-close button does not call onQuickClose when the confirmation is declined', async () => {
     const onQuickClose = vi.fn();
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(
       <ul>
         <ConversationListItem
@@ -424,9 +424,9 @@ describe('ConversationListItem', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancelar' }));
 
     expect(onQuickClose).not.toHaveBeenCalled();
-    window.confirm.mockRestore();
   });
 
   test('shows the AI triage line when the conversation has completed triage', () => {

@@ -9,6 +9,7 @@ export { PageHeader } from './PageHeader';
 export { DangerZone } from './DangerZone';
 export { AsyncState } from './AsyncState';
 export { ConfirmDialog } from './ConfirmDialog';
+export { AlertDialog } from './AlertDialog';
 export { Dialog, DialogBody, DialogFooter } from './Dialog';
 
 // Raio 12px: o controle é o nível mais interno da escala (painel 22 > cartão 16 > controle 12).

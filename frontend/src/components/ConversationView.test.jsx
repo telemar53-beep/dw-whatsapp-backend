@@ -379,12 +379,20 @@ describe('ConversationView', () => {
     alertSpy.mockRestore();
   });
 
+  // O aviso deixou de ser a caixa nativa do navegador: virou um alertdialog do
+  // proprio sistema, que continua exigindo reconhecimento explicito.
   test('shows an alert with the backend error when claiming fails', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     api.claimConversation.mockRejectedValue({ body: { error: 'Conversation is already assigned' } });
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: /assumir/i }));
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Conversation is already assigned'));
+
+    const aviso = await screen.findByRole('alertdialog');
+    expect(aviso).toHaveTextContent('Conversation is already assigned');
+    expect(alertSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(within(aviso).getByRole('button', { name: /entendi/i }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     alertSpy.mockRestore();
   });
 

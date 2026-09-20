@@ -26,7 +26,7 @@ function formatMessageTime(lastMessageAt) {
   return new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected, divided = true, showArrivalTime = false, compact = false }) {
+function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected, divided = true, showArrivalTime = false, compact = false, rail = false }) {
   // A cidade já foi colada no nome ("Fulano - Cidade"), mas os dois dividiam um
   // `truncate` só: nome comprido comia a cidade inteira. Com cada atendente
   // puxando uma cidade diferente, era justamente o dado que sumia — então ela
@@ -56,6 +56,36 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
     if (window.confirm('Encerrar esse atendimento sem motivo?')) {
       onQuickClose(conversation.id);
     }
+  }
+
+  // Rail: o espaço não comporta a lista inteira, mas o atendente precisa
+  // continuar vendo que existem outros atendimentos e trocar rápido. Só
+  // avatar, seleção e sinal de mensagem nova — cidade, setor e prévia voltam
+  // quando a lista reabre. O nome fica na dica.
+  if (rail) {
+    return (
+      <li className="chat-rail-entry">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={handleSelect}
+          onKeyDown={handleKeyDown}
+          aria-label={nameLabel}
+          aria-current={selected ? 'true' : undefined}
+          className={`chat-rail-row ${selected ? 'is-selected' : ''} ${unread ? 'is-unread' : ''}`}
+        >
+          <ContactAvatar
+            contactId={conversation.contactId}
+            avatarPath={conversation.contactAvatarPath}
+            displayName={conversation.contactDisplayName}
+            phoneNumber={conversation.contactPhoneNumber}
+            size={36}
+          />
+          {unread && <span className="chat-rail-unread" aria-hidden="true" />}
+          <span className="chat-rail-tip">{nameLabel}</span>
+        </div>
+      </li>
+    );
   }
 
   if (compact) {

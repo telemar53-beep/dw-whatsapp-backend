@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
+import { useWorkspaceLayout } from '../hooks/useWorkspaceLayout';
 import { useCompanyName } from '../hooks/useCompanyName';
 import { useTransferNotice } from '../hooks/useTransferNotice';
 import TransferNotice from '../components/TransferNotice';
@@ -16,7 +17,7 @@ import ChannelStatusBanner from '../components/ChannelStatusBanner';
 import StartConversationModal from '../components/StartConversationModal';
 import TeamPanel from '../components/TeamPanel';
 import { Tabs } from '../components/ui/Tabs';
-import { IconNewChat, IconSearch, IconLock, IconEmptyChat } from '../components/icons/WaIcons';
+import { IconNewChat, IconSearch, IconLock, IconEmptyChat, IconChats, IconArrowLeft } from '../components/icons/WaIcons';
 import './dashboard.css';
 
 const TABS = [
@@ -53,10 +54,21 @@ function DashboardPage() {
   // referência estável, então o hook não reassina os eventos a cada render.
   const { unreadIds, clearUnread } = useUnreadMyConversations(myConversations, selectedId, queue);
   const { notice: transferNotice, dismiss: dismissTransferNotice } = useTransferNotice();
+  // Mede o espaço real da mesa (o menu troca de 196px para 64px sem a janela
+  // mudar de tamanho, e media query não vê isso). A conversa tem piso; quem
+  // cede é a lista, depois o painel. Nada sobrepõe a conversa.
+  const colunasRef = useRef(null);
+  const [painelAberto, setPainelAberto] = useState(false);
+  const [listaAberta, setListaAberta] = useState(false);
+  const layout = useWorkspaceLayout(colunasRef, painelAberto);
+  const emRail = layout.lista === 'rail' && !listaAberta;
+  const listaOcupaTudo = layout.lista === 'oculta' || listaAberta;
 
   function selectConversation(conversationId) {
     clearUnread(conversationId);
     setSelectedId(conversationId);
+    // Escolher um atendimento devolve o espaço para a conversa.
+    setListaAberta(false);
   }
 
   // A conversa transferida cai em "Meus atendimentos", então abrir pelo aviso
@@ -121,12 +133,29 @@ function DashboardPage() {
         <ChannelStatusBanner />
       </div>
 
-      <div className="chat-workspace-columns flex min-h-0 flex-1 gap-0">
+      <div ref={colunasRef} data-lista={layout.lista} data-painel={layout.painel} className="chat-workspace-columns flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden">
         <aside
           className={`${
-            selectedConversation ? 'hidden' : 'flex'
-          } chat-workspace-list w-full min-w-0 flex-col lg:flex lg:shrink-0 lg:overflow-clip`}
+            listaOcupaTudo && selectedConversation && !listaAberta ? 'hidden' : 'flex'
+          } chat-workspace-list ${emRail ? 'is-rail' : ''} ${listaAberta ? 'is-aberta' : ''} w-full min-w-0 shrink-0 flex-col overflow-clip`}
         >
+          {emRail && (
+            <button
+              type="button"
+              onClick={() => setListaAberta(true)}
+              aria-label="Ver lista de atendimentos"
+              className="chat-rail-expandir"
+            >
+              <IconChats size={18} />
+              <span className="chat-rail-tip">Ver lista de atendimentos</span>
+            </button>
+          )}
+          {listaAberta && (
+            <button type="button" onClick={() => setListaAberta(false)} className="chat-lista-voltar">
+              <IconArrowLeft size={16} />
+              Voltar à conversa
+            </button>
+          )}
           <div className="chat-inbox-heading flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-4">
             <h1 className="font-display text-[20px] font-semibold leading-7 text-chat-text">Atendimento</h1>
             <button
@@ -180,6 +209,7 @@ function DashboardPage() {
                 unreadIds={unreadIds}
                 selectedId={selectedId}
                 compact
+                rail={emRail}
               />
             )}
             {activeTab === 'waiting' && (
@@ -192,6 +222,7 @@ function DashboardPage() {
                 selectedId={selectedId}
                 emptyMessage="Nenhum atendimento em espera."
                 compact
+                rail={emRail}
               />
             )}
             {activeTab === 'automation' && (
@@ -204,6 +235,7 @@ function DashboardPage() {
                 selectedId={selectedId}
                 emptyMessage="Nenhum atendimento em automação."
                 compact
+                rail={emRail}
               />
             )}
           </div>
@@ -213,12 +245,14 @@ function DashboardPage() {
 
         <main
           className={`chat-workspace-main ${
-            selectedConversation ? 'block' : 'hidden'
-          } min-w-0 flex-1 lg:block lg:overflow-clip`}
+            listaOcupaTudo && !selectedConversation ? 'hidden' : listaOcupaTudo && listaAberta ? 'hidden' : 'block'
+          } min-w-0 flex-1 overflow-clip`}
         >
           {selectedConversation ? (
             <ConversationView
               conversation={selectedConversation}
+              painelModo={layout.painel}
+              onPainelAbertoChange={setPainelAberto}
               onTransferClick={setTransferringId}
               onBack={() => setSelectedId(null)}
               workspace

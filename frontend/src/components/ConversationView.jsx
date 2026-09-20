@@ -235,7 +235,7 @@ function CustomerPanel({ conversation, displayName, cityName, onClose }) {
   );
 }
 
-function ConversationView({ conversation, onTransferClick, onBack, workspace = false }) {
+function ConversationView({ conversation, onTransferClick, onBack, painelModo = 'coluna', onPainelAbertoChange, workspace = false }) {
   const { token, agent } = useAuth();
   // `status` já é o estado do atendimento neste componente; o do carregamento
   // das mensagens entra com nome próprio.
@@ -265,6 +265,21 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
   const [customerPanelOpen, setCustomerPanelOpen] = useState(false);
   const [customerPanelDismissed, setCustomerPanelDismissed] = useState(false);
+  // Quando o espaço não comporta lista + conversa + painel, o painel deixa de
+  // ser coluna e ocupa a área de trabalho, com volta explícita. Nunca por cima
+  // da conversa: mensagem escondida atrás de painel foi problema real antes.
+  const painelAberto = sgpPanelOpen || (workspace && customerPanelOpen && !customerPanelDismissed);
+  const painelAlternado = painelModo === 'alternado' && painelAberto;
+
+  useEffect(() => {
+    if (onPainelAbertoChange) onPainelAbertoChange(painelAberto);
+  }, [painelAberto, onPainelAbertoChange]);
+
+  function fecharPaineis() {
+    setSgpPanelOpen(false);
+    setCustomerPanelOpen(false);
+    setCustomerPanelDismissed(true);
+  }
   const [closingReason, setClosingReason] = useState(false);
   // A sugestão que o atendente escolheu editar: { id, content } enquanto o texto
   // está no campo de digitação, ou null. Enquanto ela existir, o próximo envio de
@@ -429,7 +444,7 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
   const timeline = buildTimeline(messages);
 
   return (
-    <div className={`${workspace ? 'chat-workspace-conversation' : ''} flex h-full`}>
+    <div className={`${workspace ? 'chat-workspace-conversation' : ''} ${painelAlternado ? 'is-painel-alternado' : ''} flex h-full`}>
       <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
       <div className="chat-workspace-header @container z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/[0.07] px-2 py-2.5 md:px-5">
         <div className="chat-workspace-header-identity flex min-w-[240px] flex-1 items-center gap-1.5">
@@ -826,6 +841,12 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
         />
       )}
       </div>
+      {painelAlternado && (
+        <button type="button" onClick={fecharPaineis} className="chat-painel-voltar">
+          <IconArrowLeft size={16} />
+          Voltar à conversa
+        </button>
+      )}
       {sgpPanelOpen ? (
         <SgpLookupPanel
           onSendMessage={(content) => sendMessage(content)}

@@ -19,23 +19,24 @@
 .settings-workspace > aside nav > div > button[data-settings-category=automacao] .settings-functional-icon {color:#b7accf}
 .settings-workspace > aside nav > div > button[data-settings-category=integracoes] .settings-functional-icon {color:#91b9d3}
 .settings-search-group {display:block;font-size:10px;color:#98adbb;font-weight:400;margin-top:2px}
-.settings-workspace .settings-detail-header,.settings-workspace .settings-group-header {padding:0 18px;background:#2c3941;border-bottom:1px solid var(--settings-line)}
-.settings-workspace :is(.settings-detail-header,.settings-group-header) header {padding:13px 0 12px;gap:8px}
-.settings-workspace :is(.settings-detail-header,.settings-group-header) h1 {font-size:20px;line-height:26px;letter-spacing:-.02em}
-.settings-workspace :is(.settings-detail-header,.settings-group-header) header p {font-size:12px;line-height:17px;margin-top:4px}
-.settings-workspace :is(.settings-detail-header,.settings-group-header) nav {font-size:10px;margin-bottom:7px;color:#9eb3c1}
+.settings-workspace .settings-shell-header {padding:0 18px;background:#2c3941;border-bottom:1px solid var(--settings-line)}
+.settings-workspace .settings-shell-header header {padding:13px 0 12px;gap:8px}
+.settings-workspace .settings-shell-header h1 {font-size:20px;line-height:26px;letter-spacing:-.02em}
+.settings-workspace .settings-shell-header header p {font-size:12px;line-height:17px;margin-top:4px}
+.settings-workspace .settings-shell-header nav {font-size:10px;margin-bottom:7px;color:#9eb3c1}
 .settings-title {display:flex;align-items:center;gap:10px}
 .settings-title-mark {display:grid;place-items:center;width:34px;height:34px;border:1px solid #ffffff0b;background:#ffffff04;border-radius:8px;color:#c7b6a6}
 [data-settings-group=canais] .settings-title-mark {color:#89d1ac;background:#60bf8c0b}
 [data-settings-group=automacao] .settings-title-mark {color:#c1b3db;background:#c1b3db0b}
 [data-settings-group=integracoes] .settings-title-mark {color:#a5c8de;background:#a5c8de0b}
-.settings-workspace .settings-detail-body,.settings-workspace .settings-group-body {padding:16px 18px 24px;container-type:inline-size}
-.settings-workspace :is(.settings-section-list,.settings-group-body > div) {max-width:none}
-.settings-workspace .settings-section-list {display:flex;flex-direction:column;gap:14px}
-.settings-workspace .settings-section-list .settings-section {padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
-.settings-workspace .settings-section-list .settings-section + .settings-section {padding-top:14px;border-top:1px solid var(--settings-line)}
-.settings-workspace .settings-section-list .settings-section h2:before {display:none!important}
-.settings-workspace .settings-section-list .settings-section > div:last-child:not(:first-child) {padding-top:10px}
+.settings-workspace .settings-shell-body {padding:16px 18px 24px;container-type:inline-size}
+/* A largura agora e declarada pela casca (data-width), nao anulada aqui. */
+.settings-workspace .settings-shell-content {display:flex;flex-direction:column;gap:14px;width:100%}
+
+.settings-workspace .settings-shell-content .settings-section {padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.settings-workspace .settings-shell-content .settings-section + .settings-section {padding-top:14px;border-top:1px solid var(--settings-line)}
+.settings-workspace .settings-shell-content .settings-section h2:before {display:none!important}
+.settings-workspace .settings-shell-content .settings-section > div:last-child:not(:first-child) {padding-top:10px}
 .settings-workspace h2,.settings-workspace h3 {letter-spacing:0}
 .settings-workspace :is(.settings-section h2,.settings-open-form h2,.settings-open-form h3) {font-size:14px;line-height:20px}
 .settings-workspace :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) {font-size:12px;line-height:18px;border-radius:6px;padding:6px 9px;min-height:32px;max-width:100%}
@@ -46,7 +47,7 @@
 .settings-workspace textarea {min-height:76px;resize:vertical;line-height:1.5}
 .settings-workspace :is(input,select,textarea):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 .settings-workspace input:is([type=checkbox],[type=radio]) {accent-color:#d5a176}
-.settings-workspace :is(form,section,.settings-detail-header,.settings-group-header,.settings-group-body) button:not([role=tab]) {font-size:12px;line-height:18px;border-radius:6px;padding:5px 10px;min-height:30px;box-shadow:none}
+.settings-workspace :is(form,section,.settings-shell-header,.settings-shell-body) button:not([role=tab]) {font-size:12px;line-height:18px;border-radius:6px;padding:5px 10px;min-height:30px;box-shadow:none}
 .settings-workspace button:disabled {opacity:.45;cursor:not-allowed}
 .settings-workspace :is(button,a,summary):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 .settings-workspace :is(form,section) label {font-size:12px}
@@ -59,7 +60,7 @@
 .settings-workspace [role=alert] {border-left:2px solid #d97b70;border-radius:4px;padding:10px 12px;font-size:12px}
 .settings-workspace details summary {font-size:12px}
 .settings-workspace details[open] {border-color:#d5a17655}
-.settings-workspace .settings-section-list .settings-section:has(.text-wa-warn-text) {padding:10px 12px;border-left:2px solid #cbaa6b;background:#b9914010}
+.settings-workspace .settings-shell-content .settings-section:has(.text-wa-warn-text) {padding:10px 12px;border-left:2px solid #cbaa6b;background:#b9914010}
 .settings-steps {display:flex;flex-wrap:wrap;gap:8px 20px;border-bottom:1px solid var(--settings-line);padding-bottom:12px;color:#b9c9d3}
 .settings-steps li {display:flex;gap:8px;align-items:center;font-size:11px}
 .settings-steps small {font-size:9px;color:#91a7b7;margin-right:6px}
@@ -84,9 +85,9 @@
 .settings-transcription-form section[aria-label] {padding:10px 12px;background:#8daec709;border-left:2px solid #97b4c8;border-bottom:0}
 .settings-transcription-form section {min-width:0}
 .settings-transcription-form > div:last-child {justify-content:flex-end;border-top:1px solid var(--settings-line);padding-top:12px}
-.settings-workspace[data-settings-page=noturno] .settings-section-list {display:grid;grid-template-columns:minmax(0,1.1fr) minmax(200px,.9fr);gap:16px}
-.settings-workspace[data-settings-page=noturno] .settings-section-list > :is(ol,p) {grid-column:1/-1}
-.settings-workspace[data-settings-page=noturno] .settings-section-list > .settings-section {border-left:1px solid var(--settings-line);padding-left:18px}
+.settings-workspace[data-settings-page=noturno] .settings-shell-content {display:grid;grid-template-columns:minmax(0,1.1fr) minmax(200px,.9fr);gap:16px}
+.settings-workspace[data-settings-page=noturno] .settings-shell-content > :is(ol,p) {grid-column:1/-1}
+.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-section {border-left:1px solid var(--settings-line);padding-left:18px}
 .settings-workspace[data-settings-page=ferramentas] section[id], .settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] {border-radius:5px;border:0;background:none;border-top:1px solid var(--settings-line)}
 .settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] h2 {font-size:12px}
 .settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] > div:first-child {background:#ffffff03;padding:7px 10px}
@@ -107,9 +108,9 @@
 .settings-message-pair p {font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
 .settings-assignment-summary {flex:1;min-width:0}
 .settings-workspace[data-settings-page=abertura-encerramento] .settings-message-editor > div:last-child {padding:0;border:0;background:none}
-.settings-workspace[data-settings-page=horario] .settings-section-list {display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px}
-.settings-workspace[data-settings-page=horario] .settings-section-list > p {font-size:12px;line-height:18px;border:0;border-right:1px solid var(--settings-line);padding-right:16px}
-.settings-workspace[data-settings-page=horario] .settings-section-list > :not(p) {border:0;background:none;padding:0}
+.settings-workspace[data-settings-page=horario] .settings-shell-content {display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px}
+.settings-workspace[data-settings-page=horario] .settings-shell-content > p {font-size:12px;line-height:18px;border:0;border-right:1px solid var(--settings-line);padding-right:16px}
+.settings-workspace[data-settings-page=horario] .settings-shell-content > :not(p) {border:0;background:none;padding:0}
 .settings-template-library {gap:16px;grid-template-columns:minmax(0,1fr)}
 @container(min-width:960px){.settings-template-library{grid-template-columns:minmax(0,1fr) 280px}.settings-template-library > :last-child{position:sticky;top:0}}
 .settings-template-library section {border-radius:6px;box-shadow:none}
@@ -173,7 +174,7 @@ body:has(.settings-workspace) > .chat-theme [role=dialog] :is(input:not([type=ch
 body:has(.settings-workspace) > .chat-theme [role=dialog] button {font-size:12px;padding:6px 12px;border-radius:6px}
 body:has(.settings-workspace) > .chat-theme [role=dialog] h2 {font-size:17px}
 @media(max-width:1023px){.settings-workspace > aside{width:100%;border-right:0;border-bottom:1px solid var(--settings-line);flex:none}.settings-workspace > aside > div:first-child{padding:10px 14px}.settings-workspace > aside > div{padding-bottom:8px}}
-@container(max-width:650px){.settings-workspace[data-settings-page=noturno] .settings-section-list,.settings-workspace[data-settings-page=horario] .settings-section-list,.settings-company-summary,.settings-message-pair{grid-template-columns:1fr}.settings-workspace[data-settings-page=noturno] .settings-section-list > .settings-section,.settings-workspace[data-settings-page=horario] .settings-section-list > p{border:0;padding:0}.settings-company-payees{border:0;padding:0}.settings-service-switchboard > a{padding:8px}.settings-channel-record{grid-template-columns:minmax(0,1fr)}.settings-channel-record > div:nth-child(4){grid-column:1;grid-row:4}}
+@container(max-width:650px){.settings-workspace[data-settings-page=noturno] .settings-shell-content,.settings-workspace[data-settings-page=horario] .settings-shell-content,.settings-company-summary,.settings-message-pair{grid-template-columns:1fr}.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-section,.settings-workspace[data-settings-page=horario] .settings-shell-content > p{border:0;padding:0}.settings-company-payees{border:0;padding:0}.settings-service-switchboard > a{padding:8px}.settings-channel-record{grid-template-columns:minmax(0,1fr)}.settings-channel-record > div:nth-child(4){grid-column:1;grid-row:4}}
 /* Ajustes após inspeção dos canais carregados. */
 .settings-channel-record {row-gap:4px;padding-top:10px;padding-bottom:10px}
 .settings-channel-record > div:nth-child(2) {padding-top:0}
@@ -182,7 +183,7 @@ body:has(.settings-workspace) > .chat-theme [role=dialog] h2 {font-size:17px}
 .settings-channel-record > div:nth-child(1) {gap:10px}
 .settings-channel-record > div:nth-child(1) .settings-channel-symbol {width:30px!important;height:30px!important}
 .settings-channel-record > div:nth-child(2) {padding-left:40px}
-.settings-workspace .settings-group-body > div.max-w-6xl {width:100%}
+
 .settings-workspace [aria-labelledby=channel-detail-title] {border-radius:6px;border:0;background:none}
 .settings-workspace [aria-labelledby=channel-detail-title] > div:first-child {padding:10px 0}
 .settings-workspace [aria-labelledby=channel-detail-title] > div:last-child {padding:12px 0}
@@ -190,7 +191,7 @@ body:has(.settings-workspace) > .chat-theme [role=dialog] h2 {font-size:17px}
 .settings-workspace .settings-register-list > p {border-top:1px solid var(--settings-line);border-bottom:1px solid var(--settings-line);padding:14px 0;font-size:12px}
 .settings-workspace .settings-channel-switch {border:0;border-radius:0;background:none;padding:0 0 10px;border-bottom:1px solid var(--settings-line)}
 .settings-channel-switch label {flex-direction:row;align-items:center;gap:10px}
-.settings-workspace :is(.settings-group-body,.settings-detail-body) button:not([role=tab]) {height:auto}
+.settings-workspace .settings-shell-body button:not([role=tab]) {height:auto}
 /* Cadastro de usuário: identidade e acesso em pares, com rodapé próprio. */
 body:has(.settings-workspace) [role=dialog]:has(#agent-name) {max-width:640px}
 body:has(.settings-workspace) [role=dialog] form:has(#agent-name) {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
@@ -198,3 +199,95 @@ body:has(.settings-workspace) [role=dialog] form:has(#agent-name) > * {margin:0}
 body:has(.settings-workspace) [role=dialog] form:has(#agent-name) > :is(label,p,h3),body:has(.settings-workspace) [role=dialog] form:has(#agent-name) > div:last-child {grid-column:1/-1}
 body:has(.settings-workspace) [role=dialog] form:has(#agent-name) > div:last-child {border-top:1px solid #ffffff12;padding-top:12px;justify-content:flex-end}
 @media(max-width:540px){body:has(.settings-workspace) [role=dialog] form:has(#agent-name){grid-template-columns:minmax(0,1fr)}}
+
+/* Bloco que morava no index.css — a folha GLOBAL do produto estilizando uma
+   area especifica, e vencendo a folha local por ser injetada depois. Era por
+   isso que as regras de cabecalho e corpo de settings.css pareciam nao valer:
+   havia um terceiro arquivo por cima. Agora Configuracoes e estilizada num
+   lugar so; a ordem dentro do arquivo preserva quem vencia. */
+.settings-workspace > aside {
+  background: linear-gradient(165deg, rgba(54, 61, 65, .96), rgba(37, 45, 50, .97));
+}
+.settings-workspace > section {
+  background: #283137;
+}
+.settings-workspace .settings-shell-header {
+  background: linear-gradient(100deg, rgba(255, 145, 68, .075), transparent 56%);
+}
+.settings-workspace .settings-shell-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+/* Painel e tabela respiram entre blocos; formulario usa a divisoria das secoes. */
+.settings-workspace .settings-shell-content[data-width=table] {
+  gap: 12px;
+}
+.settings-workspace .settings-shell-content > .settings-section,
+.settings-workspace .settings-shell-content > form > .settings-section {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 15px 2px 17px;
+  box-shadow: none;
+}
+.settings-workspace .settings-shell-content > .settings-section + .settings-section,
+.settings-workspace .settings-shell-content > form + .settings-section,
+.settings-workspace .settings-shell-content > form > .settings-section + .settings-section {
+  border-top: 1px solid rgba(255,255,255,.09);
+}
+.settings-workspace .settings-shell-content .settings-section > div:first-child h2 {
+  font-size: 17px;
+  letter-spacing: -.015em;
+}
+.settings-workspace .settings-shell-content .settings-section > div:first-child h2::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 16px;
+  margin-right: 11px;
+  border-radius: 5px;
+  background: var(--color-chat-orange);
+  vertical-align: -2px;
+}
+.settings-workspace .settings-shell-content .settings-section > div:last-child:not(:first-child) {
+  max-width: none;
+}
+.settings-workspace input[type="number"],
+.settings-workspace input[type="time"] {
+  max-width: 168px;
+}
+.settings-workspace .settings-open-form:not(.grid).space-y-4 > :not([hidden]) ~ :not([hidden]),
+.settings-workspace .settings-open-form:not(.grid).space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 12px;
+}
+.settings-workspace .settings-shell-content .settings-section[aria-labelledby] > div:last-child:has(table) {
+  max-width: none;
+}
+.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 16px 0 20px;
+}
+.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section + .settings-section {
+  border-top: 1px solid rgba(255,255,255,.09);
+}
+.settings-workspace [aria-labelledby="channel-detail-title"] .settings-section h2::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 15px;
+  margin-right: 10px;
+  border-radius: 4px;
+  background: var(--color-chat-orange);
+  vertical-align: -2px;
+}
+.settings-workspace .settings-shell-content section[aria-labelledby$="-card-title"] > div > p:first-child:last-child {
+  padding-left: 18px;
+  padding-right: 18px;
+}
+@media (min-width: 1024px) {
+  .settings-workspace .settings-shell-header { padding-left: 32px; padding-right: 32px; }
+  .settings-workspace .settings-shell-body { padding-left: 34px; padding-right: 34px; }
+}

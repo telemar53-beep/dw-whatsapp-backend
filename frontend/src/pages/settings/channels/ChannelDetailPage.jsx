@@ -9,6 +9,7 @@ import { hasLevel } from '../../../navigation/navItems';
 import { formatPhone } from '../../../utils/phone';
 import { useChannelActions } from './useChannelActions';
 import { ChannelIcon, ConnectionStatus, providerLabel } from './ChannelsTable';
+import SettingsShell from '../SettingsShell';
 
 function ChannelDetailPage() {
   const { id } = useParams();
@@ -30,17 +31,14 @@ function ChannelDetailPage() {
   }, [channel?.status, refresh]);
 
   return (
-    <ProtectedRoute level="admin" areaLabel="Canais WhatsApp">
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="settings-group-header border-b border-white/[0.07] px-4">
-          <PageHeader
-            crumbs={[{ label: 'Configurações', to: '/configuracoes' }]}
-            title={<SettingsTitle name="canais">Canais WhatsApp</SettingsTitle>}
-            description="Gerencie os números e o atendimento de cada canal."
-          />
-        </div>
-        <div className="settings-group-body chat-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-7 pt-4 sm:px-6">
-          <div className="max-w-6xl space-y-3">
+    <SettingsShell
+      areaLabel="Canais WhatsApp"
+      title="Canais WhatsApp"
+      iconName="canais"
+      crumb={null}
+      description="Gerencie os números e o atendimento de cada canal."
+      width="table"
+    >
             <AsyncState status={status} onRetry={refresh}>
               <div className="settings-channel-switch flex flex-wrap items-center justify-between gap-3">
                 <Link to="/configuracoes/canais" className="text-[13px] font-medium text-wa-link hover:underline">← Todos os canais</Link>
@@ -97,12 +95,9 @@ function ChannelDetailPage() {
                   </div>
                 </section>
               )}
-            </AsyncState>
-          </div>
-        </div>
-        {actions.confirmDialog}
-      </div>
-    </ProtectedRoute>
+      </AsyncState>
+      {actions.confirmDialog}
+    </SettingsShell>
   );
 }
 

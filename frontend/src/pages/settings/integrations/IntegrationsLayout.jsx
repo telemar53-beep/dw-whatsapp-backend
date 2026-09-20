@@ -1,7 +1,6 @@
-import { SettingsTitle, SettingsIcon } from '../SettingsVisuals';
+import { SettingsIcon } from '../SettingsVisuals';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import ProtectedRoute from '../../../components/ProtectedRoute';
-import { PageHeader } from '../../../components/ui';
+import SettingsShell from '../SettingsShell';
 import { IconInfo } from '../../../components/icons/WaIcons';
 import { findSettingsItem } from '../../../navigation/navItems';
 import { useSgpQueryConfig } from '../../../hooks/useSgpQueryConfig';
@@ -45,17 +44,13 @@ function IntegrationsLayout() {
   const perChannel = integrations.length;
 
   return (
-    <ProtectedRoute level="integrations" areaLabel="Integrações">
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="settings-group-header border-b border-white/[0.07] px-4">
-          <PageHeader
-            crumbs={[{ label: 'Configurações', to: '/configuracoes' }, { label: 'Integrações' }]}
-            title={<SettingsTitle name={selected?.key}>{selected?.label || 'Integrações'}</SettingsTitle>}
-            description={selected?.description || 'Conecte o atendimento aos serviços da sua operação.'}
-          />
-        </div>
-        <div className="settings-group-body chat-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-7 pt-4 sm:px-6">
-          <div className="max-w-6xl space-y-3">
+    <SettingsShell
+      level="integrations"
+      areaLabel="Integrações"
+      crumb="Integrações"
+      description={selected?.description || 'Conecte o atendimento aos serviços da sua operação.'}
+      width="table"
+    >
             <div className="settings-service-switchboard" aria-label="Estado das integrações">
               <Link to="/configuracoes/integracoes/sgp/consultas" aria-current={selected?.key === 'sgp-consultas' ? 'page' : undefined}><SettingsIcon name="sgp-consultas"/><span>SGP<small>Consultas</small></span>{sgpBadge}</Link>
               <Link to="/configuracoes/integracoes/openai" aria-current={selected?.key === 'openai' ? 'page' : undefined}><SettingsIcon name="openai"/><span>OpenAI<small>Modelos e credenciais</small></span>{aiBadge}</Link>
@@ -71,10 +66,7 @@ function IntegrationsLayout() {
                 Gerenciar canais →
               </Link>
             </p>
-          </div>
-        </div>
-      </div>
-    </ProtectedRoute>
+    </SettingsShell>
   );
 }
 

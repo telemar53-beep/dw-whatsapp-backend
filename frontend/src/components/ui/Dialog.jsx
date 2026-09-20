@@ -77,7 +77,7 @@ export function Dialog({
   onClose,
   closeOnBackdrop = false,
   closeOnEsc = true,
-  dismissible = false,
+  dismissible = true,
   closeLabel = 'Fechar',
   className = '',
   children,
@@ -214,7 +214,7 @@ export function Dialog({
         aria-describedby={describedBy || (title && description ? descricaoId : undefined)}
         tabIndex={-1}
         onKeyDown={prenderTab}
-        className={`dw-dialog animate-wa-pop relative flex max-h-[85vh] w-full ${size} ${orientation === 'row' ? 'flex-row' : 'flex-col'} overflow-hidden rounded-[var(--wa-dialog-radius)] border border-[var(--wa-dialog-border)] bg-wa-panel shadow-[var(--wa-dialog-shadow)] backdrop-blur-[var(--wa-dialog-blur)] ${className}`}
+        className={`dw-dialog animate-wa-pop relative flex w-full ${size} ${orientation === 'row' ? 'flex-row' : 'flex-col'} overflow-hidden rounded-[var(--wa-dialog-radius)] border border-[var(--wa-dialog-border)] bg-wa-panel shadow-[var(--wa-dialog-shadow)] backdrop-blur-[var(--wa-dialog-blur)] ${className}`}
       >
         {dismissible && (
           <button

@@ -74,7 +74,7 @@ describe('ConversationHistoryModal', () => {
     const onClose = vi.fn();
     render(<ConversationHistoryModal contactId="contact-1" onClose={onClose} />);
 
-    await userEvent.click(await screen.findByRole('button', { name: /fechar/i }));
+    await userEvent.click((await screen.findAllByRole('button', { name: /fechar/i })).find((b) => !b.hasAttribute('data-dialog-close')));
     expect(onClose).toHaveBeenCalled();
   });
 });

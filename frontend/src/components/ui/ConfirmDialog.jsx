@@ -20,6 +20,9 @@ export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar'
       title={title}
       ariaLabel={title ? undefined : message}
       describedBy={messageId}
+      // Sem "x": Cancelar ja e a saida explicita, e dois jeitos de dizer nao
+      // lado a lado so criam duvida sobre a diferenca entre eles.
+      dismissible={false}
       onClose={onCancel}
       // Confirmação não fecha por clique no fundo: é decisão, não leitura.
       closeOnBackdrop={false}

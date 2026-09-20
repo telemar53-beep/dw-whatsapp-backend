@@ -6,7 +6,7 @@ import { transferConversation } from '../services/api';
 import WaDialog, { waErrorClass } from './WaDialog';
 import AgentAvatar from './AgentAvatar';
 import { AsyncState } from './ui';
-import { IconChats, IconChevronDown, IconClose, IconInfo, IconSearch, IconTransfer } from './icons/WaIcons';
+import { IconChats, IconChevronDown, IconInfo, IconSearch, IconTransfer } from './icons/WaIcons';
 
 // Nível de carga pelo número de atendimentos abertos. Os limites são uma
 // escolha de produto (não vêm do backend): quem está offline nunca é sugerido
@@ -166,24 +166,15 @@ function TransferModal({ conversationId, onClose }) {
   const hasOthers = allAgents.some((a) => a.id !== agent.id);
 
   return (
-    <WaDialog variant="transfer" onClose={onClose} size="max-w-[760px]">
+    <WaDialog variant="transfer" onClose={onClose} labelledBy="transfer-modal-title" size="max-w-[760px]">
       <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5">
         <span aria-hidden="true" className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-chat-orange/20 text-chat-orange">
           <IconTransfer size={30} />
         </span>
         <div className="min-w-0 flex-1 pt-1">
-          <h2 className="text-[20px] font-semibold leading-[26px] text-wa-text">Transferir atendimento</h2>
+          <h2 id="transfer-modal-title" className="text-[20px] font-semibold leading-[26px] text-wa-text">Transferir atendimento</h2>
           <p className="mt-0.5 text-[13.5px] leading-[18px] text-wa-muted">Escolha um atendente para transferir esta conversa.</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fechar o popup de transferência"
-          title="Fechar"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-white/[0.06] text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          <IconClose size={17} />
-        </button>
       </div>
 
       <div className="flex shrink-0 flex-wrap gap-2.5 px-5">

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import WaDialog from './WaDialog';
 import AgentAvatar from './AgentAvatar';
 import { AsyncState } from './ui';
-import { IconClock, IconClose, IconSearch, IconTeam } from './icons/WaIcons';
+import { IconClock, IconSearch, IconTeam } from './icons/WaIcons';
 import { formatLastSeen } from '../utils/formatLastSeen';
 
 function plural(count, singular, pluralForm) {
@@ -102,21 +102,12 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
   const columns = filter === 'all' ? 'md:grid-cols-3' : filter === 'online' ? 'md:grid-cols-2' : 'md:grid-cols-1';
 
   return (
-    <WaDialog variant="team" onClose={onClose} closeOnBackdrop size="max-w-[980px]">
+    <WaDialog variant="team" onClose={onClose} closeOnBackdrop labelledBy="team-modal-title" size="max-w-[980px]">
       <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5 sm:px-6">
         <div className="min-w-0 flex-1">
-          <h2 className="text-[20px] font-semibold leading-[26px] text-wa-text">Nossa equipe</h2>
+          <h2 id="team-modal-title" className="text-[20px] font-semibold leading-[26px] text-wa-text">Nossa equipe</h2>
           <p className="mt-0.5 text-[13px] leading-[18px] text-wa-muted">{plural(counts.all, 'integrante na equipe', 'integrantes na equipe')} · veja a disponibilidade para transferir</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fechar o popup da equipe"
-          title="Fechar"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-white/[0.06] text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          <IconClose size={17} />
-        </button>
       </div>
 
       <div className="shrink-0 border-b border-wa-border px-5 pb-3 sm:px-6">

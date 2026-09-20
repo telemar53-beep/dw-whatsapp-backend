@@ -110,7 +110,7 @@ describe('ProfileModal', () => {
     const onClose = vi.fn();
     render(<ProfileModal onClose={onClose} />);
 
-    const fecharButton = await screen.findByRole('button', { name: /fechar/i });
+    const fecharButton = (await screen.findAllByRole('button', { name: /fechar/i })).find((b) => !b.hasAttribute('data-dialog-close'));
     expect(await screen.findByText('Sessão expirada')).toBeInTheDocument();
 
     await userEvent.click(fecharButton);

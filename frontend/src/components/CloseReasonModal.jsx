@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import WaDialog, { waErrorClass } from './WaDialog';
 import { useReasons } from '../hooks/useReasons';
 import { AsyncState } from './ui';
-import { describeReason, closeReasonHeaderIcon, checkCircleIcon, closeIcon } from './closeReasonCatalog';
+import { describeReason, closeReasonHeaderIcon, checkCircleIcon } from './closeReasonCatalog';
 
 function ReasonCard({ reason, checked, onSelect, groupName }) {
   const id = useId();
@@ -68,24 +68,15 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
   }
 
   return (
-    <WaDialog variant="close-reason" onClose={onClose} size="max-w-[820px]">
+    <WaDialog variant="close-reason" onClose={onClose} labelledBy="close-reason-title" size="max-w-[820px]">
       <div className="flex shrink-0 items-start gap-3 px-6 pb-4 pt-5">
         <span aria-hidden="true" className="mt-0.5 shrink-0 text-accent">
           {closeReasonHeaderIcon}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-[21px] font-semibold leading-[26px] text-wa-text">Motivo do contato</h2>
+          <h2 id="close-reason-title" className="text-[21px] font-semibold leading-[26px] text-wa-text">Motivo do contato</h2>
           <p className="mt-1 text-[14px] leading-[19px] text-wa-muted">Selecione o motivo principal deste atendimento.</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fechar"
-          title="Fechar"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-wa-border bg-wa-panel-header text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          {closeIcon}
-        </button>
       </div>
 
       <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-5">

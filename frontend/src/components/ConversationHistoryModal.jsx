@@ -62,7 +62,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
   }
 
   return (
-    <WaDialog variant="history" onClose={onClose} closeOnBackdrop size="max-w-3xl">
+    <WaDialog variant="history" onClose={onClose} closeOnBackdrop ariaLabel="Atendimentos anteriores" size="max-w-3xl">
       {selected ? (
         <>
           <div className="flex shrink-0 items-center gap-3 border-b border-wa-border px-4 py-3">

@@ -184,11 +184,12 @@ describe('TeamPanel', () => {
     render(<TeamPanel />);
     await openPanel();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    // O rodape tem "Fechar" e a base poe o "x" no canto: os dois fecham.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Fechar' }).find((b) => !b.hasAttribute('data-dialog-close')));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     await openPanel();
-    await userEvent.click(screen.getByRole('button', { name: 'Fechar o popup da equipe' }));
+    await userEvent.click(document.querySelector('[data-dialog-close]'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 

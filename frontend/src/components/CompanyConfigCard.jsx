@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCompanyConfig } from '../hooks/useCompanyConfig';
 import { updateCompanyConfig } from '../services/api';
-import { AsyncState } from './ui';
+import { AsyncState, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -87,11 +87,14 @@ function CompanyConfigCard() {
   return (
     <form onSubmit={handleSave} className={cardClass}>
       <h3 className="font-display text-base font-semibold text-wa-text lg:col-span-2">Empresa</h3>
-      <div>
-        <label htmlFor="company-name" className={labelClass}>Nome da empresa</label>
+      <Field
+        id="company-name"
+        label="Nome da empresa"
+        width="md"
+        help="Como aparece para o cliente: na tela de login, no chat e nas mensagens da IA."
+      >
         <input id="company-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
-        <p className="mt-1 text-[12px] text-wa-muted">Como aparece para o cliente: na tela de login, no chat e nas mensagens da IA.</p>
-      </div>
+      </Field>
       <div>
         <label htmlFor="company-payee-names" className={labelClass}>Nomes aceitos como favorecido no comprovante</label>
         <textarea

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAiConfig } from '../hooks/useAiConfig';
 import { updateTranscriptionConfig, testAiConnection } from '../services/api';
-import { AsyncState } from './ui';
+import { AsyncState, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -115,8 +115,7 @@ function AudioTranscriptionConfigCard() {
           <h2 id="transcription-processing-title" className="font-display text-[16px] font-semibold text-wa-text">Processamento</h2>
           <p className="mt-1 text-[12.5px] text-wa-muted">Modelo e limites aplicados a cada áudio.</p>
         </div>
-        <div>
-          <label htmlFor="transcription-model" className={labelClass}>Modelo</label>
+        <Field id="transcription-model" label="Modelo" width="md">
           <select
             id="transcription-model"
             value={model}
@@ -128,31 +127,30 @@ function AudioTranscriptionConfigCard() {
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
-        </div>
+        </Field>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor="transcription-max-minutes" className={labelClass}>Duração máxima (minutos)</label>
+          {/* Minutos e megabytes sao dois digitos: largura de dois digitos. */}
+          <Field id="transcription-max-minutes" label="Duração máxima (minutos)" width="xs">
             <input
               id="transcription-max-minutes"
               type="number"
               min="1"
               value={maxMinutes}
               onChange={(e) => setMaxMinutes(e.target.value)}
-              className={`${inputClass} max-w-32`}
+              className={inputClass}
             />
-          </div>
-          <div>
-            <label htmlFor="transcription-max-mb" className={labelClass}>Tamanho máximo (MB)</label>
+          </Field>
+          <Field id="transcription-max-mb" label="Tamanho máximo (MB)" width="xs">
             <input
               id="transcription-max-mb"
               type="number"
               min="1"
               value={maxMb}
               onChange={(e) => setMaxMb(e.target.value)}
-              className={`${inputClass} max-w-32`}
+              className={inputClass}
             />
-          </div>
+          </Field>
         </div>
         <button
           type="button"
@@ -172,8 +170,11 @@ function AudioTranscriptionConfigCard() {
           Enviar transcrição para a IA
         </label>
 
-        <div>
-          <label htmlFor="transcription-vocabulary" className={labelClass}>Vocabulário da operação</label>
+        <Field
+          id="transcription-vocabulary"
+          label="Vocabulário da operação"
+          help="Termos que o modelo costuma errar: nomes técnicos, marcas, jargão da operação."
+        >
           <textarea
             id="transcription-vocabulary"
             rows={2}
@@ -181,10 +182,7 @@ function AudioTranscriptionConfigCard() {
             onChange={(e) => setVocabulary(e.target.value)}
             className={`${inputClass} min-h-[72px] max-h-56 resize-y [field-sizing:content]`}
           />
-          <p className="mt-1 text-xs text-wa-muted">
-            Termos que o modelo costuma errar: nomes técnicos, marcas, jargão da operação.
-          </p>
-        </div>
+        </Field>
         </section>
 
         </div>

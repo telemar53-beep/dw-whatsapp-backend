@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAiConfig } from '../hooks/useAiConfig';
 import { updateAiConfig, testAiConnection } from '../services/api';
-import { AsyncState } from './ui';
+import { AsyncState, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -125,35 +125,34 @@ function OpenAiConfigCard() {
             </div>
           ) : (
             <>
-              <label htmlFor="ai-api-key" className={labelClass}>Chave da API</label>
-              <input
-                id="ai-api-key"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className={inputClass}
-              />
+              <Field id="ai-api-key" label="Chave da API">
+                <input
+                  id="ai-api-key"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className={inputClass}
+                />
+              </Field>
             </>
           )}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label htmlFor="ai-model" className={labelClass}>Modelo</label>
+        <Field id="ai-model" label="Modelo" width="md">
           <select id="ai-model" value={model} onChange={(e) => setModel(e.target.value)} className={inputClass}>
             <option value="">Selecione um modelo</option>
             {modelOptions.map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
-        </div>
-        <div>
-          <label htmlFor="ai-mode" className={labelClass}>Modo</label>
+        </Field>
+        <Field id="ai-mode" label="Modo" width="md">
           <select id="ai-mode" value={mode} onChange={(e) => setMode(e.target.value)} className={inputClass}>
             {MODE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
-        </div>
+        </Field>
         </div>
         {testError && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{testError}</p>}
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}

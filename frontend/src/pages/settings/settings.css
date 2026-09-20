@@ -39,9 +39,7 @@
 .settings-workspace .settings-shell-content .settings-section > div:last-child:not(:first-child) {padding-top:10px}
 .settings-workspace h2,.settings-workspace h3 {letter-spacing:0}
 .settings-workspace :is(.settings-section h2,.settings-open-form h2,.settings-open-form h3) {font-size:14px;line-height:20px}
-.settings-workspace :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) {font-size:12px;line-height:18px;border-radius:6px;padding:6px 9px;min-height:32px;max-width:100%}
-.settings-workspace input[type=number] {width:112px;max-width:100%}
-.settings-workspace input[type=time] {width:140px;max-width:100%}
+.settings-workspace :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) {font-size:12px;line-height:18px;border-radius:6px;padding:6px 9px;min-height:32px}
 .settings-workspace input[type=search] {min-height:0;padding:0;background:transparent;border:0;border-radius:0}
 .settings-workspace label:has(> input[type=search]) {min-height:34px;height:34px;border-radius:6px;max-width:420px;font-size:12px}
 .settings-workspace textarea {min-height:76px;resize:vertical;line-height:1.5}
@@ -253,10 +251,8 @@ body:has(.settings-workspace) [role=dialog] form:has(#agent-name) > div:last-chi
 .settings-workspace .settings-shell-content .settings-section > div:last-child:not(:first-child) {
   max-width: none;
 }
-.settings-workspace input[type="number"],
-.settings-workspace input[type="time"] {
-  max-width: 168px;
-}
+/* O cap global de 168px para numero e hora saiu: a largura agora e declarada
+   no campo (ui/Field), pelo dado que ele guarda. */
 .settings-workspace .settings-open-form:not(.grid).space-y-4 > :not([hidden]) ~ :not([hidden]),
 .settings-workspace .settings-open-form:not(.grid).space-y-5 > :not([hidden]) ~ :not([hidden]) {
   margin-top: 12px;

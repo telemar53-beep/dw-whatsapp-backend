@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSgpQueryConfig } from '../hooks/useSgpQueryConfig';
 import { updateSgpQueryConfig } from '../services/api';
-import { AsyncState } from './ui';
+import { AsyncState, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -155,14 +155,13 @@ function SgpQueryConfigCard() {
     <form onSubmit={handleSave} className={cardClass}>
       <h3 className="text-[15px] font-semibold text-wa-text">Conexão para consultas</h3>
       <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(180px,0.6fr)]">
-      <div>
-        <label htmlFor="sgp-query-base-url" className={labelClass}>URL de acesso ao SGP</label>
+      <Field id="sgp-query-base-url" label="URL de acesso ao SGP">
         <input id="sgp-query-base-url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className={inputClass} />
-      </div>
-      <div>
-        <label htmlFor="sgp-query-app" className={labelClass}>App</label>
+      </Field>
+      {/* Nome curto de aplicacao; nao precisa da linha inteira. */}
+      <Field id="sgp-query-app" label="App" width="sm">
         <input id="sgp-query-app" value={app} onChange={(e) => setApp(e.target.value)} className={inputClass} />
-      </div>
+      </Field>
       </div>
       <div>
         {config.configured && !changingToken ? (
@@ -173,10 +172,9 @@ function SgpQueryConfigCard() {
             </button>
           </div>
         ) : (
-          <>
-            <label htmlFor="sgp-query-token" className={labelClass}>Token</label>
+          <Field id="sgp-query-token" label="Token">
             <input id="sgp-query-token" value={newToken} onChange={(e) => setNewToken(e.target.value)} className={inputClass} />
-          </>
+          </Field>
         )}
       </div>
       <label className="flex items-center gap-2 text-sm text-wa-muted">

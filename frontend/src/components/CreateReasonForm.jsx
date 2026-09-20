@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createReason } from '../services/api';
+import { Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -35,10 +36,9 @@ function CreateReasonForm({ onCreated, onCancel, embedded = false }) {
     >
       {!embedded && <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar novo motivo</h3>}
       <div>
-        <label htmlFor="reason-name" className={labelClass}>
-          Nome
-        </label>
-        <input id="reason-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
+        <Field id="reason-name" label="Nome" width="md">
+          <input id="reason-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
+        </Field>
       </div>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">

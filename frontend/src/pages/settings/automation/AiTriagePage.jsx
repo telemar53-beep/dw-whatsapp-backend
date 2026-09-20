@@ -98,6 +98,7 @@ function AiTriagePage() {
                 <Field
                   id="triage-confidence"
                   label="Confiança mínima (%)"
+                  width="xs"
                   help="Abaixo deste valor, o resumo entregue ao atendente é marcado como confiança baixa. Não gera pergunta ao cliente."
                 >
                   <input
@@ -110,7 +111,7 @@ function AiTriagePage() {
                     className={inputClass}
                   />
                 </Field>
-                <Field id="triage-max-questions" label="Máximo de perguntas">
+                <Field id="triage-max-questions" label="Máximo de perguntas" width="xs">
                   <input
                     id="triage-max-questions"
                     type="number"
@@ -121,7 +122,7 @@ function AiTriagePage() {
                     className={inputClass}
                   />
                 </Field>
-                <Field id="triage-timeout" label="Tempo limite (minutos)">
+                <Field id="triage-timeout" label="Tempo limite (minutos)" width="xs">
                   <input
                     id="triage-timeout"
                     type="number"

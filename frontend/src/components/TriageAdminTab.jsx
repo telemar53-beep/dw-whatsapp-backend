@@ -7,7 +7,7 @@ import { updateTriageOption, deleteTriageOption } from '../services/api';
 import TriageConfigForm from './TriageConfigForm';
 import CreateTriageOptionForm from './CreateTriageOptionForm';
 import SectionHelp from './SectionHelp';
-import { AsyncState } from './ui';
+import { AsyncState, Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -81,34 +81,43 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
       >
         <p className="text-[13px] font-semibold text-wa-text">Editar opção {option.optionNumber}</p>
         <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
-          <label className="text-[12px] text-wa-muted">Número da opção
-        <input
-          type="number"
-          min="1"
-          value={optionNumber}
-          onChange={(e) => setOptionNumber(e.target.value)}
-          className={`w-32 ${inputClass}`}
-          required
-        />
-          </label>
-          <label className="text-[12px] text-wa-muted">Setor
-        <select value={sectorId} onChange={(e) => setSectorId(e.target.value)} className={inputClass} required>
-          {sectors.map((sector) => (
-            <option key={sector.id} value={sector.id}>
-              {sector.name}
-            </option>
-          ))}
-        </select>
-          </label>
+          {/* Um digito de menu: largura de um digito. */}
+          <Field id={`triage-option-number-${option.id}`} label="Número da opção" width="xs">
+            <input
+              id={`triage-option-number-${option.id}`}
+              type="number"
+              min="1"
+              value={optionNumber}
+              onChange={(e) => setOptionNumber(e.target.value)}
+              className={inputClass}
+              required
+            />
+          </Field>
+          <Field id={`triage-option-sector-${option.id}`} label="Setor" width="md">
+            <select
+              id={`triage-option-sector-${option.id}`}
+              value={sectorId}
+              onChange={(e) => setSectorId(e.target.value)}
+              className={inputClass}
+              required
+            >
+              {sectors.map((sector) => (
+                <option key={sector.id} value={sector.id}>
+                  {sector.name}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
-        <label className="block text-[12px] text-wa-muted">Frases-gatilho
-        <input
-          value={keywords}
-          onChange={(e) => setKeywords(e.target.value)}
-          className={inputClass}
-          placeholder="financeiro, conta, fatura, boleto"
-        />
-        </label>
+        <Field id={`triage-option-keywords-${option.id}`} label="Frases-gatilho">
+          <input
+            id={`triage-option-keywords-${option.id}`}
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            className={inputClass}
+            placeholder="financeiro, conta, fatura, boleto"
+          />
+        </Field>
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button

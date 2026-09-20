@@ -20,10 +20,10 @@ function NightModePage() {
         <form onSubmit={(e) => { e.preventDefault(); form.save(); }}>
           <Card title="Janela noturna" scope="global" footer={<Button type="submit" loading={form.saving}>Salvar janela noturna</Button>}>
             <div className="grid max-w-[380px] grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field id="triage-night-start" label="Início">
+              <Field id="triage-night-start" label="Início" width="sm">
                 <input id="triage-night-start" type="time" placeholder="20:00" value={form.values.nightStart} onChange={(e) => form.setValue('nightStart', e.target.value)} className={inputClass} />
               </Field>
-              <Field id="triage-night-end" label="Fim">
+              <Field id="triage-night-end" label="Fim" width="sm">
                 <input id="triage-night-end" type="time" placeholder="08:00" value={form.values.nightEnd} onChange={(e) => form.setValue('nightEnd', e.target.value)} className={inputClass} />
               </Field>
             </div>

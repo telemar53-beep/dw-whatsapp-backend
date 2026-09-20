@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSectors } from '../hooks/useSectors';
 import { createTriageOption } from '../services/api';
+import { Field } from './ui';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -41,24 +42,18 @@ function CreateTriageOptionForm({ onCreated, onCancel }) {
     >
       <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar nova opção</h3>
       <div className="grid gap-3 sm:grid-cols-[130px_minmax(0,1fr)]">
-        <div>
-          <label htmlFor="option-number" className={labelClass}>
-            Número da opção
-          </label>
+        <Field id="option-number" label="Número da opção" width="xs">
           <input
             id="option-number"
             type="number"
             min="1"
             value={optionNumber}
             onChange={(e) => setOptionNumber(e.target.value)}
-            className={`max-w-[130px] ${inputClass}`}
+            className={inputClass}
             required
           />
-        </div>
-        <div>
-          <label htmlFor="option-sector" className={labelClass}>
-            Setor
-          </label>
+        </Field>
+        <Field id="option-sector" label="Setor" width="md">
           <select
             id="option-sector"
             value={sectorId}
@@ -73,12 +68,9 @@ function CreateTriageOptionForm({ onCreated, onCancel }) {
               </option>
             ))}
           </select>
-        </div>
+        </Field>
       </div>
-      <div>
-        <label htmlFor="option-keywords" className={labelClass}>
-          Frases-gatilho (separadas por vírgula)
-        </label>
+      <Field id="option-keywords" label="Frases-gatilho (separadas por vírgula)">
         <input
           id="option-keywords"
           value={keywords}
@@ -86,7 +78,7 @@ function CreateTriageOptionForm({ onCreated, onCancel }) {
           className={inputClass}
           placeholder="financeiro, conta, fatura, boleto"
         />
-      </div>
+      </Field>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">
         <button

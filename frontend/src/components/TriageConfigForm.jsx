@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { updateTriageConfig } from '../services/api';
+import { Field } from './ui';
 
 const inputClass =
   'rounded-xl border border-wa-border bg-wa-field px-3.5 py-2 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -73,18 +74,17 @@ function TriageConfigForm({ config, onSaved }) {
       </div>
       <div className="mt-3 flex flex-wrap items-end gap-x-5 gap-y-3">
         <div className="w-full sm:w-auto">
-          <label htmlFor="triage-max-attempts" className={labelClass}>
-            Tentativas antes de cair na fila geral
-          </label>
+          <Field id="triage-max-attempts" label="Tentativas antes de cair na fila geral" width="xs">
           <input
             id="triage-max-attempts"
             type="number"
             min="1"
             value={maxAttempts}
             onChange={(e) => setMaxAttempts(e.target.value)}
-            className={`block w-28 max-w-full ${inputClass}`}
+            className={inputClass}
             required
           />
+          </Field>
         </div>
         <button
           type="submit"

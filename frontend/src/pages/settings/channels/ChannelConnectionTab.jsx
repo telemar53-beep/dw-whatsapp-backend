@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Button, DangerZone, inputClass } from '../../../components/ui';
+import { Button, DangerZone, Field, inputClass } from '../../../components/ui';
 import QrCodeView from '../../../components/QrCodeView';
 import { IconInfo, IconChevronDown } from '../../../components/icons/WaIcons';
 import { isOfficialChannelType } from '../../../utils/channelTypes';
@@ -64,10 +64,7 @@ function MetaCloudCredentialsForm({ channel, canManage, onSave }) {
           ? `Use isto quando o Access Token for rotacionado ou revogado. As credenciais são conferidas com a Meta contra o número ${formatPhone(channel.phoneNumber)} antes de serem salvas, e o histórico deste canal não é afetado.`
           : `O número ${formatPhone(channel.phoneNumber)} precisa estar no Cloud API da Meta antes disso — ou seja, já ter saído do provedor atual — e o app precisa estar inscrito no webhook da conta do WhatsApp. O histórico deste canal é preservado: conversas, protocolos e integrações continuam aqui.`}
       </p>
-      <div>
-        <label htmlFor="migratePhoneNumberId" className="mb-1.5 block text-sm font-medium text-wa-muted">
-          Phone Number ID
-        </label>
+      <Field id="migratePhoneNumberId" label="Phone Number ID">
         <input
           id="migratePhoneNumberId"
           value={phoneNumberId}
@@ -75,11 +72,8 @@ function MetaCloudCredentialsForm({ channel, canManage, onSave }) {
           className={inputClass}
           required
         />
-      </div>
-      <div>
-        <label htmlFor="migrateAccessToken" className="mb-1.5 block text-sm font-medium text-wa-muted">
-          Access Token
-        </label>
+      </Field>
+      <Field id="migrateAccessToken" label="Access Token">
         <input
           id="migrateAccessToken"
           value={accessToken}
@@ -87,11 +81,8 @@ function MetaCloudCredentialsForm({ channel, canManage, onSave }) {
           className={inputClass}
           required
         />
-      </div>
-      <div>
-        <label htmlFor="migrateWabaId" className="mb-1.5 block text-sm font-medium text-wa-muted">
-          WABA ID
-        </label>
+      </Field>
+      <Field id="migrateWabaId" label="WABA ID">
         <input
           id="migrateWabaId"
           value={wabaId}
@@ -99,7 +90,7 @@ function MetaCloudCredentialsForm({ channel, canManage, onSave }) {
           className={inputClass}
           required
         />
-      </div>
+      </Field>
       <ErrorNote>{error}</ErrorNote>
       <div className="flex gap-2">
         <Button type="submit" disabled={submitting}>
@@ -252,17 +243,16 @@ function ChannelConnectionTab() {
           </dl>
           {editingName && (
             <div className="border-t border-wa-border py-3">
-              <label htmlFor="channel-name" className="mb-1.5 block text-[13px] font-medium text-wa-muted">
-                Nome do canal
-              </label>
-              <div className="flex flex-wrap items-center gap-2">
+              <Field id="channel-name" label="Nome do canal" width="md">
                 <input
                   id="channel-name"
                   value={nameDraft}
                   disabled={!canManage}
                   onChange={(e) => setNameDraft(e.target.value)}
-                  className={`${inputClass} max-w-[320px]`}
+                  className={inputClass}
                 />
+              </Field>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Button onClick={handleSaveName} disabled={!canManage || !nameDraft.trim()} className="!py-2">
                   Salvar nome
                 </Button>
@@ -281,17 +271,16 @@ function ChannelConnectionTab() {
           )}
           {official && editingWaba && (
             <div className="border-t border-wa-border py-3">
-              <label htmlFor="waba-id" className="mb-1.5 block text-[13px] font-medium text-wa-muted">
-                Identificador da conta (WABA ID)
-              </label>
-              <div className="flex flex-wrap items-center gap-2">
+              <Field id="waba-id" label="Identificador da conta (WABA ID)" width="md">
                 <input
                   id="waba-id"
                   value={wabaIdDraft}
                   disabled={!canManage}
                   onChange={(e) => setWabaIdDraft(e.target.value)}
-                  className={`${inputClass} max-w-[320px]`}
+                  className={inputClass}
                 />
+              </Field>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Button onClick={handleSaveWaba} disabled={!canManage} className="!py-2">
                   Salvar WABA ID
                 </Button>

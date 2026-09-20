@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBusinessHoursConfig } from '../../hooks/useBusinessHoursConfig';
 import { updateBusinessHoursConfig } from '../../services/api';
-import { inputClass, AsyncState } from '../ui';
+import { inputClass, AsyncState, Field } from '../ui';
 import CityStatusDot from './StatusDot';
 
 function BusinessHoursSection() {
@@ -66,11 +66,9 @@ function BusinessHoursSection() {
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-accent" />
           Ativo
         </label>
-        <div className="grid max-w-[380px] grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label htmlFor="business-hours-start" className="text-sm font-medium text-wa-text">
-              Hora de início
-            </label>
+        {/* Hora e quatro digitos: a largura e de hora, nao de campo de texto. */}
+        <div className="flex flex-wrap gap-3">
+          <Field id="business-hours-start" label="Hora de início" width="sm">
             <input
               id="business-hours-start"
               type="time"
@@ -79,11 +77,8 @@ function BusinessHoursSection() {
               className={inputClass}
               required
             />
-          </div>
-          <div className="space-y-1">
-            <label htmlFor="business-hours-end" className="text-sm font-medium text-wa-text">
-              Hora de fim
-            </label>
+          </Field>
+          <Field id="business-hours-end" label="Hora de fim" width="sm">
             <input
               id="business-hours-end"
               type="time"
@@ -92,12 +87,9 @@ function BusinessHoursSection() {
               className={inputClass}
               required
             />
-          </div>
+          </Field>
         </div>
-        <div className="space-y-1">
-          <label htmlFor="business-hours-message" className="text-sm font-medium text-wa-text">
-            Mensagem
-          </label>
+        <Field id="business-hours-message" label="Mensagem">
           <textarea
             id="business-hours-message"
             value={message}
@@ -107,7 +99,7 @@ function BusinessHoursSection() {
             className={`${inputClass} min-h-[72px] max-h-56 resize-y [field-sizing:content]`}
             required
           />
-        </div>
+        </Field>
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
           <button

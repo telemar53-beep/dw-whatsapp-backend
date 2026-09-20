@@ -43,6 +43,43 @@ function desligarTeclado() {
   document.removeEventListener('keydown', aoTeclar);
 }
 
+// Trava do fundo. É a pilha que trava e destrava, uma vez só: o segundo e o
+// terceiro diálogo não criam travas próprias, e o fundo continua travado
+// enquanto qualquer nível existir. O estilo inline anterior do body é devolvido
+// exatamente como estava — inclusive quando era vazio.
+let fundoTravado = null;
+
+function medirBarraDeRolagem() {
+  const raiz = document.documentElement;
+  return Math.max(0, window.innerWidth - raiz.clientWidth);
+}
+
+function travarFundo() {
+  if (pilha.length !== 1 || typeof document === 'undefined' || fundoTravado) return;
+  const corpo = document.body;
+  fundoTravado = {
+    overflow: corpo.style.overflow,
+    paddingRight: corpo.style.paddingRight,
+  };
+  // `overflow:hidden` no body não mexe na posição de rolagem (ao contrário de
+  // `position:fixed`), então a página fica onde estava.
+  corpo.style.overflow = 'hidden';
+  // Compensação só existe se existir barra de verdade. Hoje, nesta aplicação,
+  // o documento nunca rola (a casca é h-dvh e toda rolagem é interna), então
+  // isto é rede de segurança e não muda nada — foi medido, não suposto.
+  const barra = medirBarraDeRolagem();
+  if (barra > 0) corpo.style.paddingRight = `${barra}px`;
+}
+
+function destravarFundo() {
+  if (pilha.length !== 0 || !fundoTravado) return;
+  const corpo = document.body;
+  corpo.style.overflow = fundoTravado.overflow;
+  corpo.style.paddingRight = fundoTravado.paddingRight;
+  if (!corpo.getAttribute('style')) corpo.removeAttribute('style');
+  fundoTravado = null;
+}
+
 export function inscrever(ouvinte) {
   ouvintes.add(ouvinte);
   return () => ouvintes.delete(ouvinte);
@@ -52,12 +89,14 @@ export function inscrever(ouvinte) {
 export function entrar(entrada) {
   pilha.push(entrada);
   ligarTeclado();
+  travarFundo();
   avisar();
   return function sair() {
     const posicao = pilha.indexOf(entrada);
     if (posicao === -1) return;
     pilha.splice(posicao, 1);
     desligarTeclado();
+    destravarFundo();
     avisar();
   };
 }

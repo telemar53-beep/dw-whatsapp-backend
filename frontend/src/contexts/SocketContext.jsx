@@ -23,7 +23,25 @@ export function SocketProvider({ children }) {
     }
     const connection = io(API_BASE_URL, { auth: { token } });
     connection.on('connect_error', () => {
-      logout();
+      // `active` distingue os dois erros no nivel do protocolo, sem depender
+      // do texto — que aqui e sempre 'Unauthorized', para token ausente,
+      // malformado, com assinatura ruim ou expirado.
+      //
+      // Recusa do middleware: o servidor manda um pacote CONNECT_ERROR e o
+      // socket.io-client chama destroy() ANTES de avisar a aplicacao, o que
+      // limpa as subscriptions ("clean subscriptions to avoid reconnections")
+      // e fecha o Manager. Logo `active` ja e false aqui e o cliente nao vai
+      // tentar de novo: e rejeicao definitiva da credencial.
+      //
+      // Falha de transporte (backend fora do ar, rede caindo): nenhum
+      // destroy(), `active` continua true e o proprio socket.io segue o
+      // cronograma de reconexao dele. Deslogar aqui derrubava a atendente no
+      // meio do atendimento por um restart de servidor de poucos segundos.
+      if (!connection.active) {
+        logout();
+        return;
+      }
+      setConnectionState('reconnecting');
     });
     connection.on('connect', () => setConnectionState('connected'));
     connection.on('disconnect', (reason) => {

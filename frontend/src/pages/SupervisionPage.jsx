@@ -109,7 +109,14 @@ function SupervisionRow({ conversation, onSelect, onQuickClose, stateLabel }) {
 
 function SupervisionPage() {
   const { token } = useAuth();
-  const { inProgress, waiting, inAutomation, closedTodayCount } = useAttendanceDashboard();
+  // O hook já expunha `status` e `refresh`; a página ignorava os dois e, com a
+  // API fora do ar, as três colunas diziam "nenhum atendimento" — operação
+  // parada e backend caído ficavam idênticos na tela.
+  const { inProgress, waiting, inAutomation, closedTodayCount, status: dashboardStatus, refresh: refreshDashboard } = useAttendanceDashboard();
+  // Esconder os dados é a exceção, não a regra: só quando se sabe que está
+  // carregando ou que falhou. Assim um status ausente mostra a operação em vez
+  // de uma tela vazia — o erro que esta correção existe para acabar.
+  const dashboardDataVisible = dashboardStatus !== 'loading' && dashboardStatus !== 'error' && dashboardStatus !== 'forbidden';
   const { channels } = useChannels(true);
   const { agents, status: agentsStatus } = useAgents();
   const onlineIds = usePresence(agents);
@@ -163,20 +170,25 @@ function SupervisionPage() {
   const [phoneQuery, setPhoneQuery] = useState('');
   const [phoneError, setPhoneError] = useState(null);
   const [phoneSearchResult, setPhoneSearchResult] = useState(null);
+  const [closedError, setClosedError] = useState(null);
+  const [actionError, setActionError] = useState(null);
+  const [closedReloadToken, setClosedReloadToken] = useState(0);
 
   useEffect(() => {
     if (!token) return;
+    setClosedError(null);
     getDashboardClosedToday({ offset: 0, limit: CLOSED_PAGE_SIZE }, token)
       .then((data) => {
         setClosedItems(data.items);
         setClosedOffset(data.items.length);
         setClosedHasMore(data.hasMore);
       })
-      .catch(() => {});
-  }, [token]);
+      .catch(() => setClosedError('Não foi possível carregar os atendimentos encerrados hoje.'));
+  }, [token, closedReloadToken]);
 
   function loadMoreClosed() {
     setLoadingClosed(true);
+    setClosedError(null);
     getDashboardClosedToday({ offset: closedOffset, limit: CLOSED_PAGE_SIZE }, token)
       .then((data) => {
         setClosedItems((prev) => [...prev, ...data.items]);
@@ -184,7 +196,10 @@ function SupervisionPage() {
         setClosedHasMore(data.hasMore);
         setLoadingClosed(false);
       })
-      .catch(() => setLoadingClosed(false));
+      .catch(() => {
+        setLoadingClosed(false);
+        setClosedError('Não foi possível carregar mais atendimentos encerrados.');
+      });
   }
 
   const filters = useMemo(
@@ -220,7 +235,11 @@ function SupervisionPage() {
   }
 
   function quickCloseConversation(conversationId) {
-    closeConversation(conversationId, null, token).catch(() => {});
+    setActionError(null);
+    // Antes falhava calado: o supervisor clicava em finalizar e nada acontecia.
+    closeConversation(conversationId, null, token).catch((err) =>
+      setActionError((err && err.body && err.body.error) || 'Não foi possível finalizar este atendimento.')
+    );
   }
 
   async function handleProtocolSearch(event) {
@@ -326,8 +345,8 @@ function SupervisionPage() {
         </form>
         </div>
       </div>
-      {(protocolError || phoneError) && (
-        <p role="alert" className="px-2 pb-2 text-[13px] text-wa-error-text">{protocolError || phoneError}</p>
+      {(protocolError || phoneError || actionError) && (
+        <p role="alert" className="px-2 pb-2 text-[13px] text-wa-error-text">{protocolError || phoneError || actionError}</p>
       )}
 
       <div className="supervision-central">
@@ -386,14 +405,32 @@ function SupervisionPage() {
         </div>
       ) : activeTab === 'all' ? (
         <div id="tabpanel-all" role="tabpanel" aria-labelledby="tab-all" className="supervision-live chat-scroll">
-          {(operationView === 'all' || operationView === 'progress') && (          <DashboardColumn
+          {dashboardStatus === 'loading' && (
+            <p role="status" className="px-4 py-10 text-center text-[13.5px] text-chat-muted">Carregando atendimentos…</p>
+          )}
+          {dashboardStatus === 'forbidden' && (
+            <p role="alert" className="px-4 py-10 text-center text-[13.5px] text-wa-error-text">Você não tem acesso ao painel de atendimentos.</p>
+          )}
+          {dashboardStatus === 'error' && (
+            <div role="alert" className="flex flex-wrap items-center justify-center gap-3 px-4 py-10 text-center text-[13.5px] text-wa-error-text">
+              <span>Não foi possível carregar os atendimentos.</span>
+              <button
+                type="button"
+                onClick={refreshDashboard}
+                className="rounded-[8px] border border-wa-error-text/40 px-2.5 py-1 text-[13px] font-medium transition hover:bg-wa-error-text/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-error-text"
+              >
+                Tentar de novo
+              </button>
+            </div>
+          )}
+          {dashboardDataVisible && (operationView === 'all' || operationView === 'progress') && (          <DashboardColumn
             title="Em andamento"
             count={filteredInProgress.length}
             conversations={displayInProgress}
             onSelect={openConversation}
             emptyMessage="Nenhum atendimento em andamento."
           />)}
-          {(operationView === 'all' || operationView === 'waiting') && (          <DashboardColumn
+          {dashboardDataVisible && (operationView === 'all' || operationView === 'waiting') && (          <DashboardColumn
             title="Em espera"
             count={filteredWaiting.length}
             conversations={displayWaiting}
@@ -401,7 +438,7 @@ function SupervisionPage() {
             onQuickClose={quickCloseConversation}
             emptyMessage="Nenhum atendimento em espera."
           />)}
-          {(operationView === 'all' || operationView === 'automation') && (          <DashboardColumn
+          {dashboardDataVisible && (operationView === 'all' || operationView === 'automation') && (          <DashboardColumn
             title="Em automação"
             count={filteredInAutomation.length}
             conversations={displayInAutomation}

@@ -78,6 +78,12 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
   // conversa — só muda a prop —, então sem isto o que ficou escrito para um
   // cliente aparecia na conversa do próximo, e enviar mandava para a pessoa
   // errada (relatado pelas atendentes em 2026-09-17).
+  // O botão Enviar tem `disabled={sending}`, mas o Enter do teclado chama
+  // `submit()` direto e não passa por ele. Como o campo só é limpo depois do
+  // await, dois Enters numa rede lenta mandavam a mesma mensagem duas vezes
+  // para o cliente. O ref tranca na hora; o estado `sending` sozinho depende de
+  // um novo render para valer.
+  const sendingRef = useRef(false);
   const contentRef = useRef('');
   const draftsRef = useRef(new Map());
   const currentConversationRef = useRef(conversationId);
@@ -246,6 +252,8 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
 
   async function submit() {
     if (!content.trim() && !file) return;
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     setError(null);
     try {
@@ -256,6 +264,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
     } catch (err) {
       setError((err.body && err.body.error) || 'Falha ao enviar mensagem');
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }

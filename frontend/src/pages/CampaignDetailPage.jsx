@@ -21,14 +21,22 @@ function CampaignDetailPage() {
   const [campaign, setCampaign] = useState(null);
   const [status, setStatus] = useState('loading');
 
-  const refresh = useCallback(() => {
-    setStatus('loading');
+  // `silencioso` existe porque o polling de 5s chamava este mesmo refresh:
+  // com `status='loading'`, o AsyncState descartava a árvore e a tela inteira
+  // (resumo, progresso, destinatários e a posição da rolagem) virava skeleton
+  // a cada 5 segundos — justamente enquanto a campanha dispara e a pessoa está
+  // olhando. Só a primeira carga mostra o skeleton.
+  const refresh = useCallback(({ silencioso = false } = {}) => {
+    if (!silencioso) setStatus('loading');
     return getCampaign(id, token)
       .then((data) => {
         setCampaign(data);
         setStatus('ready');
       })
-      .catch(() => setStatus('error'));
+      .catch(() => {
+        // Uma falha pontual do polling não pode apagar o que já está na tela.
+        if (!silencioso) setStatus('error');
+      });
   }, [id, token]);
 
   useEffect(() => {
@@ -42,7 +50,7 @@ function CampaignDetailPage() {
     if (!stillProcessing) return undefined;
     const interval = setInterval(() => {
       if (document.hidden) return;
-      refresh();
+      refresh({ silencioso: true });
     }, 5000);
     return () => clearInterval(interval);
   }, [stillProcessing, refresh]);

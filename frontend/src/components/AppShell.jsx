@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
+import { useSocketConnection } from '../contexts/SocketContext';
 import SideNav from './SideNav';
 import ProfileModal from './ProfileModal';
 import { IconChats } from './icons/WaIcons';
@@ -13,6 +14,7 @@ function AppShell({ dense = false }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
+  const connectionState = useSocketConnection();
   const openProfile = useCallback(() => setProfileOpen(true), []);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
   // Telas densas ficam com 40% do brilho do chat (45%->18%, 25%->10%): o texto
@@ -21,6 +23,18 @@ function AppShell({ dense = false }) {
 
   return (
     <div className="chat-theme relative flex h-dvh overflow-hidden bg-chat-canvas font-sans text-chat-text">
+      {/* Flutua sobre o conteúdo: avisar não pode empurrar o layout da mesa. */}
+      {connectionState === 'reconnecting' && (
+        <div
+          role="status"
+          className="pointer-events-none absolute inset-x-0 top-2 z-30 flex justify-center px-3"
+        >
+          <span className="flex items-center gap-2 rounded-full border border-wa-warn-text/40 bg-wa-warn-bg px-3.5 py-1.5 text-[13px] font-medium text-wa-warn-text shadow-[0_10px_30px_-12px_rgba(0,0,0,0.6)]">
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-wa-warn-text animate-wa-rec" />
+            Reconectando… as mensagens novas podem demorar a aparecer.
+          </span>
+        </div>
+      )}
       <div aria-hidden="true" className={`pointer-events-none absolute left-[38%] -top-[10%] h-[38rem] w-[42rem] rounded-full ${glow[0]} blur-[150px]`} />
       <div aria-hidden="true" className={`pointer-events-none absolute -right-[6%] bottom-[-15%] h-[30rem] w-[32rem] rounded-full ${glow[1]} blur-[150px]`} />
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-0 md:p-3">

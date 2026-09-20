@@ -233,7 +233,9 @@ function CustomerPanel({ conversation, displayName, cityName, onClose }) {
 
 function ConversationView({ conversation, onTransferClick, onBack, workspace = false }) {
   const { token, agent } = useAuth();
-  const { messages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
+  // `status` já é o estado do atendimento neste componente; o do carregamento
+  // das mensagens entra com nome próprio.
+  const { messages, status: messagesStatus, reloadMessages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
   // O relógio do cálculo da janela vive em estado, e não num `new Date()` solto
   // no corpo do render: assim a passagem do tempo (e o envio) conseguem
   // refazer a conta sem recarregar a página.
@@ -551,6 +553,30 @@ function ConversationView({ conversation, onTransferClick, onBack, workspace = f
           </span>
           Este atendimento fica registrado no sistema da {companyName || 'empresa'}.
         </div>
+
+        {/* Sem isto, histórico que falhou ao carregar era indistinguível de
+            conversa sem mensagem nenhuma. */}
+        {messagesStatus === 'error' && (
+          <div
+            role="alert"
+            className="mx-auto mb-3 flex w-fit max-w-[90%] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-[12px] border border-wa-error-text/30 bg-wa-error-bg px-4 py-2 text-center text-[13px] leading-[18px] text-wa-error-text"
+          >
+            <span>Não foi possível carregar as mensagens deste atendimento.</span>
+            <button
+              type="button"
+              onClick={reloadMessages}
+              className="rounded-[8px] border border-wa-error-text/40 px-2.5 py-1 text-[12.5px] font-medium transition hover:bg-wa-error-text/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-error-text"
+            >
+              Tentar de novo
+            </button>
+          </div>
+        )}
+
+        {messagesStatus === 'loading' && messages.length === 0 && (
+          <p role="status" className="mb-3 text-center text-[13px] leading-[18px] text-chat-faint">
+            Carregando mensagens…
+          </p>
+        )}
 
         {timeline.map((row) => {
           if (row.kind === 'day') {

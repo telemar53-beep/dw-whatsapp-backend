@@ -1500,3 +1500,49 @@ describe('janela de 24 horas indeterminada', () => {
     expect(screen.queryByText(/não foi possível conferir a janela de 24h/i)).not.toBeInTheDocument();
   });
 });
+
+describe('carregamento do histórico da conversa', () => {
+  test('falha ao carregar mostra aviso e oferece tentar de novo', async () => {
+    const reloadMessages = vi.fn();
+    useConversationMessages.mockReturnValue({
+      messages: [],
+      status: 'error',
+      reloadMessages,
+      sendMessage: vi.fn(),
+    });
+
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Ana' }}
+        onTransferClick={vi.fn()}
+        workspace
+      />
+    );
+
+    const aviso = screen.getByRole('alert');
+    expect(aviso).toHaveTextContent(/não foi possível carregar as mensagens/i);
+
+    await userEvent.click(within(aviso).getByRole('button', { name: /tentar de novo/i }));
+    expect(reloadMessages).toHaveBeenCalledTimes(1);
+  });
+
+  test('conversa realmente sem mensagens não mostra o aviso de falha', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [],
+      status: 'ready',
+      reloadMessages: vi.fn(),
+      sendMessage: vi.fn(),
+    });
+
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Ana' }}
+        onTransferClick={vi.fn()}
+        workspace
+      />
+    );
+
+    expect(screen.queryByText(/não foi possível carregar as mensagens/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/carregando mensagens/i)).not.toBeInTheDocument();
+  });
+});

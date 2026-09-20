@@ -91,3 +91,24 @@ describe('ClosedConversationsModal', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });
+
+describe('empilhamento da conversa aberta a partir de Encerrados', () => {
+  test('a conversa abre numa camada acima do diálogo que a abriu', async () => {
+    // O diálogo "Encerrados" é um portal no fim do <body>. Enquanto a conversa
+    // era renderizada na árvore do #root, ficava atrás dele e clicar num
+    // atendimento parecia não fazer nada.
+    const { container } = render(<ClosedConversationsModal onClose={vi.fn()} />);
+
+    await userEvent.click(screen.getByText('Ana Encerrada'));
+
+    const camadaDaConversa = screen.getAllByRole('dialog').find((el) => el.className.includes('dialog-conversation'));
+
+    expect(camadaDaConversa).toBeTruthy();
+    // Fora da árvore do componente pai: foi para o portal no body.
+    expect(container.contains(camadaDaConversa)).toBe(false);
+    expect(document.body.contains(camadaDaConversa)).toBe(true);
+    // E o tema escuro acompanha o portal, senão o modal sairia claro.
+    expect(camadaDaConversa.closest('.chat-theme')).not.toBeNull();
+    expect(camadaDaConversa.parentElement.className).toContain('z-[60]');
+  });
+});

@@ -186,6 +186,46 @@ describe('MessageInput', () => {
     await waitFor(() => expect(onSend).toHaveBeenCalledWith('Oi', null, null, false));
   });
 
+  test('a second Enter during a slow send does not deliver the message twice', async () => {
+    // O botão Enviar tem disabled={sending}, mas o Enter chama submit() direto
+    // e o campo só é limpo depois do await: sem trava, a mesma mensagem saía
+    // duas vezes para o cliente numa rede lenta.
+    let liberarEnvio;
+    const onSend = vi.fn().mockImplementation(() => new Promise((resolve) => { liberarEnvio = resolve; }));
+    render(<MessageInput onSend={onSend} />);
+
+    const textbox = screen.getByPlaceholderText(/digite uma mensagem/i);
+    await userEvent.type(textbox, 'Oi{Enter}');
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+
+    // O primeiro envio ainda está pendente e o texto continua no campo.
+    expect(textbox).toHaveValue('Oi');
+    fireEvent.keyDown(textbox, { key: 'Enter' });
+    fireEvent.keyDown(textbox, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledTimes(1);
+
+    liberarEnvio({});
+    await waitFor(() => expect(textbox).toHaveValue(''));
+
+    // Terminado o envio, a trava sai e o campo volta a funcionar.
+    await userEvent.type(textbox, 'Segunda{Enter}');
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+  });
+
+  test('a failed send releases the lock so the message can be retried', async () => {
+    const onSend = vi.fn()
+      .mockRejectedValueOnce(new Error('rede'))
+      .mockResolvedValueOnce({});
+    render(<MessageInput onSend={onSend} />);
+
+    const textbox = screen.getByPlaceholderText(/digite uma mensagem/i);
+    await userEvent.type(textbox, 'Oi{Enter}');
+    await waitFor(() => expect(screen.getByText(/falha ao enviar mensagem/i)).toBeInTheDocument());
+
+    fireEvent.keyDown(textbox, { key: 'Enter' });
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+  });
+
   test('pressing Shift+Enter inserts a newline instead of sending — a plain <input> cannot hold this', async () => {
     const onSend = vi.fn();
     render(<MessageInput onSend={onSend} />);

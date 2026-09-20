@@ -453,3 +453,42 @@ test('team selection reuses the agent filter and operation navigation keeps the 
   expect(screen.getByText('Maria')).toBeInTheDocument();
   expect(screen.queryByText('Carlos')).not.toBeInTheDocument();
 });
+
+describe('estados de carregamento da central de operação', () => {
+  test('carregando não é apresentado como operação vazia', () => {
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
+      status: 'loading', loading: true, refresh: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByRole('status')).toHaveTextContent(/carregando atendimentos/i);
+    expect(screen.queryByText('Nenhum atendimento em andamento.')).not.toBeInTheDocument();
+  });
+
+  test('falha na carga mostra erro com tentar de novo, e não "nenhum atendimento"', async () => {
+    const refresh = vi.fn();
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
+      status: 'error', loading: false, refresh,
+    });
+    renderPage();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/não foi possível carregar os atendimentos/i);
+    expect(screen.queryByText('Nenhum atendimento em espera.')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('operação realmente vazia continua dizendo que não há atendimentos', () => {
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
+      status: 'ready', loading: false, refresh: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText('Nenhum atendimento em andamento.')).toBeInTheDocument();
+    expect(screen.queryByText(/não foi possível carregar os atendimentos/i)).not.toBeInTheDocument();
+  });
+});

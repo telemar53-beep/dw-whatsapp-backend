@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import ConversationView from './ConversationView';
 import ConversationInfoPanel from './ConversationInfoPanel';
 import { IconClose } from './icons/WaIcons';
@@ -12,9 +13,15 @@ function ConversationModal({ conversation, onClose, onTransferClick }) {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  return (
+  // Quem abre este modal a partir de "Encerrados" é um WaDialog, que vive num
+  // portal no fim do <body>. Renderizado na árvore do #root — cujo contêiner é
+  // um contexto de empilhamento z-10 — esta conversa ficava ATRÁS do diálogo
+  // que a abriu: clicar num atendimento encerrado parecia não fazer nada.
+  // Portal no body (com `chat-theme`, que não é herdado fora do #root) e uma
+  // camada acima resolvem, sem mexer no WaDialog.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--wa-overlay)] p-4 backdrop-blur-[var(--wa-overlay-blur)] sm:p-8"
+      className="chat-theme fixed inset-0 z-[60] flex items-center justify-center bg-[var(--wa-overlay)] p-4 backdrop-blur-[var(--wa-overlay-blur)] sm:p-8"
       onClick={onClose}
     >
       <div
@@ -38,7 +45,8 @@ function ConversationModal({ conversation, onClose, onTransferClick }) {
         </div>
         <ConversationInfoPanel conversation={conversation} />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

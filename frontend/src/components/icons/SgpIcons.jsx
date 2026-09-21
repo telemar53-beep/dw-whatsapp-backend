@@ -38,7 +38,7 @@ export function IconBarcode(props) {
 export function IconQrCode(props) {
   return (
     <Svg {...props}>
-      <g fill="none" stroke="currentColor" strokeWidth="1.9">
+      <g fill="none" stroke="currentColor" strokeWidth="1.75">
         <rect x="3" y="3" width="7" height="7" rx="1.2" />
         <rect x="14" y="3" width="7" height="7" rx="1.2" />
         <rect x="3" y="14" width="7" height="7" rx="1.2" />
@@ -73,7 +73,7 @@ export function IconPdfFile(props) {
 export function IconInvoiceLink(props) {
   return (
     <Svg {...props}>
-      <g fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round">
+      <g fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
         <path d="M10.3 13.7a4.6 4.6 0 006.5 0l2.4-2.4a4.6 4.6 0 00-6.5-6.5l-1.3 1.3" />
         <path d="M13.7 10.3a4.6 4.6 0 00-6.5 0l-2.4 2.4a4.6 4.6 0 006.5 6.5l1.3-1.3" />
       </g>

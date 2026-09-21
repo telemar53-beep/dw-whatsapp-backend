@@ -244,6 +244,9 @@ export function IconWarning(props) {
   );
 }
 
+// Unica excecao a grade de 1.75: o viewBox aqui e 320x190, treze vezes maior
+// que o dos icones. Manter o MESMO numero daria um traco treze vezes mais
+// fino na tela — o 3 daqui pesa menos que o 1.75 de um icone de 24.
 export function IconEmptyChat(props) {
   return (
     <Svg viewBox="0 0 320 190" {...props}>

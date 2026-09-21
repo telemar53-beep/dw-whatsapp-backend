@@ -252,7 +252,9 @@ describe('ReportsPage', () => {
 
     expect(clickSpy).toHaveBeenCalledTimes(1);
     const anchor = clickSpy.mock.instances[0];
-    expect(anchor.download).toMatch(/^relatorio-today-\d{4}-\d{2}-\d{2}\.csv$/);
+    // O nome era `relatorio-today-…`, a chave crua do backend. Agora descreve
+    // o recorte em português, e a data é a de São Paulo (ver exportMetricsCsv).
+    expect(anchor.download).toMatch(/^relatorio-ultimas-24-horas-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     const blob = createObjectURL.mock.calls[0][0];
     expect(blob.type).toBe('text/csv;charset=utf-8;');
@@ -376,5 +378,46 @@ describe('troca de periodo e atomica', () => {
     await userEvent.click(screen.getByRole('button', { name: /aplicar/i }));
 
     await waitFor(() => expect(screen.getByLabelText('Resumo do período')).toHaveTextContent(/últimos 45 dias/i));
+  });
+});
+
+// Etapa 6.4 — o campo "Personalizado" abria vazio mesmo com ?dias=45 em vigor,
+// e o painel ficava aberto depois de aplicar.
+describe('campo de periodo personalizado', () => {
+  const DADOS = { period: 'custom', scope: 'agent', own: { closedCount: 9, avgResolutionMinutes: 5, avgFirstResponseMinutes: 2 } };
+
+  test('abre mostrando os dias que ja estao em vigor na URL', async () => {
+    api.getMetrics.mockResolvedValue(DADOS);
+    renderInShell(<ReportsPage />, { path: '/relatorios', initialEntries: ['/relatorios?periodo=custom&dias=45'] });
+    await screen.findByText('9');
+
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+
+    expect(screen.getByLabelText(/últimos/i)).toHaveValue(45);
+  });
+
+  test('aplicar fecha o painel', async () => {
+    api.getMetrics.mockResolvedValue(DADOS);
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+    await userEvent.type(screen.getByLabelText(/últimos/i), '45');
+
+    await userEvent.click(screen.getByRole('button', { name: /aplicar/i }));
+
+    await waitFor(() => expect(screen.queryByLabelText(/últimos/i)).not.toBeInTheDocument());
+  });
+
+  test('exporta com o numero de dias do request que produziu os dados', async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function noop() {});
+    global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+    global.URL.revokeObjectURL = vi.fn();
+    api.getMetrics.mockResolvedValue(DADOS);
+    renderInShell(<ReportsPage />, { path: '/relatorios', initialEntries: ['/relatorios?periodo=custom&dias=45'] });
+    await screen.findByText('9');
+
+    await userEvent.click(screen.getByRole('button', { name: /exportar csv/i }));
+
+    expect(clickSpy.mock.instances[0].download).toMatch(/^relatorio-ultimos-45-dias-\d{4}-\d{2}-\d{2}\.csv$/);
+    clickSpy.mockRestore();
   });
 });

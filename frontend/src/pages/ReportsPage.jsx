@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getMetrics } from '../services/api';
-import { buildMetricsCsv } from '../utils/exportMetricsCsv';
+import { buildMetricsCsv, nomeDoArquivoDeMetricas } from '../utils/exportMetricsCsv';
 import { formatDuration } from '../utils/formatDuration';
 import SectionHelp from '../components/SectionHelp';
 import './reports.css';
@@ -157,7 +157,9 @@ function ReportsPage() {
   // de ficar preso em "Carregando indicadores..." pra sempre, cai para "today".
   const period = rawPeriod === 'custom' && !validCustomDaysFromUrl ? 'today' : rawPeriod;
   const customDays = period === 'custom' ? validCustomDaysFromUrl : null;
-  const [customDaysInput, setCustomDaysInput] = useState('');
+  // Abrir "Personalizado" com ?dias=45 na URL mostrava o campo vazio, como se
+  // o recorte em vigor não existisse.
+  const [customDaysInput, setCustomDaysInput] = useState(validCustomDaysFromUrl ? String(validCustomDaysFromUrl) : '');
   const [showCustomInput, setShowCustomInput] = useState(false);
   // A resposta carrega junto os parâmetros que a produziram. Antes o rótulo do
   // resumo lia a seleção atual: trocar de período mudava o texto na hora e os
@@ -204,16 +206,20 @@ function ReportsPage() {
   function handleApplyCustomDays() {
     if (!customDaysValid) return;
     selectPeriod('custom', customDaysValue);
+    setShowCustomInput(false);
   }
 
   function handleExportCsv() {
-    if (!data) return;
-    const csv = buildMetricsCsv(data);
+    if (!resposta) return;
+    // Tudo sai do instantâneo: se há uma requisição em andamento, o arquivo
+    // descreve os dados que foram exportados, não o período já selecionado.
+    const agora = new Date();
+    const csv = buildMetricsCsv(resposta.dados, { periodo: rotuloDoPeriodo(resposta), geradoEm: agora });
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `relatorio-${data.period}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = nomeDoArquivoDeMetricas(resposta, agora);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

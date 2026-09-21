@@ -5,7 +5,7 @@ import QrCodeView from '../../../components/QrCodeView';
 import { IconChevronDown } from '../../../components/icons/WaIcons';
 import { isOfficialChannelType } from '../../../utils/channelTypes';
 import { formatPhone } from '../../../utils/phone';
-import { ConnectionStatus, providerLabel } from './ChannelsTable';
+import { providerLabel } from './ChannelsTable';
 
 export { STATUS_LABELS } from './channelStatus';
 export { ConnectionStatus as StatusDot } from './ChannelsTable';
@@ -192,9 +192,12 @@ function ChannelConnectionTab() {
 
       {/* 1. ESTADO — a primeira pergunta de quem abre esta tela é "está ligado?" */}
       <section aria-labelledby="channel-state-title" className="channel-section channel-section-estado">
+        {/* Sem chip de situação aqui: o cabeçalho do canal já o mostra, 106px
+            acima e com as mesmas palavras, e vale também para a aba
+            Atendimento. Esta seção fica com o que é só dela — a explicação, o
+            QR e o caminho da ação. */}
         <div className="channel-section-head">
           <h3 id="channel-state-title" className="channel-section-title">Estado da conexão</h3>
-          <ConnectionStatus channel={channel} />
         </div>
         <p className="channel-section-text">
           {official

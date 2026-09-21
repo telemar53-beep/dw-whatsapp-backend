@@ -109,10 +109,18 @@ function DashboardPage() {
     [...queue, ...myConversations].find((c) => c.id === selectedId) ||
     (pendingConversation && pendingConversation.id === selectedId ? pendingConversation : null);
 
+  // A casca esconde o botão "Abrir menu" quando isto é verdade, então a
+  // condição tem de ser "a conversa ocupa a tela inteira" — exatamente a mesma
+  // em que a lista é escondida, mais abaixo. Antes bastava HAVER conversa
+  // selecionada, e isso apagava a única navegação do produto em dois casos
+  // reais: de 500 a 767px, onde o rail continua visível e a conversa não ocupa
+  // tudo, e no desktop com zoom de 200% (1366x768 vira 683x384).
+  const conversaOcupaTudo = layout.lista === 'oculta' && !listaAberta && Boolean(selectedConversation);
+
   useEffect(() => {
-    setConversationOpen(Boolean(selectedConversation));
+    setConversationOpen(conversaOcupaTudo);
     return () => setConversationOpen(false);
-  }, [Boolean(selectedConversation), setConversationOpen]);
+  }, [conversaOcupaTudo, setConversationOpen]);
 
   useEffect(() => {
     if (pendingConversation && [...queue, ...myConversations].some((c) => c.id === pendingConversation.id)) {
@@ -139,9 +147,10 @@ function DashboardPage() {
 
       <div ref={colunasRef} data-lista={layout.lista} data-painel={layout.painel} className="chat-workspace-columns flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden">
         <aside
+          aria-label="Atendimentos"
           className={`${
             listaOcupaTudo && selectedConversation && !listaAberta ? 'hidden' : 'flex'
-          } chat-workspace-list ${emRail ? 'is-rail' : ''} ${listaAberta ? 'is-aberta' : ''} w-full min-w-0 shrink-0 flex-col overflow-clip`}
+          } chat-workspace-list ${emRail ? 'is-rail' : ''} ${listaOcupaTudo ? 'is-aberta' : ''} w-full min-w-0 shrink-0 flex-col overflow-clip`}
         >
           {emRail && (
             <button
@@ -189,6 +198,19 @@ function DashboardPage() {
               />
             </label>
           </div>
+
+          {/* A contagem da fila só existia DENTRO do nome da aba ("Espera 12"),
+              e nome de aba que muda não é anunciado: quem usa leitor de tela não
+              sabia que entrou atendimento novo — o som avisa, a tela não. Região
+              discreta e à parte, para não transformar a própria aba em live
+              region (aí cada troca de aba viraria anúncio). */}
+          {/* `aria-live` sem `role="status"`: a contagem da fila é conteúdo que
+              se atualiza, não o estado de uma operação — e `role="status"` aqui
+              ainda disputaria o papel com o aviso de transferência, que é um
+              status de verdade. O anúncio é o mesmo. */}
+          <p aria-live="polite" className="sr-only">
+            {tabCounts.waiting} em espera, {tabCounts.inProgress} em andamento.
+          </p>
 
           <div className="chat-inbox-tabs shrink-0 px-4 pb-1 pt-1">
             <Tabs

@@ -7,8 +7,11 @@ import { IconChats } from './icons/WaIcons';
 
 // Casca de todas as páginas autenticadas. `dense` = telas com muito conteúdo
 // (Configurações, Supervisão, Relatórios): os brilhos do fundo ficam mais fracos.
-// `conversationOpen` vem do Atendimento: com uma conversa aberta no celular, o
-// botão de abrir o menu some (o chat ocupa a tela inteira, como hoje).
+// `conversationOpen` vem do Atendimento e significa "a conversa OCUPA A TELA
+// INTEIRA" — não apenas "existe conversa selecionada". Só nesse caso o botão de
+// abrir o menu pode sumir: enquanto a lista ou o rail continuam visíveis, a
+// conversa não tomou a tela e esconder o botão apagava a única navegação do
+// produto (era o que acontecia de 500 a 767px e no desktop com zoom de 200%).
 function AppShell({ dense = false }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -37,6 +40,22 @@ function AppShell({ dense = false }) {
   }, [connectionState]);
   const openProfile = useCallback(() => setProfileOpen(true), []);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  // A gaveta do menu não é um diálogo, então ninguém guardava quem a abriu: ao
+  // fechar com ESC o foco ficava largado no conteúdo. O botão é desta casca,
+  // logo é ela que o devolve. `estavaAberta` evita focar o botão na primeira
+  // pintura, quando nada foi aberto ainda.
+  const gatilhoDoMenu = useRef(null);
+  const estavaAberta = useRef(false);
+  useEffect(() => {
+    if (mobileNavOpen) {
+      estavaAberta.current = true;
+      return;
+    }
+    if (!estavaAberta.current) return;
+    estavaAberta.current = false;
+    const botao = gatilhoDoMenu.current;
+    if (botao && document.contains(botao)) botao.focus();
+  }, [mobileNavOpen]);
   // Telas densas ficam com 40% do brilho do chat (45%->18%, 25%->10%): o texto
   // sobre painel de vidro precisa de um fundo mais parado que o do Atendimento.
   const glow = dense ? ['bg-chat-copper/[0.06]', 'bg-[#8296a4]/[0.05]'] : ['bg-chat-copper/[0.10]', 'bg-[#8296a4]/[0.07]'];
@@ -72,8 +91,12 @@ function AppShell({ dense = false }) {
       <div aria-hidden="true" className={`pointer-events-none absolute -right-[6%] bottom-[-15%] h-[30rem] w-[32rem] rounded-full ${glow[1]} blur-[150px]`} />
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-0 md:p-3">
         <SideNav onProfileClick={openProfile} mobileOpen={mobileNavOpen} onMobileClose={closeMobileNav} />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* `inert` no conteúdo enquanto a gaveta está aberta: é o que impede o
+            Tab de sair da gaveta e passear pela página atrás dela — a mesma
+            técnica que a pilha de diálogos usa no nível de baixo. */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col" inert={mobileNavOpen ? '' : undefined}>
           <button
+            ref={gatilhoDoMenu}
             type="button"
             onClick={() => setMobileNavOpen(true)}
             aria-label="Abrir menu"

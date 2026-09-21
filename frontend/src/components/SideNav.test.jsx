@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import SideNav, { iniciaisDaEmpresa } from './SideNav';
@@ -149,4 +149,48 @@ test('account exposes logout and closes with Escape', async () => {
   expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
   await userEvent.keyboard('{Escape}');
   expect(screen.queryByRole('button', { name: 'Sair' })).not.toBeInTheDocument();
+});
+
+// F1 — o veu do menu mobile estava na MESMA camada da gaveta (--z-nav) e, por
+// vir depois no DOM, pintava por cima dela: no celular a gaveta abria
+// escurecida e nenhum toque a alcancava, porque todo clique caia no veu.
+describe('menu mobile: a gaveta fica acima do veu', () => {
+  function abrirNoMobile() {
+    const onMobileClose = vi.fn();
+    const r = renderNav({ role: 'admin' }, '/', { mobileOpen: true, onMobileClose });
+    const gaveta = r.container.querySelector('.worknav.is-mobile-open');
+    const veu = r.container.querySelector('[aria-hidden="true"][class*="fixed inset-0"]');
+    return { ...r, onMobileClose, gaveta, veu };
+  }
+
+  test('a gaveta usa a camada da navegacao e o veu fica um degrau abaixo', () => {
+    const { gaveta, veu } = abrirNoMobile();
+
+    expect(gaveta).toBeInTheDocument();
+    expect(veu).toBeInTheDocument();
+    // Nenhum numero magico: os dois saem da escala --z-*.
+    expect(veu.className).toContain('z-[calc(var(--z-nav)-1)]');
+    expect(veu.className).not.toContain('z-[var(--z-nav)]');
+  });
+
+  test('clicar no veu continua fechando o menu', async () => {
+    const { veu, onMobileClose } = abrirNoMobile();
+    await userEvent.click(veu);
+    expect(onMobileClose).toHaveBeenCalled();
+  });
+
+  test('clicar DENTRO da gaveta nao fecha o menu', async () => {
+    const { gaveta, onMobileClose } = abrirNoMobile();
+    const item = within(gaveta).getByRole('button', { name: /som (ativado|desativado)/i });
+
+    await userEvent.click(item);
+
+    expect(onMobileClose).not.toHaveBeenCalled();
+  });
+
+  test('sem o menu aberto nao existe veu nenhum', () => {
+    const { container } = renderNav({ role: 'admin' }, '/', { mobileOpen: false });
+    expect(container.querySelector('[aria-hidden="true"][class*="fixed inset-0"]')).toBeNull();
+    expect(container.querySelector('.worknav.is-mobile-open')).toBeNull();
+  });
 });

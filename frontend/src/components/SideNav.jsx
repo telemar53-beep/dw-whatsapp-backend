@@ -92,7 +92,12 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [accountOpen]);
   return <>
-    {mobileOpen && <div aria-hidden="true" onClick={onMobileClose} className="fixed inset-0 z-[var(--z-nav)] bg-black/50 md:hidden" />}
+    {/* O véu fica UM degrau abaixo da barra, não na mesma camada dela. Enquanto
+        os dois disputaram `--z-nav`, quem pintava por cima era o véu (mesmo
+        z-index, e o véu vem depois no DOM): no celular a gaveta abria
+        escurecida e nenhum toque a alcançava — todo clique caía no véu e
+        fechava o menu. */}
+    {mobileOpen && <div aria-hidden="true" onClick={onMobileClose} className="fixed inset-0 z-[calc(var(--z-nav)-1)] bg-black/50 md:hidden" />}
     <nav id="sidenav" aria-label="Navegação principal" className={`worknav ${compact ? 'is-compact' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
       <MarcaDoMenu compact={compact} companyName={companyName} companyNameStatus={companyNameStatus} />
       <button type="button" className="worknav-collapse" onClick={toggle} aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'} title={collapsed ? 'Expandir menu' : 'Recolher menu'}>

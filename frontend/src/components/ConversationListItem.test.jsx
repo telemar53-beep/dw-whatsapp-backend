@@ -411,6 +411,68 @@ describe('ConversationListItem', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  // A linha é um `role="button"` e o "Finalizar" é um <button> DENTRO dela. O
+  // `onKeyDown` da linha chamava `preventDefault()` em Enter/Espaço antes de
+  // qualquer coisa, o que cancelava a ativação nativa do botão filho: pelo
+  // teclado, Enter no "Finalizar" abria a conversa em vez de finalizar.
+  test('Enter no botão de finalizar pede confirmação, e não abre a conversa', async () => {
+    const onQuickClose = vi.fn();
+    const onSelect = vi.fn();
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={onSelect}
+          onQuickClose={onQuickClose}
+        />
+      </ul>
+    );
+
+    screen.getByRole('button', { name: /finalizar/i }).focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Finalizar esse atendimento sem informar o motivo?');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  test('Espaço no botão de finalizar também pede confirmação', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={onSelect}
+          onQuickClose={vi.fn()}
+        />
+      </ul>
+    );
+
+    screen.getByRole('button', { name: /finalizar/i }).focus();
+    await userEvent.keyboard(' ');
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  // E a linha em si não pode ter perdido o teclado por causa da guarda.
+  test('Enter na própria linha continua abrindo a conversa', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{ id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' }}
+          onSelect={onSelect}
+          onQuickClose={vi.fn()}
+        />
+      </ul>
+    );
+
+    screen.getByRole('button', { name: /carlos/i }).focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(onSelect).toHaveBeenCalledWith('c1');
+  });
+
   test('clicking the quick-close button does not call onQuickClose when the confirmation is declined', async () => {
     const onQuickClose = vi.fn();
     render(

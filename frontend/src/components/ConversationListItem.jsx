@@ -50,6 +50,13 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
   }
 
   function handleKeyDown(event) {
+    // "Finalizar sem motivo" é um <button> DENTRO desta linha, que por sua vez
+    // é um `role="button"`. A tecla sobe do botão até aqui, e o
+    // `preventDefault` abaixo cancelava a ativação nativa DELE — pelo teclado,
+    // Enter e Espaço no "Finalizar" abriam a conversa em vez de finalizar, nas
+    // duas rotas que usam esta linha (mesa e Supervisão). Só a linha em si
+    // responde por estas teclas; quem estiver dentro cuida das suas.
+    if (event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       handleSelect();
@@ -100,7 +107,11 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
   if (compact) {
     return (
       <li className="chat-conversation-entry">
+        {/* `aria-current` como a variante rail ja fazia: sem ele o item
+            selecionado e o nao selecionado tinham arvore de acessibilidade
+            IDENTICA — a selecao existia so como classe CSS. */}
         <div role="button" tabIndex={0} onClick={handleSelect} onKeyDown={handleKeyDown}
+          aria-current={selected ? 'true' : undefined}
           className={`chat-conversation-row ${selected ? 'is-selected' : ''} ${unread ? 'is-unread' : ''}`}>
           <div className="chat-conversation-summary">
             <span className="chat-conversation-name" title={nameLabel}>{nameLabel}</span>
@@ -142,6 +153,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
         tabIndex={0}
         onClick={handleSelect}
         onKeyDown={handleKeyDown}
+        aria-current={selected ? 'true' : undefined}
         className={`flex w-full items-center text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring ${compact ? 'gap-3 rounded-[12px] border-l-[3px] px-3 py-2.5' : 'gap-4 rounded-[18px] p-4'} ${
           selected ? compact ? 'border-chat-orange bg-chat-orange/[0.10]' : 'bg-white/[0.08]' : compact ? 'border-transparent hover:bg-white/[0.05]' : 'hover:bg-white/[0.04]'
         }`}

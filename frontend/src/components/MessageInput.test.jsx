@@ -538,6 +538,44 @@ describe('o campo cresce com o texto', () => {
     expect(parseInt(campo.style.height, 10)).toBeLessThan(CONTEUDO_ALTO);
   });
 
+  // O teto era 320px fixos, sem relação com a altura da tela. Numa viewport
+  // baixa — 384px, que é um desktop 1366x768 com zoom de 200% — o compositor
+  // passava da borda inferior, a timeline colapsava para 20px e "Anexar
+  // arquivo" saía da tela sem rolagem que recuperasse.
+  test('numa janela baixa o teto acompanha a altura da tela', async () => {
+    const alturaOriginal = window.innerHeight;
+    Object.defineProperty(window, 'innerHeight', { value: 384, configurable: true, writable: true });
+    try {
+      render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+      const campo = screen.getByPlaceholderText('Digite uma mensagem…');
+
+      await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
+
+      // 45% de 384 = 172. O campo não pode passar disso, nem do teto absoluto.
+      expect(parseInt(campo.style.height, 10)).toBeLessThanOrEqual(173);
+      expect(parseInt(campo.style.maxHeight, 10)).toBeLessThanOrEqual(173);
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { value: alturaOriginal, configurable: true, writable: true });
+    }
+  });
+
+  // E numa janela alta o teto de sempre continua valendo: a correção não pode
+  // ter encolhido o campo no desktop.
+  test('numa janela alta o teto de 320px continua valendo', async () => {
+    const alturaOriginal = window.innerHeight;
+    Object.defineProperty(window, 'innerHeight', { value: 1080, configurable: true, writable: true });
+    try {
+      render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
+      const campo = screen.getByPlaceholderText('Digite uma mensagem…');
+
+      await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
+
+      expect(parseInt(campo.style.maxHeight, 10)).toBe(320);
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { value: alturaOriginal, configurable: true, writable: true });
+    }
+  });
+
   test('depois de enviar, o campo volta ao tamanho de uma linha', async () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(<MessageInput conversationId="c1" onSend={onSend} />);

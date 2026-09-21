@@ -2,6 +2,7 @@ import ContactAvatar from './ContactAvatar';
 import MessageStatusTicks from './MessageStatusTicks';
 import { IconCheckCircle } from './icons/WaIcons';
 import { useConfirm } from '../hooks/useConfirm';
+import { useDicaFlutuante, DicaFlutuante } from './DicaFlutuante';
 
 const MEDIA_TYPE_LABELS = {
   image: '📷 Foto',
@@ -61,6 +62,10 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
     if (ok) onQuickClose(conversation.id);
   }
 
+  // O hook fica aqui, antes de qualquer retorno: chamar hook dentro do
+  // `if (rail)` quebraria a ordem entre renderizações quando a lista abre.
+  const { gatilho: gatilhoDaDica, caixa: caixaDaDica } = useDicaFlutuante();
+
   // Rail: o espaço não comporta a lista inteira, mas o atendente precisa
   // continuar vendo que existem outros atendimentos e trocar rápido. Só
   // avatar, seleção e sinal de mensagem nova — cidade, setor e prévia voltam
@@ -69,6 +74,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
     return (
       <li className="chat-rail-entry">
         <div
+          {...gatilhoDaDica}
           role="button"
           tabIndex={0}
           onClick={handleSelect}
@@ -85,7 +91,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
             size={36}
           />
           {unread && <span className="chat-rail-unread" aria-hidden="true" />}
-          <span className="chat-rail-tip">{nameLabel}</span>
+          <DicaFlutuante caixa={caixaDaDica}>{nameLabel}</DicaFlutuante>
         </div>
       </li>
     );

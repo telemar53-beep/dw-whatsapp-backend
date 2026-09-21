@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationListItem from './ConversationListItem';
 import { useAuth } from '../contexts/AuthContext';
@@ -627,5 +627,93 @@ describe('hora mostrada na linha', () => {
       </ul>
     );
     expect(screen.getByText('Ana Julia')).toBeInTheDocument();
+  });
+});
+
+// F2 — no rail a dica com o nome era um span absoluto DENTRO da linha, e tres
+// ancestrais com overflow a recortavam: o atendente via so avatares sem nome.
+// Agora ela e portada para o body e posicionada por coordenada de tela.
+describe('rail: o nome da conversa aparece de verdade', () => {
+  const baseConversation = { id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999990000' };
+
+  function renderRail(extra = {}) {
+    return render(
+      <ul>
+        <ConversationListItem
+          conversation={{ ...baseConversation, contactDisplayName: 'Tatiane Ferreira', ...extra }}
+          onSelect={vi.fn()}
+          rail
+        />
+      </ul>
+    );
+  }
+
+  test('a dica nao existe ate haver ponteiro ou foco', () => {
+    renderRail();
+    expect(document.querySelector('.chat-rail-tip')).toBeNull();
+  });
+
+  test('o ponteiro sobre a linha mostra o nome, e ele sai do container da lista', async () => {
+    const { container } = renderRail();
+    const linha = container.querySelector('.chat-rail-row');
+
+    fireEvent.mouseEnter(linha);
+
+    const dica = document.querySelector('.chat-rail-tip');
+    expect(dica).toBeInTheDocument();
+    expect(dica).toHaveTextContent('Tatiane Ferreira');
+    // A prova estrutural: a dica NAO e descendente da linha nem da lista —
+    // ela foi portada para o body, fora de qualquer ancestral que recorte.
+    expect(linha.contains(dica)).toBe(false);
+    expect(dica.closest('ul')).toBeNull();
+    expect(dica.parentElement).toBe(document.body);
+
+    fireEvent.mouseLeave(linha);
+    expect(document.querySelector('.chat-rail-tip')).toBeNull();
+  });
+
+  test('o foco por teclado tambem mostra o nome', () => {
+    const { container } = renderRail();
+    const linha = container.querySelector('.chat-rail-row');
+
+    fireEvent.focus(linha);
+    expect(document.querySelector('.chat-rail-tip')).toHaveTextContent('Tatiane Ferreira');
+
+    fireEvent.blur(linha);
+    expect(document.querySelector('.chat-rail-tip')).toBeNull();
+  });
+
+  test('a dica e posicionada por coordenada de tela, nao pelo fluxo', () => {
+    const { container } = renderRail();
+    const linha = container.querySelector('.chat-rail-row');
+    linha.getBoundingClientRect = () => ({ right: 72, top: 100, height: 52, left: 0, width: 72, bottom: 152 });
+
+    fireEvent.mouseEnter(linha);
+
+    const dica = document.querySelector('.chat-rail-tip');
+    expect(dica.style.left).toBe('80px');
+    expect(dica.style.top).toBe('126px');
+  });
+
+  // Quem anuncia o nome e o aria-label da linha; a dica e so visual.
+  test('a dica nao e lida duas vezes pelo leitor de tela', () => {
+    const { container } = renderRail();
+    const linha = container.querySelector('.chat-rail-row');
+    expect(linha).toHaveAttribute('aria-label', expect.stringContaining('Tatiane Ferreira'));
+
+    fireEvent.mouseEnter(linha);
+    expect(document.querySelector('.chat-rail-tip')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  test('o atendimento selecionado continua marcado no rail', () => {
+    const { container } = renderRail();
+    expect(container.querySelector('.chat-rail-row')).not.toHaveClass('is-selected');
+
+    const { container: c2 } = render(
+      <ul>
+        <ConversationListItem conversation={baseConversation} onSelect={vi.fn()} rail selected />
+      </ul>
+    );
+    expect(c2.querySelector('.chat-rail-row')).toHaveClass('is-selected');
   });
 });

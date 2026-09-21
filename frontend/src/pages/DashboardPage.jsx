@@ -6,6 +6,7 @@ import { useMyConversations } from '../hooks/useMyConversations';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
 import { useWorkspaceLayout } from '../hooks/useWorkspaceLayout';
 import { useCompanyName } from '../hooks/useCompanyName';
+import { useDicaFlutuante, DicaFlutuante } from '../components/DicaFlutuante';
 import { useTransferNotice } from '../hooks/useTransferNotice';
 import TransferNotice from '../components/TransferNotice';
 import { closeConversation } from '../services/api';
@@ -60,6 +61,9 @@ function DashboardPage() {
   const colunasRef = useRef(null);
   const [painelAberto, setPainelAberto] = useState(false);
   const [listaAberta, setListaAberta] = useState(false);
+  // A dica do rail e portada para o body: dentro da coluna ela era
+  // recortada por tres ancestrais com overflow e nunca aparecia.
+  const { gatilho: gatilhoDoExpandir, caixa: caixaDoExpandir } = useDicaFlutuante();
   const layout = useWorkspaceLayout(colunasRef, painelAberto);
   const emRail = layout.lista === 'rail' && !listaAberta;
   const listaOcupaTudo = layout.lista === 'oculta' || listaAberta;
@@ -142,12 +146,13 @@ function DashboardPage() {
           {emRail && (
             <button
               type="button"
+              {...gatilhoDoExpandir}
               onClick={() => setListaAberta(true)}
               aria-label="Ver lista de atendimentos"
               className="chat-rail-expandir"
             >
               <IconChats size={18} />
-              <span className="chat-rail-tip">Ver lista de atendimentos</span>
+              <DicaFlutuante caixa={caixaDoExpandir}>Ver lista de atendimentos</DicaFlutuante>
             </button>
           )}
           {listaAberta && (

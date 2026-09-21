@@ -3,13 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { listChannelsForAgent, listTemplatesForChannel, createCampaign } from '../services/api';
 import { isOfficialChannelType, channelTypeLabel } from '../utils/channelTypes';
 import { parseRecipients } from '../utils/parseRecipients';
-import WaDialog, {
-  waInputClass,
-  waLabelClass,
-  waPrimaryButtonClass,
-  waGhostButtonClass,
-  waErrorClass,
-} from './WaDialog';
+import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError } from './WaDialog';
 import { descreverErro } from '../utils/errorMessages';
 
 const RECIPIENT_LIMIT = 2000;
@@ -143,7 +137,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
                     </p>
                   )}
                   {summary.valid.length + summary.invalid > RECIPIENT_LIMIT && (
-                    <p className={waErrorClass}>O limite é de {RECIPIENT_LIMIT} destinatários por campanha.</p>
+                    <WaError>O limite é de {RECIPIENT_LIMIT} destinatários por campanha.</WaError>
                   )}
                 </dd>
               </div>
@@ -163,7 +157,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
                 </dd>
               </div>
             </dl>
-            {error && <p className={waErrorClass}>{error}</p>}
+            {error && <WaError>{error}</WaError>}
           </div>
           <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
             <button type="button" onClick={() => setStep('form')} className={waGhostButtonClass}>
@@ -220,9 +214,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
               </select>
             )}
             {fieldErrors.channelId && (
-              <p className={waErrorClass} id="campaign-channel-error">
+              <WaError id="campaign-channel-error">
                 {fieldErrors.channelId}
-              </p>
+              </WaError>
             )}
           </div>
           <section className="dialog-campaign-content">
@@ -255,9 +249,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
                   </select>
                 )}
                 {fieldErrors.templateId && (
-                  <p className={waErrorClass} id="campaign-template-error">
+                  <WaError id="campaign-template-error">
                     {fieldErrors.templateId}
-                  </p>
+                  </WaError>
                 )}
               </div>
               {templateVariableValues.map((value, index) => (
@@ -274,9 +268,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
                     aria-describedby={fieldErrors[`variable-${index}`] ? `campaign-variable-${index}-error` : undefined}
                   />
                   {fieldErrors[`variable-${index}`] && (
-                    <p className={waErrorClass} id={`campaign-variable-${index}-error`}>
+                    <WaError id={`campaign-variable-${index}-error`}>
                       {fieldErrors[`variable-${index}`]}
-                    </p>
+                    </WaError>
                   )}
                 </div>
               ))}
@@ -295,9 +289,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
                 aria-describedby={fieldErrors.content ? 'campaign-message-error' : undefined}
               />
               {fieldErrors.content && (
-                <p className={waErrorClass} id="campaign-message-error">
+                <WaError id="campaign-message-error">
                   {fieldErrors.content}
-                </p>
+                </WaError>
               )}
             </div>
           )}
@@ -315,12 +309,12 @@ function CreateCampaignModal({ onClose, onCreated }) {
               aria-describedby={fieldErrors.recipients ? 'campaign-recipients-error' : undefined}
             />
             {fieldErrors.recipients && (
-              <p className={waErrorClass} id="campaign-recipients-error">
+              <WaError id="campaign-recipients-error">
                 {fieldErrors.recipients}
-              </p>
+              </WaError>
             )}
           </div>
-          {error && <p className={waErrorClass}>{error}</p>}
+          {error && <WaError>{error}</WaError>}
         </div>
         <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
           <button type="button" onClick={onClose} className={waGhostButtonClass}>

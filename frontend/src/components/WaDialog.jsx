@@ -19,6 +19,21 @@ export const waGhostButtonClass =
 
 export const waErrorClass = 'rounded-[10px] bg-wa-error-bg px-3 py-2 text-[13.5px] text-wa-error-text';
 
+// Mesmo contrato que `ui/Field` já aplica no erro de campo: `role="alert"` para
+// o erro e `role="status"` para a confirmação. Vinte pontos da aplicação
+// montavam a faixa à mão com `waErrorClass` e ficavam MUDOS — medido na
+// auditoria: com "As senhas não coincidem" na tela, a consulta por
+// `[aria-live],[role=status],[role=alert]` devolvia lista vazia. Não é um
+// segundo sistema de mensagem: é o mesmo, num componente em vez de uma classe
+// solta, para o papel não depender de cada tela lembrar de escrevê-lo.
+export function WaError({ className = '', children, ...rest }) {
+  return <p role="alert" className={`${waErrorClass} ${className}`.trim()} {...rest}>{children}</p>;
+}
+
+export function WaSuccess({ className = '', children, ...rest }) {
+  return <p role="status" className={`text-[13.5px] text-wa-muted ${className}`.trim()} {...rest}>{children}</p>;
+}
+
 function WaDialog(props) {
   // `closeOnBackdrop` nasce falso: antes QUALQUER clique no fundo fechava
   // qualquer diálogo, inclusive um formulário preenchido. Quem é de leitura

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getMyProfile, updateMyProfile, uploadMyAvatar, deleteMyAvatar, changePassword } from '../services/api';
 import AgentAvatar from './AgentAvatar';
-import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
+import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError, WaSuccess } from './WaDialog';
 import { descreverErro } from '../utils/errorMessages';
 
 function ProfileModal({ onClose, onProfileUpdated }) {
@@ -145,7 +145,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
             )}
           </div>
         </div>
-        {avatarError && <p className={`mt-3 ${waErrorClass}`}>{avatarError}</p>}
+        {avatarError && <WaError className="mt-3">{avatarError}</WaError>}
 
         <div className="mt-5 space-y-5">
           <section aria-labelledby="profile-personal-title">
@@ -165,8 +165,8 @@ function ProfileModal({ onClose, onProfileUpdated }) {
                 <p className="rounded-[10px] border border-wa-border bg-wa-panel-header px-3.5 py-2.5 text-[14px] text-wa-text">{profile.email}</p>
               </div>
             </form>
-            {profileError && <p className={`mt-3 ${waErrorClass}`}>{profileError}</p>}
-            {profileSuccess && <p className="mt-3 text-[13.5px] text-wa-muted">Perfil atualizado.</p>}
+            {profileError && <WaError className="mt-3">{profileError}</WaError>}
+            {profileSuccess && <WaSuccess className="mt-3">Perfil atualizado.</WaSuccess>}
           </section>
 
           <details className="group rounded-[12px] border border-wa-border bg-wa-panel-header">
@@ -187,8 +187,8 @@ function ProfileModal({ onClose, onProfileUpdated }) {
                 <label htmlFor="confirm-password" className={waLabelClass}>Confirmar nova senha</label>
                 <input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={waInputClass} required />
               </div>
-              {passwordError && <p className={`sm:col-span-2 lg:col-span-3 ${waErrorClass}`}>{passwordError}</p>}
-              {passwordSuccess && <p className="text-[13.5px] text-wa-muted sm:col-span-2 lg:col-span-3">Senha alterada com sucesso.</p>}
+              {passwordError && <WaError className="sm:col-span-2 lg:col-span-3">{passwordError}</WaError>}
+              {passwordSuccess && <WaSuccess className="sm:col-span-2 lg:col-span-3">Senha alterada com sucesso.</WaSuccess>}
               <div className="flex justify-end pt-1 sm:col-span-2 lg:col-span-3">
                 <button type="submit" disabled={submittingPassword} className={waGhostButtonClass}>Trocar senha</button>
               </div>

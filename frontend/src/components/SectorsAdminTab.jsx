@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { updateSector, deleteSector } from '../services/api';
 import CreateSectorForm from './CreateSectorForm';
-import WaDialog, { waErrorClass } from './WaDialog';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, inputClass } from './ui';
 import { descreverErro } from '../utils/errorMessages';
 
@@ -98,7 +98,7 @@ function SectorRow({ sector, onSaved, onDeleted }) {
                 className={inputClass}
               />
             </div>
-            {error && <p className={waErrorClass}>{error}</p>}
+            {error && <WaError>{error}</WaError>}
             <div className="flex gap-2">
               <Button type="submit" loading={submitting} className="!py-1.5">
                 Salvar
@@ -120,7 +120,7 @@ function SectorRow({ sector, onSaved, onDeleted }) {
         <span className="block truncate" title={sector.aiHint || undefined}>
           {sector.aiHint || <span className="text-wa-meta">Sem orientação</span>}
         </span>
-        {deleteError && <p className={`mt-2 ${waErrorClass}`}>{deleteError}</p>}
+        {deleteError && <WaError className="mt-2">{deleteError}</WaError>}
       </td>
       <td className={`${CELULA} whitespace-nowrap`}>
         <div className="flex items-center justify-end gap-2">
@@ -170,7 +170,7 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
 
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={sectors.length === 0} emptyMessage="Nenhum setor cadastrado ainda.">
-            <DataTable>
+            <DataTable label="Setores">
                 <thead>
                   <tr className="bg-black/[0.16]">
                     <th scope="col" className={CABECALHO}>

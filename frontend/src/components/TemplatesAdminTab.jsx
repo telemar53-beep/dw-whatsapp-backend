@@ -5,7 +5,7 @@ import { useTemplates } from '../hooks/useTemplates';
 import { useChannels } from '../hooks/useChannels';
 import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin, setTemplatePurpose } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
-import WaDialog, { waErrorClass } from './WaDialog';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu, inputClass } from './ui';
 import { IconSearch, IconRefresh, IconNewChat, IconMore, IconInfo, IconFile } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
@@ -125,7 +125,7 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
           {template.name}
         </button>
         {template.rejectionReason && <p className="mt-0.5 text-[12px] text-wa-error-text">{template.rejectionReason}</p>}
-        {deleteError && <p className={`mt-2 ${waErrorClass}`}>{deleteError}</p>}
+        {deleteError && <WaError className="mt-2">{deleteError}</WaError>}
       </td>
       <td className={`${CELULA} whitespace-nowrap text-wa-text`}>{categoryLabel(template.category)}</td>
       <td className={`${CELULA} whitespace-nowrap`}>
@@ -310,7 +310,7 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
         )}
       </fieldset>
 
-      {error && <p className={waErrorClass}>{error}</p>}
+      {error && <WaError>{error}</WaError>}
       <div className="flex gap-2">
         <Button variant="secondary" onClick={onCancel}>
           Cancelar
@@ -398,7 +398,7 @@ function RegisterExistingTemplateForm({ officialChannels, initialChannelId, onRe
           </select>
         </div>
       </div>
-      {error && <p className={waErrorClass}>{error}</p>}
+      {error && <WaError>{error}</WaError>}
       <div className="flex gap-2">
         <Button variant="secondary" onClick={onCancel}>
           Cancelar
@@ -627,7 +627,7 @@ function TemplatesAdminTab() {
           </Button>
         </div>
       </div>
-      {syncError && <p className={waErrorClass}>{syncError}</p>}
+      {syncError && <WaError>{syncError}</WaError>}
 
       <div className="settings-template-library grid items-start gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
         <div>
@@ -642,7 +642,7 @@ function TemplatesAdminTab() {
             </div>
             <div className="px-4 pb-1 sm:px-5">
               <AsyncState status={status} onRetry={refresh} isEmpty={templates.length === 0} emptyMessage="Nenhum template cadastrado ainda.">
-                <DataTable className="min-w-[480px]">
+                <DataTable label="Templates" className="min-w-[480px]">
                     <thead>
                       <tr className="bg-black/[0.16]">
                         <th scope="col" className={CABECALHO}>

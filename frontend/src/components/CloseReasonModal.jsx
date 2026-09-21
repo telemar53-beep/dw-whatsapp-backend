@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import WaDialog, { waErrorClass } from './WaDialog';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
 import { useReasons } from '../hooks/useReasons';
 import { AsyncState } from './ui';
 import { describeReason, closeReasonHeaderIcon, checkCircleIcon } from './closeReasonCatalog';
@@ -98,7 +98,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
             ))}
           </div>
         </AsyncState>
-        {error && <p className={`${waErrorClass} mt-4`}>{error}</p>}
+        {error && <WaError className="mt-4">{error}</WaError>}
       </div>
 
       <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-wa-border px-6 py-4">

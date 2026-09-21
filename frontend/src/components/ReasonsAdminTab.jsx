@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { updateReason } from '../services/api';
 import CreateReasonForm from './CreateReasonForm';
-import WaDialog, { waErrorClass } from './WaDialog';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu, inputClass } from './ui';
 import { IconSearch, IconNewChat, IconMore, IconEdit } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
@@ -96,7 +96,7 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
       <tr className={`border-t border-wa-border ${reason.active ? '' : 'opacity-80'} ${usedByAi ? 'bg-chat-orange/[0.06]' : ''}`}>
         <td className={`${CELULA} text-[14px] font-medium text-wa-text`}>
           {reason.name}
-          {toggleError && <p className={`mt-2 ${waErrorClass}`}>{toggleError}</p>}
+          {toggleError && <WaError className="mt-2">{toggleError}</WaError>}
         </td>
         <td className={`${CELULA} whitespace-nowrap`}>
           <StatusBadge active={reason.active} />
@@ -141,7 +141,7 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
               <Button variant="secondary" onClick={handleCancel} className="!py-2">
                 Cancelar
               </Button>
-              {error && <p className={`w-full ${waErrorClass}`}>{error}</p>}
+              {error && <WaError className="w-full">{error}</WaError>}
             </form>
           </td>
         </tr>
@@ -226,7 +226,7 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
         </div>
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={reasons.length === 0} emptyMessage="Nenhum motivo cadastrado ainda.">
-            <DataTable>
+            <DataTable label="Motivos de contato">
                 <thead>
                   <tr className="bg-black/[0.16]">
                     <th scope="col" className={CABECALHO}>

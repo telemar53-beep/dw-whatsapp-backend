@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { deleteCity } from '../services/api';
 import CreateCityForm from './CreateCityForm';
-import WaDialog, { waErrorClass } from './WaDialog';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable } from './ui';
 import { IconSearch, IconNewChat } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
@@ -129,7 +129,7 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         <div className="settings-register-summary text-wa-muted">{countLabel}</div>
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={cities.length === 0} emptyMessage="Nenhuma cidade cadastrada ainda.">
-            <DataTable className="min-w-[420px]">
+            <DataTable label="Cidades" className="min-w-[420px]">
                 <thead>
                   <tr className="bg-black/[0.16]">
                     <th scope="col" className={CABECALHO}>
@@ -154,9 +154,9 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
               </DataTable>
           </AsyncState>
           {errorMessages.map((message, index) => (
-            <p key={index} className={`mb-3 ${waErrorClass}`}>
+            <WaError key={index} className="mb-3">
               {message}
-            </p>
+            </WaError>
           ))}
         </div>
 

@@ -101,7 +101,7 @@ function CampaignsPage() {
   }, [campaigns, busca, ordem, channels]);
 
   return (
-    <div className="campaigns-workspace flex min-h-0 flex-1 flex-col">
+    <main className="campaigns-workspace flex min-h-0 flex-1 flex-col">
       <PageHeader
         variant="destaque"
         title="Campanhas"
@@ -169,7 +169,7 @@ function CampaignsPage() {
           }}
         />
       )}
-    </div>
+    </main>
   );
 }
 

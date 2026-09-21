@@ -38,7 +38,7 @@ function SettingsLayout() {
 
   return (
     <div data-settings-page={active?.item.key} data-settings-group={active?.group.groupKey} className="settings-workspace flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row">
-      <aside className={`settings-nav ${PANEL} flex min-w-0 flex-col lg:w-[264px] lg:shrink-0 ${term ? 'max-h-[40vh] lg:max-h-none' : ''}`}>
+      <aside aria-label="Seções de configurações" className={`settings-nav ${PANEL} flex min-w-0 flex-col lg:w-[264px] lg:shrink-0 ${term ? 'max-h-[40vh] lg:max-h-none' : ''}`}>
         <div className="settings-nav-heading shrink-0 px-4 pb-2 pt-4 lg:pt-5">
           <h2 className="font-display text-[18px] font-semibold leading-tight text-chat-text">Configurações</h2>
         </div>
@@ -143,7 +143,12 @@ function SettingsLayout() {
           })}
         </nav>}
       </aside>
-      <section className={`settings-stage ${PANEL} flex min-h-0 min-w-0 flex-1 flex-col`}>
+      {/* `role="main"` e não a tag <main>: `settings.css` estiliza botão, label
+          e parágrafo por `.settings-workspace :is(form,section,…)`, e o palco é
+          justamente um <section>. Trocar a tag tiraria o estilo de tudo que não
+          está dentro de um form/section interno — mudança visual pelo mesmo
+          mecanismo do R7. O papel dá o landmark sem tocar na cascata. */}
+      <section role="main" className={`settings-stage ${PANEL} flex min-h-0 min-w-0 flex-1 flex-col`}>
         <Outlet />
       </section>
     </div>

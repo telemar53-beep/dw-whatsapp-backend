@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCities } from '../hooks/useCities';
 import { updateContact } from '../services/api';
-import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
+import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError } from './WaDialog';
 import { descreverErro } from '../utils/errorMessages';
 
 function EditContactModal({ conversation, onClose, onSaved }) {
@@ -81,7 +81,7 @@ function EditContactModal({ conversation, onClose, onSaved }) {
               className={waInputClass}
             />
           </div>
-          {error && <p className={waErrorClass}>{error}</p>}
+          {error && <WaError>{error}</WaError>}
         </div>
         <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
           <button type="button" onClick={onClose} className={waGhostButtonClass}>

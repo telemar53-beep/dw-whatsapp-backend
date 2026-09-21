@@ -134,7 +134,10 @@ export function Tabs({ tabs, active, onChange, label = 'Abas', look = 'pills', a
             type="button"
             role="tab"
             aria-selected={isActive}
-            aria-controls={`tabpanel-${tab.key}`}
+            // Só a aba ATIVA aponta para um painel: o painel da aba inativa
+            // não é montado, e `aria-controls` para um id inexistente é uma
+            // referência quebrada.
+            aria-controls={isActive ? `tabpanel-${tab.key}` : undefined}
             tabIndex={isActive ? 0 : -1}
             onClick={() => onChange(tab.key)}
             onKeyDown={(e) => onKeyDown(e, index)}

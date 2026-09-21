@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAgents } from '../hooks/useAgents';
 import { usePresence } from '../hooks/usePresence';
 import { transferConversation } from '../services/api';
-import WaDialog, { waErrorClass } from './WaDialog';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
 import AgentAvatar from './AgentAvatar';
 import { AsyncState } from './ui';
 import { IconChats, IconChevronDown, IconInfo, IconSearch, IconTransfer } from './icons/WaIcons';
@@ -226,7 +226,7 @@ function TransferModal({ conversationId, onClose }) {
             <p className="px-2 py-5 text-center text-[13px] text-wa-muted">Nenhum atendente encontrado com esse nome.</p>
           )}
         </AsyncState>
-        {error && <p className={`${waErrorClass} mt-3`}>{error}</p>}
+        {error && <WaError className="mt-3">{error}</WaError>}
       </div>
 
       <div className="flex shrink-0 items-center gap-3 border-t border-wa-border px-5 py-3">

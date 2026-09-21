@@ -5,7 +5,7 @@ import { useSectors } from '../hooks/useSectors';
 import { setAgentActive, setAgentSectors, resetAgentPassword } from '../services/api';
 import CreateAgentForm from './CreateAgentForm';
 import AgentAvatar from './AgentAvatar';
-import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
+import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu } from './ui';
 import { IconSearch, IconUserPlus, IconMore } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
@@ -153,7 +153,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       {(editingSectors || passwordError) && (
         <tr className="bg-black/[0.12]">
           <td colSpan={5} className="px-4 pb-4 pt-3">
-            {passwordError && <p className={`mb-3 ${waErrorClass}`}>{passwordError}</p>}
+            {passwordError && <WaError className="mb-3">{passwordError}</WaError>}
             {editingSectors && (
               <div className="dialog-sector-assignment space-y-3">
                 <p className="text-[13px] font-medium text-wa-muted">Setores de {agentRow.name}</p>
@@ -174,7 +174,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
                     ))}
                   </div>
                 )}
-                {error && <p className={waErrorClass}>{error}</p>}
+                {error && <WaError>{error}</WaError>}
                 <div className="flex gap-2">
                   <Button onClick={handleSaveSectors} loading={submitting} className="!py-1.5">
                     Salvar
@@ -318,7 +318,7 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         </div>
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={agents.length === 0} emptyMessage="Nenhum usuário cadastrado ainda.">
-            <DataTable className="min-w-[720px]">
+            <DataTable label="Usuários" className="min-w-[720px]">
                 <thead>
                   <tr className="bg-black/[0.16]">
                     <th scope="col" className={CABECALHO}>

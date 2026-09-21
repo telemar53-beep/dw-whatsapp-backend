@@ -38,3 +38,13 @@
 .settings-channel-center .channel-row-menu .dw-menu-item-danger {border-top:1px solid #ffffff0c;margin-top:3px;color:#e7a69f}
 .settings-channel-center .channel-row-menu button:disabled {opacity:.4}
 @media(prefers-reduced-motion:reduce){.settings-channel-center .settings-channel-record{transition:none}}
+
+/* QR de conexao, no tema. Era um iframe de fundo branco; agora e a imagem
+   dentro de uma moldura do produto, com o texto do que fazer ao lado. */
+.channel-qr {display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--settings-line)}
+.channel-qr-quadro {width:188px;height:188px;flex:none;display:grid;place-items:center;border-radius:12px;border:1px solid #ffffff14;background:#f6f7f8;padding:10px}
+.channel-qr-imagem {width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.channel-qr-vazio {font-size:11px;line-height:16px;text-align:center;color:#5b6472;padding:0 8px}
+.channel-qr-lado {display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0}
+.channel-qr-instrucao {font-size:12px;line-height:18px;color:var(--settings-muted);margin:0}
+@container(max-width:520px){.channel-qr{grid-template-columns:minmax(0,1fr);justify-items:center}.channel-qr-lado{align-items:center;text-align:center}}

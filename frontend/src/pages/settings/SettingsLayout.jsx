@@ -54,7 +54,7 @@ function SettingsLayout() {
             id="settings-section"
             value={selectValue}
             onChange={(e) => navigate(e.target.value)}
-            className="w-full rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 py-2.5 text-[14px] text-chat-text outline-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
+            className="w-full rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 py-2.5 text-[14px] text-chat-text outline-none transition"
           >
             {selectValue === '' && <option value="" disabled>Seção</option>}
             {SETTINGS_SECTIONS.map((group) => (

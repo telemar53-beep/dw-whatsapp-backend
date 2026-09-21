@@ -13,7 +13,8 @@
 .dw-dialog textarea {resize:vertical}
 .dw-dialog label,.dw-dialog legend {font-size:12px}
 .dw-dialog button {font-size:12px;line-height:18px}
-.dw-dialog :is(button,a,input,select,textarea,summary):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
+/* Campo usa anel (ver index.css); aqui ficam so as acoes. */
+.dw-dialog :is(button,a,summary):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 .dw-dialog button:disabled {opacity:.5}
 .dw-dialog form > div:last-child:has(> button),.dw-dialog > div:last-child:has(> button),.dw-dialog-footer {border-top:1px solid #ffffff10;padding:12px 22px;gap:8px;flex:none}
 .dw-dialog form > div:last-child:has(> button) button,.dw-dialog > div:last-child:has(> button) button,.dw-dialog-footer button {padding:7px 13px;border-radius:7px}
@@ -155,7 +156,8 @@
 .dialog-filter-options {width:260px;border-radius:9px;padding:6px;box-shadow:0 10px 28px #0005}
 .dialog-filter-options label {font-size:12px;border-radius:5px;padding:7px 8px}
 .dialog-filter-options label:has(input:checked) {background:#d5a17612;color:#efd4ba}
-.dialog-filter-options label:focus-within {outline: 2px solid var(--color-focus-ring);outline-offset:-2px}
+/* Removido: o proprio checkbox ja tem :focus-visible, e ele aponta o
+   alvo real em vez da linha inteira. Antes saiam dois contornos. */
 .dialog-sector-assignment {display:grid;grid-template-columns:180px minmax(0,1fr) auto;gap:14px;align-items:start}
 .dialog-sector-assignment > * {margin:0!important}
 .dialog-sector-assignment > p:first-child {font-size:12px}

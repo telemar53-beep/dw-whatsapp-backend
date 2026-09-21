@@ -414,7 +414,7 @@ function SupervisionPage() {
             onChange={(e) => setProtocolQuery(e.target.value)}
             placeholder="Buscar por protocolo"
             aria-label="Buscar por protocolo"
-            className="h-[38px] w-[205px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            className="h-[38px] w-[205px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25"
           />
         </form>
         <form onSubmit={handlePhoneSearch} className="min-w-0 max-w-full shrink-0">
@@ -424,7 +424,7 @@ function SupervisionPage() {
             onChange={(e) => setPhoneQuery(e.target.value)}
             placeholder="Buscar por telefone do cliente"
             aria-label="Buscar por telefone do cliente"
-            className="h-[38px] w-[262px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            className="h-[38px] w-[262px] max-w-full rounded-[10px] border border-white/[0.12] bg-[#354047] px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25"
           />
         </form>
         </div>

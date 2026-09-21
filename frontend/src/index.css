@@ -264,8 +264,33 @@
    layer vence utilitário em layer, e é isso que alcança os 42 `outline-none`
    espalhados pelos campos. O `outline-offset` não faz parte do atalho
    `outline`, então cada componente mantém o recuo que já escolheu. */
-.chat-theme :is(a, button, summary, input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+/* CONTORNO — ação: botão, link, summary, linha clicável, e os controles
+   nativos que o sistema desenha (caixa, rádio, arquivo, faixa, cor), para os
+   quais não existe "anel". */
+.chat-theme :is(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"]),
+                input[type="checkbox"], input[type="radio"], input[type="file"],
+                input[type="range"], input[type="color"]):focus-visible {
   outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ANEL — campo de digitação, select e textarea. UM indicador só: até a Etapa
+   7.9 o campo recebia o contorno desta folha E o anel das classes do próprio
+   componente, dois traços de 2px da mesma cor, um colado no outro. A 7.6 não
+   criou isso — ao igualar as duas cores, tornou visível a duplicata.
+
+   A regra continua FORA de @layer pelo mesmo motivo de antes: é ela que
+   alcança os 42 `outline-none` dos campos, e são 18 campos sem nenhuma classe
+   de anel própria que dependem só dela para ter foco visível.
+
+   O `outline: 2px solid transparent` fica para o modo de alto contraste
+   forçado do Windows, onde o box-shadow é descartado e o contorno é repintado
+   pelo sistema — sem ele o campo perderia o foco nesse modo. */
+.chat-theme :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+                select, textarea):focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 0;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-focus-ring) 40%, transparent);
 }
 
 /* ---------- Fundo do chat ---------- */

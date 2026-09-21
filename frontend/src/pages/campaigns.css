@@ -43,7 +43,7 @@
 .campaign-toolbar input::placeholder{color:#8c9aa4}
 .campaign-toolbar label{font-size:11px;color:#aeb8bf}
 .campaign-toolbar select{height:32px;padding:0 8px;border:1px solid #ffffff20;border-radius:7px;background:#2b353b;color:inherit;font-size:12px}
-.campaign-toolbar input:focus-visible,.campaign-toolbar select:focus-visible,.campaign-filtro button:focus-visible,.campaign-mostrar-mais:focus-visible{outline:2px solid var(--color-focus-ring);outline-offset:2px}
+.campaign-filtro button:focus-visible,.campaign-mostrar-mais:focus-visible{outline:2px solid var(--color-focus-ring);outline-offset:2px}
 .campaign-sem-resultado{padding:22px 2px;font-size:13px;color:#aeb8bf;border-top:1px solid #ffffff12}
 
 .campaign-filtro{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 10px}

@@ -61,7 +61,7 @@ function IconLayers(props) {
 
 function IconInbox(props) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
       <path d="M4 12h4l2 3h4l2-3h4" />
       <path d="M6 5h12l2 7v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6l2-7z" />
     </svg>
@@ -98,7 +98,7 @@ function IconTag(props) {
 }
 
 
-function IconCalendar() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg>; }
+function IconCalendar() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg>; }
 function Metric({ icon, value, label }) { return <div className="report-metric"><span className="report-metric-icon">{icon}</span><div><strong>{value ?? '—'}</strong><span>{label}</span></div></div>; }
 function EmptyState() { return <p className="report-empty"><IconInbox />Nenhum atendimento fechado nesse período.</p>; }
 // Escala visual apenas: os valores e os cálculos do relatório permanecem intactos.

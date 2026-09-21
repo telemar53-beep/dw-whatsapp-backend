@@ -423,3 +423,14 @@ export function IconEdit(props) {
     </Svg>
   );
 }
+
+// Aparelho pareado: e o que distingue o Baileys, que conecta lendo um QR no
+// celular. Icone funcional, nao reproducao de logotipo — o Baileys nao tem
+// marca oficial que possamos usar.
+export function IconDevice(props) {
+  return (
+    <Svg {...props}>
+      <path d="M7 1.5h10A2.5 2.5 0 0119.5 4v16a2.5 2.5 0 01-2.5 2.5H7A2.5 2.5 0 014.5 20V4A2.5 2.5 0 017 1.5zm0 2A.5.5 0 006.5 4v16a.5.5 0 00.5.5h10a.5.5 0 00.5-.5V4a.5.5 0 00-.5-.5h-1.2l-.4.9a1 1 0 01-.9.6h-4a1 1 0 01-.9-.6l-.4-.9H7zm5 14a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5z" />
+    </Svg>
+  );
+}

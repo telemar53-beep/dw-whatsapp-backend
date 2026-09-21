@@ -108,11 +108,11 @@ function CampaignsPage() {
         action={
           <>
             <Button variant="secondary" className="campaign-create-button" onClick={() => refresh({ silencioso: true })}>
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6M16.5 3v3.5H13" /></svg>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6M16.5 3v3.5H13" /></svg>
               <span>Atualizar</span>
             </Button>
             <Button className="campaign-create-button" onClick={() => setCreating(true)}>
-              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" focusable="false"><path d="M10 4v12M4 10h12" /></svg>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true" focusable="false"><path d="M10 4v12M4 10h12" /></svg>
               <span>Nova campanha</span>
             </Button>
           </>

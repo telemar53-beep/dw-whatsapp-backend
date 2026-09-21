@@ -5,9 +5,12 @@
 .settings-channel-center .settings-channel-symbol[data-provider=baileys] {color:#8cd3ba;background:#55bd9810;border-color:#70c9a820}
 .settings-channel-center .settings-channel-symbol[data-provider='360dialog'] {color:#d2b0ed;background:#ab7aca12;border-color:#b58cdd22}
 .channel-brand-mark {display:block;width:20px;height:20px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
-.settings-workspace[data-settings-page=canais] .settings-group-header .settings-title-mark {color:#8ed4ab}
-.settings-workspace[data-settings-page=canais] .settings-group-header .settings-title-mark > .settings-functional-icon {display:none}
-.settings-workspace[data-settings-page=canais] .settings-group-header .settings-title-mark:after {content:'';width:19px;height:19px;background:currentColor;mask:url('../../../assets/brands/whatsapp.svg') center/contain no-repeat}
+/* A marca do WhatsApp no titulo de Canais: a regra existia desde antes,
+   presa a um ancestral (.settings-group-header) que nao existe mais no
+   JSX — entao o unico uso de whatsapp.svg no produto nunca desenhava. */
+.settings-workspace[data-settings-page=canais] .settings-title-mark {color:#8ed4ab}
+.settings-workspace[data-settings-page=canais] .settings-title-mark > .settings-functional-icon {display:none}
+.settings-workspace[data-settings-page=canais] .settings-title-mark:after {content:'';width:19px;height:19px;background:currentColor;mask:url('../../../assets/brands/whatsapp.svg') center/contain no-repeat}
 .settings-channel-center .settings-channel-record {transition:background-color .14s ease,box-shadow .14s ease;border-color:#ffffff0a}
 .settings-channel-center .settings-channel-record:hover {background:#ffffff03}
 .settings-channel-center .settings-channel-record:focus-within {background:#ffffff04}

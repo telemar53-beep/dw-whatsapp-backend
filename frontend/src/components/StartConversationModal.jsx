@@ -2,13 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listChannelsForAgent, startConversation, listTemplatesForChannel } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
-import WaDialog, {
-  waInputClass,
-  waLabelClass,
-  waPrimaryButtonClass,
-  waGhostButtonClass,
-  waErrorClass,
-} from './WaDialog';
+import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError } from './WaDialog';
 import { descreverErro } from '../utils/errorMessages';
 
 const COUNTRY_CODES = [
@@ -174,7 +168,7 @@ function StartConversationModal({ onClose, onCreated }) {
                 <span>Digite com DDD. Com ou sem o 9, o sistema confere no WhatsApp qual forma existe.</span>
                 {phoneDigits.length > 0 && <span className="shrink-0 tabular-nums">Número completo: {ddi}{phoneDigits}</span>}
               </div>
-              {phoneError && <p id="start-conversation-phone-error" className={`mt-2 ${waErrorClass}`}>{phoneError}</p>}
+              {phoneError && <WaError id="start-conversation-phone-error" className="mt-2">{phoneError}</WaError>}
             </div>
           </div>
           <section>
@@ -185,12 +179,16 @@ function StartConversationModal({ onClose, onCreated }) {
                 <p className="border-l-2 border-wa-warn-text pl-2 text-[12.5px] text-wa-warn-text">Este canal requer o uso de template para iniciar o atendimento!</p>
               </div>
               <div className="max-w-[420px]">
-                <label htmlFor="start-conversation-template" className={waLabelClass}>
-                  Template
-                </label>
+                {/* O <label> acompanha o <select>: quando nao ha template o
+                    campo nao existe, e um `for` apontando para id inexistente e
+                    referencia quebrada. */}
                 {templates.length === 0 ? (
                   <p className="text-[14px] text-wa-muted">Nenhum template aprovado para este canal.</p>
                 ) : (
+                  <>
+                  <label htmlFor="start-conversation-template" className={waLabelClass}>
+                    Template
+                  </label>
                   <select
                     id="start-conversation-template"
                     value={templateId}
@@ -203,6 +201,7 @@ function StartConversationModal({ onClose, onCreated }) {
                       </option>
                     ))}
                   </select>
+                  </>
                 )}
               </div>
               {/* Template não abre a janela de 24h — só a resposta do cliente
@@ -250,11 +249,17 @@ function StartConversationModal({ onClose, onCreated }) {
             </div>
           )}
           </section>
-          {error && <p className={waErrorClass}>{error}</p>}
+          {error && <WaError>{error}</WaError>}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-wa-border bg-wa-panel-header px-5 py-3 sm:px-6">
-          <p role="status" className="min-w-0 flex-1 text-[12.5px] text-wa-warn-text">{startDisabled ? disabledReason : ''}</p>
-          <div className="flex items-center justify-end gap-2">
+          {/* `min-w-0 flex-1` deixava o aviso encolher até ~35px e virar uma
+              coluna de nove linhas de uma palavra ao lado de "Cancelar", em vez
+              de o rodapé quebrar. Com uma largura mínima QUANDO há aviso, ele
+              toma a primeira linha e os botões descem. Sem aviso a largura
+              mínima sai do caminho, senão sobraria uma linha vazia acima dos
+              botões. Padrão reaproveitável para rodapé com aviso + ações. */}
+          <p role="status" className={`flex-1 text-[12.5px] text-wa-warn-text ${startDisabled ? 'min-w-[14rem]' : 'min-w-0'}`}>{startDisabled ? disabledReason : ''}</p>
+          <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
           <button type="button" onClick={onClose} className={waGhostButtonClass}>
             Cancelar
           </button>

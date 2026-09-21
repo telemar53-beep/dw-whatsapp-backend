@@ -175,13 +175,14 @@ function HeaderChip({ children, title, strong = false, className = '' }) {
   );
 }
 
-function HeaderIconButton({ label, onClick, children }) {
+function HeaderIconButton({ label, onClick, children, expanded }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
       title={label}
+      aria-expanded={expanded}
       className={`${ACTION} w-8 text-chat-icon hover:bg-white/[0.08] hover:text-chat-text`}
     >
       {children}
@@ -335,6 +336,34 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;
   const nameLabel = displayName || conversation.contactPhoneNumber || 'Conversa';
   const headerLabel = cityName ? `${nameLabel} - ${cityName}` : nameLabel;
+
+  // Mensagem nova não era anunciada de forma nenhuma: a timeline é um <div> sem
+  // papel, e nenhum estado da conversa tinha live region (medido: a consulta por
+  // `[aria-live],[role=status],[role=alert],[role=log]` devolvia lista vazia).
+  //
+  // A timeline INTEIRA não pode virar `role="log"`: a cada troca de conversa o
+  // leitor releria o histórico do começo. Então o anúncio é só da última
+  // mensagem RECEBIDA, e só quando ela chega com a conversa JÁ aberta — abrir uma
+  // conversa, ou trocar para outra, não é "mensagem nova".
+  const [avisoDeMensagem, setAvisoDeMensagem] = useState('');
+  const ultimaRecebidaRef = useRef(null);
+  const conversaDoAvisoRef = useRef(null);
+
+  useEffect(() => {
+    const recebidas = messages.filter((mensagem) => mensagem.direction === 'inbound');
+    const ultima = recebidas[recebidas.length - 1] || null;
+    const mesmaConversa = conversaDoAvisoRef.current === conversation.id;
+    conversaDoAvisoRef.current = conversation.id;
+    const anterior = ultimaRecebidaRef.current;
+    ultimaRecebidaRef.current = ultima ? ultima.id : null;
+    if (!ultima || !mesmaConversa || anterior === null || anterior === ultima.id) {
+      setAvisoDeMensagem('');
+      return;
+    }
+    const resumo = ultima.content || (ultima.mediaType ? 'anexo' : 'mensagem');
+    setAvisoDeMensagem(`Nova mensagem de ${headerLabel}: ${resumo}`);
+  }, [messages, conversation.id, headerLabel]);
+
   // Só vale repetir o telefone embaixo quando o título é o nome do contato.
   const phoneLine = displayName && conversation.contactPhoneNumber ? conversation.contactPhoneNumber : null;
   const secondLine = channelLine(conversation) || phoneLine;
@@ -453,7 +482,15 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     <div className={`${workspace ? 'chat-workspace-conversation' : ''} ${painelAlternado ? 'is-painel-alternado' : ''} flex h-full`}>
       <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
       <div className="chat-workspace-header @container z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/[0.07] px-2 py-2.5 md:px-5">
-        <div className="chat-workspace-header-identity flex min-w-[240px] flex-1 items-center gap-1.5">
+        {/* A base é 240px, não 0. Com `flex-1` puro (base 0%) o item nunca
+            chega a transbordar a linha, então o `flex-wrap` do cabeçalho jamais
+            disparava: a identidade era só clampada pelo `min-width` e o nome do
+            cliente ficava com 63px de caixa para 70px de texto a 360px. Com
+            base 240px, quando ela e as ações não cabem juntas, a identidade
+            leva a primeira linha inteira e as ações descem — que é o que o
+            `flex-wrap` estava ali para fazer. No desktop nada muda: 240 mais as
+            ações cabem de sobra e o `flex-grow` continua distribuindo o resto. */}
+        <div className="chat-workspace-header-identity flex min-w-[240px] flex-[1_1_240px] items-center gap-1.5">
         <button
           onClick={onBack}
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] text-chat-icon hover:bg-white/10 ${workspace ? 'lg:hidden' : 'md:hidden'}`}
@@ -508,7 +545,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
             <IconHistory size={20} />
           </HeaderIconButton>
-          <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
+          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} onClick={() => setSgpPanelOpen((prev) => !prev)}>
             <IconSearch size={20} />
           </HeaderIconButton>
           {/* Este grupo é do modal (`!workspace`). Havia aqui um
@@ -558,12 +595,12 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
             <IconHistory size={20} />
           </HeaderIconButton>
-          <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
+          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} onClick={() => setSgpPanelOpen((prev) => !prev)}>
             <IconSearch size={20} />
             <span className="chat-context-label">SGP</span>
           </HeaderIconButton>
           {workspace && (
-            <HeaderIconButton label="Dados do cliente" onClick={() => { setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false); }}>
+            <HeaderIconButton label="Dados do cliente" expanded={customerPanelOpen} onClick={() => { setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false); }}>
               <IconInfo size={20} />
               <span className="chat-context-label">Cliente</span>
             </HeaderIconButton>
@@ -572,6 +609,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
         </div>
       </div>}
 
+      <p role="status" aria-live="polite" className="sr-only">{avisoDeMensagem}</p>
       <div className="chat-workspace-timeline chat-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 md:px-8">
         <div className="chat-workspace-system-note mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-full bg-white/[0.13] px-4 py-2 text-center text-[13px] leading-[18px] text-chat-muted">
           <span className="shrink-0 text-chat-faint">

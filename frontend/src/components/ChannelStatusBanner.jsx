@@ -22,8 +22,14 @@ function ChannelStatusBanner() {
   return (
     <div className="space-y-1 border-b border-white/10 bg-chat-canvas px-4 py-2 font-wa text-[13.5px] leading-[20px] text-chat-muted">
       {problemChannels.map((channel) => (
-        <p key={channel.id} className="flex items-center gap-2">
-          <span className="shrink-0 text-chat-orange">
+        // Texto corrido, NÃO flex: com `display:flex` no parágrafo cada trecho
+        // de texto entre os elementos virava um item flex anônimo, e como o
+        // padrão é `nowrap` a frase se quebrava em colunas justapostas em vez
+        // de em linhas. A 360 e a 430px a faixa ficava 3x mais alta (20px ->
+        // 60px) e o link caía numa coluna de 97px, em três linhas. O ícone
+        // volta a ser um ícone no meio da frase.
+        <p key={channel.id}>
+          <span className="mr-2 inline-flex align-middle text-chat-orange">
             <IconWarning size={16} />
           </span>
           Canal <strong className="font-semibold text-chat-text">{channel.name}</strong> está{' '}

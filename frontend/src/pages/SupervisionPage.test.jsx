@@ -540,3 +540,136 @@ describe('contadores confiáveis', () => {
     expect(screen.getByText(/online · sem atendimentos/i)).toBeInTheDocument();
   });
 });
+
+// Etapa 6.1 — o painel de Encerrados nao pode apresentar falha como fila vazia,
+// e a contagem filtrada nao pode se passar por total quando so ha uma pagina
+// carregada. Nao existe endpoint que devolva o total filtrado.
+describe('encerrados: falha visivel e contagem honesta', () => {
+  function doisCanais() {
+    useChannels.mockReturnValue({
+      channels: [
+        { id: 'chan-1', name: 'WhatsApp Vendas' },
+        { id: 'chan-2', name: 'WhatsApp Suporte' },
+      ],
+      loading: false,
+      refresh: vi.fn(),
+    });
+  }
+
+  async function abrirEncerrados() {
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
+  }
+
+  async function filtrarPorVendas() {
+    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
+    await userEvent.click(screen.getByLabelText('WhatsApp Vendas'));
+  }
+
+  test('falha na carga inicial vira alerta, e nao "nenhum atendimento encerrado hoje"', async () => {
+    getDashboardClosedToday.mockRejectedValue(new Error('offline'));
+    await abrirEncerrados();
+
+    const alerta = await screen.findByRole('alert');
+    expect(alerta).toHaveTextContent(/não foi possível carregar os atendimentos encerrados hoje/i);
+    expect(within(alerta).getByRole('button', { name: /tentar de novo/i })).toBeInTheDocument();
+    expect(screen.queryByText(/nenhum atendimento encerrado hoje/i)).not.toBeInTheDocument();
+  });
+
+  test('"tentar de novo" depois da falha inicial busca a primeira pagina outra vez', async () => {
+    getDashboardClosedToday
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ items: [{ id: 'c9', contactDisplayName: 'Selma', channelId: 'chan-1' }], hasMore: false });
+    await abrirEncerrados();
+
+    await userEvent.click(await screen.findByRole('button', { name: /tentar de novo/i }));
+
+    expect(await screen.findByText('Selma')).toBeInTheDocument();
+    expect(getDashboardClosedToday).toHaveBeenLastCalledWith({ offset: 0, limit: 20 }, 'tok-123');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  test('falha no "carregar mais" preserva a lista ja carregada', async () => {
+    getDashboardClosedToday
+      .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', channelId: 'chan-1' }], hasMore: true })
+      .mockRejectedValueOnce(new Error('offline'));
+    await abrirEncerrados();
+    expect(await screen.findByText('Pedro')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /carregar mais/i }));
+
+    const alerta = await screen.findByRole('alert');
+    expect(alerta).toHaveTextContent(/não foi possível carregar mais atendimentos encerrados/i);
+    // O que ja estava na tela continua la: uma pagina adicional que falha nao
+    // invalida os encerrados que o supervisor ja esta lendo.
+    expect(screen.getByText('Pedro')).toBeInTheDocument();
+  });
+
+  test('"tentar de novo" depois de falhar o "carregar mais" repete a mesma pagina, sem recomecar', async () => {
+    getDashboardClosedToday
+      .mockResolvedValueOnce({ items: [{ id: 'c10', contactDisplayName: 'Pedro', channelId: 'chan-1' }], hasMore: true })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ items: [{ id: 'c11', contactDisplayName: 'Rita', channelId: 'chan-1' }], hasMore: false });
+    await abrirEncerrados();
+    await screen.findByText('Pedro');
+    await userEvent.click(screen.getByRole('button', { name: /carregar mais/i }));
+    await screen.findByRole('alert');
+
+    await userEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
+
+    expect(await screen.findByText('Rita')).toBeInTheDocument();
+    expect(screen.getByText('Pedro')).toBeInTheDocument();
+    expect(getDashboardClosedToday).toHaveBeenLastCalledWith({ offset: 1, limit: 20 }, 'tok-123');
+  });
+
+  test('com filtro e mais paginas, o contador diz que o numero e so do que foi carregado', async () => {
+    doisCanais();
+    getDashboardClosedToday.mockResolvedValue({
+      items: [
+        { id: 'c1', contactDisplayName: 'Ana', channelId: 'chan-1' },
+        { id: 'c2', contactDisplayName: 'Beto', channelId: 'chan-2' },
+      ],
+      hasMore: true,
+    });
+    await abrirEncerrados();
+    await filtrarPorVendas();
+
+    const aba = screen.getByRole('tab', { name: /encerrados hoje/i });
+    await waitFor(() => expect(aba).toHaveTextContent(/1 carregados/i));
+    // O numero cru sozinho afirmaria um total que ninguem mediu.
+    expect(within(aba).queryByText('1', { selector: 'span' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/1 correspondência entre 2 encerrados carregados\. Há mais resultados disponíveis/i)
+    ).toBeInTheDocument();
+  });
+
+  test('com filtro e sem mais paginas, o numero filtrado e o total e aparece normalmente', async () => {
+    doisCanais();
+    getDashboardClosedToday.mockResolvedValue({
+      items: [
+        { id: 'c1', contactDisplayName: 'Ana', channelId: 'chan-1' },
+        { id: 'c2', contactDisplayName: 'Beto', channelId: 'chan-2' },
+      ],
+      hasMore: false,
+    });
+    await abrirEncerrados();
+    await filtrarPorVendas();
+
+    const aba = screen.getByRole('tab', { name: /encerrados hoje/i });
+    await waitFor(() => expect(within(aba).getByText('1')).toBeInTheDocument());
+    expect(aba).not.toHaveTextContent(/carregados/i);
+    expect(screen.getByText(/1 de 2 encerrados de hoje correspondem aos filtros/i)).toBeInTheDocument();
+  });
+
+  test('vazio por filtro se distingue de nao haver encerrado nenhum', async () => {
+    doisCanais();
+    getDashboardClosedToday.mockResolvedValue({
+      items: [{ id: 'c2', contactDisplayName: 'Beto', channelId: 'chan-2' }],
+      hasMore: false,
+    });
+    await abrirEncerrados();
+    await filtrarPorVendas();
+
+    expect(await screen.findByText(/nenhum atendimento encerrado hoje com os filtros atuais/i)).toBeInTheDocument();
+  });
+});

@@ -187,7 +187,11 @@ function SupervisionPage() {
         setClosedOffset(data.items.length);
         setClosedHasMore(data.hasMore);
       })
-      .catch(() => setClosedError('Não foi possível carregar os atendimentos encerrados hoje.'));
+      // O erro guarda o ESCOPO porque "Tentar de novo" precisa repetir a
+      // requisição certa: recarregar a primeira página joga fora o que já
+      // estava na tela, e isso não pode acontecer por causa de uma falha numa
+      // página adicional.
+      .catch(() => setClosedError({ mensagem: 'Não foi possível carregar os atendimentos encerrados hoje.', escopo: 'inicial' }));
   }, [token, closedReloadToken]);
 
   function loadMoreClosed() {
@@ -202,8 +206,18 @@ function SupervisionPage() {
       })
       .catch(() => {
         setLoadingClosed(false);
-        setClosedError('Não foi possível carregar mais atendimentos encerrados.');
+        // A lista já carregada continua intacta de propósito: falhar a próxima
+        // página não invalida os encerrados que já estão na tela.
+        setClosedError({ mensagem: 'Não foi possível carregar mais atendimentos encerrados.', escopo: 'mais' });
       });
+  }
+
+  function tentarEncerradosDeNovo() {
+    if (closedError && closedError.escopo === 'mais') {
+      loadMoreClosed();
+      return;
+    }
+    setClosedReloadToken((n) => n + 1);
   }
 
   const filters = useMemo(
@@ -233,6 +247,22 @@ function SupervisionPage() {
 
   const totalActiveCount = filteredInProgress.length + filteredWaiting.length + filteredInAutomation.length;
   const closedCount = hasActiveFilter ? filteredClosed.length : closedTodayCount;
+  // Com filtro, o número só pode sair da lista JÁ CARREGADA — o endpoint de
+  // encerrados não aceita filtro nem devolve total filtrado. Enquanto houver
+  // páginas por vir, esse número não é o total: 5 correspondências entre os 20
+  // primeiros não dizem nada sobre a existência de uma sexta. Então ele se
+  // apresenta como parcial em vez de se passar por total.
+  const contagemParcialDeEncerrados = hasActiveFilter && closedHasMore;
+
+  function contagemDaAbaEncerrados() {
+    if (!hasActiveFilter) return numero(closedCount);
+    if (closedError) return '—';
+    if (contagemParcialDeEncerrados) {
+      return <span className="supervision-contagem-parcial"><b>{closedCount}</b> carregados</span>;
+    }
+    // Sem mais páginas, tudo que existe já está na memória: o filtrado é total.
+    return closedCount;
+  }
 
   function openConversation(conversationId) {
     setSelectedConversationId(conversationId);
@@ -300,7 +330,7 @@ function SupervisionPage() {
             { key: 'all', label: 'Todos atendimentos', count: numero(totalActiveCount) },
             // Com filtro o numero vem da lista de encerrados (outra requisicao);
             // sem filtro vem do painel. Cada um responde pela propria falha.
-            { key: 'closed', label: 'Encerrados hoje', count: hasActiveFilter ? (closedError ? '—' : closedCount) : numero(closedCount) },
+            { key: 'closed', label: 'Encerrados hoje', count: contagemDaAbaEncerrados() },
           ]}
         />
         <div className="flex flex-wrap items-center gap-2 xl:ml-auto">
@@ -457,8 +487,28 @@ function SupervisionPage() {
         </div>
       ) : (
         <div id="tabpanel-closed" role="tabpanel" aria-labelledby="tab-closed" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+          {/* Falha e fila vazia diziam a mesma coisa: "Nenhum atendimento
+              encerrado hoje.". O erro agora fala por si, e o que já estava
+              carregado continua na tela embaixo dele. */}
+          {closedError && (
+            <div role="alert" className="supervision-closed-error">
+              <span>{closedError.mensagem}</span>
+              <button type="button" onClick={tentarEncerradosDeNovo}>Tentar de novo</button>
+            </div>
+          )}
+          {hasActiveFilter && closedItems.length > 0 && (
+            <p className="supervision-parcial-aviso">
+              {contagemParcialDeEncerrados
+                ? `${filteredClosed.length} ${filteredClosed.length === 1 ? 'correspondência' : 'correspondências'} entre ${closedItems.length} encerrados carregados. Há mais resultados disponíveis — use “Carregar mais”.`
+                : `${filteredClosed.length} de ${closedItems.length} encerrados de hoje correspondem aos filtros.`}
+            </p>
+          )}
           {displayClosed.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">Nenhum atendimento encerrado hoje.</p>
+            closedError ? null : (
+            <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">
+              {hasActiveFilter ? 'Nenhum atendimento encerrado hoje com os filtros atuais.' : 'Nenhum atendimento encerrado hoje.'}
+            </p>
+            )
           ) : (
             <ul className="supervision-history">
               {displayClosed.map((conversation) => (

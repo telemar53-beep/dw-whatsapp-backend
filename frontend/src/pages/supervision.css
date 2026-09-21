@@ -47,6 +47,10 @@
 .supervision-record .chat-conversation-snippet {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .supervision-record .chat-conversation-context {font-size:10px;color:#c0b1d5;line-height:14px;margin-top:3px}
 .supervision-record .chat-conversation-context > span+span:before {content:'·';padding:0 4px;color:#8c9ca8}
+/* Mesmo motivo do dashboard: o botao saiu de dentro da linha e o <li> assume
+   o contexto de posicionamento. O <li> ocupa a mesma caixa da linha, entao
+   right:0/top:0 continuam caindo no mesmo lugar. */
+.supervision-record .chat-conversation-entry {position:relative}
 .supervision-record .chat-conversation-close {position:absolute;right:0;top:0;color:#b4b6b8;padding:3px}
 .supervision-workspace button:focus-visible,.supervision-workspace [role=button]:focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 @media(max-width:1200px){.supervision-central{grid-template-columns:210px minmax(0,1fr)}.supervision-column-labels,.supervision-record{grid-template-columns:minmax(150px,1.5fr) minmax(95px,1fr) minmax(85px,.8fr) 105px 42px;gap:8px;padding:8px 10px}}
@@ -62,7 +66,12 @@
 .supervision-toolbar [role=tab][aria-selected=true] {background:color-mix(in oklab, var(--color-ui-marker-supervision) 15%, transparent);border-color:#d990558c;color:#fff0e3;box-shadow:inset 0 -2px var(--color-ui-marker-supervision)}
 .supervision-toolbar [role=tab][aria-selected=true] > span {background:color-mix(in oklab, var(--color-ui-marker-supervision) 20%, transparent);color:#ffcfaa}
 .supervision-toolbar [role=tab]:hover {border-color:#d9905573;background:#ffffff0c}
-.supervision-toolbar [role=tab][aria-selected=true]:hover {background:color-mix(in oklab, var(--color-ui-marker-supervision) 19%, transparent)}
+/* A aba selecionada ENFRAQUECIA no hover: `[role=tab]:hover` e
+   `[role=tab][aria-selected=true]` empatam em (0,3,0) e o hover vem depois, entao
+   a borda caia de #d990558c (0,55) para #d9905573 (0,45) — o fundo reforcava e a
+   borda recuava. Esta regra ja esta em (0,4,0) e ja vencia; faltava ela declarar
+   a borda tambem. Fundo preservado em 19%. */
+.supervision-toolbar [role=tab][aria-selected=true]:hover {background:color-mix(in oklab, var(--color-ui-marker-supervision) 19%, transparent);border-color:#d990558c}
 @media(min-width:1100px){.supervision-workspace .supervision-toolbar{flex-direction:row;align-items:center;justify-content:space-between}}
 
 /* Keep count contrast above the shared orange-badge text rule. */

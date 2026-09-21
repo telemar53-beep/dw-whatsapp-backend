@@ -135,12 +135,21 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
               {conversation.assignedAgentName && <span>{conversation.assignedAgentName}</span>}
             </div>
           )}
-          {onQuickClose && (
-            <button type="button" onClick={handleQuickClose} aria-label="Finalizar sem motivo" title="Finalizar sem motivo" className="chat-conversation-close">
-              <IconCheckCircle size={17} />
-            </button>
-          )}
         </div>
+        {/* Irmão da linha, não filho dela. Enquanto estava DENTRO do
+            `role="button"`, duas coisas quebravam: o nome acessível da linha
+            virava "Santos 09:09 … Finalizar sem motivo", porque um elemento que
+            se apresenta como botão não admite ação interativa dentro; e um
+            role="button" com botão aninhado é semântica inválida. A ação da
+            LINHA é abrir a conversa; a do botão é finalizar sem motivo — são duas
+            ações, e agora são dois elementos lado a lado. A aparência não muda:
+            ele já era `position:absolute`, e o contexto de posicionamento passou
+            da linha para o <li>, que ocupa a mesma caixa. */}
+        {onQuickClose && (
+          <button type="button" onClick={handleQuickClose} aria-label="Finalizar sem motivo" title="Finalizar sem motivo" className="chat-conversation-close">
+            <IconCheckCircle size={17} />
+          </button>
+        )}
       {confirmDialog}
       </li>
     );

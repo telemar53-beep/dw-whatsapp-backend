@@ -29,6 +29,39 @@ function focaveis(raiz) {
   );
 }
 
+// Prender o Tab não é exclusividade de diálogo: a gaveta do menu no celular
+// também precisa, e é uma <nav>, não um `role="dialog"`. Estas duas saem daqui
+// para que a definição de "focável" continue sendo UMA só — duplicá-la é como
+// as duas listas divergem com o tempo.
+// `focaveis` não olha `display`, e isso importa fora de um diálogo: na gaveta do
+// menu o primeiro focável é "Recolher menu", que o CSS esconde justamente quando
+// a gaveta está aberta. Chamar `.focus()` num elemento sem caixa não faz nada —
+// o foco ficava largado no <body> e a gaveta abria sem receber o foco. Filtrar
+// aqui, e não em `focaveis`, mantém o comportamento do Dialog intocado.
+function focaveisVisiveis(raiz) {
+  return focaveis(raiz).filter((el) => el.getClientRects().length > 0);
+}
+
+export function primeiroFocavel(raiz) {
+  return focaveisVisiveis(raiz)[0] || null;
+}
+
+export function prenderTabEm(raiz, evento) {
+  if (evento.key !== 'Tab' || !raiz) return;
+  const lista = focaveisVisiveis(raiz);
+  if (lista.length === 0) return;
+  const primeiro = lista[0];
+  const ultimo = lista[lista.length - 1];
+  const ativo = document.activeElement;
+  if (evento.shiftKey && (ativo === primeiro || ativo === raiz)) {
+    evento.preventDefault();
+    ultimo.focus();
+  } else if (!evento.shiftKey && ativo === ultimo) {
+    evento.preventDefault();
+    primeiro.focus();
+  }
+}
+
 // Foco inicial: primeiro o que a tela marcou, depois o primeiro CAMPO — não o
 // primeiro focável, que seria o "×" ou um item de lista qualquer — e, na falta
 // de campo, o próprio diálogo, para o leitor de tela anunciar o título antes de

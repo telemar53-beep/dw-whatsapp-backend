@@ -13,6 +13,18 @@ const MEDIA_TYPES_COM_ARQUIVO = ['image', 'video', 'audio', 'document', 'sticker
 const BAR_COUNT = 38;
 const SPEEDS = [1, 1.5, 2];
 
+// Enter e Espaço num <button> disparam um clique SINTÉTICO: `detail` 0 e
+// `clientX` 0. Como a posição na barra vinha de `clientX - rect.left`, a conta
+// dava negativo, o clamp prendia em 0 e o áudio REBOBINAVA para o começo — pelo
+// teclado, a única coisa que a barra de progresso fazia era voltar ao início.
+// Sem coordenada não existe posição para onde ir, então o clique é ignorado.
+function posicaoDoCliqueNaBarra(event) {
+  if (event.detail === 0) return null;
+  const rect = event.currentTarget.getBoundingClientRect();
+  if (!rect.width) return null;
+  return Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
+}
+
 function waveformBars(seed = '') {
   let hash = 2166136261;
   for (let i = 0; i < seed.length; i += 1) {
@@ -138,8 +150,8 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             type="button"
             aria-label="Avançar no áudio"
             onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              seekTo(Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1));
+              const posicao = posicaoDoCliqueNaBarra(event);
+              if (posicao !== null) seekTo(posicao);
             }}
             className="relative flex h-8 min-w-0 flex-1 items-center gap-[2px] overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring"
           >
@@ -213,8 +225,8 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
           type="button"
           aria-label="Avançar no áudio"
           onClick={(event) => {
-            const rect = event.currentTarget.getBoundingClientRect();
-            seekTo(Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1));
+            const posicao = posicaoDoCliqueNaBarra(event);
+            if (posicao !== null) seekTo(posicao);
           }}
           className="relative mt-1 flex h-8 flex-1 items-center gap-[2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring"
         >

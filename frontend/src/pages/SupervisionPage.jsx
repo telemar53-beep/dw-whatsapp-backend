@@ -48,6 +48,7 @@ function matchesFilters(conversation, { channelIds, agentIds, sectorIds }) {
 
 function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange }) {
   const containerRef = useRef(null);
+  const gatilho = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -56,13 +57,27 @@ function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange
         onOpenChange(false);
       }
     }
+    // Só havia listener de `mousedown`: pelo teclado o painel abria e não havia
+    // NENHUMA forma de fechá-lo — ESC não fazia nada e o Tab saía deixando os
+    // filtros abertos por cima da lista.
+    function onKey(event) {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      onOpenChange(false);
+      gatilho.current?.focus();
+    }
     document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open, onOpenChange]);
 
   return (
     <div className="relative" ref={containerRef}>
       <button
+        ref={gatilho}
         type="button"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}

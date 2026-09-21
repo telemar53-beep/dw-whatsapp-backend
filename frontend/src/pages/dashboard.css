@@ -64,7 +64,10 @@
 .chat-workspace .chat-workspace-bubble.is-inbound:not(.is-sticker) { background: var(--chat-bubble-in); border-left: 3px solid var(--chat-edge-in); }
 .chat-workspace .chat-workspace-bubble.is-outbound:not(.is-sticker) { background: var(--chat-bubble-out); border-color: var(--chat-line-soft); border-right: 3px solid var(--chat-edge-out); }
 .chat-workspace .chat-workspace-bubble.is-ai:not(.is-sticker) { background: var(--chat-bubble-ai); border-color: var(--chat-ai-line); border-right: 3px solid var(--chat-edge-ai); }
-.chat-workspace .chat-message-author { display: block; margin-bottom: 4px; font-size: 11px; color: var(--color-ui-ink-faint); }
+/* `ink-muted`, nao `ink-faint`: o faint dava 3,92:1 sobre a bolha de saida e
+   4,10:1 sobre a de entrada, abaixo do 4,5:1 de AA. E a mesma troca que a linha
+   do horario, tres abaixo, ja fez. */
+.chat-workspace .chat-message-author { display: block; margin-bottom: 4px; font-size: 11px; color: var(--color-ui-ink-muted); }
 .chat-workspace .chat-message-author.is-ai { color: var(--color-ui-ink-ai); }
 .chat-workspace .chat-workspace-message-text { font-size: 13px; line-height: 1.45; }
 .chat-workspace .chat-workspace-bubble .text-chat-faint { color: var(--color-ui-ink-muted); }

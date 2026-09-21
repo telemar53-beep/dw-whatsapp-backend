@@ -8,6 +8,7 @@ import { NAV_ITEMS, hasLevel } from '../navigation/navItems';
 import ClosedConversationsModal from './ClosedConversationsModal';
 import AgentAvatar from './AgentAvatar';
 import { IconBellOn, IconBellOff, IconUser, IconLogout, IconCheckCircle, IconChevronDown, IconWarning } from './icons/WaIcons';
+import { primeiroFocavel, prenderTabEm } from './ui/Dialog';
 import { useSocketConnection } from '../contexts/SocketContext';
 import './side-nav.css';
 import { marcaDaInstalacao } from '../branding';
@@ -75,16 +76,30 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
   const accountTrigger = useRef(null);
+  const accountPanel = useRef(null);
+  const navRef = useRef(null);
   const compact = collapsed && !mobileOpen;
   const items = NAV_ITEMS.filter((item) => hasLevel(agent, item.level));
   useEffect(() => {
     if (!mobileOpen) return undefined;
+    // A gaveta é uma <nav> com uma classe, não passa pela pilha de diálogos:
+    // sem isto o foco ficava no botão "Abrir menu" e o Tab seguinte ia para o
+    // conteúdo ATRÁS da gaveta aberta. Quem devolve o foco ao botão no
+    // fechamento é a casca, que é dona dele.
+    const alvo = primeiroFocavel(navRef.current);
+    if (alvo) alvo.focus();
     function onKey(e) { if (e.key === 'Escape') onMobileClose(); }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [mobileOpen, onMobileClose]);
   useEffect(() => {
     if (!accountOpen) return undefined;
+    // O painel é renderizado ANTES do gatilho no DOM, e visualmente ele fica
+    // ACIMA — a ordem está certa. O que faltava era entregar o foco: ele ficava
+    // no gatilho e o Tab seguinte saía da barra lateral inteira, então "Meu
+    // perfil" e "Sair" só eram alcançáveis com Shift+Tab.
+    const primeiroItem = primeiroFocavel(accountPanel.current);
+    if (primeiroItem) primeiroItem.focus();
     function outside(e) { if (!accountRef.current?.contains(e.target)) setAccountOpen(false); }
     function escape(e) { if (e.key === 'Escape') { setAccountOpen(false); accountTrigger.current?.focus(); } }
     document.addEventListener('pointerdown', outside);
@@ -98,7 +113,13 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
         escurecida e nenhum toque a alcançava — todo clique caía no véu e
         fechava o menu. */}
     {mobileOpen && <div aria-hidden="true" onClick={onMobileClose} className="fixed inset-0 z-[calc(var(--z-nav)-1)] bg-black/50 md:hidden" />}
-    <nav id="sidenav" aria-label="Navegação principal" className={`worknav ${compact ? 'is-compact' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
+    <nav
+      id="sidenav"
+      ref={navRef}
+      aria-label="Navegação principal"
+      onKeyDown={mobileOpen ? (evento) => prenderTabEm(navRef.current, evento) : undefined}
+      className={`worknav ${compact ? 'is-compact' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}
+    >
       <MarcaDoMenu compact={compact} companyName={companyName} companyNameStatus={companyNameStatus} />
       <button type="button" className="worknav-collapse" onClick={toggle} aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'} title={collapsed ? 'Expandir menu' : 'Recolher menu'}>
         <IconChevronDown size={16} /><span className="worknav-label">Recolher menu</span>
@@ -107,11 +128,15 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
         const links = items.filter(item => group.keys.includes(item.key));
         const hasClosed = group.label === 'Acompanhamento' && agent?.role === 'agent';
         if (!links.length && !hasClosed) return null;
-        return <section className="worknav-group" key={group.label} aria-label={group.label}>
-          <h2 className="worknav-label">{group.label}</h2>
+        return <div className="worknav-group" role="group" key={group.label} aria-label={group.label}>
+          {/* aria-hidden: o rótulo continua visível e estilizado, mas para de ser um
+              CABEÇALHO — eram três <h2> ("TRABALHO", "ACOMPANHAMENTO",
+              "ADMINISTRAÇÃO") antes do <h1> da rota em toda página. Quem nomeia
+              o grupo agora é o aria-label. */}
+          <h2 aria-hidden="true" className="worknav-label">{group.label}</h2>
           {links.map(item => <NavItem key={item.key} item={item} onNavigate={() => { setAccountOpen(false); onMobileClose(); }} />)}
           {hasClosed && <button type="button" className="worknav-item" title="Atendimentos encerrados" aria-label="Atendimentos encerrados" onClick={() => setClosedOpen(true)}><IconCheckCircle size={19} /><span className="worknav-label">Encerrados</span></button>}
-        </section>;
+        </div>;
       })}</div>
       <div className="worknav-personal">
         {/* Estado persistente da conexão: fica aqui, no rodapé do menu, para
@@ -128,10 +153,15 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
           {muted ? <IconBellOff size={19} /> : <IconBellOn size={19} />}<span className="worknav-label">Som da fila <small>{muted ? 'Desativado' : 'Ativado'}</small></span>
         </button>
         <div className="worknav-account" ref={accountRef}>
-          {accountOpen && <div className="worknav-account-panel" id="worknav-account-actions" aria-label="Opções da conta">
-            <button type="button" onClick={() => { setAccountOpen(false); onProfileClick(); }}><IconUser size={18} />Meu perfil</button>
-            <button type="button" onClick={() => { setAccountOpen(false); logout(); }}><IconLogout size={18} />Sair</button>
-          </div>}
+          {/* <ul> em vez de <div>: um `div` sem papel não pode ser nomeado, e o
+              `aria-label` que estava aqui era descartado pelo leitor de tela
+              (medido: `role: generic, name: "Opções da conta"`). Lista nativa
+              resolve sem prometer o contrato de teclado de um `role="menu"`,
+              que exigiria setas e não está nesta rodada. */}
+          {accountOpen && <ul ref={accountPanel} className="worknav-account-panel" id="worknav-account-actions" aria-label="Opções da conta">
+            <li><button type="button" onClick={() => { setAccountOpen(false); onProfileClick(); }}><IconUser size={18} />Meu perfil</button></li>
+            <li><button type="button" onClick={() => { setAccountOpen(false); logout(); }}><IconLogout size={18} />Sair</button></li>
+          </ul>}
           <button type="button" ref={accountTrigger} className="worknav-account-trigger" title={`Conta: ${agent?.name || 'Atendente'}`} aria-label={`Conta: ${agent?.name || 'Atendente'}`} aria-expanded={accountOpen} aria-controls="worknav-account-actions" onClick={() => setAccountOpen(open => !open)}>
             <AgentAvatar agentId={agent?.id} avatarPath={agent?.avatarPath} name={agent?.name} size={30} />
             <span className="worknav-label"><strong>{agent?.name || 'Atendente'}</strong><small>Minha conta</small></span><span className="worknav-label"><IconChevronDown size={14} /></span>

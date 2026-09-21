@@ -22,7 +22,10 @@ function MessageStatusTicks({ status }) {
     return (
       <span
         title="Falha ao enviar"
-        className="inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white"
+        // red-600 em vez de red-500: o branco sobre o 500 dava 3,81:1 e não
+        // passa AA nem como texto grande. Sobre o 600 dá 4,83:1, e o selo
+        // continua vermelho e do mesmo tamanho.
+        className="inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold leading-none text-white"
       >
         !
       </span>

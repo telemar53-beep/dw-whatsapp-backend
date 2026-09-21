@@ -44,7 +44,12 @@ function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber, size =
       style={{ ...boxStyle, fontSize: Math.round(size * 0.34) }}
       className={`flex shrink-0 select-none items-center justify-center rounded-full font-semibold tracking-[0.01em] ${
         dark
-          ? 'bg-[linear-gradient(135deg,var(--color-chat-orange),var(--color-chat-copper))] text-white'
+          // Tinta escura sobre o gradiente laranja: branco dava 2,30:1, longe
+          // do 4,5:1 de AA, e este avatar aparece na lista, no cabeçalho da
+          // conversa, nas linhas da Supervisão e no popup da equipe. O token
+          // `chat-orange-ink` existe para isto e dá 7,22:1. O disco e o
+          // gradiente não mudam — só a tinta das iniciais.
+          ? 'bg-[linear-gradient(135deg,var(--color-chat-orange),var(--color-chat-copper))] text-chat-orange-ink'
           : 'bg-wa-avatar font-medium text-wa-avatar-text'
       }`}
     >

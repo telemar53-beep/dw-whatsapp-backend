@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { Button, DangerZone, Field, inputClass } from '../../../components/ui';
 import QrCodeView from '../../../components/QrCodeView';
-import { IconInfo, IconChevronDown } from '../../../components/icons/WaIcons';
+import { IconChevronDown } from '../../../components/icons/WaIcons';
 import { isOfficialChannelType } from '../../../utils/channelTypes';
 import { formatPhone } from '../../../utils/phone';
 import { ConnectionStatus, providerLabel } from './ChannelsTable';
@@ -93,11 +93,11 @@ function MetaCloudCredentialsForm({ channel, canManage, onSave }) {
       </Field>
       <ErrorNote>{error}</ErrorNote>
       <div className="flex gap-2">
-        <Button type="submit" disabled={submitting}>
-          {updating ? 'Salvar' : 'Migrar'}
-        </Button>
         <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={submitting}>
           Cancelar
+        </Button>
+        <Button type="submit" disabled={submitting}>
+          {updating ? 'Salvar' : 'Migrar'}
         </Button>
       </div>
     </form>
@@ -138,7 +138,7 @@ function advancedActions(type) {
 
 function DataRow({ label, children, action }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5">
+    <div className="channel-data-row flex items-center justify-between gap-3 py-2.5">
       <dt className="w-[46%] shrink-0 text-[13px] text-wa-muted">{label}</dt>
       <dd className="flex min-w-0 flex-1 items-center justify-between gap-3 text-[13.5px] text-wa-text">
         <span className="min-w-0 truncate">{children}</span>
@@ -181,144 +181,154 @@ function ChannelConnectionTab() {
     setEditingName(false);
   }
 
+  // Daqui para baixo, a ordem do DOM é a ordem que a pessoa vê: estado,
+  // identidade, relacionadas, avançado. Sem `order-*` reorganizando por CSS e
+  // sem regra que dependa de posição. Cada erro fica na seção que o causa.
   return (
-    <div className="space-y-3">
+    <div className="channel-connection-page">
       {!canManage && (
         <p className="rounded-[12px] bg-wa-warn-bg px-3 py-2.5 text-[13.5px] text-wa-warn-text">{PERMISSION_REASON}</p>
       )}
-      <ErrorNote>{actions.errors.name}</ErrorNote>
-      <ErrorNote>{actions.errors.wabaId}</ErrorNote>
-      <ErrorNote>{actions.errors.action}</ErrorNote>
 
-      <div className="settings-channel-connection grid gap-3">
-        <section aria-labelledby="connection-data-title" className="settings-connection-block order-2 rounded-[14px] border border-wa-border bg-black/[0.08] px-4 pb-2 pt-4 sm:px-5">
-          <h3 id="connection-data-title" className="text-[15px] font-semibold text-wa-text">
-            Dados da conexão
-          </h3>
-          <dl className="mt-2 divide-y divide-wa-border">
-            {!editingName && (
-              <DataRow
-                label="Nome"
-                action={
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingName(true)}
-                    disabled={!canManage}
-                    title={!canManage ? PERMISSION_REASON : undefined}
-                  >
-                    Editar nome
-                  </Button>
-                }
-              >
-                {channel.name}
-              </DataRow>
-            )}
-            <DataRow label="Provedor">{providerLabel(channel.type)}</DataRow>
-            <DataRow label="Tipo">{official ? 'API oficial' : 'Não oficial'}</DataRow>
-            <DataRow label="Número">{formatPhone(channel.phoneNumber)}</DataRow>
-            {!official && (
-              <DataRow label="Situação">
-                <ConnectionStatus channel={channel} />
-              </DataRow>
-            )}
-            {official && !editingWaba && (
-              <DataRow
-                label="Identificador da conta (WABA)"
-                action={
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingWaba(true)}
-                    disabled={!canManage}
-                    title={!canManage ? PERMISSION_REASON : undefined}
-                  >
-                    Editar
-                  </Button>
-                }
-              >
-                {channel.wabaId || <span className="text-wa-meta">não informado</span>}
-              </DataRow>
-            )}
-          </dl>
-          {editingName && (
-            <div className="border-t border-wa-border py-3">
-              <Field id="channel-name" label="Nome do canal" width="md">
-                <input
-                  id="channel-name"
-                  value={nameDraft}
-                  disabled={!canManage}
-                  onChange={(e) => setNameDraft(e.target.value)}
-                  className={inputClass}
-                />
-              </Field>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Button onClick={handleSaveName} disabled={!canManage || !nameDraft.trim()} className="!py-2">
-                  Salvar nome
-                </Button>
+      {/* 1. ESTADO — a primeira pergunta de quem abre esta tela é "está ligado?" */}
+      <section aria-labelledby="channel-state-title" className="channel-section channel-section-estado">
+        <div className="channel-section-head">
+          <h3 id="channel-state-title" className="channel-section-title">Estado da conexão</h3>
+          <ConnectionStatus channel={channel} />
+        </div>
+        <p className="channel-section-text">
+          {official
+            ? 'API oficial identifica o tipo de conexão. O status operacional é confirmado pelo provedor, não por este sistema.'
+            : channel.status === 'awaiting_qr'
+              ? 'Leia o QR code abaixo no WhatsApp do número deste canal. A situação muda para "Conectado" sozinha assim que o celular terminar.'
+              : channel.status === 'connected'
+                ? 'O WhatsApp deste número está ligado a este sistema. Se cair, use "Reconectar" em Ações avançadas.'
+                : 'O WhatsApp deste número não está ligado. Use "Reconectar" em Ações avançadas para gerar um novo QR code.'}
+        </p>
+        <QrCodeView channel={channel} onRefresh={refresh} />
+      </section>
+
+      {/* 2. IDENTIDADE — o que este canal é. */}
+      <section aria-labelledby="channel-identity-title" className="channel-section">
+        <div className="channel-section-head">
+          <h3 id="channel-identity-title" className="channel-section-title">Identificação do canal</h3>
+        </div>
+        <dl className="channel-data-list">
+          {!editingName && (
+            <DataRow
+              label="Nome"
+              action={
                 <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setNameDraft(channel.name);
-                    setEditingName(false);
-                  }}
-                  className="!py-2"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
-          {official && editingWaba && (
-            <div className="border-t border-wa-border py-3">
-              <Field id="waba-id" label="Identificador da conta (WABA ID)" width="md">
-                <input
-                  id="waba-id"
-                  value={wabaIdDraft}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingName(true)}
                   disabled={!canManage}
-                  onChange={(e) => setWabaIdDraft(e.target.value)}
-                  className={inputClass}
-                />
-              </Field>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Button onClick={handleSaveWaba} disabled={!canManage} className="!py-2">
-                  Salvar WABA ID
+                  title={!canManage ? PERMISSION_REASON : undefined}
+                >
+                  Editar nome
                 </Button>
-                <Button variant="secondary" onClick={() => { setWabaIdDraft(channel.wabaId || ''); setEditingWaba(false); }} className="!py-2">
-                  Cancelar
-                </Button>
-              </div>
-            </div>
+              }
+            >
+              {channel.name}
+            </DataRow>
           )}
-        </section>
+          <DataRow label="Provedor">{providerLabel(channel.type)}</DataRow>
+          <DataRow label="Tipo">{official ? 'API oficial' : 'Não oficial'}</DataRow>
+          <DataRow label="Número">{formatPhone(channel.phoneNumber)}</DataRow>
+          {official && !editingWaba && (
+            <DataRow
+              label="Identificador da conta (WABA)"
+              action={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingWaba(true)}
+                  disabled={!canManage}
+                  title={!canManage ? PERMISSION_REASON : undefined}
+                >
+                  Editar
+                </Button>
+              }
+            >
+              {channel.wabaId || <span className="text-wa-meta">não informado</span>}
+            </DataRow>
+          )}
+        </dl>
 
-        <section className="settings-connection-block order-1 rounded-[14px] border border-chat-orange/25 bg-chat-orange/[0.045] px-4 py-4 sm:px-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="mt-0.5 shrink-0 text-wa-muted">
-              <IconInfo size={18} />
-            </span>
-            <div className="min-w-0">
-              <h3 className="text-[15px] font-semibold text-wa-text">Sobre o status</h3>
-              <p className="mt-1 text-[13px] leading-[19px] text-wa-muted">
-                {official
-                  ? 'API oficial identifica o tipo de conexão. O status operacional é confirmado pelo provedor, não por este sistema.'
-                  : channel.status === 'awaiting_qr'
-                    ? 'Leia o QR code abaixo no WhatsApp do número deste canal. A situação muda para "Conectado" sozinha assim que o celular terminar.'
-                    : channel.status === 'connected'
-                      ? 'O WhatsApp deste número está ligado a este sistema. Se cair, use "Reconectar" em Ações avançadas.'
-                      : 'O WhatsApp deste número não está ligado. Use "Reconectar" em Ações avançadas para gerar um novo QR code.'}
-              </p>
+        {editingName && (
+          <div className="channel-inline-edit">
+            <Field id="channel-name" label="Nome do canal" width="md">
+              <input
+                id="channel-name"
+                value={nameDraft}
+                disabled={!canManage}
+                onChange={(e) => setNameDraft(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <div className="channel-inline-actions">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setNameDraft(channel.name);
+                  setEditingName(false);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveName} disabled={!canManage || !nameDraft.trim()}>
+                Salvar nome
+              </Button>
             </div>
           </div>
-          <div className="shrink-0 rounded-full border border-wa-border bg-wa-surface px-3 py-1.5"><ConnectionStatus channel={channel} /></div>
-          </div>
-          <QrCodeView channel={channel} onRefresh={refresh} />
-        </section>
-      </div>
+        )}
+        {/* O erro do nome fica junto do nome, e não numa pilha no topo. */}
+        <ErrorNote>{actions.errors.name}</ErrorNote>
 
-      <details className="group rounded-[14px] border border-wa-border bg-black/[0.08]">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[13.5px] text-wa-text sm:px-5 [&::-webkit-details-marker]:hidden">
+        {official && editingWaba && (
+          <div className="channel-inline-edit">
+            <Field id="waba-id" label="Identificador da conta (WABA ID)" width="md">
+              <input
+                id="waba-id"
+                value={wabaIdDraft}
+                disabled={!canManage}
+                onChange={(e) => setWabaIdDraft(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+            <div className="channel-inline-actions">
+              <Button
+                variant="secondary"
+                onClick={() => { setWabaIdDraft(channel.wabaId || ''); setEditingWaba(false); }}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveWaba} disabled={!canManage}>
+                Salvar WABA ID
+              </Button>
+            </div>
+          </div>
+        )}
+        <ErrorNote>{actions.errors.wabaId}</ErrorNote>
+      </section>
+
+      {/* 3. RELACIONADAS — quem atende neste canal NÃO se configura aqui.
+          Duplicar os interruptores criaria duas fontes de verdade. */}
+      <section aria-labelledby="channel-related-title" className="channel-section channel-section-relacionadas">
+        <div className="channel-section-head">
+          <h3 id="channel-related-title" className="channel-section-title">Configurações relacionadas</h3>
+        </div>
+        <p className="channel-section-text">
+          Quem atende neste canal — humano, triagem por menu, IA e atendimento noturno — fica na aba Atendimento.
+        </p>
+        <Link to={`/configuracoes/canais/${channel.id}/atendimento`} className="channel-related-link">
+          Abrir Atendimento deste canal →
+        </Link>
+      </section>
+
+      {/* 4. AVANÇADO — secundário de propósito: fechado por padrão. */}
+      <details className="channel-advanced group">
+        <summary className="channel-advanced-summary">
           <span className="flex items-center gap-2">
             <span aria-hidden="true" className="text-wa-muted transition-transform group-open:rotate-180">
               <IconChevronDown size={16} />
@@ -327,7 +337,7 @@ function ChannelConnectionTab() {
           </span>
           <span className="text-[12.5px] text-wa-muted">{advancedActions(channel.type).summary}</span>
         </summary>
-        <div className="px-4 pb-4 sm:px-5">
+        <div className="channel-advanced-body">
           <DangerZone description={advancedActions(channel.type).description}>
             <MetaCloudCredentialsForm
               channel={channel}
@@ -361,6 +371,8 @@ function ChannelConnectionTab() {
               Excluir
             </Button>
           </DangerZone>
+          {/* O erro nasce destes botões; fica junto deles. */}
+          <ErrorNote>{actions.errors.action}</ErrorNote>
         </div>
       </details>
     </div>

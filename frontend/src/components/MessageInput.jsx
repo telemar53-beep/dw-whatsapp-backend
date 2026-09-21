@@ -293,7 +293,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
           <div className="flex items-stretch overflow-hidden rounded-2xl bg-white/[0.10]">
             <span className="w-[4px] shrink-0 bg-chat-copper" />
             <div className="min-w-0 flex-1 px-3 py-1.5">
-              <p className="text-[12.8px] font-medium leading-[18px] text-chat-copper">Respondendo</p>
+              <p className="text-[12.5px] font-medium leading-[18px] text-chat-copper">Respondendo</p>
               <p className="truncate text-[13px] leading-[18px] text-chat-muted">{replyingTo.content}</p>
             </div>
             <button

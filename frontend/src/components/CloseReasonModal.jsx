@@ -75,7 +75,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
           {closeReasonHeaderIcon}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 id="close-reason-title" className="text-[21px] font-semibold leading-[26px] text-wa-text">Motivo do contato</h2>
+          <h2 id="close-reason-title" className="text-[18px] font-semibold leading-[26px] text-wa-text">Motivo do contato</h2>
           <p className="mt-1 text-[14px] leading-[19px] text-wa-muted">Selecione o motivo principal deste atendimento.</p>
         </div>
       </div>

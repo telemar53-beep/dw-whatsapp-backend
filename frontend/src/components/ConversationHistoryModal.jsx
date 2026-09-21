@@ -93,7 +93,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
                 className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-[14px] border border-wa-border px-3 pb-2 pt-[7px] text-[14.2px] leading-[19px] text-wa-text ${
+                  className={`max-w-[80%] rounded-[14px] border border-wa-border px-3 pb-2 pt-[7px] text-[14px] leading-[19px] text-wa-text ${
                     message.direction === 'outbound' ? 'bg-wa-out' : 'bg-wa-in'
                   }`}
                 >
@@ -112,7 +112,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
       ) : (
         <>
           <div className="dialog-history-heading shrink-0 px-6 pb-2 pt-5">
-            <h2 className="text-[19px] leading-[26px] text-wa-text">Atendimentos anteriores</h2>
+            <h2 className="text-[17px] leading-[26px] text-wa-text">Atendimentos anteriores</h2>
           </div>
           <div className="dialog-history-results wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-1">
             <AsyncState status={historyStatus} isEmpty={history.length === 0} emptyMessage="Nenhum atendimento anterior encontrado.">

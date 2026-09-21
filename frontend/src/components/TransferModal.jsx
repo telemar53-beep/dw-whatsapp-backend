@@ -173,7 +173,7 @@ function TransferModal({ conversationId, onClose }) {
           <IconTransfer size={30} />
         </span>
         <div className="min-w-0 flex-1 pt-1">
-          <h2 id="transfer-modal-title" className="text-[20px] font-semibold leading-[26px] text-wa-text">Transferir atendimento</h2>
+          <h2 id="transfer-modal-title" className="text-[18px] font-semibold leading-[26px] text-wa-text">Transferir atendimento</h2>
           <p className="mt-0.5 text-[13.5px] leading-[18px] text-wa-muted">Escolha um atendente para transferir esta conversa.</p>
         </div>
       </div>

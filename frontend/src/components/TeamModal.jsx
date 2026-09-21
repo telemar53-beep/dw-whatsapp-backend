@@ -105,7 +105,7 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
     <WaDialog variant="team" onClose={onClose} closeOnBackdrop labelledBy="team-modal-title" size="max-w-[980px]">
       <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5 sm:px-6">
         <div className="min-w-0 flex-1">
-          <h2 id="team-modal-title" className="text-[20px] font-semibold leading-[26px] text-wa-text">Nossa equipe</h2>
+          <h2 id="team-modal-title" className="text-[18px] font-semibold leading-[26px] text-wa-text">Nossa equipe</h2>
           <p className="mt-0.5 text-[13px] leading-[18px] text-wa-muted">{plural(counts.all, 'integrante na equipe', 'integrantes na equipe')} · veja a disponibilidade para transferir</p>
         </div>
       </div>

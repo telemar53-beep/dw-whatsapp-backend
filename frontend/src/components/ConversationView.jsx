@@ -673,7 +673,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
                   <div className="mb-1 flex overflow-hidden rounded-[10px] bg-black/20">
                     <span className="w-[4px] shrink-0 bg-chat-copper" />
                     <span className="min-w-0 flex-1 px-2 py-1">
-                      <span className="block truncate text-[12.8px] font-medium leading-[18px] text-chat-copper">
+                      <span className="block truncate text-[12.5px] font-medium leading-[18px] text-chat-copper">
                         {repliedToLabel}
                       </span>
                       <span className="block truncate text-[13px] leading-[18px] text-chat-muted">
@@ -701,7 +701,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
                 />
 
                 {hasText && (
-                  <p className="chat-workspace-message-text whitespace-pre-wrap break-words text-[15.5px] leading-[21px] text-chat-text">
+                  <p className="chat-workspace-message-text whitespace-pre-wrap break-words text-[13px] leading-[21px] text-chat-text">
                     {message.content}
                     <span
                       aria-hidden="true"

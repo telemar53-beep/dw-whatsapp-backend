@@ -166,7 +166,14 @@
   /* Tipografia — piso de 12px para texto lido; 11px só para número e selo. */
   --ui-text-2xs: 11px;
   --ui-text-xs: 12px;
+  /* Passos COMPACTOS, oficializados na Etapa 7.10. Nao sao arredondamento
+     pendente: 13,5px e o tamanho mais frequente de todo o produto (102
+     usos em 46 arquivos) e 12,5px vem logo atras (69). Eles sustentam a
+     densidade de linha de tabela, de menu e de lista. Componente novo
+     consome a escala em vez de inventar 12,8 ou 14,2. */
+  --ui-text-xs-plus: 12.5px;
   --ui-text-sm: 13px;   /* o corpo real do produto */
+  --ui-text-sm-plus: 13.5px;
   --ui-text-base: 14px;
   --ui-text-lg: 16px;
   --ui-text-xl: 20px;

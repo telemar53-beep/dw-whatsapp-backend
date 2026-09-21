@@ -280,7 +280,7 @@ export function Dialog({
         )}
         {title && (
           <div className="dw-dialog-heading shrink-0 px-6 pb-2 pt-5">
-            <h2 id={tituloId} className="text-[19px] leading-[26px] text-wa-text">
+            <h2 id={tituloId} className="text-[18px] leading-[26px] text-wa-text">
               {title}
             </h2>
             {description && (

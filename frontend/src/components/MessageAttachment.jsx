@@ -464,6 +464,67 @@ function ViewerButton({ label, onClick, disabled, children }) {
   );
 }
 
+// O video era o unico anexo sem acabamento nenhum:
+//
+//   <video controls src={url} className="max-w-full rounded-[12px]" ... />
+//
+// Player nativo solto no meio de uma timeline onde o audio tem tratamento
+// proprio, sem nome do arquivo e — o que mais pesa — sem estado de
+// indisponivel: video apagado pela retencao de 12 meses virava um quadro preto
+// quebrado, enquanto o audio e a imagem ja diziam que o arquivo nao existe
+// mais.
+//
+// Os CONTROLES continuam sendo os nativos, de proposito: sao a opcao mais
+// robusta (tela cheia, velocidade, legenda, teclado, picture-in-picture) e
+// reescreve-los seria trocar robustez por enfeite. O que passa a ser nosso e a
+// moldura em volta.
+//
+// NAO mostra tamanho do arquivo: a tabela `messages` guarda media_path,
+// media_mime_type e media_filename — tamanho nao existe, e inventar seria pior
+// que omitir.
+function VideoCard({ url, filename, outbound, dark }) {
+  const [indisponivel, setIndisponivel] = useState(false);
+
+  const moldura = dark
+    ? 'border-white/[0.14] bg-black/[0.16]'
+    : outbound
+      ? 'border-wa-border bg-wa-out-deep'
+      : 'border-wa-border bg-[#eef4f2]';
+
+  if (indisponivel) {
+    return (
+      <div
+        role="status"
+        className={`flex min-h-[88px] w-[min(20rem,68vw)] items-center gap-2 rounded-[12px] border px-3 text-[12.5px] ${moldura} ${dark ? 'text-chat-muted' : 'text-wa-meta'}`}
+      >
+        <IconAttach size={17} />
+        <span className="min-w-0">
+          Vídeo indisponível
+          {filename && <span className="mt-0.5 block truncate text-[11px] opacity-80">{filename}</span>}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`overflow-hidden rounded-[12px] border ${moldura}`}>
+      <video
+        controls
+        preload="metadata"
+        src={url}
+        onError={() => setIndisponivel(true)}
+        className="block w-[min(20rem,68vw)] max-w-full bg-black"
+        style={{ maxHeight: 340 }}
+      />
+      {filename && (
+        <p className={`truncate px-3 py-1.5 text-[11.5px] ${dark ? 'text-chat-muted' : 'text-wa-meta'}`} title={filename}>
+          {filename}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DocumentCard({ url, filename, outbound, dark }) {
   const label = filename || 'Documento';
   const extension = fileExtension(filename) || 'ARQUIVO';
@@ -672,7 +733,7 @@ function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) 
   }
 
   if (message.messageType === 'video') {
-    return <video controls src={url} className="max-w-full rounded-[12px]" style={{ maxHeight: 340, minWidth: 200 }} />;
+    return <VideoCard url={url} filename={message.mediaFilename} outbound={outbound} dark={dark} />;
   }
 
   if (message.messageType === 'document') {

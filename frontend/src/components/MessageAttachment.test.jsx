@@ -338,3 +338,44 @@ describe('arquivo removido pela retencao', () => {
     expect(screen.queryByRole('button', { name: /analisar comprovante/i })).not.toBeInTheDocument();
   });
 });
+
+// Etapa 7.8 — o video era o unico anexo sem acabamento: <video controls> solto,
+// sem nome de arquivo e sem estado de indisponivel.
+describe('video na timeline', () => {
+  const video = (extra = {}) => ({ id: 'v1', messageType: 'video', mediaPath: 'clipe.mp4', direction: 'inbound', ...extra });
+
+  test('continua usando os controles nativos', () => {
+    const { container } = render(<MessageAttachment message={video()} />);
+    const el = container.querySelector('video');
+    expect(el).toBeInTheDocument();
+    expect(el).toHaveAttribute('controls');
+    expect(el).toHaveAttribute('preload', 'metadata');
+  });
+
+  test('mostra o nome do arquivo quando existe', () => {
+    render(<MessageAttachment message={video({ mediaFilename: 'reuniao-quarta.mp4' })} />);
+    expect(screen.getByText('reuniao-quarta.mp4')).toBeInTheDocument();
+  });
+
+  test('sem nome de arquivo, nao inventa rotulo nenhum', () => {
+    const { container } = render(<MessageAttachment message={video()} />);
+    expect(container.querySelector('p')).toBeNull();
+  });
+
+  // Video apagado pela retencao de 12 meses mostrava um quadro preto quebrado.
+  test('arquivo que nao carrega vira "Video indisponivel"', () => {
+    const { container } = render(<MessageAttachment message={video({ mediaFilename: 'antigo.mp4' })} />);
+
+    fireEvent.error(container.querySelector('video'));
+
+    expect(screen.getByText('Vídeo indisponível')).toBeInTheDocument();
+    expect(screen.getByText('antigo.mp4')).toBeInTheDocument();
+    expect(container.querySelector('video')).toBeNull();
+  });
+
+  // O backend nao guarda tamanho de midia: nao existe coluna para isso.
+  test('nao mostra tamanho de arquivo, porque o backend nao fornece', () => {
+    const { container } = render(<MessageAttachment message={video({ mediaFilename: 'clipe.mp4' })} />);
+    expect(container.textContent).not.toMatch(/\d+([.,]\d+)?\s*(KB|MB|GB)/i);
+  });
+});

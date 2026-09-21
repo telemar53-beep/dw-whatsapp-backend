@@ -3,7 +3,7 @@ import { ProviderMark, QrStatusIcon, VisibilityIcon } from './ChannelVisuals';
 import './channels-polish.css';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { IconSearch, IconSettings, IconMore, IconClock, IconCheckCircle, IconWarning, IconUser, IconSpark, IconRefresh, IconTrash } from '../../../components/icons/WaIcons';
+import { IconSearch, IconSettings, IconMore, IconClock, IconCheckCircle, IconWarning, IconUser, IconBrain, IconRefresh, IconTrash } from '../../../components/icons/WaIcons';
 import { isOfficialChannelType } from '../../../utils/channelTypes';
 import { formatPhone } from '../../../utils/phone';
 import { STATUS_LABELS } from './channelStatus';
@@ -205,7 +205,11 @@ function ChannelRow({ channel, selected, summaryContext, actions, canManage }) {
                 CHIP_TONES[label] || 'border-wa-border bg-white/[0.06] text-wa-muted'
               }`}
             >
-              <span className="channel-attendance-icon" aria-hidden="true">{label === 'Humano' ? <IconUser size={13} /> : <IconSpark size={13} />}</span>{label}
+              {/* `IconBrain` e a IA DO PRODUTO (Triagem, Automacao) e `IconSpark`
+                  e a OpenAI, o FORNECEDOR — a Etapa 7.7 separou os dois de
+                  proposito. Estes chips dizem "IA ativa" e "Triagem IA", que sao
+                  o produto, nao o fornecedor: aqui o glifo certo e o cerebro. */}
+              <span className="channel-attendance-icon" aria-hidden="true">{label === 'Humano' ? <IconUser size={13} /> : <IconBrain size={13} />}</span>{label}
             </span>
           ))}
         </div>

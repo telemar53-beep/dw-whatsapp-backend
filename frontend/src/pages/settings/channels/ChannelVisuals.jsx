@@ -1,17 +1,32 @@
 import metaLogo from '../../../assets/brands/meta.svg';
-import { IconDevice, IconServer } from '../../../components/icons/WaIcons';
+import whatsappLogo from '../../../assets/brands/whatsapp.svg';
+import dialog360Logo from '../../../assets/brands/360dialog.svg';
+import { IconServer } from '../../../components/icons/WaIcons';
 
-// Meta usa a marca oficial. Baileys e 360dialog usam simbolos FUNCIONAIS —
-// nao existe logotipo confiavel para reproduzir, e inventar um seria pior que
-// nao ter. O nome do provedor continua visivel na linha.
+// Onde existe marca real no repositorio, a marca vem no lugar de glifo
+// funcional. As duas sao do Simple Icons 16.0.0 (colecao CC0) e ja estavam em
+// `assets/brands/` — ver o README de lá.
 //
-// Cada simbolo diz COMO o canal conecta: o Baileys pareia um aparelho lendo
-// um QR; a 360dialog e um gateway hospedado. Antes o Baileys usava IconPlug,
-// o mesmo glifo do grupo Integracoes, e a 360dialog usava IconChats, o mesmo
-// do menu Atendimento.
+// Baileys usa a marca do WHATSAPP porque e o que o canal e de fato: uma sessao
+// de WhatsApp pareada por QR. O `whatsapp.svg` estava no repositorio e era usado
+// so no titulo da pagina de Canais; a linha do canal ficava com IconDevice, um
+// celular generico. Quem diz que NAO e a API oficial e o texto ao lado
+// ("Baileys · Nao oficial" na tabela, "Baileys (nao oficial)" no modal) — esse
+// texto e obrigatorio e nao sai.
+//
+// A 360dialog e o unico caso que NAO usa mask, e de proposito. As marcas da Meta
+// e do WhatsApp sao glifos monocromaticos de path unico (Simple Icons), feitos
+// para serem pintados em qualquer cor — `currentColor` ali e o uso correto. A
+// marca da 360dialog e um BADGE de app, com o wordmark "360D" vazado, e a
+// empresa distribui so tres cores (Black, White, Perf Green). Pintar esse badge
+// de roxo com `currentColor` seria recolorir o logotipo de terceiro, que as
+// diretrizes dela provavelmente nao permitem. Entao ela entra como <img>, na cor
+// que a propria empresa publica, sem modificacao. Ver o README de assets/brands.
 export function ProviderMark({ type }) {
   if (type === 'meta_cloud') return <span className="channel-brand-mark" style={{ maskImage: `url(${metaLogo})` }} />;
-  if (type === 'baileys') return <IconDevice size={18} />;
+  if (type === 'baileys') return <span className="channel-brand-mark" style={{ maskImage: `url(${whatsappLogo})` }} />;
+  if (type === '360dialog') return <img src={dialog360Logo} alt="" className="channel-brand-logo" />;
+  // Tipo desconhecido: simbolo funcional, como sempre foi.
   return <IconServer size={18} />;
 }
 

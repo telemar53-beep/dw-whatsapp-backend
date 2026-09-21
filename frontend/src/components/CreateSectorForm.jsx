@@ -33,7 +33,7 @@ function CreateSectorForm({ onCreated, onCancel, embedded = false }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className={embedded ? 'space-y-3' : 'settings-open-form space-y-4 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-5'}
+      className={embedded ? 'space-y-3' : 'settings-open-form space-y-4 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-5'}
     >
       {!embedded && <h3 className="font-display text-base font-semibold text-wa-text">Cadastrar novo setor</h3>}
       <div>

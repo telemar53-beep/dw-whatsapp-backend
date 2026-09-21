@@ -8,7 +8,7 @@ import { Button } from '../ui';
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-focus-ring/40';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
-const cardClass = 'settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-4';
+const cardClass = 'settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-4';
 
 function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated, onCancel }) {
   const { token } = useAuth();

@@ -139,7 +139,7 @@
 .dialog-sgp-panel button {font-size:12px}
 .dialog-sgp-panel select {font-size:12px}
 /* Context menus: compact command lists with clear focus/destructive action. */
-.dialog-context-menu {border-radius:8px;background:#303d46;border-color:#64778466;padding:5px;box-shadow:0 10px 28px #0005}
+.dialog-context-menu {border-radius:8px;background:var(--color-ui-surface-overlay);border-color:#64778466;padding:5px;box-shadow:0 10px 28px #0005}
 .dialog-context-menu button {font-size:12px;padding:7px 10px;border-radius:4px;line-height:18px}
 .dialog-context-menu button:hover {background:#ffffff08}
 .dialog-context-menu button:focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:-2px}

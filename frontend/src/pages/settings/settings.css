@@ -1,12 +1,12 @@
 /* Configurações: base comum de controles + composições específicas por conteúdo. */
-.settings-workspace { gap:0; --settings-line:#ffffff12; --settings-accent:#d5a176; --settings-muted:#a9bdc9; container-type:inline-size; }
+.settings-workspace { gap:0; --settings-accent:#d5a176; container-type:inline-size; }
 /* Menu de Configuracoes. Cada peca tem nome; nenhuma regra depende mais de
    "o primeiro div do aside" ou "o botao dentro do div do nav". */
-.settings-nav {width:258px;background:#26323a;border:0;border-right:1px solid var(--settings-line);border-radius:0;backdrop-filter:none}
+.settings-nav {width:258px;background:#26323a;border:0;border-right:1px solid var(--color-ui-line);border-radius:0;backdrop-filter:none}
 .settings-stage {background:#29343c;border:0;border-radius:0;backdrop-filter:none}
 .settings-nav-heading {padding:18px 16px 12px}
 .settings-nav-heading h2 {font-size:17px}
-.settings-nav-search {height:34px;border-radius:6px;background:#202b32}
+.settings-nav-search {height:34px;border-radius:6px;background:var(--color-ui-surface-sunken)}
 .settings-nav-list {padding:0 9px 16px}
 .settings-nav-group {margin:3px 0}
 .settings-nav-group-trigger,.settings-nav-solo,.settings-nav-list > .settings-nav-item {border-radius:6px;gap:9px;padding:10px 8px;font-size:12px;line-height:17px}
@@ -21,7 +21,7 @@
 .settings-nav-group-trigger[data-settings-category=automacao] .settings-functional-icon {color:#b7accf}
 .settings-nav-group-trigger[data-settings-category=integracoes] .settings-functional-icon {color:#91b9d3}
 .settings-search-group {display:block;font-size:10px;color:#98adbb;font-weight:400;margin-top:2px}
-.settings-workspace .settings-shell-header {padding:0 18px;background:#2c3941;border-bottom:1px solid var(--settings-line)}
+.settings-workspace .settings-shell-header {padding:0 18px;background:#2c3941;border-bottom:1px solid var(--color-ui-line)}
 .settings-workspace .settings-shell-header header {padding:13px 0 12px;gap:8px}
 .settings-workspace .settings-shell-header h1 {font-size:20px;line-height:26px;letter-spacing:-.02em}
 .settings-workspace .settings-shell-header header p {font-size:12px;line-height:17px;margin-top:4px}
@@ -36,7 +36,7 @@
 .settings-workspace .settings-shell-content {display:flex;flex-direction:column;gap:14px;width:100%}
 
 .settings-workspace .settings-shell-content .settings-section {padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
-.settings-workspace .settings-shell-content .settings-section + .settings-section {padding-top:14px;border-top:1px solid var(--settings-line)}
+.settings-workspace .settings-shell-content .settings-section + .settings-section {padding-top:14px;border-top:1px solid var(--color-ui-line)}
 .settings-workspace .settings-shell-content .settings-section h2:before {display:none!important}
 .settings-workspace .settings-shell-content .settings-section-head + .settings-section-body {padding-top:10px}
 .settings-workspace h2,.settings-workspace h3 {letter-spacing:0}
@@ -60,7 +60,7 @@
 /* Removido: `.chat-theme table tbody tr:hover` (index.css) tem
    especificidade (0,2,3) contra (0,2,2) daqui e vencia sempre —
    esta regra nunca chegou a pintar nada. */
-.dw-table-head {padding:9px 10px;text-align:left;font-size:11px;line-height:16px;font-weight:500;color:var(--settings-muted);vertical-align:middle}
+.dw-table-head {padding:9px 10px;text-align:left;font-size:11px;line-height:16px;font-weight:500;color:var(--color-ui-ink-muted);vertical-align:middle}
 .dw-table-cell {padding:9px 10px;vertical-align:middle}
 .dw-row-menu-trigger {display:inline-flex;height:32px;width:32px;flex:none;align-items:center;justify-content:center;border-radius:10px;border:1px solid var(--color-wa-border);background:var(--color-wa-field);color:var(--color-wa-text);transition:background-color .15s}
 .dw-row-menu-trigger:hover {background:var(--color-wa-panel)}
@@ -78,49 +78,49 @@
 .settings-triage-menu-layout > .settings-intro {grid-column:1/-1}
 .settings-triage-menu-layout > .settings-triage-options {margin:0;padding:0!important;border:0;border-radius:0;background:none}
 .settings-triage-menu-layout > form {border:0;padding:0}
-@container(min-width:800px){.settings-triage-menu-layout{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}.settings-triage-menu-layout > .settings-triage-options{border-left:1px solid var(--settings-line);padding-left:18px!important}.settings-menu-text-fields{grid-template-columns:1fr}}
+@container(min-width:800px){.settings-triage-menu-layout{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)}.settings-triage-menu-layout > .settings-triage-options{border-left:1px solid var(--color-ui-line);padding-left:18px!important}.settings-menu-text-fields{grid-template-columns:1fr}}
 /* IA: status lateral, política de triagem dominante. */
 .settings-ai-policy {display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
 .settings-ai-policy > .settings-ai-policy-aside {display:flex;flex-direction:column;gap:16px;border:0;padding:0}
 .settings-ai-policy form {padding:0;min-width:0}
 .settings-ai-policy h2 {border:0;padding:0;font-size:14px}
 .settings-ai-policy .settings-section-body > .grid {gap:12px}
-@container(min-width:870px){.settings-ai-policy{grid-template-columns:220px minmax(0,1fr)}.settings-ai-policy > .settings-ai-policy-aside{border-right:1px solid var(--settings-line);padding-right:16px}.settings-ai-policy .settings-section-body > .grid:first-of-type{grid-template-columns:repeat(3,minmax(0,1fr))}.settings-ai-policy .settings-section-body > .grid:nth-of-type(2){grid-template-columns:1fr}}
+@container(min-width:870px){.settings-ai-policy{grid-template-columns:220px minmax(0,1fr)}.settings-ai-policy > .settings-ai-policy-aside{border-right:1px solid var(--color-ui-line);padding-right:16px}.settings-ai-policy .settings-section-body > .grid:first-of-type{grid-template-columns:repeat(3,minmax(0,1fr))}.settings-ai-policy .settings-section-body > .grid:nth-of-type(2){grid-template-columns:1fr}}
 /* Identificacao: uma coluna so. A grade de duas colunas saiu — uma delas nao
    tinha controle nenhum, so um paragrafo. */
 .settings-identification {display:flex;flex-direction:column;gap:14px}
 /* Selo de dependencia: diz o estado de uma configuracao de OUTRA pagina.
    Nao e controle; e informacao com caminho. */
-.settings-dependency-chip {display:inline-flex;align-items:center;gap:7px;font-size:12px;line-height:18px;color:var(--settings-muted)}
+.settings-dependency-chip {display:inline-flex;align-items:center;gap:7px;font-size:12px;line-height:18px;color:var(--color-ui-ink-muted)}
 .settings-dependency-chip .settings-dependency-dot {width:7px;height:7px;border-radius:999px;background:#8fa6b5;flex:none}
 .settings-dependency-chip.is-pronta {color:#a9d3bb}
 .settings-dependency-chip.is-pronta .settings-dependency-dot {background:#7fc79f}
 .settings-dependency-link {margin-left:auto;font-size:12px;font-weight:500;color:var(--color-chat-orange)}
 .settings-dependency-link:hover {text-decoration:underline}
-.settings-dependency-text {font-size:12px;line-height:18px;color:var(--settings-muted);max-width:74ch}
+.settings-dependency-text {font-size:12px;line-height:18px;color:var(--color-ui-ink-muted);max-width:74ch}
 /* Faixa de acao de uma pagina de formulario: sempre a mesma, com nome. */
-.settings-actions {border-top:1px solid var(--settings-line);padding-top:12px;display:flex;justify-content:flex-end}
+.settings-actions {border-top:1px solid var(--color-ui-line);padding-top:12px;display:flex;justify-content:flex-end}
 /* Bloco que abre a pagina e explica do que ela trata. */
 .settings-intro {font-size:12px;line-height:18px}
 .settings-transcription-form section[aria-label] {padding:10px 12px;background:#8daec709;border-left:2px solid #97b4c8;border-bottom:0}
 .settings-transcription-form section {min-width:0}
 .settings-workspace[data-settings-page=noturno] .settings-shell-content {display:grid;grid-template-columns:minmax(0,1.1fr) minmax(200px,.9fr);gap:16px}
 .settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-intro {grid-column:1/-1}
-.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-section {border-left:1px solid var(--settings-line);padding-left:18px}
-.settings-workspace[data-settings-page=ferramentas] section[id], .settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] {border-radius:5px;border:0;background:none;border-top:1px solid var(--settings-line)}
+.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-section {border-left:1px solid var(--color-ui-line);padding-left:18px}
+.settings-workspace[data-settings-page=ferramentas] section[id], .settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] {border-radius:5px;border:0;background:none;border-top:1px solid var(--color-ui-line)}
 .settings-workspace[data-settings-page=ferramentas] section[aria-labelledby^=ai-tools] h2 {font-size:12px}
 .settings-workspace[data-settings-page=ferramentas] .settings-tool-group-head {background:#ffffff03;padding:7px 10px}
 .settings-workspace[data-settings-page=ferramentas] label {font-size:12px;line-height:17px}
-.settings-workspace[data-settings-page=ferramentas] [aria-label='Resumo das ações'] {padding:8px 0;border-bottom:1px solid var(--settings-line)}
+.settings-workspace[data-settings-page=ferramentas] [aria-label='Resumo das ações'] {padding:8px 0;border-bottom:1px solid var(--color-ui-line)}
 /* Bibliotecas de mensagens: propósito à esquerda, registros/editoração à direita. */
 .settings-message-library,.settings-message-editor {display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 :is(.settings-message-library,.settings-message-editor) > .settings-intro {border:0;font-size:12px;line-height:18px;padding:0}
-.settings-library-toolbar {display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#afbec8;border-bottom:1px solid var(--settings-line);padding-bottom:10px}
+.settings-library-toolbar {display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#afbec8;border-bottom:1px solid var(--color-ui-line);padding-bottom:10px}
 .settings-message-library ul {border:0;border-radius:0;background:none}
 .settings-message-library li {padding:12px 0}
 .settings-message-library li p.truncate {white-space:normal;overflow-wrap:anywhere}
 .settings-message-library .settings-section {min-width:0}
-@container(min-width:820px){.settings-message-library,.settings-message-editor{grid-template-columns:200px minmax(0,1fr)}:is(.settings-message-library,.settings-message-editor) > .settings-intro{grid-column:1;grid-row:1/8;border-right:1px solid var(--settings-line);padding-right:16px}:is(.settings-message-library,.settings-message-editor) > :not(.settings-intro){grid-column:2}}
+@container(min-width:820px){.settings-message-library,.settings-message-editor{grid-template-columns:200px minmax(0,1fr)}:is(.settings-message-library,.settings-message-editor) > .settings-intro{grid-column:1;grid-row:1/8;border-right:1px solid var(--color-ui-line);padding-right:16px}:is(.settings-message-library,.settings-message-editor) > :not(.settings-intro){grid-column:2}}
 .settings-message-pair {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
 .settings-message-pair section {border-left:2px solid #a3b8c340;padding:0 10px}
 .settings-message-pair h3 {font-size:11px;color:#b4c3ce;margin-bottom:6px}
@@ -128,14 +128,14 @@
 .settings-assignment-summary {flex:1;min-width:0}
 .settings-workspace[data-settings-page=abertura-encerramento] .settings-message-pane {padding:0;border:0;background:none}
 .settings-workspace[data-settings-page=horario] .settings-shell-content {display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px}
-.settings-workspace[data-settings-page=horario] .settings-shell-content > .settings-intro {font-size:12px;line-height:18px;border:0;border-right:1px solid var(--settings-line);padding-right:16px}
+.settings-workspace[data-settings-page=horario] .settings-shell-content > .settings-intro {font-size:12px;line-height:18px;border:0;border-right:1px solid var(--color-ui-line);padding-right:16px}
 .settings-workspace[data-settings-page=horario] .settings-pane {border:0;background:none;padding:0}
 .settings-template-library {gap:16px;grid-template-columns:minmax(0,1fr)}
 @container(min-width:960px){.settings-template-library{grid-template-columns:minmax(0,1fr) 280px}.settings-template-library > :last-child{position:sticky;top:0}}
 .settings-template-library section {border-radius:6px;box-shadow:none}
 /* Services: navigation is a service strip, configuration and usage are distinct. */
-.settings-service-switchboard {display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--settings-line);padding-bottom:12px}
-.settings-service-link {display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 14px;border-right:1px solid var(--settings-line);font-size:12px}
+.settings-service-switchboard {display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--color-ui-line);padding-bottom:12px}
+.settings-service-link {display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 14px;border-right:1px solid var(--color-ui-line);font-size:12px}
 .settings-service-link:first-of-type {padding-left:0}
 .settings-service-link:last-of-type {border:0}
 .settings-service-switchboard small {display:block;font-size:10px;color:#a8bac8;margin-top:2px}
@@ -143,12 +143,12 @@
 .settings-service-detail {grid-template-columns:minmax(0,1fr);gap:20px}
 .settings-service-detail > * {border:0;border-radius:0;background:none;padding:0;min-width:0}
 .settings-service-aside section {padding:0;border:0;background:none}
-@container(min-width:780px){.settings-service-detail{grid-template-columns:minmax(0,1fr) 245px}.settings-service-aside{border-left:1px solid var(--settings-line);padding-left:18px}}
+@container(min-width:780px){.settings-service-detail{grid-template-columns:minmax(0,1fr) 245px}.settings-service-aside{border-left:1px solid var(--color-ui-line);padding-left:18px}}
 .settings-sgp-deliveries {display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
-.settings-sgp-deliveries > * {margin:0;border-radius:5px;box-shadow:none;border:0;border-top:1px solid var(--settings-line);background:#ffffff02}
+.settings-sgp-deliveries > * {margin:0;border-radius:5px;box-shadow:none;border:0;border-top:1px solid var(--color-ui-line);background:#ffffff02}
 @container(min-width:950px){.settings-sgp-deliveries{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* Canais: resumo do parque, linhas com identidade/status e controles separados. */
-.settings-channel-overview {display:flex;flex-wrap:wrap;gap:12px 28px;padding:0 0 14px;border-bottom:1px solid var(--settings-line)}
+.settings-channel-overview {display:flex;flex-wrap:wrap;gap:12px 28px;padding:0 0 14px;border-bottom:1px solid var(--color-ui-line)}
 .settings-channel-stat {display:flex;align-items:baseline;gap:7px;font-size:11px;color:#afc0cb}
 .settings-channel-overview strong {font-size:22px;font-weight:500;color:#e2eaf0;font-variant-numeric:tabular-nums}
 .settings-channel-toolbar {gap:8px}
@@ -156,7 +156,7 @@
 .settings-channel-record {grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:14px 12px;align-items:start}
 .settings-channel-record > .settings-channel-identity {grid-column:1;grid-row:1}
 .settings-channel-record > .settings-channel-link {grid-column:1;grid-row:2;padding-left:50px}
-.settings-channel-record > .settings-channel-service {grid-column:1/-1;grid-row:3;padding-top:8px;border-top:1px solid var(--settings-line)}
+.settings-channel-record > .settings-channel-service {grid-column:1/-1;grid-row:3;padding-top:8px;border-top:1px solid var(--color-ui-line)}
 .settings-channel-record > .settings-channel-actions {grid-column:2;grid-row:1/3}
 .settings-channel-chips {gap:5px 12px}
 .settings-channel-chips > span {border:0;padding:0;background:none;border-radius:0;font-size:11px}
@@ -166,25 +166,25 @@
 /* Conexao do canal. A ordem do DOM e a ordem visual: estado, identidade,
    relacionadas, avancado. Nada de order-* nem de "o segundo bloco". */
 .channel-connection-page {display:flex;flex-direction:column;gap:12px}
-.channel-section {border-radius:5px;border:1px solid var(--settings-line);background:#ffffff03;padding:12px 14px}
+.channel-section {border-radius:5px;border:1px solid var(--color-ui-line);background:#ffffff03;padding:12px 14px}
 .channel-section-estado {border-color:#d5a17640;background:#d5a1760c}
 .channel-section-head {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
 .channel-section-title {font-size:13px;font-weight:600;color:var(--color-wa-text);margin:0}
-.channel-section-text {font-size:12px;line-height:18px;color:var(--settings-muted);margin:6px 0 0;max-width:80ch}
+.channel-section-text {font-size:12px;line-height:18px;color:var(--color-ui-ink-muted);margin:6px 0 0;max-width:80ch}
 .channel-data-list {margin-top:6px}
-.channel-data-row + .channel-data-row {border-top:1px solid var(--settings-line)}
-.channel-inline-edit {margin-top:10px;padding-top:10px;border-top:1px solid var(--settings-line)}
+.channel-data-row + .channel-data-row {border-top:1px solid var(--color-ui-line)}
+.channel-inline-edit {margin-top:10px;padding-top:10px;border-top:1px solid var(--color-ui-line)}
 .channel-inline-actions {display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .channel-related-link {display:inline-block;margin-top:8px;font-size:12px;font-weight:500;color:var(--color-chat-orange)}
 .channel-related-link:hover {text-decoration:underline}
-.channel-advanced {border-radius:5px;border:1px solid var(--settings-line);background:#00000014}
+.channel-advanced {border-radius:5px;border:1px solid var(--color-ui-line);background:#00000014}
 .channel-advanced-summary {display:flex;cursor:pointer;list-style:none;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;font-size:12.5px;color:var(--color-wa-text)}
 .channel-advanced-summary::-webkit-details-marker {display:none}
 .channel-advanced-body {padding:0 14px 12px}
 .settings-channel-behavior {display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 @container(min-width:860px){.settings-channel-behavior{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.settings-channel-behavior > p{grid-column:1/-1}}
 /* Cadastros: a barra operacional precede a tabela, sem moldura de cartão. */
-.settings-register-summary {margin-bottom:8px!important;padding:7px 0!important;border-top:1px solid var(--settings-line);border-bottom:1px solid var(--settings-line);font-size:11px!important}
+.settings-register-summary {margin-bottom:8px!important;padding:7px 0!important;border-top:1px solid var(--color-ui-line);border-bottom:1px solid var(--color-ui-line);font-size:11px!important}
 .settings-workspace .settings-register-list:has(table) {border:0;border-radius:0;background:none}
 .settings-workspace .settings-register-toolbar {gap:8px;padding-bottom:10px}
 .settings-workspace .settings-register-head {gap:8px;padding-bottom:10px}
@@ -193,16 +193,16 @@
 .settings-permissions .settings-permissions-notes {font-size:12px}
 .settings-permissions table thead {position:sticky;top:0;z-index:1}
 .settings-permissions table td {text-align:center}
-@container(min-width:1050px){.settings-permissions{grid-template-columns:minmax(0,1fr) 230px}.settings-permissions .settings-permissions-notes{border:0!important;border-left:1px solid var(--settings-line)!important;padding:0 0 0 16px!important}}
+@container(min-width:1050px){.settings-permissions{grid-template-columns:minmax(0,1fr) 230px}.settings-permissions .settings-permissions-notes{border:0!important;border-left:1px solid var(--color-ui-line)!important;padding:0 0 0 16px!important}}
 .settings-company-summary {display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:18px}
 .settings-company-name h2 {font-size:22px!important;line-height:1.4!important;margin-top:6px;overflow-wrap:anywhere}
 .settings-company-name > .settings-cell-label {font-size:11px;color:#a8bac7}
-.settings-company-payees {border-left:1px solid var(--settings-line);padding-left:18px}
+.settings-company-payees {border-left:1px solid var(--color-ui-line);padding-left:18px}
 .settings-company-payees h3 {font-size:12px;color:#acbfca;margin-bottom:8px}
-.settings-company-payees li {font-size:13px;border-bottom:1px solid var(--settings-line);padding:8px 0;overflow-wrap:anywhere}
+.settings-company-payees li {font-size:13px;border-bottom:1px solid var(--color-ui-line);padding:8px 0;overflow-wrap:anywhere}
 .settings-company-summary > button {justify-self:start}
 /* Somente os diálogos abertos a partir da área de Configurações. */
-@media(max-width:1023px){.settings-workspace > aside{width:100%;border-right:0;border-bottom:1px solid var(--settings-line);flex:none}.settings-workspace > aside > div:first-child{padding:10px 14px}.settings-workspace > aside > div{padding-bottom:8px}}
+@media(max-width:1023px){.settings-workspace > aside{width:100%;border-right:0;border-bottom:1px solid var(--color-ui-line);flex:none}.settings-workspace > aside > div:first-child{padding:10px 14px}.settings-workspace > aside > div{padding-bottom:8px}}
 @container(max-width:650px){.settings-workspace[data-settings-page=noturno] .settings-shell-content,.settings-workspace[data-settings-page=horario] .settings-shell-content,.settings-company-summary,.settings-message-pair{grid-template-columns:1fr}.settings-workspace[data-settings-page=noturno] .settings-shell-content > .settings-section,.settings-workspace[data-settings-page=horario] .settings-shell-content > .settings-intro{border:0;padding:0}.settings-company-payees{border:0;padding:0}.settings-service-link{padding:8px}.settings-channel-record{grid-template-columns:minmax(0,1fr)}.settings-channel-record > .settings-channel-actions{grid-column:1;grid-row:4}}
 /* Ajustes após inspeção dos canais carregados. */
 .settings-channel-record {row-gap:4px;padding-top:10px;padding-bottom:10px}
@@ -217,8 +217,8 @@
 .settings-workspace .settings-channel-detail-head {padding:10px 0}
 .settings-workspace .settings-channel-detail-body {padding:12px 0}
 .settings-workspace .settings-register-list {border:0;border-radius:0;background:none}
-.settings-workspace .settings-register-list > [role=status],.settings-workspace .settings-register-list > p {border-top:1px solid var(--settings-line);border-bottom:1px solid var(--settings-line);padding:14px 0;font-size:12px}
-.settings-workspace .settings-channel-switch {border:0;border-radius:0;background:none;padding:0 0 10px;border-bottom:1px solid var(--settings-line)}
+.settings-workspace .settings-register-list > [role=status],.settings-workspace .settings-register-list > p {border-top:1px solid var(--color-ui-line);border-bottom:1px solid var(--color-ui-line);padding:14px 0;font-size:12px}
+.settings-workspace .settings-channel-switch {border:0;border-radius:0;background:none;padding:0 0 10px;border-bottom:1px solid var(--color-ui-line)}
 .settings-channel-switch label {flex-direction:row;align-items:center;gap:10px}
 .settings-workspace .settings-shell-body button:not([role=tab]) {height:auto}
 /* Cadastro de usuário: identidade e acesso em pares, com rodapé próprio. */

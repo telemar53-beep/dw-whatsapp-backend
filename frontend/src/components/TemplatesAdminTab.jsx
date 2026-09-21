@@ -55,7 +55,7 @@ function languageLabel(language) {
 }
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10 > item de menu 8.
-const CARD = 'overflow-clip rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95';
+const CARD = 'overflow-clip rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95';
 const CONTROL =
   'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40';
 const LABEL = 'mb-1.5 block text-[13px] font-medium text-wa-muted';
@@ -565,7 +565,7 @@ function TemplatesAdminTab() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-3 sm:p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-3 sm:p-4">
         <label
           className={`${CONTROL} flex min-w-[200px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/25`}
         >

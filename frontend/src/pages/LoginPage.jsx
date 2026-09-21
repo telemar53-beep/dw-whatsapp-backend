@@ -24,7 +24,7 @@ function SignalMark() {
 }
 
 const FIELD_CLASS =
-  'h-12 w-full rounded-xl border border-white/[0.13] bg-[#222a30] px-4 text-[15px] text-white outline-none transition-colors placeholder:text-[#aeb8c0] hover:border-white/25 focus:border-accent-line focus:ring-2 focus:ring-focus-ring/40';
+  'h-12 w-full rounded-xl border border-white/[0.13] bg-ui-surface-sunken px-4 text-[15px] text-white outline-none transition-colors placeholder:text-[#aeb8c0] hover:border-white/25 focus:border-accent-line focus:ring-2 focus:ring-focus-ring/40';
 
 function LoginPage() {
   const { login } = useAuth();
@@ -52,7 +52,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="chat-theme relative isolate flex min-h-dvh overflow-hidden bg-[#20272d] px-4 py-6 font-sans text-chat-text sm:px-8 lg:px-12">
+    <div className="chat-theme relative isolate flex min-h-dvh overflow-hidden bg-[var(--color-chat-canvas)] px-4 py-6 font-sans text-chat-text sm:px-8 lg:px-12">
       <div aria-hidden="true" className="pointer-events-none absolute -left-40 -top-48 h-[32rem] w-[32rem] rounded-full bg-accent/[0.08] blur-[110px]" />
       <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 right-[-12rem] h-[35rem] w-[35rem] rounded-full bg-[#8296a4]/[0.08] blur-[120px]" />
 
@@ -79,7 +79,7 @@ function LoginPage() {
         </section>
 
         <main className="w-full animate-login-rise">
-          <div className="rounded-[22px] border border-white/[0.12] bg-[#2b333a]/95 px-6 py-8 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.65)] backdrop-blur-md sm:px-10 sm:py-10">
+          <div className="rounded-[22px] border border-white/[0.12] bg-ui-surface-card/95 px-6 py-8 shadow-[0_28px_70px_-30px_rgba(0,0,0,0.65)] backdrop-blur-md sm:px-10 sm:py-10">
             <div className="mb-8">
               <span className="mb-6 flex h-12 w-12 items-center justify-center rounded-[13px] border border-accent-line/60 bg-accent-surface lg:hidden">
                 <SignalMark />

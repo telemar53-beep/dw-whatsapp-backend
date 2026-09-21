@@ -175,7 +175,7 @@ function TriageAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
             </p>
           )}
           <TriageConfigForm config={config} onSaved={refresh} />
-          <section aria-label="Opções do menu" className="settings-triage-options rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 px-4 py-3 sm:px-5">
+          <section aria-label="Opções do menu" className="settings-triage-options rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 px-4 py-3 sm:px-5">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] pb-2.5">
               <div>
                 <h3 className="font-display text-[16px] font-semibold text-wa-text">Opções do menu</h3>

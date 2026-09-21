@@ -75,7 +75,7 @@ function AssignmentMessageSection() {
     return (
       <form
         onSubmit={handleSave}
-        className="settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-4"
+        className="settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-4"
       >
         <label className="flex items-center gap-2 text-sm text-wa-muted">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-accent" />
@@ -159,7 +159,7 @@ function AssignmentMessageSection() {
   }
 
   return (
-    <div className="settings-message-pane rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-5">
+    <div className="settings-message-pane rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-5">
       <AsyncState status={status} skeletonLines={2}>
         {config.id === null ? (
           <div className="flex items-center justify-between gap-3">

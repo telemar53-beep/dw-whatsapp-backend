@@ -35,7 +35,7 @@
 .settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {width:30px;padding:0;background:transparent;border-color:transparent}
 .settings-channel-center .settings-channel-record > .settings-channel-actions a:hover,.settings-workspace .settings-channel-center button[aria-haspopup]:hover,.settings-workspace .settings-channel-center button[aria-expanded=true] {background:#ffffff08;border-color:#ffffff22;color:#edf2f5}
 .settings-channel-center :is(a,button,select):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
-.settings-channel-center .channel-row-menu {border-radius:8px;background:#303d46;border-color:#64778466;box-shadow:0 10px 28px #0005;min-width:172px}
+.settings-channel-center .channel-row-menu {border-radius:8px;background:var(--color-ui-surface-overlay);border-color:#64778466;box-shadow:0 10px 28px #0005;min-width:172px}
 .settings-workspace .settings-channel-center .channel-row-menu button {display:flex;align-items:center;gap:8px;min-height:30px;padding:6px 9px;font-size:12px;border-radius:4px}
 .settings-channel-center .channel-row-menu button:hover {background:#ffffff08}
 .settings-channel-center .channel-row-menu .dw-menu-item-danger {border-top:1px solid #ffffff0c;margin-top:3px;color:#e7a69f}
@@ -44,10 +44,10 @@
 
 /* QR de conexao, no tema. Era um iframe de fundo branco; agora e a imagem
    dentro de uma moldura do produto, com o texto do que fazer ao lado. */
-.channel-qr {display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--settings-line)}
+.channel-qr {display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--color-ui-line)}
 .channel-qr-quadro {width:188px;height:188px;flex:none;display:grid;place-items:center;border-radius:12px;border:1px solid #ffffff14;background:#f6f7f8;padding:10px}
 .channel-qr-imagem {width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
 .channel-qr-vazio {font-size:11px;line-height:16px;text-align:center;color:#5b6472;padding:0 8px}
 .channel-qr-lado {display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0}
-.channel-qr-instrucao {font-size:12px;line-height:18px;color:var(--settings-muted);margin:0}
+.channel-qr-instrucao {font-size:12px;line-height:18px;color:var(--color-ui-ink-muted);margin:0}
 @container(max-width:520px){.channel-qr{grid-template-columns:minmax(0,1fr);justify-items:center}.channel-qr-lado{align-items:center;text-align:center}}

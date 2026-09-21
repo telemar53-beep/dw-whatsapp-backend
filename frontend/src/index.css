@@ -37,6 +37,24 @@
   --color-wa-surface-line: rgba(255, 255, 255, 0.55);
   --color-wa-field: #ffffff;
   --color-wa-link: #0f766e;
+  /* ---------- Superficies e tintas, por PAPEL (Etapa 7.9) ----------
+     Nomeiam o que ja estava espalhado em hexadecimal. Cartao aparecia em 12
+     pontos com dois hexes de 1 ponto de diferenca; a bandeja flutuante tinha
+     cinco; o campo afundado, quatro. Divisoria e texto de apoio ja tinham
+     TRES e DOIS tokens com o mesmo valor, um por area. Aqui vira um nome por
+     papel, e o valor claro/escuro segue o padrao dos tokens wa-*. */
+  --color-ui-surface-canvas: #eef5f3;
+  --color-ui-surface-panel: #ffffff;
+  --color-ui-surface-card: #ffffff;
+  --color-ui-surface-overlay: #ffffff;
+  --color-ui-surface-field: #ffffff;
+  --color-ui-surface-sunken: #eef4f2;
+  --color-ui-line: #e3ece9;
+  --color-ui-ink-strong: #0b1220;
+  --color-ui-ink-muted: #5b6472;
+  --color-ui-ink-faint: #808a97;
+  --color-ui-ink-ai: #6d4fa3;
+
   --color-sgp-blue: #1a73e8;
   --color-sgp-red: #d93025;
   --color-sgp-gray: #57626d;
@@ -133,6 +151,19 @@
   --color-wa-surface-line: rgba(255, 255, 255, 0.08);
   --color-wa-field: #354047;
   --color-wa-link: #ffb078;
+  /* Mesma familia, nos valores do tema grafite. */
+  --color-ui-surface-canvas: #242f36;
+  --color-ui-surface-panel: #2d3a43;
+  --color-ui-surface-card: #2b343b;
+  --color-ui-surface-overlay: #30383d;
+  --color-ui-surface-field: #354047;
+  --color-ui-surface-sunken: #202a31;
+  --color-ui-line: #ffffff12;
+  --color-ui-ink-strong: #f1f4f6;
+  --color-ui-ink-muted: #a9bcc8;
+  --color-ui-ink-faint: #93a7b5;
+  --color-ui-ink-ai: #c4b2dc;
+
   --color-sgp-blue: #7ab0ff;
   --color-sgp-red: #ff8d82;
   --color-sgp-gray: #c7c2bd;
@@ -235,13 +266,9 @@
   --chat-bubble-ai: #393f4b;
 
   /* Tinta por peso: título, corpo, apoio, metadado. */
-  --chat-ink-strong: #f1f4f6;
   --chat-ink: #cbd7df;
-  --chat-ink-muted: #a9bcc8;
-  --chat-ink-faint: #93a7b5;
 
   /* Linhas e estados. O hover era #ffffff04 — 1,05:1, invisível na prática. */
-  --chat-line: #ffffff12;
   --chat-line-soft: #ffffff0a;
   --chat-state-hover: #ffffff0d;
   --chat-state-selected: #b7835924;
@@ -251,7 +278,6 @@
 
   /* Acento e IA. */
   --chat-accent-soft: #e5a16d;
-  --chat-ai-ink: #c4b2dc;
   --chat-ai-line: #b9a1d733;
 
   /* Filete do autor: a distincao das bolhas nao pode depender so de matiz.

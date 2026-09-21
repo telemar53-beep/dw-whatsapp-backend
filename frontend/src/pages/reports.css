@@ -15,7 +15,7 @@
 .reports-redesign button:disabled { opacity: .5; cursor: not-allowed; }
 .reports-redesign button:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 3px; }
 .report-custom-period { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; justify-content: flex-end; font-size: 12px; }
-.report-custom-period input { width: 76px; padding: 6px 9px; border: 1px solid #ffffff30; border-radius: 6px; background: #20282e; }
+.report-custom-period input { width: 76px; padding: 6px 9px; border: 1px solid #ffffff30; border-radius: 6px; background: var(--color-ui-surface-sunken); }
 .report-custom-period button { background: #e38c48; color: #1d2429; font-weight: 600; }
 .report-content { padding: 0 18px 20px; overflow-y: auto; min-height: 0; }
 .report-overview { margin-bottom: 22px; border-bottom: 1px solid #ffffff16; }

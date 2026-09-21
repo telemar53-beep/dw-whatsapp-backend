@@ -151,12 +151,63 @@ describe('DashboardPage', () => {
     expect(clearUnread).toHaveBeenCalledWith('c2');
   });
 
-  test('abre "Meu perfil" pelo contexto do shell e avisa quando uma conversa está aberta', async () => {
-    useQueue.mockReturnValue({ queue: [], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [{ id: 'c1', contactDisplayName: 'Ana', status: 'assigned', channelId: 'ch1' }], status: 'ready' });
-    const { ctx } = renderInShell(<DashboardPage />);
-    await userEvent.click(await screen.findByText('Ana'));
-    expect(ctx.setConversationOpen).toHaveBeenLastCalledWith(true);
+  // `conversationOpen` significa "a conversa OCUPA A TELA INTEIRA", e não apenas
+  // "existe conversa selecionada". A distinção não é cosmética: a casca esconde o
+  // botão "Abrir menu" quando essa bandeira é verdadeira, e com o significado
+  // antigo a única navegação do produto desaparecia em telas onde a lista ou o
+  // rail continuavam visíveis — de 500 a 767px, e num desktop 1366x768 com zoom
+  // de 200% (que vira uma viewport lógica de 683x384).
+  //
+  // A largura vem de `larguraDePalpite()` (window.innerWidth - 90), porque o
+  // jsdom não tem ResizeObserver e o hook fica no palpite: dá para escolher o
+  // layout de forma determinística.
+  describe('conversationOpen avisa a casca que a conversa ocupa a tela', () => {
+    const larguraOriginal = window.innerWidth;
+    const definirJanela = (px) =>
+      Object.defineProperty(window, 'innerWidth', { value: px, configurable: true, writable: true });
+
+    function umaConversaMinha() {
+      useQueue.mockReturnValue({ queue: [], status: 'ready' });
+      useMyConversations.mockReturnValue({
+        conversations: [{ id: 'c1', contactDisplayName: 'Ana', status: 'assigned', channelId: 'ch1' }],
+        status: 'ready',
+      });
+    }
+
+    afterEach(() => definirJanela(larguraOriginal));
+
+    test('com a lista ainda visível, selecionar a conversa NÃO diz que ela ocupa a tela', async () => {
+      definirJanela(1280); // 1190 úteis: cabem lista (332) e conversa (420) -> lista "expandida"
+      umaConversaMinha();
+      const { ctx } = renderInShell(<DashboardPage />);
+
+      await userEvent.click(await screen.findByText('Ana'));
+
+      expect(ctx.setConversationOpen).toHaveBeenLastCalledWith(false);
+    });
+
+    test('quando a lista fica oculta, selecionar a conversa diz que ela ocupa a tela', async () => {
+      definirJanela(400); // 310 úteis: não cabem nem rail (72) e conversa (420) -> lista "oculta"
+      umaConversaMinha();
+      const { ctx } = renderInShell(<DashboardPage />);
+
+      await userEvent.click(await screen.findByText('Ana'));
+
+      expect(ctx.setConversationOpen).toHaveBeenLastCalledWith(true);
+    });
+
+    test('e selecionar a conversa continua abrindo a conversa, nas duas larguras', async () => {
+      for (const largura of [1280, 400]) {
+        definirJanela(largura);
+        umaConversaMinha();
+        const { unmount } = renderInShell(<DashboardPage />);
+
+        await userEvent.click(await screen.findByText('Ana'));
+
+        expect(await screen.findByRole('button', { name: 'Voltar para a lista' })).toBeInTheDocument();
+        unmount();
+      }
+    });
   });
 
   test('shows the queue in the Espera tab after clicking it', async () => {

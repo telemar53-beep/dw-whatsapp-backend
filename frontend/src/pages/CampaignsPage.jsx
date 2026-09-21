@@ -24,19 +24,41 @@ function CampaignsPage() {
     return acc;
   }, {});
 
-  const refresh = useCallback(() => {
-    setStatus('loading');
+  // `silencioso` pelo mesmo motivo do detalhe: com `status='loading'` o
+  // AsyncState descarta a árvore e a lista inteira vira skeleton. Numa
+  // atualização — automática ou pelo botão — os números precisam trocar
+  // debaixo de uma lista que continua na tela.
+  const refresh = useCallback(({ silencioso = false } = {}) => {
+    if (!silencioso) setStatus('loading');
     return listCampaigns(token)
       .then((data) => {
         setCampaigns(data);
         setStatus('ready');
       })
-      .catch(() => setStatus('error'));
+      .catch(() => {
+        // Uma falha pontual do polling não pode apagar o que já está na tela.
+        if (!silencioso) setStatus('error');
+      });
   }, [token]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Só enquanto houver campanha com destinatário por processar. Quando todas
+  // terminam, o polling para: não há mais número que possa mudar sozinho.
+  const algumaProcessando = campaigns.some(
+    (c) => c.sentCount + c.failedCount + c.skippedCount < c.totalRecipients
+  );
+
+  useEffect(() => {
+    if (!algumaProcessando) return undefined;
+    const intervalo = setInterval(() => {
+      if (document.hidden) return;
+      refresh({ silencioso: true });
+    }, 10000);
+    return () => clearInterval(intervalo);
+  }, [algumaProcessando, refresh]);
 
   return (
     <div className="campaigns-workspace flex min-h-0 flex-1 flex-col">
@@ -44,10 +66,16 @@ function CampaignsPage() {
         title="Campanhas"
         description="Disparo em massa para uma lista de clientes"
         action={
-          <Button className="campaign-create-button" onClick={() => setCreating(true)}>
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" focusable="false"><path d="M10 4v12M4 10h12" /></svg>
-            <span>Nova campanha</span>
-          </Button>
+          <>
+            <Button variant="secondary" className="campaign-create-button" onClick={() => refresh({ silencioso: true })}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6M16.5 3v3.5H13" /></svg>
+              <span>Atualizar</span>
+            </Button>
+            <Button className="campaign-create-button" onClick={() => setCreating(true)}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" focusable="false"><path d="M10 4v12M4 10h12" /></svg>
+              <span>Nova campanha</span>
+            </Button>
+          </>
         }
       />
 
@@ -73,7 +101,7 @@ function CampaignsPage() {
                 <span className="campaign-number campaign-sent"><small>Enviados</small>{campaign.sentCount}</span>
                 <span className={`campaign-number ${campaign.failedCount ? 'campaign-failed' : ''}`}><small>Falharam</small>{campaign.failedCount}</span>
                 <span className="campaign-number campaign-skipped"><small>Pulados</small>{campaign.skippedCount}</span>
-                <span className="campaign-progress"><span>{processed} / {campaign.totalRecipients}</span><span className="campaign-track" aria-hidden="true"><span style={{ width: `${campaign.totalRecipients ? Math.min(100, processed / campaign.totalRecipients * 100) : 0}%` }} /></span></span>
+                <span className="campaign-progress"><span><small className="campaign-rotulo">Processados </small>{processed} / {campaign.totalRecipients}</span><span className="campaign-track" aria-hidden="true"><span style={{ width: `${campaign.totalRecipients ? Math.min(100, processed / campaign.totalRecipients * 100) : 0}%` }} /></span></span>
               </Link></li>;
             })}</ul>
           </>}

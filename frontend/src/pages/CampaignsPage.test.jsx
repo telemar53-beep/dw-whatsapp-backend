@@ -92,3 +92,76 @@ describe('CampaignsPage', () => {
     expect(link).toHaveAttribute('href', '/campanhas/campaign-1');
   });
 });
+
+// Etapa 6.5 — a lista carregava uma vez e ficava: campanha disparando mostrava
+// numeros congelados e nao havia como atualizar.
+describe('atualizacao da lista', () => {
+  const EM_ANDAMENTO = { id: 'c1', name: 'Aviso', channelName: 'Berg', totalRecipients: 10, sentCount: 4, failedCount: 0, skippedCount: 0, createdAt: '2026-09-21T10:00:00Z' };
+  const TERMINADA = { ...EM_ANDAMENTO, sentCount: 10 };
+
+  test('o botao "Atualizar" rebusca sem transformar a lista em skeleton', async () => {
+    api.listCampaigns
+      .mockResolvedValueOnce([TERMINADA])
+      .mockResolvedValueOnce([{ ...TERMINADA, name: 'Aviso revisado' }]);
+    renderPage();
+    expect(await screen.findByText('Aviso')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /atualizar/i }));
+
+    // A lista nunca some: o nome antigo so e substituido pelo novo.
+    expect(await screen.findByText('Aviso revisado')).toBeInTheDocument();
+    expect(api.listCampaigns).toHaveBeenCalledTimes(2);
+  });
+
+  test('uma falha na atualizacao nao apaga a lista que ja esta na tela', async () => {
+    api.listCampaigns
+      .mockResolvedValueOnce([TERMINADA])
+      .mockRejectedValueOnce(new Error('offline'));
+    renderPage();
+    expect(await screen.findByText('Aviso')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /atualizar/i }));
+
+    await waitFor(() => expect(api.listCampaigns).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Aviso')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  test('com campanha ainda processando, atualiza sozinha a cada 10s', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    api.listCampaigns.mockResolvedValue([EM_ANDAMENTO]);
+    renderPage();
+    await screen.findByText('Aviso');
+    expect(api.listCampaigns).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(api.listCampaigns).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(api.listCampaigns).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+
+  test('com todas processadas, nao fica consultando a toa', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    api.listCampaigns.mockResolvedValue([TERMINADA]);
+    renderPage();
+    await screen.findByText('Aviso');
+
+    await vi.advanceTimersByTimeAsync(30000);
+
+    expect(api.listCampaigns).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  test('cada numero da linha tem rotulo para leitor de tela', async () => {
+    api.listCampaigns.mockResolvedValue([TERMINADA]);
+    renderPage();
+
+    const linha = await screen.findByRole('link', { name: /aviso/i });
+    // A linha de cabecalho e aria-hidden; sem esses rotulos a leitura era so
+    // uma sequencia de numeros sem significado.
+    ['Destinatários', 'Enviados', 'Falharam', 'Pulados', 'Processados'].forEach((rotulo) => {
+      expect(linha).toHaveAccessibleName(new RegExp(rotulo, 'i'));
+    });
+  });
+});

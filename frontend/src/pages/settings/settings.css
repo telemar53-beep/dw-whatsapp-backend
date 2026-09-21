@@ -64,7 +64,10 @@
 .dw-row-menu-trigger {display:inline-flex;height:32px;width:32px;flex:none;align-items:center;justify-content:center;border-radius:10px;border:1px solid var(--color-wa-border);background:var(--color-wa-field);color:var(--color-wa-text);transition:background-color .15s}
 .dw-row-menu-trigger:hover {background:var(--color-wa-panel)}
 .dw-row-menu-trigger:focus-visible {outline:2px solid var(--color-focus-ring);outline-offset:2px}
-.dw-row-menu {position:absolute;right:0;top:calc(100% + 4px);z-index:var(--z-popover);min-width:170px;border-radius:12px;border:1px solid var(--color-wa-border);background:var(--color-wa-panel);padding:4px;box-shadow:var(--wa-dialog-shadow)}
+/* `fixed` porque o menu agora vive num portal do body (ver RowMenu): quem
+   posiciona e quem decide virar para cima e o componente, por coordenada de
+   tela. O teto de altura cobre a viewport curta, onde nem virando cabe. */
+.dw-row-menu {position:fixed;z-index:var(--z-popover);min-width:170px;max-height:calc(100dvh - 16px);overflow-y:auto;border-radius:12px;border:1px solid var(--color-wa-border);background:var(--color-wa-panel);padding:4px;box-shadow:var(--wa-dialog-shadow)}
 .dw-menu-item {display:flex;width:100%;align-items:center;border-radius:8px;padding:8px 12px;text-align:left;font-size:13.5px;color:var(--color-wa-text);transition:background-color .15s}
 .dw-menu-item:hover {background:var(--color-wa-hover)}
 .dw-menu-item:disabled {opacity:.5}

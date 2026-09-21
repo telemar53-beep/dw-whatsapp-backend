@@ -89,14 +89,6 @@ export function IconIdCard(props) {
   );
 }
 
-export function IconInvoice(props) {
-  return (
-    <Svg {...props}>
-      <path d="M5.5 2h13a1 1 0 011 1v18.2l-2.6-1.6-2.6 1.6-2.6-1.6-2.6 1.6-2.6-1.6L4.5 21V3a1 1 0 011-1zm2 5.2v1.8h9V7.2zm0 4v1.8h9v-1.8zm0 4v1.8h6v-1.8z" />
-    </Svg>
-  );
-}
-
 export function IconClose(props) {
   return (
     <Svg {...props}>

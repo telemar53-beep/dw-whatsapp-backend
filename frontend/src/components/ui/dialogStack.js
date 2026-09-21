@@ -17,7 +17,23 @@ const ouvintes = new Set();
 // Passo entre camadas. A base (--z-dialog) mora no CSS; a multiplicação por
 // profundidade acontece aqui, em JavaScript, e o que vai para o style é sempre
 // um valor CSS válido.
-export const PASSO_DE_CAMADA = 10;
+// O passo entre diálogos empilhados mora no CSS, junto da base `--z-dialog`.
+// Antes o `10` estava escrito nos dois lugares e só o do JavaScript tinha
+// efeito: mexer no token não mudava nada, e a divergência passaria despercebida.
+// Agora existe uma fonte de verdade só, e o número daqui é apenas o resgate
+// para quando não há CSS (teste em jsdom, render no servidor).
+const PASSO_PADRAO = 10;
+let passoLido = null;
+
+export function passoDeCamada() {
+  if (passoLido !== null) return passoLido;
+  let lido = NaN;
+  if (typeof window !== 'undefined' && document.documentElement) {
+    lido = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--z-dialog-step'), 10);
+  }
+  passoLido = Number.isFinite(lido) && lido > 0 ? lido : PASSO_PADRAO;
+  return passoLido;
+}
 
 function avisar() {
   for (const ouvinte of [...ouvintes]) ouvinte();

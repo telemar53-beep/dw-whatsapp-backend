@@ -179,8 +179,3 @@ export const checkCircleIcon = (
   </svg>
 );
 
-export const closeIcon = (
-  <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" {...STROKE} strokeWidth={2.2}>
-    <path d="M6 6l12 12M18 6L6 18" />
-  </svg>
-);

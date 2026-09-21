@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { entrar, inscrever, posicaoDe, topoDaPilha, PASSO_DE_CAMADA } from './dialogStack';
+import { entrar, inscrever, posicaoDe, topoDaPilha, passoDeCamada } from './dialogStack';
 import { IconClose } from '../icons/WaIcons';
 import '../overlays.css';
 
@@ -91,7 +91,7 @@ export function useDialogLayer(aberto, aoFechar, { fecharComEsc = true } = {}) {
   return {
     profundidade: camada.profundidade,
     topo: camada.topo,
-    zIndex: `calc(var(--z-dialog) + ${camada.profundidade * PASSO_DE_CAMADA})`,
+    zIndex: `calc(var(--z-dialog) + ${camada.profundidade * passoDeCamada()})`,
   };
 }
 
@@ -248,7 +248,7 @@ export function Dialog({
       className={`chat-theme fixed inset-0 flex items-center justify-center bg-[var(--wa-overlay)] p-4 font-wa ${
         camada.profundidade === 0 ? 'backdrop-blur-[var(--wa-overlay-blur)]' : ''
       }`}
-      style={{ zIndex: `calc(var(--z-dialog) + ${camada.profundidade * PASSO_DE_CAMADA})` }}
+      style={{ zIndex: `calc(var(--z-dialog) + ${camada.profundidade * passoDeCamada()})` }}
       data-dialog-depth={camada.profundidade}
       inert={camada.topo ? undefined : ''}
       onPointerDown={aoDescerNoFundo}

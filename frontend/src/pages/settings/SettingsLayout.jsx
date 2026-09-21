@@ -38,12 +38,12 @@ function SettingsLayout() {
 
   return (
     <div data-settings-page={active?.item.key} data-settings-group={active?.group.groupKey} className="settings-workspace flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row">
-      <aside className={`settings-nav ${PANEL} flex min-w-0 flex-col bg-[#2b343b]/95 lg:w-[264px] lg:shrink-0 ${term ? 'max-h-[40vh] lg:max-h-none' : ''}`}>
+      <aside className={`settings-nav ${PANEL} flex min-w-0 flex-col lg:w-[264px] lg:shrink-0 ${term ? 'max-h-[40vh] lg:max-h-none' : ''}`}>
         <div className="settings-nav-heading shrink-0 px-4 pb-2 pt-4 lg:pt-5">
           <h2 className="font-display text-[18px] font-semibold leading-tight text-chat-text">Configurações</h2>
         </div>
         <div className="px-3 pb-3">
-          <label className="settings-nav-search flex h-10 items-center gap-2 rounded-[10px] border border-white/[0.12] bg-[#354047] px-3 focus-within:border-chat-orange/60">
+          <label className="settings-nav-search flex h-10 items-center gap-2 rounded-[10px] border border-white/[0.12] px-3 focus-within:border-chat-orange/60">
             <IconSearch size={17} />
             <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar configuração" aria-label="Buscar configuração" className="min-w-0 flex-1 bg-transparent text-[13px] text-chat-text outline-none placeholder:text-chat-faint" />
           </label>
@@ -143,7 +143,7 @@ function SettingsLayout() {
           })}
         </nav>}
       </aside>
-      <section className={`settings-stage ${PANEL} flex min-h-0 min-w-0 flex-1 flex-col bg-[#293238]/92`}>
+      <section className={`settings-stage ${PANEL} flex min-h-0 min-w-0 flex-1 flex-col`}>
         <Outlet />
       </section>
     </div>

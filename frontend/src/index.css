@@ -236,7 +236,6 @@
   /* Linhas e estados. O hover era #ffffff04 — 1,05:1, invisível na prática. */
   --chat-line: #ffffff12;
   --chat-line-soft: #ffffff0a;
-  --chat-line-strong: #ffffff1f;
   --chat-state-hover: #ffffff0d;
   --chat-state-selected: #b7835924;
   --chat-state-selected-soft: #b783590b;
@@ -296,33 +295,6 @@
 /* ---------- Fundo do chat ---------- */
 .wa-wallpaper {
   background-color: var(--color-wa-chat);
-}
-
-/* ---------- Balões ---------- */
-.wa-bubble {
-  border: 1px solid rgba(11, 18, 32, 0.04);
-  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.08);
-}
-
-.wa-tail-in::before,
-.wa-tail-out::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  width: 8px;
-  height: 13px;
-}
-
-.wa-tail-in::before {
-  left: -8px;
-  background-color: var(--color-wa-in);
-  clip-path: polygon(100% 0, 100% 100%, 0 0);
-}
-
-.wa-tail-out::before {
-  right: -8px;
-  background-color: var(--color-wa-out);
-  clip-path: polygon(0 0, 100% 0, 0 100%);
 }
 
 /* ---------- Barras de rolagem ----------

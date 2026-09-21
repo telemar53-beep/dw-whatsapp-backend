@@ -26,18 +26,6 @@ export function DataTable({ label, className = '', children }) {
   );
 }
 
-export function DataTableEmpty({ colSpan, children }) {
-  return (
-    <tr>
-      <td colSpan={colSpan} className="dw-table-empty">
-        {children}
-      </td>
-    </tr>
-  );
-}
-
-// Menu de ações da linha. O gatilho é um alvo de ícone com rótulo acessível;
-// o painel fecha por clique fora, por ESC e ao escolher uma ação.
 export function RowMenu({ label, children }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);

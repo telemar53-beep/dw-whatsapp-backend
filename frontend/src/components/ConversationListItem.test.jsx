@@ -404,8 +404,8 @@ describe('ConversationListItem', () => {
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
 
     const confirmacao = await screen.findByRole('alertdialog');
-    expect(confirmacao).toHaveTextContent('Encerrar esse atendimento sem motivo?');
-    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Encerrar' }));
+    expect(confirmacao).toHaveTextContent('Finalizar esse atendimento sem informar o motivo?');
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Finalizar' }));
 
     expect(onQuickClose).toHaveBeenCalledWith('c1');
     expect(onSelect).not.toHaveBeenCalled();

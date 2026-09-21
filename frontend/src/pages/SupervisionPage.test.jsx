@@ -87,7 +87,7 @@ describe('SupervisionPage', () => {
 
     const waitingColumn = screen.getByRole('heading', { name: 'Em espera', exact: true }).closest('div').parentElement;
     await userEvent.click(within(waitingColumn).getByRole('button', { name: /finalizar/i }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Finalizar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
   });
@@ -98,7 +98,7 @@ describe('SupervisionPage', () => {
 
     const automationColumn = screen.getByRole('heading', { name: 'Em automação', exact: true }).closest('div').parentElement;
     await userEvent.click(within(automationColumn).getByRole('button', { name: /finalizar/i }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Finalizar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c3', null, 'tok-123');
   });

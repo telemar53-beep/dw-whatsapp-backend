@@ -187,7 +187,7 @@ function TransferModal({ conversationId, onClose }) {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar atendente por nome..."
+            placeholder="Buscar atendente por nome…"
             aria-label="Buscar atendente por nome"
             className="min-w-0 flex-1 bg-transparent text-[13.5px] text-wa-text outline-none placeholder:text-wa-muted"
           />

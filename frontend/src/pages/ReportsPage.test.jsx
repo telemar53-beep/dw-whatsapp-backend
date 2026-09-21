@@ -180,7 +180,7 @@ describe('ReportsPage', () => {
 
   // Fix: periodo=custom chegando pela URL sem um "dias" válido (1..365) —
   // link colado à mão, favorito antigo, "dias" apagado — ficava preso em
-  // "Carregando indicadores..." pra sempre, porque o efeito de busca só
+  // "Carregando indicadores…" pra sempre, porque o efeito de busca só
   // rodava com customDays truthy. Agora cai para "today".
   test('periodo=custom sem dias válido na URL cai para hoje em vez de travar carregando', async () => {
     api.getMetrics.mockResolvedValue({

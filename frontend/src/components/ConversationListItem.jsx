@@ -57,7 +57,7 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
 
   async function handleQuickClose(event) {
     event.stopPropagation();
-    const ok = await confirm('Encerrar esse atendimento sem motivo?', { danger: true, confirmLabel: 'Encerrar' });
+    const ok = await confirm('Finalizar esse atendimento sem informar o motivo?', { danger: true, confirmLabel: 'Finalizar' });
     if (ok) onQuickClose(conversation.id);
   }
 

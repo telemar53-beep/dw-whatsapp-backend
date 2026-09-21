@@ -304,8 +304,8 @@ describe('colar imagem no campo de mensagem', () => {
     const onSend = vi.fn();
     render(<MessageInput onSend={onSend} />);
 
-    await userEvent.click(screen.getByPlaceholderText('Digite uma mensagem...'));
-    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), pasteEvent([imagemFake()]));
+    await userEvent.click(screen.getByPlaceholderText('Digite uma mensagem…'));
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem…'), pasteEvent([imagemFake()]));
 
     expect(await screen.findByRole('button', { name: /remover/i })).toBeInTheDocument();
     expect(onSend).not.toHaveBeenCalled();
@@ -314,7 +314,7 @@ describe('colar imagem no campo de mensagem', () => {
   test('mostra a miniatura da imagem colada', async () => {
     render(<MessageInput onSend={vi.fn()} />);
 
-    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), pasteEvent([imagemFake()]));
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem…'), pasteEvent([imagemFake()]));
 
     expect(await screen.findByAltText(/pré-visualização/i)).toHaveAttribute('src', 'blob:miniatura');
   });
@@ -322,7 +322,7 @@ describe('colar imagem no campo de mensagem', () => {
   test('colar texto não vira anexo', async () => {
     render(<MessageInput onSend={vi.fn()} />);
 
-    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), {
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem…'), {
       clipboardData: { items: [{ kind: 'string', type: 'text/plain', getAsFile: () => null }], getData: () => 'oi' },
     });
 
@@ -333,7 +333,7 @@ describe('colar imagem no campo de mensagem', () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(<MessageInput onSend={onSend} />);
 
-    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), pasteEvent([imagemFake()]));
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem…'), pasteEvent([imagemFake()]));
     await screen.findByRole('button', { name: /remover/i });
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
 
@@ -345,7 +345,7 @@ describe('colar imagem no campo de mensagem', () => {
 
   test('remover limpa a imagem colada', async () => {
     render(<MessageInput onSend={vi.fn()} />);
-    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), pasteEvent([imagemFake()]));
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem…'), pasteEvent([imagemFake()]));
     await screen.findByRole('button', { name: /remover/i });
 
     await userEvent.click(screen.getByRole('button', { name: /remover/i }));
@@ -355,7 +355,7 @@ describe('colar imagem no campo de mensagem', () => {
 
   test('colar de novo substitui a imagem anterior', async () => {
     render(<MessageInput onSend={vi.fn()} />);
-    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
 
     fireEvent.paste(campo, pasteEvent([imagemFake()]));
     await screen.findByRole('button', { name: /remover/i });
@@ -372,34 +372,34 @@ describe('colar imagem no campo de mensagem', () => {
 describe('rascunho por conversa', () => {
   test('o campo abre vazio ao trocar de conversa', async () => {
     const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Olá Maria, tudo bem?');
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem…'), 'Olá Maria, tudo bem?');
 
     rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
 
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('');
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).toHaveValue('');
   });
 
   test('voltar para a conversa devolve o que estava escrito nela', async () => {
     const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Olá Maria');
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem…'), 'Olá Maria');
 
     rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
     rerender(<MessageInput conversationId="c1" onSend={vi.fn()} />);
 
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('Olá Maria');
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).toHaveValue('Olá Maria');
   });
 
   test('cada conversa guarda o seu proprio texto', async () => {
     const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Para Maria');
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem…'), 'Para Maria');
     rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
-    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Para Berg');
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem…'), 'Para Berg');
 
     rerender(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('Para Maria');
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).toHaveValue('Para Maria');
 
     rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('Para Berg');
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).toHaveValue('Para Berg');
   });
 
   // O anexo é o que mais arrisca ir para o cliente errado, então ele nunca
@@ -408,7 +408,7 @@ describe('rascunho por conversa', () => {
     global.URL.createObjectURL = vi.fn(() => 'blob:x');
     global.URL.revokeObjectURL = vi.fn();
     const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), {
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem…'), {
       clipboardData: {
         items: [{ kind: 'file', type: 'image/png', getAsFile: () => new File(['x'], 'p.png', { type: 'image/png' }) }],
         getData: () => '',
@@ -425,7 +425,7 @@ describe('rascunho por conversa', () => {
     global.URL.createObjectURL = vi.fn(() => 'blob:x');
     global.URL.revokeObjectURL = vi.fn();
     const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem...'), {
+    fireEvent.paste(screen.getByPlaceholderText('Digite uma mensagem…'), {
       clipboardData: {
         items: [{ kind: 'file', type: 'image/png', getAsFile: () => new File(['x'], 'p.png', { type: 'image/png' }) }],
         getData: () => '',
@@ -442,14 +442,14 @@ describe('rascunho por conversa', () => {
   test('depois de enviar, o texto nao reaparece ao voltar para a conversa', async () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     const { rerender } = render(<MessageInput conversationId="c1" onSend={onSend} />);
-    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem...'), 'Olá Maria');
+    await userEvent.type(screen.getByPlaceholderText('Digite uma mensagem…'), 'Olá Maria');
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
     await waitFor(() => expect(onSend).toHaveBeenCalled());
 
     rerender(<MessageInput conversationId="c2" onSend={onSend} />);
     rerender(<MessageInput conversationId="c1" onSend={onSend} />);
 
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toHaveValue('');
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).toHaveValue('');
   });
 });
 
@@ -466,7 +466,7 @@ describe('gravação em andamento na hora da troca', () => {
 
     expect(screen.queryByRole('button', { name: /parar gravação/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/gravação de áudio/i)).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).toBeInTheDocument();
   });
 
   test('o microfone é liberado ao descartar a gravação', async () => {
@@ -512,7 +512,7 @@ describe('o campo cresce com o texto', () => {
 
   test('texto curto mantém o campo do tamanho de uma linha', async () => {
     render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
 
     await userEvent.type(campo, 'Oi');
 
@@ -521,7 +521,7 @@ describe('o campo cresce com o texto', () => {
 
   test('texto longo faz o campo crescer', async () => {
     render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
 
     await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
 
@@ -531,7 +531,7 @@ describe('o campo cresce com o texto', () => {
   // Sem teto, um texto muito longo empurraria a conversa inteira para fora.
   test('para de crescer no teto e passa a rolar por dentro', async () => {
     render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
 
     await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
 
@@ -541,7 +541,7 @@ describe('o campo cresce com o texto', () => {
   test('depois de enviar, o campo volta ao tamanho de uma linha', async () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(<MessageInput conversationId="c1" onSend={onSend} />);
-    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
     await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
 
     await userEvent.click(screen.getByRole('button', { name: /enviar/i }));
@@ -551,13 +551,13 @@ describe('o campo cresce com o texto', () => {
 
   test('trocar de conversa ajusta o campo ao rascunho da nova', async () => {
     const { rerender } = render(<MessageInput conversationId="c1" onSend={vi.fn()} />);
-    const campo = screen.getByPlaceholderText('Digite uma mensagem...');
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
     await userEvent.type(campo, 'COBERTURA: Boa Vista do Gurupi, Cachoeira do Piriá, Cândido Mendes, Carutapera');
 
     rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
 
     await waitFor(() =>
-      expect(parseInt(screen.getByPlaceholderText('Digite uma mensagem...').style.height, 10)).toBe(UMA_LINHA)
+      expect(parseInt(screen.getByPlaceholderText('Digite uma mensagem…').style.height, 10)).toBe(UMA_LINHA)
     );
   });
 });

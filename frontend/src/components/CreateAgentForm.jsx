@@ -62,7 +62,7 @@ function CreateAgentForm({ onCreated, onCancel, embedded = false }) {
       </div>
       <div>
         <label htmlFor="agent-email" className={labelClass}>
-          Email
+          E-mail
         </label>
         <input
           id="agent-email"

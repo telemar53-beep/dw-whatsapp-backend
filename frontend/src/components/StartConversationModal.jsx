@@ -61,7 +61,7 @@ function StartConversationModal({ onClose, onCreated }) {
   const selectedTemplate = templates.find((tpl) => tpl.id === templateId);
   const startDisabled = submitting || loading || loadError || channels.length === 0 || (isOfficialChannel && templates.length === 0);
   const disabledReason = submitting
-    ? 'Iniciando conversa...'
+    ? 'Iniciando conversa…'
     : loading
       ? 'Aguarde a lista de canais.'
       : loadError
@@ -128,7 +128,7 @@ function StartConversationModal({ onClose, onCreated }) {
               Canal
             </label>
             {loading ? (
-              <p className="text-[14px] text-wa-muted">Carregando canais...</p>
+              <p className="text-[14px] text-wa-muted">Carregando canais…</p>
             ) : loadError ? (
               <p className="text-[14px] text-wa-error-text">Não foi possível carregar os canais. Feche e tente novamente.</p>
             ) : channels.length === 0 ? (

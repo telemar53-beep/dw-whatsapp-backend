@@ -140,7 +140,7 @@ function FinanceiroSection({ contractId, onSendMessage, onSendPdf, onSendPix, on
       {state && state.loading && (
         <p className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
           <IconSpinner size={16} />
-          Consultando o SGP...
+          Consultando o SGP…
         </p>
       )}
 
@@ -327,7 +327,7 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
         {loading && (
           <p className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
             <IconSpinner size={16} />
-            Buscando no SGP...
+            Buscando no SGP…
           </p>
         )}
         {error === 'not_found' && (

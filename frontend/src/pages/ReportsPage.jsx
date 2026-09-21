@@ -154,7 +154,7 @@ function ReportsPage() {
   const customDaysFromUrl = Number(searchParams.get('dias'));
   const validCustomDaysFromUrl = isValidCustomDays(customDaysFromUrl) ? customDaysFromUrl : null;
   // periodo=custom sem "dias" válido (1..365) não tem o que buscar — em vez
-  // de ficar preso em "Carregando indicadores..." pra sempre, cai para "today".
+  // de ficar preso em "Carregando indicadores…" pra sempre, cai para "today".
   const period = rawPeriod === 'custom' && !validCustomDaysFromUrl ? 'today' : rawPeriod;
   const customDays = period === 'custom' ? validCustomDaysFromUrl : null;
   // Abrir "Personalizado" com ?dias=45 na URL mostrava o campo vazio, como se
@@ -245,7 +245,7 @@ function ReportsPage() {
     </header>
     <div className={`report-content chat-scroll${atualizando && resposta ? ' is-atualizando' : ''}`}>
       {error && <div role="alert" className="report-error"><IconAlert/>{error}</div>}
-      {!data && !error && <p role="status" aria-live="polite" className="report-empty">Carregando indicadores...</p>}
+      {!data && !error && <p role="status" aria-live="polite" className="report-empty">Carregando indicadores…</p>}
       <section className="report-overview" aria-label="Resumo do período">
         <div className="report-overview-heading"><span>Resumo do período{resposta && <>{' '}<b>· {rotuloDoPeriodo(resposta)}</b></>}{atualizando && resposta && <em className="report-updating" role="status">Atualizando…</em>}</span><div className="report-help"><span aria-hidden="true">ⓘ</span>          <SectionHelp label="Como os tempos são calculados" title="Como os tempos são calculados">
             <p>

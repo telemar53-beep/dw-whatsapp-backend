@@ -1148,7 +1148,7 @@ describe('aviso da janela de 24 horas', () => {
     comMensagens([{ id: 'm1', direction: 'inbound', content: 'Oi', createdAt: horasAtras(25) }]);
     render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
 
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).not.toBeDisabled();
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).not.toBeDisabled();
   });
 });
 
@@ -1386,7 +1386,7 @@ describe('recálculo da janela de 24 horas', () => {
     expect(screen.queryByText(/janela de 24h fechada/i)).not.toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.change(screen.getByPlaceholderText('Digite uma mensagem...'), { target: { value: 'Alguma coisa' } });
+      fireEvent.change(screen.getByPlaceholderText('Digite uma mensagem…'), { target: { value: 'Alguma coisa' } });
     });
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Enviar'));
@@ -1456,7 +1456,7 @@ describe('janela de 24 horas indeterminada', () => {
     comDataIlegivel();
     render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
 
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).not.toBeDisabled();
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).not.toBeDisabled();
   });
 
   // A decisão final é do canal: enquanto ele não recusou, não há por que

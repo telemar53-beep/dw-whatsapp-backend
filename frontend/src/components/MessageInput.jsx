@@ -407,7 +407,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleComposerKeyDown}
                 onPaste={handlePaste}
-                placeholder="Digite uma mensagem..."
+                placeholder="Digite uma mensagem…"
                 rows={1}
                 style={{ minHeight: COMPOSER_MIN_HEIGHT, maxHeight: COMPOSER_MAX_HEIGHT }}
                 className="min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"

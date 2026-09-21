@@ -120,7 +120,7 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar um integrante da equipe..."
+            placeholder="Buscar um integrante da equipe…"
             aria-label="Buscar um integrante da equipe"
             className="min-w-0 flex-1 bg-transparent text-[13.5px] text-wa-text outline-none placeholder:text-wa-muted"
           />

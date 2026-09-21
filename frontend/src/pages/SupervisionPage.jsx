@@ -437,7 +437,7 @@ function SupervisionPage() {
         <aside className="supervision-team" aria-label="Equipe e carga">
           <header><h2>Equipe e carga</h2><span>{agents.filter(a => onlineIds.has(a.id)).length} online</span></header>
           <p>Carga total ativa · clique para filtrar</p>
-          {agentsStatus === 'loading' && <p role="status">Carregando equipe...</p>}
+          {agentsStatus === 'loading' && <p role="status">Carregando equipe…</p>}
           {agentsStatus === 'error' && <p role="alert">Não foi possível carregar a equipe.</p>}
           <ul>{agents.map(agent => {
             const count = cargaPorAtendente.get(agent.id) || 0;
@@ -580,7 +580,7 @@ function SupervisionPage() {
               disabled={loadingClosed}
               className="mt-3 w-full rounded-[16px] border border-white/[0.10] bg-white/[0.06] px-4 py-3 text-[14px] font-medium text-chat-text transition hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loadingClosed ? 'Carregando...' : 'Carregar mais'}
+              {loadingClosed ? 'Carregando…' : 'Carregar mais'}
             </button>
           )}
         </div>

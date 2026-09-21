@@ -194,7 +194,7 @@ describe('DashboardPage', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Finalizar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c1', null, 'tok-123');
   });
@@ -206,7 +206,7 @@ describe('DashboardPage', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: /automação/i }));
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Finalizar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
   });

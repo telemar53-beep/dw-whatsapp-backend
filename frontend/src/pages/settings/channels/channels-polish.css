@@ -33,7 +33,16 @@
 .settings-channel-center .settings-channel-service > .settings-cell-label {font-size:9px;letter-spacing:.08em;color:#91a6b4;line-height:14px;margin-bottom:5px}
 .settings-channel-center .settings-channel-record > .settings-channel-actions a,.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {height:30px;min-height:30px;border-radius:6px;background:#ffffff03;border-color:#ffffff12;font-size:11px;padding:4px 9px;color:#cbd6dd;gap:6px}
 .settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {width:30px;padding:0;background:transparent;border-color:transparent}
-.settings-channel-center .settings-channel-record > .settings-channel-actions a:hover,.settings-workspace .settings-channel-center button[aria-haspopup]:hover,.settings-workspace .settings-channel-center button[aria-expanded=true] {background:#ffffff08;border-color:#ffffff22;color:#edf2f5}
+.settings-channel-center .settings-channel-record > .settings-channel-actions a:hover {background:#ffffff08;border-color:#ffffff22;color:#edf2f5}
+/* O repouso do "..." mora na linha acima em (0,5,1) e declara
+   `background:transparent`. O hover vinha em (0,4,1) e o aberto em (0,3,1):
+   os dois PERDIAM, e os tres estados computavam identicos (medido: os tres em
+   rgba(0,0,0,0)). Aqui so a especificidade muda — os valores de hover sao os
+   que ja estavam escritos. O aberto ganha um degrau para nao se confundir com
+   o hover, no mesmo vocabulario de alpha do arquivo. */
+.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup]:hover,
+.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup]:focus-visible {background:#ffffff08;border-color:#ffffff22;color:#edf2f5}
+.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup][aria-expanded=true] {background:#ffffff12;border-color:#ffffff2e;color:#f3f7f9}
 .settings-channel-center :is(a,button,select):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 .settings-channel-center .channel-row-menu {border-radius:8px;background:var(--color-ui-surface-overlay);border-color:#64778466;box-shadow:0 10px 28px #0005;min-width:172px}
 .settings-workspace .settings-channel-center .channel-row-menu button {display:flex;align-items:center;gap:8px;min-height:30px;padding:6px 9px;font-size:12px;border-radius:4px}

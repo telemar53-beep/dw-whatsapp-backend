@@ -35,3 +35,29 @@
 /* Local action sizing: do not change the shared Button or other pages. */
 .campaigns-workspace .campaign-create-button{height:32px;min-height:32px;padding:0 10px;gap:6px;border-radius:7px;font-size:12px;line-height:16px;white-space:nowrap}
 .campaigns-workspace .campaign-create-button svg{flex:none;width:14px;height:14px}
+
+/* Busca, ordenacao e filtro: controles novos no mesmo tom dos existentes,
+   sem mexer na composicao aprovada da lista. */
+.campaign-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 0 10px}
+.campaign-toolbar input{flex:1 1 220px;min-width:0;height:32px;padding:0 10px;border:1px solid #ffffff20;border-radius:7px;background:#ffffff07;color:inherit;font-size:12px}
+.campaign-toolbar input::placeholder{color:#8c9aa4}
+.campaign-toolbar label{font-size:11px;color:#aeb8bf}
+.campaign-toolbar select{height:32px;padding:0 8px;border:1px solid #ffffff20;border-radius:7px;background:#2b353b;color:inherit;font-size:12px}
+.campaign-toolbar input:focus-visible,.campaign-toolbar select:focus-visible,.campaign-filtro button:focus-visible,.campaign-mostrar-mais:focus-visible{outline:2px solid var(--color-focus-ring);outline-offset:2px}
+.campaign-sem-resultado{padding:22px 2px;font-size:13px;color:#aeb8bf;border-top:1px solid #ffffff12}
+
+.campaign-filtro{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 10px}
+.campaign-filtro button{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;border:1px solid #ffffff1c;border-radius:7px;font-size:12px;color:#b6bfc5}
+.campaign-filtro button:hover{border-color:#d9905573;background:#ffffff08}
+.campaign-filtro button[aria-pressed=true]{border-color:#d990558c;background:#d9905526;color:#ffd9b9}
+.campaign-filtro strong{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+
+.campaign-mostrar-mais{width:100%;margin-top:12px;padding:10px;border:1px solid #ffffff14;border-radius:9px;background:#ffffff06;color:#d6dee3;font-size:12.5px}
+.campaign-mostrar-mais:hover{background:#ffffff0c}
+
+/* Terminada x em andamento: so o que os contadores permitem afirmar. Nada de
+   "travada", "pausada" ou "cancelada" — o backend nao guarda estado nenhum. */
+.campaign-situacao{font-size:10px;color:#9fa9b1}
+.campaign-situacao.is-completo{color:#80d9ab}
+.campaign-track.is-completo>span{background:#5fbd8d}
+.campaign-detail-progress .campaign-situacao{flex:none}

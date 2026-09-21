@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getCampaign } from '../services/api';
 import { useAgentChannels } from '../hooks/useAgentChannels';
+import { descreverFalha } from '../utils/failureReasons';
+import { processadosDaCampanha, situacaoDaCampanha, campanhaTerminou } from '../utils/campaignStatus';
 import './campaigns.css';
 import { PageHeader, AsyncState } from '../components/ui';
 
@@ -14,12 +16,28 @@ const STATUS_TONES = {
   skipped: 'border-white/[0.10] bg-white/[0.06] text-chat-muted',
 };
 
+const FILTROS = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'sent', label: 'Enviados' },
+  { value: 'failed', label: 'Falharam' },
+  { value: 'skipped', label: 'Pulados' },
+  { value: 'pending', label: 'Pendentes' },
+];
+
+// A rota devolve TODOS os destinatários de uma vez, e a campanha aceita até
+// 2000. Desenhar 2000 linhas — e redesenhá-las a cada consulta de 5s enquanto
+// dispara — é peso puro. Paginar de verdade é dívida de backend; aqui o que dá
+// para fazer é desenhar por lote.
+const LOTE = 200;
+
 function CampaignDetailPage() {
   const { id } = useParams();
   const { token } = useAuth();
   const { channels } = useAgentChannels();
   const [campaign, setCampaign] = useState(null);
   const [status, setStatus] = useState('loading');
+  const [filtro, setFiltro] = useState('todos');
+  const [limite, setLimite] = useState(LOTE);
 
   // `silencioso` existe porque o polling de 5s chamava este mesmo refresh:
   // com `status='loading'`, o AsyncState descartava a árvore e a tela inteira
@@ -43,8 +61,10 @@ function CampaignDetailPage() {
     refresh();
   }, [refresh]);
 
-  const processedCount = campaign ? campaign.sentCount + campaign.failedCount + campaign.skippedCount : 0;
-  const stillProcessing = campaign ? processedCount < campaign.totalRecipients : false;
+  // Os números do topo e o progresso respondem pela campanha inteira, sempre:
+  // o filtro muda quem aparece na lista, não o que a campanha é.
+  const processedCount = campaign ? processadosDaCampanha(campaign) : 0;
+  const stillProcessing = campaign ? !campanhaTerminou(campaign) : false;
 
   useEffect(() => {
     if (!stillProcessing) return undefined;
@@ -55,7 +75,26 @@ function CampaignDetailPage() {
     return () => clearInterval(interval);
   }, [stillProcessing, refresh]);
 
-  const channelName = campaign && (campaign.channelName || channels.find((channel) => channel.id === campaign.channelId)?.name);
+  const destinatarios = campaign ? campaign.recipients : [];
+  const porResultado = useMemo(() => {
+    const contagem = { todos: destinatarios.length, sent: 0, failed: 0, skipped: 0, pending: 0 };
+    for (const r of destinatarios) if (contagem[r.status] !== undefined) contagem[r.status] += 1;
+    return contagem;
+  }, [destinatarios]);
+
+  const filtrados = useMemo(
+    () => (filtro === 'todos' ? destinatarios : destinatarios.filter((r) => r.status === filtro)),
+    [destinatarios, filtro]
+  );
+
+  function trocarFiltro(valor) {
+    setFiltro(valor);
+    setLimite(LOTE);
+  }
+
+  // `channelName` nunca vem no payload (a rota devolve só as colunas de
+  // `campaigns`); quem resolve o nome é sempre a lista de canais.
+  const channelName = campaign && channels.find((channel) => channel.id === campaign.channelId)?.name;
 
   return (
     <div className="campaigns-workspace flex min-h-0 flex-1 flex-col">
@@ -70,19 +109,32 @@ function CampaignDetailPage() {
           {campaign && <>
             <section className="campaign-summary" aria-label="Resumo da campanha">
               <div className="campaign-channel"><strong>{channelName || 'Canal não informado'}</strong><span>Canal de envio</span></div>
-              {[["Destinatários", campaign.totalRecipients], ["Enviados", campaign.sentCount], ["Falharam", campaign.failedCount], ["Pulados", campaign.skippedCount]].map(([label, value]) => <div key={label}><strong>{value}</strong><span>{label}</span></div>)}
+              {[["Destinatários", campaign.totalRecipients], ["Enviados", campaign.sentCount], ["Falharam", campaign.failedCount], ["Pulados", campaign.skippedCount]].map(([label, value]) => <div key={label}><strong>{(value || 0).toLocaleString('pt-BR')}</strong><span>{label}</span></div>)}
             </section>
             <div className="campaign-detail-progress"><span>{processedCount} de {campaign.totalRecipients} processados</span>
-              <div className="campaign-track" role="progressbar" aria-label="Destinatários processados" aria-valuemin={0} aria-valuemax={campaign.totalRecipients} aria-valuenow={processedCount}><span style={{ width: `${campaign.totalRecipients ? Math.min(100, processedCount / campaign.totalRecipients * 100) : 0}%` }} /></div>
+              <div className={`campaign-track${campanhaTerminou(campaign) ? ' is-completo' : ''}`} role="progressbar" aria-label="Destinatários processados" aria-valuemin={0} aria-valuemax={campaign.totalRecipients} aria-valuenow={processedCount}><span style={{ width: `${campaign.totalRecipients ? Math.min(100, processedCount / campaign.totalRecipients * 100) : 0}%` }} /></div>
+              <small className={`campaign-situacao${campanhaTerminou(campaign) ? ' is-completo' : ''}`}>{situacaoDaCampanha(campaign)}</small>
             </div>
-            <div className="campaign-section-heading"><h2>Destinatários</h2><span>{campaign.recipients.length} registros</span></div>
+            <div className="campaign-section-heading"><h2>Destinatários</h2><span>{filtro === 'todos' ? `${campaign.recipients.length} registros` : `${filtrados.length} de ${campaign.recipients.length} registros`}</span></div>
             {campaign.recipients.length === 0 ? <p className="campaign-empty">Nenhum destinatário nesta campanha.</p> : <>
+              <div className="campaign-filtro" role="group" aria-label="Filtrar destinatários por resultado">
+                {FILTROS.map((f) => <button key={f.value} type="button" aria-pressed={filtro === f.value} onClick={() => trocarFiltro(f.value)}>{f.label}<strong>{porResultado[f.value]}</strong></button>)}
+              </div>
+              {filtrados.length === 0 ? <p className="campaign-sem-resultado">Nenhum destinatário com esse resultado.</p> : <>
               <div className="campaign-recipient-columns" aria-hidden="true"><span>Destinatário / telefone</span><span>Resultado</span><span>Detalhe do envio</span></div>
-              <ul className="campaign-list">{campaign.recipients.map((recipient) => <li key={recipient.id} className="campaign-recipient-row">
+              <ul className="campaign-list">{filtrados.slice(0, limite).map((recipient) => <li key={recipient.id} className="campaign-recipient-row">
                 <div className="campaign-identity"><strong>{recipient.displayName || recipient.phoneNumber}</strong>{recipient.displayName && <span>{recipient.phoneNumber}</span>}</div>
                 <span className={`campaign-recipient-status ${STATUS_TONES[recipient.status] || STATUS_TONES.skipped}`}>{STATUS_LABELS[recipient.status] || recipient.status}</span>
-                <p className={recipient.errorMessage ? 'campaign-error' : 'campaign-no-error'}>{recipient.errorMessage || '—'}</p>
+                {/* Mesma tradução do envio avulso: códigos conhecidos viram frase,
+                    e qualquer motivo sem mapeamento confiável passa inteiro. */}
+                <p className={recipient.errorMessage ? 'campaign-error' : 'campaign-no-error'}>{descreverFalha(recipient.errorMessage) || '—'}</p>
               </li>)}</ul>
+              {filtrados.length > limite && (
+                <button type="button" className="campaign-mostrar-mais" onClick={() => setLimite((n) => n + LOTE)}>
+                  Mostrar mais ({filtrados.length - limite} restantes)
+                </button>
+              )}
+              </>}
             </>}
           </>}
         </AsyncState>

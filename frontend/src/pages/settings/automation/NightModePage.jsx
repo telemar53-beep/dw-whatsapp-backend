@@ -1,4 +1,3 @@
-import { SettingsSteps } from '../SettingsVisuals';
 import { Link } from 'react-router-dom';
 import SettingsPage from '../SettingsPage';
 import { Card, Field, Button, AsyncState, HelpText, inputClass } from '../../../components/ui';
@@ -12,8 +11,7 @@ function NightModePage() {
 
   return (
     <SettingsPage title="Atendimento noturno" description="A janela em que a IA atende sozinha à noite, nos canais que tiverem o noturno ligado." scope="global">
-      <SettingsSteps items={[['horario','Expediente humano'],['noturno','Janela da IA'],['canais','Canais habilitados']]} />
-      <p className="border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
+      <p className="settings-intro border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
         <Link to="/configuracoes/regras/horario" className="text-wa-link underline">Horário de atendimento</Link> define o expediente humano. Esta janela controla a IA à noite; quando ativa, o aviso de “fora do horário” não é enviado.
       </p>
       <AsyncState status={form.status} skeletonLines={4}>

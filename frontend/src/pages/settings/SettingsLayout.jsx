@@ -19,7 +19,7 @@ function matchesTerm(item, term) {
 // O raio diz a profundidade: casca 26 > painel 22 > cartão 16 > controle 12.
 const PANEL = 'overflow-clip rounded-[22px] border border-white/[0.07] backdrop-blur-2xl';
 const ITEM =
-  'relative flex items-center gap-2 rounded-[12px] px-2.5 py-[7px] text-[14px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring';
+  'settings-nav-item relative flex items-center gap-2 rounded-[12px] px-2.5 py-[7px] text-[14px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring';
 
 function SettingsLayout() {
   const { agent } = useAuth();
@@ -38,12 +38,12 @@ function SettingsLayout() {
 
   return (
     <div data-settings-page={active?.item.key} data-settings-group={active?.group.groupKey} className="settings-workspace flex min-h-0 min-w-0 flex-1 flex-col gap-3 lg:flex-row">
-      <aside className={`${PANEL} flex min-w-0 flex-col bg-[#2b343b]/95 lg:w-[264px] lg:shrink-0 ${term ? 'max-h-[40vh] lg:max-h-none' : ''}`}>
-        <div className="shrink-0 px-4 pb-2 pt-4 lg:pt-5">
+      <aside className={`settings-nav ${PANEL} flex min-w-0 flex-col bg-[#2b343b]/95 lg:w-[264px] lg:shrink-0 ${term ? 'max-h-[40vh] lg:max-h-none' : ''}`}>
+        <div className="settings-nav-heading shrink-0 px-4 pb-2 pt-4 lg:pt-5">
           <h2 className="font-display text-[18px] font-semibold leading-tight text-chat-text">Configurações</h2>
         </div>
         <div className="px-3 pb-3">
-          <label className="flex h-10 items-center gap-2 rounded-[10px] border border-white/[0.12] bg-[#354047] px-3 focus-within:border-chat-orange/60">
+          <label className="settings-nav-search flex h-10 items-center gap-2 rounded-[10px] border border-white/[0.12] bg-[#354047] px-3 focus-within:border-chat-orange/60">
             <IconSearch size={17} />
             <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar configuração" aria-label="Buscar configuração" className="min-w-0 flex-1 bg-transparent text-[13px] text-chat-text outline-none placeholder:text-chat-faint" />
           </label>
@@ -67,7 +67,7 @@ function SettingsLayout() {
           </select>
         </div>}
         {term ? (
-          <nav aria-label="Resultados da busca em configurações" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+          <nav aria-label="Resultados da busca em configurações" className="settings-nav-list chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
             {results.length === 0 && <p className="px-3 py-4 text-[13px] text-chat-muted">Nenhuma configuração encontrada.</p>}
             {results.map((item) => {
               const allowed = hasLevel(agent, item.level);
@@ -79,13 +79,13 @@ function SettingsLayout() {
               );
             })}
           </nav>
-        ) : <nav aria-label="Seções de configurações" className="chat-scroll hidden min-h-0 flex-1 overflow-y-auto px-2 pb-4 lg:block">
+        ) : <nav aria-label="Seções de configurações" className="settings-nav-list chat-scroll hidden min-h-0 flex-1 overflow-y-auto px-2 pb-4 lg:block">
           {SETTINGS_SECTIONS.map((group) => {
             const GroupIcon = group.icon;
             if (group.items.length === 1 && group.items[0].label === group.group) {
               const item = group.items[0];
               const allowed = hasLevel(agent, item.level);
-              return <NavLink key={group.groupKey} to={item.to} aria-disabled={allowed ? undefined : 'true'} title={allowed ? item.description : 'Acesso restrito'} className={({ isActive }) => `mb-1 flex items-center gap-2 rounded-[12px] px-2.5 py-2.5 text-[13px] font-medium transition hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus-ring ${isActive ? 'bg-white/[0.07] text-chat-text' : 'text-chat-muted'}`}>
+              return <NavLink key={group.groupKey} to={item.to} aria-disabled={allowed ? undefined : 'true'} title={allowed ? item.description : 'Acesso restrito'} className={({ isActive }) => `settings-nav-solo mb-1 flex items-center gap-2 rounded-[12px] px-2.5 py-2.5 text-[13px] font-medium transition hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus-ring ${isActive ? 'bg-white/[0.07] text-chat-text' : 'text-chat-muted'}`}>
                 <span aria-hidden="true" className="shrink-0 text-chat-copper"><SettingsIcon name={group.groupKey} size={19}/></span>
                 <span className="min-w-0">{item.label}</span>
                 {!allowed && <IconLock size={13} />}
@@ -93,14 +93,14 @@ function SettingsLayout() {
             }
             const expanded = expandedGroup === group.groupKey;
             return (
-              <div key={group.groupKey} className="mb-1">
+              <div key={group.groupKey} className="settings-nav-group mb-1">
                 <button
                   type="button"
                   data-settings-category={group.groupKey}
                   aria-expanded={expanded}
                   aria-controls={`settings-group-${group.groupKey}`}
                   onClick={() => setOpenGroup(expanded ? '' : group.groupKey)}
-                  className={`flex w-full items-center gap-2 rounded-[12px] px-2.5 py-2.5 text-left text-[13px] font-medium transition hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus-ring ${expanded ? 'bg-white/[0.07] text-chat-text' : 'text-chat-muted'}`}
+                  className={`settings-nav-group-trigger flex w-full items-center gap-2 rounded-[12px] px-2.5 py-2.5 text-left text-[13px] font-medium transition hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus-ring ${expanded ? 'bg-white/[0.07] text-chat-text' : 'text-chat-muted'}`}
                 >
                   {GroupIcon && (
                     <span aria-hidden="true" className="shrink-0 text-chat-copper">
@@ -111,7 +111,7 @@ function SettingsLayout() {
                   <span className="text-[11px] tabular-nums text-chat-faint">{group.items.length}</span>
                   <span aria-hidden="true" className={`text-chat-faint transition-transform ${expanded ? 'rotate-90' : ''}`}>›</span>
                 </button>
-                <div id={`settings-group-${group.groupKey}`} hidden={!expanded} className="mb-2 ml-[17px] border-l border-white/[0.10] pl-2">
+                <div id={`settings-group-${group.groupKey}`} hidden={!expanded} className="settings-nav-sublist mb-2 ml-[17px] border-l border-white/[0.10] pl-2">
                 {group.items.map((item) => {
                   const allowed = hasLevel(agent, item.level);
                   return (
@@ -129,7 +129,7 @@ function SettingsLayout() {
                     >
                       {({ isActive }) => (
                         <>
-                          {isActive && <span aria-hidden="true" className="absolute left-0 h-4 w-[3px] rounded-full bg-chat-orange" />}
+                          {isActive && <span aria-hidden="true" className="settings-nav-marker absolute left-0 h-4 w-[3px] rounded-full bg-chat-orange" />}
                           <SettingsIcon name={item.key} size={15}/><span className="min-w-0">{item.label}</span>
                           {!allowed && <span className="ml-auto shrink-0 text-chat-muted"><IconLock size={13} /></span>}
                         </>
@@ -143,7 +143,7 @@ function SettingsLayout() {
           })}
         </nav>}
       </aside>
-      <section className={`${PANEL} flex min-h-0 min-w-0 flex-1 flex-col bg-[#293238]/92`}>
+      <section className={`settings-stage ${PANEL} flex min-h-0 min-w-0 flex-1 flex-col bg-[#293238]/92`}>
         <Outlet />
       </section>
     </div>

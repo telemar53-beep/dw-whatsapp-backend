@@ -3,7 +3,7 @@ import AssignmentMessageSection from '../../../components/messages/AssignmentMes
 function AssignmentPage() {
   return (
     <div className="settings-message-editor">
-      <div className="border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
+      <div className="settings-intro border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
         <p>Defina as mensagens enviadas ao assumir e ao encerrar um atendimento, por canal e atendente.</p>
         <details className="mt-2">
           <summary className="w-fit cursor-pointer text-chat-orange">Ver variáveis e exemplo</summary>

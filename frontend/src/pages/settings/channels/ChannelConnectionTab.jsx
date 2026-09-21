@@ -191,7 +191,7 @@ function ChannelConnectionTab() {
       <ErrorNote>{actions.errors.action}</ErrorNote>
 
       <div className="settings-channel-connection grid gap-3">
-        <section aria-labelledby="connection-data-title" className="order-2 rounded-[14px] border border-wa-border bg-black/[0.08] px-4 pb-2 pt-4 sm:px-5">
+        <section aria-labelledby="connection-data-title" className="settings-connection-block order-2 rounded-[14px] border border-wa-border bg-black/[0.08] px-4 pb-2 pt-4 sm:px-5">
           <h3 id="connection-data-title" className="text-[15px] font-semibold text-wa-text">
             Dados da conexão
           </h3>
@@ -292,7 +292,7 @@ function ChannelConnectionTab() {
           )}
         </section>
 
-        <section className="order-1 rounded-[14px] border border-chat-orange/25 bg-chat-orange/[0.045] px-4 py-4 sm:px-5">
+        <section className="settings-connection-block order-1 rounded-[14px] border border-chat-orange/25 bg-chat-orange/[0.045] px-4 py-4 sm:px-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <span className="mt-0.5 shrink-0 text-wa-muted">

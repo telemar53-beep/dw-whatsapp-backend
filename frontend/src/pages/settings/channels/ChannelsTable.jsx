@@ -84,10 +84,10 @@ export function ConnectionStatus({ channel }) {
       return (
         <span data-connection="connected" className="channel-connection inline-flex items-center gap-2 whitespace-nowrap text-[13.5px] text-wa-text">
           <span className="channel-status-icon" aria-hidden="true"><IconCheckCircle size={13} /></span>
-          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-wa-chip-text" />
+          <span aria-hidden="true" className="channel-status-dot h-2 w-2 rounded-full bg-wa-chip-text" />
           Conectado
           {quality && (
-            <span className={`rounded-full border px-2 py-0.5 text-[12px] font-medium ${QUALITY_TONES[connection.quality]}`}>
+            <span className={`channel-quality-chip rounded-full border px-2 py-0.5 text-[12px] font-medium ${QUALITY_TONES[connection.quality]}`}>
               {quality}
             </span>
           )}
@@ -98,8 +98,8 @@ export function ConnectionStatus({ channel }) {
     return (
       <span data-connection="error" className="channel-connection inline-flex items-center gap-2 text-[13.5px] text-wa-text" title={motivo}>
         <span className="channel-status-icon" aria-hidden="true"><IconWarning size={13} /></span>
-        <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-wa-error-text" />
-        <span className="max-w-[22ch] truncate">{motivo}</span>
+        <span aria-hidden="true" className="channel-status-dot h-2 w-2 shrink-0 rounded-full bg-wa-error-text" />
+        <span className="channel-connection-reason max-w-[22ch] truncate">{motivo}</span>
       </span>
     );
   }
@@ -108,7 +108,7 @@ export function ConnectionStatus({ channel }) {
   return (
     <span data-connection={channel.status} className="channel-connection inline-flex max-w-full items-center gap-2 text-[13.5px] text-wa-text">
       <span className="channel-status-icon" aria-hidden="true">{channel.status === 'connected' ? <IconCheckCircle size={13} /> : channel.status === 'awaiting_qr' ? <QrStatusIcon /> : <IconWarning size={13} />}</span>
-      <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${color}`} />
+      <span aria-hidden="true" className={`channel-status-dot h-2 w-2 shrink-0 rounded-full ${color}`} />
       <span className="min-w-0 leading-[18px]">{STATUS_LABELS[channel.status] || channel.status}</span>
     </span>
   );
@@ -174,7 +174,7 @@ function ChannelRow({ channel, selected, summaryContext, actions, canManage }) {
         selected ? 'bg-chat-orange/[0.08] shadow-[inset_3px_0_0_var(--color-chat-orange)]' : ''
       } ${channel.hidden ? 'opacity-70' : ''}`}
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="settings-channel-identity flex min-w-0 items-center gap-3">
           <ChannelIcon size={38} type={channel.type} />
           <div className="min-w-0">
             <Link
@@ -187,16 +187,16 @@ function ChannelRow({ channel, selected, summaryContext, actions, canManage }) {
               {formatPhone(channel.phoneNumber)}
               {channel.hidden ? ' · oculto' : ''}
             </p>
-            <p className="mt-0.5 text-[11.5px] text-wa-muted">{providerLabel(channel.type)} · {official ? 'API oficial' : 'Não oficial'}</p>
+            <p className="settings-channel-provider mt-0.5 text-[11.5px] text-wa-muted">{providerLabel(channel.type)} · {official ? 'API oficial' : 'Não oficial'}</p>
           </div>
       </div>
-      <div className="min-w-0 sm:pl-[50px] lg:pl-0">
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-wa-muted">Conexão</p>
+      <div className="settings-channel-link min-w-0 sm:pl-[50px] lg:pl-0">
+        <p className="settings-cell-label mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-wa-muted">Conexão</p>
         <ConnectionStatus channel={channel} />
       </div>
-      <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-wa-muted">Atendimento</p>
-        <div className="flex flex-wrap gap-1.5">
+      <div className="settings-channel-service min-w-0 sm:col-span-2 lg:col-span-1">
+        <p className="settings-cell-label mb-1 text-[11px] font-medium uppercase tracking-[0.08em] text-wa-muted">Atendimento</p>
+        <div className="settings-channel-chips flex flex-wrap gap-1.5">
           {labels.map((label) => (
             <span
               key={label}
@@ -219,7 +219,7 @@ function ChannelRow({ channel, selected, summaryContext, actions, canManage }) {
           </div>
         )}
       </div>
-      <div className="sm:col-start-2 sm:row-start-1 lg:col-start-auto lg:row-start-auto">
+      <div className="settings-channel-actions sm:col-start-2 sm:row-start-1 lg:col-start-auto lg:row-start-auto">
         <div className="flex items-center justify-start gap-2 sm:justify-end">
           <Link to={detailTo} className={SMALL_BTN}>
             <IconSettings size={15} />
@@ -236,7 +236,7 @@ function ChannelRow({ channel, selected, summaryContext, actions, canManage }) {
                 <VisibilityIcon />
                 {channel.hidden ? 'Reexibir' : 'Ocultar'}
               </button>
-              <button type="button" onClick={() => actions.remove(channel)} disabled={busy} className={`${MENU_ITEM} text-wa-error-text`}>
+              <button type="button" onClick={() => actions.remove(channel)} disabled={busy} className={`${MENU_ITEM} dw-menu-item-danger text-wa-error-text`}>
                 <IconTrash size={14} /> Excluir
               </button>
             </RowMenu>
@@ -267,12 +267,12 @@ export function ChannelsTable({ channels, selectedId = null, summaryContext, act
   return (
     <div className="settings-channel-center space-y-3">
       <div className="settings-channel-overview" aria-label="Resumo dos canais">
-        <span><strong>{channels.length}</strong>Números</span>
-        <span><strong>{channels.filter(c => isOfficialChannelType(c.type)).length}</strong>API oficial</span>
-        <span><strong>{channels.filter(c => c.type === 'baileys').length}</strong>Baileys</span>
-        <span><strong>{visible.length}</strong>Neste filtro</span>
+        <span className="settings-channel-stat"><strong>{channels.length}</strong>Números</span>
+        <span className="settings-channel-stat"><strong>{channels.filter(c => isOfficialChannelType(c.type)).length}</strong>API oficial</span>
+        <span className="settings-channel-stat"><strong>{channels.filter(c => c.type === 'baileys').length}</strong>Baileys</span>
+        <span className="settings-channel-stat"><strong>{visible.length}</strong>Neste filtro</span>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="settings-channel-toolbar flex flex-wrap items-center gap-3">
         <label
           className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/25`}
         >
@@ -298,7 +298,7 @@ export function ChannelsTable({ channels, selectedId = null, summaryContext, act
         {extraControls}
       </div>
 
-      <div className="overflow-visible rounded-[16px] border border-wa-surface-line bg-wa-surface">
+      <div className="settings-channel-list overflow-visible rounded-[16px] border border-wa-surface-line bg-wa-surface">
         <div className="flex items-center justify-between border-b border-wa-border px-4 py-2.5 text-[12.5px] text-wa-muted">
           <span>{visible.length} {visible.length === 1 ? 'canal' : 'canais'} {visible.length !== channels.length ? `de ${channels.length}` : ''}</span>
           <span>Conexão e atendimento por canal</span>

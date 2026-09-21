@@ -56,7 +56,7 @@ function RolesPage() {
               </tbody>)}
         </DataTable>
       </Card>
-      <Card title="Regras que não dependem de página" description="Vêm do backend e valem em qualquer tela.">
+      <Card className="settings-permissions-notes" title="Regras que não dependem de página" description="Vêm do backend e valem em qualquer tela.">
         <ul className="list-disc space-y-1 pl-5 text-[13.5px] text-wa-text">
           {FIXED_RULES.map((rule) => <li key={rule}>{rule}</li>)}
         </ul>

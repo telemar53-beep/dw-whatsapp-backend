@@ -65,7 +65,7 @@ function CompanyConfigCard() {
       <div className="settings-open-form border-b border-white/[0.09] px-0 pb-4 pt-2">
         <AsyncState status={status} skeletonLines={2}>
           <div className="settings-company-summary">
-            <div className="settings-company-name"><p className="font-medium text-wa-text">Empresa</p><h2>{config.name || 'Empresa não cadastrada'}</h2></div>
+            <div className="settings-company-name"><p className="settings-cell-label font-medium text-wa-text">Empresa</p><h2>{config.name || 'Empresa não cadastrada'}</h2></div>
             <div className="settings-company-payees"><h3>Nomes aceitos no comprovante</h3>
               {(config.acceptedPayeeNames || []).length > 0 ? <ul>{config.acceptedPayeeNames.map((name,index) => <li key={index}>{name}</li>)}</ul> : <p>nenhum</p>}
             </div>

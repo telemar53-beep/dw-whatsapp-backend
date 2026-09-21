@@ -7,7 +7,7 @@ function CityNoticesPage() {
   const { cityNotices, status, refresh } = useCityNotices();
   return (
     <div className="settings-message-library">
-      <div className="border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
+      <div className="settings-intro border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
         <p>Envie um aviso aos clientes de uma cidade quando entrarem em contato, além das boas-vindas.</p>
         <details className="mt-2">
           <summary className="w-fit cursor-pointer text-chat-orange">Ver exemplo</summary>

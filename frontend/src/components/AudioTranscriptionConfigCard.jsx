@@ -96,7 +96,7 @@ function AudioTranscriptionConfigCard() {
 
   return (
     <form onSubmit={handleSave} className={cardClass}>
-      <p className="text-[13.5px] leading-5 text-wa-muted">
+      <p className="settings-intro text-[13.5px] leading-5 text-wa-muted">
         O texto transcrito fica disponível ao atendente e pode ser usado pela IA na resposta.
       </p>
 
@@ -190,7 +190,7 @@ function AudioTranscriptionConfigCard() {
           <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>
         )}
 
-        <div className="flex">
+        <div className="settings-actions flex">
           <Button type="submit" loading={saving}>
             Salvar transcrição
           </Button>

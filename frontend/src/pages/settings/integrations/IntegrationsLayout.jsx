@@ -52,9 +52,9 @@ function IntegrationsLayout() {
       width="table"
     >
             <div className="settings-service-switchboard" aria-label="Estado das integrações">
-              <Link to="/configuracoes/integracoes/sgp/consultas" aria-current={selected?.key === 'sgp-consultas' ? 'page' : undefined}><SettingsIcon name="sgp-consultas"/><span>SGP<small>Consultas</small></span>{sgpBadge}</Link>
-              <Link to="/configuracoes/integracoes/openai" aria-current={selected?.key === 'openai' ? 'page' : undefined}><SettingsIcon name="openai"/><span>OpenAI<small>Modelos e credenciais</small></span>{aiBadge}</Link>
-              <Link to="/configuracoes/integracoes/sgp/envios" aria-current={selected?.key === 'sgp-envios' ? 'page' : undefined}><SettingsIcon name="sgp-envios"/><span>SGP · Pix e boleto<small>{perChannel === 1 ? '1 integração por canal' : `${perChannel} integrações por canal`}</small></span></Link>
+              <Link className="settings-service-link" to="/configuracoes/integracoes/sgp/consultas" aria-current={selected?.key === 'sgp-consultas' ? 'page' : undefined}><SettingsIcon name="sgp-consultas"/><span>SGP<small>Consultas</small></span>{sgpBadge}</Link>
+              <Link className="settings-service-link" to="/configuracoes/integracoes/openai" aria-current={selected?.key === 'openai' ? 'page' : undefined}><SettingsIcon name="openai"/><span>OpenAI<small>Modelos e credenciais</small></span>{aiBadge}</Link>
+              <Link className="settings-service-link" to="/configuracoes/integracoes/sgp/envios" aria-current={selected?.key === 'sgp-envios' ? 'page' : undefined}><SettingsIcon name="sgp-envios"/><span>SGP · Pix e boleto<small>{perChannel === 1 ? '1 integração por canal' : `${perChannel} integrações por canal`}</small></span></Link>
             </div>
 
             <Outlet />

@@ -259,7 +259,7 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         aria-labelledby="users-card-title"
         className="overflow-clip"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 pt-1">
+        <div className="settings-register-head flex flex-wrap items-center justify-between gap-3 pb-4 pt-1">
           <h2 id="users-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
             Usuários
           </h2>
@@ -269,7 +269,7 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 pb-4">
+        <div className="settings-register-toolbar flex flex-wrap items-center gap-3 pb-4">
           <label
             className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/25`}
           >

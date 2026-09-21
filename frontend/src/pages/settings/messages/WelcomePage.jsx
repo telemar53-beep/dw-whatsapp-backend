@@ -10,7 +10,7 @@ function WelcomePage() {
   const { channels, status, refresh } = useChannels(true);
   return (
     <div className="settings-message-library">
-      <div className="border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
+      <div className="settings-intro border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
         <p>A mensagem é enviada após o primeiro contato do cliente, antes das outras automações.</p>
         <details className="mt-2">
           <summary className="w-fit cursor-pointer text-chat-orange">Ver exemplo</summary>

@@ -158,7 +158,7 @@ function AssignmentMessageSection() {
   }
 
   return (
-    <div className="rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-5">
+    <div className="settings-message-pane rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95 p-5">
       <AsyncState status={status} skeletonLines={2}>
         {config.id === null ? (
           <div className="flex items-center justify-between gap-3">

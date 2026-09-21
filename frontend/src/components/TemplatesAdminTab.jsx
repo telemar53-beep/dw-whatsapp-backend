@@ -631,7 +631,7 @@ function TemplatesAdminTab() {
       <div className="settings-template-library grid items-start gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
         <div>
           <section aria-labelledby="templates-card-title" className={CARD}>
-            <div className="flex items-center gap-2.5 px-4 pb-3 pt-5 sm:px-5">
+            <div className="settings-register-head flex items-center gap-2.5 px-4 pb-3 pt-5 sm:px-5">
               <h2 id="templates-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
                 Templates do canal
               </h2>

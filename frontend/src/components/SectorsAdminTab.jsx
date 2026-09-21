@@ -151,7 +151,7 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
         aria-labelledby="sectors-card-title"
         className="overflow-clip"
       >
-        <div className="flex flex-wrap items-start justify-between gap-3 pb-4 pt-1">
+        <div className="settings-register-head flex flex-wrap items-start justify-between gap-3 pb-4 pt-1">
           <div className="min-w-0">
             <h2 id="sectors-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
               Setores

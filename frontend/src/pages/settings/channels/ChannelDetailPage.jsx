@@ -67,7 +67,7 @@ function ChannelDetailPage() {
                   aria-labelledby="channel-detail-title"
                   className="overflow-clip rounded-[18px] border border-wa-surface-line bg-wa-surface"
                 >
-                  <div className="flex flex-wrap items-center gap-3 border-b border-wa-border px-4 py-4 sm:px-5">
+                  <div className="settings-channel-detail-head flex flex-wrap items-center gap-3 border-b border-wa-border px-4 py-4 sm:px-5">
                     <ChannelIcon size={40} />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -90,7 +90,7 @@ function ChannelDetailPage() {
                       ]}
                     />
                   </div>
-                  <div className="px-4 pb-5 pt-5 sm:px-5">
+                  <div className="settings-channel-detail-body px-4 pb-5 pt-5 sm:px-5">
                     <Outlet context={{ channel, refresh, actions, canManage }} />
                   </div>
                 </section>

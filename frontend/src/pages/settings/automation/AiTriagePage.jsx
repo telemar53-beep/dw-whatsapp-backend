@@ -1,4 +1,3 @@
-import { SettingsSteps } from '../SettingsVisuals';
 import { Link } from 'react-router-dom';
 import SettingsPage from '../SettingsPage';
 import { Field, Button, Toggle, AsyncState, inputClass } from '../../../components/ui';
@@ -38,9 +37,8 @@ function AiTriagePage() {
       scope="global"
       wide
     >
-      <SettingsSteps items={[['usuarios','Durante o atendimento humano'],['ia','Triagem com IA'],['motivos','Conclusão e encaminhamento']]} />
       <div className="settings-ai-policy @container">
-        <div className="grid gap-3 border-b border-wa-border pb-3 @min-[760px]:grid-cols-2 @min-[760px]:gap-5">
+        <div className="settings-ai-policy-aside grid gap-3 border-b border-wa-border pb-3 @min-[760px]:grid-cols-2 @min-[760px]:gap-5">
           {/* Chave própria, e não um quarto "modo": desligar a IA pelo modo levaria
               junto a triagem e a transcrição de áudio, que continuam desejadas. */}
           <section aria-labelledby="ai-human-heading" className="min-w-0">

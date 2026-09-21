@@ -87,7 +87,7 @@ function AiToolsPage() {
                 <div key={index} className="min-w-0 space-y-3">
                   {column.map((group) => (
                     <section key={group.id} aria-labelledby={`ai-tools-${group.id}`} className="min-w-0 overflow-hidden rounded-[13px] border border-white/[0.08] bg-[#30393e]">
-                      <div className="flex items-center justify-between gap-2 border-b border-white/[0.08] px-3 py-2.5">
+                      <div className="settings-tool-group-head flex items-center justify-between gap-2 border-b border-white/[0.08] px-3 py-2.5">
                         <h2 id={`ai-tools-${group.id}`} className="text-[14px] font-semibold leading-5 text-wa-text">{group.label}</h2>
                         <span className="rounded-full bg-white/[0.07] px-2 py-0.5 text-[11px] tabular-nums text-wa-muted">{group.items.length}</span>
                       </div>

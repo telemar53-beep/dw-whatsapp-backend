@@ -18,6 +18,3 @@ export function SettingsIcon({ name, size = 18 }) {
 export function SettingsTitle({ name, children }) {
   return <span className="settings-title"><span className="settings-title-mark"><SettingsIcon name={name} size={23}/></span><span>{children}</span></span>;
 }
-export function SettingsSteps({ items }) {
-  return <ol className="settings-steps" aria-label="Organização desta configuração">{items.map(([icon,label],index) => <li key={label}><SettingsIcon name={icon}/><span><small>{String(index+1).padStart(2,'0')}</small>{label}</span></li>)}</ol>;
-}

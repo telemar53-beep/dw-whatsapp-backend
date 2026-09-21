@@ -1,4 +1,3 @@
-import { SettingsSteps } from '../SettingsVisuals';
 import { useState } from 'react';
 import SettingsPage from '../SettingsPage';
 import { Button } from '../../../components/ui';
@@ -15,7 +14,6 @@ function MenuTriagePage() {
       scope="channel"
       action={!creating && <Button onClick={() => setCreating(true)}>Criar opção</Button>}
     >
-      <SettingsSteps items={[['boas-vindas','Pergunta'],['triagem-menu','Escolha do cliente'],['setores','Encaminhamento']]} />
       <TriageAdminTab creating={creating} onCreatingChange={setCreating} />
     </SettingsPage>
   );

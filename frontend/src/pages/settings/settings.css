@@ -85,7 +85,18 @@
 .settings-ai-policy h2 {border:0;padding:0;font-size:14px}
 .settings-ai-policy .settings-section-body > .grid {gap:12px}
 @container(min-width:870px){.settings-ai-policy{grid-template-columns:220px minmax(0,1fr)}.settings-ai-policy > .settings-ai-policy-aside{border-right:1px solid var(--settings-line);padding-right:16px}.settings-ai-policy .settings-section-body > .grid:first-of-type{grid-template-columns:repeat(3,minmax(0,1fr))}.settings-ai-policy .settings-section-body > .grid:nth-of-type(2){grid-template-columns:1fr}}
-.settings-identification {gap:20px}
+/* Identificacao: uma coluna so. A grade de duas colunas saiu — uma delas nao
+   tinha controle nenhum, so um paragrafo. */
+.settings-identification {display:flex;flex-direction:column;gap:14px}
+/* Selo de dependencia: diz o estado de uma configuracao de OUTRA pagina.
+   Nao e controle; e informacao com caminho. */
+.settings-dependency-chip {display:inline-flex;align-items:center;gap:7px;font-size:12px;line-height:18px;color:var(--settings-muted)}
+.settings-dependency-chip .settings-dependency-dot {width:7px;height:7px;border-radius:999px;background:#8fa6b5;flex:none}
+.settings-dependency-chip.is-pronta {color:#a9d3bb}
+.settings-dependency-chip.is-pronta .settings-dependency-dot {background:#7fc79f}
+.settings-dependency-link {margin-left:auto;font-size:12px;font-weight:500;color:var(--color-chat-orange)}
+.settings-dependency-link:hover {text-decoration:underline}
+.settings-dependency-text {font-size:12px;line-height:18px;color:var(--settings-muted);max-width:74ch}
 /* Faixa de acao de uma pagina de formulario: sempre a mesma, com nome. */
 .settings-actions {border-top:1px solid var(--settings-line);padding-top:12px;display:flex;justify-content:flex-end}
 /* Bloco que abre a pagina e explica do que ela trata. */

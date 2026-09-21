@@ -28,12 +28,29 @@ describe('ProviderMark: identidade por provedor', () => {
     expect(marcaDe('baileys').style.maskImage).not.toBe(marcaDe('meta_cloud').style.maskImage);
   });
 
-  // Não existe logotipo da 360dialog neste repositório nem em nenhum commit do
-  // histórico. Inventar ou imitar um seria pior que não ter, então ela continua
-  // com símbolo funcional e o nome do provedor visível na linha.
-  test('360dialog continua com símbolo funcional, sem marca inventada', () => {
+  // A 360dialog usa a marca oficial da própria empresa, mas por <img> e não por
+  // mask: o logotipo dela é um badge com o wordmark "360D" vazado e a empresa
+  // publica só três cores. Pintar de roxo com `currentColor` seria recolorir
+  // logotipo de terceiro. Entra na cor publicada, sem modificação.
+  test('360dialog usa a marca oficial como imagem, sem recolorir', () => {
     const { container } = render(<ProviderMark type="360dialog" />);
+    const logo = container.querySelector('img.channel-brand-logo');
+    expect(logo).not.toBeNull();
+    expect(logo.getAttribute('src')).toMatch(/360dialog/);
+    // nada de mask aqui: mask pinta em currentColor e recoloriria a marca
     expect(container.querySelector('.channel-brand-mark')).toBeNull();
+  });
+
+  test('decorativa: a imagem não entra na árvore de acessibilidade com texto', () => {
+    const { container } = render(<ProviderMark type="360dialog" />);
+    expect(container.querySelector('img').getAttribute('alt')).toBe('');
+  });
+
+  // Tipo desconhecido continua caindo no símbolo funcional de sempre.
+  test('tipo desconhecido continua com símbolo funcional', () => {
+    const { container } = render(<ProviderMark type="outro" />);
+    expect(container.querySelector('.channel-brand-mark')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('svg')).not.toBeNull();
   });
 });

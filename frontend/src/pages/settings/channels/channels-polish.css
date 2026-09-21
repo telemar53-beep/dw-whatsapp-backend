@@ -4,7 +4,14 @@
 .settings-channel-center .settings-channel-symbol[data-provider=meta_cloud] {color:#83b6fb;background:#3987ff12;border-color:#75aaff20}
 .settings-channel-center .settings-channel-symbol[data-provider=baileys] {color:#8cd3ba;background:#55bd9810;border-color:#70c9a820}
 .settings-channel-center .settings-channel-symbol[data-provider='360dialog'] {color:#d2b0ed;background:#ab7aca12;border-color:#b58cdd22}
-.channel-brand-mark {display:block;width:20px;height:20px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
+/* 24px, nao 20: a 20 o glifo da Meta perde forma (desvio de 8,97% contra a
+   referencia vetorial; a 24 cai para 7,27%) e o usuario relatou que lia como
+   mancha. O box de 30px nao muda — sobram 3px de folga de cada lado. */
+.channel-brand-mark {display:block;width:24px;height:24px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
+/* A 360dialog entra como imagem na cor publicada pela propria empresa, sem
+   recolorir. Fica 20px porque e um BADGE preenchido: no mesmo tamanho de um
+   glifo vazado ele pesaria muito mais na linha. */
+.channel-brand-logo {display:block;width:20px;height:20px;object-fit:contain}
 /* A marca do WhatsApp no titulo de Canais: a regra existia desde antes,
    presa a um ancestral (.settings-group-header) que nao existe mais no
    JSX — entao o unico uso de whatsapp.svg no produto nunca desenhava. */

@@ -180,4 +180,5 @@
 @media(max-width:680px){[data-dialog=campaign] .dialog-campaign-fields > .dialog-campaign-content,[data-dialog=campaign] .dialog-campaign-fields > :has(#campaign-recipients){grid-column:1;grid-row:auto}}
 /* Short viewports still allow necessary content scrolling without losing fields. */
 [data-dialog=help] > div:nth-child(2),[data-dialog=users] > div:last-child,[data-dialog=city] > div:last-child,[data-dialog=sector] > div:last-child,[data-dialog=reason] > div:last-child,[data-dialog=confirm] > div,[data-dialog=alert] > div {min-height:0;overflow-y:auto}
-.dialog-provider-symbol .channel-brand-mark {display:block;width:20px;height:20px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
+.dialog-provider-symbol .channel-brand-mark {display:block;width:24px;height:24px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
+.dialog-provider-symbol .channel-brand-logo {display:block;width:20px;height:20px;object-fit:contain}

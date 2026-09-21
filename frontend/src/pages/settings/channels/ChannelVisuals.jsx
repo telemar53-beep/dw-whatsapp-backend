@@ -1,5 +1,6 @@
 import metaLogo from '../../../assets/brands/meta.svg';
 import whatsappLogo from '../../../assets/brands/whatsapp.svg';
+import dialog360Logo from '../../../assets/brands/360dialog.svg';
 import { IconServer } from '../../../components/icons/WaIcons';
 
 // Onde existe marca real no repositorio, a marca vem no lugar de glifo
@@ -13,12 +14,19 @@ import { IconServer } from '../../../components/icons/WaIcons';
 // ("Baileys · Nao oficial" na tabela, "Baileys (nao oficial)" no modal) — esse
 // texto e obrigatorio e nao sai.
 //
-// 360dialog continua com simbolo FUNCIONAL: nao existe logotipo dela neste
-// repositorio nem em nenhum commit do historico, e inventar ou imitar um seria
-// pior que nao ter. O nome do provedor continua visivel na linha.
+// A 360dialog e o unico caso que NAO usa mask, e de proposito. As marcas da Meta
+// e do WhatsApp sao glifos monocromaticos de path unico (Simple Icons), feitos
+// para serem pintados em qualquer cor — `currentColor` ali e o uso correto. A
+// marca da 360dialog e um BADGE de app, com o wordmark "360D" vazado, e a
+// empresa distribui so tres cores (Black, White, Perf Green). Pintar esse badge
+// de roxo com `currentColor` seria recolorir o logotipo de terceiro, que as
+// diretrizes dela provavelmente nao permitem. Entao ela entra como <img>, na cor
+// que a propria empresa publica, sem modificacao. Ver o README de assets/brands.
 export function ProviderMark({ type }) {
   if (type === 'meta_cloud') return <span className="channel-brand-mark" style={{ maskImage: `url(${metaLogo})` }} />;
   if (type === 'baileys') return <span className="channel-brand-mark" style={{ maskImage: `url(${whatsappLogo})` }} />;
+  if (type === '360dialog') return <img src={dialog360Logo} alt="" className="channel-brand-logo" />;
+  // Tipo desconhecido: simbolo funcional, como sempre foi.
   return <IconServer size={18} />;
 }
 

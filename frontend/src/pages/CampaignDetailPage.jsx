@@ -99,6 +99,7 @@ function CampaignDetailPage() {
   return (
     <div className="campaigns-workspace flex min-h-0 flex-1 flex-col">
       <PageHeader
+        variant="destaque"
         title={campaign ? campaign.name || 'Sem nome' : 'Campanha'}
         description={campaign ? 'Acompanhe o andamento e o resultado de cada destinatário.' : undefined}
         crumbs={[{ label: 'Campanhas', to: '/campanhas' }, { label: campaign?.name || 'Sem nome' }]}

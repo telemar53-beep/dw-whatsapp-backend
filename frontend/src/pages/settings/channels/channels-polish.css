@@ -12,9 +12,9 @@
 .settings-workspace[data-settings-page=canais] .settings-title-mark > .settings-functional-icon {display:none}
 .settings-workspace[data-settings-page=canais] .settings-title-mark:after {content:'';width:19px;height:19px;background:currentColor;mask:url('../../../assets/brands/whatsapp.svg') center/contain no-repeat}
 .settings-channel-center .settings-channel-record {transition:background-color .14s ease,box-shadow .14s ease;border-color:#ffffff0a}
-.settings-channel-center .settings-channel-record:hover {background:#ffffff03}
+.settings-channel-center .settings-channel-record:hover {background:var(--color-ui-state-hover)}
 .settings-channel-center .settings-channel-record:focus-within {background:#ffffff04}
-.settings-channel-center .settings-channel-record[aria-selected=true] {background:#d99c6510;box-shadow:inset 2px 0 #d5a176}
+.settings-channel-center .settings-channel-record[aria-selected=true] {background:var(--color-ui-state-selected);box-shadow:inset 2px 0 #d5a176}
 .settings-channel-center .settings-channel-record > .settings-channel-identity a {font-size:13px;line-height:18px;font-weight:600;letter-spacing:.005em}
 .settings-channel-center .settings-channel-record > .settings-channel-identity p {color:#aabac5;font-variant-numeric:tabular-nums}
 .settings-channel-center .settings-channel-provider {color:#8fa6b5;font-size:10px;line-height:15px}
@@ -31,7 +31,7 @@
 .settings-channel-center [data-attendance=Humano] {color:#bfccd5}
 .settings-channel-center [data-attendance='IA ativa'],.settings-channel-center [data-attendance='Triagem IA'] {color:#c1b2dc}
 .settings-channel-center .settings-channel-service > .settings-cell-label {font-size:9px;letter-spacing:.08em;color:#91a6b4;line-height:14px;margin-bottom:5px}
-.settings-channel-center .settings-channel-record > .settings-channel-actions a,.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {height:30px;min-height:30px;border-radius:6px;background:#ffffff03;border-color:#ffffff12;font-size:11px;padding:4px 9px;color:#cbd6dd;gap:6px}
+.settings-channel-center .settings-channel-record > .settings-channel-actions a,.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {height:30px;min-height:30px;border-radius:6px;background:var(--color-ui-state-hover);border-color:#ffffff12;font-size:11px;padding:4px 9px;color:#cbd6dd;gap:6px}
 .settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {width:30px;padding:0;background:transparent;border-color:transparent}
 .settings-channel-center .settings-channel-record > .settings-channel-actions a:hover,.settings-workspace .settings-channel-center button[aria-haspopup]:hover,.settings-workspace .settings-channel-center button[aria-expanded=true] {background:#ffffff08;border-color:#ffffff22;color:#edf2f5}
 .settings-channel-center :is(a,button,select):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}

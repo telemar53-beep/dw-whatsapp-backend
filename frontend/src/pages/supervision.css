@@ -11,14 +11,14 @@
 .supervision-team header span,.supervision-team > p {font-size:11px;font-weight:400;color:#acbeca}
 .supervision-team > p {padding:0 12px 12px}
 .supervision-team li button {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;text-align:left;width:100%;padding:11px 12px;border-top:1px solid var(--color-ui-line)}
-.supervision-team li button:hover {background:#ffffff05}
+.supervision-team li button:hover {background:var(--color-ui-state-hover)}
 .supervision-team li button[aria-pressed=true] {background:#d18e5820;box-shadow:inset 2px 0 #e5a16d}
 .supervision-agent-name {font-size:13px;overflow-wrap:anywhere}
 .supervision-team strong {font-size:14px;font-variant-numeric:tabular-nums;color:#edbd99}
 .supervision-team strong small {font-size:10px;font-weight:400;color:#aebec8}
 .supervision-presence {grid-column:1/-1;font-size:10.5px;color:#adbec9;display:flex;align-items:center;gap:5px}
 .supervision-presence i {width:6px;height:6px;border-radius:50%;background:#71808b}
-.supervision-presence i.is-online {background:#65c596}
+.supervision-presence i.is-online {background:var(--color-ui-presence-online)}
 .supervision-load {grid-column:1/-1;height:3px;background:#ffffff09;margin-top:3px;border-radius:2px}
 .supervision-load > span {display:block;height:100%;background:#bb936f;border-radius:2px}
 .supervision-operation {min-width:0;min-height:0;display:flex;flex-direction:column}
@@ -33,7 +33,7 @@
 .supervision-group-heading span {font-size:11px;color:#a7bac7}
 .supervision-empty {font-size:12px;padding:12px 14px;color:#94aab9}
 .supervision-record {border-bottom:1px solid var(--color-ui-line);font-size:12px;min-height:62px}
-.supervision-record:hover {background:#ffffff03}
+.supervision-record:hover {background:var(--color-ui-state-hover)}
 .supervision-record > div {min-width:0;overflow-wrap:anywhere}
 .supervision-record-location,.supervision-record-state {display:flex;flex-direction:column;gap:3px}
 .supervision-record small {color:#9eb4c2;font-size:10.5px}
@@ -52,7 +52,6 @@
 @media(max-width:1200px){.supervision-central{grid-template-columns:210px minmax(0,1fr)}.supervision-column-labels,.supervision-record{grid-template-columns:minmax(150px,1.5fr) minmax(95px,1fr) minmax(85px,.8fr) 105px 42px;gap:8px;padding:8px 10px}}
 @media(max-width:950px){.supervision-column-labels{display:none}.supervision-record{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 50px;gap:6px 12px}.supervision-record-contact{grid-column:1/3}.supervision-open{grid-column:3;grid-row:1/3}.supervision-record-state{grid-column:1/3;flex-direction:row;flex-wrap:wrap;gap:8px}}
 @media(max-width:650px){.supervision-central{display:flex;flex-direction:column;overflow:auto}.supervision-team{flex:none;max-height:180px;border-right:0;border-bottom:1px solid var(--color-ui-line)}.supervision-team ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.supervision-operation{min-height:300px;flex:1}.supervision-toolbar input[type=text]{width:100%}.supervision-toolbar form{flex:1;min-width:140px}}
-.supervision-workspace > header h1 {font-size:22px}
 .supervision-workspace > header p {font-size:12px;margin-top:3px;line-height:17px}
 .supervision-record-state {line-height:15px;gap:2px}
 .supervision-record-state small {line-height:13px}
@@ -60,10 +59,10 @@
 @media(min-width:1400px){.supervision-workspace .supervision-toolbar{flex-direction:row;align-items:center;justify-content:space-between}}
 .supervision-toolbar [role=tab] {display:inline-flex;align-items:center;height:32px;padding:4px 10px;white-space:nowrap;font-size:12px;font-weight:500;color:#d9e2e8;border:1px solid #ffffff29;background:#ffffff06}
 .supervision-toolbar [role=tab] > span {flex:none;background:#ffffff12;color:#f3f6f8;border-radius:4px}
-.supervision-toolbar [role=tab][aria-selected=true] {background:#d9905526;border-color:#d990558c;color:#fff0e3;box-shadow:inset 0 -2px #d99055}
-.supervision-toolbar [role=tab][aria-selected=true] > span {background:#d9905533;color:#ffcfaa}
+.supervision-toolbar [role=tab][aria-selected=true] {background:var(--color-ui-marker-supervision)26;border-color:#d990558c;color:#fff0e3;box-shadow:inset 0 -2px var(--color-ui-marker-supervision)}
+.supervision-toolbar [role=tab][aria-selected=true] > span {background:var(--color-ui-marker-supervision)33;color:#ffcfaa}
 .supervision-toolbar [role=tab]:hover {border-color:#d9905573;background:#ffffff0c}
-.supervision-toolbar [role=tab][aria-selected=true]:hover {background:#d9905530}
+.supervision-toolbar [role=tab][aria-selected=true]:hover {background:var(--color-ui-marker-supervision)30}
 @media(min-width:1100px){.supervision-workspace .supervision-toolbar{flex-direction:row;align-items:center;justify-content:space-between}}
 
 /* Keep count contrast above the shared orange-badge text rule. */
@@ -71,9 +70,9 @@
 .chat-theme .supervision-workspace .supervision-toolbar [role=tab][aria-selected=true] > span {color:#ffcfaa}
 
 /* Encerrados: falha visível e contagem que não se passa por total. */
-.supervision-closed-error {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:10px 8px 0;padding:10px 12px;border:1px solid #ff9a9033;border-radius:10px;background:#b9434320;color:#ffc2bc;font-size:13px}
-.supervision-closed-error button {flex:none;padding:4px 10px;border:1px solid #ffc2bc66;border-radius:8px;font-size:12.5px;font-weight:500;color:inherit}
-.supervision-closed-error button:hover {background:#ffc2bc14}
+.supervision-closed-error {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:10px 8px 0;padding:10px 12px;border:1px solid color-mix(in oklab, var(--color-ui-error-ink) 20%, transparent);border-radius:10px;background:var(--color-ui-error-surface);color:var(--color-ui-error-ink);font-size:13px}
+.supervision-closed-error button {flex:none;padding:4px 10px;border:1px solid color-mix(in oklab, var(--color-ui-error-ink) 40%, transparent);border-radius:8px;font-size:12.5px;font-weight:500;color:inherit}
+.supervision-closed-error button:hover {background:color-mix(in oklab, var(--color-ui-error-ink) 8%, transparent)}
 .supervision-parcial-aviso {margin:10px 10px 2px;font-size:11.5px;line-height:1.5;color:#9fb3c0}
 .supervision-contagem-parcial {font-size:11px;font-weight:400;white-space:nowrap}
 .supervision-contagem-parcial b {font-size:14px;font-weight:700}

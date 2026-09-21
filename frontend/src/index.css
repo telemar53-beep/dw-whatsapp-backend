@@ -43,6 +43,13 @@
      cinco; o campo afundado, quatro. Divisoria e texto de apoio ja tinham
      TRES e DOIS tokens com o mesmo valor, um por area. Aqui vira um nome por
      papel, e o valor claro/escuro segue o padrao dos tokens wa-*. */
+  --color-ui-state-hover: #eef4f2;
+  --color-ui-state-selected: rgba(13, 148, 136, 0.11);
+  --color-ui-marker-supervision: #0d9488;
+  --color-ui-presence-online: #0f766e;
+  --color-ui-error-surface: #fdecea;
+  --color-ui-error-ink: #b3261e;
+
   --color-ui-surface-canvas: #eef5f3;
   --color-ui-surface-panel: #ffffff;
   --color-ui-surface-card: #ffffff;
@@ -152,6 +159,26 @@
   --color-wa-field: #354047;
   --color-wa-link: #ffb078;
   /* Mesma familia, nos valores do tema grafite. */
+  /* Estado e marcadores (Etapa 7, ultima rodada).
+     - hover: os casos invisiveis (1,03-1,06:1) convergem para este; quem ja
+       estava entre 08 e 0c nao foi tocado.
+     - selecionado: alpha .11 da dY +3,7 sobre o fundo local, a mesma faixa de
+       Configuracoes (+3,5) e longe de Supervisao (+5,2), que fica como esta.
+     - marker-supervision: MESMO #d99055 de antes, zero mudanca visual. Existe
+       porque a Supervisao reusava o HEX de --chat-edge-out, que e autoria de
+       mensagem: era dependencia semantica errada, nao problema de aparencia.
+     - presence-online: o verde de "atendente online agora", papel distinto de
+       --color-chat-online (conexao/entregue/pastilha de status).
+     - error-surface/ink: a faixa de erro mais legivel (8,17:1) ganha nome. NAO
+       substitui --color-wa-error-*, que serve tambem botao danger e chip de
+       status — mudar o token global degradaria ~35 telas em silencio. */
+  --color-ui-state-hover: #ffffff0d;
+  --color-ui-state-selected: rgba(242, 140, 69, 0.11);
+  --color-ui-marker-supervision: #d99055;
+  --color-ui-presence-online: #65c596;
+  --color-ui-error-surface: #b9434320;
+  --color-ui-error-ink: #ffc2bc;
+
   --color-ui-surface-canvas: #242f36;
   --color-ui-surface-panel: #2d3a43;
   --color-ui-surface-card: #2b343b;

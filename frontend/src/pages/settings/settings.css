@@ -23,7 +23,6 @@
 .settings-search-group {display:block;font-size:10px;color:#98adbb;font-weight:400;margin-top:2px}
 .settings-workspace .settings-shell-header {padding:0 18px;background:#2c3941;border-bottom:1px solid var(--color-ui-line)}
 .settings-workspace .settings-shell-header header {padding:13px 0 12px;gap:8px}
-.settings-workspace .settings-shell-header h1 {font-size:20px;line-height:26px;letter-spacing:-.02em}
 .settings-workspace .settings-shell-header header p {font-size:12px;line-height:17px;margin-top:4px}
 .settings-workspace .settings-shell-header nav {font-size:10px;margin-bottom:7px;color:#9eb3c1}
 .settings-title {display:flex;align-items:center;gap:10px}

@@ -1,122 +1,569 @@
-.reports-redesign { min-width: 0; min-height: 0; flex: 1; display: flex; flex-direction: column; color: #edf0f2; }
+/* Relatórios — painel de gestão da operação.
+   Identidade grafite + laranja: o laranja continua sendo a cor do produto (o
+   indicador principal, o líder da equipe, o período em vigor). Azul, verde e
+   roxo entram como cores FUNCIONAIS — separam indicadores e diferenciam
+   categorias — sempre sobre base grafite: borda, halo e superfície de ícone
+   recebem a cor; o fundo do cartão, não.
+
+   A paleta categórica das barras (--rp-cat-1..6) foi validada pelos seis
+   checks do método de dataviz contra ESTA superfície (#2b343b) em pares
+   adjacentes — que é o pairlist certo para barras empilhadas numa lista:
+   banda de luminosidade, piso de croma, separação para protanopia/deuteranopia
+   (pior par ΔE 11,3), piso de visão normal (17,0) e contraste ≥ 3:1. Trocar um
+   hex aqui exige rodar o validador de novo. Toda barra carrega rótulo, número e
+   participação ao lado: a cor diferencia, nunca é o único canal de identidade —
+   e nunca significa bom ou ruim.
+   ATENÇÃO: esta folha fica FORA de @layer, então vence utilitário do Tailwind
+   por ordem, não por especificidade. Onde o index.css estiliza `table th` em
+   (0,1,2), as regras daqui levam o escopo `.reports-redesign` para subir a
+   (0,2,2) e não depender da ordem dos arquivos no bundle. */
+.reports-redesign {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  color: var(--color-chat-text);
+
+  --rp-card: #2b343b;
+  --rp-card-top: #333d45;
+  --rp-line: #ffffff1a;
+  --rp-line-soft: #ffffff0d;
+  --rp-ink: #f1f4f6;
+  --rp-ink-muted: #b3c0c9;
+  --rp-ink-faint: #99a9b4; /* 4,8:1 sobre o topo do gradiente do cartao — AA */
+  --rp-bar-track: #ffffff12;
+  --rp-bar: #8b9fad;
+  /* Sombra difusa + filete interno no topo: a luz vem de cima, então o cartão
+     ganha um fio claro na borda superior e escurece para baixo. É o que separa
+     cartão de fundo sem precisar de borda forte. */
+  --rp-shadow: 0 22px 38px -28px rgba(0, 0, 0, 0.95), 0 3px 10px -6px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 #ffffff12;
+  --rp-gap: 16px;
+
+  /* Paleta categórica — ordem fixa, nunca reciclada. `-ink` é o passo claro
+     para glifo e texto sobre superfície tonal; o passo base é o da barra. */
+  --rp-cat-1: #d67231;
+  --rp-cat-2: #3f86cc;
+  --rp-cat-3: #2ea77c;
+  --rp-cat-4: #8a6ad8;
+  --rp-cat-5: #d96a93;
+  --rp-cat-6: #b9852a;
+
+  --rp-tom-laranja: #f28c45;
+  --rp-tom-azul: #5aa2e8;
+  --rp-tom-verde: #3fbf8f;
+  --rp-tom-roxo: #9b7ae8;
+}
+
+/* Um tom é declarado uma vez e alimenta borda, halo, ícone e filete. */
+.reports-redesign [data-tom='laranja'] { --rp-tom: var(--rp-tom-laranja); }
+.reports-redesign [data-tom='azul'] { --rp-tom: var(--rp-tom-azul); }
+.reports-redesign [data-tom='verde'] { --rp-tom: var(--rp-tom-verde); }
+.reports-redesign [data-tom='roxo'] { --rp-tom: var(--rp-tom-roxo); }
 .reports-redesign svg { width: 17px; height: 17px; flex-shrink: 0; }
-.report-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; padding: 15px 18px; border-bottom: 1px solid #ffffff12; }
-.report-title { display: flex; align-items: center; gap: 12px; }
-.report-title h1 { font-size: 21px; font-weight: 650; letter-spacing: -.5px; margin: 0; }
-.report-scope { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #bcc6cb; }
-.report-periods { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; margin-left: auto; }
-.report-periods > svg { color: #a7b3bb; margin-right: 5px; }
-.report-periods button, .report-export, .report-custom-period button { padding: 7px 10px; border: 1px solid transparent; border-radius: 7px; font-size: 12px; line-height: 18px; cursor: pointer; white-space: nowrap; }
-.report-periods button { color: #bcc6cb; }
-.report-periods button:hover { background: #ffffff08; color: #fff; }
-.report-periods button[aria-pressed="true"] { background: var(--color-ui-state-selected); border-color: #ff943b40; color: #ffb575; }
-.report-export { display: inline-flex; gap: 7px; align-items: center; background: #ffffff07; border-color: #ffffff20; color: #edf0f2; }
-.report-export:hover { background: #ffffff10; }
-.reports-redesign button:disabled { opacity: .5; cursor: not-allowed; }
-.reports-redesign button:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 3px; }
-.report-custom-period { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; justify-content: flex-end; font-size: 12px; }
-.report-custom-period input { width: 76px; padding: 6px 9px; border: 1px solid #ffffff30; border-radius: 6px; background: var(--color-ui-surface-sunken); }
-.report-custom-period button { background: var(--color-accent); color: var(--color-on-accent); font-weight: 600; }
+
+/* ---------- Topo: título, período, exportação ---------- */
+.report-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 14px 18px 16px;
+}
+.report-head-title { min-width: 0; flex: 1 1 17rem; }
+.report-head-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.report-head-line h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.report-head-title p { margin: 6px 0 0; font-size: 13.5px; line-height: 19px; color: var(--rp-ink-muted); }
+.report-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  background: #ffffff0f;
+  font-size: 11.5px;
+  color: var(--rp-ink-muted);
+}
+.report-scope svg { width: 14px; height: 14px; }
+
+.report-head-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.report-periods {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--rp-line-soft);
+  border-radius: 13px;
+  background: #ffffff08;
+}
+.report-periods > svg { width: 16px; height: 16px; margin: 0 5px 0 7px; color: var(--rp-ink-faint); }
+.report-periods button {
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rp-ink-muted);
+  font-size: 12.5px;
+  line-height: 17px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.report-periods button:hover { background: #ffffff0d; color: var(--rp-ink); }
+.report-periods button[aria-pressed='true'] {
+  background: var(--color-accent-surface-strong);
+  border-color: var(--color-accent-line);
+  color: #ffc08a;
+  font-weight: 600;
+}
+.report-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--rp-line);
+  border-radius: 13px;
+  background: #ffffff0a;
+  color: var(--rp-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.report-export:hover:not(:disabled) { background: #ffffff14; border-color: #ffffff26; }
+.reports-redesign button:disabled { opacity: 0.5; cursor: not-allowed; }
+.reports-redesign :is(button, select):focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+
+.report-custom-period {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  justify-content: flex-end;
+  font-size: 12.5px;
+  color: var(--rp-ink-muted);
+}
+.report-custom-period input {
+  width: 78px;
+  padding: 7px 10px;
+  border: 1px solid var(--rp-line);
+  border-radius: 10px;
+  background: var(--color-ui-surface-sunken);
+  color: var(--rp-ink);
+}
+.report-custom-period button {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
 .report-custom-period button:hover:not(:disabled) { background: var(--color-accent-strong); }
-.report-content { padding: 0 18px 20px; overflow-y: auto; min-height: 0; }
-.report-overview { margin-bottom: 22px; border-bottom: 1px solid #ffffff16; }
-.report-overview-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 16px; padding: 12px 0 3px; font-size: 11px; color: #aab7bf; }
-.report-overview-heading b { font-weight: 400; color: #d0d8dc; }
-.report-help { display: flex; gap: 5px; align-items: center; color: #aab7bf; }
-.report-help > button { font-size: 11px; color: #bbc7cf; }
-.report-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 13px 0 18px; }
-.report-metric { display: flex; align-items: center; gap: 11px; padding: 0 20px; min-width: 0; border-left: 1px solid #ffffff14; }
-.report-metric:first-child { border: 0; padding-left: 0; }
-.report-metric-icon { color: #a6b5bf; }
-.report-metric:first-child .report-metric-icon { color: #f2a362; }
-.report-metric strong { display: block; font-size: 27px; font-weight: 620; letter-spacing: -.6px; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.report-metric div > span { display: block; margin-top: 4px; font-size: 12px; line-height: 1.4; color: #aab7bf; }
-.report-analysis { display: grid; grid-template-columns: minmax(0,1.9fr) minmax(250px,1fr); gap: 26px; align-items: start; }
-.report-team, .report-breakdowns { min-width: 0; }
-.report-section-heading { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; justify-content: space-between; padding-bottom: 12px; }
-.report-section-heading > span { display: flex; align-items: center; gap: 8px; }
-.report-section-heading svg { color: #aab8c2; }
-.report-section-heading h2 { font-size: 14px; font-weight: 600; margin: 0; }
-.report-section-heading small { font-size: 11px; color: #a3b1ba; }
+.report-custom-period .report-note { margin: 0; }
+
+/* ---------- Corpo ---------- */
+.report-content { padding: 0 18px 22px; overflow-y: auto; min-height: 0; }
+
+.report-caption { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding-bottom: 13px; }
+.report-caption-period { font-size: 12.5px; font-weight: 600; color: var(--rp-ink-muted); }
+.report-caption-side { margin-left: auto; display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--rp-ink-faint); }
+.report-snapshot time { font-variant-numeric: tabular-nums; }
+.report-updating {
+  font-style: normal;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #ffffff0f;
+  color: var(--rp-ink-muted);
+  font-size: 11px;
+}
+
+/* ---------- Indicadores ---------- */
+.report-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--rp-gap); margin-bottom: var(--rp-gap); }
+.report-kpi {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'icon value' 'label label' 'note note';
+  align-items: center;
+  column-gap: 14px;
+  min-width: 0;
+  padding: 17px 19px 15px;
+  border: 1px solid var(--rp-line);
+  border-radius: var(--ui-radius-lg);
+  background-color: var(--rp-card);
+  background-image: linear-gradient(180deg, var(--rp-card-top), var(--rp-card));
+  box-shadow: var(--rp-shadow);
+}
+.report-kpi-icon {
+  grid-area: icon;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #ffffff0d;
+  color: var(--rp-ink-muted);
+}
+.report-kpi-icon svg { width: 23px; height: 23px; }
+.report-kpi-value {
+  grid-area: value;
+  justify-self: start;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: clamp(26px, 2.3vw, 35px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.report-kpi-label { grid-area: label; margin-top: 13px; font-size: 13px; line-height: 18px; color: var(--rp-ink-muted); }
+.report-kpi-note {
+  grid-area: note;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rp-line-soft);
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--rp-ink-faint);
+}
+/* Cada indicador tem o seu tom. O fundo continua grafite; o que recebe cor é a
+   borda, um halo de canto e a superfície do ícone. Substituição de custom
+   property é por TOKEN: nada de `var(--rp-tom)26` — alpha só via color-mix. */
+/* Duas camadas: um véu de 8% que percorre o cartão inteiro (senão o canto
+   inferior direito volta a ser grafite puro e o cartão "perde" a cor) e o halo
+   mais forte no canto de onde vem a luz. Continua base grafite — o véu é fino
+   demais para virar fundo sólido colorido. */
+.report-kpi[data-tom]:not([data-tom='neutro']) {
+  border-color: color-mix(in oklab, var(--rp-tom) 34%, transparent);
+  background-color: color-mix(in oklab, var(--rp-tom) 8%, var(--rp-card));
+  background-image:
+    radial-gradient(135% 115% at 0% 0%, color-mix(in oklab, var(--rp-tom) 26%, transparent), transparent 68%),
+    linear-gradient(180deg, color-mix(in oklab, var(--rp-tom) 8%, var(--rp-card-top)), transparent);
+}
+.report-kpi[data-tom]:not([data-tom='neutro']) .report-kpi-icon {
+  background: color-mix(in oklab, var(--rp-tom) 32%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--rp-tom) 42%, transparent);
+  color: var(--rp-tom);
+}
+.report-kpi[data-tom]:not([data-tom='neutro']) .report-kpi-note {
+  border-top-color: color-mix(in oklab, var(--rp-tom) 20%, transparent);
+}
+/* O indicador principal é o único que a cor também marca na aresta: um filete
+   vertical à esquerda, do mesmo laranja do produto. */
+.report-kpi[data-tom='laranja'] { position: relative; overflow: hidden; }
+.report-kpi[data-tom='laranja']::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--color-accent);
+}
+
+/* ---------- Cartões ---------- */
+.report-card {
+  min-width: 0;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--rp-line);
+  border-radius: var(--ui-radius-lg);
+  background-color: var(--rp-card);
+  background-image: linear-gradient(180deg, var(--rp-card-top), var(--rp-card));
+  box-shadow: var(--rp-shadow);
+}
+.report-card-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; padding-bottom: 14px; }
+.report-card-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.report-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: #ffffff0d;
+  color: var(--rp-ink-muted);
+}
+.report-card-icon svg { width: 19px; height: 19px; }
+.report-card-icon[data-tom]:not([data-tom='neutro']) {
+  background: color-mix(in oklab, var(--rp-tom) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--rp-tom) 24%, transparent);
+  color: var(--rp-tom);
+}
+.report-card-title h2 { margin: 0; font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.report-card-title p { margin: 3px 0 0; font-size: 12px; line-height: 16px; color: var(--rp-ink-faint); }
+
+.report-analysis { display: grid; grid-template-columns: minmax(0, 1.62fr) minmax(300px, 1fr); gap: var(--rp-gap); align-items: start; }
+.report-breakdowns { display: grid; gap: var(--rp-gap); min-width: 0; align-content: start; }
+
+/* ---------- Desempenho da equipe ---------- */
+.report-sort { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; color: var(--rp-ink-faint); }
+.report-sort select {
+  appearance: none;
+  padding: 7px 31px 7px 11px;
+  border: 1px solid var(--rp-line);
+  border-radius: 10px;
+  background-color: #ffffff0a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239fb0bb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 13px;
+  color: var(--rp-ink);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.report-sort select:hover { background-color: #ffffff14; }
+.report-sort option { background: var(--color-ui-surface-overlay); color: var(--rp-ink); }
+
 .report-team-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 13px; }
+.report-team-table col,
 .report-team-table th:first-child { width: 33%; }
-.report-team-table th:nth-child(2) { width: 23%; }
-.report-team-table thead th { position: sticky; top: 0; z-index: 1; background: #293238; color: #aebcc5; text-align: right; font-size: 11px; font-weight: 500; padding: 9px 12px; border-bottom: 1px solid #ffffff16; }
-.report-team-table thead th:first-child { text-align: left; border-radius: 7px 0 0 0; }
-.report-team-table thead th:last-child { border-radius: 0 7px 0 0; }
-.report-team-table tbody th, .report-team-table td { border-bottom: 1px solid #ffffff0d; padding: 12px; text-align: right; vertical-align: middle; font-variant-numeric: tabular-nums; }
-/* `.chat-theme table tbody tr:hover` (index.css) e (0,2,3) e vencia esta
-   regra em (0,2,2) — a correcao declarada nao chegava a tela. O escopo da
-   pagina sobe a especificidade para (0,3,2), que vence. */
+.report-team-table th:nth-child(2) { width: 31%; }
+.report-team-table th:nth-child(3),
+.report-team-table th:nth-child(4) { width: 18%; }
+/* Faixa de cabeçalho: um plano levemente mais claro que atravessa o cartão,
+   separando os rótulos das linhas em vez de deixá-los soltos sobre o fundo.
+   O respiro lateral vem do padding do cartão, então a faixa sangra para fora
+   dele com margem negativa e devolve o recuo no próprio th. */
+.reports-redesign .report-team-table thead th {
+  padding: 8px 10px 8px;
+  border-bottom: 1px solid var(--rp-line);
+  background: #ffffff09;
+  color: var(--rp-ink-faint);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+}
+/* A faixa sangra até a borda do cartão sem mexer no layout: `box-shadow` de
+   deslocamento puro pinta o padding lateral, então os rótulos continuam
+   alinhados exatamente com as colunas do corpo. */
+.reports-redesign .report-team-table thead th:first-child { box-shadow: -20px 0 0 #ffffff09; }
+.reports-redesign .report-team-table thead th:last-child { box-shadow: 20px 0 0 #ffffff09; }
+.reports-redesign .report-team-table thead th:first-child { text-align: left; padding-left: 0; }
+/* O cabecalho fica sobre o numero, nao sobre a barra: a contagem abre a
+   celula e o cabecalho a direita ficava apontando para o vazio. */
+.reports-redesign .report-team-table thead th:nth-child(2) { text-align: left; padding-left: 10px; }
+.reports-redesign .report-team-table thead th:last-child { padding-right: 0; }
+.reports-redesign .report-team-table tbody :is(th, td) {
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--rp-line-soft);
+  text-align: right;
+  vertical-align: middle;
+  color: var(--rp-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.reports-redesign .report-team-table tbody th { text-align: left; padding-left: 0; font-weight: 500; }
+.reports-redesign .report-team-table tbody td:last-child { padding-right: 0; }
+.reports-redesign .report-team-table tbody tr:last-child :is(th, td) { border-bottom: 0; }
 .reports-redesign .report-team-table tbody tr:hover { background: var(--color-ui-state-hover); }
-.report-team-table tbody th { font-weight: 500; text-align: left; }
-.report-person { display: flex; align-items: center; gap: 9px; }
-.report-person > span:last-child { min-width: 0; overflow-wrap: anywhere; }
-.report-avatar { display: inline-flex; align-items: center; justify-content: center; width: 29px; height: 29px; flex-shrink: 0; border-radius: 50%; background: #ffffff09; color: #c2cdd4; font-size: 10px; }
-.report-volume { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
-.report-volume strong { font-weight: 600; }
-.report-bar { display: block; height: 4px; border-radius: 3px; background: #ffffff08; overflow: hidden; }
-.report-bar > span { display: block; height: 100%; background: #9baebc; border-radius: inherit; }
-.report-volume .report-bar { width: 65px; flex-shrink: 1; }
-.report-volume .report-bar > span { background: #c8956c; }
-.report-breakdowns { border-left: 1px solid #ffffff12; padding-left: 24px; }
-.report-breakdown + .report-breakdown { margin-top: 22px; padding-top: 18px; border-top: 1px solid #ffffff12; }
+
+.report-person { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.report-rank {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  color: var(--rp-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+/* A posição acompanha a ordenação em vigor; o destaque do pódio só aparece
+   quando a lista está ordenada por atendimentos — em "Nome" ele mentiria. */
+.report-rank[data-lider] { border-radius: 50%; font-weight: 600; }
+.report-rank[data-lider='1'] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-surface);
+}
+/* 2º e 3º: disco CHEIO, como o do líder — anel vazado se dissolve na linha e
+   deixa de ler como pódio. O que os rebaixa é a saturação, não o contorno. */
+.report-rank[data-lider='2'] {
+  background: color-mix(in oklab, var(--color-accent) 42%, #4c5a64);
+  color: #1e1610;
+}
+.report-rank[data-lider='3'] {
+  background: color-mix(in oklab, var(--color-accent) 20%, #4c5a64);
+  color: #f2f5f7;
+}
+.report-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #ffffff16;
+  color: #e3eaee;
+  font-size: 12px;
+  font-weight: 600;
+}
+.report-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; color: var(--rp-ink); }
+
+.report-volume { display: grid; grid-template-columns: 3.5ch minmax(36px, 1fr); align-items: center; gap: 12px; }
+.report-volume strong { text-align: right; font-size: 13.5px; font-weight: 600; color: var(--rp-ink); }
+/* Trilho afundado, preenchimento com ponta arredondada e um brilho interno no
+   topo — a barra deixa de ser um retângulo chapado sem virar enfeite. */
+.report-bar {
+  display: block;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--rp-bar-track);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+.report-bar > span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+  background-color: var(--rp-fill, var(--rp-bar));
+  background-image: linear-gradient(180deg, #ffffff2e, #ffffff00 65%);
+  box-shadow: 0 0 10px -3px var(--rp-fill, transparent);
+  transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Slots categóricos: ordem fixa, atribuída na ordem decrescente do cartão. */
+.report-bar[data-tom='1'] { --rp-fill: var(--rp-cat-1); }
+.report-bar[data-tom='2'] { --rp-fill: var(--rp-cat-2); }
+.report-bar[data-tom='3'] { --rp-fill: var(--rp-cat-3); }
+.report-bar[data-tom='4'] { --rp-fill: var(--rp-cat-4); }
+.report-bar[data-tom='5'] { --rp-fill: var(--rp-cat-5); }
+.report-bar[data-tom='6'] { --rp-fill: var(--rp-cat-6); }
+/* Pódio da equipe: o líder leva o laranja do produto; 2º e 3º recebem passos
+   cada vez mais lavados do MESMO laranja, então a diferença é de intensidade,
+   não de categoria — ninguém lê "azul" como um desempenho diferente. */
+.report-bar.is-podio-1 { --rp-fill: var(--color-accent); }
+.report-bar.is-podio-2 { --rp-fill: color-mix(in oklab, var(--color-accent) 62%, var(--rp-bar)); }
+.report-bar.is-podio-3 { --rp-fill: color-mix(in oklab, var(--color-accent) 34%, var(--rp-bar)); }
+
+.report-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 13px;
+  padding: 9px;
+  border: 1px solid var(--rp-line-soft);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--rp-ink-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.report-more:hover { background: #ffffff0a; color: var(--rp-ink); }
+.report-more svg { width: 15px; height: 15px; transition: transform 0.2s ease; }
+.report-more[aria-expanded='true'] svg { transform: rotate(180deg); }
+
+/* ---------- Setores e motivos ---------- */
 .report-distribution { margin: 0; padding: 0; list-style: none; }
-.report-distribution li { padding: 8px 0; }
-.report-distribution li > div { display: flex; gap: 16px; justify-content: space-between; align-items: baseline; font-size: 12px; margin-bottom: 7px; }
-.report-distribution li > div > span { min-width: 0; overflow-wrap: anywhere; }
-.report-distribution strong { flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
-.report-unset .report-bar > span { background: #818b92; }
-.report-note { color: #a3afb7; font-size: 11px; line-height: 1.55; margin-top: 9px; }
-.report-team-note { padding-left: 12px; }
-.report-empty { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 24px 8px; font-size: 12px; color: #aebcc5; }
-.report-no-data { padding: 20px; text-align: center; }
-.report-no-data > p:last-child { font-size: 12px; color: #a3afb7; max-width: 600px; margin: 0 auto; }
-.report-error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--color-ui-error-surface); color: var(--color-ui-error-ink); padding: 10px 12px; margin-top: 10px; border-radius: 6px; font-size: 13px; }
+.report-distribution li { padding: 5px 0 6px; }
+.report-distribution-line { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; font-size: 12.5px; }
+.report-distribution-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rp-ink); }
+.report-distribution strong { flex-shrink: 0; font-size: 13px; font-weight: 600; color: var(--rp-ink); font-variant-numeric: tabular-nums; }
+.report-share { flex-shrink: 0; width: 4ch; text-align: right; font-size: 11.5px; color: var(--rp-ink-faint); font-variant-numeric: tabular-nums; }
+/* Ausência de setor/motivo não é uma categoria: fica legível, mas nunca ganha
+   cor de slot, mesmo quando é a maior fatia — e por isso também não consome um
+   slot da paleta. Da sétima categoria em diante vale o mesmo neutro. */
+.report-unset .report-distribution-name { color: var(--rp-ink-faint); }
+.report-unset .report-bar > span { --rp-fill: #7d919f; }
+
+/* ---------- Apoio ---------- */
+.report-note { margin: 9px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--rp-ink-faint); }
+.report-team-note { margin-top: 12px; }
+.report-empty { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 26px 8px; font-size: 12.5px; color: var(--rp-ink-muted); }
+.report-no-data { padding: 26px 20px; text-align: center; }
+.report-no-data > p:last-child { max-width: 62ch; margin: 0 auto; font-size: 12.5px; line-height: 1.6; color: var(--rp-ink-faint); }
+.report-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--color-ui-error-surface);
+  color: var(--color-ui-error-ink);
+  font-size: 13px;
+}
 /* Mesma aparencia do botao da faixa de erro da Supervisao, pelos mesmos tokens. */
 .report-error span { flex: 1; min-width: 0; }
-.report-error button { flex: none; padding: 4px 10px; border: 1px solid color-mix(in oklab, var(--color-ui-error-ink) 40%, transparent); border-radius: 8px; font-size: 12.5px; font-weight: 500; color: inherit; }
+.report-error button {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in oklab, var(--color-ui-error-ink) 40%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
 .report-error button:hover { background: color-mix(in oklab, var(--color-ui-error-ink) 8%, transparent); }
-@media (max-width: 1150px) {
-  .report-toolbar { gap: 10px; }
-  .report-title { margin-right: auto; }
-  .report-periods { order: 3; width: 100%; margin-left: 0; }
-  .report-custom-period { order: 4; justify-content: flex-start; }
-  .report-analysis { grid-template-columns: minmax(0,1fr); gap: 20px; }
-  .report-breakdowns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; padding: 16px 0 0; border-left: 0; border-top: 1px solid #ffffff12; }
-  .report-breakdown + .report-breakdown { margin: 0; padding: 0 0 0 24px; border-top: 0; border-left: 1px solid #ffffff12; }
+
+/* ---------- Larguras menores ----------
+   Desktop é o ambiente de gestão e manda na composição; abaixo disso os
+   cartões se reorganizam sem que nada saia da tela. */
+@media (max-width: 1250px) {
+  .report-analysis { grid-template-columns: minmax(0, 1fr); }
+  .report-breakdowns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .report-head { gap: 12px; }
+  .report-head-title { flex-basis: 100%; }
+  .report-head-controls { width: 100%; }
+  .report-periods { margin-right: auto; }
+  .report-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-kpi-value { font-size: 30px; }
+}
+@media (max-width: 860px) {
+  .report-breakdowns { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 600px) {
-  .report-toolbar { padding: 12px; }
-  .report-title { gap: 8px; }
-  .report-title h1 { font-size: 19px; }
-  .report-scope { font-size: 10px; }
-  .report-scope svg { display: none; }
+  .report-head { padding: 12px 12px 14px; }
+  .report-head-line h1 { font-size: 22px; }
+  .report-head-title p { font-size: 12.5px; }
   .report-content { padding: 0 12px 16px; }
-  .report-periods { gap: 3px; }
-  .report-periods > svg { display: none; }
-  .report-periods button { padding: 6px; font-size: 11px; }
-  .report-metric { padding: 0 9px; }
-  .report-metric-icon { display: none; }
-  .report-metric strong { font-size: 21px; }
-  .report-metric div > span { font-size: 10px; }
+  .report-custom-period { justify-content: flex-start; }
+  .report-kpis { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .report-kpi { padding: 14px 16px 13px; }
+  .report-kpi-icon { width: 38px; height: 38px; border-radius: 11px; }
+  .report-kpi-value { font-size: 27px; }
+  .report-card { padding: 15px 15px 13px; }
+  .report-card-head { padding-bottom: 12px; }
+  .report-sort { width: 100%; }
+  .report-sort select { flex: 1; }
+  /* A tabela vira uma linha por atendente: nome em cima, três medidas embaixo,
+     cada uma com o rótulo que o cabeçalho deixou de mostrar. */
+  .report-team-table,
+  .report-team-table tbody { display: block; }
   .report-team-table thead { display: none; }
-  .report-team-table, .report-team-table tbody { display: block; }
-  .report-team-table tbody tr { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 10px 0; gap: 9px 4px; border-bottom: 1px solid #ffffff12; }
-  .report-team-table tbody th { grid-column: 1 / -1; width: auto; padding: 0; border: 0; }
-  .report-team-table td { display: block; padding: 0; border: 0; text-align: left; font-size: 12px; }
-  .report-team-table td::before { content: attr(data-label); display: block; font-size: 9px; color: #aab7bf; margin-bottom: 4px; }
-  .report-volume { justify-content: flex-start; }
-  .report-volume .report-bar { width: 40px; }
-  .report-breakdowns { gap: 14px; }
-  .report-breakdown + .report-breakdown { padding-left: 14px; }
-  .report-section-heading h2 { font-size: 13px; }
-  .report-breakdown .report-section-heading > span { align-items: flex-start; gap: 5px; }
+  .report-team-table tbody tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 8px; padding: 11px 0; border-bottom: 1px solid var(--rp-line-soft); }
+  .reports-redesign .report-team-table tbody th { grid-column: 1 / -1; padding: 0; border: 0; }
+  .reports-redesign .report-team-table tbody td { display: block; padding: 0; border: 0; text-align: left; font-size: 12.5px; }
+  .reports-redesign .report-team-table tbody tr:last-child { border-bottom: 0; }
+  .report-team-table td::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 10px; color: var(--rp-ink-faint); }
+  .report-volume { grid-template-columns: 3.5ch minmax(28px, 1fr); gap: 8px; }
 }
 
 /* Troca de período: os dados antigos continuam legíveis e rotulados como
    antigos até a resposta nova chegar. Atenuação leve, sem piscar. */
-.report-updating { font-style: normal; margin-left: 10px; padding: 1px 7px; border-radius: 999px; background: #ffffff0f; color: #c6d0d6; font-size: 10.5px; }
-.report-content { transition: opacity .18s ease; }
-.report-content.is-atualizando { opacity: .72; }
-@media (prefers-reduced-motion: reduce) { .report-content { transition: none; } }
+.report-content { transition: opacity 0.18s ease; }
+.report-content.is-atualizando { opacity: 0.72; }
+@media (prefers-reduced-motion: reduce) {
+  .report-content { transition: none; }
+  .report-bar > span { transition: none; }
+  .report-more svg { transition: none; }
+}

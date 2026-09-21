@@ -9,17 +9,14 @@ function WelcomePage() {
   const canEdit = hasLevel(agent, 'integrations');
   const { channels, status, refresh } = useChannels(true);
   return (
-    <>
-      <Card title="Como funciona">
-        <p>
-          Enviada automaticamente para o cliente assim que ele manda a primeira mensagem em um
-          canal — antes de qualquer outra automação.
-        </p>
-        <p className="mt-2 italic">
-          Exemplo: "Olá! Bem-vindo à nossa empresa. Em instantes um atendente vai continuar o seu
-          atendimento."
-        </p>
-      </Card>
+    <div className="settings-message-library">
+      <div className="settings-intro border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
+        <p>A mensagem é enviada após o primeiro contato do cliente, antes das outras automações.</p>
+        <details className="mt-2">
+          <summary className="w-fit cursor-pointer text-chat-orange">Ver exemplo</summary>
+          <p className="mt-2 italic">“Olá! Bem-vindo à nossa empresa. Em instantes um atendente vai continuar o seu atendimento.”</p>
+        </details>
+      </div>
       <Card title="Por canal" description={canEdit ? undefined : 'Salvar boas-vindas exige a permissão de Canais e Integrações.'}>
         <AsyncState status={status} onRetry={refresh} isEmpty={channels.length === 0} emptyMessage="Nenhum canal cadastrado. Crie um em Canais WhatsApp.">
           <ul className="divide-y divide-wa-border overflow-hidden rounded-[16px] border border-wa-border bg-wa-surface">
@@ -29,7 +26,7 @@ function WelcomePage() {
           </ul>
         </AsyncState>
       </Card>
-    </>
+    </div>
   );
 }
 

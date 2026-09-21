@@ -3,10 +3,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAgents } from '../hooks/useAgents';
 import { usePresence } from '../hooks/usePresence';
 import { transferConversation } from '../services/api';
-import WaDialog, { waErrorClass } from './WaDialog';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
 import AgentAvatar from './AgentAvatar';
 import { AsyncState } from './ui';
-import { IconChats, IconChevronDown, IconClose, IconInfo, IconSearch, IconTransfer } from './icons/WaIcons';
+import { IconChats, IconChevronDown, IconInfo, IconSearch, IconTransfer } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 // Nível de carga pelo número de atendimentos abertos. Os limites são uma
 // escolha de produto (não vêm do backend): quem está offline nunca é sugerido
@@ -58,7 +59,7 @@ function normalize(text) {
 
 function IconArrowRight({ size = 16 }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 12h14M13 6l6 6-6 6" />
     </svg>
   );
@@ -84,7 +85,7 @@ function AgentRow({ agent, online, busy, onTransfer }) {
         <AgentAvatar agentId={agent.id} avatarPath={agent.avatarPath} name={displayName} size={46} />
         <span
           title={online ? 'Online' : 'Offline'}
-          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#1c1a18] ${DOT_CLASSES[level.tone]}`}
+          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#30383d] ${DOT_CLASSES[level.tone]}`}
         />
       </span>
       <span className="flex min-w-0 flex-1 basis-0 flex-col gap-1.5">
@@ -117,7 +118,7 @@ function AgentRow({ agent, online, busy, onTransfer }) {
         onClick={onTransfer}
         disabled={busy}
         aria-label={`Transferir para ${displayName}`}
-        className="flex shrink-0 items-center gap-2 rounded-[10px] border border-chat-orange/60 bg-chat-orange/20 px-3.5 py-2 text-[13.5px] font-semibold text-[#ffb08a] transition-colors hover:bg-chat-orange/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-orange disabled:opacity-50"
+        className="flex shrink-0 items-center gap-2 rounded-[10px] border border-chat-orange/60 bg-chat-orange/20 px-3.5 py-2 text-[13.5px] font-semibold text-[#ffb08a] transition-colors hover:bg-chat-orange/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50"
       >
         <span className="text-chat-orange">
           <IconArrowRight size={15} />
@@ -158,7 +159,7 @@ function TransferModal({ conversationId, onClose }) {
       await transferConversation(conversationId, toAgentId, token);
       onClose();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Não foi possível transferir este atendimento.');
+      setError(descreverErro(err, 'Não foi possível transferir este atendimento.'));
       setBusyId(null);
     }
   }
@@ -166,24 +167,15 @@ function TransferModal({ conversationId, onClose }) {
   const hasOthers = allAgents.some((a) => a.id !== agent.id);
 
   return (
-    <WaDialog onClose={onClose} size="max-w-[760px]">
+    <WaDialog variant="transfer" onClose={onClose} labelledBy="transfer-modal-title" size="max-w-[760px]">
       <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5">
         <span aria-hidden="true" className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-chat-orange/20 text-chat-orange">
           <IconTransfer size={30} />
         </span>
         <div className="min-w-0 flex-1 pt-1">
-          <h2 className="text-[20px] font-semibold leading-[26px] text-wa-text">Transferir atendimento</h2>
+          <h2 id="transfer-modal-title" className="text-[18px] font-semibold leading-[26px] text-wa-text">Transferir atendimento</h2>
           <p className="mt-0.5 text-[13.5px] leading-[18px] text-wa-muted">Escolha um atendente para transferir esta conversa.</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fechar o popup de transferência"
-          title="Fechar"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-white/[0.06] text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
-        >
-          <IconClose size={17} />
-        </button>
       </div>
 
       <div className="flex shrink-0 flex-wrap gap-2.5 px-5">
@@ -195,7 +187,7 @@ function TransferModal({ conversationId, onClose }) {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar atendente por nome..."
+            placeholder="Buscar atendente por nome…"
             aria-label="Buscar atendente por nome"
             className="min-w-0 flex-1 bg-transparent text-[13.5px] text-wa-text outline-none placeholder:text-wa-muted"
           />
@@ -210,7 +202,7 @@ function TransferModal({ conversationId, onClose }) {
               className="cursor-pointer appearance-none bg-transparent pr-2 text-[13.5px] font-medium leading-[19px] text-wa-text outline-none"
             >
               {SORTS.map((item) => (
-                <option key={item.key} value={item.key} className="bg-[#26221f] text-white">
+                <option key={item.key} value={item.key} className="bg-[#30383d] text-white">
                   {item.label}
                 </option>
               ))}
@@ -234,7 +226,7 @@ function TransferModal({ conversationId, onClose }) {
             <p className="px-2 py-5 text-center text-[13px] text-wa-muted">Nenhum atendente encontrado com esse nome.</p>
           )}
         </AsyncState>
-        {error && <p className={`${waErrorClass} mt-3`}>{error}</p>}
+        {error && <WaError className="mt-3">{error}</WaError>}
       </div>
 
       <div className="flex shrink-0 items-center gap-3 border-t border-wa-border px-5 py-3">
@@ -245,7 +237,7 @@ function TransferModal({ conversationId, onClose }) {
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 rounded-[10px] border border-wa-border-strong bg-white/[0.06] px-6 py-2 text-[13.5px] font-medium text-wa-text transition-colors hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="shrink-0 rounded-[10px] border border-wa-border-strong bg-white/[0.06] px-6 py-2 text-[13.5px] font-medium text-wa-text transition-colors hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           Cancelar
         </button>

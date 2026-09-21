@@ -38,7 +38,7 @@ export function IconBarcode(props) {
 export function IconQrCode(props) {
   return (
     <Svg {...props}>
-      <g fill="none" stroke="currentColor" strokeWidth="1.9">
+      <g fill="none" stroke="currentColor" strokeWidth="1.75">
         <rect x="3" y="3" width="7" height="7" rx="1.2" />
         <rect x="14" y="3" width="7" height="7" rx="1.2" />
         <rect x="3" y="14" width="7" height="7" rx="1.2" />
@@ -73,7 +73,7 @@ export function IconPdfFile(props) {
 export function IconInvoiceLink(props) {
   return (
     <Svg {...props}>
-      <g fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round">
+      <g fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
         <path d="M10.3 13.7a4.6 4.6 0 006.5 0l2.4-2.4a4.6 4.6 0 00-6.5-6.5l-1.3 1.3" />
         <path d="M13.7 10.3a4.6 4.6 0 00-6.5 0l-2.4 2.4a4.6 4.6 0 006.5 6.5l1.3-1.3" />
       </g>
@@ -85,14 +85,6 @@ export function IconIdCard(props) {
   return (
     <Svg {...props}>
       <path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zM8.5 7.6a2.3 2.3 0 110 4.6 2.3 2.3 0 010-4.6zM13 16.8H4v-.7c0-1.5 3-2.3 4.5-2.3s4.5.8 4.5 2.3zM20 15h-5v-1.8h5zm0-3.4h-5V9.8h5zm0-3.4h-5V6.4h5z" />
-    </Svg>
-  );
-}
-
-export function IconInvoice(props) {
-  return (
-    <Svg {...props}>
-      <path d="M5.5 2h13a1 1 0 011 1v18.2l-2.6-1.6-2.6 1.6-2.6-1.6-2.6 1.6-2.6-1.6L4.5 21V3a1 1 0 011-1zm2 5.2v1.8h9V7.2zm0 4v1.8h9v-1.8zm0 4v1.8h6v-1.8z" />
     </Svg>
   );
 }

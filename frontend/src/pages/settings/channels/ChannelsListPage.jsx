@@ -1,3 +1,4 @@
+import { SettingsTitle, SettingsIcon } from '../SettingsVisuals';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProtectedRoute from '../../../components/ProtectedRoute';
@@ -12,6 +13,7 @@ import { hasLevel } from '../../../navigation/navItems';
 import { computeStatus } from '../../../components/OpenAiConfigCard';
 import { useChannelActions } from './useChannelActions';
 import { ChannelsTable } from './ChannelsTable';
+import SettingsShell from '../SettingsShell';
 
 export function useChannelSummaryContext() {
   const { options } = useTriage();
@@ -41,25 +43,22 @@ function ChannelsListPage() {
   }
 
   return (
-    <ProtectedRoute level="admin" areaLabel="Canais WhatsApp">
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="px-4">
-          <PageHeader
-            crumbs={[{ label: 'Configurações', to: '/configuracoes' }]}
-            title="Canais WhatsApp"
-            description="Gerencie os números e o atendimento de cada canal."
-            action={
-              canManage && (
-                <Button onClick={() => setCreatingChannel(true)}>
-                  <IconNewChat size={18} />
-                  Adicionar canal
-                </Button>
-              )
-            }
-          />
-        </div>
-        <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-10 pt-2 sm:px-6">
-          <div className="max-w-6xl space-y-5">
+    <SettingsShell
+      areaLabel="Números conectados"
+      title="Números conectados"
+      iconName="canais"
+      crumb="WhatsApp e canais"
+      description="Gerencie os números e o atendimento de cada canal."
+      width="table"
+      action={
+        canManage && (
+          <Button onClick={() => setCreatingChannel(true)}>
+            <IconNewChat size={18} />
+            Adicionar canal
+          </Button>
+        )
+      }
+    >
             {actions.errors.action && (
               <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text">{actions.errors.action}</p>
             )}
@@ -76,28 +75,25 @@ function ChannelsListPage() {
                       type="checkbox"
                       checked={showHidden}
                       onChange={(e) => toggleShowHidden(e.target.checked)}
-                      className="h-4 w-4 accent-wa-green"
+                      className="h-4 w-4 accent-accent"
                     />
                     Mostrar ocultos
                   </label>
                 }
               />
-            </AsyncState>
-          </div>
-        </div>
+      </AsyncState>
 
-        {actions.confirmDialog}
-        {creatingChannel && (
-          <CreateChannelModal
-            onClose={() => setCreatingChannel(false)}
-            onCreated={() => {
-              refresh();
-              setCreatingChannel(false);
-            }}
-          />
-        )}
-      </div>
-    </ProtectedRoute>
+      {actions.confirmDialog}
+      {creatingChannel && (
+        <CreateChannelModal
+          onClose={() => setCreatingChannel(false)}
+          onCreated={() => {
+            refresh();
+            setCreatingChannel(false);
+          }}
+        />
+      )}
+    </SettingsShell>
   );
 }
 

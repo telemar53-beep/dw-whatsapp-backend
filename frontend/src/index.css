@@ -10,10 +10,6 @@
   /* Base clara dos componentes: continua valendo fora de `.chat-theme`, que
      hoje é declarado por todas as páginas. Manter os dois lados faz o mesmo
      componente servir aos dois temas sem fork. */
-  --color-wa-green: #0d9488;
-  --color-wa-green-dark: #0b7d73;
-  --color-wa-badge: #0d9488;
-  --color-wa-tick: #0d9488;
   --color-wa-text: #0b1220;
   --color-wa-muted: #5b6472;
   --color-wa-meta: #808a97;
@@ -22,14 +18,12 @@
   --color-wa-border-strong: #c3d2cd;
   --color-wa-panel: #ffffff;
   --color-wa-panel-header: #eef4f2;
-  --color-wa-page: #eef5f3;
   --color-wa-chat: #eef5f3;
   --color-wa-in: #ffffff;
   --color-wa-out: #ffffff;
   --color-wa-out-deep: #eef4f2;
   --color-wa-hover: #eef4f2;
   --color-wa-active: #e6efec;
-  --color-wa-quote: #0d9488;
   --color-wa-chip: #dcefe9;
   --color-wa-chip-text: #0f766e;
   --color-wa-avatar: #dfe5e7;
@@ -43,24 +37,71 @@
   --color-wa-surface-line: rgba(255, 255, 255, 0.55);
   --color-wa-field: #ffffff;
   --color-wa-link: #0f766e;
+  /* ---------- Superficies e tintas, por PAPEL (Etapa 7.9) ----------
+     Nomeiam o que ja estava espalhado em hexadecimal. Cartao aparecia em 12
+     pontos com dois hexes de 1 ponto de diferenca; a bandeja flutuante tinha
+     cinco; o campo afundado, quatro. Divisoria e texto de apoio ja tinham
+     TRES e DOIS tokens com o mesmo valor, um por area. Aqui vira um nome por
+     papel, e o valor claro/escuro segue o padrao dos tokens wa-*. */
+  --color-ui-state-hover: #eef4f2;
+  --color-ui-state-selected: rgba(13, 148, 136, 0.11);
+  --color-ui-marker-supervision: #0d9488;
+  --color-ui-presence-online: #0f766e;
+  --color-ui-error-surface: #fdecea;
+  --color-ui-error-ink: #b3261e;
+
+  --color-ui-surface-canvas: #eef5f3;
+  --color-ui-surface-panel: #ffffff;
+  --color-ui-surface-card: #ffffff;
+  --color-ui-surface-overlay: #ffffff;
+  --color-ui-surface-field: #ffffff;
+  --color-ui-surface-sunken: #eef4f2;
+  --color-ui-line: #e3ece9;
+  --color-ui-ink-strong: #0b1220;
+  --color-ui-ink-muted: #5b6472;
+  --color-ui-ink-faint: #808a97;
+  --color-ui-ink-ai: #6d4fa3;
+
   --color-sgp-blue: #1a73e8;
   --color-sgp-red: #d93025;
   --color-sgp-gray: #57626d;
 
+  /* ---------- Acento ----------
+     Antes isto se chamava `wa-green` e pintava laranja dentro de
+     `.chat-theme`: o nome mentia sobre o que renderizava. `on-accent` é a
+     tinta que fica legível em cima do acento — branco sobre o teal claro,
+     grafite sobre o laranja escuro. Trocar a cor da marca passa a ser mudar
+     estes três valores, não caçar dezenas de tons espalhados. */
+  --color-accent: #0d9488;
+  --color-accent-strong: #0b7d73;
+  --color-on-accent: #ffffff;
+  /* Etapa 7: o acento virou família semântica, por PAPEL visual. Até aqui cada
+     área tinha o seu laranja só porque foi estilizada num momento diferente —
+     login, menu, Supervisão, Configurações e Relatórios usavam cinco tons
+     distintos. `soft` é o acento em texto e ícone sobre fundo escuro, onde o
+     acento cheio brilha demais; `surface` e `line` são o acento tingindo fundo
+     e borda. Cor semântica (sucesso, erro, aviso, tipo de arquivo) continua
+     independente disto. */
+  --color-accent-soft: #14b8a6;
+  --color-accent-surface: rgba(13, 148, 136, 0.12);
+  --color-accent-surface-strong: rgba(13, 148, 136, 0.2);
+  --color-accent-line: rgba(13, 148, 136, 0.4);
+
+  /* ---------- Anel de foco ----------
+     Um valor só, no lugar das nove cores de contorno que conviviam. */
+  --color-focus-ring: #e5a16d;
+
   /* Vidro fumê da página de chat (Atendimento) — escopo isolado dos tokens wa-*,
      que continuam servindo os modais claros. Ver output/design-chat/LEIA-ME-DESIGN.md */
-  --color-chat-canvas: #100e0d;
-  --color-chat-rail: #17140f;
-  --color-chat-text: #f4f1ed;
-  --color-chat-muted: #c7c2bd;
-  --color-chat-faint: #8b8682;
-  --color-chat-icon: #b0aba6;
-  --color-chat-copper: #b97a55;
-  --color-chat-mauve: #6c5b77;
-  --color-chat-orange: #f4531f;
-  --color-chat-orange-ink: #2a1a0e;
+  --color-chat-canvas: #20272d;
+  --color-chat-text: #f4f6f7;
+  --color-chat-muted: #bec8ce;
+  --color-chat-faint: #97a4ad;
+  --color-chat-icon: #b9c4cb;
+  --color-chat-copper: #f29a58;
+  --color-chat-orange: #f28c45;
+  --color-chat-orange-ink: #2a1b12;
   --color-chat-online: #33d9a6;
-  --color-chat-cream: #efe7ce;
 }
 
 /* ---------- Vidro fumê nos pop-ups da página de atendimento ----------
@@ -76,35 +117,38 @@
   --wa-dialog-border: rgba(255, 255, 255, 0.1);
   --wa-dialog-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.75);
   --wa-dialog-blur: 28px;
-  --wa-overlay: rgba(8, 7, 6, 0.62);
+  --wa-overlay: rgba(13, 20, 24, 0.68);
   --wa-overlay-blur: 6px;
   --scroll-thumb: rgba(255, 255, 255, 0.26);
   --scroll-thumb-hover: rgba(255, 255, 255, 0.42);
 
-  --color-wa-text: #f4f1ed;
-  --color-wa-muted: #b6b0ab;
-  --color-wa-meta: #8b8682;
-  --color-wa-icon: #c7c2bd;
+  --color-wa-text: #f4f6f7;
+  --color-wa-muted: #bac5cc;
+  --color-wa-meta: #97a4ad;
+  --color-wa-icon: #bec8ce;
   --color-wa-border: rgba(255, 255, 255, 0.1);
   --color-wa-border-strong: rgba(255, 255, 255, 0.2);
-  --color-wa-panel: rgba(36, 32, 30, 0.92);
+  --color-wa-panel: rgba(45, 54, 60, 0.96);
   --color-wa-panel-header: rgba(255, 255, 255, 0.07);
-  --color-wa-page: #171513;
-  --color-wa-chat: #171513;
+  --color-wa-chat: #293136;
   --color-wa-in: rgba(255, 255, 255, 0.14);
   --color-wa-out: rgba(255, 255, 255, 0.12);
   --color-wa-out-deep: rgba(255, 255, 255, 0.12);
   --color-wa-hover: rgba(255, 255, 255, 0.07);
   --color-wa-active: rgba(255, 255, 255, 0.12);
-  --color-wa-green: #f4531f;
-  --color-wa-green-dark: #d8441a;
-  --color-wa-badge: #33d9a6;
-  --color-wa-tick: #33d9a6;
-  --color-wa-quote: #f4531f;
   --color-wa-chip: rgba(51, 217, 166, 0.16);
   --color-wa-chip-text: #33d9a6;
   --color-wa-avatar: rgba(255, 255, 255, 0.13);
-  --color-wa-avatar-text: #c7c2bd;
+  --color-wa-avatar-text: #c7d0d5;
+  --color-accent: #f28c45;
+  --color-accent-strong: #dd7835;
+  --color-on-accent: #2a1b12;
+  /* Mesma família semântica do bloco base, nos valores do tema grafite.
+     `soft` é o #e5a16d que o chat e o anel de foco já usavam — agora com nome. */
+  --color-accent-soft: #e5a16d;
+  --color-accent-surface: rgba(242, 140, 69, 0.14);
+  --color-accent-surface-strong: rgba(242, 140, 69, 0.24);
+  --color-accent-line: rgba(242, 140, 69, 0.42);
   --color-wa-error-bg: rgba(234, 67, 53, 0.18);
   --color-wa-error-text: #ff9d93;
   --color-wa-warn-bg: rgba(242, 169, 60, 0.16);
@@ -112,12 +156,50 @@
   --color-wa-surface: rgba(255, 255, 255, 0.06);
   --color-wa-surface-soft: rgba(255, 255, 255, 0.04);
   --color-wa-surface-line: rgba(255, 255, 255, 0.08);
-  --color-wa-field: rgba(255, 255, 255, 0.06);
-  --color-wa-link: #ff9a6b;
+  --color-wa-field: #354047;
+  --color-wa-link: #ffb078;
+  /* Mesma familia, nos valores do tema grafite. */
+  /* Estado e marcadores (Etapa 7, ultima rodada).
+     - hover: os casos invisiveis (1,03-1,06:1) convergem para este; quem ja
+       estava entre 08 e 0c nao foi tocado.
+     - selecionado: alpha .11 da dY +3,7 sobre o fundo local, a mesma faixa de
+       Configuracoes (+3,5) e longe de Supervisao (+5,2), que fica como esta.
+     - marker-supervision: MESMO #d99055 de antes, zero mudanca visual. Existe
+       porque a Supervisao reusava o HEX de --chat-edge-out, que e autoria de
+       mensagem: era dependencia semantica errada, nao problema de aparencia.
+     - presence-online: o verde de "atendente online agora", papel distinto de
+       --color-chat-online (conexao/entregue/pastilha de status).
+     - error-surface/ink: a faixa de erro mais legivel (8,17:1) ganha nome. NAO
+       substitui --color-wa-error-*, que serve tambem botao danger e chip de
+       status — mudar o token global degradaria ~35 telas em silencio. */
+  --color-ui-state-hover: #ffffff0d;
+  --color-ui-state-selected: rgba(242, 140, 69, 0.11);
+  --color-ui-marker-supervision: #d99055;
+  --color-ui-presence-online: #65c596;
+  --color-ui-error-surface: #b9434320;
+  --color-ui-error-ink: #ffc2bc;
+
+  --color-ui-surface-canvas: #242f36;
+  --color-ui-surface-panel: #2d3a43;
+  --color-ui-surface-card: #2b343b;
+  --color-ui-surface-overlay: #30383d;
+  --color-ui-surface-field: #354047;
+  --color-ui-surface-sunken: #202a31;
+  --color-ui-line: #ffffff12;
+  --color-ui-ink-strong: #f1f4f6;
+  --color-ui-ink-muted: #a9bcc8;
+  --color-ui-ink-faint: #93a7b5;
+  --color-ui-ink-ai: #c4b2dc;
+
   --color-sgp-blue: #7ab0ff;
   --color-sgp-red: #ff8d82;
   --color-sgp-gray: #c7c2bd;
 }
+
+
+/* Tabelas de canais, usuários e cadastros preservam a densidade de trabalho. */
+.chat-theme table tbody tr:hover { background-color: rgba(255, 255, 255, 0.035); }
+.chat-theme table th { color: var(--color-chat-muted); }
 
 /* Valores claros equivalentes, para o mesmo componente fora do chat. */
 :root {
@@ -131,52 +213,148 @@
   --scroll-thumb-hover: rgba(11, 20, 26, 0.34);
 }
 
+/* ---------- Escalas do produto ----------
+   Vocabulário declarado, não imposto. Existe um prefixo porque redefinir
+   `--text-sm` ou `--radius-lg` mudaria de uma vez os 113 `text-sm` e os 57
+   `rounded-lg` que já existem, e isso é convergência, não consolidação. E o
+   prefixo é `ui-`, neutro: o produto é white-label, então a fundação visual
+   não carrega nome de empresa nem de tenant.
+   Cada área adota estes valores quando for a vez dela. */
+:root {
+  /* Tipografia — piso de 12px para texto lido; 11px só para número e selo. */
+  --ui-text-2xs: 11px;
+  --ui-text-xs: 12px;
+  /* Passos COMPACTOS, oficializados na Etapa 7.10. Nao sao arredondamento
+     pendente: 13,5px e o tamanho mais frequente de todo o produto (102
+     usos em 46 arquivos) e 12,5px vem logo atras (69). Eles sustentam a
+     densidade de linha de tabela, de menu e de lista. Componente novo
+     consome a escala em vez de inventar 12,8 ou 14,2. */
+  --ui-text-xs-plus: 12.5px;
+  --ui-text-sm: 13px;   /* o corpo real do produto */
+  --ui-text-sm-plus: 13.5px;
+  --ui-text-base: 14px;
+  --ui-text-lg: 16px;
+  --ui-text-xl: 20px;
+  --ui-text-2xl: 26px;
+
+  /* Espaçamento — escala de 4, onde o produto já vive. */
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  --ui-space-12: 48px;
+
+  /* Raio — painel 22 > cartão 16 > controle 12 > chip 8. */
+  --ui-radius-sm: 8px;
+  --ui-radius-md: 12px;
+  --ui-radius-lg: 16px;
+  --ui-radius-xl: 22px;
+
+  /* Largura de campo pelo dado que ele guarda (ver ui/Field). */
+  --ui-field-xs: 96px;
+  --ui-field-sm: 180px;
+  --ui-field-md: 320px;
+
+  /* Camadas. Antes cada overlay escolhia o proprio numero e o resultado era
+     a conversa de "Encerrados" nascendo ATRAS do dialogo que a abriu, com um
+     z-[60] improvisado por cima para compensar. Agora ha uma escala so, e a
+     profundidade de dialogo empilhado e calculada pela DialogStack em vez de
+     ser escrita a mao. */
+  --z-nav: 100;
+  --z-popover: 200;
+  --z-toast: 300;
+  --z-dialog: 1000;
+  --z-dialog-step: 10;
+}
+
+/* ---------- Superfícies e tinta da mesa de atendimento ----------
+   A mesa tinha 67 cores distintas em 85 literais, contra 8 usos de token.
+   Aqui elas viram papéis: superfície pelo nível de elevação, tinta pelo peso
+   da informação, linha pela força da separação. Tons quase idênticos foram
+   convergidos — a mesa é a área autorizada a mudar nesta etapa.
+   Escopo `.chat-workspace`: não vaza para as outras telas, que fazem a
+   própria consolidação quando for a vez delas. */
+.chat-workspace {
+  /* Elevação: do mais fundo (busca, trilho) ao mais alto (campo, painel). */
+  --chat-surface-sunken: #202a31;
+  --chat-surface-canvas: #242f36;
+  --chat-surface-list: #263139;
+  --chat-surface-raised: #2a353d;
+  --chat-surface-panel: #2d3a43;
+  --chat-surface-panel-raised: #34424b;
+  --chat-surface-input: #33414a;
+  --chat-surface-ai: #303843;
+
+  /* Bolhas: o valor fica, a distinção passa a vir do filete (ver abaixo). */
+  --chat-bubble-in: #35434c;
+  --chat-bubble-out: #394742;
+  --chat-bubble-ai: #393f4b;
+
+  /* Tinta por peso: título, corpo, apoio, metadado. */
+  --chat-ink: #cbd7df;
+
+  /* Linhas e estados. O hover era #ffffff04 — 1,05:1, invisível na prática. */
+  --chat-line-soft: #ffffff0a;
+  --chat-state-hover: #ffffff0d;
+  --chat-state-selected: #b7835924;
+  --chat-state-selected-soft: #b783590b;
+  --chat-header-tint: #2e3b4388;
+  --chat-timeline-top: #222e35;
+
+  /* Acento e IA. */
+  --chat-accent-soft: #e5a16d;
+  --chat-ai-line: #b9a1d733;
+
+  /* Filete do autor: a distincao das bolhas nao pode depender so de matiz.
+     Cliente, atendente e IA tinham 1,047:1 e 1,11:1 de diferenca — em monitor
+     com brilho baixo, quem falou o que sumia. O filete nao gasta altura. */
+  --chat-edge-in: #7f95a3;
+  --chat-edge-out: #d99055;
+  --chat-edge-ai: #b9a1d7;
+  --chat-ai-chip: #cbb9e6;
+  --chat-ai-chip-ink: #2b2038;
+}
+
 /* ---------- Foco por teclado ----------
-   Rede de segurança: todo link e botão ganha um anel visível mesmo quando a
-   classe do componente não declara um. Fica na camada base, então qualquer
-   utilitário `focus-visible:outline-*` do próprio componente continua vencendo
-   e mantém a cor certa (laranja no CTA, verde no formulário). */
-@layer base {
-  .chat-theme a:focus-visible,
-  .chat-theme button:focus-visible,
-  .chat-theme summary:focus-visible,
-  .chat-theme [role="button"]:focus-visible,
-  .chat-theme [tabindex]:not([tabindex="-1"]):focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.7);
-    outline-offset: 2px;
-  }
+   Uma regra, uma cor, para todo elemento que recebe foco — inclusive campos,
+   que antes ficavam de fora. Fica FORA de @layer de propósito: regra sem
+   layer vence utilitário em layer, e é isso que alcança os 42 `outline-none`
+   espalhados pelos campos. O `outline-offset` não faz parte do atalho
+   `outline`, então cada componente mantém o recuo que já escolheu. */
+/* CONTORNO — ação: botão, link, summary, linha clicável, e os controles
+   nativos que o sistema desenha (caixa, rádio, arquivo, faixa, cor), para os
+   quais não existe "anel". */
+.chat-theme :is(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"]),
+                input[type="checkbox"], input[type="radio"], input[type="file"],
+                input[type="range"], input[type="color"]):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ANEL — campo de digitação, select e textarea. UM indicador só: até a Etapa
+   7.9 o campo recebia o contorno desta folha E o anel das classes do próprio
+   componente, dois traços de 2px da mesma cor, um colado no outro. A 7.6 não
+   criou isso — ao igualar as duas cores, tornou visível a duplicata.
+
+   A regra continua FORA de @layer pelo mesmo motivo de antes: é ela que
+   alcança os 42 `outline-none` dos campos, e são 18 campos sem nenhuma classe
+   de anel própria que dependem só dela para ter foco visível.
+
+   O `outline: 2px solid transparent` fica para o modo de alto contraste
+   forçado do Windows, onde o box-shadow é descartado e o contorno é repintado
+   pelo sistema — sem ele o campo perderia o foco nesse modo. */
+.chat-theme :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]),
+                select, textarea):focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 0;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-focus-ring) 40%, transparent);
 }
 
 /* ---------- Fundo do chat ---------- */
 .wa-wallpaper {
   background-color: var(--color-wa-chat);
-}
-
-/* ---------- Balões ---------- */
-.wa-bubble {
-  border: 1px solid rgba(11, 18, 32, 0.04);
-  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.08);
-}
-
-.wa-tail-in::before,
-.wa-tail-out::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  width: 8px;
-  height: 13px;
-}
-
-.wa-tail-in::before {
-  left: -8px;
-  background-color: var(--color-wa-in);
-  clip-path: polygon(100% 0, 100% 100%, 0 0);
-}
-
-.wa-tail-out::before {
-  right: -8px;
-  background-color: var(--color-wa-out);
-  clip-path: polygon(0 0, 100% 0, 0 100%);
 }
 
 /* ---------- Barras de rolagem ----------

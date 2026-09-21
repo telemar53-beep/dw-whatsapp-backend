@@ -19,7 +19,7 @@ describe('OpenAiPage', () => {
     useAuth.mockReturnValue({ token: 'tok', agent: { role: 'admin' } });
     useAiConfig.mockReturnValue({ config: { configured: true, mode: 'assistant', model: 'gpt' }, status: 'ready', loading: false, refresh: vi.fn() });
     renderInShell(<OpenAiPage />, { path: PATH });
-    expect(screen.getByRole('heading', { name: /integração com openai/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /conexão e modelo/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /salvar openai/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /atendimento e triagem com ia/i })).toHaveAttribute('href', '/configuracoes/automacao/ia');
   });

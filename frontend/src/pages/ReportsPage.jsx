@@ -1,38 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getMetrics } from '../services/api';
-import { buildMetricsCsv } from '../utils/exportMetricsCsv';
+import { buildMetricsCsv, nomeDoArquivoDeMetricas } from '../utils/exportMetricsCsv';
 import { formatDuration } from '../utils/formatDuration';
-import { PageHeader, Button } from '../components/ui';
 import SectionHelp from '../components/SectionHelp';
+import './reports.css';
 
 const PERIODS = [
   { value: 'today', label: 'Últimas 24 horas' },
   { value: '7d', label: 'Últimos 7 dias' },
   { value: '30d', label: 'Últimos 30 dias' },
 ];
-
-// Séries claras o bastante para o fundo escuro, e distintas entre si.
-const TEAL = '#4dd4ac';
-const AMBER_DARK = '#f0a94f';
-const INDIGO = '#8aa9e8';
-// Barras "Sem setor" / "Sem motivo": neutro, fora da paleta das séries normais.
-const UNSET = '#9a948f';
-const GRID_COLOR = 'rgba(255, 255, 255, 0.10)';
-const AXIS_COLOR = 'rgba(255, 255, 255, 0.55)';
-const TOOLTIP_STYLE = {
-  backgroundColor: 'rgba(36, 32, 30, 0.96)',
-  border: '1px solid rgba(255, 255, 255, 0.12)',
-  borderRadius: 14,
-  boxShadow: '0 30px 80px -20px rgba(0, 0, 0, 0.75)',
-  fontSize: 13,
-  color: '#f4f1ed',
-};
-const AXIS_TICK = { fill: AXIS_COLOR, fontSize: 12 };
-const CHART_CURSOR = { fill: 'rgba(255, 255, 255, 0.06)' };
-
 function IconCheck(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
@@ -80,19 +59,9 @@ function IconLayers(props) {
   );
 }
 
-function IconGauge(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      <path d="M4 14a8 8 0 1 1 16 0" />
-      <path d="M12 14l4-4" />
-      <path d="M12 14v.01" />
-    </svg>
-  );
-}
-
 function IconInbox(props) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
       <path d="M4 12h4l2 3h4l2-3h4" />
       <path d="M6 5h12l2 7v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6l2-7z" />
     </svg>
@@ -128,62 +97,22 @@ function IconTag(props) {
   );
 }
 
-const PANEL_CLASS = 'rounded-[22px] border border-white/[0.07] bg-white/[0.08] backdrop-blur-2xl';
 
-function StatTile({ icon, value, label }) {
-  const display = value === null || value === undefined ? '—' : value;
-  return (
-    <div className={`${PANEL_CLASS} p-5 sm:p-6`}>
-      <span aria-hidden="true" className="mb-4 flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.07] text-chat-orange">
-        {icon}
-      </span>
-      <p className="font-display text-[32px] font-semibold leading-tight text-chat-text">{display}</p>
-      <p className="mt-1.5 text-[14px] leading-[19px] text-chat-muted">{label}</p>
-    </div>
-  );
+function IconCalendar() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg>; }
+function Metric({ icon, value, label }) { return <div className="report-metric"><span className="report-metric-icon">{icon}</span><div><strong>{value ?? '—'}</strong><span>{label}</span></div></div>; }
+function EmptyState() { return <p className="report-empty"><IconInbox />Nenhum atendimento fechado nesse período.</p>; }
+// Escala visual apenas: os valores e os cálculos do relatório permanecem intactos.
+function VolumeBar({ value, maximum }) { return <span className="report-bar" aria-hidden="true"><span style={{ width: maximum > 0 ? (value / maximum * 100) + '%' : '0%' }} /></span>; }
+function Breakdown({ title, icon, rows, nameKey, idKey, note, unsetNote }) {
+  const maximum = Math.max(0, ...rows.map(row => row.closedCount));
+  return <section className="report-breakdown" aria-label={title}>
+    <header className="report-section-heading"><span>{icon}<h2>{title}</h2></span><small>{note}</small></header>
+    {rows.length === 0 ? <EmptyState /> : <ul className="report-distribution">{rows.map(row => <li key={row[idKey] ?? 'none'} className={row[idKey] === null ? 'report-unset' : ''}>
+      <div><span>{row[nameKey]}</span><strong>{row.closedCount}</strong></div><VolumeBar value={row.closedCount} maximum={maximum}/>
+    </li>)}</ul>}
+    {rows.some(row => row[idKey] === null) && <p className="report-note">{unsetNote}</p>}
+  </section>;
 }
-
-function ChartCard({ title, icon, children }) {
-  return (
-    <div className={`${PANEL_CLASS} min-w-0 p-5 sm:p-6`}>
-      <div className="mb-5 flex items-center gap-2.5">
-        <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.07] text-chat-orange">
-          {icon}
-        </span>
-        <h2 className="min-w-0 font-display text-[16px] font-semibold leading-[22px] text-chat-text">{title}</h2>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex h-[260px] flex-col items-center justify-center gap-2 rounded-[16px] border border-dashed border-white/[0.12] text-center">
-      <IconInbox className="h-6 w-6 text-chat-muted" />
-      <p className="px-4 text-[13.5px] text-chat-muted">Nenhum atendimento fechado nesse período.</p>
-    </div>
-  );
-}
-
-// Eixos e grade repetidos em todos os gráficos.
-function chartAxes(dataKey, { yTickFormatter, yWidth = 32 } = {}) {
-  return (
-    <>
-      <CartesianGrid vertical={false} stroke={GRID_COLOR} />
-      <XAxis dataKey={dataKey} tick={AXIS_TICK} axisLine={{ stroke: GRID_COLOR }} tickLine={false} />
-      <YAxis
-        tick={AXIS_TICK}
-        axisLine={false}
-        tickLine={false}
-        allowDecimals={false}
-        width={yWidth}
-        tickFormatter={yTickFormatter}
-      />
-    </>
-  );
-}
-
 // A faixa de indicadores do admin sai do mesmo payload dos gráficos: total de
 // fechados e as médias de tempo ponderadas pelo volume de cada atendente.
 function summarize(byAgent) {
@@ -211,6 +140,13 @@ function isValidCustomDays(value) {
   return Number.isInteger(value) && value >= 1 && value <= CUSTOM_DAYS_MAX;
 }
 
+// Sempre a partir do instantâneo da resposta, nunca da seleção atual: é o
+// período dos números que estão na tela.
+function rotuloDoPeriodo({ period, customDays }) {
+  if (period === 'custom') return `Últimos ${customDays} dias`;
+  return PERIODS.find((p) => p.value === period)?.label;
+}
+
 function ReportsPage() {
   const { token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -218,13 +154,25 @@ function ReportsPage() {
   const customDaysFromUrl = Number(searchParams.get('dias'));
   const validCustomDaysFromUrl = isValidCustomDays(customDaysFromUrl) ? customDaysFromUrl : null;
   // periodo=custom sem "dias" válido (1..365) não tem o que buscar — em vez
-  // de ficar preso em "Carregando indicadores..." pra sempre, cai para "today".
+  // de ficar preso em "Carregando indicadores…" pra sempre, cai para "today".
   const period = rawPeriod === 'custom' && !validCustomDaysFromUrl ? 'today' : rawPeriod;
   const customDays = period === 'custom' ? validCustomDaysFromUrl : null;
-  const [customDaysInput, setCustomDaysInput] = useState('');
+  // Abrir "Personalizado" com ?dias=45 na URL mostrava o campo vazio, como se
+  // o recorte em vigor não existisse.
+  const [customDaysInput, setCustomDaysInput] = useState(validCustomDaysFromUrl ? String(validCustomDaysFromUrl) : '');
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [data, setData] = useState(null);
+  // A resposta carrega junto os parâmetros que a produziram. Antes o rótulo do
+  // resumo lia a seleção atual: trocar de período mudava o texto na hora e os
+  // números só depois, então a tela afirmava "Últimos 30 dias" sobre os números
+  // das últimas 24 horas. Dados e rótulo agora entram e saem juntos, e é esse
+  // instantâneo — não a seleção — que nomeia a exportação.
+  const [resposta, setResposta] = useState(null);
   const [error, setError] = useState(null);
+  const [atualizando, setAtualizando] = useState(false);
+  // Contador de tentativa: e o que o botao "Tentar de novo" incrementa para o
+  // efeito de carga rodar outra vez sem recarregar a pagina.
+  const [tentativa, setTentativa] = useState(0);
+  const data = resposta ? resposta.dados : null;
 
   function selectPeriod(value, days) {
     setSearchParams((prev) => {
@@ -236,11 +184,24 @@ function ReportsPage() {
   }
 
   useEffect(() => {
+    let cancelado = false;
     setError(null);
+    setAtualizando(true);
     getMetrics(period, token, customDays)
-      .then(setData)
-      .catch(() => setError('Falha ao carregar métricas'));
-  }, [period, token, customDays]);
+      .then((dados) => {
+        if (cancelado) return;
+        setResposta({ dados, period, customDays });
+        setAtualizando(false);
+      })
+      .catch(() => {
+        if (cancelado) return;
+        setError('Falha ao carregar métricas');
+        setAtualizando(false);
+      });
+    // Uma resposta atrasada de um período abandonado não pode chegar depois e
+    // sobrescrever a do período que o usuário está vendo.
+    return () => { cancelado = true; };
+  }, [period, token, customDays, tentativa]);
 
   const customDaysValue = Number(customDaysInput);
   const customDaysValid = isValidCustomDays(customDaysValue);
@@ -248,16 +209,20 @@ function ReportsPage() {
   function handleApplyCustomDays() {
     if (!customDaysValid) return;
     selectPeriod('custom', customDaysValue);
+    setShowCustomInput(false);
   }
 
   function handleExportCsv() {
-    if (!data) return;
-    const csv = buildMetricsCsv(data);
+    if (!resposta) return;
+    // Tudo sai do instantâneo: se há uma requisição em andamento, o arquivo
+    // descreve os dados que foram exportados, não o período já selecionado.
+    const agora = new Date();
+    const csv = buildMetricsCsv(resposta.dados, { periodo: rotuloDoPeriodo(resposta), geradoEm: agora });
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `relatorio-${data.period}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = nomeDoArquivoDeMetricas(resposta, agora);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -267,80 +232,27 @@ function ReportsPage() {
   const isAdmin = data && data.scope === 'admin';
   const summary = useMemo(() => (isAdmin ? summarize(data.byAgent) : null), [isAdmin, data]);
 
-  function periodButtonClass(selected) {
-    return `shrink-0 rounded-full border px-[18px] py-[9px] text-[14.5px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70 ${
-      selected
-        ? 'border-chat-orange/70 bg-chat-orange/[0.12] font-medium text-chat-text'
-        : 'border-white/[0.12] text-chat-muted hover:border-white/25 hover:text-chat-text'
-    }`;
-  }
 
-  const hasUnsetSector = isAdmin && data.bySector.some((row) => row.sectorId === null);
-  const hasUnsetReason = isAdmin && data.byReason.some((row) => row.reasonId === null);
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <PageHeader
-        title="Relatórios"
-        description="Indicadores de atendimento da equipe"
-        action={
-          <Button variant="secondary" onClick={handleExportCsv} disabled={!data}>
-            <IconDownload className="h-4 w-4" />
-            Exportar CSV
-          </Button>
-        }
-      />
-
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2.5 px-2 pb-4">
-        {PERIODS.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            aria-pressed={period === p.value}
-            onClick={() => {
-              selectPeriod(p.value);
-              setShowCustomInput(false);
-            }}
-            className={periodButtonClass(period === p.value)}
-          >
-            {p.label}
-          </button>
-        ))}
-        <button type="button" aria-pressed={period === 'custom'} aria-expanded={showCustomInput} onClick={() => setShowCustomInput((prev) => !prev)} className={periodButtonClass(period === 'custom')}>
-          Personalizado
-        </button>
-
-        {showCustomInput && (
-          <>
-            <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10" />
-            <div className="flex items-center gap-2">
-              <label htmlFor="custom-days" className="text-[14px] text-chat-muted">
-                Últimos
-              </label>
-              <input
-                id="custom-days"
-                type="number"
-                min="1"
-                max={CUSTOM_DAYS_MAX}
-                value={customDaysInput}
-                onChange={(e) => setCustomDaysInput(e.target.value)}
-                className="h-[40px] w-20 rounded-[12px] border border-white/[0.12] bg-white/[0.06] px-3 text-[14px] text-chat-text outline-none transition focus-visible:border-chat-orange/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
-              />
-              <span className="text-[14px] text-chat-muted">dias</span>
-              <button
-                type="button"
-                onClick={handleApplyCustomDays}
-                disabled={!customDaysValid}
-                className="h-[40px] shrink-0 rounded-[12px] bg-chat-orange px-4 text-[14px] font-medium text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-chat-orange disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Aplicar
-              </button>
-            </div>
-          </>
-        )}
-
-        <div className="ml-auto shrink-0">
-          <SectionHelp label="Como os tempos são calculados" title="Como os tempos são calculados">
+  const adminHasNoBreakdown = isAdmin && data.byAgent.length === 0 && data.bySector.length === 0 && data.byReason.length === 0;
+  const maximumVolume = isAdmin ? Math.max(0, ...data.byAgent.map(row => row.closedCount)) : 0;
+  const metrics = isAdmin ? summary : data?.scope === 'agent' ? data.own : null;
+  return <main className="reports-workspace reports-redesign">
+    <header className="report-toolbar">
+      <div className="report-title"><h1>Relatórios</h1>{data && <span className="report-scope"><IconUsers/>{isAdmin ? 'Equipe' : 'Meus resultados'}</span>}</div>
+      <div className="report-periods" role="group" aria-label="Período do relatório"><IconCalendar/>
+        {PERIODS.map(p => <button key={p.value} type="button" aria-pressed={period === p.value} onClick={() => { selectPeriod(p.value); setShowCustomInput(false); }}>{p.label}</button>)}
+        <button type="button" aria-pressed={period === 'custom'} aria-expanded={showCustomInput} onClick={() => setShowCustomInput(prev => !prev)}>Personalizado</button>
+      </div>
+      <button className="report-export" type="button" onClick={handleExportCsv} disabled={!data}><IconDownload/>Exportar CSV</button>
+      {showCustomInput && <div className="report-custom-period"><label htmlFor="custom-days">Últimos</label><input id="custom-days" type="number" min="1" max={CUSTOM_DAYS_MAX} value={customDaysInput} onChange={e => setCustomDaysInput(e.target.value)}/><span>dias</span><button type="button" onClick={handleApplyCustomDays} disabled={!customDaysValid}>Aplicar</button><span className="report-note">De 1 a 365 dias</span></div>}
+    </header>
+    <div className={`report-content chat-scroll${atualizando && resposta ? ' is-atualizando' : ''}`}>
+      {/* Supervisao e Canais ja ofereciam "Tentar de novo"; aqui a falha era
+          um beco sem saida — so recarregar a pagina inteira resolvia. */}
+      {error && <div role="alert" className="report-error"><IconAlert/><span>{error}</span><button type="button" onClick={() => setTentativa((n) => n + 1)}>Tentar de novo</button></div>}
+      {!data && !error && <p role="status" aria-live="polite" className="report-empty">Carregando indicadores…</p>}
+      <section className="report-overview" aria-label="Resumo do período">
+        <div className="report-overview-heading"><span>Resumo do período{resposta && <>{' '}<b>· {rotuloDoPeriodo(resposta)}</b></>}{atualizando && resposta && <em className="report-updating" role="status">Atualizando…</em>}</span><div className="report-help"><span aria-hidden="true">ⓘ</span>          <SectionHelp label="Como os tempos são calculados" title="Como os tempos são calculados">
             <p>
               <strong>Tempo médio de atendimento</strong> começa quando a conversa é criada e termina no encerramento.
               Inclui o tempo em espera, na triagem e com a IA, e as transferências.
@@ -357,161 +269,34 @@ function ReportsPage() {
               Motivos de contato inclui também os atendimentos encerrados pela IA; os totais e o gráfico por setor
               contam só os encerrados por atendentes.
             </p>
-          </SectionHelp>
-        </div>
-      </div>
-
-      <div className="chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-2 pb-4">
-        {error && (
-          <div role="alert" className="flex items-center gap-2 rounded-[14px] bg-wa-error-bg px-4 py-3 text-[14px] text-wa-error-text">
-            <IconAlert className="h-4 w-4 flex-shrink-0" />
-            <p>{error}</p>
-          </div>
-        )}
-
-        {!data && !error && (
-          <p role="status" aria-live="polite" className="px-1 py-10 text-center text-[14px] text-chat-muted">Carregando indicadores...</p>
-        )}
-
-        {data && data.scope === 'agent' && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatTile icon={<IconCheck className="h-5 w-5" />} value={data.own.closedCount} label="Atendimentos fechados" />
-            <StatTile
-              icon={<IconClock className="h-5 w-5" />}
-              value={formatDuration(data.own.avgResolutionMinutes)}
-              label="Tempo médio de atendimento"
-            />
-            <StatTile
-              icon={<IconReply className="h-5 w-5" />}
-              value={formatDuration(data.own.avgFirstResponseMinutes)}
-              label="Tempo médio de primeira resposta"
-            />
-          </div>
-        )}
-
-        {isAdmin && (
-          <>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <StatTile icon={<IconCheck className="h-5 w-5" />} value={summary.closedCount} label="Atendimentos fechados" />
-              <StatTile
-                icon={<IconClock className="h-5 w-5" />}
-                value={formatDuration(summary.avgResolutionMinutes)}
-                label="Tempo médio de atendimento"
-              />
-              <StatTile
-                icon={<IconReply className="h-5 w-5" />}
-                value={formatDuration(summary.avgFirstResponseMinutes)}
-                label="Tempo médio de primeira resposta"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <ChartCard title="Atendimentos por atendente" icon={<IconUsers className="h-4 w-4" />}>
-                {data.byAgent.length === 0 ? (
-                  <EmptyState />
-                ) : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={data.byAgent} barCategoryGap="32%">
-                      {chartAxes('agentName')}
-                      <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
-                      <Bar
-                        isAnimationActive={false}
-                        dataKey="closedCount"
-                        name="Atendimentos"
-                        fill={TEAL}
-                        radius={[6, 6, 0, 0]}
-                        maxBarSize={48}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </ChartCard>
-
-              <ChartCard title="Atendimentos por setor" icon={<IconLayers className="h-4 w-4" />}>
-                {data.bySector.length === 0 ? (
-                  <EmptyState />
-                ) : (
-                  <>
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={data.bySector} barCategoryGap="32%">
-                        {chartAxes('sectorName')}
-                        <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
-                        <Bar isAnimationActive={false} dataKey="closedCount" name="Atendimentos" radius={[6, 6, 0, 0]} maxBarSize={48}>
-                          {data.bySector.map((row) => (
-                            <Cell key={row.sectorId ?? 'none'} fill={row.sectorId === null ? UNSET : INDIGO} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                    {hasUnsetSector && (
-                      <p className="mt-2 text-[12.5px] leading-[17px] text-chat-muted">
-                        "Sem setor" são conversas encerradas sem setor definido na triagem ou pelo atendente.
-                      </p>
-                    )}
-                  </>
-                )}
-              </ChartCard>
-
-              <ChartCard title="Motivos de contato" icon={<IconTag className="h-4 w-4" />}>
-                {data.byReason.length === 0 ? (
-                  <EmptyState />
-                ) : (
-                  <>
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={data.byReason} barCategoryGap="32%">
-                        {chartAxes('reasonName')}
-                        <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
-                        <Bar isAnimationActive={false} dataKey="closedCount" name="Atendimentos" radius={[6, 6, 0, 0]} maxBarSize={48}>
-                          {data.byReason.map((row) => (
-                            <Cell key={row.reasonId ?? 'none'} fill={row.reasonId === null ? UNSET : AMBER_DARK} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                    {hasUnsetReason && (
-                      <p className="mt-2 text-[12.5px] leading-[17px] text-chat-muted">
-                        "Sem motivo" são conversas finalizadas direto da fila, sem motivo.
-                      </p>
-                    )}
-                  </>
-                )}
-              </ChartCard>
-
-              <ChartCard title="Tempo médio por atendente" icon={<IconGauge className="h-4 w-4" />}>
-                {data.byAgent.length === 0 ? (
-                  <EmptyState />
-                ) : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={data.byAgent} barCategoryGap="28%" barGap={4}>
-                      {chartAxes('agentName', { yTickFormatter: (v) => `${v} min`, yWidth: 56 })}
-                      <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
-                      <Legend wrapperStyle={{ fontSize: 13, color: AXIS_COLOR, paddingTop: 8 }} />
-                      <Bar
-                        isAnimationActive={false}
-                        dataKey="avgResolutionMinutes"
-                        name="Atendimento"
-                        fill={TEAL}
-                        radius={[6, 6, 0, 0]}
-                        maxBarSize={40}
-                      />
-                      <Bar
-                        isAnimationActive={false}
-                        dataKey="avgFirstResponseMinutes"
-                        name="Primeira resposta"
-                        fill={AMBER_DARK}
-                        radius={[6, 6, 0, 0]}
-                        maxBarSize={40}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </ChartCard>
-            </div>
-          </>
-        )}
-      </div>
+          </SectionHelp></div></div>
+        {metrics && <div className="report-metrics">
+          <Metric icon={<IconCheck/>} value={metrics.closedCount} label="Atendimentos fechados"/>
+          <Metric icon={<IconClock/>} value={formatDuration(metrics.avgResolutionMinutes)} label="Tempo médio de atendimento"/>
+          <Metric icon={<IconReply/>} value={formatDuration(metrics.avgFirstResponseMinutes)} label="Tempo médio de primeira resposta"/>
+        </div>}
+      </section>
+      {isAdmin && (adminHasNoBreakdown ? <section className="report-no-data" aria-label="Relatórios sem dados"><EmptyState/><p>Os indicadores por atendente, setor, motivo e tempo aparecem quando houver atendimentos encerrados no período selecionado.</p></section> : <div className="report-analysis">
+        <section className="report-team" aria-labelledby="report-team-title">
+          <header className="report-section-heading"><span><IconUsers/><h2 id="report-team-title">Desempenho da equipe</h2></span><small>Encerramentos por atendentes</small></header>
+          {data.byAgent.length === 0 ? <EmptyState/> : <table className="report-team-table">
+            <caption className="sr-only">Atendimentos encerrados e tempos médios por atendente</caption>
+            <thead><tr><th scope="col">Atendente</th><th scope="col">Encerrados</th><th scope="col">Tempo médio<br/>de atendimento</th><th scope="col">Primeira<br/>resposta</th></tr></thead>
+            <tbody>{data.byAgent.map(row => <tr key={row.agentId ?? row.agentName}>
+              <th scope="row"><span className="report-person"><span className="report-avatar" aria-hidden="true">{row.agentName?.trim().slice(0,2).toUpperCase()}</span><span>{row.agentName}</span></span></th>
+              <td data-label="Encerrados"><div className="report-volume"><strong>{row.closedCount}</strong><VolumeBar value={row.closedCount} maximum={maximumVolume}/></div></td>
+              <td data-label="Tempo de atendimento">{formatDuration(row.avgResolutionMinutes)}</td>
+              <td data-label="Primeira resposta">{formatDuration(row.avgFirstResponseMinutes)}</td>
+            </tr>)}</tbody>
+          </table>}
+          <p className="report-note report-team-note">Os tempos são médias. “—” indica ausência de dados para o cálculo.</p>
+        </section>
+        <aside className="report-breakdowns" aria-label="Distribuição dos atendimentos">
+          <Breakdown title="Atendimentos por setor" icon={<IconLayers/>} rows={data.bySector} nameKey="sectorName" idKey="sectorId" note="Encerrados por atendentes" unsetNote={'"Sem setor" são conversas encerradas sem setor definido na triagem ou pelo atendente.'}/>
+          <Breakdown title="Motivos de contato" icon={<IconTag/>} rows={data.byReason} nameKey="reasonName" idKey="reasonId" note="Inclui encerramentos pela IA" unsetNote={'"Sem motivo" são conversas finalizadas direto da fila, sem motivo.'}/>
+        </aside>
+      </div>)}
     </div>
-  );
+  </main>;
 }
-
 export default ReportsPage;

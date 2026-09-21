@@ -244,6 +244,9 @@ export function IconWarning(props) {
   );
 }
 
+// Unica excecao a grade de 1.75: o viewBox aqui e 320x190, treze vezes maior
+// que o dos icones. Manter o MESMO numero daria um traco treze vezes mais
+// fino na tela — o 3 daqui pesa menos que o 1.75 de um icone de 24.
 export function IconEmptyChat(props) {
   return (
     <Svg viewBox="0 0 320 190" {...props}>
@@ -420,6 +423,17 @@ export function IconEdit(props) {
   return (
     <Svg {...props}>
       <path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75zm17.7-10.2a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75z" />
+    </Svg>
+  );
+}
+
+// Aparelho pareado: e o que distingue o Baileys, que conecta lendo um QR no
+// celular. Icone funcional, nao reproducao de logotipo — o Baileys nao tem
+// marca oficial que possamos usar.
+export function IconDevice(props) {
+  return (
+    <Svg {...props}>
+      <path d="M7 1.5h10A2.5 2.5 0 0119.5 4v16a2.5 2.5 0 01-2.5 2.5H7A2.5 2.5 0 014.5 20V4A2.5 2.5 0 017 1.5zm0 2A.5.5 0 006.5 4v16a.5.5 0 00.5.5h10a.5.5 0 00.5-.5V4a.5.5 0 00-.5-.5h-1.2l-.4.9a1 1 0 01-.9.6h-4a1 1 0 01-.9-.6l-.4-.9H7zm5 14a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5z" />
     </Svg>
   );
 }

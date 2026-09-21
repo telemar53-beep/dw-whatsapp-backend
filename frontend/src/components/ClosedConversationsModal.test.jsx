@@ -91,3 +91,33 @@ describe('ClosedConversationsModal', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });
+
+describe('empilhamento da conversa aberta a partir de Encerrados', () => {
+  test('a conversa abre numa camada acima do diálogo que a abriu', async () => {
+    // O diálogo "Encerrados" é um portal no fim do <body>. Enquanto a conversa
+    // era renderizada na árvore do #root, ficava atrás dele e clicar num
+    // atendimento parecia não fazer nada.
+    const { container } = render(<ClosedConversationsModal onClose={vi.fn()} />);
+
+    await userEvent.click(screen.getByText('Ana Encerrada'));
+
+    const camadaDaConversa = document.querySelector('[data-dialog="conversation"]');
+    const camadaDeEncerrados = document.querySelector('[data-dialog="closed"]');
+
+    expect(camadaDaConversa).toBeTruthy();
+    // Fora da árvore do componente pai: foi para o portal no body.
+    expect(container.contains(camadaDaConversa)).toBe(false);
+    expect(document.body.contains(camadaDaConversa)).toBe(true);
+    // E o tema escuro acompanha o portal, senão o modal sairia claro.
+    expect(camadaDaConversa.closest('.chat-theme')).not.toBeNull();
+    // A camada não é mais um número escrito à mão: vem da profundidade na
+    // pilha. A conversa está um nível acima de quem a abriu, e o nível de
+    // baixo fica inerte enquanto ela existir.
+    const fundoDaConversa = camadaDaConversa.parentElement;
+    const fundoDeEncerrados = camadaDeEncerrados.parentElement;
+    expect(Number(fundoDaConversa.dataset.dialogDepth)).toBeGreaterThan(Number(fundoDeEncerrados.dataset.dialogDepth));
+    expect(fundoDeEncerrados).toHaveAttribute('inert');
+    expect(fundoDaConversa).not.toHaveAttribute('inert');
+
+  });
+});

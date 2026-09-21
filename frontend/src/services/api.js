@@ -528,6 +528,49 @@ export function updateAiTriageConfig(payload, token) {
   return apiFetch('/api/admin/ai/triage', { method: 'PUT', body: payload, token });
 }
 
+// O endpoint do QR devolve um DOCUMENTO HTML, e nao JSON nem imagem — divida
+// registrada do backend, fora do escopo desta etapa. Aqui a gente busca esse
+// HTML autenticando pelo HEADER (nada de token na URL), le o `src` da imagem
+// com DOMParser e so devolve se for mesmo um data:image/. Sem regex sobre
+// markup e sem confiar em qualquer string que vier.
+const PREFIXO_DE_IMAGEM = /^data:image\/(png|jpeg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+
+export async function fetchChannelQrImage(channelId, token) {
+  let resposta;
+  try {
+    resposta = await fetch(`${API_BASE_URL}/api/admin/channels/${channelId}/qr`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (err) {
+    throw Object.assign(new Error('Falha de rede ao buscar o QR code'), { motivo: 'erro' });
+  }
+
+  if (resposta.status === 404) {
+    throw Object.assign(new Error('Sem QR code disponível'), { motivo: 'indisponivel' });
+  }
+  if (resposta.status === 401 || resposta.status === 403) {
+    throw Object.assign(new Error('Sem permissão para ver o QR code'), { motivo: 'semPermissao' });
+  }
+  if (!resposta.ok) {
+    throw Object.assign(new Error(`QR code indisponível (${resposta.status})`), { motivo: 'erro' });
+  }
+
+  const html = await resposta.text();
+  const documento = new DOMParser().parseFromString(html, 'text/html');
+  const imagem = documento.querySelector('img[src]');
+  const src = imagem ? imagem.getAttribute('src') : null;
+
+  // Se o formato mudar, isto falha ALTO: estado de erro na tela, com "Tentar de
+  // novo". Nada de cair de volta para o iframe com token na URL.
+  if (!src || !PREFIXO_DE_IMAGEM.test(src)) {
+    throw Object.assign(
+      new Error('A resposta do QR code não veio no formato esperado (imagem embutida)'),
+      { motivo: 'formatoInesperado' },
+    );
+  }
+  return src;
+}
+
 export function listAiTools(token) {
   return apiFetch('/api/admin/ai/tools', { token });
 }

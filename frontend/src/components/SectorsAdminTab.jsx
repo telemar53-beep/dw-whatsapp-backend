@@ -4,14 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { updateSector, deleteSector } from '../services/api';
 import CreateSectorForm from './CreateSectorForm';
-import WaDialog, { waErrorClass } from './WaDialog';
-import { AsyncState, Button, inputClass } from './ui';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
+import { AsyncState, Button, CABECALHO, CELULA, DataTable, inputClass } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
-const CELL = 'px-3 py-3 align-middle';
-const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const SMALL_BTN =
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border px-3 text-[13px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:opacity-50';
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border px-3 text-[13px] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50';
 
 function SectorRow({ sector, onSaved, onDeleted }) {
   const { token } = useAuth();
@@ -33,7 +32,7 @@ function SectorRow({ sector, onSaved, onDeleted }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSubmitting(false);
     }
@@ -65,7 +64,7 @@ function SectorRow({ sector, onSaved, onDeleted }) {
       await deleteSector(sector.id, token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }
@@ -99,7 +98,7 @@ function SectorRow({ sector, onSaved, onDeleted }) {
                 className={inputClass}
               />
             </div>
-            {error && <p className={waErrorClass}>{error}</p>}
+            {error && <WaError>{error}</WaError>}
             <div className="flex gap-2">
               <Button type="submit" loading={submitting} className="!py-1.5">
                 Salvar
@@ -116,30 +115,21 @@ function SectorRow({ sector, onSaved, onDeleted }) {
 
   return (
     <tr className="border-t border-wa-border">
-      <td className={`${CELL} whitespace-nowrap font-medium text-wa-text`}>{sector.name}</td>
-      <td className={`${CELL} max-w-[380px] text-wa-muted`}>
+      <td className={`${CELULA} whitespace-nowrap font-medium text-wa-text`}>{sector.name}</td>
+      <td className={`${CELULA} max-w-[380px] text-wa-muted`}>
         <span className="block truncate" title={sector.aiHint || undefined}>
           {sector.aiHint || <span className="text-wa-meta">Sem orientação</span>}
         </span>
-        {deleteError && <p className={`mt-2 ${waErrorClass}`}>{deleteError}</p>}
+        {deleteError && <WaError className="mt-2">{deleteError}</WaError>}
       </td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={handleEditClick}
-            className={`${SMALL_BTN} border-wa-border bg-wa-field text-wa-text hover:bg-wa-panel`}
-          >
+          <Button variant="secondary" size="sm" onClick={handleEditClick}>
             Editar
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
-            className={`${SMALL_BTN} border-wa-error-text/30 bg-wa-error-bg text-wa-error-text hover:brightness-110`}
-          >
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting}>
             Excluir
-          </button>
+          </Button>
         </div>
         {confirmDialog}
       </td>
@@ -160,9 +150,9 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
     <>
       <section
         aria-labelledby="sectors-card-title"
-        className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+        className="overflow-clip"
       >
-        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-4 pt-5 sm:px-5">
+        <div className="settings-register-head flex flex-wrap items-start justify-between gap-3 pb-4 pt-1">
           <div className="min-w-0">
             <h2 id="sectors-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
               Setores
@@ -178,19 +168,18 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           )}
         </div>
 
-        <div className="px-4 pb-1 sm:px-5">
+        <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={sectors.length === 0} emptyMessage="Nenhum setor cadastrado ainda.">
-            <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
-              <table className="w-full min-w-[560px] border-collapse text-[13.5px]">
+            <DataTable label="Setores">
                 <thead>
                   <tr className="bg-black/[0.16]">
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Nome
                     </th>
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Orientação para a IA
                     </th>
-                    <th scope="col" className={`${HEAD} text-right`}>
+                    <th scope="col" className={`${CABECALHO} text-right`}>
                       Ações
                     </th>
                   </tr>
@@ -200,18 +189,17 @@ function SectorsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                     <SectorRow key={sector.id} sector={sector} onSaved={refresh} onDeleted={refresh} />
                   ))}
                 </tbody>
-              </table>
-            </div>
+              </DataTable>
           </AsyncState>
         </div>
 
-        <div className="border-t border-wa-border px-4 py-3 text-[12.5px] text-wa-muted sm:px-5">
+        <div className="px-1 py-3 text-[12.5px] text-wa-muted">
           {sectors.length} {sectors.length === 1 ? 'setor' : 'setores'}
         </div>
       </section>
 
       {controlled && creating && (
-        <WaDialog title="Adicionar setor" onClose={() => setCreating(false)} size="max-w-md">
+        <WaDialog variant="sector" title="Adicionar setor" onClose={() => setCreating(false)} size="max-w-md">
           <div className="px-6 pb-5 pt-2">
             <CreateSectorForm
               embedded

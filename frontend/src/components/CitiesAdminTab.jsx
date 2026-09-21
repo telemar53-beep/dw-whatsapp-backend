@@ -4,17 +4,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { deleteCity } from '../services/api';
 import CreateCityForm from './CreateCityForm';
-import WaDialog, { waErrorClass } from './WaDialog';
-import { AsyncState, Button } from './ui';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
+import { AsyncState, Button, CABECALHO, CELULA, DataTable } from './ui';
 import { IconSearch, IconNewChat } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
-const CELL = 'px-3 py-3 align-middle';
-const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const CONTROL =
-  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-wa-green/60 focus:ring-2 focus:ring-wa-green/25';
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40';
 const DANGER_BTN =
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 text-[13px] font-medium text-wa-error-text transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:opacity-50';
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 text-[13px] font-medium text-wa-error-text transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50';
 
 function CityRow({ city, onDeleted, onError }) {
   const { token } = useAuth();
@@ -33,26 +32,26 @@ function CityRow({ city, onDeleted, onError }) {
       await deleteCity(city.id, token);
       onDeleted();
     } catch (err) {
-      onError(city.id, (err.body && err.body.error) || 'Falha ao excluir');
+      onError(city.id, descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }
 
   return (
     <tr className="border-t border-wa-border">
-      <td className={`${CELL} text-[14px] font-medium text-wa-text`}>{city.name}</td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} text-[14px] font-medium text-wa-text`}>{city.name}</td>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <div className="flex items-center justify-end">
-          <button
-            type="button"
+          <Button
+            variant="danger"
+            size="sm"
             onClick={handleDelete}
-            disabled={deleting}
+            loading={deleting}
             aria-label={`Excluir ${city.name}`}
             title={`Excluir ${city.name}`}
-            className={DANGER_BTN}
           >
             Excluir
-          </button>
+          </Button>
         </div>
         {confirmDialog}
       </td>
@@ -90,9 +89,9 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
     <>
       <section
         aria-labelledby="cities-card-title"
-        className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+        className="overflow-clip"
       >
-        <div className="flex flex-wrap items-start justify-between gap-3 px-4 pb-4 pt-5 sm:px-5">
+        <div className="settings-register-head flex flex-wrap items-start justify-between gap-3 pb-4 pt-1">
           <div className="min-w-0">
             <h2 id="cities-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
               Cidades
@@ -109,9 +108,9 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 px-4 pb-4 sm:px-5">
+        <div className="settings-register-toolbar flex flex-wrap items-center gap-3 pb-4">
           <label
-            className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
+            className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/25`}
           >
             <span className="shrink-0 text-wa-muted">
               <IconSearch size={17} />
@@ -127,16 +126,16 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </label>
         </div>
 
-        <div className="px-4 pb-1 sm:px-5">
+        <div className="settings-register-summary text-wa-muted">{countLabel}</div>
+        <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={cities.length === 0} emptyMessage="Nenhuma cidade cadastrada ainda.">
-            <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
-              <table className="w-full min-w-[420px] border-collapse text-[13.5px]">
+            <DataTable label="Cidades" className="min-w-[420px]">
                 <thead>
                   <tr className="bg-black/[0.16]">
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Cidade
                     </th>
-                    <th scope="col" className={`${HEAD} text-right`}>
+                    <th scope="col" className={`${CABECALHO} text-right`}>
                       Ações
                     </th>
                   </tr>
@@ -152,21 +151,19 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                     visible.map((city) => <CityRow key={city.id} city={city} onDeleted={refresh} onError={setCityError} />)
                   )}
                 </tbody>
-              </table>
-            </div>
+              </DataTable>
           </AsyncState>
           {errorMessages.map((message, index) => (
-            <p key={index} className={`mb-3 ${waErrorClass}`}>
+            <WaError key={index} className="mb-3">
               {message}
-            </p>
+            </WaError>
           ))}
         </div>
 
-        <div className="border-t border-wa-border px-4 py-3 text-[12.5px] text-wa-muted sm:px-5">{countLabel}</div>
       </section>
 
       {controlled && creating && (
-        <WaDialog title="Nova cidade" onClose={() => setCreating(false)} size="max-w-md">
+        <WaDialog variant="city" title="Nova cidade" onClose={() => setCreating(false)} size="max-w-md">
           <div className="px-6 pb-5 pt-2">
             <CreateCityForm
               embedded

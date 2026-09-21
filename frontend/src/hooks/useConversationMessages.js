@@ -7,12 +7,38 @@ export function useConversationMessages(conversationId) {
   const { token } = useAuth();
   const socket = useSocket();
   const [messages, setMessages] = useState([]);
+  // Antes a falha era engolida (`.catch(() => {})`) e a conversa abria vazia:
+  // não dava para saber se o cliente não tinha falado nada ou se o histórico
+  // não carregou. `status` separa os dois casos e habilita o "Tentar de novo".
+  const [status, setStatus] = useState('ready');
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     setMessages([]);
-    if (!conversationId || !token) return;
-    getMessages(conversationId, token).then(setMessages).catch(() => {});
-  }, [conversationId, token]);
+    if (!conversationId || !token) {
+      setStatus('ready');
+      return undefined;
+    }
+    // Trocar de conversa durante o carregamento não pode deixar a resposta
+    // antiga sobrescrever a nova, nem marcar erro na conversa errada.
+    let cancelado = false;
+    setStatus('loading');
+    getMessages(conversationId, token)
+      .then((lista) => {
+        if (cancelado) return;
+        setMessages(lista);
+        setStatus('ready');
+      })
+      .catch(() => {
+        if (cancelado) return;
+        setStatus('error');
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [conversationId, token, reloadToken]);
+
+  const reloadMessages = useCallback(() => setReloadToken((valor) => valor + 1), []);
 
   useEffect(() => {
     if (!socket || !conversationId) return undefined;
@@ -78,5 +104,5 @@ export function useConversationMessages(conversationId) {
     [conversationId, token, appendMessage]
   );
 
-  return { messages, sendMessage, appendMessage };
+  return { messages, status, reloadMessages, sendMessage, appendMessage };
 }

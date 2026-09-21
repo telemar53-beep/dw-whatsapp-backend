@@ -49,13 +49,15 @@ beforeEach(() => {
   api.reconnectChannel.mockResolvedValue({});
   api.setChannelHidden.mockResolvedValue({});
   api.setChannelAiNightModeEnabled.mockResolvedValue({});
+  // O QR deixou de ser um iframe: a tela busca a imagem e a desenha no tema.
+  api.fetchChannelQrImage.mockResolvedValue('data:image/png;base64,iVBORw0KGgo=');
 });
 
 describe('ChannelDetailPage', () => {
   test('aba Conexão mostra o QR de um baileys aguardando e as ações de cuidado', () => {
     renderDetail('/configuracoes/canais/ch1/conexao');
     expect(screen.getByRole('heading', { level: 2, name: 'Berg' })).toBeInTheDocument();
-    expect(screen.getByTitle('QR - Berg')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /qr code de conexão/i })).toBeInTheDocument();
     const zone = screen.getByRole('heading', { name: /ações com cuidado/i }).closest('section');
     expect(within(zone).getByRole('button', { name: /reconectar/i })).toBeInTheDocument();
     expect(within(zone).getByRole('button', { name: /ocultar/i })).toBeInTheDocument();

@@ -11,20 +11,17 @@ function NightModePage() {
 
   return (
     <SettingsPage title="Atendimento noturno" description="A janela em que a IA atende sozinha à noite, nos canais que tiverem o noturno ligado." scope="global">
-      <Card title="Não confundir com o horário de atendimento" tone="default">
-        <p className="text-[13.5px] text-wa-text">
-          <Link to="/configuracoes/regras/horario" className="text-wa-link underline">Horário de atendimento</Link> define quando há atendente humano.
-          Esta janela define quando a IA atende sozinha à noite. Com o noturno ativo, o aviso de "fora do horário" não é enviado.
-        </p>
-      </Card>
+      <p className="settings-intro border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
+        <Link to="/configuracoes/regras/horario" className="text-wa-link underline">Horário de atendimento</Link> define o expediente humano. Esta janela controla a IA à noite; quando ativa, o aviso de “fora do horário” não é enviado.
+      </p>
       <AsyncState status={form.status} skeletonLines={4}>
         <form onSubmit={(e) => { e.preventDefault(); form.save(); }}>
           <Card title="Janela noturna" scope="global" footer={<Button type="submit" loading={form.saving}>Salvar janela noturna</Button>}>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field id="triage-night-start" label="Início">
+            <div className="grid max-w-[380px] grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field id="triage-night-start" label="Início" width="sm">
                 <input id="triage-night-start" type="time" placeholder="20:00" value={form.values.nightStart} onChange={(e) => form.setValue('nightStart', e.target.value)} className={inputClass} />
               </Field>
-              <Field id="triage-night-end" label="Fim">
+              <Field id="triage-night-end" label="Fim" width="sm">
                 <input id="triage-night-end" type="time" placeholder="08:00" value={form.values.nightEnd} onChange={(e) => form.setValue('nightEnd', e.target.value)} className={inputClass} />
               </Field>
             </div>

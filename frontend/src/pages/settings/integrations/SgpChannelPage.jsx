@@ -62,7 +62,7 @@ function SgpChannelPage() {
           isEmpty={integrations.length === 0}
           emptyMessage="Nenhuma integração SGP por canal ainda."
         >
-          <div className="space-y-3">
+          <div className="settings-sgp-deliveries space-y-3">
             {integrations.map((integration) => (
               <SgpIntegrationCard
                 key={integration.id}

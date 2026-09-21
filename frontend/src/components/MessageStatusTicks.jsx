@@ -7,7 +7,7 @@ function Tick({ className }) {
       className={className}
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.7"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -22,7 +22,10 @@ function MessageStatusTicks({ status }) {
     return (
       <span
         title="Falha ao enviar"
-        className="inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold leading-none text-white"
+        // red-600 em vez de red-500: o branco sobre o 500 dava 3,81:1 e não
+        // passa AA nem como texto grande. Sobre o 600 dá 4,83:1, e o selo
+        // continua vermelho e do mesmo tamanho.
+        className="inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-full bg-red-600 text-[9px] font-bold leading-none text-white"
       >
         !
       </span>
@@ -31,14 +34,16 @@ function MessageStatusTicks({ status }) {
 
   if (status === 'sent') {
     return (
-      <span title="Enviado" className="inline-flex shrink-0 text-white/45">
+      <span title="Enviado" className="inline-flex shrink-0 text-white/60">
         <Tick />
       </span>
     );
   }
 
   if (status === 'delivered' || status === 'read') {
-    const colorClass = status === 'read' ? 'text-white/85' : 'text-white/45';
+    // Entregue e lido usavam a MESMA cor, e a diferenca ficava so em um tique a
+    // mais num glifo de 12px: pela lista, nao dava para saber se o cliente leu.
+    const colorClass = status === 'read' ? 'text-chat-online' : 'text-white/60';
     const label = status === 'read' ? 'Lido' : 'Entregue';
     return (
       <span title={label} className={`inline-flex shrink-0 ${colorClass}`}>

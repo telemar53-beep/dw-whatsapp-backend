@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getMyProfile, updateMyProfile, uploadMyAvatar, deleteMyAvatar, changePassword } from '../services/api';
 import AgentAvatar from './AgentAvatar';
-import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
+import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError, WaSuccess } from './WaDialog';
+import { descreverErro } from '../utils/errorMessages';
 
 function ProfileModal({ onClose, onProfileUpdated }) {
   const { token, updateAgent } = useAuth();
@@ -31,7 +32,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
         setPhone(data.phone || '');
       })
       .catch((err) => {
-        setLoadError((err.body && err.body.error) || 'Falha ao carregar perfil');
+        setLoadError(descreverErro(err, 'Falha ao carregar perfil'));
       });
   }, [token]);
 
@@ -47,7 +48,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
       setProfileSuccess(true);
       onProfileUpdated && onProfileUpdated();
     } catch (err) {
-      setProfileError((err.body && err.body.error) || 'Falha ao salvar perfil');
+      setProfileError(descreverErro(err, 'Falha ao salvar perfil'));
     } finally {
       setSavingProfile(false);
     }
@@ -65,7 +66,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
       updateAgent({ avatarPath: result.avatarPath });
       onProfileUpdated && onProfileUpdated();
     } catch (err) {
-      setAvatarError((err.body && err.body.error) || 'Falha ao enviar foto');
+      setAvatarError(descreverErro(err, 'Falha ao enviar foto'));
     } finally {
       setAvatarBusy(false);
     }
@@ -80,7 +81,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
       updateAgent({ avatarPath: null });
       onProfileUpdated && onProfileUpdated();
     } catch (err) {
-      setAvatarError((err.body && err.body.error) || 'Falha ao remover foto');
+      setAvatarError(descreverErro(err, 'Falha ao remover foto'));
     } finally {
       setAvatarBusy(false);
     }
@@ -102,7 +103,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      setPasswordError((err.body && err.body.error) || 'Falha ao trocar senha');
+      setPasswordError(descreverErro(err, 'Falha ao trocar senha'));
     } finally {
       setSubmittingPassword(false);
     }
@@ -110,9 +111,9 @@ function ProfileModal({ onClose, onProfileUpdated }) {
 
   if (!profile) {
     return (
-      <WaDialog title="Meu perfil" onClose={onClose} size="max-w-md">
+      <WaDialog variant="profile" title="Meu perfil" onClose={onClose} size="max-w-md">
         <div className="px-6 py-4">
-          <p className="text-[14.5px] text-wa-muted">{loadError || 'Carregando...'}</p>
+          <p role={loadError ? 'alert' : 'status'} className="text-[14.5px] text-wa-muted">{loadError || 'Carregando…'}</p>
         </div>
         <div className="flex shrink-0 justify-end px-4 py-3">
           <button type="button" onClick={onClose} className={waGhostButtonClass}>
@@ -124,131 +125,80 @@ function ProfileModal({ onClose, onProfileUpdated }) {
   }
 
   return (
-    <WaDialog title="Meu perfil" onClose={onClose} size="max-w-md">
-      <div className="wa-scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
-        <div className="flex items-center gap-4">
-          <AgentAvatar agentId={profile.id} avatarPath={profile.avatarPath} name={profile.name} size={64} />
-          <div className="flex flex-col items-start gap-1.5">
-            <label className={`${waGhostButtonClass} cursor-pointer`}>
+    <WaDialog variant="profile" title="Meu perfil" onClose={onClose} size="max-w-4xl">
+      <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3 sm:px-6">
+        <div className="flex flex-wrap items-center gap-4 rounded-[16px] border border-wa-border bg-wa-panel-header px-4 py-4 sm:px-5">
+          <AgentAvatar agentId={profile.id} avatarPath={profile.avatarPath} name={profile.name} size={68} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[17px] font-semibold text-wa-text">{profile.name}</p>
+            <p className="truncate text-[13.5px] text-wa-muted">E-mail · {profile.email}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className={`${waGhostButtonClass} cursor-pointer border border-wa-border bg-wa-panel text-wa-text`}>
               Alterar foto
-              <input
-                type="file"
-                aria-label="Alterar foto"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                onChange={handleAvatarChange}
-                disabled={avatarBusy}
-                className="sr-only"
-              />
+              <input type="file" aria-label="Alterar foto" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarChange} disabled={avatarBusy} className="sr-only" />
             </label>
             {profile.avatarPath && (
-              <button
-                type="button"
-                onClick={handleRemoveAvatar}
-                disabled={avatarBusy}
-                className="px-2 text-[13px] text-wa-error-text hover:underline"
-              >
+              <button type="button" onClick={handleRemoveAvatar} disabled={avatarBusy} className="px-2 text-[13px] text-wa-error-text hover:underline">
                 Remover foto
               </button>
             )}
           </div>
         </div>
-        {avatarError && <p className={waErrorClass}>{avatarError}</p>}
+        {avatarError && <WaError className="mt-3">{avatarError}</WaError>}
 
-        <form onSubmit={handleSaveProfile} className="space-y-4">
-          <div>
-            <label htmlFor="profile-name" className={waLabelClass}>
-              Nome completo
-            </label>
-            <input
-              id="profile-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={waInputClass}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="profile-phone" className={waLabelClass}>
-              Telefone
-            </label>
-            <input
-              id="profile-phone"
-              type="text"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className={waInputClass}
-            />
-          </div>
-          <div>
-            <label className={waLabelClass}>E-mail</label>
-            <p className="text-[14.5px] text-wa-text">{profile.email}</p>
-          </div>
-          {profileError && <p className={waErrorClass}>{profileError}</p>}
-          {profileSuccess && <p className="text-[13.5px] text-wa-muted">Perfil atualizado.</p>}
-          <div className="flex justify-end">
-            <button type="submit" disabled={savingProfile} className={waPrimaryButtonClass}>
-              Salvar
-            </button>
-          </div>
-        </form>
+        <div className="mt-5 space-y-5">
+          <section aria-labelledby="profile-personal-title">
+            <h3 id="profile-personal-title" className="text-[15px] font-semibold text-wa-text">Dados pessoais</h3>
+            <p className="mt-1 text-[13px] text-wa-muted">Informações exibidas no seu perfil de atendimento.</p>
+            <form id="profile-info-form" onSubmit={handleSaveProfile} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-[1.15fr_0.9fr_1.15fr]">
+              <div>
+                <label htmlFor="profile-name" className={waLabelClass}>Nome completo</label>
+                <input id="profile-name" type="text" value={name} onChange={(e) => setName(e.target.value)} className={waInputClass} required />
+              </div>
+              <div>
+                <label htmlFor="profile-phone" className={waLabelClass}>Telefone</label>
+                <input id="profile-phone" type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className={waInputClass} />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-1">
+                <span className={waLabelClass}>E-mail</span>
+                <p className="rounded-[10px] border border-wa-border bg-wa-panel-header px-3.5 py-2.5 text-[14px] text-wa-text">{profile.email}</p>
+              </div>
+            </form>
+            {profileError && <WaError className="mt-3">{profileError}</WaError>}
+            {profileSuccess && <WaSuccess className="mt-3">Perfil atualizado.</WaSuccess>}
+          </section>
 
-        <div className="border-t border-wa-border pt-4">
-          <h3 className="mb-3 text-[15px] font-medium text-wa-text">Trocar senha</h3>
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <div>
-              <label htmlFor="current-password" className={waLabelClass}>
-                Senha atual
-              </label>
-              <input
-                id="current-password"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className={waInputClass}
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="new-password" className={waLabelClass}>
-                Nova senha
-              </label>
-              <input
-                id="new-password"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className={waInputClass}
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="confirm-password" className={waLabelClass}>
-                Confirmar nova senha
-              </label>
-              <input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className={waInputClass}
-                required
-              />
-            </div>
-            {passwordError && <p className={waErrorClass}>{passwordError}</p>}
-            {passwordSuccess && <p className="text-[13.5px] text-wa-muted">Senha alterada com sucesso.</p>}
-            <div className="flex justify-end">
-              <button type="submit" disabled={submittingPassword} className={waPrimaryButtonClass}>
-                Trocar senha
-              </button>
-            </div>
-          </form>
+          <details className="group rounded-[12px] border border-wa-border bg-wa-panel-header">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 text-[14px] font-medium text-wa-text [&::-webkit-details-marker]:hidden">
+              <span>Trocar senha <span className="ml-2 text-[12.5px] font-normal text-wa-muted">Atualize sua senha de acesso.</span></span>
+              <span aria-hidden="true" className="text-wa-muted transition-transform group-open:rotate-180">⌄</span>
+            </summary>
+            <form onSubmit={handleChangePassword} className="grid gap-3 border-t border-wa-border px-4 pb-4 pt-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label htmlFor="current-password" className={waLabelClass}>Senha atual</label>
+                <input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className={waInputClass} required />
+              </div>
+              <div>
+                <label htmlFor="new-password" className={waLabelClass}>Nova senha</label>
+                <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={waInputClass} required />
+              </div>
+              <div>
+                <label htmlFor="confirm-password" className={waLabelClass}>Confirmar nova senha</label>
+                <input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={waInputClass} required />
+              </div>
+              {passwordError && <WaError className="sm:col-span-2 lg:col-span-3">{passwordError}</WaError>}
+              {passwordSuccess && <WaSuccess className="sm:col-span-2 lg:col-span-3">Senha alterada com sucesso.</WaSuccess>}
+              <div className="flex justify-end pt-1 sm:col-span-2 lg:col-span-3">
+                <button type="submit" disabled={submittingPassword} className={waGhostButtonClass}>Trocar senha</button>
+              </div>
+            </form>
+          </details>
         </div>
       </div>
-      <div className="flex shrink-0 justify-end px-4 py-3">
-        <button type="button" onClick={onClose} className={waGhostButtonClass}>
-          Fechar
-        </button>
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-wa-border bg-wa-panel-header px-5 py-3 sm:px-6">
+        <button type="button" onClick={onClose} className={waGhostButtonClass}>Cancelar</button>
+        <button type="submit" form="profile-info-form" disabled={savingProfile} className={waPrimaryButtonClass}>Salvar alterações</button>
       </div>
     </WaDialog>
   );

@@ -137,7 +137,7 @@ describe('AgentsAdminTab', () => {
     await userEvent.click(screen.getByRole('button', { name: /mais ações/i }));
     await userEvent.click(screen.getByRole('button', { name: /gerar nova senha/i }));
     await screen.findByText('Xy9kFpQr2z');
-    await userEvent.click(screen.getByRole('button', { name: /^fechar$/i }));
+    await userEvent.click(screen.getAllByRole('button', { name: /^fechar$/i }).find((b) => !b.hasAttribute('data-dialog-close')));
 
     expect(screen.queryByText('Xy9kFpQr2z')).not.toBeInTheDocument();
   });

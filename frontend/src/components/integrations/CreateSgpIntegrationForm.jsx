@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { createSgpIntegration } from '../../services/api';
 import { isOfficialChannelType } from '../../utils/channelTypes';
+import { descreverErro } from '../../utils/errorMessages';
+import { Button } from '../ui';
 
 const inputClass =
-  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-focus-ring/40';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
-const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+const cardClass = 'settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-4';
 
 function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated, onCancel }) {
   const { token } = useAuth();
@@ -51,7 +53,7 @@ function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated
       setEnabled(true);
       onCreated();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao cadastrar a integração');
+      setError(descreverErro(err, 'Falha ao cadastrar a integração'));
     } finally {
       setSaving(false);
     }
@@ -69,6 +71,7 @@ function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated
   return (
     <form onSubmit={handleCreate} className={cardClass}>
       <h3 className="font-display text-base font-semibold text-wa-text">Nova integração SGP</h3>
+      <div className="grid gap-3 md:grid-cols-2">
       <div>
         <label htmlFor="sgp-description" className={labelClass}>Descrição</label>
         <input id="sgp-description" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
@@ -82,6 +85,7 @@ function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated
           ))}
         </select>
       </div>
+      </div>
       {isTemplateMode && (
         <div>
           <label htmlFor="sgp-default-template" className={labelClass}>Template padrão (opcional)</label>
@@ -94,25 +98,13 @@ function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated
         </div>
       )}
       <label className="flex items-center gap-2 text-sm text-wa-muted">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-accent" />
         Ativo
       </label>
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cadastrar
-        </button>
-        <button
-          type="button"
-          onClick={handleCancelCreate}
-          className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-        >
-          Cancelar
-        </button>
+        <Button type="submit" disabled={saving}>Cadastrar</Button>
+        <Button variant="secondary" type="button" onClick={handleCancelCreate}>Cancelar</Button>
       </div>
     </form>
   );

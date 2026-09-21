@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../hooks/useConfirm';
 import { updateQuickReply, deleteQuickReply } from '../../services/api';
-import { inputClass } from '../ui';
+import { inputClass, Button } from '../ui';
+import { descreverErro } from '../../utils/errorMessages';
 
 function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   const { token } = useAuth();
@@ -24,7 +25,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSubmitting(false);
     }
@@ -54,7 +55,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
       await deleteQuickReply(quickReply.id, token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }
@@ -63,7 +64,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-2 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="space-y-3 rounded-[14px] border border-chat-orange/30 bg-white/[0.04] p-4"
       >
         <input
           value={title}
@@ -79,43 +80,31 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
         />
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
+          <Button variant="secondary" size="sm" onClick={handleCancel}>
             Cancelar
-          </button>
+          </Button>
+          <Button type="submit" size="sm" loading={submitting}>
+            Salvar
+          </Button>
         </div>
       </form>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="border-b border-white/[0.08] px-2 py-3.5 last:border-b-0">
       <div className="flex items-center justify-between">
         <div>
           <p className="font-medium text-wa-text">{quickReply.title}</p>
           <p className="text-sm text-wa-muted">{quickReply.content}</p>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+          <Button variant="ghost" size="sm" onClick={handleEditClick}>
             Editar
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="text-sm font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
-          >
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting}>
             Excluir
-          </button>
+          </Button>
         </div>
       </div>
       {deleteError && (

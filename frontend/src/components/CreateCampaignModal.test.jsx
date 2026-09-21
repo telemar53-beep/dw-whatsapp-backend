@@ -76,7 +76,7 @@ describe('CreateCampaignModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /revisar/i }));
     await userEvent.click(screen.getByRole('button', { name: /confirmar e disparar/i }));
 
-    expect(await screen.findByText('No valid recipient found in the list')).toBeInTheDocument();
+    expect(await screen.findByText('Nenhum destinatário válido na lista.')).toBeInTheDocument();
   });
 
   test('não chama a API e mostra erro por campo quando a mensagem está em branco', async () => {

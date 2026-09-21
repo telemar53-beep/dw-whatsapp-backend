@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createAgent } from '../services/api';
+import { Button } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 const inputClass =
-  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-focus-ring/40';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 
 // `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
@@ -34,7 +36,7 @@ function CreateAgentForm({ onCreated, onCancel, embedded = false }) {
       setCanManageIntegrations(false);
       onCreated();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao cadastrar atendente');
+      setError(descreverErro(err, 'Falha ao cadastrar atendente'));
     } finally {
       setSubmitting(false);
     }
@@ -60,7 +62,7 @@ function CreateAgentForm({ onCreated, onCancel, embedded = false }) {
       </div>
       <div>
         <label htmlFor="agent-email" className={labelClass}>
-          Email
+          E-mail
         </label>
         <input
           id="agent-email"
@@ -105,29 +107,21 @@ function CreateAgentForm({ onCreated, onCancel, embedded = false }) {
             type="checkbox"
             checked={canManageIntegrations}
             onChange={(e) => setCanManageIntegrations(e.target.checked)}
-            className="h-4 w-4 accent-wa-green"
+            className="h-4 w-4 accent-accent"
           />
           Pode gerenciar Canais e Integrações
         </label>
       )}
       {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cadastrar
-        </button>
         {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
+          <Button variant="secondary" onClick={onCancel}>
             Cancelar
-          </button>
+          </Button>
         )}
+        <Button type="submit" loading={submitting}>
+          Cadastrar
+        </Button>
       </div>
     </form>
   );

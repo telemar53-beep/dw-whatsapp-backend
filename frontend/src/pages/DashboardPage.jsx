@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
 import { useMyConversations } from '../hooks/useMyConversations';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
+import { useWorkspaceLayout } from '../hooks/useWorkspaceLayout';
 import { useCompanyName } from '../hooks/useCompanyName';
+import { useDicaFlutuante, DicaFlutuante } from '../components/DicaFlutuante';
 import { useTransferNotice } from '../hooks/useTransferNotice';
 import TransferNotice from '../components/TransferNotice';
 import { closeConversation } from '../services/api';
@@ -16,10 +18,11 @@ import ChannelStatusBanner from '../components/ChannelStatusBanner';
 import StartConversationModal from '../components/StartConversationModal';
 import TeamPanel from '../components/TeamPanel';
 import { Tabs } from '../components/ui/Tabs';
-import { IconNewChat, IconSearch, IconLock, IconEmptyChat } from '../components/icons/WaIcons';
+import { IconNewChat, IconSearch, IconLock, IconEmptyChat, IconChats, IconArrowLeft } from '../components/icons/WaIcons';
+import './dashboard.css';
 
 const TABS = [
-  { value: 'inProgress', label: 'Andamento' },
+  { value: 'inProgress', label: 'Atendimento' },
   { value: 'waiting', label: 'Espera' },
   { value: 'automation', label: 'Automação' },
 ];
@@ -48,12 +51,28 @@ function DashboardPage() {
   const [activeTab, setActiveTab] = useState('inProgress');
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState('');
-  const { unreadIds, clearUnread } = useUnreadMyConversations(myConversations, selectedId);
+  // Espera e Automação também acendem o sinal de mensagem nova. `queue` já é
+  // referência estável, então o hook não reassina os eventos a cada render.
+  const { unreadIds, clearUnread } = useUnreadMyConversations(myConversations, selectedId, queue);
   const { notice: transferNotice, dismiss: dismissTransferNotice } = useTransferNotice();
+  // Mede o espaço real da mesa (o menu troca de 196px para 64px sem a janela
+  // mudar de tamanho, e media query não vê isso). A conversa tem piso; quem
+  // cede é a lista, depois o painel. Nada sobrepõe a conversa.
+  const colunasRef = useRef(null);
+  const [painelAberto, setPainelAberto] = useState(false);
+  const [listaAberta, setListaAberta] = useState(false);
+  // A dica do rail e portada para o body: dentro da coluna ela era
+  // recortada por tres ancestrais com overflow e nunca aparecia.
+  const { gatilho: gatilhoDoExpandir, caixa: caixaDoExpandir } = useDicaFlutuante();
+  const layout = useWorkspaceLayout(colunasRef, painelAberto);
+  const emRail = layout.lista === 'rail' && !listaAberta;
+  const listaOcupaTudo = layout.lista === 'oculta' || listaAberta;
 
   function selectConversation(conversationId) {
     clearUnread(conversationId);
     setSelectedId(conversationId);
+    // Escolher um atendimento devolve o espaço para a conversa.
+    setListaAberta(false);
   }
 
   // A conversa transferida cai em "Meus atendimentos", então abrir pelo aviso
@@ -90,10 +109,18 @@ function DashboardPage() {
     [...queue, ...myConversations].find((c) => c.id === selectedId) ||
     (pendingConversation && pendingConversation.id === selectedId ? pendingConversation : null);
 
+  // A casca esconde o botão "Abrir menu" quando isto é verdade, então a
+  // condição tem de ser "a conversa ocupa a tela inteira" — exatamente a mesma
+  // em que a lista é escondida, mais abaixo. Antes bastava HAVER conversa
+  // selecionada, e isso apagava a única navegação do produto em dois casos
+  // reais: de 500 a 767px, onde o rail continua visível e a conversa não ocupa
+  // tudo, e no desktop com zoom de 200% (1366x768 vira 683x384).
+  const conversaOcupaTudo = layout.lista === 'oculta' && !listaAberta && Boolean(selectedConversation);
+
   useEffect(() => {
-    setConversationOpen(Boolean(selectedConversation));
+    setConversationOpen(conversaOcupaTudo);
     return () => setConversationOpen(false);
-  }, [Boolean(selectedConversation), setConversationOpen]);
+  }, [conversaOcupaTudo, setConversationOpen]);
 
   useEffect(() => {
     if (pendingConversation && [...queue, ...myConversations].some((c) => c.id === pendingConversation.id)) {
@@ -113,31 +140,50 @@ function DashboardPage() {
   }, []);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div data-testid="channel-banner-wrapper" className={`relative ${selectedConversation ? 'hidden md:block' : ''}`}>
+    <div className="chat-workspace flex min-h-0 flex-1 flex-col">
+      <div data-testid="channel-banner-wrapper" className={`relative ${selectedConversation ? 'hidden lg:block' : ''}`}>
         <ChannelStatusBanner />
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-0 md:gap-3">
+      <div ref={colunasRef} data-lista={layout.lista} data-painel={layout.painel} className="chat-workspace-columns flex min-h-0 min-w-0 flex-1 gap-0 overflow-hidden">
         <aside
+          aria-label="Atendimentos"
           className={`${
-            selectedConversation ? 'hidden' : 'flex'
-          } w-full min-w-0 flex-col bg-white/[0.09] backdrop-blur-2xl md:flex md:w-[380px] md:shrink-0 md:overflow-clip md:rounded-[22px] md:border md:border-white/[0.07] lg:w-[28%] lg:min-w-[360px] lg:max-w-[440px]`}
+            listaOcupaTudo && selectedConversation && !listaAberta ? 'hidden' : 'flex'
+          } chat-workspace-list ${emRail ? 'is-rail' : ''} ${listaOcupaTudo ? 'is-aberta' : ''} w-full min-w-0 shrink-0 flex-col overflow-clip`}
         >
-          <div className="flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-4">
+          {emRail && (
+            <button
+              type="button"
+              {...gatilhoDoExpandir}
+              onClick={() => setListaAberta(true)}
+              aria-label="Ver lista de atendimentos"
+              className="chat-rail-expandir"
+            >
+              <IconChats size={18} />
+              <DicaFlutuante caixa={caixaDoExpandir}>Ver lista de atendimentos</DicaFlutuante>
+            </button>
+          )}
+          {listaAberta && (
+            <button type="button" onClick={() => setListaAberta(false)} className="chat-lista-voltar">
+              <IconArrowLeft size={16} />
+              Voltar à conversa
+            </button>
+          )}
+          <div className="chat-inbox-heading flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-4">
             <h1 className="font-display text-[20px] font-semibold leading-7 text-chat-text">Atendimento</h1>
             <button
               onClick={() => setStartingConversation(true)}
               aria-label="Nova conversa"
               title="Nova conversa"
-              className="flex h-9 shrink-0 items-center gap-1 rounded-[10px] bg-chat-orange pl-2.5 pr-3.5 text-[13.5px] font-semibold text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
+              className="chat-new-conversation flex h-9 shrink-0 items-center gap-1 rounded-[10px] bg-chat-orange pl-2.5 pr-3.5 text-[13.5px] font-semibold text-on-accent transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
               <IconNewChat size={18} />
               Nova
             </button>
           </div>
 
-          <div className="shrink-0 px-4 pb-3">
+          <div className="chat-inbox-search shrink-0 px-4 pb-3">
             <label className="flex h-[42px] min-w-0 items-center gap-2.5 rounded-[12px] border border-white/[0.09] bg-white/[0.06] px-3.5 transition focus-within:border-white/20 focus-within:bg-white/[0.10]">
               <span className="shrink-0 text-chat-faint">
                 <IconSearch size={18} />
@@ -153,7 +199,20 @@ function DashboardPage() {
             </label>
           </div>
 
-          <div className="shrink-0 px-4 pb-3 pt-1">
+          {/* A contagem da fila só existia DENTRO do nome da aba ("Espera 12"),
+              e nome de aba que muda não é anunciado: quem usa leitor de tela não
+              sabia que entrou atendimento novo — o som avisa, a tela não. Região
+              discreta e à parte, para não transformar a própria aba em live
+              region (aí cada troca de aba viraria anúncio). */}
+          {/* `aria-live` sem `role="status"`: a contagem da fila é conteúdo que
+              se atualiza, não o estado de uma operação — e `role="status"` aqui
+              ainda disputaria o papel com o aviso de transferência, que é um
+              status de verdade. O anúncio é o mesmo. */}
+          <p aria-live="polite" className="sr-only">
+            {tabCounts.waiting} em espera, {tabCounts.inProgress} em andamento.
+          </p>
+
+          <div className="chat-inbox-tabs shrink-0 px-4 pb-1 pt-1">
             <Tabs
               look="segmented"
               label="Filas"
@@ -167,7 +226,7 @@ function DashboardPage() {
             role="tabpanel"
             id={`tabpanel-${activeTab}`}
             aria-labelledby={`tab-${activeTab}`}
-            className="chat-scroll min-h-0 flex-1 overflow-y-auto pt-3"
+            className="chat-scroll min-h-0 flex-1 overflow-y-auto pt-1"
           >
             {activeTab === 'inProgress' && (
               <MyConversationsList
@@ -176,26 +235,34 @@ function DashboardPage() {
                 onSelect={selectConversation}
                 unreadIds={unreadIds}
                 selectedId={selectedId}
+                compact
+                rail={emRail}
               />
             )}
             {activeTab === 'waiting' && (
               <QueueList
                 conversations={visibleWaiting}
                 status={queueStatus}
-                onSelect={setSelectedId}
+                onSelect={selectConversation}
+                unreadIds={unreadIds}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
                 emptyMessage="Nenhum atendimento em espera."
+                compact
+                rail={emRail}
               />
             )}
             {activeTab === 'automation' && (
               <QueueList
                 conversations={visibleAutomation}
                 status={queueStatus}
-                onSelect={setSelectedId}
+                onSelect={selectConversation}
+                unreadIds={unreadIds}
                 onQuickClose={quickCloseConversation}
                 selectedId={selectedId}
                 emptyMessage="Nenhum atendimento em automação."
+                compact
+                rail={emRail}
               />
             )}
           </div>
@@ -204,18 +271,21 @@ function DashboardPage() {
         </aside>
 
         <main
-          className={`${
-            selectedConversation ? 'block' : 'hidden'
-          } min-w-0 flex-1 md:block md:overflow-clip md:rounded-[22px] md:border md:border-white/[0.07]`}
+          className={`chat-workspace-main ${
+            listaOcupaTudo && !selectedConversation ? 'hidden' : listaOcupaTudo && listaAberta ? 'hidden' : 'block'
+          } min-w-0 flex-1 overflow-clip`}
         >
           {selectedConversation ? (
             <ConversationView
               conversation={selectedConversation}
+              painelModo={layout.painel}
+              onPainelAbertoChange={setPainelAberto}
               onTransferClick={setTransferringId}
               onBack={() => setSelectedId(null)}
+              workspace
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center bg-white/[0.08] px-6 text-center backdrop-blur-2xl md:rounded-[22px]">
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <span className="text-white/10">
                 <IconEmptyChat width={320} height={190} />
               </span>

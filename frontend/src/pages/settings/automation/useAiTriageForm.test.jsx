@@ -18,6 +18,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok' });
   useAiConfig.mockReturnValue({ config: saved, status: 'ready', loading: false, refresh: vi.fn() });
+  // O save agora relê a configuração ANTES de gravar, para não reverter o que
+  // outra tela mudou nesse meio-tempo.
+  api.getAiConfig.mockResolvedValue(saved);
   api.updateAiTriageConfig.mockResolvedValue({});
 });
 

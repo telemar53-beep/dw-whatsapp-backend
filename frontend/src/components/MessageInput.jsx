@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { IconEmoji, IconAttach, IconQuickReply, IconMic, IconSend, IconTrash, IconStop } from './icons/WaIcons';
 import { AsyncState } from './ui';
+import RecordingPreview from './RecordingPreview';
+import { descreverErro } from '../utils/errorMessages';
 
 // O campo cresce com o conteúdo, como o WhatsApp: com altura fixa, reler um
 // texto longo antes de enviar virava rolar dentro de uma caixa de 4 linhas.
@@ -8,6 +10,22 @@ import { AsyncState } from './ui';
 // dentro como antes.
 const COMPOSER_MIN_HEIGHT = 48;
 const COMPOSER_MAX_HEIGHT = 320;
+// Fração da janela que o campo pode ocupar, no máximo.
+//
+// O teto de 320px é absoluto e não olha a altura da tela. Numa viewport baixa
+// — 683x384, que é um desktop 1366x768 com zoom de 200% — o compositor
+// chegava a 349px e sua base caía 84px ABAIXO da borda inferior: a timeline
+// colapsava para 20px (o atendente não via mensagem nenhuma enquanto digitava)
+// e "Anexar arquivo" ficava fora da tela, inalcançável. Não havia rolagem que
+// recuperasse: `main` é overflow-clip e a casca é h-dvh. Passando do teto, o
+// texto rola por dentro do campo, como já rolava.
+const COMPOSER_MAX_VH = 0.45;
+
+function tetoDoCompositor() {
+  if (typeof window === 'undefined' || !window.innerHeight) return COMPOSER_MAX_HEIGHT;
+  const daJanela = Math.round(window.innerHeight * COMPOSER_MAX_VH);
+  return Math.max(COMPOSER_MIN_HEIGHT, Math.min(COMPOSER_MAX_HEIGHT, daJanela));
+}
 
 function fitComposerHeight(element) {
   if (!element) return;
@@ -15,7 +33,7 @@ function fitComposerHeight(element) {
   // diminui, e o campo só cresceria.
   element.style.height = 'auto';
   const desejada = Math.max(element.scrollHeight || 0, COMPOSER_MIN_HEIGHT);
-  element.style.height = `${Math.min(desejada, COMPOSER_MAX_HEIGHT)}px`;
+  element.style.height = `${Math.min(desejada, tetoDoCompositor())}px`;
 }
 
 const AUDIO_MIME_CANDIDATES = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm'];
@@ -35,18 +53,15 @@ function pickSupportedAudioMimeType() {
   return AUDIO_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate));
 }
 
-function ComposerButton({ label, onClick, disabled, active, children, as = 'button', htmlFor }) {
-  const className = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 ${
+// Era possível passar `as="label"` para emparelhar com um <input type=file>.
+// Um <label> nunca entra na ordem de tabulação, e o input alvo era
+// `display:none`, que também não entra — juntos, eliminavam QUALQUER caminho de
+// teclado para anexar arquivo. Só existia esse uso, e ele virou botão: o galho
+// saiu para ninguém recriar o mesmo beco sem saída.
+function ComposerButton({ label, onClick, disabled, active, children }) {
+  const className = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring ${
     active ? 'bg-white/10 text-chat-text' : 'text-chat-icon'
   } ${disabled ? 'pointer-events-none opacity-40' : 'cursor-pointer hover:bg-white/[0.08]'}`;
-
-  if (as === 'label') {
-    return (
-      <label htmlFor={htmlFor} title={label} aria-label={label} className={className}>
-        {children}
-      </label>
-    );
-  }
 
   return (
     <button type="button" onClick={onClick} disabled={disabled} title={label} aria-label={label} className={className}>
@@ -67,6 +82,10 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showingQuickReplies, setShowingQuickReplies] = useState(false);
   const [showingEmojis, setShowingEmojis] = useState(false);
+  // O teto do campo acompanha a janela (ver COMPOSER_MAX_VH). Fica em estado
+  // porque o `max-height` é inline: se ficasse só na medição imperativa, o
+  // próximo render do React devolveria o valor antigo.
+  const [tetoDoCampo, setTetoDoCampo] = useState(tetoDoCompositor);
   const fileInputRef = useRef(null);
   const textInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -77,6 +96,12 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
   // conversa — só muda a prop —, então sem isto o que ficou escrito para um
   // cliente aparecia na conversa do próximo, e enviar mandava para a pessoa
   // errada (relatado pelas atendentes em 2026-09-17).
+  // O botão Enviar tem `disabled={sending}`, mas o Enter do teclado chama
+  // `submit()` direto e não passa por ele. Como o campo só é limpo depois do
+  // await, dois Enters numa rede lenta mandavam a mesma mensagem duas vezes
+  // para o cliente. O ref tranca na hora; o estado `sending` sozinho depende de
+  // um novo render para valer.
+  const sendingRef = useRef(false);
   const contentRef = useRef('');
   const draftsRef = useRef(new Map());
   const currentConversationRef = useRef(conversationId);
@@ -130,6 +155,18 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
     contentRef.current = content;
     fitComposerHeight(textInputRef.current);
   }, [content]);
+
+  // Mudar de zoom ou girar o aparelho muda a altura da janela, e um campo já
+  // crescido continuaria com a altura da janela antiga — justo o caso que
+  // estourava a tela.
+  useEffect(() => {
+    function recalcular() {
+      setTetoDoCampo(tetoDoCompositor());
+      fitComposerHeight(textInputRef.current);
+    }
+    window.addEventListener('resize', recalcular);
+    return () => window.removeEventListener('resize', recalcular);
+  }, []);
 
   useEffect(() => {
     const anterior = currentConversationRef.current;
@@ -245,6 +282,8 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
 
   async function submit() {
     if (!content.trim() && !file) return;
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     setError(null);
     try {
@@ -253,8 +292,9 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
       setContent('');
       clearAttachment();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao enviar mensagem');
+      setError(descreverErro(err, 'Falha ao enviar mensagem'));
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
@@ -276,13 +316,13 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
   const canSend = Boolean(content.trim() || file);
 
   return (
-    <div className="shrink-0 font-wa">
+    <div className="chat-workspace-composer shrink-0 font-wa">
       {replyingTo && (
         <div className="px-3 pt-2 md:px-5">
           <div className="flex items-stretch overflow-hidden rounded-2xl bg-white/[0.10]">
             <span className="w-[4px] shrink-0 bg-chat-copper" />
             <div className="min-w-0 flex-1 px-3 py-1.5">
-              <p className="text-[12.8px] font-medium leading-[18px] text-chat-copper">Respondendo</p>
+              <p className="text-[12.5px] font-medium leading-[18px] text-chat-copper">Respondendo</p>
               <p className="truncate text-[13px] leading-[18px] text-chat-muted">{replyingTo.content}</p>
             </div>
             <button
@@ -298,7 +338,11 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
         </div>
       )}
 
-      {!recording && file && (
+      {!recording && file && fileIsRecording && (
+        <RecordingPreview file={file} seconds={recordingSeconds} sending={sending}
+          onRemove={clearAttachment} onRecordAgain={startRecording} onSend={submit} />
+      )}
+      {!recording && file && !fileIsRecording && (
         <div className="px-3 pt-2 md:px-5">
           <p className="flex items-center gap-2 rounded-2xl bg-white/[0.10] px-3 py-2 text-[13px] text-chat-muted">
             {previewUrl ? (
@@ -351,7 +395,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               onClick={stopRecording}
               aria-label="Parar gravação"
               title="Parar gravação"
-              className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95"
+              className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-orange text-chat-orange-ink transition-colors hover:brightness-95"
             >
               <IconStop size={20} />
             </button>
@@ -362,7 +406,10 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               ref={popoverRef}
               className="relative flex min-h-[60px] min-w-0 flex-1 items-end gap-3 rounded-[30px] border border-white/[0.06] bg-white/[0.07] py-2 pl-3 pr-1.5"
             >
-              <ComposerButton label="Anexar arquivo" as="label" htmlFor="message-file-input">
+              {/* O seletor é aberto pelo ref, não por emparelhamento com
+                  <label>: assim o controle é focável e responde a Enter e
+                  Espaço como qualquer botão do compositor. */}
+              <ComposerButton label="Anexar arquivo" onClick={() => fileInputRef.current?.click()}>
                 <IconAttach size={24} />
               </ComposerButton>
               <ComposerButton
@@ -392,14 +439,15 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleComposerKeyDown}
                 onPaste={handlePaste}
-                placeholder="Digite uma mensagem..."
+                placeholder="Digite uma mensagem…"
                 rows={1}
-                style={{ minHeight: COMPOSER_MIN_HEIGHT, maxHeight: COMPOSER_MAX_HEIGHT }}
+                style={{ minHeight: COMPOSER_MIN_HEIGHT, maxHeight: tetoDoCampo }}
                 className="min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
               />
 
               {showingEmojis && (
-                <div className="animate-wa-pop absolute bottom-full left-0 z-20 mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-[#232325]/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                <div className="dialog-emoji-picker animate-wa-pop absolute bottom-full left-0 z-[var(--z-popover)] mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-ui-surface-overlay/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                  <p className="dialog-popover-heading">Emojis</p>
                   <div className="grid grid-cols-8 gap-1">
                     {EMOJIS.map((emoji) => (
                       <button
@@ -416,7 +464,8 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               )}
 
               {showingQuickReplies && (
-                <div className="animate-wa-pop chat-scroll absolute bottom-full left-0 z-20 mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-[#232325]/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                <div className="dialog-quick-replies animate-wa-pop chat-scroll absolute bottom-full left-0 z-[var(--z-popover)] mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-ui-surface-overlay/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                  <p className="dialog-popover-heading">Respostas rápidas</p>
                   <AsyncState
                     status={quickRepliesStatus}
                     isEmpty={quickReplies.length === 0}
@@ -435,7 +484,8 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                             }}
                             className="block w-full truncate px-3.5 py-2.5 text-left text-[14.5px] text-chat-text transition-colors hover:bg-white/[0.06]"
                           >
-                            {quickReply.title}
+                            <span className="block font-medium">{quickReply.title}</span>
+                            <span className="dialog-quick-reply-preview">{quickReply.content}</span>
                           </button>
                         </li>
                       ))}
@@ -445,13 +495,13 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               )}
             </div>
 
-            {canSend ? (
+            {file && fileIsRecording ? null : canSend ? (
               <button
                 type="submit"
                 disabled={sending}
                 aria-label="Enviar"
                 title="Enviar"
-                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-cream text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70 disabled:opacity-40"
+                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-orange text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring disabled:opacity-50"
               >
                 <IconSend size={24} />
               </button>
@@ -461,7 +511,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 onClick={startRecording}
                 aria-label="Gravar áudio"
                 title="Gravar áudio"
-                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.08] text-chat-icon transition-colors hover:bg-white/[0.13] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.08] text-chat-icon transition-colors hover:bg-white/[0.13] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
               >
                 <IconMic size={24} />
               </button>

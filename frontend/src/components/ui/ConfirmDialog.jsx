@@ -1,52 +1,41 @@
-import { useEffect, useId, useRef } from 'react';
-import WaDialog from '../WaDialog';
+import { useId } from 'react';
+import { Dialog } from './Dialog';
 import { Button } from './Button';
+import { IconWarning, IconInfo } from '../icons/WaIcons';
 
-export function ConfirmDialog({ open, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false, onConfirm, onCancel }) {
-  const cancelRef = useRef(null);
-  const confirmRef = useRef(null);
-  const openerRef = useRef(null);
+// A API externa não mudou: `useConfirm` e os sete arquivos que o usam seguem
+// iguais. O que mudou é por dentro — antes isto era um `role="alertdialog"`
+// dentro de um `role="dialog"`, com `aria-modal` duplicado e um trap de Tab
+// artesanal que só funcionava porque havia exatamente dois botões.
+export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false, onConfirm, onCancel }) {
   const messageId = useId();
-
-  useEffect(() => {
-    if (!open) return undefined;
-    openerRef.current = document.activeElement;
-    cancelRef.current?.focus();
-    return () => {
-      const opener = openerRef.current;
-      if (opener && typeof opener.focus === 'function') opener.focus();
-    };
-  }, [open]);
 
   if (!open) return null;
 
-  // Só há dois elementos focáveis dentro do diálogo (Cancelar e Confirmar):
-  // prende o Tab entre eles para o foco não escapar para trás do overlay.
-  function trapTab(event) {
-    if (event.key !== 'Tab') return;
-    const first = cancelRef.current;
-    const last = confirmRef.current;
-    if (!first || !last) return;
-    if (event.shiftKey) {
-      if (document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      }
-    } else if (document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
   return (
-    <WaDialog onClose={onCancel} size="max-w-sm">
-      <div role="alertdialog" aria-modal="true" aria-describedby={messageId} className="px-6 pb-4 pt-5" onKeyDown={trapTab}>
+    <Dialog
+      role="alertdialog"
+      variant="confirm"
+      size="max-w-sm"
+      title={title}
+      ariaLabel={title ? undefined : message}
+      describedBy={messageId}
+      // Sem "x": Cancelar ja e a saida explicita, e dois jeitos de dizer nao
+      // lado a lado so criam duvida sobre a diferenca entre eles.
+      dismissible={false}
+      onClose={onCancel}
+      // Confirmação não fecha por clique no fundo: é decisão, não leitura.
+      closeOnBackdrop={false}
+    >
+      <div className="dialog-confirm-body px-6 pb-4 pt-5">
+        <span className="dialog-confirm-icon" data-danger={danger} aria-hidden="true">{danger ? <IconWarning size={22} /> : <IconInfo size={22} />}</span>
         <p id={messageId} className="text-[15px] leading-[22px] text-wa-text">{message}</p>
         <div className="mt-5 flex justify-end gap-2">
-          <Button ref={cancelRef} variant="ghost" onClick={onCancel}>{cancelLabel}</Button>
-          <Button ref={confirmRef} variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button>
+          {/* O foco inicial é a saída segura, nunca a ação destrutiva. */}
+          <Button data-autofocus="" variant="ghost" onClick={onCancel}>{cancelLabel}</Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button>
         </div>
       </div>
-    </WaDialog>
+    </Dialog>
   );
 }

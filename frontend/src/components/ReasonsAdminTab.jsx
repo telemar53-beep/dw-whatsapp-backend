@@ -4,9 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { updateReason } from '../services/api';
 import CreateReasonForm from './CreateReasonForm';
-import WaDialog, { waErrorClass } from './WaDialog';
-import { AsyncState, Button, inputClass } from './ui';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
+import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu, inputClass } from './ui';
 import { IconSearch, IconNewChat, IconMore, IconEdit } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 const STATUS_OPTIONS = [
   ['all', 'Todos os status'],
@@ -15,16 +16,10 @@ const STATUS_OPTIONS = [
 ];
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10 > item de menu 8.
-const CELL = 'px-3 py-3 align-middle';
-const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const CONTROL =
-  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-wa-green/60 focus:ring-2 focus:ring-wa-green/25';
-const ICON_BTN =
-  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40';
 const LINK_BTN =
-  'inline-flex h-8 items-center gap-1.5 rounded-[10px] px-2 text-[13px] font-medium text-chat-orange transition hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
-const MENU_ITEM =
-  'flex w-full items-center rounded-[8px] px-3 py-2 text-left text-[13.5px] text-wa-text transition hover:bg-wa-hover disabled:opacity-50';
+  'inline-flex h-8 items-center gap-1.5 rounded-[10px] px-2 text-[13px] font-medium text-chat-orange transition hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 
 function StatusBadge({ active }) {
   return (
@@ -39,51 +34,6 @@ function StatusBadge({ active }) {
 }
 
 // Botão de reticências com um pop-up de ações; fecha ao clicar fora, no Esc ou ao escolher.
-function RowMenu({ label, children }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function onDown(event) {
-      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
-    }
-    function onKey(event) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative inline-block">
-      <button
-        type="button"
-        aria-label={label}
-        title={label}
-        aria-haspopup="true"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        className={ICON_BTN}
-      >
-        <IconMore size={18} />
-      </button>
-      {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className="absolute right-0 top-[calc(100%+4px)] z-20 min-w-[170px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ReasonRow({ reason, usedByAi, onSaved }) {
   const { token } = useAuth();
   const { confirm, confirmDialog } = useConfirm();
@@ -103,7 +53,7 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSubmitting(false);
     }
@@ -135,7 +85,7 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
       await updateReason(reason.id, { active: !reason.active }, token);
       onSaved();
     } catch (err) {
-      setToggleError((err.body && err.body.error) || 'Falha ao atualizar o motivo');
+      setToggleError(descreverErro(err, 'Falha ao atualizar o motivo'));
     } finally {
       setToggling(false);
     }
@@ -144,14 +94,14 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
   return (
     <>
       <tr className={`border-t border-wa-border ${reason.active ? '' : 'opacity-80'} ${usedByAi ? 'bg-chat-orange/[0.06]' : ''}`}>
-        <td className={`${CELL} text-[14px] font-medium text-wa-text`}>
+        <td className={`${CELULA} text-[14px] font-medium text-wa-text`}>
           {reason.name}
-          {toggleError && <p className={`mt-2 ${waErrorClass}`}>{toggleError}</p>}
+          {toggleError && <WaError className="mt-2">{toggleError}</WaError>}
         </td>
-        <td className={`${CELL} whitespace-nowrap`}>
+        <td className={`${CELULA} whitespace-nowrap`}>
           <StatusBadge active={reason.active} />
         </td>
-        <td className={`${CELL} whitespace-nowrap`}>
+        <td className={`${CELULA} whitespace-nowrap`}>
           {usedByAi ? (
             <span className="inline-flex items-center rounded-[8px] border border-chat-orange/40 bg-chat-orange/[0.14] px-2.5 py-[3px] text-[12.5px] font-medium text-chat-orange">
               Encerramento pela IA
@@ -160,14 +110,14 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
             <span className="text-[13.5px] text-wa-muted">Encerramento</span>
           )}
         </td>
-        <td className={`${CELL} whitespace-nowrap`}>
+        <td className={`${CELULA} whitespace-nowrap`}>
           <div className="flex items-center justify-end gap-2">
-            <button type="button" onClick={handleEditClick} aria-expanded={editing} className={LINK_BTN}>
+            <Button variant="ghost" size="sm" onClick={handleEditClick} aria-expanded={editing}>
               <IconEdit size={15} />
               Editar
-            </button>
+            </Button>
             <RowMenu label={`Mais ações para ${reason.name}`}>
-              <button type="button" onClick={handleToggleActive} disabled={toggling} className={MENU_ITEM}>
+              <button type="button" onClick={handleToggleActive} disabled={toggling} className={ITEM_DE_MENU}>
                 {reason.active ? 'Desativar' : 'Ativar'}
               </button>
             </RowMenu>
@@ -191,7 +141,7 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
               <Button variant="secondary" onClick={handleCancel} className="!py-2">
                 Cancelar
               </Button>
-              {error && <p className={`w-full ${waErrorClass}`}>{error}</p>}
+              {error && <WaError className="w-full">{error}</WaError>}
             </form>
           </td>
         </tr>
@@ -228,9 +178,9 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
     <>
       <section
         aria-labelledby="reasons-card-title"
-        className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+        className="overflow-clip"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4 pt-5 sm:px-5">
+        <div className="settings-register-head flex flex-wrap items-center justify-between gap-3 pb-4 pt-1">
           <h2 id="reasons-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
             Motivos de atendimento
           </h2>
@@ -240,9 +190,9 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 px-4 pb-4 sm:px-5">
+        <div className="settings-register-toolbar flex flex-wrap items-center gap-3 pb-4">
           <label
-            className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
+            className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/25`}
           >
             <span className="shrink-0 text-wa-muted">
               <IconSearch size={17} />
@@ -270,22 +220,25 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
           </select>
         </div>
 
-        <div className="px-4 pb-1 sm:px-5">
+        <div className="settings-register-summary flex flex-wrap items-center justify-between gap-2 px-1 py-3 text-[12.5px] text-wa-muted">
+          <span>{countLabel}</span>
+          <span>O motivo fica registrado no histórico e agrupado em Relatórios.</span>
+        </div>
+        <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={reasons.length === 0} emptyMessage="Nenhum motivo cadastrado ainda.">
-            <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
-              <table className="w-full min-w-[560px] border-collapse text-[13.5px]">
+            <DataTable label="Motivos de contato">
                 <thead>
                   <tr className="bg-black/[0.16]">
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Motivo
                     </th>
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Situação
                     </th>
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Uso
                     </th>
-                    <th scope="col" className={`${HEAD} text-right`}>
+                    <th scope="col" className={`${CABECALHO} text-right`}>
                       Ações
                     </th>
                   </tr>
@@ -303,19 +256,15 @@ function ReasonsAdminTab({ creating: creatingProp, onCreatingChange, aiResolvedR
                     ))
                   )}
                 </tbody>
-              </table>
-            </div>
+              </DataTable>
           </AsyncState>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-wa-border px-4 py-3 text-[12.5px] text-wa-muted sm:px-5">
-          <span>{countLabel}</span>
-          <span>O motivo fica registrado no histórico e agrupado em Relatórios.</span>
-        </div>
+
       </section>
 
       {creatingReason && (
-        <WaDialog title="Novo motivo" onClose={() => setCreatingReason(false)} size="max-w-md">
+        <WaDialog variant="reason" title="Novo motivo" onClose={() => setCreatingReason(false)} size="max-w-md">
           <div className="px-6 pb-5 pt-2">
             <CreateReasonForm
               embedded

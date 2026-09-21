@@ -3,11 +3,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { updateSgpIntegration, rotateSgpIntegrationKey } from '../../services/api';
 import { isOfficialChannelType } from '../../utils/channelTypes';
 import { Button, DangerZone } from '../ui';
+import { descreverErro } from '../../utils/errorMessages';
 
 const inputClass =
-  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-wa-green/60 focus:bg-wa-panel focus:ring-2 focus:ring-wa-green/25';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-focus-ring/40';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
-const cardClass = 'space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-6 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl';
+const cardClass = 'space-y-3 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-4';
 
 const MODE_LABELS = { freetext: 'Texto livre (Baileys)', template: 'Template (oficial)' };
 
@@ -65,7 +66,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
       onChanged();
       setEditing(false);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao atualizar');
+      setError(descreverErro(err, 'Falha ao atualizar'));
     } finally {
       setSavingEdit(false);
     }
@@ -81,7 +82,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
       );
       onChanged();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao atualizar');
+      setError(descreverErro(err, 'Falha ao atualizar'));
     }
   }
 
@@ -93,7 +94,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
       setGeneratedKey(result.apiKey);
       onChanged();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao gerar a chave');
+      setError(descreverErro(err, 'Falha ao gerar a chave'));
     } finally {
       setRotating(false);
     }
@@ -114,7 +115,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
             checked={integration.enabled}
             onChange={handleToggleEnabled}
             aria-label={`Ativo: ${integration.description}`}
-            className="h-4 w-4 accent-wa-green"
+            className="h-4 w-4 accent-accent"
           />
           Ativo
         </label>
@@ -122,12 +123,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
       <p className="text-sm text-wa-muted">{integration.hasApiKey ? 'Uma chave já foi gerada.' : 'Nenhuma chave foi gerada ainda.'}</p>
       {!editing && (
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleStartEdit}
-            className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
-          >
-            Editar
-          </button>
+          <Button variant="secondary" onClick={handleStartEdit}>Editar</Button>
         </div>
       )}
       {editing && (
@@ -136,6 +132,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
           aria-label={`Editar integração: ${integration.description}`}
           className="space-y-3 rounded-xl border border-wa-surface-line bg-wa-surface-soft p-4"
         >
+          <div className="grid gap-3 md:grid-cols-2">
           <div>
             <label htmlFor={`sgp-edit-description-${integration.id}`} className={labelClass}>Descrição</label>
             <input
@@ -159,6 +156,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
               ))}
             </select>
           </div>
+          </div>
           {editIsTemplateMode && (
             <div>
               <label htmlFor={`sgp-edit-default-template-${integration.id}`} className={labelClass}>Template padrão (opcional)</label>
@@ -176,20 +174,8 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="submit"
-              disabled={savingEdit}
-              className="rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Salvar
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="rounded-lg border border-wa-border bg-wa-field px-3 py-2 text-sm font-medium text-wa-text transition hover:bg-wa-panel"
-            >
-              Cancelar
-            </button>
+            <Button type="submit" disabled={savingEdit}>Salvar</Button>
+            <Button variant="secondary" type="button" onClick={handleCancelEdit}>Cancelar</Button>
           </div>
         </form>
       )}

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createCity } from '../services/api';
+import { Button } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 // `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
 function CreateCityForm({ onCreated, onCancel, embedded = false }) {
@@ -18,7 +20,7 @@ function CreateCityForm({ onCreated, onCancel, embedded = false }) {
       setName('');
       onCreated();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao cadastrar cidade');
+      setError(descreverErro(err, 'Falha ao cadastrar cidade'));
     } finally {
       setSubmitting(false);
     }
@@ -36,25 +38,17 @@ function CreateCityForm({ onCreated, onCancel, embedded = false }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Nome da cidade"
-          className="h-10 min-w-0 flex-1 rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[14px] text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60"
+          className="h-10 min-w-0 flex-1 rounded-[10px] border border-wa-border bg-wa-field px-3.5 text-[14px] text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60"
           required
         />
-        <button
-          type="submit"
-          disabled={submitting}
-          className="h-10 shrink-0 rounded-[10px] bg-wa-green px-4 text-[13.5px] font-medium text-white transition hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cadastrar
-        </button>
         {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="h-10 shrink-0 rounded-[10px] border border-wa-border bg-wa-surface px-3 text-[13.5px] font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
+          <Button variant="secondary" onClick={onCancel}>
             Cancelar
-          </button>
+          </Button>
         )}
+        <Button type="submit" loading={submitting}>
+          Cadastrar
+        </Button>
       </form>
       {error && (
         <p className="mt-2 rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">

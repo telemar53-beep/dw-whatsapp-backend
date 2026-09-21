@@ -1,48 +1,44 @@
-import { useEffect } from 'react';
+import { Dialog } from './ui/Dialog';
+
+// Este arquivo deixou de ser a base dos diálogos: agora é um adaptador fino
+// sobre `ui/Dialog`. A assinatura continua idêntica de propósito — são 22
+// pontos de uso e dez arquivos importando as classes abaixo. Nenhum deles
+// precisou mudar para ganhar rótulo acessível, foco, trap, ESC por pilha e
+// clique fora à prova de arrasto. Código novo usa `ui/Dialog` direto.
 
 export const waInputClass =
-  'w-full rounded-[10px] bg-wa-panel-header px-3.5 py-2.5 text-[14.5px] text-wa-text outline-none transition-colors placeholder:text-wa-muted focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-wa-green/60';
+  'w-full rounded-[10px] bg-wa-panel-header px-3.5 py-2.5 text-[14.5px] text-wa-text outline-none transition-colors placeholder:text-wa-muted focus:outline focus:outline-2 focus:outline-offset-[-2px] focus:outline-accent/60';
 
 export const waLabelClass = 'mb-1.5 block text-[13px] font-medium text-wa-muted';
 
 export const waPrimaryButtonClass =
-  'rounded-[24px] bg-wa-green px-6 py-2 text-[14px] font-medium text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark disabled:opacity-50';
+  'rounded-[12px] bg-accent px-6 py-2 text-[14px] font-medium text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50';
 
 export const waGhostButtonClass =
-  'rounded-[24px] px-6 py-2 text-[14px] font-medium text-wa-icon transition-colors hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
+  'rounded-[12px] px-6 py-2 text-[14px] font-medium text-wa-icon transition-colors hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 
 export const waErrorClass = 'rounded-[10px] bg-wa-error-bg px-3 py-2 text-[13.5px] text-wa-error-text';
 
-function WaDialog({ title, description, onClose, children, size = 'max-w-md' }) {
-  useEffect(() => {
-    function onKeyDown(event) {
-      if (event.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+// Mesmo contrato que `ui/Field` já aplica no erro de campo: `role="alert"` para
+// o erro e `role="status"` para a confirmação. Vinte pontos da aplicação
+// montavam a faixa à mão com `waErrorClass` e ficavam MUDOS — medido na
+// auditoria: com "As senhas não coincidem" na tela, a consulta por
+// `[aria-live],[role=status],[role=alert]` devolvia lista vazia. Não é um
+// segundo sistema de mensagem: é o mesmo, num componente em vez de uma classe
+// solta, para o papel não depender de cada tela lembrar de escrevê-lo.
+export function WaError({ className = '', children, ...rest }) {
+  return <p role="alert" className={`${waErrorClass} ${className}`.trim()} {...rest}>{children}</p>;
+}
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--wa-overlay)] p-4 font-wa backdrop-blur-[var(--wa-overlay-blur)]"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-        className={`animate-wa-pop flex max-h-[85vh] w-full ${size} flex-col overflow-hidden rounded-[var(--wa-dialog-radius)] border border-[var(--wa-dialog-border)] bg-wa-panel shadow-[var(--wa-dialog-shadow)] backdrop-blur-[var(--wa-dialog-blur)]`}
-      >
-        {title && (
-          <div className="shrink-0 px-6 pb-2 pt-5">
-            <h2 className="text-[19px] leading-[26px] text-wa-text">{title}</h2>
-            {description && <p className="mt-1.5 text-[14px] leading-[20px] text-wa-muted">{description}</p>}
-          </div>
-        )}
-        {children}
-      </div>
-    </div>
-  );
+export function WaSuccess({ className = '', children, ...rest }) {
+  return <p role="status" className={`text-[13.5px] text-wa-muted ${className}`.trim()} {...rest}>{children}</p>;
+}
+
+function WaDialog(props) {
+  // `closeOnBackdrop` nasce falso: antes QUALQUER clique no fundo fechava
+  // qualquer diálogo, inclusive um formulário preenchido. Quem é de leitura
+  // pede a permissão de volta explicitamente.
+  return <Dialog {...props} />;
 }
 
 export default WaDialog;

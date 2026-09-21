@@ -1,44 +1,34 @@
-import { useEffect } from 'react';
 import ConversationView from './ConversationView';
 import ConversationInfoPanel from './ConversationInfoPanel';
-import { IconClose } from './icons/WaIcons';
+import { Dialog } from './ui/Dialog';
 
+// Aberta a partir de "Encerrados" e da Supervisão — quase sempre por cima de
+// outro diálogo. Tinha portal, backdrop, listener de ESC e z-index próprios, e
+// era exatamente por isso que um único ESC fechava a conversa E a lista que a
+// abriu. Agora é um diálogo como os outros: a pilha resolve camada, ESC e foco.
 function ConversationModal({ conversation, onClose, onTransferClick }) {
-  useEffect(() => {
-    function onKeyDown(event) {
-      if (event.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--wa-overlay)] p-4 backdrop-blur-[var(--wa-overlay-blur)] sm:p-8"
-      onClick={onClose}
+    <Dialog
+      variant="conversation"
+      orientation="row"
+      size="max-w-6xl"
+      ariaLabel="Conversa"
+      // Superficie de leitura e trabalho, nao formulario: o foco inicial e o
+      // proprio dialogo, e nao o primeiro campo que aparecer no painel lateral.
+      initialFocus="dialog"
+      onClose={onClose}
+      dismissible
+      closeLabel="Fechar conversa"
+      // Não fecha por clique no fundo: há uma caixa de mensagem aqui dentro, e
+      // texto digitado e não enviado é trabalho que não pode sumir por engano.
+      closeOnBackdrop={false}
+      className="chat-workspace"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-        className="animate-wa-pop relative flex h-[85vh] max-h-[880px] w-full max-w-6xl overflow-hidden rounded-[28px] border border-wa-surface-line bg-wa-panel shadow-[0_40px_100px_-30px_rgba(15,35,60,0.55)] backdrop-blur-2xl"
-      >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fechar conversa"
-          title="Fechar"
-          className="absolute right-3 top-3 z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-wa-surface-line bg-wa-panel text-wa-muted shadow-sm backdrop-blur-md transition hover:bg-wa-hover hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green md:flex"
-        >
-          <IconClose size={16} />
-        </button>
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <ConversationView conversation={conversation} onTransferClick={onTransferClick} onBack={onClose} />
-        </div>
-        <ConversationInfoPanel conversation={conversation} />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <ConversationView conversation={conversation} onTransferClick={onTransferClick} onBack={onClose} />
       </div>
-    </div>
+      <ConversationInfoPanel conversation={conversation} />
+    </Dialog>
   );
 }
 

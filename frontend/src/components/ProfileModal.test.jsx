@@ -72,6 +72,7 @@ describe('ProfileModal', () => {
     api.changePassword.mockResolvedValue({ ok: true });
     render(<ProfileModal onClose={vi.fn()} />);
     await screen.findByDisplayValue('Ana');
+    await userEvent.click(screen.getByText('Atualize sua senha de acesso.'));
 
     await userEvent.type(screen.getByLabelText(/senha atual/i), 'oldpass123');
     await userEvent.type(screen.getByLabelText(/^nova senha/i), 'newpass456');
@@ -85,6 +86,7 @@ describe('ProfileModal', () => {
   test('shows an error when the confirmation password does not match', async () => {
     render(<ProfileModal onClose={vi.fn()} />);
     await screen.findByDisplayValue('Ana');
+    await userEvent.click(screen.getByText('Atualize sua senha de acesso.'));
 
     await userEvent.type(screen.getByLabelText(/senha atual/i), 'oldpass123');
     await userEvent.type(screen.getByLabelText(/^nova senha/i), 'newpass456');
@@ -95,11 +97,11 @@ describe('ProfileModal', () => {
     expect(api.changePassword).not.toHaveBeenCalled();
   });
 
-  test('calls onClose when Fechar is clicked', async () => {
+  test('calls onClose when Cancelar is clicked', async () => {
     const onClose = vi.fn();
     render(<ProfileModal onClose={onClose} />);
     await screen.findByDisplayValue('Ana');
-    await userEvent.click(screen.getByRole('button', { name: /fechar/i }));
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -108,7 +110,7 @@ describe('ProfileModal', () => {
     const onClose = vi.fn();
     render(<ProfileModal onClose={onClose} />);
 
-    const fecharButton = await screen.findByRole('button', { name: /fechar/i });
+    const fecharButton = (await screen.findAllByRole('button', { name: /fechar/i })).find((b) => !b.hasAttribute('data-dialog-close'));
     expect(await screen.findByText('Sessão expirada')).toBeInTheDocument();
 
     await userEvent.click(fecharButton);

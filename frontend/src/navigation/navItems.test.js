@@ -36,7 +36,8 @@ describe('NAV_ITEMS', () => {
 describe('SETTINGS_SECTIONS', () => {
   test('cada página tem rota sob /configuracoes e um nível válido', () => {
     const items = SETTINGS_SECTIONS.flatMap((g) => g.items);
-    expect(items.length).toBe(13);
+    expect(items.length).toBe(22);
+    expect(new Set(items.map((item) => item.to)).size).toBe(items.length);
     items.forEach((item) => {
       expect(item.to.startsWith('/configuracoes/')).toBe(true);
       expect(['admin', 'integrations']).toContain(item.level);

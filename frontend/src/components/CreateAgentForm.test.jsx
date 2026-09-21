@@ -20,7 +20,7 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={onCreated} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Ana Souza');
-    await userEvent.type(screen.getByLabelText(/email/i), 'ana@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'ana@dw.com');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp12345');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 
@@ -38,7 +38,7 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Beto Lima');
-    await userEvent.type(screen.getByLabelText(/email/i), 'beto@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'beto@dw.com');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp67890');
     await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'admin');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
@@ -67,7 +67,7 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Marcia Reis');
-    await userEvent.type(screen.getByLabelText(/email/i), 'marcia@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'marcia@dw.com');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp11223');
     await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'manager');
     await userEvent.click(screen.getByLabelText(/pode gerenciar canais e integrações/i));
@@ -86,7 +86,7 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Nilo Reis');
-    await userEvent.type(screen.getByLabelText(/email/i), 'nilo@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'nilo@dw.com');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp44556');
     await userEvent.selectOptions(screen.getByLabelText(/tipo/i), 'manager');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
@@ -104,7 +104,7 @@ describe('CreateAgentForm', () => {
     render(<CreateAgentForm onCreated={vi.fn()} />);
 
     await userEvent.type(screen.getByLabelText(/nome/i), 'Ana Souza');
-    await userEvent.type(screen.getByLabelText(/email/i), 'ana@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'ana@dw.com');
     await userEvent.type(screen.getByLabelText(/senha temporária/i), 'temp12345');
     await userEvent.click(screen.getByRole('button', { name: /cadastrar/i }));
 

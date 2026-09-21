@@ -5,9 +5,10 @@ import { useTemplates } from '../hooks/useTemplates';
 import { useChannels } from '../hooks/useChannels';
 import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin, setTemplatePurpose } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
-import WaDialog, { waErrorClass } from './WaDialog';
-import { AsyncState, Button, inputClass } from './ui';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
+import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu, inputClass } from './ui';
 import { IconSearch, IconRefresh, IconNewChat, IconMore, IconInfo, IconFile } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 const STATUS_META = {
   APPROVED: { label: 'Aprovado', chip: 'border-wa-chip-text/30 bg-wa-chip text-wa-chip-text' },
@@ -54,15 +55,9 @@ function languageLabel(language) {
 }
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10 > item de menu 8.
-const CARD = 'overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl';
-const CELL = 'px-3 py-3 align-middle';
-const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
+const CARD = 'overflow-clip rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95';
 const CONTROL =
-  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-wa-green/60 focus:ring-2 focus:ring-wa-green/25';
-const ICON_BTN =
-  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
-const MENU_ITEM =
-  'flex w-full items-center rounded-[8px] px-3 py-2 text-left text-[13.5px] transition hover:bg-wa-hover disabled:opacity-50';
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40';
 const LABEL = 'mb-1.5 block text-[13px] font-medium text-wa-muted';
 
 function StatusChip({ status }) {
@@ -76,51 +71,6 @@ function StatusChip({ status }) {
 }
 
 // Botão de reticências com um pop-up de ações; fecha ao clicar fora, no Esc ou ao escolher.
-function RowMenu({ label, children }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function onDown(event) {
-      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
-    }
-    function onKey(event) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative inline-block" onClick={(event) => event.stopPropagation()}>
-      <button
-        type="button"
-        aria-label={label}
-        title={label}
-        aria-haspopup="true"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        className={ICON_BTN}
-      >
-        <IconMore size={18} />
-      </button>
-      {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className="absolute right-0 top-[calc(100%+4px)] z-20 min-w-[170px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function TemplateRow({ template, selected, onSelect, onDeleted }) {
   const { token } = useAuth();
   const { confirm, confirmDialog } = useConfirm();
@@ -139,7 +89,7 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
       await deleteTemplateAdmin(template.id, token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }
@@ -151,7 +101,7 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
       await setTemplatePurpose(template.id, template.purpose === 'disparo' ? 'atendimento' : 'disparo', token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao trocar a finalidade');
+      setDeleteError(descreverErro(err, 'Falha ao trocar a finalidade'));
     } finally {
       setSwitching(false);
     }
@@ -165,32 +115,32 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
         selected ? 'bg-chat-orange/[0.08] shadow-[inset_3px_0_0_var(--color-chat-orange)]' : 'hover:bg-wa-hover'
       }`}
     >
-      <td className={CELL}>
+      <td className={CELULA}>
         <button
           type="button"
           onClick={onSelect}
-          className="block max-w-[260px] truncate text-left text-[14px] font-medium text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="block max-w-[260px] truncate text-left text-[14px] font-medium text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           title={template.name}
         >
           {template.name}
         </button>
         {template.rejectionReason && <p className="mt-0.5 text-[12px] text-wa-error-text">{template.rejectionReason}</p>}
-        {deleteError && <p className={`mt-2 ${waErrorClass}`}>{deleteError}</p>}
+        {deleteError && <WaError className="mt-2">{deleteError}</WaError>}
       </td>
-      <td className={`${CELL} whitespace-nowrap text-wa-text`}>{categoryLabel(template.category)}</td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} whitespace-nowrap text-wa-text`}>{categoryLabel(template.category)}</td>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <PurposeChip purpose={template.purpose} />
       </td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <StatusChip status={template.status} />
       </td>
-      <td className={`${CELL} whitespace-nowrap`}>
+      <td className={`${CELULA} whitespace-nowrap`}>
         <div className="flex items-center justify-end">
           <RowMenu label={`Mais ações para ${template.name}`}>
-            <button type="button" onClick={handleTogglePurpose} disabled={switching} className={MENU_ITEM}>
+            <button type="button" onClick={handleTogglePurpose} disabled={switching} className={ITEM_DE_MENU}>
               {template.purpose === 'disparo' ? 'Usar para atendimento' : 'Usar para disparo'}
             </button>
-            <button type="button" onClick={handleDelete} disabled={deleting} className={`${MENU_ITEM} text-wa-error-text`}>
+            <button type="button" onClick={handleDelete} disabled={deleting} className={`${ITEM_DE_MENU} text-wa-error-text`}>
               Excluir
             </button>
           </RowMenu>
@@ -246,7 +196,7 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
       await createTemplateAdmin({ channelId, name, category, language, bodyText, purpose, buttons: botoesPreenchidos }, token);
       onCreated();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao criar template');
+      setError(descreverErro(err, 'Falha ao criar template'));
     } finally {
       setSubmitting(false);
     }
@@ -360,13 +310,13 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
         )}
       </fieldset>
 
-      {error && <p className={waErrorClass}>{error}</p>}
+      {error && <WaError>{error}</WaError>}
       <div className="flex gap-2">
-        <Button type="submit" loading={submitting}>
-          Cadastrar
-        </Button>
         <Button variant="secondary" onClick={onCancel}>
           Cancelar
+        </Button>
+        <Button type="submit" loading={submitting}>
+          Cadastrar
         </Button>
       </div>
     </form>
@@ -390,7 +340,7 @@ function RegisterExistingTemplateForm({ officialChannels, initialChannelId, onRe
       await registerExistingTemplateAdmin({ channelId, name, language, headerType: headerType || null }, token);
       onRegistered();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao registrar template');
+      setError(descreverErro(err, 'Falha ao registrar template'));
     } finally {
       setSubmitting(false);
     }
@@ -448,13 +398,13 @@ function RegisterExistingTemplateForm({ officialChannels, initialChannelId, onRe
           </select>
         </div>
       </div>
-      {error && <p className={waErrorClass}>{error}</p>}
+      {error && <WaError>{error}</WaError>}
       <div className="flex gap-2">
-        <Button type="submit" loading={submitting}>
-          Registrar
-        </Button>
         <Button variant="secondary" onClick={onCancel}>
           Cancelar
+        </Button>
+        <Button type="submit" loading={submitting}>
+          Registrar
         </Button>
       </div>
     </form>
@@ -492,7 +442,7 @@ function TemplatePreview({ template, channel }) {
       <div className="px-4 sm:px-5">
         <div className="overflow-hidden rounded-[14px] border border-white/[0.06] bg-[#0b141a]">
           <div className="flex items-center gap-3 border-b border-white/[0.06] bg-[#1f2c34] px-4 py-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chat-orange text-[13px] font-semibold text-white">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-chat-orange text-[13px] font-semibold text-on-accent">
               {iniciais(channel?.name)}
             </span>
             <span className="min-w-0 flex-1">
@@ -607,7 +557,7 @@ function TemplatesAdminTab() {
       await syncTemplatesAdmin(channel.wabaId, token);
       refresh();
     } catch (err) {
-      setSyncError((err.body && err.body.error) || 'Falha ao sincronizar');
+      setSyncError(descreverErro(err, 'Falha ao sincronizar'));
     } finally {
       setSyncing(false);
     }
@@ -615,9 +565,9 @@ function TemplatesAdminTab() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-3 sm:p-4">
         <label
-          className={`${CONTROL} flex min-w-[200px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
+          className={`${CONTROL} flex min-w-[200px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/25`}
         >
           <span className="shrink-0 text-wa-muted">
             <IconSearch size={17} />
@@ -659,28 +609,30 @@ function TemplatesAdminTab() {
             </option>
           ))}
         </select>
-        <Button
-          variant="secondary"
-          onClick={handleSync}
-          loading={syncing}
-          disabled={!channel?.wabaId}
-          title={channel?.wabaId ? `Buscar na Meta os templates da conta ${channel.wabaId}` : 'O canal selecionado não tem WABA ID'}
-          className="!py-2"
-        >
-          <IconRefresh size={17} />
-          Sincronizar
-        </Button>
-        <Button onClick={() => setCreating(true)} className="!py-2">
-          <IconNewChat size={18} />
-          Novo template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={handleSync}
+            loading={syncing}
+            disabled={!channel?.wabaId}
+            title={channel?.wabaId ? `Buscar na Meta os templates da conta ${channel.wabaId}` : 'O canal selecionado não tem WABA ID'}
+            className="!py-2"
+          >
+            <IconRefresh size={17} />
+            Sincronizar
+          </Button>
+          <Button onClick={() => setCreating(true)} className="!py-2">
+            <IconNewChat size={18} />
+            Novo template
+          </Button>
+        </div>
       </div>
-      {syncError && <p className={waErrorClass}>{syncError}</p>}
+      {syncError && <WaError>{syncError}</WaError>}
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <div className="space-y-5">
+      <div className="settings-template-library grid items-start gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+        <div>
           <section aria-labelledby="templates-card-title" className={CARD}>
-            <div className="flex items-center gap-2.5 px-4 pb-3 pt-5 sm:px-5">
+            <div className="settings-register-head flex items-center gap-2.5 px-4 pb-3 pt-5 sm:px-5">
               <h2 id="templates-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
                 Templates do canal
               </h2>
@@ -690,23 +642,22 @@ function TemplatesAdminTab() {
             </div>
             <div className="px-4 pb-1 sm:px-5">
               <AsyncState status={status} onRetry={refresh} isEmpty={templates.length === 0} emptyMessage="Nenhum template cadastrado ainda.">
-                <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
-                  <table className="w-full min-w-[480px] border-collapse text-[13.5px]">
+                <DataTable label="Templates" className="min-w-[480px]">
                     <thead>
                       <tr className="bg-black/[0.16]">
-                        <th scope="col" className={HEAD}>
+                        <th scope="col" className={CABECALHO}>
                           Nome
                         </th>
-                        <th scope="col" className={HEAD}>
+                        <th scope="col" className={CABECALHO}>
                           Categoria
                         </th>
-                        <th scope="col" className={HEAD}>
+                        <th scope="col" className={CABECALHO}>
                           Finalidade
                         </th>
-                        <th scope="col" className={HEAD}>
+                        <th scope="col" className={CABECALHO}>
                           Status
                         </th>
-                        <th scope="col" className={`${HEAD} text-right`}>
+                        <th scope="col" className={`${CABECALHO} text-right`}>
                           Ações
                         </th>
                       </tr>
@@ -730,20 +681,15 @@ function TemplatesAdminTab() {
                         ))
                       )}
                     </tbody>
-                  </table>
-                </div>
+                  </DataTable>
               </AsyncState>
             </div>
             <p className="flex items-center gap-1.5 border-t border-wa-border px-4 py-3 text-[12px] text-wa-muted sm:px-5">
               <IconInfo size={14} />
               Status de aprovação informado pela Meta.
             </p>
-          </section>
-
-          <section className={`${CARD} flex flex-wrap items-center gap-4 px-4 py-4 sm:px-5`}>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-white/[0.06] text-wa-muted">
-              <IconFile size={22} />
-            </span>
+            <div className="flex flex-wrap items-center gap-4 border-t border-white/[0.08] bg-black/[0.08] px-4 py-4 sm:px-5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white/[0.06] text-wa-muted"><IconFile size={19} /></span>
             <div className="min-w-0 flex-1 basis-[14rem]">
               <p className="text-[14.5px] font-medium text-wa-text">Já tem um template cadastrado?</p>
               <p className="mt-0.5 text-[13px] text-wa-muted">Vincule um modelo existente ao canal selecionado.</p>
@@ -751,6 +697,7 @@ function TemplatesAdminTab() {
             <Button variant="secondary" onClick={() => setRegistering(true)} aria-label="Registrar template existente" className="!py-2">
               Registrar existente
             </Button>
+            </div>
           </section>
         </div>
 
@@ -758,7 +705,7 @@ function TemplatesAdminTab() {
       </div>
 
       {creating && (
-        <WaDialog title="Novo template" onClose={() => setCreating(false)} size="max-w-lg">
+        <WaDialog variant="templates" title="Novo template" onClose={() => setCreating(false)} size="max-w-4xl">
           <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-2">
             <CreateTemplateForm
               officialChannels={officialChannels}
@@ -773,7 +720,7 @@ function TemplatesAdminTab() {
         </WaDialog>
       )}
       {registering && (
-        <WaDialog title="Registrar template existente" onClose={() => setRegistering(false)} size="max-w-lg">
+        <WaDialog variant="templates" title="Registrar template existente" onClose={() => setRegistering(false)} size="max-w-4xl">
           <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-5 pt-2">
             <RegisterExistingTemplateForm
               officialChannels={officialChannels}

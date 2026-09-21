@@ -9,28 +9,6 @@ import * as api from '../services/api';
 vi.mock('../contexts/AuthContext');
 vi.mock('../services/api');
 
-// Recharts' ResponsiveContainer relies on real DOM layout (getBoundingClientRect),
-// which jsdom doesn't provide — it renders nothing in tests. Stub the pieces this
-// page uses with simple elements that expose the data as visible text, so tests can
-// assert on what data reached the chart without fighting jsdom's lack of layout.
-vi.mock('recharts', () => ({
-  ResponsiveContainer: ({ children }) => <div>{children}</div>,
-  BarChart: ({ data }) => (
-    <div data-testid="bar-chart">
-      {data.map((item, i) => (
-        <div key={i}>{JSON.stringify(item)}</div>
-      ))}
-    </div>
-  ),
-  Bar: () => null,
-  Cell: () => null,
-  XAxis: () => null,
-  YAxis: () => null,
-  CartesianGrid: () => null,
-  Tooltip: () => null,
-  Legend: () => null,
-}));
-
 function renderPage() {
   return renderInShell(<ReportsPage />, { path: '/relatorios' });
 }
@@ -66,7 +44,7 @@ describe('ReportsPage', () => {
     expect(screen.getAllByText('—')).toHaveLength(2);
   });
 
-  test('shows the per-agent and per-sector charts for an admin', async () => {
+  test('shows agent volumes and times together with sector distribution for an admin', async () => {
     useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
     api.getMetrics.mockResolvedValue({
       period: 'today',
@@ -77,12 +55,10 @@ describe('ReportsPage', () => {
     });
     renderPage();
 
-    // "Ana" appears in two chart sections (atendimentos por atendente AND tempo médio
-    // por atendente both render `data.byAgent`) — the sector chart uses a different
-    // array and appears exactly once.
-    await screen.findAllByText(/"agentName":"Ana"/);
-    expect(screen.getAllByText(/"agentName":"Ana"/)).toHaveLength(2);
-    expect(screen.getByText(/"sectorName":"Financeiro"/)).toBeInTheDocument();
+    expect(await screen.findByRole('rowheader', { name: 'Ana' })).toBeInTheDocument();
+    expect(screen.getByText('Financeiro')).toBeInTheDocument();
+    expect(screen.getByRole('table')).toHaveTextContent('10 min');
+    expect(screen.getByRole('table')).toHaveTextContent('2 min');
   });
 
   test('shows an empty-state message instead of charts when an admin has no data', async () => {
@@ -96,11 +72,11 @@ describe('ReportsPage', () => {
     });
     renderPage();
 
-    expect(await screen.findAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(4);
-    expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
+    expect(await screen.findAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(1);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  test('shows charts for byAgent but an empty-state for bySector when only bySector is empty', async () => {
+  test('keeps the agent comparison when sector and reason distributions are empty', async () => {
     useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
     api.getMetrics.mockResolvedValue({
       period: 'today',
@@ -111,14 +87,13 @@ describe('ReportsPage', () => {
     });
     renderPage();
 
-    await screen.findAllByText(/"agentName":"Ana"/);
-    expect(screen.getAllByText(/"agentName":"Ana"/)).toHaveLength(2);
+    expect(await screen.findByRole('rowheader', { name: 'Ana' })).toBeInTheDocument();
     // Both bySector and byReason are empty here, so their charts each render their
     // own empty state.
     expect(screen.getAllByText('Nenhum atendimento fechado nesse período.')).toHaveLength(2);
   });
 
-  test('shows the per-reason chart for an admin', async () => {
+  test('shows the reason distribution for an admin', async () => {
     useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
     api.getMetrics.mockResolvedValue({
       period: 'today',
@@ -129,7 +104,7 @@ describe('ReportsPage', () => {
     });
     renderPage();
 
-    expect(await screen.findByText(/"reasonName":"Troca de senha"/)).toBeInTheDocument();
+    expect(await screen.findByText('Troca de senha')).toBeInTheDocument();
   });
 
   test('switching period refetches metrics with the new period', async () => {
@@ -205,7 +180,7 @@ describe('ReportsPage', () => {
 
   // Fix: periodo=custom chegando pela URL sem um "dias" válido (1..365) —
   // link colado à mão, favorito antigo, "dias" apagado — ficava preso em
-  // "Carregando indicadores..." pra sempre, porque o efeito de busca só
+  // "Carregando indicadores…" pra sempre, porque o efeito de busca só
   // rodava com customDays truthy. Agora cai para "today".
   test('periodo=custom sem dias válido na URL cai para hoje em vez de travar carregando', async () => {
     api.getMetrics.mockResolvedValue({
@@ -277,7 +252,9 @@ describe('ReportsPage', () => {
 
     expect(clickSpy).toHaveBeenCalledTimes(1);
     const anchor = clickSpy.mock.instances[0];
-    expect(anchor.download).toMatch(/^relatorio-today-\d{4}-\d{2}-\d{2}\.csv$/);
+    // O nome era `relatorio-today-…`, a chave crua do backend. Agora descreve
+    // o recorte em português, e a data é a de São Paulo (ver exportMetricsCsv).
+    expect(anchor.download).toMatch(/^relatorio-ultimas-24-horas-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     const blob = createObjectURL.mock.calls[0][0];
     expect(blob.type).toBe('text/csv;charset=utf-8;');
@@ -325,7 +302,122 @@ describe('ReportsPage', () => {
       byReason: [],
     });
     renderInShell(<ReportsPage />, { path: '/relatorios' });
-    expect(await screen.findByText(/"sectorName":"Sem setor"/)).toBeInTheDocument();
+    expect(await screen.findByText('Sem setor')).toBeInTheDocument();
     expect(screen.getByText(/encerradas sem setor definido/i)).toBeInTheDocument();
+  });
+});
+
+// Etapa 6.3 — trocar de periodo mudava o rotulo na hora e os numeros so depois.
+// A tela chegava a afirmar "Ultimos 30 dias" sobre os numeros das ultimas 24h.
+describe('troca de periodo e atomica', () => {
+  const HOJE = { period: 'today', scope: 'agent', own: { closedCount: 3, avgResolutionMinutes: 10, avgFirstResponseMinutes: 2 } };
+  const TRINTA = { period: '30d', scope: 'agent', own: { closedCount: 88, avgResolutionMinutes: 20, avgFirstResponseMinutes: 5 } };
+
+  test('enquanto a resposta nova nao chega, rotulo e numeros continuam sendo os antigos', async () => {
+    let liberar;
+    api.getMetrics
+      .mockResolvedValueOnce(HOJE)
+      .mockReturnValueOnce(new Promise((resolve) => { liberar = () => resolve(TRINTA); }));
+    renderPage();
+    expect(await screen.findByText('3')).toBeInTheDocument();
+    expect(screen.getByLabelText('Resumo do período')).toHaveTextContent(/últimas 24 horas/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /últimos 30 dias/i }));
+
+    // O rótulo do resumo ainda descreve os dados que estão na tela.
+    const resumo = screen.getByLabelText('Resumo do período');
+    expect(resumo).toHaveTextContent(/últimas 24 horas/i);
+    expect(resumo).not.toHaveTextContent(/últimos 30 dias/i);
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.queryByText('88')).not.toBeInTheDocument();
+    // E a tela diz que está buscando, em vez de fingir que já trocou.
+    expect(screen.getByText(/atualizando/i)).toBeInTheDocument();
+
+    liberar();
+
+    // Dados e rótulo entram juntos.
+    await waitFor(() => expect(screen.getByText('88')).toBeInTheDocument());
+    expect(resumo).toHaveTextContent(/últimos 30 dias/i);
+    expect(resumo).not.toHaveTextContent(/últimas 24 horas/i);
+    expect(screen.queryByText(/atualizando/i)).not.toBeInTheDocument();
+  });
+
+  test('a primeira carga nao mostra "atualizando", mostra o carregamento normal', () => {
+    api.getMetrics.mockReturnValue(new Promise(() => {}));
+    renderPage();
+
+    expect(screen.getByText(/carregando indicadores/i)).toBeInTheDocument();
+    expect(screen.queryByText(/atualizando/i)).not.toBeInTheDocument();
+  });
+
+  test('resposta atrasada de um periodo abandonado nao sobrescreve o periodo atual', async () => {
+    let liberarAntiga;
+    api.getMetrics
+      .mockReturnValueOnce(new Promise((resolve) => { liberarAntiga = () => resolve(HOJE); }))
+      .mockResolvedValueOnce(TRINTA);
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: /últimos 30 dias/i }));
+    await waitFor(() => expect(screen.getByText('88')).toBeInTheDocument());
+
+    liberarAntiga();
+
+    await waitFor(() => expect(screen.getByLabelText('Resumo do período')).toHaveTextContent(/últimos 30 dias/i));
+    expect(screen.queryByText('3')).not.toBeInTheDocument();
+  });
+
+  test('periodo personalizado rotula com o numero de dias que produziu os dados', async () => {
+    api.getMetrics
+      .mockResolvedValueOnce(HOJE)
+      .mockResolvedValueOnce({ ...TRINTA, period: 'custom' });
+    renderPage();
+    await screen.findByText('3');
+
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+    await userEvent.type(screen.getByLabelText(/últimos/i), '45');
+    await userEvent.click(screen.getByRole('button', { name: /aplicar/i }));
+
+    await waitFor(() => expect(screen.getByLabelText('Resumo do período')).toHaveTextContent(/últimos 45 dias/i));
+  });
+});
+
+// Etapa 6.4 — o campo "Personalizado" abria vazio mesmo com ?dias=45 em vigor,
+// e o painel ficava aberto depois de aplicar.
+describe('campo de periodo personalizado', () => {
+  const DADOS = { period: 'custom', scope: 'agent', own: { closedCount: 9, avgResolutionMinutes: 5, avgFirstResponseMinutes: 2 } };
+
+  test('abre mostrando os dias que ja estao em vigor na URL', async () => {
+    api.getMetrics.mockResolvedValue(DADOS);
+    renderInShell(<ReportsPage />, { path: '/relatorios', initialEntries: ['/relatorios?periodo=custom&dias=45'] });
+    await screen.findByText('9');
+
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+
+    expect(screen.getByLabelText(/últimos/i)).toHaveValue(45);
+  });
+
+  test('aplicar fecha o painel', async () => {
+    api.getMetrics.mockResolvedValue(DADOS);
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+    await userEvent.type(screen.getByLabelText(/últimos/i), '45');
+
+    await userEvent.click(screen.getByRole('button', { name: /aplicar/i }));
+
+    await waitFor(() => expect(screen.queryByLabelText(/últimos/i)).not.toBeInTheDocument());
+  });
+
+  test('exporta com o numero de dias do request que produziu os dados', async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function noop() {});
+    global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+    global.URL.revokeObjectURL = vi.fn();
+    api.getMetrics.mockResolvedValue(DADOS);
+    renderInShell(<ReportsPage />, { path: '/relatorios', initialEntries: ['/relatorios?periodo=custom&dias=45'] });
+    await screen.findByText('9');
+
+    await userEvent.click(screen.getByRole('button', { name: /exportar csv/i }));
+
+    expect(clickSpy.mock.instances[0].download).toMatch(/^relatorio-ultimos-45-dias-\d{4}-\d{2}-\d{2}\.csv$/);
+    clickSpy.mockRestore();
   });
 });

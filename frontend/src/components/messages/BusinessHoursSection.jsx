@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBusinessHoursConfig } from '../../hooks/useBusinessHoursConfig';
 import { updateBusinessHoursConfig } from '../../services/api';
-import { inputClass, AsyncState } from '../ui';
+import { inputClass, AsyncState, Button, Field } from '../ui';
 import CityStatusDot from './StatusDot';
+import { descreverErro } from '../../utils/errorMessages';
 
 function BusinessHoursSection() {
   const { token } = useAuth();
@@ -46,7 +47,7 @@ function BusinessHoursSection() {
       setEditing(false);
       refresh();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSaving(false);
     }
@@ -56,17 +57,19 @@ function BusinessHoursSection() {
     return (
       <form
         onSubmit={handleSave}
-        className="space-y-3 rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl"
+        className="settings-open-form space-y-3 rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-4"
       >
+        <div>
+          <h2 className="font-display text-[16px] font-semibold text-wa-text">Editar horário de atendimento</h2>
+          <p className="mt-1 text-[12.5px] text-wa-muted">Disponibilidade humana e aviso fora do expediente.</p>
+        </div>
         <label className="flex items-center gap-2 text-sm text-wa-muted">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-wa-green" />
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-accent" />
           Ativo
         </label>
-        <div className="flex gap-3">
-          <div className="space-y-1">
-            <label htmlFor="business-hours-start" className="text-sm font-medium text-wa-text">
-              Hora de início
-            </label>
+        {/* Hora e quatro digitos: a largura e de hora, nao de campo de texto. */}
+        <div className="flex flex-wrap gap-3">
+          <Field id="business-hours-start" label="Hora de início" width="sm">
             <input
               id="business-hours-start"
               type="time"
@@ -75,11 +78,8 @@ function BusinessHoursSection() {
               className={inputClass}
               required
             />
-          </div>
-          <div className="space-y-1">
-            <label htmlFor="business-hours-end" className="text-sm font-medium text-wa-text">
-              Hora de fim
-            </label>
+          </Field>
+          <Field id="business-hours-end" label="Hora de fim" width="sm">
             <input
               id="business-hours-end"
               type="time"
@@ -88,62 +88,52 @@ function BusinessHoursSection() {
               className={inputClass}
               required
             />
-          </div>
+          </Field>
         </div>
-        <div className="space-y-1">
-          <label htmlFor="business-hours-message" className="text-sm font-medium text-wa-text">
-            Mensagem
-          </label>
+        <Field id="business-hours-message" label="Mensagem">
           <textarea
             id="business-hours-message"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Nosso horário de atendimento é de segunda a sexta, das 08:00 às 18:00. Sua mensagem será respondida assim que possível."
-            className={inputClass}
+            rows={2}
+            className={`${inputClass} min-h-[72px] max-h-56 resize-y [field-sizing:content]`}
             required
           />
-        </div>
+        </Field>
         {error && <p className="rounded-lg border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-sm text-wa-error-text">{error}</p>}
         <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded-lg bg-wa-green px-3 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="rounded-lg border border-wa-border bg-wa-surface px-3 py-1.5 text-sm font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-          >
+          <Button variant="secondary" size="sm" onClick={handleCancel}>
             Cancelar
-          </button>
+          </Button>
+          <Button type="submit" size="sm" loading={saving}>
+            Salvar
+          </Button>
         </div>
       </form>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-wa-surface-line bg-wa-surface p-4 shadow-[0_20px_50px_-25px_rgba(15,35,60,0.35)] backdrop-blur-xl">
+    <div className="settings-pane rounded-[16px] border border-white/[0.09] bg-ui-surface-card/95 p-5">
       <AsyncState status={status} skeletonLines={2}>
         {config.id === null ? (
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-wa-muted">Nenhum horário configurado ainda.</p>
-            <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="font-display text-[16px] font-semibold text-wa-text">Horário de atendimento</h2><p className="mt-1 text-[13px] text-wa-muted">Nenhum horário configurado ainda.</p></div>
+            <Button variant="ghost" size="sm" onClick={handleEditClick}>
               Criar horário de atendimento
-            </button>
+            </Button>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-wa-muted">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="font-display text-[16px] font-semibold text-wa-text">Horário de atendimento</h2><p className="mt-1 text-sm text-wa-muted">
               Das {config.startTime} às {config.endTime}, segunda a sexta
-            </p>
+            </p></div>
             <div className="flex items-center gap-3">
               <CityStatusDot enabled={config.enabled} />
-              <button onClick={handleEditClick} className="text-sm font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+              <Button variant="ghost" size="sm" onClick={handleEditClick}>
                 Editar
-              </button>
+              </Button>
             </div>
           </div>
         )}

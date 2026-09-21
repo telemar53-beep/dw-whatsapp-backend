@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCities } from '../hooks/useCities';
 import { updateContact } from '../services/api';
-import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
+import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError } from './WaDialog';
+import { descreverErro } from '../utils/errorMessages';
 
 function EditContactModal({ conversation, onClose, onSaved }) {
   const { token } = useAuth();
@@ -27,16 +28,16 @@ function EditContactModal({ conversation, onClose, onSaved }) {
       onSaved({ displayName: updated.displayName, cityId: updated.cityId, cityName, internalNote: updated.internalNote });
       onClose();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <WaDialog title="Editar cliente" onClose={onClose} size="max-w-sm">
+    <WaDialog title="Editar cliente" onClose={onClose} size="max-w-2xl" variant="contact-edit">
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="wa-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-3">
+        <div className="dialog-contact-fields wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-3">
           <div>
             <label htmlFor="contact-name" className={waLabelClass}>
               Nome
@@ -80,7 +81,7 @@ function EditContactModal({ conversation, onClose, onSaved }) {
               className={waInputClass}
             />
           </div>
-          {error && <p className={waErrorClass}>{error}</p>}
+          {error && <WaError>{error}</WaError>}
         </div>
         <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
           <button type="button" onClick={onClose} className={waGhostButtonClass}>

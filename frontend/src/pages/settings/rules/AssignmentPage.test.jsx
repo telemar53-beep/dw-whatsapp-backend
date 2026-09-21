@@ -30,10 +30,7 @@ beforeEach(() => {
 });
 
 describe('AssignmentPage', () => {
-  // Adaptado do antigo popup "O que é isso: atribuir um atendimento"
-  // (SectionHelp) do MessagesAdminTab: a explicação agora é um Card sempre
-  // visível no topo da página — sem precisar clicar em nada para revelá-la.
-  test('shows the explanation card for the assignment-message feature directly, without a popup', () => {
+  test('mostra a explicação curta da mensagem automática', () => {
     useAssignmentMessageConfig.mockReturnValue({
       config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] }, status: 'ready',
       loading: false,
@@ -41,17 +38,17 @@ describe('AssignmentPage', () => {
     });
     renderInShell(<AssignmentPage />, { path: '/configuracoes/regras/atribuicao' });
 
-    expect(screen.getByText(/enviada automaticamente para o cliente quando um atendente assume/i)).toBeInTheDocument();
+    expect(screen.getByText(/mensagens enviadas ao assumir e ao encerrar/i)).toBeInTheDocument();
   });
 
-  test('shows a "Criar atribuição" button when no config exists yet', () => {
+  test('mostra o botão de configurar mensagens quando não há configuração', () => {
     useAssignmentMessageConfig.mockReturnValue({
       config: { id: null, enabled: false, openingMessage: '', closingMessage: '', agentIds: [], channelIds: [] }, status: 'ready',
       loading: false,
       refresh: vi.fn(),
     });
     renderInShell(<AssignmentPage />, { path: '/configuracoes/regras/atribuicao' });
-    expect(screen.getByRole('button', { name: 'Criar atribuição' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Configurar mensagens' })).toBeInTheDocument();
   });
 
   test('fills the form, saves and shows the closed summary', async () => {
@@ -71,7 +68,7 @@ describe('AssignmentPage', () => {
     });
     renderInShell(<AssignmentPage />, { path: '/configuracoes/regras/atribuicao' });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Criar atribuição' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Configurar mensagens' }));
     await userEvent.type(screen.getByLabelText(/mensagem de abertura/i), 'Olá @chat_atendente');
     await userEvent.type(screen.getByLabelText(/mensagem de encerramento/i), 'Tchau @chat_protocolo');
     await userEvent.click(screen.getByLabelText('Geovanna Silva'));
@@ -94,7 +91,7 @@ describe('AssignmentPage', () => {
     // The closed summary must reflect the saved config immediately, without depending
     // on refresh()'s network round-trip (which silently swallows its own errors).
     expect(screen.getByText(/1 atendentes, 0 canais/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Criar atribuição' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Configurar mensagens' })).not.toBeInTheDocument();
   });
 
   test('checking an already-checked agent unchecks it', async () => {
@@ -105,7 +102,7 @@ describe('AssignmentPage', () => {
     });
     renderInShell(<AssignmentPage />, { path: '/configuracoes/regras/atribuicao' });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Criar atribuição' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Configurar mensagens' }));
     const agentCheckbox = screen.getByLabelText('Geovanna Silva');
     await userEvent.click(agentCheckbox);
     expect(agentCheckbox).toBeChecked();
@@ -121,11 +118,11 @@ describe('AssignmentPage', () => {
     });
     renderInShell(<AssignmentPage />, { path: '/configuracoes/regras/atribuicao' });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Criar atribuição' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Configurar mensagens' }));
     await userEvent.type(screen.getByLabelText(/mensagem de abertura/i), 'rascunho descartado');
     await userEvent.click(screen.getByRole('button', { name: /^cancelar$/i }));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Criar atribuição' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Configurar mensagens' }));
     expect(screen.getByLabelText(/mensagem de abertura/i)).toHaveValue('');
   });
 
@@ -177,7 +174,7 @@ describe('AssignmentPage', () => {
     });
     renderInShell(<AssignmentPage />, { path: '/configuracoes/regras/atribuicao' });
 
-    expect(screen.queryByRole('button', { name: 'Criar atribuição' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Configurar mensagens' })).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

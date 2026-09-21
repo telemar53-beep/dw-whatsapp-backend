@@ -31,6 +31,7 @@ describe('StartConversationModal', () => {
     render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
 
     expect(await screen.findByText(/nenhum canal conectado/i)).toBeInTheDocument();
+    expect(screen.getByText('Nenhum canal disponível para iniciar.')).toBeInTheDocument();
   });
 
   test('submits the form and calls onCreated with the new conversation', async () => {
@@ -204,6 +205,8 @@ describe('StartConversationModal', () => {
 
     await waitFor(() => expect(screen.getByRole('option', { name: 'Oficial' })).toBeInTheDocument());
     expect(screen.queryByRole('option', { name: 'Berg' })).not.toBeInTheDocument();
+    expect(screen.getByText('Este canal precisa de um template aprovado para iniciar.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Iniciar conversa' })).toBeDisabled();
   });
 });
 

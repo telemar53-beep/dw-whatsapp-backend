@@ -50,6 +50,29 @@ beforeEach(() => {
 });
 
 describe('ConversationView', () => {
+  test('mostra apenas os dados disponíveis do cliente no painel contextual', () => {
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Ana', contactCityName: 'São Paulo', sectorName: 'Financeiro', protocolNumber: '123' }}
+        onTransferClick={vi.fn()}
+        workspace
+      />
+    );
+    const panel = screen.getByRole('complementary', { name: 'Dados do cliente' });
+    expect(within(panel).getByText('São Paulo')).toBeInTheDocument();
+    expect(within(panel).getByText('Financeiro')).toBeInTheDocument();
+    expect(within(panel).getByText('123')).toBeInTheDocument();
+    expect(within(panel).queryByText('CPF')).not.toBeInTheDocument();
+  });
+
+  test('permite fechar e reabrir os dados do cliente sem alterar a conversa', async () => {
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', contactDisplayName: 'Ana' }} onTransferClick={vi.fn()} workspace />);
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar dados do cliente' }));
+    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).toHaveClass('is-dismissed');
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).not.toHaveClass('is-dismissed');
+  });
+
   // O nome do provedor e configuracao: o sistema roda em mais de uma empresa.
   test('o aviso do topo cita a empresa cadastrada', async () => {
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
@@ -351,17 +374,25 @@ describe('ConversationView', () => {
     await userEvent.click(screen.getByLabelText('Troca de senha'));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i }));
 
-    expect(await screen.findByText('Conversation is not currently assigned to you, or is closed')).toBeInTheDocument();
+    expect(await screen.findByText('Este atendimento não está com você, ou já foi encerrado.')).toBeInTheDocument();
     expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 
+  // O aviso deixou de ser a caixa nativa do navegador: virou um alertdialog do
+  // proprio sistema, que continua exigindo reconhecimento explicito.
   test('shows an alert with the backend error when claiming fails', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     api.claimConversation.mockRejectedValue({ body: { error: 'Conversation is already assigned' } });
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: /assumir/i }));
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Conversation is already assigned'));
+
+    const aviso = await screen.findByRole('alertdialog');
+    expect(aviso).toHaveTextContent('Conversation is already assigned');
+    expect(alertSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(within(aviso).getByRole('button', { name: /entendi/i }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     alertSpy.mockRestore();
   });
 
@@ -1117,7 +1148,7 @@ describe('aviso da janela de 24 horas', () => {
     comMensagens([{ id: 'm1', direction: 'inbound', content: 'Oi', createdAt: horasAtras(25) }]);
     render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
 
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).not.toBeDisabled();
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).not.toBeDisabled();
   });
 });
 
@@ -1355,7 +1386,7 @@ describe('recálculo da janela de 24 horas', () => {
     expect(screen.queryByText(/janela de 24h fechada/i)).not.toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.change(screen.getByPlaceholderText('Digite uma mensagem...'), { target: { value: 'Alguma coisa' } });
+      fireEvent.change(screen.getByPlaceholderText('Digite uma mensagem…'), { target: { value: 'Alguma coisa' } });
     });
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Enviar'));
@@ -1425,7 +1456,7 @@ describe('janela de 24 horas indeterminada', () => {
     comDataIlegivel();
     render(<ConversationView conversation={MINHA} onTransferClick={vi.fn()} />);
 
-    expect(screen.getByPlaceholderText('Digite uma mensagem...')).not.toBeDisabled();
+    expect(screen.getByPlaceholderText('Digite uma mensagem…')).not.toBeDisabled();
   });
 
   // A decisão final é do canal: enquanto ele não recusou, não há por que
@@ -1475,5 +1506,51 @@ describe('janela de 24 horas indeterminada', () => {
     render(<ConversationView conversation={{ ...MINHA, channelType: 'baileys' }} onTransferClick={vi.fn()} />);
 
     expect(screen.queryByText(/não foi possível conferir a janela de 24h/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('carregamento do histórico da conversa', () => {
+  test('falha ao carregar mostra aviso e oferece tentar de novo', async () => {
+    const reloadMessages = vi.fn();
+    useConversationMessages.mockReturnValue({
+      messages: [],
+      status: 'error',
+      reloadMessages,
+      sendMessage: vi.fn(),
+    });
+
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Ana' }}
+        onTransferClick={vi.fn()}
+        workspace
+      />
+    );
+
+    const aviso = screen.getByRole('alert');
+    expect(aviso).toHaveTextContent(/não foi possível carregar as mensagens/i);
+
+    await userEvent.click(within(aviso).getByRole('button', { name: /tentar de novo/i }));
+    expect(reloadMessages).toHaveBeenCalledTimes(1);
+  });
+
+  test('conversa realmente sem mensagens não mostra o aviso de falha', () => {
+    useConversationMessages.mockReturnValue({
+      messages: [],
+      status: 'ready',
+      reloadMessages: vi.fn(),
+      sendMessage: vi.fn(),
+    });
+
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Ana' }}
+        onTransferClick={vi.fn()}
+        workspace
+      />
+    );
+
+    expect(screen.queryByText(/não foi possível carregar as mensagens/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/carregando mensagens/i)).not.toBeInTheDocument();
   });
 });

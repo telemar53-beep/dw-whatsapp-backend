@@ -31,6 +31,27 @@ describe('SendTemplateModal', () => {
     await waitFor(() => expect(api.listTemplatesForChannel).toHaveBeenCalledWith('ch-1', 'tok-123', 'atendimento'));
   });
 
+  // Antes a caixa inteira rolava (titulo junto) E a lista tinha o proprio
+  // max-height por dentro: dois eixos disputando. Agora ha um so, no corpo.
+  test('titulo e acoes ficam fora do unico eixo de rolagem', async () => {
+    montar();
+    await screen.findByRole('button', { name: /aviso_tecnico/ });
+
+    const painel = screen.getByRole('dialog');
+    const corpo = painel.querySelector('.dw-dialog-body');
+    const rodape = painel.querySelector('.dw-dialog-footer');
+    const cabecalho = painel.querySelector('.dw-dialog-heading');
+
+    expect(painel).toHaveAccessibleName('Enviar template');
+    expect(corpo).toBeTruthy();
+    expect(corpo.contains(cabecalho)).toBe(false);
+    expect(corpo.contains(rodape)).toBe(false);
+    expect(within(rodape).getByRole('button', { name: 'Enviar' })).toBeInTheDocument();
+    // Nenhum contêiner interno reintroduz um segundo eixo por conta propria.
+    expect(corpo.querySelector('[class*="max-h-"]')).toBeNull();
+    expect(painel.querySelector('[data-dialog-close]')).toBeTruthy();
+  });
+
   test('envia o template escolhido', async () => {
     const onSent = vi.fn();
     montar({ onSent });

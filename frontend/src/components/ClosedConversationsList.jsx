@@ -28,7 +28,7 @@ function ClosedConversationsList({ conversations, status, onSelect, selectedId, 
             disabled={loading}
             className="mt-3 w-full rounded-[16px] border border-white/[0.10] bg-white/[0.06] px-4 py-3 text-[14px] font-medium text-chat-text transition hover:bg-white/[0.10] disabled:opacity-50"
           >
-            {loading ? 'Carregando...' : 'Carregar mais'}
+            {loading ? 'Carregando…' : 'Carregar mais'}
           </button>
         )}
       </div>

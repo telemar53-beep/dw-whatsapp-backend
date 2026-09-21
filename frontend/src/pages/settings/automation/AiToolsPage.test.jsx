@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 
 describe('AiToolsPage', () => {
-  test('groups the tools by category', () => {
+  test('organiza as ações por assunto sem esconder as sensíveis', () => {
     useAiTools.mockReturnValue({
       tools: [
         { nome: 'consultar_plano', categoria: 'CONSULTA', descricao: 'd', enabled: true },
@@ -32,8 +32,21 @@ describe('AiToolsPage', () => {
       refresh: vi.fn(),
     });
     renderInShell(<AiToolsPage />, { path: PATH });
-    expect(screen.getByText('Consulta')).toBeInTheDocument();
+    expect(screen.getByText('Consultas')).toBeInTheDocument();
+    expect(screen.getByText('Financeiro')).toBeInTheDocument();
     expect(screen.getByText('Ação sensível')).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  });
+
+  test('mantém ferramentas futuras visíveis em Outras ações', () => {
+    useAiTools.mockReturnValue({
+      tools: [{ nome: 'nova_ferramenta', categoria: 'NOVA', descricao: 'Nova descrição', enabled: false }],
+      status: 'ready',
+      refresh: vi.fn(),
+    });
+    renderInShell(<AiToolsPage />, { path: PATH });
+    expect(screen.getByText('Outras ações')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'nova_ferramenta' })).toBeInTheDocument();
   });
 
   test('toggling a tool saves it', async () => {
@@ -54,7 +67,7 @@ describe('AiToolsPage', () => {
     expect(api.setAiToolEnabled).toHaveBeenCalledWith('gerar_pix', true, 't');
   });
 
-  test('mostra nome legível, descrição e identificador técnico', () => {
+  test('mantém descrição e identificador técnico acessíveis sob demanda', async () => {
     useAiTools.mockReturnValue({
       tools: [{ nome: 'consultar_status_conexao', categoria: 'CONSULTA', descricao: 'Verifica em tempo real...', enabled: true }],
       status: 'ready',
@@ -62,6 +75,7 @@ describe('AiToolsPage', () => {
     });
     renderInShell(<AiToolsPage />, { path: PATH });
     expect(screen.getByRole('checkbox', { name: /consultar conexão de internet/i })).toBeChecked();
+    await userEvent.click(screen.getByText('Quando usar'));
     expect(screen.getByText('consultar_status_conexao')).toBeInTheDocument();
     expect(screen.getByText(/verifica em tempo real/i)).toBeInTheDocument();
   });

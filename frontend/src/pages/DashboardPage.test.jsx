@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, Outlet } from 'react-router-dom';
@@ -57,6 +57,14 @@ beforeEach(() => {
   useTransferNotice.mockReturnValue({ notice: null, dismiss: vi.fn() });
 });
 
+// Sem ResizeObserver (jsdom), useWorkspaceLayout mede pela janela. É assim que
+// os testes escolhem o modo da mesa.
+const LARGURA_PADRAO = window.innerWidth;
+function larguraDaJanela(px) {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: px });
+}
+afterEach(() => larguraDaJanela(LARGURA_PADRAO));
+
 function renderDashboard() {
   return renderInShell(<DashboardPage />);
 }
@@ -90,7 +98,7 @@ describe('DashboardPage', () => {
     expect(within(screen.getByRole('main')).getByText('Atendimento')).toBeInTheDocument();
   });
 
-  test('shows my conversations in the Andamento tab by default', () => {
+  test('shows my conversations in the Atendimento tab by default', () => {
     useQueue.mockReturnValue({ queue: [{ id: 'c1', contactDisplayName: 'Carlos' }], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [{ id: 'c2', contactDisplayName: 'Maria' }], status: 'ready' });
     renderDashboard();
@@ -104,12 +112,12 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     expect(screen.getByRole('tablist')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /andamento/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /atendimento/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /espera/i })).toHaveAttribute('aria-selected', 'false');
 
     await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
 
-    expect(screen.getByRole('tab', { name: /andamento/i })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tab', { name: /atendimento/i })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('tab', { name: /espera/i })).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -118,7 +126,7 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
 
-    const tab = screen.getByRole('tab', { name: /andamento/i });
+    const tab = screen.getByRole('tab', { name: /atendimento/i });
     const panel = screen.getByRole('tabpanel');
     expect(panel).toHaveAttribute('aria-labelledby', tab.id);
   });
@@ -143,12 +151,63 @@ describe('DashboardPage', () => {
     expect(clearUnread).toHaveBeenCalledWith('c2');
   });
 
-  test('abre "Meu perfil" pelo contexto do shell e avisa quando uma conversa está aberta', async () => {
-    useQueue.mockReturnValue({ queue: [], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [{ id: 'c1', contactDisplayName: 'Ana', status: 'assigned', channelId: 'ch1' }], status: 'ready' });
-    const { ctx } = renderInShell(<DashboardPage />);
-    await userEvent.click(await screen.findByText('Ana'));
-    expect(ctx.setConversationOpen).toHaveBeenLastCalledWith(true);
+  // `conversationOpen` significa "a conversa OCUPA A TELA INTEIRA", e não apenas
+  // "existe conversa selecionada". A distinção não é cosmética: a casca esconde o
+  // botão "Abrir menu" quando essa bandeira é verdadeira, e com o significado
+  // antigo a única navegação do produto desaparecia em telas onde a lista ou o
+  // rail continuavam visíveis — de 500 a 767px, e num desktop 1366x768 com zoom
+  // de 200% (que vira uma viewport lógica de 683x384).
+  //
+  // A largura vem de `larguraDePalpite()` (window.innerWidth - 90), porque o
+  // jsdom não tem ResizeObserver e o hook fica no palpite: dá para escolher o
+  // layout de forma determinística.
+  describe('conversationOpen avisa a casca que a conversa ocupa a tela', () => {
+    const larguraOriginal = window.innerWidth;
+    const definirJanela = (px) =>
+      Object.defineProperty(window, 'innerWidth', { value: px, configurable: true, writable: true });
+
+    function umaConversaMinha() {
+      useQueue.mockReturnValue({ queue: [], status: 'ready' });
+      useMyConversations.mockReturnValue({
+        conversations: [{ id: 'c1', contactDisplayName: 'Ana', status: 'assigned', channelId: 'ch1' }],
+        status: 'ready',
+      });
+    }
+
+    afterEach(() => definirJanela(larguraOriginal));
+
+    test('com a lista ainda visível, selecionar a conversa NÃO diz que ela ocupa a tela', async () => {
+      definirJanela(1280); // 1190 úteis: cabem lista (332) e conversa (420) -> lista "expandida"
+      umaConversaMinha();
+      const { ctx } = renderInShell(<DashboardPage />);
+
+      await userEvent.click(await screen.findByText('Ana'));
+
+      expect(ctx.setConversationOpen).toHaveBeenLastCalledWith(false);
+    });
+
+    test('quando a lista fica oculta, selecionar a conversa diz que ela ocupa a tela', async () => {
+      definirJanela(400); // 310 úteis: não cabem nem rail (72) e conversa (420) -> lista "oculta"
+      umaConversaMinha();
+      const { ctx } = renderInShell(<DashboardPage />);
+
+      await userEvent.click(await screen.findByText('Ana'));
+
+      expect(ctx.setConversationOpen).toHaveBeenLastCalledWith(true);
+    });
+
+    test('e selecionar a conversa continua abrindo a conversa, nas duas larguras', async () => {
+      for (const largura of [1280, 400]) {
+        definirJanela(largura);
+        umaConversaMinha();
+        const { unmount } = renderInShell(<DashboardPage />);
+
+        await userEvent.click(await screen.findByText('Ana'));
+
+        expect(await screen.findByRole('button', { name: 'Voltar para a lista' })).toBeInTheDocument();
+        unmount();
+      }
+    });
   });
 
   test('shows the queue in the Espera tab after clicking it', async () => {
@@ -182,30 +241,28 @@ describe('DashboardPage', () => {
   test('quick-closes a conversation from the Espera tab without asking for a reason', async () => {
     useQueue.mockReturnValue({ queue: [{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderDashboard();
 
     await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Finalizar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c1', null, 'tok-123');
-    window.confirm.mockRestore();
   });
 
   test('quick-closes a conversation from the Automação tab without asking for a reason', async () => {
     useQueue.mockReturnValue({ queue: [{ id: 'c2', contactDisplayName: 'Em Triagem', triageState: 'pending', assignedAgentId: null }], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderDashboard();
 
     await userEvent.click(screen.getByRole('tab', { name: /automação/i }));
     await userEvent.click(screen.getByRole('button', { name: /finalizar/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Finalizar' }));
 
     expect(closeConversation).toHaveBeenCalledWith('c2', null, 'tok-123');
-    window.confirm.mockRestore();
   });
 
-  test('does not show a quick-close button in the Andamento tab', () => {
+  test('does not show a quick-close button in the Atendimento tab', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [{ id: 'c3', contactDisplayName: 'Minha' }], status: 'ready' });
     renderDashboard();
@@ -221,7 +278,7 @@ describe('DashboardPage', () => {
     useMyConversations.mockReturnValue({ conversations: [{ id: 'c3', contactDisplayName: 'Minha' }], status: 'ready' });
     renderDashboard();
 
-    expect(screen.getByRole('tab', { name: /andamento/i }).textContent).toContain('1');
+    expect(screen.getByRole('tab', { name: /atendimento/i }).textContent).toContain('1');
     expect(screen.getByRole('tab', { name: /espera/i }).textContent).toContain('1');
     expect(screen.getByRole('tab', { name: /automação/i }).textContent).toContain('1');
   });
@@ -232,7 +289,7 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     // Só o rótulo: nenhum número de contagem junto (o traço laranja da aba ativa não tem texto).
-    expect(screen.getByRole('tab', { name: /andamento/i }).textContent).toBe('Andamento');
+    expect(screen.getByRole('tab', { name: /atendimento/i }).textContent).toBe('Atendimento');
   });
 
   test('selecting a conversation from the Espera tab opens the conversation view', async () => {
@@ -316,52 +373,127 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/selecione uma conversa/i)).toBeInTheDocument();
   });
 
-  test('shows the list and hides the conversation panel on mobile when nothing is selected', () => {
-    useQueue.mockReturnValue({ queue: [], status: 'ready' });
+  // ---------------------------------------------------------------------
+  // Modos da mesa. O jsdom não implementa ResizeObserver, então
+  // useWorkspaceLayout cai no palpite (janela menos o menu) e a largura da
+  // janela é o que escolhe o modo. A aritmética da decisão e o piso de 420px
+  // da conversa são testados em useWorkspaceLayout.test.js; aqui o que importa
+  // é o que a mesa faz em cada modo: qual modo ela declara, que lista entrega
+  // e que caminho de volta oferece. A checagem de que nada fica espremido ou
+  // sobreposto é visual e foi feita no navegador real.
+  // ---------------------------------------------------------------------
+  const CARLOS = { id: 'c1', contactDisplayName: 'Carlos', contactPhoneNumber: '5511999997777', status: 'waiting', assignedAgentId: null };
+
+  function comFila() {
+    useQueue.mockReturnValue({ queue: [CARLOS], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+  }
+
+  async function abrirEspera() {
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+  }
+
+  test('modo largo: lista inteira e conversa convivem em colunas', async () => {
+    larguraDaJanela(1600);
+    comFila();
     const { container } = renderDashboard();
-    const aside = container.querySelector('aside');
-    const main = container.querySelector('main');
-    expect(aside.className).not.toMatch(/\bhidden\b/);
-    expect(main.className).toMatch(/\bhidden\b/);
+    const mesa = container.querySelector('[data-lista]');
+    const lista = container.querySelector('aside');
+
+    expect(mesa).toHaveAttribute('data-lista', 'expandida');
+    expect(mesa).toHaveAttribute('data-painel', 'coluna');
+    // Lista inteira: o item traz o texto do contato, não só o avatar do rail.
+    await abrirEspera();
+    expect(within(lista).getByText('Carlos')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ver lista de atendimentos/i })).not.toBeInTheDocument();
+
+    await userEvent.click(within(lista).getByRole('button', { name: /carlos/i }));
+
+    // A conversa abriu e a lista continuou ali: nenhuma das duas sai de cena.
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
+    expect(within(lista).getByText('Carlos')).toBeInTheDocument();
+    expect(mesa).toHaveAttribute('data-lista', 'expandida');
   });
 
-  test('shows the conversation panel and hides the list on mobile when a conversation is selected', async () => {
-    useQueue.mockReturnValue({ queue: [{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+  test('modo rail: lista vira trilho com a seleção identificável e volta a abrir', async () => {
+    larguraDaJanela(600);
+    comFila();
     const { container } = renderDashboard();
-    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
-    await userEvent.click(screen.getByText('Carlos'));
+    const mesa = container.querySelector('[data-lista]');
+    const lista = container.querySelector('aside');
 
-    const aside = container.querySelector('aside');
-    const main = container.querySelector('main');
-    expect(main.className).not.toMatch(/\bhidden\b/);
-    expect(aside.className).toMatch(/\bhidden\b/);
+    expect(mesa).toHaveAttribute('data-lista', 'rail');
+    await abrirEspera();
+
+    // No trilho cada atendimento é um alvo com o nome na etiqueta acessível.
+    const noTrilho = within(lista).getByRole('button', { name: 'Carlos' });
+    expect(noTrilho).not.toHaveAttribute('aria-current');
+
+    await userEvent.click(noTrilho);
+
+    // Conversa aberta e seleção visível no trilho ao mesmo tempo.
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
+    expect(within(lista).getByRole('button', { name: 'Carlos' })).toHaveAttribute('aria-current', 'true');
+
+    // O trilho tem uma ação explícita para reabrir a lista inteira...
+    await userEvent.click(screen.getByRole('button', { name: /ver lista de atendimentos/i }));
+    expect(within(lista).getByText('Carlos')).toBeInTheDocument();
+
+    // ...e um caminho de volta claro, que também é o que escolher outra
+    // conversa faz sozinho.
+    await userEvent.click(screen.getByRole('button', { name: /voltar à conversa/i }));
+    expect(within(lista).getByRole('button', { name: 'Carlos' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.queryByRole('button', { name: /voltar à conversa/i })).not.toBeInTheDocument();
   });
 
-  test('clicking the back button in the conversation view returns to the list', async () => {
-    useQueue.mockReturnValue({ queue: [{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+  test('modo alternado: o painel ocupa a área de trabalho e devolve a conversa', async () => {
+    larguraDaJanela(600);
+    comFila();
     const { container } = renderDashboard();
-    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
-    await userEvent.click(screen.getByText('Carlos'));
-    expect(container.querySelector('main').className).not.toMatch(/\bhidden\b/);
+    const mesa = container.querySelector('[data-lista]');
+    const lista = container.querySelector('aside');
+    await abrirEspera();
+    await userEvent.click(within(lista).getByRole('button', { name: 'Carlos' }));
+    expect(mesa).toHaveAttribute('data-painel', 'coluna');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+
+    // Não cabem trilho + conversa + painel: o painel deixa de ser coluna e
+    // passa a alternar com a conversa, nunca por cima dela.
+    expect(mesa).toHaveAttribute('data-painel', 'alternado');
+    expect(mesa).toHaveAttribute('data-lista', 'rail');
+
+    const voltar = screen.getByRole('button', { name: /voltar à conversa/i });
+    await userEvent.click(voltar);
+
+    expect(mesa).toHaveAttribute('data-painel', 'coluna');
+    expect(screen.queryByRole('button', { name: /voltar à conversa/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
+  });
+
+  test('modo estreito: uma coisa por vez, com volta para a lista', async () => {
+    larguraDaJanela(500);
+    comFila();
+    const { container } = renderDashboard();
+    const mesa = container.querySelector('[data-lista]');
+    const lista = container.querySelector('aside');
+
+    expect(mesa).toHaveAttribute('data-lista', 'oculta');
+    // Sem conversa escolhida, quem ocupa a área de trabalho é a tela vazia.
+    expect(screen.getByText('Net Fibra · Atendimento')).toBeInTheDocument();
+
+    await abrirEspera();
+    await userEvent.click(within(lista).getByRole('button', { name: /carlos/i }));
+
+    // A conversa tomou o lugar da tela vazia: um contexto por vez.
+    expect(screen.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /transferir/i })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
 
-    expect(container.querySelector('main').className).toMatch(/\bhidden\b/);
-    expect(container.querySelector('aside').className).not.toMatch(/\bhidden\b/);
-  });
-
-  test('hides the conversation list and the channel banner on mobile when a conversation is selected', async () => {
-    useQueue.mockReturnValue({ queue: [{ id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null }], status: 'ready' });
-    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
-    const { container } = renderDashboard();
-    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
-    await userEvent.click(screen.getByText('Carlos'));
-
-    expect(container.querySelector('aside').className).toMatch(/\bhidden\b/);
-    expect(container.querySelector('[data-testid="channel-banner-wrapper"]').className).toMatch(/\bhidden\b/);
+    expect(screen.queryByRole('button', { name: /transferir/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Net Fibra · Atendimento')).toBeInTheDocument();
+    expect(mesa).toHaveAttribute('data-lista', 'oculta');
   });
 
   // Equivalente real: AppShell.test.jsx > 'a raiz usa h-dvh para a altura da viewport'.
@@ -445,7 +577,7 @@ describe('DashboardPage', () => {
         },
       ],
     });
-    expect(screen.getByText('Cliente de Outro Atendente')).toBeInTheDocument();
+    expect(screen.getAllByText('Cliente de Outro Atendente').length).toBeGreaterThan(0);
   });
 });
 

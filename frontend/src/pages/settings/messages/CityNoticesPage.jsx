@@ -6,17 +6,14 @@ import CityNoticeRow from '../../../components/messages/CityNoticeRow';
 function CityNoticesPage() {
   const { cityNotices, status, refresh } = useCityNotices();
   return (
-    <>
-      <Card title="Como funciona">
-        <p>
-          Enviado automaticamente para clientes daquela cidade quando entram em contato, além
-          da boas-vindas normal — use para avisos de instabilidade ou manutenção pontual.
-        </p>
-        <p className="mt-2 italic">
-          Exemplo: "Nesse momento nossa rede está passando por uma instabilidade na sua
-          região. Nossa equipe já está trabalhando na correção."
-        </p>
-      </Card>
+    <div className="settings-message-library">
+      <div className="settings-intro border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
+        <p>Envie um aviso aos clientes de uma cidade quando entrarem em contato, além das boas-vindas.</p>
+        <details className="mt-2">
+          <summary className="w-fit cursor-pointer text-chat-orange">Ver exemplo</summary>
+          <p className="mt-2 italic">“Nossa rede está passando por uma instabilidade na sua região. Nossa equipe já está trabalhando na correção.”</p>
+        </details>
+      </div>
       <Card title="Por cidade">
         <AsyncState
           status={status}
@@ -26,7 +23,7 @@ function CityNoticesPage() {
             <>
               Nenhuma cidade cadastrada ainda. Cadastre cidades em{' '}
               <Link to="/configuracoes/cadastros/cidades" className="font-medium text-wa-link hover:text-wa-link/80 hover:underline">
-                Cadastros › Cidades
+                Cidades
               </Link>
               .
             </>
@@ -39,7 +36,7 @@ function CityNoticesPage() {
           </ul>
         </AsyncState>
       </Card>
-    </>
+    </div>
   );
 }
 

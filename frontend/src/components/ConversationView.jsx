@@ -16,6 +16,7 @@ import EditContactModal from './EditContactModal';
 import SgpLookupPanel from './SgpLookupPanel';
 import AiSuggestionCard from './AiSuggestionCard';
 import SendTemplateModal from './SendTemplateModal';
+import { useAlert } from '../hooks/useAlert';
 import {
   IconArrowLeft,
   IconChevronDown,
@@ -140,6 +141,7 @@ function channelLine(conversation) {
 }
 
 import { formatPhone } from '../utils/phone';
+import { descreverErro } from '../utils/errorMessages';
 
 function conversationStatus(conversation) {
   if (conversation.status === 'closed') return { label: 'Encerrado', dot: 'bg-chat-faint' };
@@ -148,19 +150,24 @@ function conversationStatus(conversation) {
   return { label: 'Em espera', dot: 'bg-chat-orange' };
 }
 
-// Uma família só de controles no cabeçalho: mesma altura, mesmo raio. O laranja
-// fica só na ação principal (Encerrar / Assumir); o resto é vidro.
 const ACTION =
-  'flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[10px] text-[13.5px] font-medium leading-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70';
-const ACTION_GHOST = `${ACTION} border border-white/[0.12] bg-white/[0.06] text-chat-text hover:bg-white/[0.12]`;
-const ACTION_PRIMARY = `${ACTION} bg-chat-orange px-3.5 text-white hover:brightness-110`;
+  'flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[8px] text-[12.5px] font-medium leading-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
+// Tem borda e texto em cor cheia: pela regua do ui/Button isso e SECONDARY,
+// nao ghost (ghost nao tem borda e usa texto apagado). O nome antigo era um
+// convite a traducao errada na proxima migracao.
+const ACTION_SECONDARY = `${ACTION} border border-white/[0.14] bg-transparent text-chat-text hover:bg-white/[0.08]`;
+// Tres categorias distintas de propósito: assumir e a acao principal,
+// transferir e secundaria, encerrar e irreversivel. Antes, assumir e encerrar
+// compartilhavam o mesmo primario.
+const ACTION_PRIMARY = `${ACTION} bg-accent px-3.5 text-on-accent shadow-[0_2px_10px_rgba(255,141,64,.16)] hover:bg-accent-strong`;
+const ACTION_DANGER = `${ACTION} border border-wa-error-text/40 bg-wa-error-bg px-3.5 text-wa-error-text hover:brightness-110`;
 
 function HeaderChip({ children, title, strong = false, className = '' }) {
   return (
     <span
       title={title || (typeof children === 'string' ? children : undefined)}
-      className={`h-9 max-w-[180px] shrink-0 items-center truncate rounded-[10px] border border-white/[0.12] bg-white/[0.06] px-3 text-[13px] leading-[34px] ${
-        strong ? 'font-medium tabular-nums text-chat-text' : 'text-chat-muted'
+      className={`max-w-[180px] shrink-0 items-center truncate border-l border-white/[0.13] pl-2.5 text-[11.5px] leading-[16px] ${
+        strong ? 'font-medium tabular-nums text-chat-muted' : 'text-chat-faint'
       } ${className}`}
     >
       {children}
@@ -168,23 +175,77 @@ function HeaderChip({ children, title, strong = false, className = '' }) {
   );
 }
 
-function HeaderIconButton({ label, onClick, children }) {
+function HeaderIconButton({ label, onClick, children, expanded }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`${ACTION_GHOST} w-9 text-chat-icon hover:text-chat-text`}
+      aria-expanded={expanded}
+      className={`${ACTION} w-8 text-chat-icon hover:bg-white/[0.08] hover:text-chat-text`}
     >
       {children}
     </button>
   );
 }
 
-function ConversationView({ conversation, onTransferClick, onBack }) {
+// Resumo da própria conversa. O SGP permanece na consulta já existente e
+// substitui este painel enquanto estiver aberto; nenhum dado é presumido.
+function CustomerPanel({ conversation, displayName, cityName, onClose }) {
+  const rows = [
+    ['Telefone', conversation.contactPhoneNumber],
+    ['Cidade', cityName],
+    ['Setor', conversation.sectorName],
+    ['Atendente', conversation.assignedAgentName],
+    ['Protocolo', conversation.protocolNumber],
+  ].filter(([, value]) => Boolean(value));
+
+  return (
+    <aside className="chat-workspace-customer-panel chat-scroll" aria-label="Dados do cliente">
+      <div className="chat-workspace-panel-heading">
+        <span>Dados do cliente</span>
+        <button type="button" onClick={onClose} aria-label="Fechar dados do cliente">×</button>
+      </div>
+      <div className="chat-workspace-panel-body">
+        <div className="chat-workspace-customer-identity">
+          <ContactAvatar contactId={conversation.contactId} avatarPath={conversation.contactAvatarPath} displayName={displayName} phoneNumber={conversation.contactPhoneNumber} size={52} dark />
+          <div className="min-w-0">
+            <h2 className="truncate text-[15px] font-semibold text-chat-text">{displayName || conversation.contactPhoneNumber || 'Conversa'}</h2>
+            <p className="mt-1 text-[12px] text-chat-muted">{conversation.status === 'closed' ? 'Encerrado' : conversation.assignedAgentId ? 'Em atendimento' : conversation.triageState === 'pending' ? 'Em automação' : 'Em espera'}</p>
+          </div>
+        </div>
+        {conversation.contactInternalNote && (
+          <section className="chat-workspace-panel-section">
+            <h3>Nota interna</h3>
+            <p className="whitespace-pre-wrap break-words">{conversation.contactInternalNote}</p>
+          </section>
+        )}
+        {rows.length > 0 && (
+          <section className="chat-workspace-panel-section">
+            <h3>Atendimento</h3>
+            <dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+          </section>
+        )}
+        {conversation.aiTriageCompletedAt && (
+          <section className="chat-workspace-panel-section">
+            <h3>Triagem por IA</h3>
+            {conversation.aiTriageReasonName && <p>Motivo: {conversation.aiTriageReasonName}</p>}
+            {conversation.aiTriageSummary && <p className="mt-2 whitespace-pre-wrap break-words">{conversation.aiTriageSummary}</p>}
+            {conversation.aiTriageLowConfidence && <p className="mt-2 text-wa-warn-text">Confiança baixa</p>}
+            {conversation.aiTriageResolvedByAi && <p className="mt-2 text-chat-online">Resolvido pela IA</p>}
+          </section>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function ConversationView({ conversation, onTransferClick, onBack, painelModo = 'coluna', onPainelAbertoChange, workspace = false }) {
   const { token, agent } = useAuth();
-  const { messages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
+  // `status` já é o estado do atendimento neste componente; o do carregamento
+  // das mensagens entra com nome próprio.
+  const { messages, status: messagesStatus, reloadMessages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
   // O relógio do cálculo da janela vive em estado, e não num `new Date()` solto
   // no corpo do render: assim a passagem do tempo (e o envio) conseguem
   // refazer a conta sem recarregar a página.
@@ -195,7 +256,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const { quickReplies, status: quickRepliesStatus } = useQuickReplies();
   // O nome do provedor é configuração: o sistema roda em mais de uma empresa.
   // Pela rota pública, e não pela de admin: esta tela é do atendente comum.
-  const { name: companyName, status: companyNameStatus } = useCompanyName();
+  const { name: companyName } = useCompanyName();
   const isMine = conversation.assignedAgentId === agent.id && conversation.status !== 'closed';
   // Sem este guard, toda conversa aberta disparava GET /:id/ai-suggestion — mesmo
   // quando o atendente não é o dono (um 403 nos logs) e mesmo com a IA desligada.
@@ -207,7 +268,25 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const [editingContact, setEditingContact] = useState(false);
   const [contactOverride, setContactOverride] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
+  const { avisar, alertDialog } = useAlert();
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
+  const [customerPanelOpen, setCustomerPanelOpen] = useState(false);
+  const [customerPanelDismissed, setCustomerPanelDismissed] = useState(false);
+  // Quando o espaço não comporta lista + conversa + painel, o painel deixa de
+  // ser coluna e ocupa a área de trabalho, com volta explícita. Nunca por cima
+  // da conversa: mensagem escondida atrás de painel foi problema real antes.
+  const painelAberto = sgpPanelOpen || (workspace && customerPanelOpen && !customerPanelDismissed);
+  const painelAlternado = painelModo === 'alternado' && painelAberto;
+
+  useEffect(() => {
+    if (onPainelAbertoChange) onPainelAbertoChange(painelAberto);
+  }, [painelAberto, onPainelAbertoChange]);
+
+  function fecharPaineis() {
+    setSgpPanelOpen(false);
+    setCustomerPanelOpen(false);
+    setCustomerPanelDismissed(true);
+  }
   const [closingReason, setClosingReason] = useState(false);
   // A sugestão que o atendente escolheu editar: { id, content } enquanto o texto
   // está no campo de digitação, ou null. Enquanto ela existir, o próximo envio de
@@ -227,6 +306,8 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     setEditingContact(false);
     setReplyingTo(null);
     setSgpPanelOpen(Boolean(conversation.contactSgpDocument));
+    setCustomerPanelOpen(false);
+    setCustomerPanelDismissed(false);
     setClosingReason(false);
     setEditedSuggestion(null);
     // ConversationView e MessageInput NÃO remontam ao trocar de conversa: sem
@@ -255,6 +336,34 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
   const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;
   const nameLabel = displayName || conversation.contactPhoneNumber || 'Conversa';
   const headerLabel = cityName ? `${nameLabel} - ${cityName}` : nameLabel;
+
+  // Mensagem nova não era anunciada de forma nenhuma: a timeline é um <div> sem
+  // papel, e nenhum estado da conversa tinha live region (medido: a consulta por
+  // `[aria-live],[role=status],[role=alert],[role=log]` devolvia lista vazia).
+  //
+  // A timeline INTEIRA não pode virar `role="log"`: a cada troca de conversa o
+  // leitor releria o histórico do começo. Então o anúncio é só da última
+  // mensagem RECEBIDA, e só quando ela chega com a conversa JÁ aberta — abrir uma
+  // conversa, ou trocar para outra, não é "mensagem nova".
+  const [avisoDeMensagem, setAvisoDeMensagem] = useState('');
+  const ultimaRecebidaRef = useRef(null);
+  const conversaDoAvisoRef = useRef(null);
+
+  useEffect(() => {
+    const recebidas = messages.filter((mensagem) => mensagem.direction === 'inbound');
+    const ultima = recebidas[recebidas.length - 1] || null;
+    const mesmaConversa = conversaDoAvisoRef.current === conversation.id;
+    conversaDoAvisoRef.current = conversation.id;
+    const anterior = ultimaRecebidaRef.current;
+    ultimaRecebidaRef.current = ultima ? ultima.id : null;
+    if (!ultima || !mesmaConversa || anterior === null || anterior === ultima.id) {
+      setAvisoDeMensagem('');
+      return;
+    }
+    const resumo = ultima.content || (ultima.mediaType ? 'anexo' : 'mensagem');
+    setAvisoDeMensagem(`Nova mensagem de ${headerLabel}: ${resumo}`);
+  }, [messages, conversation.id, headerLabel]);
+
   // Só vale repetir o telefone embaixo quando o título é o nome do contato.
   const phoneLine = displayName && conversation.contactPhoneNumber ? conversation.contactPhoneNumber : null;
   const secondLine = channelLine(conversation) || phoneLine;
@@ -337,7 +446,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     try {
       await claimConversation(conversation.id, token);
     } catch (err) {
-      window.alert((err.body && err.body.error) || 'Não foi possível assumir este atendimento.');
+      avisar(descreverErro(err, 'Não foi possível assumir este atendimento.'));
     }
   }
 
@@ -350,7 +459,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     try {
       await sendSuggestion(item);
     } catch (err) {
-      window.alert((err.body && err.body.error) || 'Não foi possível enviar a sugestão da IA.');
+      avisar(descreverErro(err, 'Não foi possível enviar a sugestão da IA.'));
     }
   }
 
@@ -363,26 +472,35 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
     try {
       await discardSuggestion(item);
     } catch (err) {
-      window.alert((err.body && err.body.error) || 'Não foi possível descartar a sugestão da IA.');
+      avisar(descreverErro(err, 'Não foi possível descartar a sugestão da IA.'));
     }
   }
 
   const timeline = buildTimeline(messages);
 
   return (
-    <div className="flex h-full">
+    <div className={`${workspace ? 'chat-workspace-conversation' : ''} ${painelAlternado ? 'is-painel-alternado' : ''} flex h-full`}>
       <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
-      <div className="@container z-10 flex shrink-0 items-center gap-3 border-b border-white/[0.07] px-2 py-3 md:px-5">
+      <div className="chat-workspace-header @container z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/[0.07] px-2 py-2.5 md:px-5">
+        {/* A base é 240px, não 0. Com `flex-1` puro (base 0%) o item nunca
+            chega a transbordar a linha, então o `flex-wrap` do cabeçalho jamais
+            disparava: a identidade era só clampada pelo `min-width` e o nome do
+            cliente ficava com 63px de caixa para 70px de texto a 360px. Com
+            base 240px, quando ela e as ações não cabem juntas, a identidade
+            leva a primeira linha inteira e as ações descem — que é o que o
+            `flex-wrap` estava ali para fazer. No desktop nada muda: 240 mais as
+            ações cabem de sobra e o `flex-grow` continua distribuindo o resto. */}
+        <div className="chat-workspace-header-identity flex min-w-[240px] flex-[1_1_240px] items-center gap-1.5">
         <button
           onClick={onBack}
-          className="flex h-10 w-10 items-center justify-center rounded-full text-chat-icon hover:bg-white/10 md:hidden"
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] text-chat-icon hover:bg-white/10 ${workspace ? 'lg:hidden' : 'md:hidden'}`}
           aria-label="Voltar para a lista"
         >
           <IconArrowLeft size={22} />
         </button>
         <button
           onClick={() => setEditingContact(true)}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] p-1.5 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] px-1 py-1 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
           aria-label={`Editar cliente: ${headerLabel}`}
         >
           <ContactAvatar
@@ -390,46 +508,53 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
             avatarPath={conversation.contactAvatarPath}
             displayName={displayName}
             phoneNumber={conversation.contactPhoneNumber}
-            size={44}
+            size={40}
             dark
           />
           <span className="min-w-0 flex-1">
-            <span title={phoneLine || nameLabel} className="block truncate text-[16px] font-semibold leading-[22px] text-chat-text">
-              {nameLabel}
-            </span>
-            {secondLine ? (
-              <span className="block truncate text-[12.5px] leading-[17px] text-chat-muted">{secondLine}</span>
-            ) : (
-              <span className="block truncate text-[12.5px] leading-[17px] text-chat-faint">
-                clique aqui para ver os dados do contato
+            <span className="flex min-w-0 items-center gap-2">
+              <span title={phoneLine || nameLabel} className="truncate text-[16px] font-semibold leading-[21px] text-chat-text">{nameLabel}</span>
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.065] px-2 py-0.5 text-[11px] font-medium text-chat-muted">
+                <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
+                {status.label}
               </span>
-            )}
-            <span className="mt-[3px] flex items-center gap-1.5 whitespace-nowrap text-[12.5px] leading-[17px] text-chat-muted">
-              <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${status.dot}`} />
-              {status.label}
+            </span>
+            <span className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] leading-[16px] text-chat-muted">
+              <span className="min-w-0 truncate">{secondLine || 'clique aqui para ver os dados do contato'}</span>
               {statusPhone && (
                 <>
                   <span aria-hidden="true" className="text-chat-faint">·</span>
-                  <span className="tabular-nums text-chat-text/90">{statusPhone}</span>
+                  <span className="shrink-0 tabular-nums text-chat-muted">{statusPhone}</span>
                 </>
               )}
             </span>
+            {(conversation.protocolNumber || cityName || conversation.sectorName) && (
+              <span className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden">
+                {conversation.protocolNumber && (
+                  <HeaderChip strong title={`Protocolo ${conversation.protocolNumber}`} className="hidden @min-[760px]:inline-flex">#{conversation.protocolNumber}</HeaderChip>
+                )}
+                {cityName && <HeaderChip className="hidden @min-[880px]:inline-flex">{cityName}</HeaderChip>}
+                {conversation.sectorName && <HeaderChip className="hidden @min-[620px]:inline-flex">{conversation.sectorName}</HeaderChip>}
+              </span>
+            )}
           </span>
         </button>
-        <div className="flex shrink-0 items-center gap-2">
+        </div>
+        <div className="chat-workspace-header-actions flex shrink-0 items-center gap-2">
+          {!workspace && <>          <div className="flex items-center gap-0.5 rounded-[10px] border border-white/[0.09] bg-black/[0.10] p-0.5">
           <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
             <IconHistory size={20} />
           </HeaderIconButton>
-          <HeaderIconButton label="Consultar SGP" onClick={() => setSgpPanelOpen((prev) => !prev)}>
+          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} onClick={() => setSgpPanelOpen((prev) => !prev)}>
             <IconSearch size={20} />
           </HeaderIconButton>
-          {conversation.protocolNumber && (
-            <HeaderChip strong title={`Protocolo ${conversation.protocolNumber}`} className="hidden @min-[760px]:inline-flex">
-              #{conversation.protocolNumber}
-            </HeaderChip>
-          )}
-          {cityName && <HeaderChip className="hidden @min-[880px]:inline-flex">{cityName}</HeaderChip>}
-          {conversation.sectorName && <HeaderChip className="hidden @min-[620px]:inline-flex">{conversation.sectorName}</HeaderChip>}
+          {/* Este grupo é do modal (`!workspace`). Havia aqui um
+              `{workspace && ...}` para "Dados do cliente" que nunca podia
+              renderizar, por estar dentro de `{!workspace && ...}` — o botão
+              de verdade vive na barra de contexto, abaixo. */}
+          </div>
+          <span aria-hidden="true" className="h-6 w-px bg-white/[0.12]" />
+</>}
           {isUnassigned && (
             <button onClick={handleClaim} className={ACTION_PRIMARY}>
               <IconClaim size={18} />
@@ -443,17 +568,17 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 onClick={() => onTransferClick(conversation.id)}
                 aria-label="Transferir atendimento"
                 title="Transferir atendimento"
-                className={`${ACTION_GHOST} w-9 @min-[560px]:w-auto @min-[560px]:px-3.5`}
+                className={`${ACTION_SECONDARY} w-8 @min-[400px]:w-auto @min-[400px]:px-3`}
               >
                 <IconTransfer size={18} />
-                <span className="hidden @min-[560px]:inline">Transferir</span>
+                <span className="hidden @min-[400px]:inline">Transferir</span>
               </button>
               <button
                 type="button"
                 onClick={() => setClosingReason(true)}
                 aria-label="Encerrar atendimento"
                 title="Encerrar atendimento"
-                className={isUnassigned ? `${ACTION_GHOST} w-9` : ACTION_PRIMARY}
+                className={isUnassigned ? `${ACTION_SECONDARY} w-8` : ACTION_DANGER}
               >
                 <IconCheckCircle size={18} />
                 {!isUnassigned && 'Encerrar'}
@@ -463,19 +588,65 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         </div>
       </div>
 
-      <div className="chat-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 md:px-8">
-        <div className="mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-full bg-white/[0.13] px-4 py-2 text-center text-[13px] leading-[18px] text-chat-muted">
+      {workspace && <div className="chat-workspace-context">
+        <span className="chat-workspace-context-label">{conversation.sectorName || secondLine || status.label}</span>
+        <div className="chat-workspace-context-actions">
+          <div className="flex items-center gap-0.5 rounded-[10px] border border-white/[0.09] bg-black/[0.10] p-0.5">
+          <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
+            <IconHistory size={20} />
+          </HeaderIconButton>
+          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} onClick={() => setSgpPanelOpen((prev) => !prev)}>
+            <IconSearch size={20} />
+            <span className="chat-context-label">SGP</span>
+          </HeaderIconButton>
+          {workspace && (
+            <HeaderIconButton label="Dados do cliente" expanded={customerPanelOpen} onClick={() => { setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false); }}>
+              <IconInfo size={20} />
+              <span className="chat-context-label">Cliente</span>
+            </HeaderIconButton>
+          )}
+          </div>
+        </div>
+      </div>}
+
+      <p role="status" aria-live="polite" className="sr-only">{avisoDeMensagem}</p>
+      <div className="chat-workspace-timeline chat-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 md:px-8">
+        <div className="chat-workspace-system-note mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-full bg-white/[0.13] px-4 py-2 text-center text-[13px] leading-[18px] text-chat-muted">
           <span className="shrink-0 text-chat-faint">
             <IconLock size={13} />
           </span>
-          Este atendimento fica registrado no sistema da {companyNameStatus === 'loading' ? '' : companyName || 'empresa'}.
+          Este atendimento fica registrado no sistema da {companyName || 'empresa'}.
         </div>
+
+        {/* Sem isto, histórico que falhou ao carregar era indistinguível de
+            conversa sem mensagem nenhuma. */}
+        {messagesStatus === 'error' && (
+          <div
+            role="alert"
+            className="mx-auto mb-3 flex w-fit max-w-[90%] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-[12px] border border-wa-error-text/30 bg-wa-error-bg px-4 py-2 text-center text-[13px] leading-[18px] text-wa-error-text"
+          >
+            <span>Não foi possível carregar as mensagens deste atendimento.</span>
+            <button
+              type="button"
+              onClick={reloadMessages}
+              className="rounded-[8px] border border-wa-error-text/40 px-2.5 py-1 text-[12.5px] font-medium transition hover:bg-wa-error-text/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            >
+              Tentar de novo
+            </button>
+          </div>
+        )}
+
+        {messagesStatus === 'loading' && messages.length === 0 && (
+          <p role="status" className="mb-3 text-center text-[13px] leading-[18px] text-chat-faint">
+            Carregando mensagens…
+          </p>
+        )}
 
         {timeline.map((row) => {
           if (row.kind === 'day') {
             return (
               <div key={row.key} className="my-3 flex justify-center">
-                <span className="rounded-full bg-white/[0.13] px-4 py-2 text-[13px] font-medium text-chat-muted">
+                <span className="chat-workspace-day rounded-full bg-white/[0.13] px-4 py-2 text-[13px] font-medium text-chat-muted">
                   {row.label}
                 </span>
               </div>
@@ -506,8 +677,11 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 metaMode === 'overlay' ? 'text-white' : 'text-chat-faint'
               }`}
             >
+              {/* Selo permanente: o filete diz o autor pela borda, este selo
+                  diz "IA" por escrito. Os dois no mesmo idioma cromático, para
+                  não pedir análise de tonalidade. */}
               {outbound && message.sentBy === 'ai' && (
-                <span className="mr-1 rounded bg-white/20 px-1 text-[10px] uppercase tracking-wide">IA</span>
+                <span className={`mr-1 rounded px-1 text-[10px] uppercase tracking-wide ${workspace ? 'bg-[var(--chat-ai-chip)] font-bold text-[var(--chat-ai-chip-ink)]' : 'bg-white/20'}`}>IA</span>
               )}
               {clockLabel(message.createdAt)}
               {outbound && <MessageStatusTicks status={message.status} />}
@@ -520,7 +694,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
               className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${row.firstOfGroup ? 'mt-3' : 'mt-[6px]'}`}
             >
               <div
-                className={`group relative max-w-[85%] md:max-w-[65%] ${
+                className={`chat-workspace-bubble ${outbound ? 'is-outbound' : 'is-inbound'} ${isSticker ? 'is-sticker' : ''} ${outbound && message.sentBy === 'ai' ? 'is-ai' : ''} group relative max-w-[85%] md:max-w-[65%] ${
                   isSticker
                     ? ''
                     : `rounded-[16px] border border-white/[0.14] ${outbound ? 'bg-white/[0.12]' : 'bg-white/[0.14]'} ${
@@ -528,11 +702,16 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                       }`
                 }`}
               >
+                {workspace && outbound && !isSticker && row.firstOfGroup && (
+                  <span className={`chat-message-author ${message.sentBy === 'ai' ? 'is-ai' : ''}`}>
+                    {message.sentBy === 'ai' ? 'Assistente IA' : 'Atendente'}
+                  </span>
+                )}
                 {message.repliedToPreview && (
                   <div className="mb-1 flex overflow-hidden rounded-[10px] bg-black/20">
                     <span className="w-[4px] shrink-0 bg-chat-copper" />
                     <span className="min-w-0 flex-1 px-2 py-1">
-                      <span className="block truncate text-[12.8px] font-medium leading-[18px] text-chat-copper">
+                      <span className="block truncate text-[12.5px] font-medium leading-[18px] text-chat-copper">
                         {repliedToLabel}
                       </span>
                       <span className="block truncate text-[13px] leading-[18px] text-chat-muted">
@@ -560,7 +739,7 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
                 />
 
                 {hasText && (
-                  <p className="whitespace-pre-wrap break-words text-[15.5px] leading-[21px] text-chat-text">
+                  <p className="chat-workspace-message-text whitespace-pre-wrap break-words text-[13px] leading-[21px] text-chat-text">
                     {message.content}
                     <span
                       aria-hidden="true"
@@ -706,7 +885,14 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
         />
       )}
       </div>
-      {sgpPanelOpen && (
+      {painelAlternado && (
+        <button type="button" onClick={fecharPaineis} className="chat-painel-voltar">
+          <IconArrowLeft size={16} />
+          Voltar à conversa
+        </button>
+      )}
+      {alertDialog}
+      {sgpPanelOpen ? (
         <SgpLookupPanel
           onSendMessage={(content) => sendMessage(content)}
           onSendPdf={handleSendSgpPdf}
@@ -716,7 +902,11 @@ function ConversationView({ conversation, onTransferClick, onBack }) {
           onClose={() => setSgpPanelOpen(false)}
           initialCpf={conversation.contactSgpDocument || ''}
         />
-      )}
+      ) : workspace ? (
+        <div className={`chat-workspace-customer ${customerPanelOpen ? 'is-open' : ''} ${customerPanelDismissed ? 'is-dismissed' : ''}`}>
+          <CustomerPanel conversation={conversation} displayName={displayName} cityName={cityName} onClose={() => { setCustomerPanelOpen(false); setCustomerPanelDismissed(true); }} />
+        </div>
+      ) : null}
     </div>
   );
 }

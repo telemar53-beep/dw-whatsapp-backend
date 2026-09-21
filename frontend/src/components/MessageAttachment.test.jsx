@@ -136,9 +136,35 @@ describe('visualizador de imagem com zoom', () => {
     expect(screen.getByAltText('comprovante.jpg')).toHaveClass('object-contain');
   });
 
+  test('shows a readable state when an audio file fails to load', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm4', messageType: 'audio', mediaPath: 'missing.ogg' }} />);
+    fireEvent.error(container.querySelector('audio'));
+    expect(screen.getByRole('status')).toHaveTextContent('Áudio indisponível');
+    expect(screen.queryByRole('button', { name: 'Reproduzir áudio' })).not.toBeInTheDocument();
+  });
+
+  test('shows a readable fallback if the stored image cannot be loaded', () => {
+    render(<MessageAttachment message={{ id: 'm2', messageType: 'image', mediaPath: 'missing.jpg' }} />);
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.getByRole('img', { name: 'Imagem indisponível' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Abrir imagem em tela cheia' })).not.toBeInTheDocument();
+  });
+
   test('abre com a imagem ajustada a tela', async () => {
     await abrirVisualizador();
     expect(screen.getByText('100%')).toBeInTheDocument();
+  });
+
+  // O ESC deixou de ser tratado dentro do visualizador e passou a vir da pilha
+  // de dialogos, que so entrega a tecla ao nivel do topo. Zoom, pan e a guarda
+  // de arrasto continuam locais e seguem cobertos pelos testes abaixo.
+  test('ESC fecha o visualizador pela pilha de dialogos', async () => {
+    await abrirVisualizador();
+    expect(screen.getByRole('dialog', { name: 'Visualizar imagem' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Visualizar imagem' })).not.toBeInTheDocument();
   });
 
   test('aumenta e diminui o zoom pelos botoes', async () => {
@@ -310,5 +336,46 @@ describe('arquivo removido pela retencao', () => {
     render(<MessageAttachment message={{ id: 'm-4', messageType: 'image', mediaPath: null, direction: 'inbound' }} onAnalyzeReceipt={vi.fn()} />);
 
     expect(screen.queryByRole('button', { name: /analisar comprovante/i })).not.toBeInTheDocument();
+  });
+});
+
+// Etapa 7.8 — o video era o unico anexo sem acabamento: <video controls> solto,
+// sem nome de arquivo e sem estado de indisponivel.
+describe('video na timeline', () => {
+  const video = (extra = {}) => ({ id: 'v1', messageType: 'video', mediaPath: 'clipe.mp4', direction: 'inbound', ...extra });
+
+  test('continua usando os controles nativos', () => {
+    const { container } = render(<MessageAttachment message={video()} />);
+    const el = container.querySelector('video');
+    expect(el).toBeInTheDocument();
+    expect(el).toHaveAttribute('controls');
+    expect(el).toHaveAttribute('preload', 'metadata');
+  });
+
+  test('mostra o nome do arquivo quando existe', () => {
+    render(<MessageAttachment message={video({ mediaFilename: 'reuniao-quarta.mp4' })} />);
+    expect(screen.getByText('reuniao-quarta.mp4')).toBeInTheDocument();
+  });
+
+  test('sem nome de arquivo, nao inventa rotulo nenhum', () => {
+    const { container } = render(<MessageAttachment message={video()} />);
+    expect(container.querySelector('p')).toBeNull();
+  });
+
+  // Video apagado pela retencao de 12 meses mostrava um quadro preto quebrado.
+  test('arquivo que nao carrega vira "Video indisponivel"', () => {
+    const { container } = render(<MessageAttachment message={video({ mediaFilename: 'antigo.mp4' })} />);
+
+    fireEvent.error(container.querySelector('video'));
+
+    expect(screen.getByText('Vídeo indisponível')).toBeInTheDocument();
+    expect(screen.getByText('antigo.mp4')).toBeInTheDocument();
+    expect(container.querySelector('video')).toBeNull();
+  });
+
+  // O backend nao guarda tamanho de midia: nao existe coluna para isso.
+  test('nao mostra tamanho de arquivo, porque o backend nao fornece', () => {
+    const { container } = render(<MessageAttachment message={video({ mediaFilename: 'clipe.mp4' })} />);
+    expect(container.textContent).not.toMatch(/\d+([.,]\d+)?\s*(KB|MB|GB)/i);
   });
 });

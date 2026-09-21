@@ -4,6 +4,7 @@ import AudioTranscriptionConfigCard from '../../../components/AudioTranscription
 function TranscriptionPage() {
   return (
     <SettingsPage
+      wide
       title="Transcrição de áudio"
       description="Áudios do cliente viram texto para o atendente e para a IA."
       scope="depends"

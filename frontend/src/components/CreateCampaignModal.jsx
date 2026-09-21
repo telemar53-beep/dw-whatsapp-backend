@@ -3,13 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { listChannelsForAgent, listTemplatesForChannel, createCampaign } from '../services/api';
 import { isOfficialChannelType, channelTypeLabel } from '../utils/channelTypes';
 import { parseRecipients } from '../utils/parseRecipients';
-import WaDialog, {
-  waInputClass,
-  waLabelClass,
-  waPrimaryButtonClass,
-  waGhostButtonClass,
-  waErrorClass,
-} from './WaDialog';
+import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError } from './WaDialog';
+import { descreverErro } from '../utils/errorMessages';
 
 const RECIPIENT_LIMIT = 2000;
 
@@ -107,7 +102,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
         : await createCampaign({ channelId, name, content, recipients }, token);
       onCreated(campaign);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao criar campanha');
+      setError(descreverErro(err, 'Falha ao criar campanha'));
     } finally {
       setSubmitting(false);
     }
@@ -115,9 +110,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
 
   if (step === 'review') {
     return (
-      <WaDialog title="Nova campanha" onClose={onClose} size="max-w-sm">
+      <WaDialog variant="campaign" title="Nova campanha" onClose={onClose} size="max-w-4xl">
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="wa-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-3">
+          <div className="dialog-campaign-fields wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-3">
             <h3 className="text-[16px] font-medium text-wa-text">Revisar campanha</h3>
             <dl className="space-y-2 text-[14px]">
               <div>
@@ -142,7 +137,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
                     </p>
                   )}
                   {summary.valid.length + summary.invalid > RECIPIENT_LIMIT && (
-                    <p className={waErrorClass}>O limite é de {RECIPIENT_LIMIT} destinatários por campanha.</p>
+                    <WaError>O limite é de {RECIPIENT_LIMIT} destinatários por campanha.</WaError>
                   )}
                 </dd>
               </div>
@@ -162,7 +157,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
                 </dd>
               </div>
             </dl>
-            {error && <p className={waErrorClass}>{error}</p>}
+            {error && <WaError>{error}</WaError>}
           </div>
           <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
             <button type="button" onClick={() => setStep('form')} className={waGhostButtonClass}>
@@ -183,9 +178,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
   }
 
   return (
-    <WaDialog title="Nova campanha" onClose={onClose} size="max-w-sm">
+    <WaDialog variant="campaign" title="Nova campanha" onClose={onClose} size="max-w-4xl">
       <form onSubmit={handleReview} className="flex min-h-0 flex-1 flex-col">
-        <div className="wa-scroll min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-3">
+        <div className="dialog-campaign-fields wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-3">
           <div>
             <label htmlFor="campaign-name" className={waLabelClass}>
               Nome (opcional)
@@ -197,7 +192,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
               Canal
             </label>
             {loading ? (
-              <p className="text-[14px] text-wa-muted">Carregando canais...</p>
+              <p role="status" className="text-[14px] text-wa-muted">Carregando canais…</p>
             ) : loadError ? (
               <p className="text-[14px] text-wa-error-text">Não foi possível carregar os canais. Feche e tente novamente.</p>
             ) : channels.length === 0 ? (
@@ -219,11 +214,12 @@ function CreateCampaignModal({ onClose, onCreated }) {
               </select>
             )}
             {fieldErrors.channelId && (
-              <p className={waErrorClass} id="campaign-channel-error">
+              <WaError id="campaign-channel-error">
                 {fieldErrors.channelId}
-              </p>
+              </WaError>
             )}
           </div>
+          <section className="dialog-campaign-content">
           {isOfficialChannel ? (
             <>
               <p className="rounded-[10px] bg-wa-warn-bg px-3 py-2 text-[13.5px] leading-[19px] text-wa-warn-text">
@@ -253,9 +249,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
                   </select>
                 )}
                 {fieldErrors.templateId && (
-                  <p className={waErrorClass} id="campaign-template-error">
+                  <WaError id="campaign-template-error">
                     {fieldErrors.templateId}
-                  </p>
+                  </WaError>
                 )}
               </div>
               {templateVariableValues.map((value, index) => (
@@ -272,9 +268,9 @@ function CreateCampaignModal({ onClose, onCreated }) {
                     aria-describedby={fieldErrors[`variable-${index}`] ? `campaign-variable-${index}-error` : undefined}
                   />
                   {fieldErrors[`variable-${index}`] && (
-                    <p className={waErrorClass} id={`campaign-variable-${index}-error`}>
+                    <WaError id={`campaign-variable-${index}-error`}>
                       {fieldErrors[`variable-${index}`]}
-                    </p>
+                    </WaError>
                   )}
                 </div>
               ))}
@@ -293,12 +289,13 @@ function CreateCampaignModal({ onClose, onCreated }) {
                 aria-describedby={fieldErrors.content ? 'campaign-message-error' : undefined}
               />
               {fieldErrors.content && (
-                <p className={waErrorClass} id="campaign-message-error">
+                <WaError id="campaign-message-error">
                   {fieldErrors.content}
-                </p>
+                </WaError>
               )}
             </div>
           )}
+          </section>
           <div>
             <label htmlFor="campaign-recipients" className={waLabelClass}>
               Destinatários (um por linha: telefone ou telefone,nome)
@@ -312,12 +309,12 @@ function CreateCampaignModal({ onClose, onCreated }) {
               aria-describedby={fieldErrors.recipients ? 'campaign-recipients-error' : undefined}
             />
             {fieldErrors.recipients && (
-              <p className={waErrorClass} id="campaign-recipients-error">
+              <WaError id="campaign-recipients-error">
                 {fieldErrors.recipients}
-              </p>
+              </WaError>
             )}
           </div>
-          {error && <p className={waErrorClass}>{error}</p>}
+          {error && <WaError>{error}</WaError>}
         </div>
         <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
           <button type="button" onClick={onClose} className={waGhostButtonClass}>

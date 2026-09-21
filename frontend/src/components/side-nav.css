@@ -1,0 +1,41 @@
+.worknav{width:196px;flex:none;display:flex;flex-direction:column;min-height:0;position:relative;z-index:var(--z-nav);background:#252d33;border:1px solid #ffffff12;border-radius:12px;padding:12px 10px;color:#c5cfd6;font-size:12px}
+.worknav-brand{display:flex;align-items:center;gap:9px;padding:2px 3px 12px;border-bottom:1px solid #ffffff10;min-height:48px}.worknav-monogram{display:grid;place-items:center;width:32px;height:32px;flex:none;border:1px solid #d9945b45;border-radius:8px;background:#d9945b10;color:#edb78e;font-size:12px;font-weight:700;letter-spacing:.02em}.worknav-brand .worknav-label{min-width:0}.worknav-brand strong{display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.worknav-brand small{display:block;color:#9facb5;font-size:10px;margin-top:2px}
+.worknav-collapse{display:flex;align-items:center;gap:8px;height:28px;flex:none;margin:7px 0;color:#a6b3bc;font-size:10px;padding:0 8px;border-radius:5px}.worknav-collapse svg{transform:rotate(90deg)}.worknav-collapse:hover{background:#ffffff07;color:#edf1f4}
+.worknav-destinations{overflow-y:auto;min-height:0;scrollbar-width:thin}.worknav-group{padding:6px 0 10px}.worknav-group+.worknav-group{border-top:1px solid #ffffff0d;padding-top:12px}.worknav-group h2{font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:#9daab3;font-weight:600;margin:0 8px 6px}
+.worknav .worknav-item{display:flex;align-items:center;gap:10px;min-height:36px;padding:7px 9px;width:100%;border-radius:6px;border:1px solid transparent;color:#c5cfd6;font-size:12px;text-decoration:none;text-align:left;margin:2px 0;transition:background .15s,color .15s}.worknav-item svg{flex:none}.worknav .worknav-item:hover{background:#ffffff07;color:#f2f5f6}.worknav .worknav-item[aria-current=page]{background:var(--color-ui-state-selected);border-color:#d9945b2b;color:#f1d7c3;font-weight:600}.worknav-item[aria-current=page] svg{color:#e7a776}
+.worknav-personal{margin-top:auto;padding-top:12px;border-top:1px solid #ffffff12}.worknav-sound{display:flex;align-items:center;gap:10px;width:100%;padding:7px 9px;border-radius:6px;text-align:left;font-size:11px}.worknav-sound svg{flex:none;color:#aebbc4}.worknav-sound small{display:block;font-size:10px;color:#9facb5;margin-top:1px}.worknav-sound:hover{background:#ffffff07}
+.worknav-account{position:relative;margin-top:8px}.worknav-account-trigger{display:flex;gap:8px;align-items:center;width:100%;padding:8px 3px;border-top:1px solid #ffffff12;text-align:left}.worknav-account-trigger>.worknav-label{min-width:0;flex:1}.worknav-account-trigger>.worknav-label:last-child{flex:none}.worknav-account-trigger strong{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#e1e7eb}.worknav-account-trigger small{display:block;font-size:10px;color:#9facb5;margin-top:2px}.worknav-account-trigger:hover{background:var(--color-ui-state-hover)}.worknav-account-panel{position:absolute;bottom:calc(100% + 6px);left:0;min-width:176px;background:var(--color-ui-surface-overlay);border:1px solid #ffffff21;border-radius:8px;padding:5px;box-shadow:0 8px 28px #0005;z-index:var(--z-popover)}.worknav-account-panel button{display:flex;align-items:center;gap:10px;width:100%;font-size:12px;padding:9px;border-radius:5px;text-align:left}.worknav-account-panel button:hover{background:#ffffff09;color:#fff}
+.worknav :is(button,a):focus-visible{outline: 2px solid var(--color-focus-ring);outline-offset:2px}.worknav.is-compact{width:64px;padding:12px 7px}.worknav.is-compact .worknav-label{display:none}.worknav.is-compact .worknav-brand{justify-content:center;padding-inline:0}.worknav.is-compact .worknav-collapse{justify-content:center}.worknav.is-compact .worknav-collapse svg{transform:rotate(-90deg)}.worknav.is-compact .worknav-item{justify-content:center;padding:8px 0;min-height:38px}.worknav.is-compact .worknav-sound{justify-content:center;padding:9px 0}.worknav.is-compact .worknav-account-trigger{justify-content:center}.worknav.is-compact .worknav-group{padding-block:6px}
+@media(max-width:767px){.worknav{display:none}.worknav.is-mobile-open{display:flex;position:fixed;inset:0 auto 0 0;width:216px;z-index:var(--z-nav);border-radius:0 12px 12px 0}.worknav.is-mobile-open .worknav-collapse{display:none}}
+@media(prefers-reduced-motion:reduce){.worknav .worknav-item{transition:none}}
+
+/* Official supplied artwork, displayed whole and without a background or color filter. */
+.worknav .worknav-brand{justify-content:center;gap:0;padding:0 0 10px;min-height:0}
+.worknav .worknav-logo{display:block;width:174px;max-width:100%;height:auto;object-fit:contain;flex:none}
+.worknav.is-compact .worknav-brand{padding:0 0 10px}
+.worknav.is-compact .worknav-logo{width:40px;height:40px;object-fit:contain}
+
+/* Transparent horizontal artwork: no panel, clipping, frame or color treatment. */
+.worknav .worknav-full-logo{display:block;width:148px;max-width:100%;height:59.2px;margin:2.4px 0;object-fit:contain;background:transparent;border:0;border-radius:0;box-shadow:none}
+/* Expanded header: a continuous transition from identity to navigation. */
+.worknav:not(.is-compact) .worknav-brand{padding-bottom:6px;border-bottom:0}
+.worknav:not(.is-compact) .worknav-collapse{margin:2px 0 10px;align-items:center}
+.worknav:not(.is-compact) .worknav-group:first-child{padding-top:2px}
+
+/* Estado persistente da conexão no rodapé do menu. Linha compacta, no mesmo
+   ritmo do "Som da fila" — nunca um cartão. A dica só existe no modo
+   recolhido, onde o rótulo some; no expandido o texto já está visível. */
+.worknav-connection{display:flex;align-items:center;gap:10px;width:100%;padding:6px 9px;margin-bottom:6px;border-radius:6px;border:1px solid #f2a93c38;background:#f2a93c14;color:#f0b65f;font-size:11px;line-height:1.3;position:relative}
+.worknav-connection svg{flex:none}
+.worknav.is-compact .worknav-connection{justify-content:center;padding:7px 0}
+.worknav-connection-tip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);width:208px;padding:8px 10px;border-radius:8px;border:1px solid #ffffff21;background:var(--color-ui-surface-overlay);color:#e6edf2;font-size:11px;line-height:1.45;box-shadow:0 8px 28px #0006;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none;z-index:var(--z-popover)}
+.worknav.is-compact .worknav-connection:hover .worknav-connection-tip,
+.worknav.is-compact .worknav-connection:focus-visible .worknav-connection-tip{opacity:1;visibility:visible}
+@media(prefers-reduced-motion:reduce){.worknav-connection-tip{transition:none}}
+
+/* Sem marca configurada em `branding`, a barra usa o monograma com as iniciais
+   da empresa. As regras acima centram e zeram o gap porque esperam uma imagem;
+   aqui o layout volta a ser simbolo + nome. */
+.worknav .worknav-brand.is-sem-marca{justify-content:flex-start;gap:9px;padding:2px 3px 10px}
+.worknav.is-compact .worknav-brand.is-sem-marca{justify-content:center;gap:0;padding:2px 0 10px}
+.worknav-brand.is-sem-marca .worknav-monogram{min-height:32px}

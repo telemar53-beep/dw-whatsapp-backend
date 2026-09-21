@@ -23,7 +23,8 @@ describe('CompanyConfigCard', () => {
     render(<CompanyConfigCard />);
     expect(screen.getByText('Empresa')).toBeInTheDocument();
     expect(screen.getByText('Provedor X')).toBeInTheDocument();
-    expect(screen.getByText(/Provedor X Ltda · Fulano de Tal/)).toBeInTheDocument();
+    expect(screen.getByText('Provedor X Ltda')).toBeInTheDocument();
+    expect(screen.getByText('Fulano de Tal')).toBeInTheDocument();
     expect(screen.queryByLabelText(/nome da empresa/i)).not.toBeInTheDocument();
   });
 

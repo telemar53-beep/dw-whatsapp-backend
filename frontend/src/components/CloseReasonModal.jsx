@@ -1,8 +1,9 @@
 import { useId, useState } from 'react';
-import WaDialog, { waErrorClass } from './WaDialog';
+import WaDialog, { waErrorClass, WaError } from './WaDialog';
 import { useReasons } from '../hooks/useReasons';
 import { AsyncState } from './ui';
-import { describeReason, closeReasonHeaderIcon, checkCircleIcon, closeIcon } from './closeReasonCatalog';
+import { describeReason, closeReasonHeaderIcon, checkCircleIcon } from './closeReasonCatalog';
+import { descreverErro } from '../utils/errorMessages';
 
 function ReasonCard({ reason, checked, onSelect, groupName }) {
   const id = useId();
@@ -11,7 +12,7 @@ function ReasonCard({ reason, checked, onSelect, groupName }) {
     <label
       htmlFor={id}
       className={`flex cursor-pointer items-center gap-3 rounded-[12px] border bg-wa-panel-header px-3 py-3 transition-colors ${
-        checked ? 'border-wa-green' : 'border-wa-border hover:border-wa-border-strong'
+        checked ? 'border-accent' : 'border-wa-border hover:border-wa-border-strong'
       }`}
     >
       <span
@@ -40,7 +41,7 @@ function ReasonCard({ reason, checked, onSelect, groupName }) {
         onChange={onSelect}
         aria-labelledby={`${id}-name`}
         aria-describedby={look.hint ? `${id}-hint` : undefined}
-        className="h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-full border-2 border-wa-border-strong transition-colors checked:border-[5px] checked:border-wa-green focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+        className="h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-full border-2 border-wa-border-strong transition-colors checked:border-[5px] checked:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
       />
     </label>
   );
@@ -62,30 +63,21 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
     try {
       await onConfirm(reasonId);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Não foi possível encerrar este atendimento.');
+      setError(descreverErro(err, 'Não foi possível encerrar este atendimento.'));
       setSubmitting(false);
     }
   }
 
   return (
-    <WaDialog onClose={onClose} size="max-w-[820px]">
+    <WaDialog variant="close-reason" onClose={onClose} labelledBy="close-reason-title" size="max-w-[820px]">
       <div className="flex shrink-0 items-start gap-3 px-6 pb-4 pt-5">
-        <span aria-hidden="true" className="mt-0.5 shrink-0 text-wa-green">
+        <span aria-hidden="true" className="mt-0.5 shrink-0 text-accent">
           {closeReasonHeaderIcon}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-[21px] font-semibold leading-[26px] text-wa-text">Motivo do contato</h2>
+          <h2 id="close-reason-title" className="text-[18px] font-semibold leading-[26px] text-wa-text">Motivo do contato</h2>
           <p className="mt-1 text-[14px] leading-[19px] text-wa-muted">Selecione o motivo principal deste atendimento.</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fechar"
-          title="Fechar"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-wa-border bg-wa-panel-header text-wa-icon transition-colors hover:text-wa-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
-        >
-          {closeIcon}
-        </button>
       </div>
 
       <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-5">
@@ -106,14 +98,14 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
             ))}
           </div>
         </AsyncState>
-        {error && <p className={`${waErrorClass} mt-4`}>{error}</p>}
+        {error && <WaError className="mt-4">{error}</WaError>}
       </div>
 
       <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-wa-border px-6 py-4">
         <button
           type="button"
           onClick={onClose}
-          className="rounded-[12px] border border-wa-border-strong bg-wa-panel-header px-7 py-2.5 text-[14px] font-medium text-wa-text transition-colors hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green"
+          className="rounded-[12px] border border-wa-border-strong bg-wa-panel-header px-7 py-2.5 text-[14px] font-medium text-wa-text transition-colors hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
           Cancelar
         </button>
@@ -121,7 +113,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
           type="button"
           onClick={handleConfirm}
           disabled={!reasonId || submitting}
-          className="flex items-center gap-2 rounded-[12px] bg-wa-green px-5 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-wa-green-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green-dark disabled:opacity-50"
+          className="flex items-center gap-2 rounded-[12px] bg-accent px-5 py-2.5 text-[14px] font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50"
         >
           <span aria-hidden="true">{checkCircleIcon}</span>
           Encerrar atendimento

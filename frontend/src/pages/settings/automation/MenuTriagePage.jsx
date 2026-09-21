@@ -8,6 +8,7 @@ function MenuTriagePage() {
 
   return (
     <SettingsPage
+      wide
       title="Triagem por menu"
       description="O menu numerado que o cliente recebe antes de falar com um atendente."
       scope="channel"

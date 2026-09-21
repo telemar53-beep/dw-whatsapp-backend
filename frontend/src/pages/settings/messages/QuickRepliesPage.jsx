@@ -8,17 +8,15 @@ function QuickRepliesPage() {
   const [creating, setCreating] = useState(false);
   const { quickReplies, status, refresh } = useQuickReplies();
   return (
-    <>
-      <Card title="Como funciona">
-        <p>
-          Mensagens prontas que o atendente pode inserir com um clique durante o
-          atendimento, pra agilizar respostas repetitivas.
-        </p>
-        <p className="mt-2 italic">
-          Exemplo: "Olá! Para agilizar seu atendimento, poderia me informar seu
-          CPF ou número de contrato?"
-        </p>
-      </Card>
+    <div className="settings-message-library">
+      <div className="settings-intro border-b border-wa-border pb-4 text-[13.5px] leading-5 text-wa-muted">
+        <p>Textos prontos que o atendente insere na conversa com um clique.</p>
+        <details className="mt-2">
+          <summary className="w-fit cursor-pointer text-chat-orange">Ver exemplo</summary>
+          <p className="mt-2 italic">“Olá! Para agilizar seu atendimento, poderia me informar seu CPF ou número de contrato?”</p>
+        </details>
+      </div>
+      <div className="settings-library-toolbar"><span>{status === 'ready' ? `${quickReplies.length} respostas cadastradas` : 'Respostas da equipe'}</span>{!creating && <Button onClick={() => setCreating(true)}>Criar resposta rápida</Button>}</div>
       {creating && (
         <CreateQuickReplyForm
           onCreated={() => {
@@ -30,8 +28,7 @@ function QuickRepliesPage() {
       )}
       <Card
         title="Cadastradas"
-        description="Textos prontos que o atendente insere com um clique."
-        footer={!creating && <Button onClick={() => setCreating(true)}>Criar resposta rápida</Button>}
+        description="Crie e edite as mensagens disponíveis para a equipe."
       >
         <AsyncState status={status} onRetry={refresh} isEmpty={quickReplies.length === 0} emptyMessage="Nenhuma resposta rápida cadastrada ainda.">
           <div className="space-y-3">
@@ -41,7 +38,7 @@ function QuickRepliesPage() {
           </div>
         </AsyncState>
       </Card>
-    </>
+    </div>
   );
 }
 

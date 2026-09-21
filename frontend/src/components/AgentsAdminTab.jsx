@@ -5,9 +5,10 @@ import { useSectors } from '../hooks/useSectors';
 import { setAgentActive, setAgentSectors, resetAgentPassword } from '../services/api';
 import CreateAgentForm from './CreateAgentForm';
 import AgentAvatar from './AgentAvatar';
-import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
-import { AsyncState, Button } from './ui';
+import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError } from './WaDialog';
+import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu } from './ui';
 import { IconSearch, IconUserPlus, IconMore } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 const ROLE_LABELS = { admin: 'Administrador', manager: 'Gerente', agent: 'Atendente' };
 const ROLE_OPTIONS = [
@@ -23,22 +24,16 @@ const STATUS_OPTIONS = [
 ];
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10 > item de menu 8.
-const CELL = 'px-3 py-3 align-middle';
-const HEAD = 'px-3 py-2.5 text-left text-[12.5px] font-medium text-wa-muted';
 const SMALL_BTN =
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field px-3 text-[13px] font-medium text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green disabled:opacity-50';
-const ICON_BTN =
-  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-wa-green';
+  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-border bg-wa-field px-3 text-[13px] font-medium text-wa-text transition hover:bg-wa-panel focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50';
 const CONTROL =
-  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-wa-green/60 focus:ring-2 focus:ring-wa-green/25';
-const MENU_ITEM =
-  'flex w-full items-center rounded-[8px] px-3 py-2 text-left text-[13.5px] text-wa-text transition hover:bg-wa-hover disabled:opacity-50';
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40';
 
 function StatusBadge({ active }) {
   return (
     <span
       className={`inline-flex items-center rounded-[8px] px-2.5 py-[3px] text-[12.5px] font-medium ${
-        active ? 'bg-[#1f8f4e] text-white' : 'bg-white/[0.08] text-wa-muted'
+        active ? 'border border-chat-online/20 bg-chat-online/[0.14] text-chat-online' : 'border border-white/[0.08] bg-white/[0.08] text-wa-muted'
       }`}
     >
       {active ? 'Ativo' : 'Inativo'}
@@ -47,51 +42,6 @@ function StatusBadge({ active }) {
 }
 
 // Botão de reticências com um pop-up de ações; fecha ao clicar fora, no Esc ou ao escolher.
-function RowMenu({ label, children }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function onDown(event) {
-      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
-    }
-    function onKey(event) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative inline-block">
-      <button
-        type="button"
-        aria-label={label}
-        title={label}
-        aria-haspopup="true"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-        className={ICON_BTN}
-      >
-        <IconMore size={18} />
-      </button>
-      {open && (
-        <div
-          onClick={() => setOpen(false)}
-          className="absolute right-0 top-[calc(100%+4px)] z-20 min-w-[190px] rounded-[12px] border border-wa-border bg-wa-panel p-1 shadow-[var(--wa-dialog-shadow)]"
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSaved }) {
   const { token } = useAuth();
   const [editingSectors, setEditingSectors] = useState(false);
@@ -112,7 +62,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       setGeneratedPassword(newPassword);
       setCopied(false);
     } catch (err) {
-      setPasswordError((err.body && err.body.error) || 'Falha ao gerar senha');
+      setPasswordError(descreverErro(err, 'Falha ao gerar senha'));
     } finally {
       setGeneratingPassword(false);
     }
@@ -147,7 +97,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       setEditingSectors(false);
       onSectorsSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar setores');
+      setError(descreverErro(err, 'Falha ao salvar setores'));
     } finally {
       setSubmitting(false);
     }
@@ -159,39 +109,39 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
   return (
     <>
       <tr className={`border-t border-wa-border ${agentRow.active ? '' : 'opacity-80'}`}>
-        <td className={CELL}>
+        <td className={CELULA}>
           <div className="flex items-center gap-3">
-            <AgentAvatar agentId={agentRow.id} avatarPath={agentRow.avatarPath} name={agentRow.name} size={36} colorful />
+            <AgentAvatar agentId={agentRow.id} avatarPath={agentRow.avatarPath} name={agentRow.name} size={36} />
             <div className="min-w-0">
               <p className="truncate text-[14px] font-medium text-wa-text">{agentRow.name}</p>
               <p className="truncate text-[12.5px] text-wa-muted">{agentRow.email}</p>
             </div>
           </div>
         </td>
-        <td className={`${CELL} whitespace-nowrap text-wa-text`}>{roleLabel}</td>
-        <td className={`${CELL} max-w-[220px] truncate text-wa-text`} title={sectorsText}>
+        <td className={`${CELULA} whitespace-nowrap text-wa-text`}>{roleLabel}</td>
+        <td className={`${CELULA} max-w-[220px] truncate text-wa-text`} title={sectorsText}>
           {sectorsText}
         </td>
-        <td className={`${CELL} whitespace-nowrap`}>
+        <td className={`${CELULA} whitespace-nowrap`}>
           <StatusBadge active={agentRow.active} />
         </td>
-        <td className={`${CELL} whitespace-nowrap`}>
+        <td className={`${CELULA} whitespace-nowrap`}>
           <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleEditSectorsClick}
               aria-label={`Editar setores de ${agentRow.name}`}
               aria-expanded={editingSectors}
-              className={SMALL_BTN}
             >
               Editar
-            </button>
+            </Button>
             {!isSelf && (
               <RowMenu label={`Mais ações para ${agentRow.name}`}>
-                <button type="button" onClick={handleGeneratePassword} disabled={generatingPassword} className={MENU_ITEM}>
+                <button type="button" onClick={handleGeneratePassword} disabled={generatingPassword} className={ITEM_DE_MENU}>
                   Gerar nova senha
                 </button>
-                <button type="button" onClick={() => onToggleActive(agentRow)} className={MENU_ITEM}>
+                <button type="button" onClick={() => onToggleActive(agentRow)} className={ITEM_DE_MENU}>
                   {agentRow.active ? 'Desativar' : 'Reativar'}
                 </button>
               </RowMenu>
@@ -203,9 +153,9 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       {(editingSectors || passwordError) && (
         <tr className="bg-black/[0.12]">
           <td colSpan={5} className="px-4 pb-4 pt-3">
-            {passwordError && <p className={`mb-3 ${waErrorClass}`}>{passwordError}</p>}
+            {passwordError && <WaError className="mb-3">{passwordError}</WaError>}
             {editingSectors && (
-              <div className="space-y-3">
+              <div className="dialog-sector-assignment space-y-3">
                 <p className="text-[13px] font-medium text-wa-muted">Setores de {agentRow.name}</p>
                 {sectors.length === 0 ? (
                   <p className="text-[13px] text-wa-muted">Nenhum setor cadastrado. Cadastre um na aba Setores.</p>
@@ -217,14 +167,14 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
                           type="checkbox"
                           checked={selectedIds.includes(sector.id)}
                           onChange={() => toggleSector(sector.id)}
-                          className="h-4 w-4 accent-wa-green"
+                          className="h-4 w-4 accent-accent"
                         />
                         {sector.name}
                       </label>
                     ))}
                   </div>
                 )}
-                {error && <p className={waErrorClass}>{error}</p>}
+                {error && <WaError>{error}</WaError>}
                 <div className="flex gap-2">
                   <Button onClick={handleSaveSectors} loading={submitting} className="!py-1.5">
                     Salvar
@@ -240,7 +190,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       )}
 
       {generatedPassword && (
-        <WaDialog title="Nova senha gerada" onClose={() => setGeneratedPassword(null)} size="max-w-sm">
+        <WaDialog variant="users" title="Nova senha gerada" onClose={() => setGeneratedPassword(null)} closeOnBackdrop size="max-w-sm">
           <div className="space-y-3 px-6 py-4">
             <p className="text-sm text-wa-muted">
               Copie e repasse essa senha pro atendente — ela só aparece essa vez.
@@ -308,9 +258,9 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
     <>
       <section
         aria-labelledby="users-card-title"
-        className="overflow-clip rounded-[16px] border border-wa-surface-line bg-wa-surface backdrop-blur-xl"
+        className="overflow-clip"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4 pt-5 sm:px-5">
+        <div className="settings-register-head flex flex-wrap items-center justify-between gap-3 pb-4 pt-1">
           <h2 id="users-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
             Usuários
           </h2>
@@ -320,9 +270,9 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 px-4 pb-4 sm:px-5">
+        <div className="settings-register-toolbar flex flex-wrap items-center gap-3 pb-4">
           <label
-            className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-wa-green/60 focus-within:ring-2 focus-within:ring-wa-green/25`}
+            className={`${CONTROL} flex min-w-[220px] flex-1 items-center gap-2.5 px-3.5 focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/25`}
           >
             <span className="shrink-0 text-wa-muted">
               <IconSearch size={17} />
@@ -362,25 +312,28 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </select>
         </div>
 
-        <div className="px-4 pb-1 sm:px-5">
+        <div className="settings-register-summary flex flex-wrap items-center justify-between gap-2 px-1 py-3 text-[12.5px] text-wa-muted">
+          <span>{countLabel}</span>
+          <span>A situação da conta é diferente do status online.</span>
+        </div>
+        <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
           <AsyncState status={status} isEmpty={agents.length === 0} emptyMessage="Nenhum usuário cadastrado ainda.">
-            <div className="chat-scroll -mx-4 overflow-x-auto sm:-mx-5">
-              <table className="w-full min-w-[720px] border-collapse text-[13.5px]">
+            <DataTable label="Usuários" className="min-w-[720px]">
                 <thead>
                   <tr className="bg-black/[0.16]">
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Nome
                     </th>
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Perfil
                     </th>
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Setores
                     </th>
-                    <th scope="col" className={HEAD}>
+                    <th scope="col" className={CABECALHO}>
                       Situação
                     </th>
-                    <th scope="col" className={`${HEAD} text-right`}>
+                    <th scope="col" className={`${CABECALHO} text-right`}>
                       Ações
                     </th>
                   </tr>
@@ -405,19 +358,15 @@ function AgentsAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
                     ))
                   )}
                 </tbody>
-              </table>
-            </div>
+              </DataTable>
           </AsyncState>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-wa-border px-4 py-3 text-[12.5px] text-wa-muted sm:px-5">
-          <span>{countLabel}</span>
-          <span>A situação da conta é diferente do status online.</span>
-        </div>
+
       </section>
 
       {creatingAgent && (
-        <WaDialog title="Adicionar usuário" onClose={() => setCreatingAgent(false)} size="max-w-md">
+        <WaDialog variant="users" title="Adicionar usuário" onClose={() => setCreatingAgent(false)} size="max-w-2xl">
           <div className="px-6 pb-5 pt-2">
             <CreateAgentForm
               embedded

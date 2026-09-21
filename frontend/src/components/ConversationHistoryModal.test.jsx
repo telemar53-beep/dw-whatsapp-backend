@@ -74,7 +74,7 @@ describe('ConversationHistoryModal', () => {
     const onClose = vi.fn();
     render(<ConversationHistoryModal contactId="contact-1" onClose={onClose} />);
 
-    await userEvent.click(await screen.findByRole('button', { name: /fechar/i }));
+    await userEvent.click((await screen.findAllByRole('button', { name: /fechar/i })).find((b) => !b.hasAttribute('data-dialog-close')));
     expect(onClose).toHaveBeenCalled();
   });
 });
@@ -117,5 +117,37 @@ describe('quem atendeu, quem encerrou e por quê', () => {
     renderComHistorico({ assignedAgentName: null, closedByAgentName: null, closeReasonName: 'Resolvido pela IA' });
 
     expect(await screen.findByText(/Resolvido pela IA/)).toBeInTheDocument();
+  });
+});
+
+
+describe('horários reais de início', () => {
+  test('distingue três atendimentos no mesmo dia, preservando a ordem recebida e os metadados', async () => {
+    api.getConversationHistory.mockResolvedValue([
+      { id: 'noite', createdAt: '2026-09-19T20:03:00', updatedAt: '2026-09-20T23:59:00', assignedAgentName: 'Ana Clara', closeReasonName: 'Troca de senha', status: 'closed' },
+      { id: 'manha', createdAt: '2026-09-19T09:10:00', updatedAt: '2026-09-20T22:59:00', assignedAgentName: 'Bruno', closeReasonName: 'Segunda via', status: 'closed' },
+      { id: 'tarde', createdAt: '2026-09-19T14:35:00', updatedAt: '2026-09-20T21:59:00', assignedAgentName: 'Carla', status: 'closed' },
+    ]);
+    api.getMessages.mockResolvedValue([]);
+    render(<ConversationHistoryModal contactId="same-contact" onClose={vi.fn()} />);
+    const rows = await screen.findAllByRole('button', { name: /19\/09\/2026/ });
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveTextContent('19/09/2026 · 20:03');
+    expect(rows[1]).toHaveTextContent('19/09/2026 · 09:10');
+    expect(rows[2]).toHaveTextContent('19/09/2026 · 14:35');
+    expect(rows[0]).toHaveTextContent('Ana Clara · Troca de senha · Finalizado');
+    expect(screen.queryByText(/23:59/)).not.toBeInTheDocument();
+    await userEvent.click(rows[0]);
+    expect(await screen.findByText('Atendimento · 19/09/2026 às 20:03')).toBeInTheDocument();
+    expect(screen.getByText('Responsável')).toBeInTheDocument();
+    expect(screen.getByText('Ana Clara')).toBeInTheDocument();
+    expect(screen.getByText('Finalizado')).toBeInTheDocument();
+    expect(screen.queryByText(/Duração|Setor|Assumido|Encerramento/)).not.toBeInTheDocument();
+  });
+  test('não substitui início ausente por updatedAt', async () => {
+    api.getConversationHistory.mockResolvedValue([{ id: 'missing', updatedAt: '2026-09-19T20:03:00', status: 'closed' }]);
+    render(<ConversationHistoryModal contactId="same-contact" onClose={vi.fn()} />);
+    expect(await screen.findByText('Início não informado')).toBeInTheDocument();
+    expect(screen.queryByText(/20:03/)).not.toBeInTheDocument();
   });
 });

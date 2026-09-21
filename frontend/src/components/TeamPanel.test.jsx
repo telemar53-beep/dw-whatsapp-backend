@@ -83,7 +83,7 @@ describe('TeamPanel', () => {
     expect(items).toEqual(['Ana', 'Carlos', 'Bruno']);
   });
 
-  test('separa em seções Online e Offline com contagem e resumo', async () => {
+  test('separa atendentes ocupados, disponíveis e offline com contagem', async () => {
     agentsReady([
       { id: 'a1', name: 'Ana', avatarPath: null, activeConversations: 1 },
       { id: 'a2', name: 'Bruno', avatarPath: null, activeConversations: 0 },
@@ -94,15 +94,15 @@ describe('TeamPanel', () => {
     render(<TeamPanel />);
     await openPanel();
 
-    expect(screen.getByRole('heading', { name: 'Online (2)' })).toBeInTheDocument();
-    expect(screen.getByText('Disponíveis para atender')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Offline (2)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Em atendimento 1' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Disponíveis 1' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Offline 2' })).toBeInTheDocument();
     expect(screen.getByText('Não disponíveis no momento')).toBeInTheDocument();
-    expect(screen.getByText('4 integrantes na equipe')).toBeInTheDocument();
-    expect(screen.getByText('2 online • 1 em atendimento • 2 offline')).toBeInTheDocument();
+    expect(screen.getByText(/4 integrantes na equipe/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Online 2' })).toBeInTheDocument();
   });
 
-  test('atendente online mostra a contagem de atendimentos e o chip certo', async () => {
+  test('cada atendente online mostra sua carga ativa e disponibilidade', async () => {
     agentsReady([
       { id: 'a1', name: 'Ana', avatarPath: null, activeConversations: 1 },
       { id: 'a2', name: 'Bruno', avatarPath: null, activeConversations: 0 },
@@ -111,11 +111,9 @@ describe('TeamPanel', () => {
     render(<TeamPanel />);
     await openPanel();
 
-    expect(screen.getByText('Atendendo 1 conversa')).toBeInTheDocument();
-    expect(screen.getByText('Disponível para atender')).toBeInTheDocument();
-    // "Em atendimento" aparece no chip da Ana e no botão de filtro.
-    expect(screen.getAllByText('Em atendimento')).toHaveLength(2);
-    expect(screen.getByText('Disponível')).toBeInTheDocument();
+    expect(screen.getByLabelText('1 atendimento ativo')).toHaveTextContent('1 ativo');
+    expect(screen.getByLabelText('0 atendimentos ativos')).toHaveTextContent('0 ativos');
+    expect(screen.getByText('Online · Disponível para atender')).toBeInTheDocument();
   });
 
   test('atendente offline mostra a última atividade', async () => {
@@ -129,9 +127,9 @@ describe('TeamPanel', () => {
     render(<TeamPanel />);
     await openPanel();
 
-    expect(screen.getByText('Última atividade: hoje às 08:37')).toBeInTheDocument();
-    expect(screen.getByText('Última atividade: sem registro')).toBeInTheDocument();
-    expect(screen.queryByText('Disponível')).not.toBeInTheDocument();
+    expect(screen.getByText('Última: hoje às 08:37')).toBeInTheDocument();
+    expect(screen.getByText('Última: sem registro')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('0 atendimentos ativos')).toHaveLength(2);
   });
 
   test('o popup mostra o nome completo', async () => {
@@ -186,11 +184,12 @@ describe('TeamPanel', () => {
     render(<TeamPanel />);
     await openPanel();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    // O rodape tem "Fechar" e a base poe o "x" no canto: os dois fecham.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Fechar' }).find((b) => !b.hasAttribute('data-dialog-close')));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     await openPanel();
-    await userEvent.click(screen.getByRole('button', { name: 'Fechar o popup da equipe' }));
+    await userEvent.click(document.querySelector('[data-dialog-close]'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 

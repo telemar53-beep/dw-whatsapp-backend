@@ -4,12 +4,26 @@ import { mediaUrl } from '../services/api';
 import { receiptVerdict } from '../utils/receiptVerdict';
 import { IconPlay, IconPause, IconMic, IconDownload, IconPin, IconAttach } from './icons/WaIcons';
 import PixCardMessage from './PixCardMessage';
+import { useDialogLayer } from './ui/Dialog';
+import { descreverErro } from '../utils/errorMessages';
 
 // Tipos que guardam arquivo no disco — os únicos que a retenção pode esvaziar.
 const MEDIA_TYPES_COM_ARQUIVO = ['image', 'video', 'audio', 'document', 'sticker'];
 
 const BAR_COUNT = 38;
 const SPEEDS = [1, 1.5, 2];
+
+// Enter e Espaço num <button> disparam um clique SINTÉTICO: `detail` 0 e
+// `clientX` 0. Como a posição na barra vinha de `clientX - rect.left`, a conta
+// dava negativo, o clamp prendia em 0 e o áudio REBOBINAVA para o começo — pelo
+// teclado, a única coisa que a barra de progresso fazia era voltar ao início.
+// Sem coordenada não existe posição para onde ir, então o clique é ignorado.
+function posicaoDoCliqueNaBarra(event) {
+  if (event.detail === 0) return null;
+  const rect = event.currentTarget.getBoundingClientRect();
+  if (!rect.width) return null;
+  return Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
+}
 
 function waveformBars(seed = '') {
   let hash = 2166136261;
@@ -56,6 +70,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
   const [speedIndex, setSpeedIndex] = useState(0);
+  const [unavailable, setUnavailable] = useState(false);
   const bars = useMemo(() => waveformBars(seed), [seed]);
 
   useEffect(() => {
@@ -84,7 +99,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
     if (!element) return;
     if (element.paused) {
       const played = element.play();
-      if (played && typeof played.catch === 'function') played.catch(() => {});
+      if (played && typeof played.catch === 'function') played.catch(() => { setPlaying(false); setUnavailable(true); });
       setPlaying(true);
     } else {
       element.pause();
@@ -107,20 +122,26 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
 
   const progress = duration > 0 ? Math.min(current / duration, 1) : 0;
   const playedBars = Math.round(progress * BAR_COUNT);
-  const trackColor = dark ? 'rgba(255,255,255,0.60)' : outbound ? '#a9cec7' : '#c7d3d0';
-  const playedColor = dark ? '#efe7ce' : '#0d9488';
+  const trackColor = dark ? (outbound ? 'rgba(255,237,223,0.55)' : 'rgba(224,233,236,0.48)') : outbound ? '#a9cec7' : '#c7d3d0';
+  const playedColor = dark ? (outbound ? '#fff5ec' : '#f7a56f') : '#0d9488';
+
+  if (unavailable) {
+    return <div role="status" className={dark
+      ? 'chat-voice-note inline-flex min-h-[52px] min-w-[172px] items-center gap-2 rounded-[12px] border border-white/[0.14] bg-black/[0.10] px-3 text-[12.5px] font-medium text-white'
+      : 'inline-flex min-h-[58px] min-w-[172px] items-start gap-2 rounded-[8px] border border-wa-border bg-wa-hover px-3 pb-6 pt-2 text-[12.5px] font-medium text-wa-text'}><IconMic size={16} /> Áudio indisponível</div>;
+  }
 
   if (dark) {
     return (
-      <div>
-        <audio ref={audioRef} src={url} preload="metadata" className="max-w-full hidden" />
-        <div className="flex w-[min(20.625rem,62vw)] items-center gap-[10px]">
+      <div className={`chat-voice-note ${outbound ? 'is-outbound' : 'is-inbound'}`}>
+        <audio ref={audioRef} src={url} preload="metadata" onError={() => setUnavailable(true)} className="max-w-full hidden" />
+        <div className="flex w-[min(19rem,72vw)] max-w-full min-w-0 items-center gap-[10px]">
           <button
             type="button"
             onClick={togglePlay}
             aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'}
             title={playing ? 'Pausar' : 'Reproduzir'}
-            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-[#131110] text-white transition-colors hover:bg-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring ${outbound ? 'bg-[#fff0e2] text-[#573823] hover:bg-white' : 'bg-[#eef2f1] text-[#344047] hover:bg-white'}`}
           >
             {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
           </button>
@@ -129,15 +150,15 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             type="button"
             aria-label="Avançar no áudio"
             onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              seekTo(Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1));
+              const posicao = posicaoDoCliqueNaBarra(event);
+              if (posicao !== null) seekTo(posicao);
             }}
-            className="relative flex h-8 items-center gap-[3px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70"
+            className="relative flex h-8 min-w-0 flex-1 items-center gap-[2px] overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring"
           >
             {bars.map((height, index) => (
               <span
                 key={index}
-                className="w-[2px] shrink-0 rounded-full"
+                className="min-w-0 flex-1 rounded-full"
                 style={{
                   height: `${Math.round(height * 22)}px`,
                   backgroundColor: index < playedBars ? playedColor : trackColor,
@@ -146,13 +167,13 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             ))}
             {progress > 0 && (
               <span
-                className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-chat-cream shadow-[0_1px_3px_rgba(0,0,0,.4)]"
+                className="absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,.3)]"
                 style={{ left: `calc(${progress * 100}% - 6px)` }}
               />
             )}
           </button>
 
-          <span className="relative ml-auto shrink-0">
+          <span className="relative shrink-0">
             {avatar || (
               <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white/[0.22] text-white/85">
                 <IconMic size={20} />
@@ -161,7 +182,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             {avatar && (
               <span
                 className={`absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-chat-canvas ${
-                  progress > 0 ? 'text-chat-faint' : 'text-chat-cream'
+                  progress > 0 ? 'text-chat-faint' : 'text-chat-orange'
                 }`}
               >
                 <IconMic size={13} />
@@ -169,7 +190,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             )}
           </span>
         </div>
-        <div className="mt-[3px] flex items-center gap-2 pl-1 text-[12px] leading-[16px] text-chat-faint">
+        <div className="mt-1 flex items-center gap-2 pl-[50px] text-[11px] leading-[16px] tabular-nums text-white/70">
           <span>{formatClock(current > 0 ? current : duration)}</span>
           {(playing || current > 0) && (
             <button
@@ -188,14 +209,14 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
 
   return (
     <div className="pt-0.5">
-      <audio ref={audioRef} src={url} preload="metadata" className="max-w-full hidden" />
+      <audio ref={audioRef} src={url} preload="metadata" onError={() => setUnavailable(true)} className="max-w-full hidden" />
       <div className="flex w-[min(17.5rem,62vw)] items-start gap-2">
         <button
           type="button"
           onClick={togglePlay}
           aria-label={playing ? 'Pausar áudio' : 'Reproduzir áudio'}
           title={playing ? 'Pausar' : 'Reproduzir'}
-          className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green"
+          className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-wa-icon transition-colors hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring"
         >
           {playing ? <IconPause size={26} /> : <IconPlay size={26} />}
         </button>
@@ -204,10 +225,10 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
           type="button"
           aria-label="Avançar no áudio"
           onClick={(event) => {
-            const rect = event.currentTarget.getBoundingClientRect();
-            seekTo(Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1));
+            const posicao = posicaoDoCliqueNaBarra(event);
+            if (posicao !== null) seekTo(posicao);
           }}
-          className="relative mt-1 flex h-8 flex-1 items-center gap-[2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-wa-green"
+          className="relative mt-1 flex h-8 flex-1 items-center gap-[2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring"
         >
           {bars.map((height, index) => (
             <span
@@ -220,7 +241,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
             />
           ))}
           <span
-            className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-wa-green shadow-[0_1px_2px_rgba(11,20,26,.25)]"
+            className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-accent shadow-[0_1px_2px_rgba(11,20,26,.25)]"
             style={{ left: `calc(${progress * 100}% - 6px)` }}
           />
         </button>
@@ -233,7 +254,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
           )}
           <span
             className={`absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full ${
-              progress > 0 ? 'text-wa-meta' : 'text-wa-green'
+              progress > 0 ? 'text-wa-meta' : 'text-accent'
             }`}
           >
             <IconMic size={18} />
@@ -271,6 +292,7 @@ function clampZoom(value) {
 
 function ImageBubble({ url, alt, filename, hasCaption, dark }) {
   const [open, setOpen] = useState(false);
+  const [failedUrl, setFailedUrl] = useState(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragRef = useRef(null);
@@ -286,6 +308,10 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
     resetView();
   }
 
+  // So a camada e o ESC vem da base. Zoom, pan, roda, duplo clique e a guarda
+  // de arrasto continuam exatamente como estavam.
+  const camadaDoVisualizador = useDialogLayer(open, closeViewer);
+
   // Sempre a partir do valor atual: zoom e offset andam juntos, e voltar ao
   // ajuste tem que recentralizar, senão a imagem some para fora da tela.
   function applyZoom(next) {
@@ -297,7 +323,8 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event) => {
-      if (event.key === 'Escape') closeViewer();
+      // ESC nao e tratado aqui: quem decide e a pilha de dialogos, e so o
+      // nivel do topo responde. Zoom e reenquadramento continuam locais.
       if (event.key === '+' || event.key === '=') applyZoom(zoom + ZOOM_STEP);
       if (event.key === '-') applyZoom(zoom - ZOOM_STEP);
       if (event.key === '0') resetView();
@@ -331,22 +358,28 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
 
   return (
     <>
-      <button
+      {failedUrl === url ? (
+        <div role="img" aria-label="Imagem indisponível" className={`flex min-h-[88px] min-w-[160px] items-center gap-2 rounded-[8px] border px-3 text-[12.5px] ${dark ? 'border-white/[0.15] bg-white/[0.08] text-chat-orange' : 'border-wa-border bg-wa-hover text-wa-muted'} ${hasCaption ? 'mb-1' : ''}`}>
+          <IconAttach size={17} />
+          Imagem indisponível
+        </div>
+      ) : <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Abrir imagem em tela cheia"
         className={`block overflow-hidden rounded-[6px] focus-visible:outline focus-visible:outline-2 ${
-          dark ? 'focus-visible:outline-white/70' : 'focus-visible:outline-wa-green'
+          dark ? 'focus-visible:outline-focus-ring' : 'focus-visible:outline-focus-ring'
         } ${hasCaption ? 'mb-1' : ''}`}
       >
         <img
           src={url}
           alt={alt || 'Imagem'}
+          onError={() => { setFailedUrl(url); setOpen(false); }}
           className="max-w-full rounded-[6px] object-contain transition-[filter] hover:brightness-[.97]"
           style={{ maxHeight: 340, maxWidth: 330, minWidth: 120 }}
         />
-      </button>
-      {open && (
+      </button>}
+      {open && failedUrl !== url && (
         <div
           role="dialog"
           aria-modal="true"
@@ -361,7 +394,8 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
             closeViewer();
           }}
           onWheel={(event) => applyZoom(zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP))}
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[#0b141a]/95 p-4"
+          style={{ zIndex: camadaDoVisualizador.zIndex }}
+          className="dialog-image-viewer fixed inset-0 flex items-center justify-center overflow-hidden bg-[#0b141a]/95 p-4"
         >
           <button
             type="button"
@@ -375,6 +409,7 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
           <img
             src={url}
             alt={alt || 'Imagem'}
+            onError={() => { setFailedUrl(url); setOpen(false); }}
             draggable={false}
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={() => (zoom > ZOOM_MIN ? resetView() : applyZoom(2))}
@@ -434,10 +469,71 @@ function ViewerButton({ label, onClick, disabled, children }) {
       disabled={disabled}
       aria-label={label}
       title={label}
-      className="flex h-8 w-8 items-center justify-center rounded-full text-[18px] leading-none text-white/85 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+      className="flex h-8 w-8 items-center justify-center rounded-full text-[18px] leading-none text-white/85 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
     </button>
+  );
+}
+
+// O video era o unico anexo sem acabamento nenhum:
+//
+//   <video controls src={url} className="max-w-full rounded-[12px]" ... />
+//
+// Player nativo solto no meio de uma timeline onde o audio tem tratamento
+// proprio, sem nome do arquivo e — o que mais pesa — sem estado de
+// indisponivel: video apagado pela retencao de 12 meses virava um quadro preto
+// quebrado, enquanto o audio e a imagem ja diziam que o arquivo nao existe
+// mais.
+//
+// Os CONTROLES continuam sendo os nativos, de proposito: sao a opcao mais
+// robusta (tela cheia, velocidade, legenda, teclado, picture-in-picture) e
+// reescreve-los seria trocar robustez por enfeite. O que passa a ser nosso e a
+// moldura em volta.
+//
+// NAO mostra tamanho do arquivo: a tabela `messages` guarda media_path,
+// media_mime_type e media_filename — tamanho nao existe, e inventar seria pior
+// que omitir.
+function VideoCard({ url, filename, outbound, dark }) {
+  const [indisponivel, setIndisponivel] = useState(false);
+
+  const moldura = dark
+    ? 'border-white/[0.14] bg-black/[0.16]'
+    : outbound
+      ? 'border-wa-border bg-wa-out-deep'
+      : 'border-wa-border bg-[#eef4f2]';
+
+  if (indisponivel) {
+    return (
+      <div
+        role="status"
+        className={`flex min-h-[88px] w-[min(20rem,68vw)] items-center gap-2 rounded-[12px] border px-3 text-[12.5px] ${moldura} ${dark ? 'text-chat-muted' : 'text-wa-meta'}`}
+      >
+        <IconAttach size={17} />
+        <span className="min-w-0">
+          Vídeo indisponível
+          {filename && <span className="mt-0.5 block truncate text-[11px] opacity-80">{filename}</span>}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`overflow-hidden rounded-[12px] border ${moldura}`}>
+      <video
+        controls
+        preload="metadata"
+        src={url}
+        onError={() => setIndisponivel(true)}
+        className="block w-[min(20rem,68vw)] max-w-full bg-black"
+        style={{ maxHeight: 340 }}
+      />
+      {filename && (
+        <p className={`truncate px-3 py-1.5 text-[11.5px] ${dark ? 'text-chat-muted' : 'text-wa-meta'}`} title={filename}>
+          {filename}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -521,7 +617,7 @@ function ReceiptAnalysis({ messageId, onAnalyze }) {
       setVerdict(receiptVerdict(await onAnalyze(messageId)));
       setState('done');
     } catch (err) {
-      setError((err.body && err.body.error) || 'Não foi possível analisar o comprovante.');
+      setError(descreverErro(err, 'Não foi possível analisar o comprovante.'));
       setState('idle');
     }
   }
@@ -539,7 +635,7 @@ function ReceiptAnalysis({ messageId, onAnalyze }) {
           type="button"
           onClick={analisar}
           disabled={state === 'loading'}
-          className="rounded-[10px] border border-white/15 bg-white/[0.08] px-2.5 py-1 text-[12.5px] font-medium text-chat-text transition hover:bg-white/[0.16] disabled:opacity-60"
+          className="rounded-[10px] border border-white/15 bg-white/[0.08] px-2.5 py-1 text-[12.5px] font-medium text-chat-text transition hover:bg-white/[0.16] disabled:opacity-50"
         >
           {state === 'loading' ? 'Analisando…' : 'Analisar comprovante'}
         </button>
@@ -649,7 +745,7 @@ function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) 
   }
 
   if (message.messageType === 'video') {
-    return <video controls src={url} className="max-w-full rounded-[12px]" style={{ maxHeight: 340, minWidth: 200 }} />;
+    return <VideoCard url={url} filename={message.mediaFilename} outbound={outbound} dark={dark} />;
   }
 
   if (message.messageType === 'document') {

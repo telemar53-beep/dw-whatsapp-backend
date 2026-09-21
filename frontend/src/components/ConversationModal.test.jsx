@@ -26,6 +26,22 @@ describe('ConversationModal', () => {
     expect(screen.getAllByText('Carlos').length).toBeGreaterThan(0);
   });
 
+  // O "x" proprio era `hidden md:flex`: no celular a conversa aberta por cima
+  // de outro dialogo nao tinha botao de fechar nenhum. O da base aparece em
+  // qualquer largura, porque nao depende de media query.
+  test('o botao fechar existe e nao depende da largura da tela', async () => {
+    const onClose = vi.fn();
+    const conversation = { id: 'c1', contactDisplayName: 'Carlos', assignedAgentId: 'agent-1', status: 'assigned' };
+    render(<ConversationModal conversation={conversation} onClose={onClose} onTransferClick={vi.fn()} />);
+
+    const fechar = screen.getByRole('button', { name: 'Fechar conversa' });
+    expect(fechar).toHaveAttribute('data-dialog-close');
+    expect(fechar.className).not.toMatch(/(hidden|md:flex|sm:flex|lg:flex)/);
+
+    await userEvent.click(fechar);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   test('closing via the conversation view\'s back button calls onClose', async () => {
     const onClose = vi.fn();
     const conversation = { id: 'c1', contactDisplayName: 'Carlos', assignedAgentId: 'agent-1', status: 'assigned' };

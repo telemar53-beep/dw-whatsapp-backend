@@ -3,6 +3,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../hooks/useConfirm';
 import { setCityNotice, deleteCityNotice } from '../../services/api';
 import CityStatusDot from './StatusDot';
+import { Button } from '../ui';
+import { descreverErro } from '../../utils/errorMessages';
 
 function CityNoticeRow({ city, onSaved }) {
   const { token } = useAuth();
@@ -38,7 +40,7 @@ function CityNoticeRow({ city, onSaved }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSaving(false);
     }
@@ -54,7 +56,7 @@ function CityNoticeRow({ city, onSaved }) {
       await deleteCityNotice(city.id, token);
       onSaved();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }
@@ -68,7 +70,7 @@ function CityNoticeRow({ city, onSaved }) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={2}
-            className="w-full rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-[13.5px] text-wa-text placeholder-wa-muted outline-none transition focus:border-wa-green/60"
+            className="w-full rounded-[10px] border border-wa-border bg-wa-field px-3 py-2 text-[13.5px] text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60"
             required
           />
           <label className="flex items-center gap-2 text-[13px] text-wa-muted">
@@ -76,26 +78,18 @@ function CityNoticeRow({ city, onSaved }) {
               type="checkbox"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 accent-wa-green"
+              className="h-4 w-4 accent-accent"
             />
             Ativo
           </label>
           {error && <p className="rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">{error}</p>}
           <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-[10px] bg-wa-green px-3 py-1.5 text-[13px] font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Salvar
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="rounded-[10px] border border-wa-border bg-wa-surface px-3 py-1.5 text-[13px] font-medium text-wa-muted transition hover:bg-wa-panel hover:text-wa-text"
-            >
+            <Button variant="secondary" size="sm" onClick={handleCancel}>
               Cancelar
-            </button>
+            </Button>
+            <Button type="submit" size="sm" loading={saving}>
+              Salvar
+            </Button>
           </div>
         </form>
       </li>
@@ -106,9 +100,9 @@ function CityNoticeRow({ city, onSaved }) {
     return (
       <li className="flex items-center justify-between gap-3 px-3.5 py-2.5">
         <p className="truncate text-[13.5px] text-wa-text">{city.name}</p>
-        <button onClick={handleEditClick} className="shrink-0 text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+        <Button variant="ghost" size="sm" onClick={handleEditClick}>
           Criar aviso
-        </button>
+        </Button>
       </li>
     );
   }
@@ -122,16 +116,12 @@ function CityNoticeRow({ city, onSaved }) {
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <CityStatusDot enabled={city.notice.enabled} />
-          <button onClick={handleEditClick} className="text-[13px] font-medium text-wa-link hover:text-wa-link/80 hover:underline">
+          <Button variant="ghost" size="sm" onClick={handleEditClick}>
             Editar
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="text-[13px] font-medium text-wa-error-text hover:text-wa-error-text hover:underline disabled:opacity-50"
-          >
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting}>
             Excluir
-          </button>
+          </Button>
         </div>
       </div>
       {deleteError && (

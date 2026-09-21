@@ -15,13 +15,24 @@ function quemAtendeu(conversation) {
   if (atendeu && encerrou && atendeu !== encerrou) {
     return `Atendido por ${atendeu}, encerrado por ${encerrou}`;
   }
-  return atendeu || encerrou || null;
+  return atendeu || (encerrou ? `Encerrado por ${encerrou}` : null);
 }
 
 function linhaDoHistorico(conversation) {
-  return [conversation.channelName, quemAtendeu(conversation), conversation.closeReasonName]
+  return [conversation.channelName, quemAtendeu(conversation), conversation.closeReasonName, statusLabel(conversation.status)]
     .filter(Boolean)
     .join(' · ');
+}
+
+function statusLabel(status) {
+  return ({ closed: 'Finalizado', waiting: 'Em espera', in_progress: 'Em atendimento', automation: 'Em automação' })[status] || status || null;
+}
+
+function inicioDoAtendimento(createdAt, separator = ' · ') {
+  if (!createdAt) return 'Início não informado';
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return 'Início não informado';
+  return `${date.toLocaleDateString('pt-BR')}${separator}${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
 }
 
 function ConversationHistoryModal({ contactId, onClose }) {
@@ -51,7 +62,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
   }
 
   return (
-    <WaDialog onClose={onClose} size="max-w-lg">
+    <WaDialog variant="history" onClose={onClose} closeOnBackdrop ariaLabel="Atendimentos anteriores" size="max-w-3xl">
       {selected ? (
         <>
           <div className="flex shrink-0 items-center gap-3 border-b border-wa-border px-4 py-3">
@@ -64,11 +75,17 @@ function ConversationHistoryModal({ contactId, onClose }) {
             </button>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[16px] leading-[21px] text-wa-text">
-                Atendimento em {new Date(selected.updatedAt).toLocaleDateString('pt-BR')}
+                Atendimento · {inicioDoAtendimento(selected.createdAt, ' às ')}
               </span>
               <span className="block truncate text-[13px] leading-[17px] text-wa-muted">{selected.channelName}</span>
             </span>
           </div>
+          <dl className="dialog-history-summary">
+            <div><dt>Responsável</dt><dd>{selected.assignedAgentName || 'Não informado'}</dd></div>
+            <div><dt>Status</dt><dd>{statusLabel(selected.status) || 'Não informado'}</dd></div>
+            {selected.closedByAgentName && selected.closedByAgentName !== selected.assignedAgentName && <div><dt>Encerrado por</dt><dd>{selected.closedByAgentName}</dd></div>}
+            <div><dt>Motivo</dt><dd>{selected.closeReasonName || 'Não informado'}</dd></div>
+          </dl>
           <div className="wa-wallpaper chat-scroll min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-3">
             {messages.map((message) => (
               <div
@@ -76,12 +93,17 @@ function ConversationHistoryModal({ contactId, onClose }) {
                 className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-[14px] border border-wa-border px-3 pb-2 pt-[7px] text-[14.2px] leading-[19px] text-wa-text ${
+                  className={`max-w-[80%] rounded-[14px] border border-wa-border px-3 pb-2 pt-[7px] text-[14px] leading-[19px] text-wa-text ${
                     message.direction === 'outbound' ? 'bg-wa-out' : 'bg-wa-in'
                   }`}
                 >
                   {message.content && <p className="whitespace-pre-wrap break-words">{message.content}</p>}
                   <MessageAttachment message={message} dark />
+                  {message.createdAt && !Number.isNaN(new Date(message.createdAt).getTime()) && (
+                    <time dateTime={message.createdAt} className="mt-1 block text-right text-[11px] leading-[14px] text-wa-muted">
+                      {new Date(message.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </time>
+                  )}
                 </div>
               </div>
             ))}
@@ -89,12 +111,12 @@ function ConversationHistoryModal({ contactId, onClose }) {
         </>
       ) : (
         <>
-          <div className="shrink-0 px-6 pb-2 pt-5">
-            <h2 className="text-[19px] leading-[26px] text-wa-text">Atendimentos anteriores</h2>
+          <div className="dialog-history-heading shrink-0 px-6 pb-2 pt-5">
+            <h2 className="text-[17px] leading-[26px] text-wa-text">Atendimentos anteriores</h2>
           </div>
-          <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-1">
+          <div className="dialog-history-results wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-1">
             <AsyncState status={historyStatus} isEmpty={history.length === 0} emptyMessage="Nenhum atendimento anterior encontrado.">
-              <ul>
+              <ul className="dialog-history-list">
                 {history.map((conversation) => (
                   <li key={conversation.id}>
                     <button
@@ -107,9 +129,9 @@ function ConversationHistoryModal({ contactId, onClose }) {
                       >
                         <IconHistory size={19} />
                       </span>
-                      <span className="min-w-0 flex-1">
+                      <span className="dialog-history-record min-w-0 flex-1">
                         <span className="block text-[15px] leading-[20px] text-wa-text">
-                          {new Date(conversation.updatedAt).toLocaleDateString('pt-BR')}
+                          {inicioDoAtendimento(conversation.createdAt)}
                         </span>
                         <span className="block truncate text-[13px] leading-[18px] text-wa-muted">
                           {linhaDoHistorico(conversation)}

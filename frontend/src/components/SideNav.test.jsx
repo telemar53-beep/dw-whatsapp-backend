@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import SideNav, { iniciaisDaEmpresa } from './SideNav';
@@ -83,11 +83,11 @@ describe('SideNav', () => {
   });
 
   test('recolher esconde os nomes e mantém o rótulo acessível', async () => {
-    renderNav({ role: 'admin' });
+    renderNav({ role: 'admin' }, '/relatorios');
     await userEvent.click(screen.getByRole('button', { name: /recolher menu/i }));
     expect(screen.getByRole('button', { name: /expandir menu/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /supervisão/i })).toHaveAttribute('title', 'Supervisão');
-    expect(localStorage.getItem('dw_nav_collapsed')).toBe('1');
+    expect(localStorage.getItem('dw_nav_collapsed_administration')).toBe('1');
   });
 
   test('em modo painel, escolher um item fecha o painel', async () => {
@@ -104,15 +104,18 @@ describe('SideNav', () => {
     expect(onMobileClose).toHaveBeenCalled();
   });
 
-  test('mostra as iniciais da empresa e o botão de som', () => {
+  test('mostra a logo oficial e o botão de som', () => {
     renderNav({ role: 'agent' });
-    expect(screen.getByText('DW')).toBeInTheDocument();
+    // O texto alternativo vem do nome da empresa (useCompanyName), nao de uma
+    // marca escrita no componente: e por isso que ele diz "DW Telecom" aqui.
+    expect(screen.getByRole('img', { name: 'DW Telecom' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /som ativado/i })).toBeInTheDocument();
   });
 
   test('clica em "Meu perfil" chama onProfileClick', async () => {
     const onProfileClick = vi.fn();
     renderNav({ role: 'agent' }, '/', { onProfileClick });
+    await userEvent.click(screen.getByRole('button', { name: /^conta:/i }));
     await userEvent.click(screen.getByRole('button', { name: /^meu perfil$/i }));
     expect(onProfileClick).toHaveBeenCalledTimes(1);
   });
@@ -129,5 +132,65 @@ describe('SideNav', () => {
     renderNav({ role: 'agent' });
     await userEvent.click(screen.getByRole('button', { name: /som ativado/i }));
     expect(toggleMuted).toHaveBeenCalledTimes(1);
+  });
+});
+
+test('chat defaults to compact while administration defaults to expanded', () => {
+  const view = renderNav({ role: 'admin' });
+  expect(screen.getByRole('button', { name: 'Expandir menu' })).toBeInTheDocument();
+  view.unmount();
+  renderNav({ role: 'admin' }, '/relatorios');
+  expect(screen.getByRole('button', { name: 'Recolher menu' })).toBeInTheDocument();
+});
+test('account exposes logout and closes with Escape', async () => {
+  renderNav({ role: 'admin' });
+  expect(screen.queryByRole('button', { name: 'Sair' })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: /^conta:/i }));
+  expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+  await userEvent.keyboard('{Escape}');
+  expect(screen.queryByRole('button', { name: 'Sair' })).not.toBeInTheDocument();
+});
+
+// F1 — o veu do menu mobile estava na MESMA camada da gaveta (--z-nav) e, por
+// vir depois no DOM, pintava por cima dela: no celular a gaveta abria
+// escurecida e nenhum toque a alcancava, porque todo clique caia no veu.
+describe('menu mobile: a gaveta fica acima do veu', () => {
+  function abrirNoMobile() {
+    const onMobileClose = vi.fn();
+    const r = renderNav({ role: 'admin' }, '/', { mobileOpen: true, onMobileClose });
+    const gaveta = r.container.querySelector('.worknav.is-mobile-open');
+    const veu = r.container.querySelector('[aria-hidden="true"][class*="fixed inset-0"]');
+    return { ...r, onMobileClose, gaveta, veu };
+  }
+
+  test('a gaveta usa a camada da navegacao e o veu fica um degrau abaixo', () => {
+    const { gaveta, veu } = abrirNoMobile();
+
+    expect(gaveta).toBeInTheDocument();
+    expect(veu).toBeInTheDocument();
+    // Nenhum numero magico: os dois saem da escala --z-*.
+    expect(veu.className).toContain('z-[calc(var(--z-nav)-1)]');
+    expect(veu.className).not.toContain('z-[var(--z-nav)]');
+  });
+
+  test('clicar no veu continua fechando o menu', async () => {
+    const { veu, onMobileClose } = abrirNoMobile();
+    await userEvent.click(veu);
+    expect(onMobileClose).toHaveBeenCalled();
+  });
+
+  test('clicar DENTRO da gaveta nao fecha o menu', async () => {
+    const { gaveta, onMobileClose } = abrirNoMobile();
+    const item = within(gaveta).getByRole('button', { name: /som (ativado|desativado)/i });
+
+    await userEvent.click(item);
+
+    expect(onMobileClose).not.toHaveBeenCalled();
+  });
+
+  test('sem o menu aberto nao existe veu nenhum', () => {
+    const { container } = renderNav({ role: 'admin' }, '/', { mobileOpen: false });
+    expect(container.querySelector('[aria-hidden="true"][class*="fixed inset-0"]')).toBeNull();
+    expect(container.querySelector('.worknav.is-mobile-open')).toBeNull();
   });
 });

@@ -304,3 +304,77 @@ describe('ReportsPage', () => {
     expect(screen.getByText(/encerradas sem setor definido/i)).toBeInTheDocument();
   });
 });
+
+// Etapa 6.3 — trocar de periodo mudava o rotulo na hora e os numeros so depois.
+// A tela chegava a afirmar "Ultimos 30 dias" sobre os numeros das ultimas 24h.
+describe('troca de periodo e atomica', () => {
+  const HOJE = { period: 'today', scope: 'agent', own: { closedCount: 3, avgResolutionMinutes: 10, avgFirstResponseMinutes: 2 } };
+  const TRINTA = { period: '30d', scope: 'agent', own: { closedCount: 88, avgResolutionMinutes: 20, avgFirstResponseMinutes: 5 } };
+
+  test('enquanto a resposta nova nao chega, rotulo e numeros continuam sendo os antigos', async () => {
+    let liberar;
+    api.getMetrics
+      .mockResolvedValueOnce(HOJE)
+      .mockReturnValueOnce(new Promise((resolve) => { liberar = () => resolve(TRINTA); }));
+    renderPage();
+    expect(await screen.findByText('3')).toBeInTheDocument();
+    expect(screen.getByLabelText('Resumo do período')).toHaveTextContent(/últimas 24 horas/i);
+
+    await userEvent.click(screen.getByRole('button', { name: /últimos 30 dias/i }));
+
+    // O rótulo do resumo ainda descreve os dados que estão na tela.
+    const resumo = screen.getByLabelText('Resumo do período');
+    expect(resumo).toHaveTextContent(/últimas 24 horas/i);
+    expect(resumo).not.toHaveTextContent(/últimos 30 dias/i);
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.queryByText('88')).not.toBeInTheDocument();
+    // E a tela diz que está buscando, em vez de fingir que já trocou.
+    expect(screen.getByText(/atualizando/i)).toBeInTheDocument();
+
+    liberar();
+
+    // Dados e rótulo entram juntos.
+    await waitFor(() => expect(screen.getByText('88')).toBeInTheDocument());
+    expect(resumo).toHaveTextContent(/últimos 30 dias/i);
+    expect(resumo).not.toHaveTextContent(/últimas 24 horas/i);
+    expect(screen.queryByText(/atualizando/i)).not.toBeInTheDocument();
+  });
+
+  test('a primeira carga nao mostra "atualizando", mostra o carregamento normal', () => {
+    api.getMetrics.mockReturnValue(new Promise(() => {}));
+    renderPage();
+
+    expect(screen.getByText(/carregando indicadores/i)).toBeInTheDocument();
+    expect(screen.queryByText(/atualizando/i)).not.toBeInTheDocument();
+  });
+
+  test('resposta atrasada de um periodo abandonado nao sobrescreve o periodo atual', async () => {
+    let liberarAntiga;
+    api.getMetrics
+      .mockReturnValueOnce(new Promise((resolve) => { liberarAntiga = () => resolve(HOJE); }))
+      .mockResolvedValueOnce(TRINTA);
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: /últimos 30 dias/i }));
+    await waitFor(() => expect(screen.getByText('88')).toBeInTheDocument());
+
+    liberarAntiga();
+
+    await waitFor(() => expect(screen.getByLabelText('Resumo do período')).toHaveTextContent(/últimos 30 dias/i));
+    expect(screen.queryByText('3')).not.toBeInTheDocument();
+  });
+
+  test('periodo personalizado rotula com o numero de dias que produziu os dados', async () => {
+    api.getMetrics
+      .mockResolvedValueOnce(HOJE)
+      .mockResolvedValueOnce({ ...TRINTA, period: 'custom' });
+    renderPage();
+    await screen.findByText('3');
+
+    await userEvent.click(screen.getByRole('button', { name: /personalizado/i }));
+    await userEvent.type(screen.getByLabelText(/últimos/i), '45');
+    await userEvent.click(screen.getByRole('button', { name: /aplicar/i }));
+
+    await waitFor(() => expect(screen.getByLabelText('Resumo do período')).toHaveTextContent(/últimos 45 dias/i));
+  });
+});

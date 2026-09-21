@@ -105,3 +105,10 @@
   .report-section-heading h2 { font-size: 13px; }
   .report-breakdown .report-section-heading > span { align-items: flex-start; gap: 5px; }
 }
+
+/* Troca de período: os dados antigos continuam legíveis e rotulados como
+   antigos até a resposta nova chegar. Atenuação leve, sem piscar. */
+.report-updating { font-style: normal; margin-left: 10px; padding: 1px 7px; border-radius: 999px; background: #ffffff0f; color: #c6d0d6; font-size: 10.5px; }
+.report-content { transition: opacity .18s ease; }
+.report-content.is-atualizando { opacity: .72; }
+@media (prefers-reduced-motion: reduce) { .report-content { transition: none; } }

@@ -140,6 +140,13 @@ function isValidCustomDays(value) {
   return Number.isInteger(value) && value >= 1 && value <= CUSTOM_DAYS_MAX;
 }
 
+// Sempre a partir do instantâneo da resposta, nunca da seleção atual: é o
+// período dos números que estão na tela.
+function rotuloDoPeriodo({ period, customDays }) {
+  if (period === 'custom') return `Últimos ${customDays} dias`;
+  return PERIODS.find((p) => p.value === period)?.label;
+}
+
 function ReportsPage() {
   const { token } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -152,8 +159,15 @@ function ReportsPage() {
   const customDays = period === 'custom' ? validCustomDaysFromUrl : null;
   const [customDaysInput, setCustomDaysInput] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [data, setData] = useState(null);
+  // A resposta carrega junto os parâmetros que a produziram. Antes o rótulo do
+  // resumo lia a seleção atual: trocar de período mudava o texto na hora e os
+  // números só depois, então a tela afirmava "Últimos 30 dias" sobre os números
+  // das últimas 24 horas. Dados e rótulo agora entram e saem juntos, e é esse
+  // instantâneo — não a seleção — que nomeia a exportação.
+  const [resposta, setResposta] = useState(null);
   const [error, setError] = useState(null);
+  const [atualizando, setAtualizando] = useState(false);
+  const data = resposta ? resposta.dados : null;
 
   function selectPeriod(value, days) {
     setSearchParams((prev) => {
@@ -165,10 +179,23 @@ function ReportsPage() {
   }
 
   useEffect(() => {
+    let cancelado = false;
     setError(null);
+    setAtualizando(true);
     getMetrics(period, token, customDays)
-      .then(setData)
-      .catch(() => setError('Falha ao carregar métricas'));
+      .then((dados) => {
+        if (cancelado) return;
+        setResposta({ dados, period, customDays });
+        setAtualizando(false);
+      })
+      .catch(() => {
+        if (cancelado) return;
+        setError('Falha ao carregar métricas');
+        setAtualizando(false);
+      });
+    // Uma resposta atrasada de um período abandonado não pode chegar depois e
+    // sobrescrever a do período que o usuário está vendo.
+    return () => { cancelado = true; };
   }, [period, token, customDays]);
 
   const customDaysValue = Number(customDaysInput);
@@ -210,11 +237,11 @@ function ReportsPage() {
       <button className="report-export" type="button" onClick={handleExportCsv} disabled={!data}><IconDownload/>Exportar CSV</button>
       {showCustomInput && <div className="report-custom-period"><label htmlFor="custom-days">Últimos</label><input id="custom-days" type="number" min="1" max={CUSTOM_DAYS_MAX} value={customDaysInput} onChange={e => setCustomDaysInput(e.target.value)}/><span>dias</span><button type="button" onClick={handleApplyCustomDays} disabled={!customDaysValid}>Aplicar</button><span className="report-note">De 1 a 365 dias</span></div>}
     </header>
-    <div className="report-content chat-scroll">
+    <div className={`report-content chat-scroll${atualizando && resposta ? ' is-atualizando' : ''}`}>
       {error && <div role="alert" className="report-error"><IconAlert/>{error}</div>}
       {!data && !error && <p role="status" aria-live="polite" className="report-empty">Carregando indicadores...</p>}
       <section className="report-overview" aria-label="Resumo do período">
-        <div className="report-overview-heading"><span>Resumo do período <b>· {period === 'custom' ? 'Últimos ' + customDays + ' dias' : PERIODS.find(p => p.value === period)?.label}</b></span><div className="report-help"><span aria-hidden="true">ⓘ</span>          <SectionHelp label="Como os tempos são calculados" title="Como os tempos são calculados">
+        <div className="report-overview-heading"><span>Resumo do período{resposta && <>{' '}<b>· {rotuloDoPeriodo(resposta)}</b></>}{atualizando && resposta && <em className="report-updating" role="status">Atualizando…</em>}</span><div className="report-help"><span aria-hidden="true">ⓘ</span>          <SectionHelp label="Como os tempos são calculados" title="Como os tempos são calculados">
             <p>
               <strong>Tempo médio de atendimento</strong> começa quando a conversa é criada e termina no encerramento.
               Inclui o tempo em espera, na triagem e com a IA, e as transferências.

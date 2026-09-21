@@ -31,7 +31,7 @@
 .settings-channel-center [data-attendance=Humano] {color:#bfccd5}
 .settings-channel-center [data-attendance='IA ativa'],.settings-channel-center [data-attendance='Triagem IA'] {color:#c1b2dc}
 .settings-channel-center .settings-channel-service > .settings-cell-label {font-size:9px;letter-spacing:.08em;color:#91a6b4;line-height:14px;margin-bottom:5px}
-.settings-channel-center .settings-channel-record > .settings-channel-actions a,.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {height:30px;min-height:30px;border-radius:6px;background:var(--color-ui-state-hover);border-color:#ffffff12;font-size:11px;padding:4px 9px;color:#cbd6dd;gap:6px}
+.settings-channel-center .settings-channel-record > .settings-channel-actions a,.settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {height:30px;min-height:30px;border-radius:6px;background:#ffffff03;border-color:#ffffff12;font-size:11px;padding:4px 9px;color:#cbd6dd;gap:6px}
 .settings-workspace .settings-channel-center .settings-channel-record > .settings-channel-actions button[aria-haspopup] {width:30px;padding:0;background:transparent;border-color:transparent}
 .settings-channel-center .settings-channel-record > .settings-channel-actions a:hover,.settings-workspace .settings-channel-center button[aria-haspopup]:hover,.settings-workspace .settings-channel-center button[aria-expanded=true] {background:#ffffff08;border-color:#ffffff22;color:#edf2f5}
 .settings-channel-center :is(a,button,select):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}

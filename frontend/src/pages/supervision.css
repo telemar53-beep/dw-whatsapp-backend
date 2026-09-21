@@ -59,10 +59,10 @@
 @media(min-width:1400px){.supervision-workspace .supervision-toolbar{flex-direction:row;align-items:center;justify-content:space-between}}
 .supervision-toolbar [role=tab] {display:inline-flex;align-items:center;height:32px;padding:4px 10px;white-space:nowrap;font-size:12px;font-weight:500;color:#d9e2e8;border:1px solid #ffffff29;background:#ffffff06}
 .supervision-toolbar [role=tab] > span {flex:none;background:#ffffff12;color:#f3f6f8;border-radius:4px}
-.supervision-toolbar [role=tab][aria-selected=true] {background:var(--color-ui-marker-supervision)26;border-color:#d990558c;color:#fff0e3;box-shadow:inset 0 -2px var(--color-ui-marker-supervision)}
-.supervision-toolbar [role=tab][aria-selected=true] > span {background:var(--color-ui-marker-supervision)33;color:#ffcfaa}
+.supervision-toolbar [role=tab][aria-selected=true] {background:color-mix(in oklab, var(--color-ui-marker-supervision) 15%, transparent);border-color:#d990558c;color:#fff0e3;box-shadow:inset 0 -2px var(--color-ui-marker-supervision)}
+.supervision-toolbar [role=tab][aria-selected=true] > span {background:color-mix(in oklab, var(--color-ui-marker-supervision) 20%, transparent);color:#ffcfaa}
 .supervision-toolbar [role=tab]:hover {border-color:#d9905573;background:#ffffff0c}
-.supervision-toolbar [role=tab][aria-selected=true]:hover {background:var(--color-ui-marker-supervision)30}
+.supervision-toolbar [role=tab][aria-selected=true]:hover {background:color-mix(in oklab, var(--color-ui-marker-supervision) 19%, transparent)}
 @media(min-width:1100px){.supervision-workspace .supervision-toolbar{flex-direction:row;align-items:center;justify-content:space-between}}
 
 /* Keep count contrast above the shared orange-badge text rule. */

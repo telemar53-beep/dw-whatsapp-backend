@@ -45,7 +45,10 @@
 .report-team-table thead th:first-child { text-align: left; border-radius: 7px 0 0 0; }
 .report-team-table thead th:last-child { border-radius: 0 7px 0 0; }
 .report-team-table tbody th, .report-team-table td { border-bottom: 1px solid #ffffff0d; padding: 12px; text-align: right; vertical-align: middle; font-variant-numeric: tabular-nums; }
-.report-team-table tbody tr:hover { background: var(--color-ui-state-hover); }
+/* `.chat-theme table tbody tr:hover` (index.css) e (0,2,3) e vencia esta
+   regra em (0,2,2) — a correcao declarada nao chegava a tela. O escopo da
+   pagina sobe a especificidade para (0,3,2), que vence. */
+.reports-redesign .report-team-table tbody tr:hover { background: var(--color-ui-state-hover); }
 .report-team-table tbody th { font-weight: 500; text-align: left; }
 .report-person { display: flex; align-items: center; gap: 9px; }
 .report-person > span:last-child { min-width: 0; overflow-wrap: anywhere; }

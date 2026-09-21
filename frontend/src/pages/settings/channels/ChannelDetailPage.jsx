@@ -48,7 +48,7 @@ function ChannelDetailPage() {
                     aria-label="Trocar de canal"
                     value={id}
                     onChange={(event) => navigate(`/configuracoes/canais/${event.target.value}/${currentTab}`)}
-                    className="h-9 min-w-0 rounded-[10px] border border-wa-border bg-wa-field px-3 text-[13px] font-medium normal-case tracking-normal text-wa-text outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/25"
+                    className="h-9 min-w-0 rounded-[10px] border border-wa-border bg-wa-field px-3 text-[13px] font-medium normal-case tracking-normal text-wa-text outline-none focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40"
                   >
                     {channels.map((item) => <option key={item.id} value={item.id}>{item.name} · {formatPhone(item.phoneNumber)}</option>)}
                   </select>

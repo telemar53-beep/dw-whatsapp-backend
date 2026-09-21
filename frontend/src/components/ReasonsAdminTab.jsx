@@ -17,7 +17,7 @@ const STATUS_OPTIONS = [
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10 > item de menu 8.
 const CONTROL =
-  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-accent/25';
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40';
 const LINK_BTN =
   'inline-flex h-8 items-center gap-1.5 rounded-[10px] px-2 text-[13px] font-medium text-chat-orange transition hover:bg-wa-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
 

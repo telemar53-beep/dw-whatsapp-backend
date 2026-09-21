@@ -113,7 +113,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
     return (
       <WaDialog variant="profile" title="Meu perfil" onClose={onClose} size="max-w-md">
         <div className="px-6 py-4">
-          <p className="text-[14.5px] text-wa-muted">{loadError || 'Carregando…'}</p>
+          <p role={loadError ? 'alert' : 'status'} className="text-[14.5px] text-wa-muted">{loadError || 'Carregando…'}</p>
         </div>
         <div className="flex shrink-0 justify-end px-4 py-3">
           <button type="button" onClick={onClose} className={waGhostButtonClass}>

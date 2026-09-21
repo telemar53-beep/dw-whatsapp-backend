@@ -14,7 +14,7 @@
 .dw-dialog label,.dw-dialog legend {font-size:12px}
 .dw-dialog button {font-size:12px;line-height:18px}
 .dw-dialog :is(button,a,input,select,textarea,summary):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
-.dw-dialog button:disabled {opacity:.45}
+.dw-dialog button:disabled {opacity:.5}
 .dw-dialog form > div:last-child:has(> button),.dw-dialog > div:last-child:has(> button),.dw-dialog-footer {border-top:1px solid #ffffff10;padding:12px 22px;gap:8px;flex:none}
 .dw-dialog form > div:last-child:has(> button) button,.dw-dialog > div:last-child:has(> button) button,.dw-dialog-footer button {padding:7px 13px;border-radius:7px}
 /* Corpo: o UNICO eixo de rolagem do dialogo. Cabecalho e rodape nao rolam. */

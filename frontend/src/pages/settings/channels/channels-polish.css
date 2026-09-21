@@ -36,7 +36,7 @@
 .settings-workspace .settings-channel-center .channel-row-menu button {display:flex;align-items:center;gap:8px;min-height:30px;padding:6px 9px;font-size:12px;border-radius:4px}
 .settings-channel-center .channel-row-menu button:hover {background:#ffffff08}
 .settings-channel-center .channel-row-menu .dw-menu-item-danger {border-top:1px solid #ffffff0c;margin-top:3px;color:#e7a69f}
-.settings-channel-center .channel-row-menu button:disabled {opacity:.4}
+.settings-channel-center .channel-row-menu button:disabled {opacity:.5}
 @media(prefers-reduced-motion:reduce){.settings-channel-center .settings-channel-record{transition:none}}
 
 /* QR de conexao, no tema. Era um iframe de fundo branco; agora e a imagem

@@ -57,7 +57,7 @@ function languageLabel(language) {
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10 > item de menu 8.
 const CARD = 'overflow-clip rounded-[16px] border border-white/[0.09] bg-[#2b343b]/95';
 const CONTROL =
-  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-accent/25';
+  'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40';
 const LABEL = 'mb-1.5 block text-[13px] font-medium text-wa-muted';
 
 function StatusChip({ status }) {

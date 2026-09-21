@@ -12,7 +12,7 @@
 .report-periods button[aria-pressed="true"] { background: #ff943b14; border-color: #ff943b40; color: #ffb575; }
 .report-export { display: inline-flex; gap: 7px; align-items: center; background: #ffffff07; border-color: #ffffff20; color: #edf0f2; }
 .report-export:hover { background: #ffffff10; }
-.reports-redesign button:disabled { opacity: .45; cursor: not-allowed; }
+.reports-redesign button:disabled { opacity: .5; cursor: not-allowed; }
 .reports-redesign button:focus-visible, .reports-redesign input:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 3px; }
 .report-custom-period { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; justify-content: flex-end; font-size: 12px; }
 .report-custom-period input { width: 76px; padding: 6px 9px; border: 1px solid #ffffff30; border-radius: 6px; background: #20282e; }

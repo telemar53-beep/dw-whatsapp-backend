@@ -115,7 +115,7 @@ function LoginPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-[15px] font-semibold text-on-accent shadow-[0_8px_20px_-12px_rgba(242,140,69,0.8)] transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-[15px] font-semibold text-on-accent shadow-[0_8px_20px_-12px_rgba(242,140,69,0.8)] transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? 'Entrando…' : 'Entrar'}
               </button>

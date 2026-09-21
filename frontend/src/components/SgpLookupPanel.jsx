@@ -72,7 +72,7 @@ function SendAction({ label, color, icon, onClick, busy, done, pressed }) {
       onClick={onClick}
       disabled={busy}
       aria-pressed={pressed}
-      className={`flex h-9 items-center gap-2 rounded-[10px] border px-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring disabled:opacity-60 ${
+      className={`flex h-9 items-center gap-2 rounded-[10px] border px-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus-ring disabled:opacity-50 ${
         pressed || done ? 'border-wa-chip-text bg-wa-chip' : 'border-wa-border bg-wa-surface hover:border-accent/50 hover:bg-wa-hover'
       }`}
     >
@@ -138,7 +138,7 @@ function FinanceiroSection({ contractId, onSendMessage, onSendPdf, onSendPix, on
       )}
 
       {state && state.loading && (
-        <p className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
+        <p role="status" className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
           <IconSpinner size={16} />
           Consultando o SGP…
         </p>
@@ -325,7 +325,7 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
         </form>
 
         {loading && (
-          <p className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
+          <p role="status" className="flex items-center gap-2 px-0.5 text-[13.5px] text-wa-muted">
             <IconSpinner size={16} />
             Buscando no SGP…
           </p>

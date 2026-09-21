@@ -457,7 +457,7 @@ function ViewerButton({ label, onClick, disabled, children }) {
       disabled={disabled}
       aria-label={label}
       title={label}
-      className="flex h-8 w-8 items-center justify-center rounded-full text-[18px] leading-none text-white/85 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+      className="flex h-8 w-8 items-center justify-center rounded-full text-[18px] leading-none text-white/85 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
     </button>
@@ -562,7 +562,7 @@ function ReceiptAnalysis({ messageId, onAnalyze }) {
           type="button"
           onClick={analisar}
           disabled={state === 'loading'}
-          className="rounded-[10px] border border-white/15 bg-white/[0.08] px-2.5 py-1 text-[12.5px] font-medium text-chat-text transition hover:bg-white/[0.16] disabled:opacity-60"
+          className="rounded-[10px] border border-white/15 bg-white/[0.08] px-2.5 py-1 text-[12.5px] font-medium text-chat-text transition hover:bg-white/[0.16] disabled:opacity-50"
         >
           {state === 'loading' ? 'Analisando…' : 'Analisar comprovante'}
         </button>

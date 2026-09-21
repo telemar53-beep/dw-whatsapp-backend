@@ -469,7 +469,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 disabled={sending}
                 aria-label="Enviar"
                 title="Enviar"
-                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-orange text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring disabled:opacity-40"
+                className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-orange text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring disabled:opacity-50"
               >
                 <IconSend size={24} />
               </button>

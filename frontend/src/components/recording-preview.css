@@ -8,7 +8,7 @@
 .recording-preview button:hover:not(:disabled) {background:#ffffff14;color:#fff}
 .recording-preview :is(.recording-preview-play,.recording-preview-send):hover:not(:disabled) {background:#ffb47d;color:#212c33}
 .recording-preview :is(button,input):focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:3px}
-.recording-preview button:disabled {opacity:.45;cursor:default}
+.recording-preview button:disabled {opacity:.5;cursor:default}
 .recording-preview-progress {min-width:0;display:flex;align-items:center;gap:10px}
 .recording-preview-progress input {appearance:none;min-width:30px;width:100%;height:5px;border-radius:4px;background:linear-gradient(to right,#e5a16d var(--progress),#637783 var(--progress));cursor:pointer}
 .recording-preview-progress input::-webkit-slider-thumb {appearance:none;width:11px;height:11px;border-radius:50%;background:#f2c5a3}

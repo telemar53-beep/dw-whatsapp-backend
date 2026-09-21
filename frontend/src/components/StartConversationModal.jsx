@@ -128,7 +128,7 @@ function StartConversationModal({ onClose, onCreated }) {
               Canal
             </label>
             {loading ? (
-              <p className="text-[14px] text-wa-muted">Carregando canais…</p>
+              <p role="status" className="text-[14px] text-wa-muted">Carregando canais…</p>
             ) : loadError ? (
               <p className="text-[14px] text-wa-error-text">Não foi possível carregar os canais. Feche e tente novamente.</p>
             ) : channels.length === 0 ? (

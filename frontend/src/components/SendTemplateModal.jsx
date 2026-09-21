@@ -64,8 +64,8 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
     >
       <DialogBody className="dialog-send-template">
 
-        {status === 'loading' && <p className="mt-4 text-[13.5px] text-chat-muted">Carregando templates…</p>}
-        {status === 'error' && <p className="mt-4 text-[13.5px] text-wa-error-text">Não foi possível carregar os templates.</p>}
+        {status === 'loading' && <p role="status" className="mt-4 text-[13.5px] text-chat-muted">Carregando templates…</p>}
+        {status === 'error' && <p role="alert" className="mt-4 text-[13.5px] text-wa-error-text">Não foi possível carregar os templates.</p>}
         {status === 'ready' && templates.length === 0 && (
           <p className="mt-4 text-[13.5px] text-chat-muted">
             Nenhum template de atendimento aprovado neste canal. Cadastre um em Configurações → Templates.

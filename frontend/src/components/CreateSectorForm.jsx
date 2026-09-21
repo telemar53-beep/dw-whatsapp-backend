@@ -5,7 +5,7 @@ import { Button, Field } from './ui';
 import { descreverErro } from '../utils/errorMessages';
 
 const inputClass =
-  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
+  'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-focus-ring/40';
 const labelClass = 'mb-1.5 block text-sm font-medium text-wa-muted';
 
 // `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.

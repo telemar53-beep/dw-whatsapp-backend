@@ -51,9 +51,13 @@ function CampaignDetailPage() {
         setCampaign(data);
         setStatus('ready');
       })
-      .catch(() => {
+      .catch((erro) => {
         // Uma falha pontual do polling não pode apagar o que já está na tela.
-        if (!silencioso) setStatus('error');
+        // 404 não é "falhou": a campanha não existe, e chamar isso de erro de
+        // carregamento fazia a migalha exibir "Sem nome" como se fosse o nome
+        // real de uma campanha que nunca existiu.
+        if (silencioso) return;
+        setStatus(erro && erro.status === 404 ? 'inexistente' : 'error');
       });
   }, [id, token]);
 
@@ -96,16 +100,25 @@ function CampaignDetailPage() {
   // `campaigns`); quem resolve o nome é sempre a lista de canais.
   const channelName = campaign && channels.find((channel) => channel.id === campaign.channelId)?.name;
 
+  // "Sem nome" é o rótulo de uma campanha real que ficou sem nome. Para uma
+  // campanha que NÃO EXISTE ele mentia duas vezes: dizia que havia um recurso e
+  // dizia que ele estava sem nome. O 404 é um estado próprio.
+  const naoExiste = status === 'inexistente';
+  const titulo = campaign ? campaign.name || 'Sem nome' : naoExiste ? 'Campanha não encontrada' : 'Campanha';
+
   return (
-    <div className="campaigns-workspace flex min-h-0 flex-1 flex-col">
+    <main className="campaigns-workspace flex min-h-0 flex-1 flex-col">
       <PageHeader
         variant="destaque"
-        title={campaign ? campaign.name || 'Sem nome' : 'Campanha'}
+        title={titulo}
         description={campaign ? 'Acompanhe o andamento e o resultado de cada destinatário.' : undefined}
-        crumbs={[{ label: 'Campanhas', to: '/campanhas' }, { label: campaign?.name || 'Sem nome' }]}
+        crumbs={[{ label: 'Campanhas', to: '/campanhas' }, { label: titulo }]}
       />
 
       <div className="campaigns-body chat-scroll">
+        {naoExiste ? (
+          <p role="alert" className="campaign-empty">Esta campanha não existe ou foi removida.</p>
+        ) : (
         <AsyncState status={status} onRetry={refresh}>
           {campaign && <>
             <section className="campaign-summary" aria-label="Resumo da campanha">
@@ -139,8 +152,9 @@ function CampaignDetailPage() {
             </>}
           </>}
         </AsyncState>
+        )}
       </div>
-    </div>
+    </main>
   );
 }
 

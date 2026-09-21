@@ -169,6 +169,9 @@ function ReportsPage() {
   const [resposta, setResposta] = useState(null);
   const [error, setError] = useState(null);
   const [atualizando, setAtualizando] = useState(false);
+  // Contador de tentativa: e o que o botao "Tentar de novo" incrementa para o
+  // efeito de carga rodar outra vez sem recarregar a pagina.
+  const [tentativa, setTentativa] = useState(0);
   const data = resposta ? resposta.dados : null;
 
   function selectPeriod(value, days) {
@@ -198,7 +201,7 @@ function ReportsPage() {
     // Uma resposta atrasada de um período abandonado não pode chegar depois e
     // sobrescrever a do período que o usuário está vendo.
     return () => { cancelado = true; };
-  }, [period, token, customDays]);
+  }, [period, token, customDays, tentativa]);
 
   const customDaysValue = Number(customDaysInput);
   const customDaysValid = isValidCustomDays(customDaysValue);
@@ -233,7 +236,7 @@ function ReportsPage() {
   const adminHasNoBreakdown = isAdmin && data.byAgent.length === 0 && data.bySector.length === 0 && data.byReason.length === 0;
   const maximumVolume = isAdmin ? Math.max(0, ...data.byAgent.map(row => row.closedCount)) : 0;
   const metrics = isAdmin ? summary : data?.scope === 'agent' ? data.own : null;
-  return <div className="reports-workspace reports-redesign">
+  return <main className="reports-workspace reports-redesign">
     <header className="report-toolbar">
       <div className="report-title"><h1>Relatórios</h1>{data && <span className="report-scope"><IconUsers/>{isAdmin ? 'Equipe' : 'Meus resultados'}</span>}</div>
       <div className="report-periods" role="group" aria-label="Período do relatório"><IconCalendar/>
@@ -244,7 +247,9 @@ function ReportsPage() {
       {showCustomInput && <div className="report-custom-period"><label htmlFor="custom-days">Últimos</label><input id="custom-days" type="number" min="1" max={CUSTOM_DAYS_MAX} value={customDaysInput} onChange={e => setCustomDaysInput(e.target.value)}/><span>dias</span><button type="button" onClick={handleApplyCustomDays} disabled={!customDaysValid}>Aplicar</button><span className="report-note">De 1 a 365 dias</span></div>}
     </header>
     <div className={`report-content chat-scroll${atualizando && resposta ? ' is-atualizando' : ''}`}>
-      {error && <div role="alert" className="report-error"><IconAlert/>{error}</div>}
+      {/* Supervisao e Canais ja ofereciam "Tentar de novo"; aqui a falha era
+          um beco sem saida — so recarregar a pagina inteira resolvia. */}
+      {error && <div role="alert" className="report-error"><IconAlert/><span>{error}</span><button type="button" onClick={() => setTentativa((n) => n + 1)}>Tentar de novo</button></div>}
       {!data && !error && <p role="status" aria-live="polite" className="report-empty">Carregando indicadores…</p>}
       <section className="report-overview" aria-label="Resumo do período">
         <div className="report-overview-heading"><span>Resumo do período{resposta && <>{' '}<b>· {rotuloDoPeriodo(resposta)}</b></>}{atualizando && resposta && <em className="report-updating" role="status">Atualizando…</em>}</span><div className="report-help"><span aria-hidden="true">ⓘ</span>          <SectionHelp label="Como os tempos são calculados" title="Como os tempos são calculados">
@@ -292,6 +297,6 @@ function ReportsPage() {
         </aside>
       </div>)}
     </div>
-  </div>;
+  </main>;
 }
 export default ReportsPage;

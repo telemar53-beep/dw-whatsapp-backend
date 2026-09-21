@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAiConfig } from '../hooks/useAiConfig';
 import { updateTranscriptionConfig, testAiConnection } from '../services/api';
 import { AsyncState, Button, Field } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -50,7 +51,7 @@ function AudioTranscriptionConfigCard() {
       if (result.ok) setTestedModels(result.models || []);
       else setError(result.error || 'Falha ao buscar modelos');
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao buscar modelos');
+      setError(descreverErro(err, 'Falha ao buscar modelos'));
     } finally {
       setTesting(false);
     }
@@ -88,7 +89,7 @@ function AudioTranscriptionConfigCard() {
       );
       refresh();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSaving(false);
     }

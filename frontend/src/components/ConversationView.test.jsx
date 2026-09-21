@@ -374,7 +374,7 @@ describe('ConversationView', () => {
     await userEvent.click(screen.getByLabelText('Troca de senha'));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i }));
 
-    expect(await screen.findByText('Conversation is not currently assigned to you, or is closed')).toBeInTheDocument();
+    expect(await screen.findByText('Este atendimento não está com você, ou já foi encerrado.')).toBeInTheDocument();
     expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });

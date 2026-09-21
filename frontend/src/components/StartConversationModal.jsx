@@ -9,6 +9,7 @@ import WaDialog, {
   waGhostButtonClass,
   waErrorClass,
 } from './WaDialog';
+import { descreverErro } from '../utils/errorMessages';
 
 const COUNTRY_CODES = [
   { code: '55', label: 'Brasil (+55)' },
@@ -111,7 +112,7 @@ function StartConversationModal({ onClose, onCreated }) {
         : await startConversation({ channelId, phoneNumber, content }, token);
       onCreated(conversation);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao iniciar conversa');
+      setError(descreverErro(err, 'Falha ao iniciar conversa'));
     } finally {
       setSubmitting(false);
     }

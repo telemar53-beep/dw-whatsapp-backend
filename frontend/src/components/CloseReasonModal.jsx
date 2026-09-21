@@ -3,6 +3,7 @@ import WaDialog, { waErrorClass } from './WaDialog';
 import { useReasons } from '../hooks/useReasons';
 import { AsyncState } from './ui';
 import { describeReason, closeReasonHeaderIcon, checkCircleIcon } from './closeReasonCatalog';
+import { descreverErro } from '../utils/errorMessages';
 
 function ReasonCard({ reason, checked, onSelect, groupName }) {
   const id = useId();
@@ -62,7 +63,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
     try {
       await onConfirm(reasonId);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Não foi possível encerrar este atendimento.');
+      setError(descreverErro(err, 'Não foi possível encerrar este atendimento.'));
       setSubmitting(false);
     }
   }

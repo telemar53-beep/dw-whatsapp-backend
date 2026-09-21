@@ -4,6 +4,7 @@ import { useConfirm } from '../../hooks/useConfirm';
 import { setCityNotice, deleteCityNotice } from '../../services/api';
 import CityStatusDot from './StatusDot';
 import { Button } from '../ui';
+import { descreverErro } from '../../utils/errorMessages';
 
 function CityNoticeRow({ city, onSaved }) {
   const { token } = useAuth();
@@ -39,7 +40,7 @@ function CityNoticeRow({ city, onSaved }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSaving(false);
     }
@@ -55,7 +56,7 @@ function CityNoticeRow({ city, onSaved }) {
       await deleteCityNotice(city.id, token);
       onSaved();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }

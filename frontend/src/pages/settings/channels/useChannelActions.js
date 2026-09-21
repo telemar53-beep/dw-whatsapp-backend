@@ -13,6 +13,7 @@ import {
   setMetaCloudCredentials,
   setChannelName,
 } from '../../../services/api';
+import { descreverErro } from '../../../utils/errorMessages';
 
 const EMPTY_ERRORS = { triage: null, ai: null, aiTriage: null, aiNightMode: null, wabaId: null, name: null, action: null };
 
@@ -37,7 +38,7 @@ export function useChannelActions(refresh) {
       await action();
       refresh();
     } catch (err) {
-      setFieldError('action', (err.body && err.body.error) || 'Não foi possível concluir a ação neste canal');
+      setFieldError('action', descreverErro(err, 'Não foi possível concluir a ação neste canal'));
     } finally {
       setBusyChannelId(null);
     }
@@ -79,7 +80,7 @@ export function useChannelActions(refresh) {
       await setChannelTriageEnabled(channelId, triageEnabled, token);
       refresh();
     } catch (err) {
-      setFieldError('triage', (err.body && err.body.error) || 'Falha ao atualizar a triagem deste canal');
+      setFieldError('triage', descreverErro(err, 'Falha ao atualizar a triagem deste canal'));
     }
   }
 
@@ -100,7 +101,7 @@ export function useChannelActions(refresh) {
         await setChannelTriageEnabled(channelId, false, token);
       }
     } catch (err) {
-      setFieldError('ai', (err.body && err.body.error) || 'Falha ao atualizar a IA deste canal');
+      setFieldError('ai', descreverErro(err, 'Falha ao atualizar a IA deste canal'));
     } finally {
       refresh();
     }
@@ -112,7 +113,7 @@ export function useChannelActions(refresh) {
       await setChannelAiTriageEnabled(channelId, aiTriageEnabled, token);
       refresh();
     } catch (err) {
-      setFieldError('aiTriage', (err.body && err.body.error) || 'Falha ao atualizar a triagem com IA deste canal');
+      setFieldError('aiTriage', descreverErro(err, 'Falha ao atualizar a triagem com IA deste canal'));
     }
   }
 
@@ -122,7 +123,7 @@ export function useChannelActions(refresh) {
       await setChannelAiNightModeEnabled(channelId, aiNightModeEnabled, token);
       refresh();
     } catch (err) {
-      setFieldError('aiNightMode', (err.body && err.body.error) || 'Falha ao atualizar o atendimento noturno deste canal');
+      setFieldError('aiNightMode', descreverErro(err, 'Falha ao atualizar o atendimento noturno deste canal'));
     }
   }
 
@@ -132,7 +133,7 @@ export function useChannelActions(refresh) {
       await setChannelName(channelId, value, token);
       refresh();
     } catch (err) {
-      setFieldError('name', (err.body && err.body.error) || 'Falha ao renomear o canal');
+      setFieldError('name', descreverErro(err, 'Falha ao renomear o canal'));
     }
   }
 
@@ -142,7 +143,7 @@ export function useChannelActions(refresh) {
       await setChannelWabaId(channelId, value, token);
       refresh();
     } catch (err) {
-      setFieldError('wabaId', (err.body && err.body.error) || 'Falha ao atualizar o WABA ID');
+      setFieldError('wabaId', descreverErro(err, 'Falha ao atualizar o WABA ID'));
     }
   }
 

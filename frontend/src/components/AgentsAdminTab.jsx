@@ -8,6 +8,7 @@ import AgentAvatar from './AgentAvatar';
 import WaDialog, { waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu } from './ui';
 import { IconSearch, IconUserPlus, IconMore } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 const ROLE_LABELS = { admin: 'Administrador', manager: 'Gerente', agent: 'Atendente' };
 const ROLE_OPTIONS = [
@@ -61,7 +62,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       setGeneratedPassword(newPassword);
       setCopied(false);
     } catch (err) {
-      setPasswordError((err.body && err.body.error) || 'Falha ao gerar senha');
+      setPasswordError(descreverErro(err, 'Falha ao gerar senha'));
     } finally {
       setGeneratingPassword(false);
     }
@@ -96,7 +97,7 @@ function AgentRow({ agentRow, currentAgent, sectors, onToggleActive, onSectorsSa
       setEditingSectors(false);
       onSectorsSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar setores');
+      setError(descreverErro(err, 'Falha ao salvar setores'));
     } finally {
       setSubmitting(false);
     }

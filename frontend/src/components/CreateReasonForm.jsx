@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createReason } from '../services/api';
 import { Button, Field } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -23,7 +24,7 @@ function CreateReasonForm({ onCreated, onCancel, embedded = false }) {
       setName('');
       onCreated();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao cadastrar motivo');
+      setError(descreverErro(err, 'Falha ao cadastrar motivo'));
     } finally {
       setSubmitting(false);
     }

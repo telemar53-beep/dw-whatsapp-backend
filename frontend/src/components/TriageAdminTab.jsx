@@ -8,6 +8,7 @@ import TriageConfigForm from './TriageConfigForm';
 import CreateTriageOptionForm from './CreateTriageOptionForm';
 import SectionHelp from './SectionHelp';
 import { AsyncState, Button, Field } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -51,7 +52,7 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSubmitting(false);
     }
@@ -68,7 +69,7 @@ function TriageOptionRow({ option, onSaved, onDeleted }) {
       await deleteTriageOption(option.id, token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }

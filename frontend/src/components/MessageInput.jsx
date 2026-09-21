@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { IconEmoji, IconAttach, IconQuickReply, IconMic, IconSend, IconTrash, IconStop } from './icons/WaIcons';
 import { AsyncState } from './ui';
 import RecordingPreview from './RecordingPreview';
+import { descreverErro } from '../utils/errorMessages';
 
 // O campo cresce com o conteúdo, como o WhatsApp: com altura fixa, reler um
 // texto longo antes de enviar virava rolar dentro de uma caixa de 4 linhas.
@@ -262,7 +263,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
       setContent('');
       clearAttachment();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao enviar mensagem');
+      setError(descreverErro(err, 'Falha ao enviar mensagem'));
     } finally {
       sendingRef.current = false;
       setSending(false);

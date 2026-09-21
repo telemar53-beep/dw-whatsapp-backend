@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { createSgpIntegration } from '../../services/api';
 import { isOfficialChannelType } from '../../utils/channelTypes';
+import { descreverErro } from '../../utils/errorMessages';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -51,7 +52,7 @@ function CreateSgpIntegrationForm({ channels, integrations, templates, onCreated
       setEnabled(true);
       onCreated();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao cadastrar a integração');
+      setError(descreverErro(err, 'Falha ao cadastrar a integração'));
     } finally {
       setSaving(false);
     }

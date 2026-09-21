@@ -7,6 +7,7 @@ import CreateCityForm from './CreateCityForm';
 import WaDialog, { waErrorClass } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable } from './ui';
 import { IconSearch, IconNewChat } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
 const CONTROL =
@@ -31,7 +32,7 @@ function CityRow({ city, onDeleted, onError }) {
       await deleteCity(city.id, token);
       onDeleted();
     } catch (err) {
-      onError(city.id, (err.body && err.body.error) || 'Falha ao excluir');
+      onError(city.id, descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }

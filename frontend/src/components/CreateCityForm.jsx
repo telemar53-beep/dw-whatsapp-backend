@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createCity } from '../services/api';
 import { Button } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 // `embedded`: dentro de um pop-up que já tem título e moldura — sem borda nem h3.
 function CreateCityForm({ onCreated, onCancel, embedded = false }) {
@@ -19,7 +20,7 @@ function CreateCityForm({ onCreated, onCancel, embedded = false }) {
       setName('');
       onCreated();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao cadastrar cidade');
+      setError(descreverErro(err, 'Falha ao cadastrar cidade'));
     } finally {
       setSubmitting(false);
     }

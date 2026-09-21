@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getMyProfile, updateMyProfile, uploadMyAvatar, deleteMyAvatar, changePassword } from '../services/api';
 import AgentAvatar from './AgentAvatar';
 import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
+import { descreverErro } from '../utils/errorMessages';
 
 function ProfileModal({ onClose, onProfileUpdated }) {
   const { token, updateAgent } = useAuth();
@@ -31,7 +32,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
         setPhone(data.phone || '');
       })
       .catch((err) => {
-        setLoadError((err.body && err.body.error) || 'Falha ao carregar perfil');
+        setLoadError(descreverErro(err, 'Falha ao carregar perfil'));
       });
   }, [token]);
 
@@ -47,7 +48,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
       setProfileSuccess(true);
       onProfileUpdated && onProfileUpdated();
     } catch (err) {
-      setProfileError((err.body && err.body.error) || 'Falha ao salvar perfil');
+      setProfileError(descreverErro(err, 'Falha ao salvar perfil'));
     } finally {
       setSavingProfile(false);
     }
@@ -65,7 +66,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
       updateAgent({ avatarPath: result.avatarPath });
       onProfileUpdated && onProfileUpdated();
     } catch (err) {
-      setAvatarError((err.body && err.body.error) || 'Falha ao enviar foto');
+      setAvatarError(descreverErro(err, 'Falha ao enviar foto'));
     } finally {
       setAvatarBusy(false);
     }
@@ -80,7 +81,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
       updateAgent({ avatarPath: null });
       onProfileUpdated && onProfileUpdated();
     } catch (err) {
-      setAvatarError((err.body && err.body.error) || 'Falha ao remover foto');
+      setAvatarError(descreverErro(err, 'Falha ao remover foto'));
     } finally {
       setAvatarBusy(false);
     }
@@ -102,7 +103,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      setPasswordError((err.body && err.body.error) || 'Falha ao trocar senha');
+      setPasswordError(descreverErro(err, 'Falha ao trocar senha'));
     } finally {
       setSubmittingPassword(false);
     }

@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../hooks/useConfirm';
 import { updateQuickReply, deleteQuickReply } from '../../services/api';
 import { inputClass, Button } from '../ui';
+import { descreverErro } from '../../utils/errorMessages';
 
 function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
   const { token } = useAuth();
@@ -24,7 +25,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSubmitting(false);
     }
@@ -54,7 +55,7 @@ function QuickReplyRow({ quickReply, onSaved, onDeleted }) {
       await deleteQuickReply(quickReply.id, token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }

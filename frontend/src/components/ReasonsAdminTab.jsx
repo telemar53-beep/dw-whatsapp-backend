@@ -7,6 +7,7 @@ import CreateReasonForm from './CreateReasonForm';
 import WaDialog, { waErrorClass } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu, inputClass } from './ui';
 import { IconSearch, IconNewChat, IconMore, IconEdit } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 const STATUS_OPTIONS = [
   ['all', 'Todos os status'],
@@ -52,7 +53,7 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSubmitting(false);
     }
@@ -84,7 +85,7 @@ function ReasonRow({ reason, usedByAi, onSaved }) {
       await updateReason(reason.id, { active: !reason.active }, token);
       onSaved();
     } catch (err) {
-      setToggleError((err.body && err.body.error) || 'Falha ao atualizar o motivo');
+      setToggleError(descreverErro(err, 'Falha ao atualizar o motivo'));
     } finally {
       setToggling(false);
     }

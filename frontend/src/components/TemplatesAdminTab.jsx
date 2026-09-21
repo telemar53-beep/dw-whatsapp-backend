@@ -8,6 +8,7 @@ import { isOfficialChannelType } from '../utils/channelTypes';
 import WaDialog, { waErrorClass } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu, inputClass } from './ui';
 import { IconSearch, IconRefresh, IconNewChat, IconMore, IconInfo, IconFile } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 const STATUS_META = {
   APPROVED: { label: 'Aprovado', chip: 'border-wa-chip-text/30 bg-wa-chip text-wa-chip-text' },
@@ -88,7 +89,7 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
       await deleteTemplateAdmin(template.id, token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }
@@ -100,7 +101,7 @@ function TemplateRow({ template, selected, onSelect, onDeleted }) {
       await setTemplatePurpose(template.id, template.purpose === 'disparo' ? 'atendimento' : 'disparo', token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao trocar a finalidade');
+      setDeleteError(descreverErro(err, 'Falha ao trocar a finalidade'));
     } finally {
       setSwitching(false);
     }
@@ -195,7 +196,7 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
       await createTemplateAdmin({ channelId, name, category, language, bodyText, purpose, buttons: botoesPreenchidos }, token);
       onCreated();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao criar template');
+      setError(descreverErro(err, 'Falha ao criar template'));
     } finally {
       setSubmitting(false);
     }
@@ -339,7 +340,7 @@ function RegisterExistingTemplateForm({ officialChannels, initialChannelId, onRe
       await registerExistingTemplateAdmin({ channelId, name, language, headerType: headerType || null }, token);
       onRegistered();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao registrar template');
+      setError(descreverErro(err, 'Falha ao registrar template'));
     } finally {
       setSubmitting(false);
     }
@@ -556,7 +557,7 @@ function TemplatesAdminTab() {
       await syncTemplatesAdmin(channel.wabaId, token);
       refresh();
     } catch (err) {
-      setSyncError((err.body && err.body.error) || 'Falha ao sincronizar');
+      setSyncError(descreverErro(err, 'Falha ao sincronizar'));
     } finally {
       setSyncing(false);
     }

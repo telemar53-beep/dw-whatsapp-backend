@@ -10,6 +10,7 @@ import WaDialog, {
   waGhostButtonClass,
   waErrorClass,
 } from './WaDialog';
+import { descreverErro } from '../utils/errorMessages';
 
 const RECIPIENT_LIMIT = 2000;
 
@@ -107,7 +108,7 @@ function CreateCampaignModal({ onClose, onCreated }) {
         : await createCampaign({ channelId, name, content, recipients }, token);
       onCreated(campaign);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao criar campanha');
+      setError(descreverErro(err, 'Falha ao criar campanha'));
     } finally {
       setSubmitting(false);
     }

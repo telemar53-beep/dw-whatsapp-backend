@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useAiConfig } from '../../../hooks/useAiConfig';
 import { getAiConfig, updateAiTriageConfig } from '../../../services/api';
+import { descreverErro } from '../../../utils/errorMessages';
 
 function fromConfig(config) {
   return {
@@ -94,7 +95,7 @@ export function useAiTriageForm(camposProprios = TODOS_OS_CAMPOS) {
       refresh();
       return true;
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
       return false;
     } finally {
       setSaving(false);

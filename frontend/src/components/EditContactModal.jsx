@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCities } from '../hooks/useCities';
 import { updateContact } from '../services/api';
 import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass } from './WaDialog';
+import { descreverErro } from '../utils/errorMessages';
 
 function EditContactModal({ conversation, onClose, onSaved }) {
   const { token } = useAuth();
@@ -27,7 +28,7 @@ function EditContactModal({ conversation, onClose, onSaved }) {
       onSaved({ displayName: updated.displayName, cityId: updated.cityId, cityName, internalNote: updated.internalNote });
       onClose();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSubmitting(false);
     }

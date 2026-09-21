@@ -6,6 +6,7 @@ import { IconChevronDown } from '../../../components/icons/WaIcons';
 import { isOfficialChannelType } from '../../../utils/channelTypes';
 import { formatPhone } from '../../../utils/phone';
 import { providerLabel } from './ChannelsTable';
+import { descreverErro } from '../../../utils/errorMessages';
 
 export { STATUS_LABELS } from './channelStatus';
 export { ConnectionStatus as StatusDot } from './ChannelsTable';
@@ -38,7 +39,7 @@ function MetaCloudCredentialsForm({ channel, canManage, onSave }) {
       await onSave({ phoneNumberId, accessToken, wabaId });
       setOpen(false);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Não foi possível salvar as credenciais deste canal');
+      setError(descreverErro(err, 'Não foi possível salvar as credenciais deste canal'));
     } finally {
       setSubmitting(false);
     }

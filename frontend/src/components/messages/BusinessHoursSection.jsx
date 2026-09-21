@@ -4,6 +4,7 @@ import { useBusinessHoursConfig } from '../../hooks/useBusinessHoursConfig';
 import { updateBusinessHoursConfig } from '../../services/api';
 import { inputClass, AsyncState, Button, Field } from '../ui';
 import CityStatusDot from './StatusDot';
+import { descreverErro } from '../../utils/errorMessages';
 
 function BusinessHoursSection() {
   const { token } = useAuth();
@@ -46,7 +47,7 @@ function BusinessHoursSection() {
       setEditing(false);
       refresh();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSaving(false);
     }

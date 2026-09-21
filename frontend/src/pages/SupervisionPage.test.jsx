@@ -375,7 +375,7 @@ describe('SupervisionPage', () => {
     await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '999999');
     await userEvent.type(screen.getByLabelText(/buscar por protocolo/i), '{Enter}');
 
-    expect(await screen.findByText('No conversation found with that protocol number')).toBeInTheDocument();
+    expect(await screen.findByText('Nenhum atendimento encontrado com esse protocolo.')).toBeInTheDocument();
   });
 
   test('searching by phone number shows the matching contact\'s conversations', async () => {
@@ -414,7 +414,7 @@ describe('SupervisionPage', () => {
 
     await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '+5511900000000{Enter}');
 
-    expect(await screen.findByText('No contact found with that phone number')).toBeInTheDocument();
+    expect(await screen.findByText('Nenhum cliente encontrado com esse telefone.')).toBeInTheDocument();
   });
 
   test('clearing the phone search returns to the normal tabs', async () => {

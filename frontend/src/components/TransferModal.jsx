@@ -7,6 +7,7 @@ import WaDialog, { waErrorClass } from './WaDialog';
 import AgentAvatar from './AgentAvatar';
 import { AsyncState } from './ui';
 import { IconChats, IconChevronDown, IconInfo, IconSearch, IconTransfer } from './icons/WaIcons';
+import { descreverErro } from '../utils/errorMessages';
 
 // Nível de carga pelo número de atendimentos abertos. Os limites são uma
 // escolha de produto (não vêm do backend): quem está offline nunca é sugerido
@@ -158,7 +159,7 @@ function TransferModal({ conversationId, onClose }) {
       await transferConversation(conversationId, toAgentId, token);
       onClose();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Não foi possível transferir este atendimento.');
+      setError(descreverErro(err, 'Não foi possível transferir este atendimento.'));
       setBusyId(null);
     }
   }

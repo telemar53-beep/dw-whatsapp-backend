@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { listTemplatesForChannel, sendConversationTemplate } from '../services/api';
 import { substituirVariaveis } from '../utils/templatePreview';
 import { Dialog, DialogBody, DialogFooter } from './ui/Dialog';
+import { descreverErro } from '../utils/errorMessages';
 
 // Com a janela de 24h fechada, template aprovado é a única coisa que o WhatsApp
 // entrega. Isto não contorna a regra: o texto continua sendo o pré-aprovado,
@@ -43,7 +44,7 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
       await sendConversationTemplate(conversationId, selected.id, variables, token);
       onSent();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Não foi possível enviar o template.');
+      setError(descreverErro(err, 'Não foi possível enviar o template.'));
     } finally {
       setSending(false);
     }

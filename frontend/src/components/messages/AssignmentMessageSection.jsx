@@ -6,6 +6,7 @@ import { useAssignmentMessageConfig } from '../../hooks/useAssignmentMessageConf
 import { updateAssignmentMessageConfig } from '../../services/api';
 import { inputClass, AsyncState, Button } from '../ui';
 import CityStatusDot from './StatusDot';
+import { descreverErro } from '../../utils/errorMessages';
 
 function AssignmentMessageSection() {
   const { token } = useAuth();
@@ -64,7 +65,7 @@ function AssignmentMessageSection() {
       setEditing(false);
       refresh();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSaving(false);
     }

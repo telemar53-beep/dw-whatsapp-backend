@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { createQuickReply } from '../services/api';
 import { Button } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text placeholder-wa-muted outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -24,7 +25,7 @@ function CreateQuickReplyForm({ onCreated, onCancel }) {
       setContent('');
       onCreated();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao cadastrar resposta rápida');
+      setError(descreverErro(err, 'Falha ao cadastrar resposta rápida'));
     } finally {
       setSubmitting(false);
     }

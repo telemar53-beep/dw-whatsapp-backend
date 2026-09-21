@@ -5,6 +5,7 @@ import { receiptVerdict } from '../utils/receiptVerdict';
 import { IconPlay, IconPause, IconMic, IconDownload, IconPin, IconAttach } from './icons/WaIcons';
 import PixCardMessage from './PixCardMessage';
 import { useDialogLayer } from './ui/Dialog';
+import { descreverErro } from '../utils/errorMessages';
 
 // Tipos que guardam arquivo no disco — os únicos que a retenção pode esvaziar.
 const MEDIA_TYPES_COM_ARQUIVO = ['image', 'video', 'audio', 'document', 'sticker'];
@@ -543,7 +544,7 @@ function ReceiptAnalysis({ messageId, onAnalyze }) {
       setVerdict(receiptVerdict(await onAnalyze(messageId)));
       setState('done');
     } catch (err) {
-      setError((err.body && err.body.error) || 'Não foi possível analisar o comprovante.');
+      setError(descreverErro(err, 'Não foi possível analisar o comprovante.'));
       setState('idle');
     }
   }

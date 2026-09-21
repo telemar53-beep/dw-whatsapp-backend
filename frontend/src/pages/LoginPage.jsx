@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCompanyName } from '../hooks/useCompanyName';
+import { descreverErro } from '../utils/errorMessages';
 
 function SignalMark() {
   return (
@@ -44,7 +45,7 @@ function LoginPage() {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao entrar');
+      setError(descreverErro(err, 'Falha ao entrar'));
     } finally {
       setSubmitting(false);
     }

@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { updateSgpIntegration, rotateSgpIntegrationKey } from '../../services/api';
 import { isOfficialChannelType } from '../../utils/channelTypes';
 import { Button, DangerZone } from '../ui';
+import { descreverErro } from '../../utils/errorMessages';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -65,7 +66,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
       onChanged();
       setEditing(false);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao atualizar');
+      setError(descreverErro(err, 'Falha ao atualizar'));
     } finally {
       setSavingEdit(false);
     }
@@ -81,7 +82,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
       );
       onChanged();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao atualizar');
+      setError(descreverErro(err, 'Falha ao atualizar'));
     }
   }
 
@@ -93,7 +94,7 @@ function SgpIntegrationCard({ integration, channels, templates, onChanged }) {
       setGeneratedKey(result.apiKey);
       onChanged();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao gerar a chave');
+      setError(descreverErro(err, 'Falha ao gerar a chave'));
     } finally {
       setRotating(false);
     }

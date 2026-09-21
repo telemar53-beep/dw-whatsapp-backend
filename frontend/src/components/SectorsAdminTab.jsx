@@ -6,6 +6,7 @@ import { updateSector, deleteSector } from '../services/api';
 import CreateSectorForm from './CreateSectorForm';
 import WaDialog, { waErrorClass } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, inputClass } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
 const SMALL_BTN =
@@ -31,7 +32,7 @@ function SectorRow({ sector, onSaved, onDeleted }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSubmitting(false);
     }
@@ -63,7 +64,7 @@ function SectorRow({ sector, onSaved, onDeleted }) {
       await deleteSector(sector.id, token);
       onDeleted();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }

@@ -99,7 +99,7 @@ describe('LoginPage', () => {
     await userEvent.type(screen.getByLabelText(/senha/i), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
-    expect(await screen.findByText('Invalid credentials')).toBeInTheDocument();
+    expect(await screen.findByText('E-mail ou senha incorretos.')).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

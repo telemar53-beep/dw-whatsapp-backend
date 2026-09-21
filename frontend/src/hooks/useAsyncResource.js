@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { descreverErro } from '../utils/errorMessages';
 
 // Um padrão só de carregamento para hooks de lista e de configuração:
 // status separa "ainda não sei" de "não existe" de "deu erro" de "não posso".
@@ -22,7 +23,7 @@ export function useAsyncResource(fetcher, deps, { initial = null, enabled = true
       })
       .catch((err) => {
         setStatus(err && err.status === 403 ? 'forbidden' : 'error');
-        setError((err && err.body && err.body.error) || (err && err.message) || null);
+        setError(descreverErro(err, (err && err.message) || null));
       })
       .finally(() => setReloading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps

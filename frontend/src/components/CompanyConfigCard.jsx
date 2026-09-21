@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCompanyConfig } from '../hooks/useCompanyConfig';
 import { updateCompanyConfig } from '../services/api';
 import { AsyncState, Button, Field } from './ui';
+import { descreverErro } from '../utils/errorMessages';
 
 const inputClass =
   'w-full rounded-xl border border-wa-border bg-wa-field px-3.5 py-2.5 text-wa-text outline-none transition focus:border-accent/60 focus:bg-wa-panel focus:ring-2 focus:ring-accent/25';
@@ -54,7 +55,7 @@ function CompanyConfigCard() {
       refresh();
       setEditing(false);
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSaving(false);
     }

@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../hooks/useConfirm';
 import { setChannelWelcomeMessage } from '../../services/api';
 import { Button } from '../ui';
+import { descreverErro } from '../../utils/errorMessages';
 
 function ChannelWelcomeMessageRow({ channel, onSaved, readOnly = false }) {
   const { token } = useAuth();
@@ -35,7 +36,7 @@ function ChannelWelcomeMessageRow({ channel, onSaved, readOnly = false }) {
       setEditing(false);
       onSaved();
     } catch (err) {
-      setError((err.body && err.body.error) || 'Falha ao salvar');
+      setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
       setSaving(false);
     }
@@ -51,7 +52,7 @@ function ChannelWelcomeMessageRow({ channel, onSaved, readOnly = false }) {
       await setChannelWelcomeMessage(channel.id, '', token);
       onSaved();
     } catch (err) {
-      setDeleteError((err.body && err.body.error) || 'Falha ao excluir');
+      setDeleteError(descreverErro(err, 'Falha ao excluir'));
       setDeleting(false);
     }
   }

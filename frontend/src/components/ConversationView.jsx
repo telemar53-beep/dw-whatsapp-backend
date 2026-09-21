@@ -141,6 +141,7 @@ function channelLine(conversation) {
 }
 
 import { formatPhone } from '../utils/phone';
+import { descreverErro } from '../utils/errorMessages';
 
 function conversationStatus(conversation) {
   if (conversation.status === 'closed') return { label: 'Encerrado', dot: 'bg-chat-faint' };
@@ -413,7 +414,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     try {
       await claimConversation(conversation.id, token);
     } catch (err) {
-      avisar((err.body && err.body.error) || 'Não foi possível assumir este atendimento.');
+      avisar(descreverErro(err, 'Não foi possível assumir este atendimento.'));
     }
   }
 
@@ -426,7 +427,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     try {
       await sendSuggestion(item);
     } catch (err) {
-      avisar((err.body && err.body.error) || 'Não foi possível enviar a sugestão da IA.');
+      avisar(descreverErro(err, 'Não foi possível enviar a sugestão da IA.'));
     }
   }
 
@@ -439,7 +440,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     try {
       await discardSuggestion(item);
     } catch (err) {
-      avisar((err.body && err.body.error) || 'Não foi possível descartar a sugestão da IA.');
+      avisar(descreverErro(err, 'Não foi possível descartar a sugestão da IA.'));
     }
   }
 

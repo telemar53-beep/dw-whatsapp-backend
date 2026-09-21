@@ -17,6 +17,7 @@ import './supervision.css';
 import ConversationModal from '../components/ConversationModal';
 import TransferModal from '../components/TransferModal';
 import { PageHeader, Tabs } from '../components/ui';
+import { descreverErro } from '../utils/errorMessages';
 
 const CLOSED_PAGE_SIZE = 20;
 
@@ -310,7 +311,7 @@ function SupervisionPage() {
     setActionError(null);
     // Antes falhava calado: o supervisor clicava em finalizar e nada acontecia.
     closeConversation(conversationId, null, token).catch((err) =>
-      setActionError((err && err.body && err.body.error) || 'Não foi possível finalizar este atendimento.')
+      setActionError(descreverErro(err, 'Não foi possível finalizar este atendimento.'))
     );
   }
 
@@ -325,7 +326,7 @@ function SupervisionPage() {
       setSelectedConversationId(conversation.id);
     } catch (err) {
       setFoundConversation(null);
-      setProtocolError((err.body && err.body.error) || 'Nenhum atendimento encontrado com esse protocolo');
+      setProtocolError(descreverErro(err, 'Nenhum atendimento encontrado com esse protocolo'));
     }
   }
 
@@ -339,7 +340,7 @@ function SupervisionPage() {
       setPhoneSearchResult(result);
     } catch (err) {
       setPhoneSearchResult(null);
-      setPhoneError((err.body && err.body.error) || 'Nenhum cliente encontrado com esse telefone');
+      setPhoneError(descreverErro(err, 'Nenhum cliente encontrado com esse telefone'));
     }
   }
 

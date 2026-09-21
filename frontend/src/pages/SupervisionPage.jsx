@@ -144,6 +144,17 @@ function SupervisionPage() {
   function toggleFilterValue(key, current, value) {
     setFilterParam(key, current.includes(value) ? current.filter((v) => v !== value) : [...current, value]);
   }
+  // Limpa só os três filtros. A aba ativa e qualquer outro parâmetro da URL
+  // continuam onde estavam.
+  function limparFiltros() {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('canal');
+      next.delete('atendente');
+      next.delete('setor');
+      return next;
+    }, { replace: true });
+  }
   function setActiveTab(tab) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -254,6 +265,33 @@ function SupervisionPage() {
   // apresenta como parcial em vez de se passar por total.
   const contagemParcialDeEncerrados = hasActiveFilter && closedHasMore;
 
+  // A carga da equipe vem do painel NÃO filtrado, de propósito: filtrar a tela
+  // não muda quantos atendimentos o atendente tem de verdade. Contado uma vez,
+  // em vez de varrer `inProgress` por atendente dentro do map.
+  const cargaPorAtendente = useMemo(() => {
+    const mapa = new Map();
+    for (const conversa of inProgress) {
+      if (!conversa.assignedAgentId) continue;
+      mapa.set(conversa.assignedAgentId, (mapa.get(conversa.assignedAgentId) || 0) + 1);
+    }
+    return mapa;
+  }, [inProgress]);
+  const cargaMaxima = useMemo(
+    () => Math.max(1, ...agents.map((a) => cargaPorAtendente.get(a.id) || 0)),
+    [agents, cargaPorAtendente]
+  );
+
+  // Fila realmente vazia e fila escondida por filtro diziam a mesma frase.
+  const vazioDaColuna = (texto) => (hasActiveFilter ? `${texto} com os filtros atuais.` : `${texto}.`);
+
+  // Quantas linhas a visão atual realmente desenha — é o que decide se os
+  // rótulos de coluna têm o que rotular.
+  const linhasVisiveis = dashboardDataVisible
+    ? (operationView === 'all' || operationView === 'progress' ? filteredInProgress.length : 0)
+      + (operationView === 'all' || operationView === 'waiting' ? filteredWaiting.length : 0)
+      + (operationView === 'all' || operationView === 'automation' ? filteredInAutomation.length : 0)
+    : 0;
+
   function contagemDaAbaEncerrados() {
     if (!hasActiveFilter) return numero(closedCount);
     if (closedError) return '—';
@@ -358,6 +396,15 @@ function SupervisionPage() {
           open={openFilterMenu === 'sectors'}
           onOpenChange={(next) => setOpenFilterMenu(next ? 'sectors' : null)}
         />
+        {hasActiveFilter && (
+          <button
+            type="button"
+            onClick={limparFiltros}
+            className="h-[38px] shrink-0 rounded-[10px] px-3 text-[14px] font-medium text-chat-orange transition hover:bg-white/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          >
+            Limpar filtros
+          </button>
+        )}
         <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10 max-xl:hidden" />
         <form onSubmit={handleProtocolSearch} className="min-w-0 max-w-full shrink-0">
           <input
@@ -392,8 +439,8 @@ function SupervisionPage() {
           {agentsStatus === 'loading' && <p role="status">Carregando equipe...</p>}
           {agentsStatus === 'error' && <p role="alert">Não foi possível carregar a equipe.</p>}
           <ul>{agents.map(agent => {
-            const count = inProgress.filter(c => c.assignedAgentId === agent.id).length;
-            const max = Math.max(1, ...agents.map(a => inProgress.filter(c => c.assignedAgentId === a.id).length));
+            const count = cargaPorAtendente.get(agent.id) || 0;
+            const max = cargaMaxima;
             const online = onlineIds.has(agent.id);
             return <li key={agent.id}><button type="button" aria-pressed={agentFilter.includes(agent.id)} onClick={() => toggleFilterValue('atendente', agentFilter, agent.id)}>
               {/* A carga vem da mesma requisicao do painel: sem ela, nao da
@@ -406,10 +453,11 @@ function SupervisionPage() {
           {agentsStatus === 'ready' && agents.length === 0 && <p>Nenhum atendente cadastrado.</p>}
         </aside>
         <main className="supervision-operation" aria-label="Operação">
+          {/* "Visão geral" repetia, encostado, o mesmo número da aba "Todos
+              atendimentos". Os outros três somam para ele, então esses ficam. */}
           {!phoneSearchResult && activeTab === 'all' && <nav className="supervision-states" aria-label="Estados dos atendimentos">
-            {[['all','Visão geral',totalActiveCount],['progress','Andamento',filteredInProgress.length],['waiting','Espera',filteredWaiting.length],['automation','Automação',filteredInAutomation.length]].map(([key,label,count]) => <button type="button" key={key} aria-pressed={operationView === key} onClick={() => setOperationView(key)}>{label}<strong>{numero(count)}</strong></button>)}
+            {[['all','Visão geral',null],['progress','Andamento',filteredInProgress.length],['waiting','Espera',filteredWaiting.length],['automation','Automação',filteredInAutomation.length]].map(([key,label,count]) => <button type="button" key={key} aria-pressed={operationView === key} onClick={() => setOperationView(key)}>{label}{count !== null && <strong>{numero(count)}</strong>}</button>)}
           </nav>}
-          <div className="supervision-column-labels" aria-hidden="true"><span>Cliente / última mensagem</span><span>Cidade / setor</span><span>Responsável</span><span>Estado / horário</span><span /></div>
       {phoneSearchResult ? (
         <div role="tabpanel" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
@@ -428,14 +476,12 @@ function SupervisionPage() {
           {phoneSearchResult.conversations.length === 0 ? (
             <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">Esse cliente ainda não teve nenhum atendimento.</p>
           ) : (
-            <ul className="supervision-history">
+            <ul>
               {phoneSearchResult.conversations.map(withAgentName).map((conversation) => (
                 <SupervisionRow
                   key={conversation.id}
                   conversation={conversation}
                   onSelect={openConversation}
-                  selected={false}
-                  divided={false}
                 />
               ))}
             </ul>
@@ -461,12 +507,18 @@ function SupervisionPage() {
               </button>
             </div>
           )}
+          {/* Os rótulos descrevem as colunas das linhas: só existem quando há
+              linha. Antes pairavam sobre o carregando, o erro, a busca por
+              telefone, os encerrados e as listas vazias. */}
+          {linhasVisiveis > 0 && (
+            <div className="supervision-column-labels" aria-hidden="true"><span>Cliente / última mensagem</span><span>Cidade / setor</span><span>Responsável</span><span>Estado / horário</span><span /></div>
+          )}
           {dashboardDataVisible && (operationView === 'all' || operationView === 'progress') && (          <DashboardColumn
             title="Em andamento"
             count={filteredInProgress.length}
             conversations={displayInProgress}
             onSelect={openConversation}
-            emptyMessage="Nenhum atendimento em andamento."
+            emptyMessage={vazioDaColuna('Nenhum atendimento em andamento')}
           />)}
           {dashboardDataVisible && (operationView === 'all' || operationView === 'waiting') && (          <DashboardColumn
             title="Em espera"
@@ -474,7 +526,7 @@ function SupervisionPage() {
             conversations={displayWaiting}
             onSelect={openConversation}
             onQuickClose={quickCloseConversation}
-            emptyMessage="Nenhum atendimento em espera."
+            emptyMessage={vazioDaColuna('Nenhum atendimento em espera')}
           />)}
           {dashboardDataVisible && (operationView === 'all' || operationView === 'automation') && (          <DashboardColumn
             title="Em automação"
@@ -482,7 +534,7 @@ function SupervisionPage() {
             conversations={displayInAutomation}
             onSelect={openConversation}
             onQuickClose={quickCloseConversation}
-            emptyMessage="Nenhum atendimento em automação."
+            emptyMessage={vazioDaColuna('Nenhum atendimento em automação')}
           />)}
         </div>
       ) : (
@@ -510,14 +562,12 @@ function SupervisionPage() {
             </p>
             )
           ) : (
-            <ul className="supervision-history">
+            <ul>
               {displayClosed.map((conversation) => (
                 <SupervisionRow
                   key={conversation.id}
                   conversation={conversation}
                   onSelect={openConversation}
-                  selected={false}
-                  divided={false}
                 />
               ))}
             </ul>

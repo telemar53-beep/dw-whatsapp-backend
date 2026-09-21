@@ -501,11 +501,14 @@ describe('contadores confiáveis', () => {
 
     // Nenhum zero pode aparecer como se fosse confirmado.
     const estados = screen.getByRole('navigation', { name: /estados dos atendimentos/i });
-    ['Visão geral', 'Andamento', 'Espera', 'Automação'].forEach((rotulo) => {
+    // "Visão geral" não carrega mais contador: ele repetia, encostado, o mesmo
+    // número da aba "Todos atendimentos", que continua respondendo por ele.
+    ['Andamento', 'Espera', 'Automação'].forEach((rotulo) => {
       const botao = within(estados).getByRole('button', { name: new RegExp(rotulo, 'i') });
       expect(botao).toHaveTextContent('—');
       expect(botao).not.toHaveTextContent('0');
     });
+    expect(within(estados).getByRole('button', { name: /visão geral/i })).toHaveTextContent(/^Visão geral$/);
 
     expect(screen.getByRole('tab', { name: /todos atendimentos/i })).toHaveTextContent('—');
     expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveTextContent('—');
@@ -534,9 +537,9 @@ describe('contadores confiáveis', () => {
     renderPage();
 
     const estados = screen.getByRole('navigation', { name: /estados dos atendimentos/i });
-    const visaoGeral = within(estados).getByRole('button', { name: /visão geral/i });
-    expect(visaoGeral).toHaveTextContent('0');
-    expect(visaoGeral).not.toHaveTextContent('—');
+    const andamento = within(estados).getByRole('button', { name: /andamento/i });
+    expect(andamento).toHaveTextContent('0');
+    expect(andamento).not.toHaveTextContent('—');
     expect(screen.getByText(/online · sem atendimentos/i)).toBeInTheDocument();
   });
 });
@@ -671,5 +674,115 @@ describe('encerrados: falha visivel e contagem honesta', () => {
     await filtrarPorVendas();
 
     expect(await screen.findByText(/nenhum atendimento encerrado hoje com os filtros atuais/i)).toBeInTheDocument();
+  });
+});
+
+// Etapa 6.2 — filtro que esconde tudo nao pode parecer operacao vazia, e
+// rotulo de coluna nao pode pairar sobre tela que nao tem coluna nenhuma.
+describe('filtros e rotulos de coluna', () => {
+  function doisCanais() {
+    useChannels.mockReturnValue({
+      channels: [
+        { id: 'chan-1', name: 'WhatsApp Vendas' },
+        { id: 'chan-2', name: 'WhatsApp Suporte' },
+      ],
+      loading: false,
+      refresh: vi.fn(),
+    });
+  }
+
+  test('sem filtro, as colunas vazias continuam dizendo que nao ha atendimento', () => {
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
+      status: 'ready', loading: false, refresh: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText('Nenhum atendimento em andamento.')).toBeInTheDocument();
+    expect(screen.queryByText(/com os filtros atuais/i)).not.toBeInTheDocument();
+  });
+
+  test('com filtro que esconde tudo, o vazio diz que a causa sao os filtros', async () => {
+    doisCanais();
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
+    await userEvent.click(screen.getByLabelText('WhatsApp Suporte'));
+
+    expect(await screen.findByText('Nenhum atendimento em andamento com os filtros atuais.')).toBeInTheDocument();
+    expect(screen.getByText('Nenhum atendimento em espera com os filtros atuais.')).toBeInTheDocument();
+    expect(screen.getByText('Nenhum atendimento em automação com os filtros atuais.')).toBeInTheDocument();
+  });
+
+  test('"limpar filtros" so aparece com filtro e apaga canal, atendente e setor', async () => {
+    doisCanais();
+    renderPage();
+    expect(screen.queryByRole('button', { name: /limpar filtros/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
+    await userEvent.click(screen.getByLabelText('WhatsApp Suporte'));
+    await userEvent.click(screen.getByRole('button', { name: /setores/i }));
+    await userEvent.click(screen.getByLabelText('Financeiro'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /limpar filtros/i }));
+
+    // Os tres atendimentos do painel voltam, e o botao some junto com o filtro.
+    expect(await screen.findByText('Carlos')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /limpar filtros/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/com os filtros atuais/i)).not.toBeInTheDocument();
+  });
+
+  test('"limpar filtros" preserva a aba ativa na URL', async () => {
+    doisCanais();
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /canais/i }));
+    await userEvent.click(screen.getByLabelText('WhatsApp Suporte'));
+    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
+
+    await userEvent.click(screen.getByRole('button', { name: /limpar filtros/i }));
+
+    expect(screen.getByRole('tab', { name: /encerrados hoje/i })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('os rotulos de coluna somem quando nao ha linha para rotular', async () => {
+    const rotulo = /cliente \/ última mensagem/i;
+    renderPage();
+    expect(screen.getByText(rotulo)).toBeInTheDocument();
+
+    // Encerrados tem outra composicao; o rotulo das colunas ao vivo nao vai junto.
+    await userEvent.click(screen.getByRole('tab', { name: /encerrados hoje/i }));
+    expect(screen.queryByText(rotulo)).not.toBeInTheDocument();
+  });
+
+  test('os rotulos de coluna nao pairam sobre carregando nem sobre erro', () => {
+    const rotulo = /cliente \/ última mensagem/i;
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
+      status: 'loading', loading: true, refresh: vi.fn(),
+    });
+    const { unmount } = renderPage();
+    expect(screen.queryByText(rotulo)).not.toBeInTheDocument();
+    unmount();
+
+    useAttendanceDashboard.mockReturnValue({
+      inProgress: [], waiting: [], inAutomation: [], closedTodayCount: 0,
+      status: 'error', loading: false, refresh: vi.fn(),
+    });
+    renderPage();
+    expect(screen.queryByText(rotulo)).not.toBeInTheDocument();
+  });
+
+  test('os rotulos de coluna somem na busca por telefone', async () => {
+    const rotulo = /cliente \/ última mensagem/i;
+    getDashboardConversationsByPhone.mockResolvedValue({
+      contact: { displayName: 'Ana', phoneNumber: '5511999999999' },
+      conversations: [{ id: 'h1', contactDisplayName: 'Ana', status: 'closed' }],
+    });
+    renderPage();
+
+    await userEvent.type(screen.getByLabelText(/buscar por telefone/i), '5511999999999{Enter}');
+
+    expect(await screen.findByText(/1 atendimento\(s\) de Ana/i)).toBeInTheDocument();
+    expect(screen.queryByText(rotulo)).not.toBeInTheDocument();
   });
 });

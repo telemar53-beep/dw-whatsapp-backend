@@ -50,6 +50,17 @@
   --color-accent: #0d9488;
   --color-accent-strong: #0b7d73;
   --color-on-accent: #ffffff;
+  /* Etapa 7: o acento virou família semântica, por PAPEL visual. Até aqui cada
+     área tinha o seu laranja só porque foi estilizada num momento diferente —
+     login, menu, Supervisão, Configurações e Relatórios usavam cinco tons
+     distintos. `soft` é o acento em texto e ícone sobre fundo escuro, onde o
+     acento cheio brilha demais; `surface` e `line` são o acento tingindo fundo
+     e borda. Cor semântica (sucesso, erro, aviso, tipo de arquivo) continua
+     independente disto. */
+  --color-accent-soft: #14b8a6;
+  --color-accent-surface: rgba(13, 148, 136, 0.12);
+  --color-accent-surface-strong: rgba(13, 148, 136, 0.2);
+  --color-accent-line: rgba(13, 148, 136, 0.4);
 
   /* ---------- Anel de foco ----------
      Um valor só, no lugar das nove cores de contorno que conviviam. */
@@ -107,6 +118,12 @@
   --color-accent: #f28c45;
   --color-accent-strong: #dd7835;
   --color-on-accent: #2a1b12;
+  /* Mesma família semântica do bloco base, nos valores do tema grafite.
+     `soft` é o #e5a16d que o chat e o anel de foco já usavam — agora com nome. */
+  --color-accent-soft: #e5a16d;
+  --color-accent-surface: rgba(242, 140, 69, 0.14);
+  --color-accent-surface-strong: rgba(242, 140, 69, 0.24);
+  --color-accent-line: rgba(242, 140, 69, 0.42);
   --color-wa-error-bg: rgba(234, 67, 53, 0.18);
   --color-wa-error-text: #ff9d93;
   --color-wa-warn-bg: rgba(242, 169, 60, 0.16);

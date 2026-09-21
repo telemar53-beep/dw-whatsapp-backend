@@ -77,7 +77,7 @@ describe('LoginPage', () => {
       </MemoryRouter>
     );
 
-    await userEvent.type(screen.getByLabelText(/email/i), 'a@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'a@dw.com');
     await userEvent.type(screen.getByLabelText(/senha/i), 'secret123');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
 
@@ -95,7 +95,7 @@ describe('LoginPage', () => {
       </MemoryRouter>
     );
 
-    await userEvent.type(screen.getByLabelText(/email/i), 'a@dw.com');
+    await userEvent.type(screen.getByLabelText(/e-mail/i), 'a@dw.com');
     await userEvent.type(screen.getByLabelText(/senha/i), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
 

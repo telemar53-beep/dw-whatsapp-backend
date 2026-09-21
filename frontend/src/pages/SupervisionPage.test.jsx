@@ -539,7 +539,7 @@ describe('contadores confiáveis', () => {
     const estados = screen.getByRole('navigation', { name: /estados dos atendimentos/i });
     const andamento = within(estados).getByRole('button', { name: /andamento/i });
     expect(andamento).toHaveTextContent('0');
-    expect(andamento).not.toHaveTextContent('—');
+    expect(andamento).not.toHaveTextContent('—');
     expect(screen.getByText(/online · sem atendimentos/i)).toBeInTheDocument();
   });
 });

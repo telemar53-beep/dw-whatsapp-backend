@@ -21,7 +21,7 @@ export function AsyncState({ status, error, isEmpty = false, emptyMessage = 'Nad
       <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13.5px] text-wa-error-text">
         <span>{error || 'Não foi possível carregar.'}</span>
         {onRetry && (
-          <Button variant="secondary" onClick={onRetry} className="!py-1.5">
+          <Button variant="secondary" size="sm" onClick={onRetry}>
             Tentar de novo
           </Button>
         )}

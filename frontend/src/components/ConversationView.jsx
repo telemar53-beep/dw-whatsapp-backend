@@ -152,7 +152,10 @@ function conversationStatus(conversation) {
 
 const ACTION =
   'flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[8px] text-[12.5px] font-medium leading-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
-const ACTION_GHOST = `${ACTION} border border-white/[0.14] bg-transparent text-chat-text hover:bg-white/[0.08]`;
+// Tem borda e texto em cor cheia: pela regua do ui/Button isso e SECONDARY,
+// nao ghost (ghost nao tem borda e usa texto apagado). O nome antigo era um
+// convite a traducao errada na proxima migracao.
+const ACTION_SECONDARY = `${ACTION} border border-white/[0.14] bg-transparent text-chat-text hover:bg-white/[0.08]`;
 // Tres categorias distintas de propósito: assumir e a acao principal,
 // transferir e secundaria, encerrar e irreversivel. Antes, assumir e encerrar
 // compartilhavam o mesmo primario.
@@ -528,7 +531,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
                 onClick={() => onTransferClick(conversation.id)}
                 aria-label="Transferir atendimento"
                 title="Transferir atendimento"
-                className={`${ACTION_GHOST} w-8 @min-[400px]:w-auto @min-[400px]:px-3`}
+                className={`${ACTION_SECONDARY} w-8 @min-[400px]:w-auto @min-[400px]:px-3`}
               >
                 <IconTransfer size={18} />
                 <span className="hidden @min-[400px]:inline">Transferir</span>
@@ -538,7 +541,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
                 onClick={() => setClosingReason(true)}
                 aria-label="Encerrar atendimento"
                 title="Encerrar atendimento"
-                className={isUnassigned ? `${ACTION_GHOST} w-8` : ACTION_DANGER}
+                className={isUnassigned ? `${ACTION_SECONDARY} w-8` : ACTION_DANGER}
               >
                 <IconCheckCircle size={18} />
                 {!isUnassigned && 'Encerrar'}

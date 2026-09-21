@@ -1,3 +1,4 @@
+import { Button } from './ui';
 // Nomes de ferramenta que mudam algo no mundo (ou custam dinheiro) e por isso
 // merecem aviso explícito ao atendente. Consultas ficam de fora: são leitura.
 const ROTULO_ACAO = {
@@ -23,9 +24,12 @@ function AiSuggestionCard({ suggestion, onSend, onEdit, onDiscard }) {
       )}
       <p className="mb-3 whitespace-pre-wrap text-sm text-wa-text">{suggestion.content}</p>
       <div className="flex gap-2">
-        <button type="button" onClick={() => onSend(suggestion)} className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent">Enviar</button>
-        <button type="button" onClick={() => onEdit(suggestion)} className="rounded-lg border border-wa-border px-3 py-1.5 text-sm text-wa-text">Editar</button>
-        <button type="button" onClick={() => onDiscard(suggestion)} className="rounded-lg px-3 py-1.5 text-sm text-wa-muted">Descartar</button>
+        {/* Eram tres <button> a mao, com o mesmo px-3 py-1.5 do `sm` e NENHUM
+            hover, foco ou disabled — o unico botao de acento solido do produto
+            sem estado de hover. O padding e a altura nao mudam. */}
+        <Button size="sm" onClick={() => onSend(suggestion)}>Enviar</Button>
+        <Button size="sm" variant="secondary" onClick={() => onEdit(suggestion)}>Editar</Button>
+        <Button size="sm" variant="ghost" onClick={() => onDiscard(suggestion)}>Descartar</Button>
       </div>
     </div>
   );

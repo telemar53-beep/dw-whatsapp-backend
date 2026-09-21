@@ -32,3 +32,10 @@
 .worknav.is-compact .worknav-connection:hover .worknav-connection-tip,
 .worknav.is-compact .worknav-connection:focus-visible .worknav-connection-tip{opacity:1;visibility:visible}
 @media(prefers-reduced-motion:reduce){.worknav-connection-tip{transition:none}}
+
+/* Sem marca configurada em `branding`, a barra usa o monograma com as iniciais
+   da empresa. As regras acima centram e zeram o gap porque esperam uma imagem;
+   aqui o layout volta a ser simbolo + nome. */
+.worknav .worknav-brand.is-sem-marca{justify-content:flex-start;gap:9px;padding:2px 3px 10px}
+.worknav.is-compact .worknav-brand.is-sem-marca{justify-content:center;gap:0;padding:2px 0 10px}
+.worknav-brand.is-sem-marca .worknav-monogram{min-height:32px}

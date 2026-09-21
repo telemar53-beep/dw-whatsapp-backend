@@ -10,8 +10,7 @@ import AgentAvatar from './AgentAvatar';
 import { IconBellOn, IconBellOff, IconUser, IconLogout, IconCheckCircle, IconChevronDown, IconWarning } from './icons/WaIcons';
 import { useSocketConnection } from '../contexts/SocketContext';
 import './side-nav.css';
-import dwHorizontal from '../assets/brands/dw-telecom-transparent.png';
-import dwMark from '../assets/brands/dw-mark.png';
+import { marcaDaInstalacao } from '../branding';
 
 export function iniciaisDaEmpresa(nome) {
   const palavras = String(nome || '').trim().split(/\s+/).filter(Boolean);
@@ -19,6 +18,37 @@ export function iniciaisDaEmpresa(nome) {
   const primeira = palavras[0];
   if (primeira.length <= 2 && primeira === primeira.toUpperCase()) return primeira;
   return palavras.slice(0, 2).map((palavra) => palavra[0].toUpperCase()).join('');
+}
+
+// A marca do menu vem de `branding` — a identidade DESTA instalação — e nunca
+// de um import fixo aqui. Sem marca configurada, o monograma com as iniciais
+// de `companyName` assume: nenhum provedor vê a marca de outro.
+//
+// O texto alternativo e o tooltip usam sempre o nome da empresa, não uma marca
+// escrita no código.
+function MarcaDoMenu({ compact, companyName, companyNameStatus }) {
+  const nome = companyName || 'Atendimento';
+  const arte = compact ? marcaDaInstalacao.compacta : marcaDaInstalacao.horizontal;
+
+  if (arte) {
+    return (
+      <div className="worknav-brand" title={nome}>
+        {compact
+          ? <img className="worknav-logo" src={arte} alt={nome} width={40} height={40} />
+          : <img className="worknav-full-logo" src={arte} alt={nome} />}
+      </div>
+    );
+  }
+
+  // Enquanto o nome não chega, o monograma fica vazio de propósito: o espaço
+  // já está reservado e a barra não pula quando a resposta chega.
+  const iniciais = companyNameStatus === 'loading' ? '' : iniciaisDaEmpresa(companyName);
+  return (
+    <div className="worknav-brand is-sem-marca" title={nome}>
+      <span className="worknav-monogram" aria-hidden="true">{iniciais}</span>
+      {!compact && <span className="worknav-label"><strong>{companyName || ''}</strong></span>}
+    </div>
+  );
 }
 
 const GROUPS = [
@@ -37,7 +67,7 @@ function NavItem({ item, onNavigate }) {
 function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} }) {
   const { agent, logout } = useAuth();
   const { muted, toggleMuted } = useQueueNotificationSound();
-  const { name: companyName } = useCompanyName();
+  const { name: companyName, status: companyNameStatus } = useCompanyName();
   const inChat = Boolean(useMatch({ path: '/', end: true }));
   const { collapsed, toggle } = useNavCollapsed({ context: inChat ? 'chat' : 'administration', defaultCollapsed: inChat });
   const connectionState = useSocketConnection();
@@ -64,10 +94,7 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
   return <>
     {mobileOpen && <div aria-hidden="true" onClick={onMobileClose} className="fixed inset-0 z-[var(--z-nav)] bg-black/50 md:hidden" />}
     <nav id="sidenav" aria-label="Navegação principal" className={`worknav ${compact ? 'is-compact' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
-      <div className="worknav-brand" title={companyName || 'DW Telecom'}>
-        {compact ? <img className="worknav-logo" src={dwMark} alt="DW Telecom" width={40} height={40} /> :
-          <img className="worknav-full-logo" src={dwHorizontal} alt="DW Telecom — Seu provedor de internet!" />}
-      </div>
+      <MarcaDoMenu compact={compact} companyName={companyName} companyNameStatus={companyNameStatus} />
       <button type="button" className="worknav-collapse" onClick={toggle} aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'} title={collapsed ? 'Expandir menu' : 'Recolher menu'}>
         <IconChevronDown size={16} /><span className="worknav-label">Recolher menu</span>
       </button>

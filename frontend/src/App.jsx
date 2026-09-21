@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { useTituloDaAba } from './hooks/useTituloDaAba';
 import { SocketProvider } from './contexts/SocketContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppShell from './components/AppShell';
@@ -59,11 +60,19 @@ function Shell({ dense = false }) {
   );
 }
 
+// Fica dentro do Router só para poder viver em um componente; o título não
+// depende de rota, só do nome da empresa.
+function TituloDaAba() {
+  useTituloDaAba();
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <SocketProvider>
+          <TituloDaAba />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
 

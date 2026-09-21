@@ -106,6 +106,8 @@ describe('SideNav', () => {
 
   test('mostra a logo oficial e o botão de som', () => {
     renderNav({ role: 'agent' });
+    // O texto alternativo vem do nome da empresa (useCompanyName), nao de uma
+    // marca escrita no componente: e por isso que ele diz "DW Telecom" aqui.
     expect(screen.getByRole('img', { name: 'DW Telecom' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /som ativado/i })).toBeInTheDocument();
   });

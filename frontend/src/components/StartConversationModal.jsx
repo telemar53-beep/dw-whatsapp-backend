@@ -124,9 +124,9 @@ function StartConversationModal({ onClose, onCreated }) {
             {loading ? (
               <p role="status" className="text-[14px] text-wa-muted">Carregando canais…</p>
             ) : loadError ? (
-              <p className="text-[14px] text-wa-error-text">Não foi possível carregar os canais. Feche e tente novamente.</p>
+              <p role="alert" className="text-[14px] text-wa-error-text">Não foi possível carregar os canais. Feche e tente novamente.</p>
             ) : channels.length === 0 ? (
-              <p className="text-[14px] text-wa-muted">Nenhum canal conectado no momento.</p>
+              <p role="status" className="text-[14px] text-wa-muted">Nenhum canal conectado no momento.</p>
             ) : (
               <select
                 id="start-conversation-channel"
@@ -142,8 +142,13 @@ function StartConversationModal({ onClose, onCreated }) {
               </select>
             )}
             </div>
-            <div>
-              <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(0,1.5fr)] gap-3">
+            <div className="dialog-inicio-linha">
+              {/* Esta grade nao tinha prefixo responsivo nenhum: o `minmax(120px)`
+                  do Pais nunca cedia e, em viewports de ate 360px, o Telefone
+                  ficava com pouco mais de 100px. Colapsa por `@container`
+                  sobre o espaco REAL do dialogo, que dentro de um modal nao e a
+                  largura da janela. */}
+              <div className="dialog-inicio-fone">
                 <div>
                   <label htmlFor="start-conversation-ddi" className={waLabelClass}>País</label>
                   <select id="start-conversation-ddi" value={ddi} onChange={(e) => setDdi(e.target.value)} className={waInputClass}>

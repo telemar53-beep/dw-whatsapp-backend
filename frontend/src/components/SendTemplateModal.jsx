@@ -79,6 +79,7 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
                 <button
                   type="button"
                   onClick={() => escolher(t)}
+                  aria-pressed={Boolean(selected && selected.id === t.id)}
                   className={`w-full rounded-[12px] border px-3 py-2 text-left transition ${
                     selected && selected.id === t.id
                       ? 'border-chat-orange/60 bg-chat-orange/10'
@@ -139,7 +140,8 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
         )}
 
         </div>
-        {error && <p className="dialog-send-template-error mt-3 text-[13px] text-wa-error-text">{error}</p>}
+        {/* Falhar ao enviar template era MUDO: sem role, ninguem e avisado. */}
+        {error && <p role="alert" className="dialog-send-template-error mt-3 text-[13px] text-wa-error-text">{error}</p>}
       </DialogBody>
       <DialogFooter>
         <button

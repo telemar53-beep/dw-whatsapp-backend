@@ -117,6 +117,12 @@
 .dialog-history-voltar {display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--color-wa-link)}
 .dialog-history-voltar:hover {text-decoration:underline}
 .dialog-history-voltar:focus-visible {outline:2px solid var(--color-focus-ring);outline-offset:2px;border-radius:6px}
+/* Nova conversa: Pais e Telefone lado a lado enquanto o espaco REAL do
+   dialogo permitir. */
+.dialog-inicio-linha {container-type:inline-size}
+.dialog-inicio-fone {display:grid;grid-template-columns:minmax(120px,.8fr) minmax(0,1.5fr);gap:12px}
+@container (max-width: 330px) {.dialog-inicio-fone {grid-template-columns:minmax(0,1fr)}}
+
 /* Equipe: grupos empilhados numa coluna. */
 .dialog-team-grupos {display:flex;flex-direction:column;gap:10px}
 .dialog-team-grupo {border:1px solid var(--color-wa-border);border-radius:12px;overflow:hidden}

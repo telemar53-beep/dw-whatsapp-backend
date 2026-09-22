@@ -412,6 +412,26 @@ A última linha é a que resolve os falsos positivos sem abrir buraco: *"o teste
 
 O detector pode continuar encontrando candidatos por regex ou por estrutura. O que decide é se a fonte tem autoridade **para aquele tipo** — não se o número aparece em algum lugar.
 
+### ⚠ Limitação em aberto — a guarda de proveniência NÃO está implementada
+
+**Estado em 2026-09-22:** as ferramentas foram entregues e os módulos de prompt
+passaram a apontar para elas. A guarda descrita acima **continua adiada**, e
+seu desenho anterior (pares velocidade/preço, gatilho por `identidade.nivel`,
+reuso de `exigiuEntregaPorAnuncio`) foi **recusado** pelo proprietário: nenhum
+desses três caminhos deve ser usado.
+
+> As ferramentas fornecem o catálogo oficial, mas a fidelidade da resposta em
+> linguagem natural ainda depende do modelo. Não existe garantia determinística
+> de que toda oferta reproduza corretamente o catálogo.
+
+Concretamente, o que **não** está protegido por código: o modelo pode consultar
+`consultar_planos` corretamente e, ainda assim, trocar o preço entre dois planos
+na resposta, ou repetir um valor que o cliente mencionou. Nada disso é barrado
+hoje — só desencorajado por instrução de prompt.
+
+**Não marcar esta proteção como implementada.** Ela exige desenho próprio e
+aprovação específica antes de qualquer código.
+
 ### Restrições
 
 - **Nenhum fallback hardcoded.** A guarda nunca substitui valor por conta própria.

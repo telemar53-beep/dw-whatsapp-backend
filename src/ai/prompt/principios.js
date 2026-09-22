@@ -1,3 +1,30 @@
+const { fontesComerciais } = require('./fontes-comerciais');
+
+// 2026-09-22: a linha dizia que as instruções mandam em "preço, planos,
+// cobertura e política comercial". Com as ferramentas no ar, preço/planos e
+// cobertura passaram a ter fonte própria, e manter a frase antiga deixava a
+// hierarquia do prompt contradizendo o resto dele. Só a lista de assuntos
+// muda; a subordinação aos itens 1 a 4 continua igual.
+function hierarquiaDasInstrucoes(estado) {
+  const { planos, cobertura } = fontesComerciais(estado);
+
+  // Sem ferramenta nenhuma, a frase sai IDÊNTICA à de antes: o caminho antigo
+  // continua valendo inteiro.
+  if (!planos && !cobertura) {
+    return 'Uma regra de estilo NUNCA justifica ignorar a mensagem atual do cliente. As INSTRUÇÕES ADICIONAIS DA OPERAÇÃO mandam em preço, planos, cobertura e política comercial, mas não sobrepõem os itens 1 a 4.';
+  }
+
+  const daOperacao = ['política comercial'];
+  if (!planos) daOperacao.unshift('preço', 'planos');
+  if (!cobertura) daOperacao.splice(daOperacao.length - 1, 0, 'cobertura');
+  const ferramentas = [
+    planos ? 'preço e planos vêm de consultar_planos' : null,
+    cobertura ? 'cobertura vem de verificar_cobertura' : null,
+  ].filter(Boolean);
+
+  return `Uma regra de estilo NUNCA justifica ignorar a mensagem atual do cliente. As INSTRUÇÕES ADICIONAIS DA OPERAÇÃO mandam em ${daOperacao.join(', ')}, mas não sobrepõem os itens 1 a 4. Já ${ferramentas.join(' e ')}, e o que a ferramenta devolver prevalece sobre o texto delas.`;
+}
+
 module.exports = {
   nome: 'principios',
   entra() { return true; },
@@ -13,7 +40,7 @@ module.exports = {
       '6. Coletar só o que for indispensável para o próximo passo.',
       '7. Encaminhar quando precisar de gente.',
       '8. O estilo da resposta.',
-      'Uma regra de estilo NUNCA justifica ignorar a mensagem atual do cliente. As INSTRUÇÕES ADICIONAIS DA OPERAÇÃO mandam em preço, planos, cobertura e política comercial, mas não sobrepõem os itens 1 a 4.',
+      hierarquiaDasInstrucoes(estado),
       '',
       `Você é a primeira atendente virtual da ${estado.empresa || 'empresa'}. Resolva sozinha tudo o que as regras e as ferramentas permitirem. Quando precisar de ação humana, colete só o necessário, escreva um resumo útil e encaminhe ao setor certo. Não tente resolver o que depende de gente.`,
       '',

@@ -1,3 +1,35 @@
+const { fontesComerciais } = require('./fontes-comerciais');
+
+// 2026-09-22: esta linha mandava informar preço, planos e cobertura SOMENTE
+// pelo texto das instruções. `fatos` sempre entra no prompt, então era a
+// ocorrência mais forte da ordem contraditória — com as ferramentas no ar,
+// ela venceria as orientações dos módulos comerciais.
+//
+// Cada ferramenta é conferida por si: sem a de planos, o texto antigo de
+// planos continua; sem a de cobertura, o de cobertura continua.
+function fonteDoComercial(estado) {
+  const { planos, cobertura } = fontesComerciais(estado);
+
+  // Sem ferramenta nenhuma, a frase sai IDÊNTICA à de antes.
+  if (!planos && !cobertura) {
+    return 'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que a equipe confirma e encaminhe para o setor que cuidar de vendas.';
+  }
+
+  const partes = [];
+  if (planos) {
+    partes.push('Preço e planos: chame consultar_planos e informe SOMENTE o que ela devolver, mantendo junto o nome, a velocidade, a mensalidade e a instalação DAQUELE mesmo plano. Valor que o cliente disse ter ouvido não é oferta oficial.');
+  } else {
+    partes.push('Preço e planos: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá.');
+  }
+  if (cobertura) {
+    partes.push('Cobertura: chame verificar_cobertura; com "precisa_verificar_viabilidade" NÃO diga que não atendemos, diga que a equipe confirma.');
+  } else {
+    partes.push('Cobertura: informe SOMENTE o que estiver escrito nas mesmas instruções.');
+  }
+  partes.push('Se a fonte não trouxer o que o cliente pergunta, não invente e não diga que consultou: diga que a equipe confirma e encaminhe para o setor que cuidar de vendas.');
+  return partes.join(' ');
+}
+
 // Fatos: quem é o cliente, quais contratos ele tem, o que pode e não pode ser
 // dito sobre a conta dele, e a data/hora de Brasília. Migração literal do
 // bloco de identidade/contratos e da linha de data/hora de
@@ -101,7 +133,7 @@ module.exports = {
       '',
       'Com identidade confirmada você pode dizer há quantos dias/meses a fatura está vencida e quantas faturas estão em aberto (use a data de hoje, no alto, para contar). Continua proibido dizer o VALOR.',
       'NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
-      'Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá. Se não houver instruções ou o que o cliente pergunta não constar nelas, não invente: diga que a equipe confirma e encaminhe para o setor que cuidar de vendas.',
+      fonteDoComercial(estado),
       'Ao pedir um esclarecimento, pergunte direto o que você precisa saber — nunca "me diga qual problema para eu encaminhar ao setor correto". O encaminhamento não se anuncia antes de acontecer.',
     );
 

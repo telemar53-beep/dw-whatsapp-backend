@@ -20,6 +20,8 @@ jest.mock('../company/company-config.repository');
 jest.mock('./receipt-usage.repository');
 jest.mock('./billing-delivery.repository');
 jest.mock('../city-notices/city-notice.service');
+jest.mock('../plans/plan.repository');
+jest.mock('../cities/city.repository');
 
 const sgpClient = require('../integrations/sgp-client');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
@@ -45,6 +47,8 @@ const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('./billing-delivery.repository');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
+const { listarPlanosDisponiveis } = require('../plans/plan.repository');
+const { listPlaces, findCityById } = require('../cities/city.repository');
 const fs = require('fs');
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
@@ -146,10 +150,11 @@ describe('tool-registry', () => {
     expect(nomes).toEqual([
       'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'consultar_faturas',
       'consultar_faturas_todos_contratos', 'consultar_financeiro',
-      'consultar_plano', 'consultar_status_conexao', 'consultar_status_contrato',
+      'consultar_plano', 'consultar_planos', 'consultar_status_conexao', 'consultar_status_contrato',
       'consultar_status_todos_contratos',
       'definir_motivo_atendimento', 'desbloqueio_confianca', 'encerrar_atendimento', 'enviar_boleto',
       'esquecer_identificacao', 'gerar_pix', 'gerar_segunda_via', 'transferir_atendimento',
+      'verificar_cobertura',
     ]);
   });
 
@@ -187,7 +192,7 @@ describe('tool-registry', () => {
     }
   });
 
-  test('the ownership exemption list is exactly these nine tools, by name', () => {
+  test('the ownership exemption list is exactly these eleven tools, by name', () => {
     // Adicionar uma isenção exige editar esta lista — a decisão passa por um
     // revisor em vez de escapar dentro da definição de uma ferramenta.
     // consultar_faturas_todos_contratos entrou porque não recebe id nenhum do
@@ -206,12 +211,15 @@ describe('tool-registry', () => {
     // analisar_comprovante entrou pela mesma razão levada ao extremo: ela não
     // tem parâmetro nenhum. A imagem que ela lê é a última que o cliente
     // mandou NESTA conversa, escolhida pelo servidor.
+    // consultar_planos e verificar_cobertura entraram porque são CATÁLOGO, não
+    // dado de cliente: não recebem contrato nenhum e valem para quem ainda não
+    // é cliente. Nada do que elas devolvem pertence a alguém.
     const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
     expect(isentas).toEqual([
       'analisar_comprovante', 'buscar_cliente', 'concluir_triagem',
-      'consultar_faturas_todos_contratos',
+      'consultar_faturas_todos_contratos', 'consultar_planos',
       'consultar_status_todos_contratos', 'definir_motivo_atendimento', 'encerrar_atendimento',
-      'esquecer_identificacao', 'transferir_atendimento',
+      'esquecer_identificacao', 'transferir_atendimento', 'verificar_cobertura',
     ]);
   });
 
@@ -3878,5 +3886,201 @@ describe('idempotência da entrega (enviar_boleto e gerar_pix)', () => {
       expect(serializado).not.toContain('89.9');
       expect(serializado).not.toContain('Willemberg');
     }
+  });
+});
+
+describe('ferramentas comerciais', () => {
+  const PLANOS = [
+    { id: 'pl-1', name: '500 Mega', speedMbps: 500, monthlyPrice: 100, installCondition: 'Grátis' },
+    { id: 'pl-2', name: '800 Mega', speedMbps: 800, monthlyPrice: 165, installCondition: 'Grátis' },
+  ];
+  const CANDIDO = { id: 'city-1', name: 'Cândido Mendes', kind: 'city', parentId: null, active: true, served: true };
+  const BARAO = { id: 'loc-1', name: 'Barão de Tromaí', kind: 'locality', parentId: 'city-1', active: true, served: true };
+
+  // Sem identificacao nenhuma: quem pergunta preco pode nao ser cliente.
+  function ctxAnonimo() {
+    return { conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, contracts: [] };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listarPlanosDisponiveis.mockResolvedValue(PLANOS);
+    listPlaces.mockResolvedValue([CANDIDO, BARAO]);
+    findCityById.mockImplementation(async (id) => (id === 'city-1' ? CANDIDO : null));
+  });
+
+  describe('consultar_planos', () => {
+    test('devolve os planos ativos do cadastro, sem exigir identificacao', async () => {
+      const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+      expect(listarPlanosDisponiveis).toHaveBeenCalled();
+      expect(r.planos).toHaveLength(2);
+      expect(r.planos[0]).toMatchObject({ nome: '500 Mega', velocidadeMbps: 500, mensalidade: 100 });
+    });
+
+    test('NUNCA devolve a observacao interna nem campo administrativo', async () => {
+      listarPlanosDisponiveis.mockResolvedValue([{ ...PLANOS[0], note: 'margem apertada', active: true, sortOrder: 3 }]);
+
+      const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+      const texto = JSON.stringify(r);
+      expect(texto).not.toContain('margem apertada');
+      expect(r.planos[0]).not.toHaveProperty('note');
+      expect(r.planos[0]).not.toHaveProperty('sortOrder');
+      expect(r.planos[0]).not.toHaveProperty('active');
+    });
+
+    test('a mensalidade vem formatada, para o modelo nao inventar o formato', async () => {
+      listarPlanosDisponiveis.mockResolvedValue([{ ...PLANOS[0], monthlyPrice: 99.9 }]);
+
+      const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+      expect(r.planos[0].mensalidade).toBe(99.9);
+      expect(r.planos[0].mensalidadeFormatada).toBe('R$ 99,90');
+    });
+
+    test('preco alterado no cadastro aparece na consulta seguinte', async () => {
+      const antes = await findTool('consultar_planos').executar({}, ctxAnonimo());
+      expect(antes.planos[0].mensalidade).toBe(100);
+
+      listarPlanosDisponiveis.mockResolvedValue([{ ...PLANOS[0], monthlyPrice: 120 }]);
+      const depois = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+      expect(depois.planos[0].mensalidade).toBe(120);
+      expect(depois.planos[0].mensalidadeFormatada).toBe('R$ 120,00');
+    });
+
+    test('catalogo vazio nao vira plano inventado', async () => {
+      listarPlanosDisponiveis.mockResolvedValue([]);
+
+      const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+      expect(r.planos).toEqual([]);
+      expect(r.instrucao).toMatch(/não invente|nao invente/i);
+      expect(r.instrucao).toMatch(/encaminhe/i);
+    });
+
+    test('a instrucao proibe usar preco de outra fonte', async () => {
+      const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+      expect(r.instrucao).toMatch(/cliente/i);
+      expect(r.instrucao).toMatch(/somente|só|apenas/i);
+    });
+  });
+
+  describe('verificar_cobertura', () => {
+    test('localidade cadastrada, ativa e atendida volta como atendida', async () => {
+      const r = await findTool('verificar_cobertura').executar({ local: 'barao de tromai' }, ctxAnonimo());
+
+      expect(r.situacao).toBe('atendida');
+      expect(r.local).toBe('Barão de Tromaí');
+      expect(r.municipio).toBe('Cândido Mendes');
+    });
+
+    test('municipio cadastrado e atendido tambem volta como atendido, sem municipio pai', async () => {
+      const r = await findTool('verificar_cobertura').executar({ local: 'CÂNDIDO MENDES' }, ctxAnonimo());
+
+      expect(r.situacao).toBe('atendida');
+      expect(r.local).toBe('Cândido Mendes');
+      expect(r.municipio).toBeNull();
+    });
+
+    test('local ausente do cadastro NAO vira "nao atendemos"', async () => {
+      const r = await findTool('verificar_cobertura').executar({ local: 'Uma cidade que ninguem cadastrou' }, ctxAnonimo());
+
+      expect(r.situacao).toBe('precisa_verificar_viabilidade');
+      expect(r.instrucao).toMatch(/não diga que não atendemos|nao diga que nao atendemos/i);
+    });
+
+    test('cadastrado mas NAO atendido volta como a verificar, nunca como recusa', async () => {
+      listPlaces.mockResolvedValue([{ ...BARAO, served: false }, CANDIDO]);
+
+      const r = await findTool('verificar_cobertura').executar({ local: 'Barão de Tromaí' }, ctxAnonimo());
+
+      expect(r.situacao).toBe('precisa_verificar_viabilidade');
+    });
+
+    test('localidade inativa volta como a verificar', async () => {
+      listPlaces.mockResolvedValue([{ ...BARAO, active: false }, CANDIDO]);
+
+      const r = await findTool('verificar_cobertura').executar({ local: 'Barão de Tromaí' }, ctxAnonimo());
+
+      expect(r.situacao).toBe('precisa_verificar_viabilidade');
+    });
+
+    test('ambiguidade entre dois cadastros parecidos nao escolhe nenhum', async () => {
+      listPlaces.mockResolvedValue([
+        { ...CANDIDO, id: 'a', name: 'Serra Alta' },
+        { ...CANDIDO, id: 'b', name: 'Serra Alva' },
+      ]);
+
+      const r = await findTool('verificar_cobertura').executar({ local: 'Serra Alia' }, ctxAnonimo());
+
+      expect(r.situacao).toBe('precisa_verificar_viabilidade');
+    });
+
+    test('atender a localidade nao promete instalacao em qualquer endereco', async () => {
+      const r = await findTool('verificar_cobertura').executar({ local: 'Barão de Tromaí' }, ctxAnonimo());
+
+      expect(r.instrucao).toMatch(/viabilidade|endereço|endereco/i);
+    });
+
+    test('local em branco e recusado pela validacao', async () => {
+      const tool = findTool('verificar_cobertura');
+      expect(tool.validar({ local: '   ' }).ok).toBeFalsy();
+      expect(tool.validar({}).ok).toBeFalsy();
+      // O valor chega ao executar ja aparado.
+      expect(tool.validar({ local: '  Barão de Tromaí ' })).toEqual({ ok: true, args: { local: 'Barão de Tromaí' } });
+    });
+
+    test('falha do cadastro nao inventa cobertura', async () => {
+      listPlaces.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        findTool('verificar_cobertura').executar({ local: 'Barão de Tromaí' }, ctxAnonimo())
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('registro e autorizacao', () => {
+    test('as duas sao isentas de contrato e nao exigem identidade forte', () => {
+      for (const nome of ['consultar_planos', 'verificar_cobertura']) {
+        const tool = findTool(nome);
+        expect(tool.isentoDeProprietario).toBe(true);
+        expect(tool.exigeIdentidadeForte).toBeFalsy();
+        expect(tool.chaveProprietario).toBeUndefined();
+      }
+    });
+
+    test('nao entram na lista fechada de terceiro', () => {
+      expect(FERRAMENTAS_PERMITIDAS_EM_TERCEIRO).not.toContain('consultar_planos');
+      expect(FERRAMENTAS_PERMITIDAS_EM_TERCEIRO).not.toContain('verificar_cobertura');
+    });
+
+    test('atravessam o executor real sem identificacao', async () => {
+      const contexto = {
+        conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, contracts: [],
+        ferramentasPermitidas: ['consultar_planos', 'verificar_cobertura'],
+      };
+
+      const planos = await executeTool('consultar_planos', {}, contexto);
+      expect(planos.ok).toBe(true);
+
+      const cobertura = await executeTool('verificar_cobertura', { local: 'Barão de Tromaí' }, contexto);
+      expect(cobertura.ok).toBe(true);
+      expect(cobertura.resultado.situacao).toBe('atendida');
+    });
+
+    test('fora do perfil que as permite, o executor recusa', async () => {
+      const contexto = {
+        conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, contracts: [],
+        ferramentasPermitidas: ['buscar_cliente'],
+      };
+
+      const r = await executeTool('consultar_planos', {}, contexto);
+
+      expect(r.ok).toBe(false);
+      expect(r.motivo).toBe('tool_not_in_profile');
+    });
   });
 });

@@ -84,3 +84,70 @@ describe('módulo painel', () => {
     expect(fraseDeFallback).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
   });
 });
+
+describe('painel com as ferramentas comerciais disponiveis', () => {
+  const COM_FERRAMENTAS = ['buscar_cliente', 'concluir_triagem', 'consultar_planos', 'verificar_cobertura'];
+
+  function texto(extra) {
+    return painel.linhas(estadoBase(extra)).join('\n');
+  }
+
+  test('declara a ferramenta como fonte oficial de preco e cobertura', () => {
+    const t = texto({ ferramentas: COM_FERRAMENTAS });
+
+    expect(t).toMatch(/FONTE OFICIAL DO COMERCIAL/);
+    expect(t).toMatch(/consultar_planos/);
+    expect(t).toMatch(/verificar_cobertura/);
+  });
+
+  test('a ferramenta prevalece sobre o que o cliente disse e sobre as instrucoes', () => {
+    const t = texto({ ferramentas: COM_FERRAMENTAS });
+
+    expect(t).toMatch(/prevalece/i);
+    expect(t).toMatch(/cliente disse ter ouvido/i);
+  });
+
+  // O ponto do lote: instrucoes vazias NAO podem mais significar "nao sei
+  // preco". Com a ferramenta no ar, ela sabe.
+  test('sem instrucoes adicionais, NAO diz mais que nao tem como confirmar', () => {
+    const t = texto({ ferramentas: COM_FERRAMENTAS, config: { ...estadoBase().config, triageExtraInstructions: null } });
+
+    expect(t).not.toMatch(/você não tem como confirmar sozinha/);
+    expect(t).toMatch(/FONTE OFICIAL DO COMERCIAL/);
+  });
+
+  test('sem ferramenta comercial, o fallback antigo continua igual', () => {
+    const t = texto({ ferramentas: ['buscar_cliente', 'concluir_triagem'] });
+
+    expect(t).toMatch(/você não tem como confirmar sozinha/);
+    expect(t).not.toMatch(/FONTE OFICIAL DO COMERCIAL/);
+  });
+
+  test('as instrucoes salvas continuam saindo inteiras, so deixam de ser "unica fonte de preco"', () => {
+    const t = texto({
+      ferramentas: COM_FERRAMENTAS,
+      config: { ...estadoBase().config, triageExtraInstructions: 'Texto que o dono escreveu.' },
+    });
+
+    expect(t).toContain('Texto que o dono escreveu.');
+    expect(t).toMatch(/INSTRUÇÕES ADICIONAIS DA OPERAÇÃO/);
+    expect(t).not.toMatch(/única fonte de preço/);
+    expect(t).toMatch(/preço, planos e cobertura vêm das ferramentas/i);
+  });
+
+  test('sem ferramenta comercial, o cabecalho antigo das instrucoes e preservado', () => {
+    const t = texto({
+      ferramentas: ['buscar_cliente'],
+      config: { ...estadoBase().config, triageExtraInstructions: 'Texto que o dono escreveu.' },
+    });
+
+    expect(t).toMatch(/única fonte de preço/);
+  });
+
+  test('so uma das duas disponivel nao anuncia a outra', () => {
+    const t = texto({ ferramentas: ['buscar_cliente', 'consultar_planos'] });
+
+    expect(t).toMatch(/consultar_planos/);
+    expect(t).not.toMatch(/verificar_cobertura/);
+  });
+});

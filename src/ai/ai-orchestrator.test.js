@@ -1305,7 +1305,9 @@ describe('perfil de triagem', () => {
 
   test('encerrar_atendimento entra na lista fixa da triagem', async () => {
     expect(FERRAMENTAS_TRIAGEM).toContain('encerrar_atendimento');
-    expect(FERRAMENTAS_TRIAGEM).toHaveLength(10);
+    // 12 desde 2026-09-22, com as duas comerciais. A contagem existe para
+    // ferramenta nova não entrar na triagem sem ninguém decidir.
+    expect(FERRAMENTAS_TRIAGEM).toHaveLength(12);
   });
 
   // 2N chamadas (status do contrato + da conexão de cada contrato) estouravam

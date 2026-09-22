@@ -3,6 +3,8 @@ export const TOOL_LABELS = {
   consultar_status_contrato: 'Consultar situação do contrato',
   consultar_status_conexao: 'Consultar conexão de internet',
   consultar_plano: 'Consultar plano contratado',
+  consultar_planos: 'Consultar planos à venda',
+  verificar_cobertura: 'Verificar cobertura de um local',
   consultar_financeiro: 'Consultar resumo financeiro',
   consultar_faturas: 'Consultar faturas do contrato',
   consultar_faturas_todos_contratos: 'Consultar faturas de todos os contratos',

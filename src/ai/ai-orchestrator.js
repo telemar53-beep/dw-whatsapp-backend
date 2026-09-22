@@ -218,6 +218,10 @@ async function carregarContratos(contact) {
 
 const FERRAMENTAS_TRIAGEM = [
   'buscar_cliente', 'esquecer_identificacao',
+  // Comerciais: quem pergunta preço ou cobertura quase nunca é cliente ainda,
+  // então elas valem SEM identificação — e são o caminho para o preço vir do
+  // cadastro em vez de um texto colado no prompt.
+  'consultar_planos', 'verificar_cobertura',
   'consultar_status_contrato', 'consultar_status_conexao',
   'consultar_status_todos_contratos', 'consultar_faturas_todos_contratos',
   // gerar_segunda_via fica de fora de propósito (teste real 2026-09-15): na

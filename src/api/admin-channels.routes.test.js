@@ -331,7 +331,11 @@ describe('GET /api/admin/channels/:id/qr', () => {
     expect(QRCode.toDataURL).toHaveBeenCalledWith('raw-qr-text');
   });
 
-  test('accepts the token via query string for browser access', async () => {
+  // O token saiu da URL: a tela ja busca o QR com Authorization desde que o
+  // <iframe> foi substituido por fetch + data URI. Um JWT na query desta rota
+  // e credencial ADMINISTRATIVA viajando por barra de endereco, log de proxy e
+  // historico do navegador - e quem abre a URL pareia o WhatsApp do canal.
+  test('um JWT valido so na query string NAO autentica mais', async () => {
     findChannelById.mockResolvedValue({ id: 'channel-4', type: 'baileys', name: 'WhatsApp Vendas', status: 'awaiting_qr' });
     baileysManager.getQrForChannel.mockReturnValue('raw-qr-text');
     QRCode.toDataURL.mockResolvedValue('data:image/png;base64,FAKEDATA');
@@ -340,25 +344,47 @@ describe('GET /api/admin/channels/:id/qr', () => {
       `/api/admin/channels/channel-4/qr?token=${tokenFor('agent-1', 'admin')}`
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
+    expect(res.text).not.toContain('FAKEDATA');
+    expect(QRCode.toDataURL).not.toHaveBeenCalled();
   });
 
-  test('returns 401 with no token in header or query string', async () => {
+  test('nem para um manager com acesso a integracoes', async () => {
+    const res = await request(buildApp()).get(
+      `/api/admin/channels/channel-4/qr?token=${tokenFor('manager-1', 'manager', true)}`
+    );
+    expect(res.status).toBe(401);
+  });
+
+  test('gerente com acesso a integracoes continua abrindo o QR pelo header', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-4', type: 'baileys', name: 'WhatsApp Vendas', status: 'awaiting_qr' });
+    baileysManager.getQrForChannel.mockReturnValue('raw-qr-text');
+    QRCode.toDataURL.mockResolvedValue('data:image/png;base64,FAKEDATA');
+
+    const res = await request(buildApp())
+      .get('/api/admin/channels/channel-4/qr')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager', true)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('data:image/png;base64,FAKEDATA');
+  });
+
+  test('returns 401 with no token at all', async () => {
     const res = await request(buildApp()).get('/api/admin/channels/channel-4/qr');
     expect(res.status).toBe(401);
   });
 
-  test('returns 403 via query string token for a non-admin agent', async () => {
-    const res = await request(buildApp()).get(
-      `/api/admin/channels/channel-4/qr?token=${tokenFor('agent-1', 'agent')}`
-    );
+  test('atendente comum continua recebendo 403 pelo header', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/channels/channel-4/qr')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(403);
   });
 
-  test('returns 403 via query string token for a manager without canManageIntegrations', async () => {
-    const res = await request(buildApp()).get(
-      `/api/admin/channels/channel-4/qr?token=${tokenFor('manager-1', 'manager')}`
-    );
+  test('gerente sem acesso a integracoes continua recebendo 403 pelo header', async () => {
+    const res = await request(buildApp())
+      .get('/api/admin/channels/channel-4/qr')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
     expect(res.status).toBe(403);
   });
 

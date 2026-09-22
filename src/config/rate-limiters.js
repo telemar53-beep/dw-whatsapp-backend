@@ -10,7 +10,12 @@ function createRateLimiter({ windowMs, max, name }) {
     standardHeaders: true,
     legacyHeaders: false,
     handler: (req, res) => {
-      console.warn(`Rate limit exceeded (${name}) for ${req.ip} on ${req.originalUrl}`);
+      // Só o caminho, nunca a query. É por ela que passam o JWT de sessão, a
+      // chave de API do SGP, o telefone do cliente e até o texto da mensagem —
+      // e este console.warn era o único ponto do servidor que imprimia tudo
+      // isso em claro. O caminho sozinho basta para saber quem está estourando.
+      const caminhoSemQuery = String(req.originalUrl || '').split('?')[0];
+      console.warn(`Rate limit exceeded (${name}) for ${req.ip} on ${req.method} ${caminhoSemQuery}`);
       res.status(429).json({ error: 'Too many requests, please try again later' });
     },
   });

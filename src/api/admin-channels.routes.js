@@ -1,8 +1,7 @@
 const express = require('express');
 const QRCode = require('qrcode');
 const crypto = require('crypto');
-const { requireAuth, requireRole, requireIntegrationsAccess, hasIntegrationsAccess } = require('../auth/auth.middleware');
-const { verifyToken } = require('../auth/auth.service');
+const { requireAuth, requireRole, requireIntegrationsAccess } = require('../auth/auth.middleware');
 const { loadConfig } = require('../config/env');
 const {
   listChannels,
@@ -38,24 +37,6 @@ const UNIQUE_VIOLATION = '23505';
 // cartao de Canais, na faixa do topo do chat e no envio pela integracao SGP.
 function initialStatusFor(type) {
   return isOfficialChannelType(type) ? 'connected' : undefined;
-}
-
-function authenticateQrRoute(req, res, next) {
-  const header = req.headers.authorization;
-  const headerToken = header && header.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
-  const token = headerToken || req.query.token;
-  if (!token) {
-    return res.status(401).json({ error: 'Missing authorization token' });
-  }
-  try {
-    req.agent = verifyToken(token);
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-  if (!hasIntegrationsAccess(req.agent)) {
-    return res.status(403).json({ error: 'Insufficient permissions' });
-  }
-  next();
 }
 
 function toChannelResponse(channel, connection) {
@@ -375,7 +356,13 @@ router.delete('/:id', requireAuth, requireIntegrationsAccess, async (req, res) =
   res.sendStatus(204);
 });
 
-router.get('/:id/qr', authenticateQrRoute, async (req, res) => {
+// Autenticação só por header. O token saiu da URL: a tela busca o QR com fetch
+// + Authorization desde que o <iframe> foi substituído, e uma credencial
+// administrativa na barra de endereço vaza por log de proxy, histórico e print
+// — e quem abre esta URL pareia o WhatsApp do canal. requireAuth +
+// requireIntegrationsAccess dão exatamente as mesmas respostas que o middleware
+// local dava, menos o fallback para a query.
+router.get('/:id/qr', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const channel = await findChannelById(req.params.id);
   if (!channel || channel.type !== 'baileys' || channel.status !== 'awaiting_qr') {
     return res.status(404).json({ error: 'No QR code available for this channel' });

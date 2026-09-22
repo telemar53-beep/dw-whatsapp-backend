@@ -691,7 +691,7 @@ describe('perfil de triagem', () => {
       const sys = (await contexto({
         avisoCidade: { cidade: 'Cândido Mendes', mensagem: 'Rompimento de fibra; equipe em campo.' },
       })).messages[0].content;
-      expect(sys).toContain('AVISO ATIVO NA CIDADE DO CLIENTE (Cândido Mendes): Rompimento de fibra; equipe em campo.');
+      expect(sys).toContain('AVISO ATIVO PARA Cândido Mendes: Rompimento de fibra; equipe em campo.');
     });
 
     // Com o motivo de encerramento configurado, a triagem deixa de encaminhar

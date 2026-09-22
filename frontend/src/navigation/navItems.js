@@ -83,6 +83,7 @@ export const SETTINGS_SECTIONS = [
     items: [
       { key: 'motivos', label: 'Motivos de atendimento', to: s('cadastros/motivos'), level: 'admin', description: 'Motivos usados ao finalizar conversas e nos relatórios.' },
       { key: 'cidades', label: 'Cidades', to: s('cadastros/cidades'), level: 'admin', description: 'Cidades usadas no cadastro e nos avisos.' },
+      { key: 'planos', label: 'Planos', to: s('cadastros/planos'), level: 'admin', description: 'Planos comerciais: velocidade, mensalidade e instalação.', terms: 'preço mensalidade velocidade mega' },
     ],
   },
   {

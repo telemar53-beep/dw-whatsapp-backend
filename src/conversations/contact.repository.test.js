@@ -12,11 +12,16 @@ const {
   listContactsMissingAvatarForBaileysBackfill,
   setContactSgpLink,
   setContactCityIfEmpty,
+  setContactLocalityIfEmpty,
 } = require('./contact.repository');
 
 describe('contact repository', () => {
   beforeEach(async () => {
-    await getPool().query('TRUNCATE contacts, cities CASCADE');
+    // `channels` entra na limpeza porque os testes de backfill criam canais com
+    // telefone fixo, e CASCADE a partir de contacts NAO alcanca channels: o
+    // arquivo passava na primeira execucao e falhava na segunda, por telefone
+    // duplicado de uma rodada anterior. O banco de teste sobrevive entre rodadas.
+    await getPool().query('TRUNCATE channels, contacts, cities CASCADE');
   });
 
   afterAll(async () => {
@@ -351,5 +356,94 @@ describe('contact repository', () => {
 
       expect(results).toEqual([{ contactId: contact.id, phoneNumber: '+5511977776669', channelId: newerChannel.id }]);
     });
+  });
+});
+
+describe('contato com localidade', () => {
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE channels, contacts, cities CASCADE');
+  });
+
+  async function municipioComPovoado() {
+    const m = await getPool().query("INSERT INTO cities (name, kind) VALUES ('Municipio', 'city') RETURNING id");
+    const p = await getPool().query(
+      "INSERT INTO cities (name, kind, parent_id) VALUES ('Povoado', 'locality', $1) RETURNING id",
+      [m.rows[0].id]
+    );
+    return { municipioId: m.rows[0].id, povoadoId: p.rows[0].id };
+  }
+
+  test('todas as leituras devolvem localityId', async () => {
+    const { municipioId, povoadoId } = await municipioComPovoado();
+    const contato = await findOrCreateContactByPhoneNumber('+5511900000031', 'Ana');
+    await updateContact(contato.id, { cityId: municipioId, localityId: povoadoId });
+
+    expect((await findContactById(contato.id)).localityId).toBe(povoadoId);
+    expect((await findContactByPhoneNumber('+5511900000031')).localityId).toBe(povoadoId);
+    expect((await findOrCreateContactByPhoneNumber('+5511900000031', 'Ana')).localityId).toBe(povoadoId);
+  });
+
+  test('contato novo nasce sem localidade', async () => {
+    const contato = await findOrCreateContactByPhoneNumber('+5511900000039', 'Novo');
+
+    expect(contato.localityId).toBeNull();
+  });
+
+  test('patch sem localityId nao apaga a localidade', async () => {
+    const { municipioId, povoadoId } = await municipioComPovoado();
+    const contato = await findOrCreateContactByPhoneNumber('+5511900000032', 'Bia');
+    await updateContact(contato.id, { cityId: municipioId, localityId: povoadoId });
+
+    const atualizado = await updateContact(contato.id, { displayName: 'Beatriz' });
+
+    expect(atualizado.localityId).toBe(povoadoId);
+    expect(atualizado.cityId).toBe(municipioId);
+  });
+
+  test('localityId null apaga de proposito, preservando o municipio', async () => {
+    const { municipioId, povoadoId } = await municipioComPovoado();
+    const contato = await findOrCreateContactByPhoneNumber('+5511900000033', 'Cid');
+    await updateContact(contato.id, { cityId: municipioId, localityId: povoadoId });
+
+    const atualizado = await updateContact(contato.id, { localityId: null });
+
+    expect(atualizado.localityId).toBeNull();
+    expect(atualizado.cityId).toBe(municipioId);
+  });
+
+  test('setContactLocalityIfEmpty nao sobrescreve escolha existente', async () => {
+    const { municipioId, povoadoId } = await municipioComPovoado();
+    const outro = await getPool().query(
+      "INSERT INTO cities (name, kind, parent_id) VALUES ('Outro povoado', 'locality', $1) RETURNING id",
+      [municipioId]
+    );
+    const contato = await findOrCreateContactByPhoneNumber('+5511900000034', 'Dora');
+    await updateContact(contato.id, { cityId: municipioId, localityId: povoadoId });
+
+    expect(await setContactLocalityIfEmpty(contato.id, outro.rows[0].id)).toBeNull();
+    expect((await findContactById(contato.id)).localityId).toBe(povoadoId);
+  });
+
+  test('setContactLocalityIfEmpty grava quando esta vazio', async () => {
+    const { municipioId, povoadoId } = await municipioComPovoado();
+    const contato = await findOrCreateContactByPhoneNumber('+5511900000035', 'Edu');
+    await updateContact(contato.id, { cityId: municipioId });
+
+    const atualizado = await setContactLocalityIfEmpty(contato.id, povoadoId);
+
+    expect(atualizado.localityId).toBe(povoadoId);
+    expect((await findContactById(contato.id)).localityId).toBe(povoadoId);
+  });
+
+  test('setContactSgpLink preserva a localidade', async () => {
+    const { municipioId, povoadoId } = await municipioComPovoado();
+    const contato = await findOrCreateContactByPhoneNumber('+5511900000036', 'Fabi');
+    await updateContact(contato.id, { cityId: municipioId, localityId: povoadoId });
+
+    const atualizado = await setContactSgpLink(contato.id, {
+      sgpClientId: 1, sgpContractId: 2, sgpDocument: '000', sgpFirstName: 'Fabi',
+    });
+
+    expect(atualizado.localityId).toBe(povoadoId);
   });
 });

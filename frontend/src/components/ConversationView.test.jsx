@@ -5,7 +5,7 @@ import ConversationView from './ConversationView';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
-import { useCities } from '../hooks/useCities';
+import { usePlaces } from '../hooks/useCities';
 import { useSgpLookup } from '../hooks/useSgpLookup';
 import { useReasons } from '../hooks/useReasons';
 import { useAiSuggestion } from '../hooks/useAiSuggestion';
@@ -28,7 +28,8 @@ beforeEach(() => {
     sendMessage: vi.fn(),
   });
   useQuickReplies.mockReturnValue({ quickReplies: [], refresh: vi.fn() });
-  useCities.mockReturnValue({ cities: [], refresh: vi.fn() });
+  // O modal de edicao passou a usar usePlaces (municipio + localidade).
+  usePlaces.mockReturnValue({ places: [], status: 'ready', refresh: vi.fn() });
   useSgpLookup.mockReturnValue({
     client: null,
     contracts: [],

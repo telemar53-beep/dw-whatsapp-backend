@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
-import { useCities } from '../hooks/useCities';
+import { usePlaces } from '../hooks/useCities';
 import { useAuth } from '../contexts/AuthContext';
 import { useConfirm } from '../hooks/useConfirm';
 import { deleteCity } from '../services/api';
-import CreateCityForm from './CreateCityForm';
-import WaDialog, { waErrorClass, WaError } from './WaDialog';
+import CityForm from './CityForm';
+import WaDialog, { WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable } from './ui';
 import { IconSearch, IconNewChat } from './icons/WaIcons';
 import { descreverErro } from '../utils/errorMessages';
@@ -12,16 +12,35 @@ import { descreverErro } from '../utils/errorMessages';
 // Escala de raio da seção: cartão 16 > controle 12 > botão de linha 10.
 const CONTROL =
   'h-10 rounded-[12px] border border-wa-border bg-wa-field text-[13.5px] text-wa-text outline-none transition focus:border-accent/60 focus:ring-2 focus:ring-focus-ring/40';
-const DANGER_BTN =
-  'inline-flex h-8 shrink-0 items-center justify-center rounded-[10px] border border-wa-error-text/30 bg-wa-error-bg px-3 text-[13px] font-medium text-wa-error-text transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50';
 
-function CityRow({ city, onDeleted, onError }) {
+const ROTULO_DE_TIPO = {
+  city: 'Cidade / Município',
+  locality: 'Povoado / Localidade',
+  unclassified: 'Não classificado',
+};
+
+// "Não atendida" seria uma afirmação que o cadastro não sustenta: served=false
+// significa cobertura NÃO CONFIRMADA, e o caminho certo é verificar viabilidade.
+function rotuloDeCobertura(served) {
+  return served ? 'Atendida' : 'A verificar';
+}
+
+function mensagemDeExclusao(err) {
+  const corpo = (err && err.body) || {};
+  if (err && err.status === 409 && corpo.error === 'place has localities') {
+    const filhas = (corpo.dependencies || {}).filhas || 0;
+    return `Não dá para excluir: ${filhas} localidades dependem deste município. Trate-as primeiro.`;
+  }
+  return descreverErro(err, 'Falha ao excluir');
+}
+
+function CityRow({ city, parentName, onEdit, onDeleted, onError }) {
   const { token } = useAuth();
   const { confirm, confirmDialog } = useConfirm();
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
-    const question = 'Excluir a cidade "' + city.name + '"?';
+    const question = 'Excluir "' + city.name + '"?';
     const ok = await confirm(question, { danger: true, confirmLabel: 'Excluir' });
     if (!ok) {
       return;
@@ -32,7 +51,7 @@ function CityRow({ city, onDeleted, onError }) {
       await deleteCity(city.id, token);
       onDeleted();
     } catch (err) {
-      onError(city.id, descreverErro(err, 'Falha ao excluir'));
+      onError(city.id, mensagemDeExclusao(err));
       setDeleting(false);
     }
   }
@@ -40,8 +59,28 @@ function CityRow({ city, onDeleted, onError }) {
   return (
     <tr className="border-t border-wa-border">
       <td className={`${CELULA} text-[14px] font-medium text-wa-text`}>{city.name}</td>
+      <td className={`${CELULA} whitespace-nowrap text-[13.5px] text-wa-muted`}>
+        {ROTULO_DE_TIPO[city.kind] || city.kind}
+      </td>
+      <td className={`${CELULA} text-[14px] text-wa-muted`}>{parentName || '—'}</td>
+      <td className={`${CELULA} text-[14px] text-wa-muted`}>{city.sgpPop || '—'}</td>
+      <td className={`${CELULA} whitespace-nowrap text-[13.5px] text-wa-muted`}>
+        {city.active ? 'Ativa' : 'Inativa'}
+      </td>
+      <td className={`${CELULA} whitespace-nowrap text-[13.5px] text-wa-muted`}>
+        {rotuloDeCobertura(city.served)}
+      </td>
       <td className={`${CELULA} whitespace-nowrap`}>
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onEdit(city)}
+            aria-label={`Editar ${city.name}`}
+            title={`Editar ${city.name}`}
+          >
+            Editar
+          </Button>
           <Button
             variant="danger"
             size="sm"
@@ -59,12 +98,13 @@ function CityRow({ city, onDeleted, onError }) {
   );
 }
 
-// Controlado (a página passa `creating`): o cartão tem o botão "Nova cidade" e
-// o formulário abre num pop-up. Sem controle: o formulário fica inline embaixo.
+// Controlado (a página passa `creating`): o cartão tem o botão de cadastro e o
+// formulário abre num pop-up. Sem controle: o formulário fica inline embaixo.
 function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
-  const { cities, status, refresh } = useCities();
+  const { places, status, refresh } = usePlaces();
   const [errors, setErrors] = useState({});
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState(null);
   const [internalCreating, setInternalCreating] = useState(false);
   const controlled = creatingProp !== undefined;
   const creating = controlled ? creatingProp : internalCreating;
@@ -74,30 +114,38 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
     setErrors((prev) => ({ ...prev, [cityId]: message }));
   }
 
+  const nomePorId = useMemo(
+    () => Object.fromEntries(places.map((p) => [p.id, p.name])),
+    [places]
+  );
+
   const errorMessages = Object.values(errors).filter(Boolean);
   const term = search.trim().toLowerCase();
   const visible = useMemo(
-    () => cities.filter((city) => !term || String(city.name || '').toLowerCase().includes(term)),
-    [cities, term]
+    () => places.filter((place) => {
+      if (!term) return true;
+      const pai = place.parentId ? nomePorId[place.parentId] || '' : '';
+      // O pai entra na busca para "Candido" achar também os povoados dele.
+      return `${place.name} ${pai} ${place.sgpPop || ''}`.toLowerCase().includes(term);
+    }),
+    [places, term, nomePorId]
   );
   const countLabel =
-    visible.length !== cities.length
-      ? `${visible.length} de ${cities.length} cidades`
-      : `${cities.length} ${cities.length === 1 ? 'cidade' : 'cidades'}`;
+    visible.length !== places.length
+      ? `${visible.length} de ${places.length} cadastros`
+      : `${places.length} ${places.length === 1 ? 'cadastro' : 'cadastros'}`;
 
   return (
     <>
-      <section
-        aria-labelledby="cities-card-title"
-        className="overflow-clip"
-      >
+      <section aria-labelledby="cities-card-title" className="overflow-clip">
         <div className="settings-register-head flex flex-wrap items-start justify-between gap-3 pb-4 pt-1">
           <div className="min-w-0">
             <h2 id="cities-card-title" className="font-display text-[17px] font-semibold leading-[22px] text-wa-text">
-              Cidades
+              Cidades e localidades
             </h2>
             <p className="mt-1 max-w-[60ch] text-[13.5px] leading-[19px] text-wa-muted">
-              As cidades do cadastro do cliente e dos avisos por região. Os nomes precisam ser iguais aos do SGP.
+              Os municípios e os povoados do cadastro do cliente e dos avisos por região. Os nomes de
+              município precisam ser iguais aos do SGP.
             </p>
           </div>
           {controlled && (
@@ -119,8 +167,8 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar cidade"
-              aria-label="Buscar cidade"
+              placeholder="Buscar cidade ou localidade"
+              aria-label="Buscar cidade ou localidade"
               className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-wa-muted"
             />
           </label>
@@ -128,30 +176,40 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
 
         <div className="settings-register-summary text-wa-muted">{countLabel}</div>
         <div className="settings-register-list overflow-hidden rounded-[15px] border border-wa-surface-line bg-wa-surface">
-          <AsyncState status={status} isEmpty={cities.length === 0} emptyMessage="Nenhuma cidade cadastrada ainda.">
-            <DataTable label="Cidades" className="min-w-[420px]">
-                <thead>
-                  <tr className="bg-black/[0.16]">
-                    <th scope="col" className={CABECALHO}>
-                      Cidade
-                    </th>
-                    <th scope="col" className={`${CABECALHO} text-right`}>
-                      Ações
-                    </th>
+          <AsyncState status={status} isEmpty={places.length === 0} emptyMessage="Nenhuma cidade cadastrada ainda.">
+            <DataTable label="Cidades e localidades" className="min-w-[760px]">
+              <thead>
+                <tr className="bg-black/[0.16]">
+                  <th scope="col" className={CABECALHO}>Nome</th>
+                  <th scope="col" className={CABECALHO}>Tipo</th>
+                  <th scope="col" className={CABECALHO}>Município</th>
+                  <th scope="col" className={CABECALHO}>POP</th>
+                  <th scope="col" className={CABECALHO}>Situação</th>
+                  <th scope="col" className={CABECALHO}>Cobertura</th>
+                  <th scope="col" className={`${CABECALHO} text-right`}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.length === 0 ? (
+                  <tr className="border-t border-wa-border">
+                    <td colSpan={7} className="px-3 py-6 text-center text-[13.5px] text-wa-muted">
+                      Nenhum cadastro com esse nome.
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {visible.length === 0 ? (
-                    <tr className="border-t border-wa-border">
-                      <td colSpan={2} className="px-3 py-6 text-center text-[13.5px] text-wa-muted">
-                        Nenhuma cidade com esse nome.
-                      </td>
-                    </tr>
-                  ) : (
-                    visible.map((city) => <CityRow key={city.id} city={city} onDeleted={refresh} onError={setCityError} />)
-                  )}
-                </tbody>
-              </DataTable>
+                ) : (
+                  visible.map((city) => (
+                    <CityRow
+                      key={city.id}
+                      city={city}
+                      parentName={city.parentId ? nomePorId[city.parentId] : null}
+                      onEdit={setEditing}
+                      onDeleted={refresh}
+                      onError={setCityError}
+                    />
+                  ))
+                )}
+              </tbody>
+            </DataTable>
           </AsyncState>
           {errorMessages.map((message, index) => (
             <WaError key={index} className="mb-3">
@@ -159,15 +217,16 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
             </WaError>
           ))}
         </div>
-
       </section>
 
       {controlled && creating && (
-        <WaDialog variant="city" title="Nova cidade" onClose={() => setCreating(false)} size="max-w-md">
+        <WaDialog variant="city" title="Nova cidade ou localidade" onClose={() => setCreating(false)} size="max-w-lg">
           <div className="px-6 pb-5 pt-2">
-            <CreateCityForm
+            <CityForm
               embedded
-              onCreated={() => {
+              place={null}
+              places={places}
+              onSaved={() => {
                 refresh();
                 setCreating(false);
               }}
@@ -176,9 +235,29 @@ function CitiesAdminTab({ creating: creatingProp, onCreatingChange } = {}) {
           </div>
         </WaDialog>
       )}
-      {!controlled && (
-        <CreateCityForm
-          onCreated={() => {
+
+      {editing && (
+        <WaDialog variant="city" title="Editar cadastro" onClose={() => setEditing(null)} size="max-w-lg">
+          <div className="px-6 pb-5 pt-2">
+            <CityForm
+              embedded
+              place={editing}
+              places={places}
+              onSaved={() => {
+                refresh();
+                setEditing(null);
+              }}
+              onCancel={() => setEditing(null)}
+            />
+          </div>
+        </WaDialog>
+      )}
+
+      {!controlled && !editing && (
+        <CityForm
+          place={null}
+          places={places}
+          onSaved={() => {
             refresh();
             setCreating(false);
           }}

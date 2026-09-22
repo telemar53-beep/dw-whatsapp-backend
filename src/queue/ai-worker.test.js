@@ -31,7 +31,7 @@ const { findChannelById } = require('../channels/channel.repository');
 const { isNightModeActive } = require('../ai/night-mode');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
-const { findActiveCityNoticeByCityId } = require('../city-notices/city-notice.repository');
+const { selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
 const { findCityById } = require('../cities/city.repository');
 const { handleAiJob } = require('./ai-worker');
 
@@ -193,7 +193,7 @@ describe('ai-worker — triagem', () => {
     // testes seguintes da triagem.
     isNightModeActive.mockReset().mockReturnValue(false);
     enviarAvisoDeCidadeSePreciso.mockReset().mockResolvedValue(null);
-    findActiveCityNoticeByCityId.mockReset().mockResolvedValue(null);
+    selecionarAvisoDoContato.mockReset().mockResolvedValue(null);
     findCityById.mockReset().mockResolvedValue(null);
     // Default benigno para o bloco de carga do escopo de terceiro (logo depois
     // de resolverIdentidade em ai-worker.js): sem isto, só o describe('escopo
@@ -400,7 +400,7 @@ describe('ai-worker — triagem', () => {
     test('o aviso ativo vai para o turno mesmo quando a mensagem já tinha sido entregue antes', async () => {
       findContactById.mockResolvedValue(CONTATO_COM_CIDADE);
       enviarAvisoDeCidadeSePreciso.mockResolvedValue(null); // já recebeu
-      findActiveCityNoticeByCityId.mockResolvedValue(AVISO);
+      selecionarAvisoDoContato.mockResolvedValue({ aviso: AVISO, lugarId: 'city-1' });
       findCityById.mockResolvedValue({ id: 'city-1', name: 'Cândido Mendes' });
 
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
@@ -413,7 +413,7 @@ describe('ai-worker — triagem', () => {
     test('contato sem cidade: nada de aviso no turno', async () => {
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-      expect(findActiveCityNoticeByCityId).not.toHaveBeenCalled();
+      expect(findCityById).not.toHaveBeenCalled();
       expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ avisoCidade: null }));
     });
 
@@ -422,7 +422,38 @@ describe('ai-worker — triagem', () => {
 
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-      expect(findActiveCityNoticeByCityId).toHaveBeenCalledWith('city-1');
+      expect(selecionarAvisoDoContato).toHaveBeenCalledWith(CONTATO_COM_CIDADE);
+      expect(findCityById).not.toHaveBeenCalled();
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ avisoCidade: null }));
+    });
+
+
+    // Envio automatico e contexto da IA precisam usar A MESMA escolha: se cada
+    // lado consultasse por conta, o cliente podia receber o aviso do povoado e
+    // a IA raciocinar com o do municipio no mesmo atendimento.
+    test('quando vence o aviso da localidade, o turno recebe o nome da LOCALIDADE', async () => {
+      findContactById.mockResolvedValue({ ...CONTATO_COM_CIDADE, localityId: 'loc-1' });
+      selecionarAvisoDoContato.mockResolvedValue({
+        aviso: { id: 'n-loc', message: 'Falha no povoado.' }, lugarId: 'loc-1',
+      });
+      findCityById.mockResolvedValue({ id: 'loc-1', name: 'Barão de Tromaí' });
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(findCityById).toHaveBeenCalledWith('loc-1');
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+        avisoCidade: { cidade: 'Barão de Tromaí', mensagem: 'Falha no povoado.' },
+      }));
+    });
+
+    test('o worker nao decide sozinho: usa a selecao do servico, e so ela', async () => {
+      const contato = { ...CONTATO_COM_CIDADE, localityId: 'loc-1' };
+      findContactById.mockResolvedValue(contato);
+      selecionarAvisoDoContato.mockResolvedValue(null);
+
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+      expect(selecionarAvisoDoContato).toHaveBeenCalledWith(contato);
       expect(findCityById).not.toHaveBeenCalled();
       expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ avisoCidade: null }));
     });

@@ -143,6 +143,7 @@ function channelLine(conversation) {
 
 import { formatPhone } from '../utils/phone';
 import { descreverErro } from '../utils/errorMessages';
+import { nomeDoLocal } from '../utils/place';
 
 function conversationStatus(conversation) {
   if (conversation.status === 'closed') return { label: 'Encerrado', dot: 'bg-chat-faint' };
@@ -390,7 +391,12 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
   const isAdmin = (agent.role === 'admin' || agent.role === 'manager') && conversation.status !== 'closed';
   const displayName = contactOverride ? contactOverride.displayName : conversation.contactDisplayName;
-  const cityName = contactOverride ? contactOverride.cityName : conversation.contactCityName;
+  // "Barão de Tromaí · Cândido Mendes" com localidade; só o município sem ela.
+  // O override vem do modal de edição e já traz os dois nomes.
+  const cityName = nomeDoLocal(
+    contactOverride ? contactOverride.localityName : conversation.contactLocalityName,
+    contactOverride ? contactOverride.cityName : conversation.contactCityName
+  );
   const nameLabel = displayName || conversation.contactPhoneNumber || 'Conversa';
   const headerLabel = cityName ? `${nameLabel} - ${cityName}` : nameLabel;
 
@@ -936,6 +942,9 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
             ...conversation,
             contactDisplayName: contactOverride ? contactOverride.displayName : conversation.contactDisplayName,
             contactCityId: contactOverride ? contactOverride.cityId : conversation.contactCityId,
+            // Sem esta linha, reabrir o modal depois de editar mostraria a
+            // localidade antiga: a cidade vinha do override e ela não.
+            contactLocalityId: contactOverride ? contactOverride.localityId : conversation.contactLocalityId,
           }}
           onClose={() => setEditingContact(false)}
           onSaved={(updated) => setContactOverride(updated)}

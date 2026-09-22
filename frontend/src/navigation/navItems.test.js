@@ -44,7 +44,11 @@ describe('NAV_ITEMS', () => {
 describe('SETTINGS_SECTIONS', () => {
   test('cada página tem rota sob /configuracoes e um nível válido', () => {
     const items = SETTINGS_SECTIONS.flatMap((g) => g.items);
-    expect(items.length).toBe(22);
+    // 23 desde 2026-09-22, com a entrada de Planos em Cadastros auxiliares.
+    // A contagem existe para uma pagina nova nao entrar sem ninguem perceber:
+    // quando ela quebrar, conferir se o item novo era intencional antes de
+    // ajustar o numero.
+    expect(items.length).toBe(23);
     expect(new Set(items.map((item) => item.to)).size).toBe(items.length);
     items.forEach((item) => {
       expect(item.to.startsWith('/configuracoes/')).toBe(true);

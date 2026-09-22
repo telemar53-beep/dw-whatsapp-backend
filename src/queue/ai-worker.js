@@ -18,8 +18,7 @@ const { paraWhatsApp } = require('../ai/whatsapp-format');
 const { garantirSaudacao, corrigirPeriodoDaSaudacao, removerSaudacao } = require('../ai/saudacao');
 const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
 const { isNightModeActive } = require('../ai/night-mode');
-const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
-const { findActiveCityNoticeByCityId } = require('../city-notices/city-notice.repository');
+const { enviarAvisoDeCidadeSePreciso, selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
 const { findCityById } = require('../cities/city.repository');
 
 async function handleAiJob(data) {
@@ -216,10 +215,14 @@ async function handleTriageTurn({ conversation, config, messageId }) {
     // O aviso ENTREGUE ANTES também conta para o prompt: a falha regional
     // continua acontecendo, e é ela que explica a reclamação deste turno —
     // mesmo que a mensagem do aviso já tenha ido em outro atendimento.
-    const avisoAtivo = contact.cityId ? await findActiveCityNoticeByCityId(contact.cityId) : null;
-    if (avisoAtivo) {
-      const cidade = await findCityById(contact.cityId);
-      avisoCidade = { cidade: cidade ? cidade.name : null, mensagem: avisoAtivo.message };
+    //
+    // A escolha vem da MESMA função que o envio usou, e não de uma consulta
+    // própria: se cada lado decidisse por conta, o cliente podia receber o
+    // aviso do povoado e a IA raciocinar com o do município.
+    const escolha = await selecionarAvisoDoContato(contact);
+    if (escolha) {
+      const lugar = await findCityById(escolha.lugarId);
+      avisoCidade = { cidade: lugar ? lugar.name : null, mensagem: escolha.aviso.message };
     }
   } catch (err) {
     console.error(`Failed to send city notice for conversation ${conversation.id}: ${mensagemSegura(err)}`);

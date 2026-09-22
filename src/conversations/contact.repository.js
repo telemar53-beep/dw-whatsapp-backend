@@ -8,6 +8,7 @@ function toContact(row) {
     avatarPath: row.avatar_path,
     avatarCheckedAt: row.avatar_checked_at,
     cityId: row.city_id,
+    localityId: row.locality_id,
     internalNote: row.internal_note,
     createdAt: row.created_at,
     sgpClientId: row.sgp_client_id,
@@ -19,7 +20,7 @@ function toContact(row) {
 
 async function findOrCreateContactByPhoneNumber(phoneNumber, displayName) {
   const existing = await getPool().query(
-    'SELECT id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name FROM contacts WHERE phone_number = $1',
+    'SELECT id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, locality_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name FROM contacts WHERE phone_number = $1',
     [phoneNumber]
   );
   if (existing.rowCount > 0) {
@@ -28,7 +29,7 @@ async function findOrCreateContactByPhoneNumber(phoneNumber, displayName) {
   const inserted = await getPool().query(
     `INSERT INTO contacts (phone_number, display_name) VALUES ($1, $2)
      ON CONFLICT (phone_number) DO UPDATE SET phone_number = EXCLUDED.phone_number
-     RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
+     RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, locality_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
     [phoneNumber, displayName || null]
   );
   return { ...toContact(inserted.rows[0]), wasCreated: true };
@@ -49,7 +50,7 @@ async function claimContactAvatarRefresh(contactId, minIntervalMs) {
     `UPDATE contacts SET avatar_checked_at = NOW()
      WHERE id = $1
        AND (avatar_checked_at IS NULL OR avatar_checked_at < NOW() - ($2::bigint * INTERVAL '1 millisecond'))
-     RETURNING id, phone_number, display_name, avatar_path, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
+     RETURNING id, phone_number, display_name, avatar_path, city_id, locality_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
     [contactId, Math.max(0, Math.floor(minIntervalMs || 0))]
   );
   if (result.rowCount === 0) return null;
@@ -58,7 +59,7 @@ async function claimContactAvatarRefresh(contactId, minIntervalMs) {
 
 async function findContactById(id) {
   const result = await getPool().query(
-    'SELECT id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name FROM contacts WHERE id = $1',
+    'SELECT id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, locality_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name FROM contacts WHERE id = $1',
     [id]
   );
   if (result.rowCount === 0) return null;
@@ -67,7 +68,7 @@ async function findContactById(id) {
 
 async function findContactByPhoneNumber(phoneNumber) {
   const result = await getPool().query(
-    'SELECT id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name FROM contacts WHERE phone_number = $1',
+    'SELECT id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, locality_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name FROM contacts WHERE phone_number = $1',
     [phoneNumber]
   );
   if (result.rowCount === 0) return null;
@@ -84,19 +85,25 @@ async function findContactByPhoneNumber(phoneNumber) {
 async function updateContact(id, patch = {}) {
   const manterNome = !('displayName' in patch);
   const manterCidade = !('cityId' in patch);
+  // A localidade tem a mesma sentinela da cidade, e pelo mesmo motivo: o que
+  // decide "não mexe" é a chave NÃO ESTAR no patch. `localityId: null` é um
+  // pedido legítimo de apagar, e precisa passar.
+  const manterLocalidade = !('localityId' in patch);
   const manterNota = !('internalNote' in patch);
   const result = await getPool().query(
     `UPDATE contacts SET
        display_name  = CASE WHEN $3::boolean THEN display_name  ELSE $2 END,
        city_id       = CASE WHEN $5::boolean THEN city_id       ELSE $4::uuid END,
-       internal_note = CASE WHEN $7::boolean THEN internal_note ELSE $6 END
+       internal_note = CASE WHEN $7::boolean THEN internal_note ELSE $6 END,
+       locality_id   = CASE WHEN $9::boolean THEN locality_id   ELSE $8::uuid END
      WHERE id = $1
-     RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
+     RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, locality_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
     [
       id,
       manterNome ? null : patch.displayName ?? null, manterNome,
       manterCidade ? null : patch.cityId ?? null, manterCidade,
       manterNota ? null : patch.internalNote ?? null, manterNota,
+      manterLocalidade ? null : patch.localityId ?? null, manterLocalidade,
     ]
   );
   if (result.rowCount === 0) return null;
@@ -111,8 +118,22 @@ async function updateContact(id, patch = {}) {
 async function setContactCityIfEmpty(contactId, cityId) {
   const result = await getPool().query(
     `UPDATE contacts SET city_id = $2 WHERE id = $1 AND city_id IS NULL
-     RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
+     RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, locality_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
     [contactId, cityId]
+  );
+  if (result.rowCount === 0) return null;
+  return toContact(result.rows[0]);
+}
+
+// Mesma regra de setContactCityIfEmpty, e pelo mesmo motivo: a condição mora no
+// próprio UPDATE para o preenchimento automático nunca passar por cima da
+// localidade que um atendente escolheu à mão, e para não haver corrida entre
+// dois turnos do mesmo contato. Devolve null quando nada foi tocado.
+async function setContactLocalityIfEmpty(contactId, localityId) {
+  const result = await getPool().query(
+    `UPDATE contacts SET locality_id = $2 WHERE id = $1 AND locality_id IS NULL
+     RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, locality_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
+    [contactId, localityId]
   );
   if (result.rowCount === 0) return null;
   return toContact(result.rows[0]);
@@ -145,7 +166,7 @@ async function setContactSgpLink(contactId, { sgpClientId, sgpContractId, sgpDoc
     `UPDATE contacts
         SET sgp_client_id = $2, sgp_contract_id = $3, sgp_document = $4,
             sgp_first_name = CASE WHEN $6::boolean THEN sgp_first_name ELSE $5 END
-      WHERE id = $1 RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
+      WHERE id = $1 RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, locality_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
     [contactId, sgpClientId, sgpContractId, sgpDocument, manterNome ? null : sgpFirstName, manterNome]
   );
   if (result.rowCount === 0) return null;
@@ -160,6 +181,7 @@ module.exports = {
   findContactByPhoneNumber,
   updateContact,
   setContactCityIfEmpty,
+  setContactLocalityIfEmpty,
   listContactsMissingAvatarForBaileysBackfill,
   setContactSgpLink,
 };

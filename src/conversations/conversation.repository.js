@@ -34,6 +34,8 @@ function toConversationSummary(row) {
     contactAvatarPath: row.contact_avatar_path,
     contactCityId: row.contact_city_id,
     contactCityName: row.contact_city_name,
+    contactLocalityId: row.contact_locality_id,
+    contactLocalityName: row.contact_locality_name,
     contactInternalNote: row.contact_internal_note,
     assignedAgentName: row.assigned_agent_name !== undefined ? row.assigned_agent_name : null,
     contactSgpDocument: row.contact_sgp_document ?? null,
@@ -353,7 +355,7 @@ async function getConversationWithContact(conversationId) {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             ct.internal_note AS contact_internal_note,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
@@ -367,6 +369,7 @@ async function getConversationWithContact(conversationId) {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m
@@ -386,7 +389,7 @@ async function findConversationByProtocolNumber(protocolNumber) {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             ct.internal_note AS contact_internal_note,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
@@ -400,6 +403,7 @@ async function findConversationByProtocolNumber(protocolNumber) {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m
@@ -419,7 +423,7 @@ async function listConversationsByContact(contactId) {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
             r.name AS ai_triage_reason_name,
@@ -432,6 +436,7 @@ async function listConversationsByContact(contactId) {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m
@@ -451,7 +456,7 @@ async function listWaitingConversations() {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             ct.internal_note AS contact_internal_note,
             aa.name AS assigned_agent_name,
             s.name AS sector_name,
@@ -467,6 +472,7 @@ async function listWaitingConversations() {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m
@@ -485,7 +491,7 @@ async function listInProgressConversations() {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
             r.name AS ai_triage_reason_name,
@@ -498,6 +504,7 @@ async function listInProgressConversations() {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m
@@ -529,7 +536,7 @@ async function listWaitingForAgentConversations() {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
             r.name AS ai_triage_reason_name,
@@ -542,6 +549,7 @@ async function listWaitingForAgentConversations() {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m
@@ -560,7 +568,7 @@ async function listInAutomationConversations() {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
             r.name AS ai_triage_reason_name,
@@ -573,6 +581,7 @@ async function listInAutomationConversations() {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m
@@ -627,7 +636,7 @@ async function listClosedSince(since, { limit, offset, filters }) {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
             r.name AS ai_triage_reason_name,
@@ -642,6 +651,7 @@ async function listClosedSince(since, { limit, offset, filters }) {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m
@@ -662,7 +672,7 @@ async function listConversationsByAgent(agentId) {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             ct.internal_note AS contact_internal_note,
             aa.name AS assigned_agent_name,
             s.name AS sector_name,
@@ -678,6 +688,7 @@ async function listConversationsByAgent(agentId) {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m
@@ -705,7 +716,7 @@ async function listClosedConversationsByAgent(agentId, { limit, offset }) {
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
-            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.locality_id AS contact_locality_id, loc.name AS contact_locality_name, ct.sgp_document AS contact_sgp_document,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
             r.name AS ai_triage_reason_name,
@@ -718,6 +729,7 @@ async function listClosedConversationsByAgent(agentId, { limit, offset }) {
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
+     LEFT JOIN cities loc ON loc.id = ct.locality_id
      LEFT JOIN LATERAL (
        SELECT content, message_type, status, direction, created_at
        FROM messages m

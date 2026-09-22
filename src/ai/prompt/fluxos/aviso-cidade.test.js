@@ -28,7 +28,7 @@ describe('módulo aviso-cidade', () => {
 
     test('cita a cidade e a mensagem do aviso, interpolados', () => {
       const t = texto('Viseu', 'Rompimento de fibra na região, equipe já está a caminho.');
-      expect(t).toMatch(/AVISO ATIVO NA CIDADE DO CLIENTE \(Viseu\): Rompimento de fibra na região, equipe já está a caminho\./);
+      expect(t).toMatch(/AVISO ATIVO PARA Viseu: Rompimento de fibra na região, equipe já está a caminho\./);
     });
 
     test('suprime verificação de equipamento e promessa de previsão', () => {
@@ -41,7 +41,7 @@ describe('módulo aviso-cidade', () => {
     // andamento na cidade dele, não só deixar de receber o roteiro normal.
     test('diz ao cliente que há falha regional em andamento na cidade dele, usando o aviso', () => {
       const t = texto();
-      expect(t).toMatch(/informe que há uma falha regional em andamento nessa cidade \(use o aviso acima\)/);
+      expect(t).toMatch(/informe que há uma falha regional em andamento nesse local \(use o aviso acima\)/);
     });
 
     test('resumo cita "falha regional" e conclui para o setor da lista acima que cuidar de suporte', () => {

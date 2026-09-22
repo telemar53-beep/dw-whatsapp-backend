@@ -1559,3 +1559,105 @@ describe('o que /queue e /mine devolvem depois de um F5', () => {
     expect(daFila.contactInternalNote).toBeNull();
   });
 });
+
+describe('localidade do contato nos resumos de conversa', () => {
+  const fs = require('fs');
+  const path = require('path');
+
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE channels, contacts, cities, agents, sectors CASCADE');
+  });
+
+  async function cenario() {
+    const municipio = await getPool().query(
+      "INSERT INTO cities (name, kind) VALUES ('Municipio', 'city') RETURNING id"
+    );
+    const povoado = await getPool().query(
+      "INSERT INTO cities (name, kind, parent_id) VALUES ('Povoado', 'locality', $1) RETURNING id",
+      [municipio.rows[0].id]
+    );
+    const channel = await createChannel({
+      type: 'baileys', name: 'Canal Loc', phoneNumber: '+5511900008888', config: {},
+    });
+    const contact = await findOrCreateContactByPhoneNumber('+5511900007777', 'Ana');
+    await updateContact(contact.id, {
+      cityId: municipio.rows[0].id, localityId: povoado.rows[0].id,
+    });
+    const conversation = await createConversation(contact.id, channel.id);
+    return {
+      municipioId: municipio.rows[0].id, povoadoId: povoado.rows[0].id,
+      channel, contact, conversation,
+    };
+  }
+
+  function conferir(resumo, povoadoId) {
+    expect(resumo).toBeDefined();
+    expect(resumo.contactLocalityId).toBe(povoadoId);
+    expect(resumo.contactLocalityName).toBe('Povoado');
+    expect(resumo.contactCityName).toBe('Municipio');
+  }
+
+  test('getConversationWithContact, listConversationsByContact e listWaitingConversations trazem a localidade', async () => {
+    const { povoadoId, conversation, contact } = await cenario();
+
+    conferir(await getConversationWithContact(conversation.id), povoadoId);
+    conferir((await listConversationsByContact(contact.id))[0], povoadoId);
+    conferir((await listWaitingConversations())[0], povoadoId);
+  });
+
+  test('findConversationByProtocolNumber traz a localidade', async () => {
+    const { povoadoId, conversation } = await cenario();
+    const protocolo = await claimProtocolNumber(conversation.id);
+
+    conferir(await findConversationByProtocolNumber(protocolo), povoadoId);
+  });
+
+  test('as consultas do atendente trazem a localidade', async () => {
+    const { povoadoId, conversation } = await cenario();
+    const agent = await createAgent({ email: 'loc@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+
+    conferir((await listInProgressConversations())[0], povoadoId);
+    conferir((await listConversationsByAgent(agent.id))[0], povoadoId);
+  });
+
+  test('as consultas de encerrado trazem a localidade', async () => {
+    const { povoadoId, conversation } = await cenario();
+    const agent = await createAgent({ email: 'loc2@dw.com', password: 'secret123', role: 'agent' });
+    await claimConversation(conversation.id, agent.id);
+    await closeConversation(conversation.id, agent.id);
+
+    const desde = new Date(Date.now() - 60 * 60 * 1000);
+    conferir((await listClosedSince(desde, { limit: 10, offset: 0 }))[0], povoadoId);
+    conferir((await listClosedConversationsByAgent(agent.id, { limit: 10, offset: 0 }))[0], povoadoId);
+  });
+
+  test('contato sem localidade devolve nulo, sem quebrar', async () => {
+    const channel = await createChannel({
+      type: 'baileys', name: 'Canal Sem Loc', phoneNumber: '+5511900006666', config: {},
+    });
+    const contact = await findOrCreateContactByPhoneNumber('+5511900005555', 'Sem');
+    const conversation = await createConversation(contact.id, channel.id);
+
+    const resumo = await getConversationWithContact(conversation.id);
+
+    expect(resumo.contactLocalityId).toBeNull();
+    expect(resumo.contactLocalityName).toBeNull();
+  });
+
+  // Guarda de OMISSAO. Sao dez consultas com o mesmo JOIN de cidade, e o modo
+  // de errar aqui e deixar UMA de fora: a localidade some numa tela so, e
+  // ninguem nota ate producao. Os testes acima cobrem o comportamento; este
+  // conta, para nenhuma consulta ficar para tras em silencio.
+  test('todas as dez consultas com JOIN de cidade tambem trazem a localidade', () => {
+    const fonte = fs.readFileSync(path.join(__dirname, 'conversation.repository.js'), 'utf8');
+
+    const joinsDeCidade = (fonte.match(/LEFT JOIN cities ci ON ci\.id = ct\.city_id/g) || []).length;
+    const joinsDeLocalidade = (fonte.match(/LEFT JOIN cities loc ON loc\.id = ct\.locality_id/g) || []).length;
+    const colunasDeLocalidade = (fonte.match(/loc\.name\s+AS contact_locality_name/g) || []).length;
+
+    expect(joinsDeCidade).toBe(10);
+    expect(joinsDeLocalidade).toBe(joinsDeCidade);
+    expect(colunasDeLocalidade).toBe(joinsDeCidade);
+  });
+});

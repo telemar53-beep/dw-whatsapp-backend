@@ -1,6 +1,6 @@
 const { getPool, closePool } = require('../db/pool');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
-const { listCities, listPlaces, listPlaceNamesForVocabulary, createCity, createPlace, updatePlace, deleteCity, findCityById } = require('./city.repository');
+const { listCities, listPlaces, listPlaceNamesForVocabulary, findPlaceBySgpPop, createCity, createPlace, updatePlace, deleteCity, findCityById } = require('./city.repository');
 
 describe('city repository', () => {
   beforeEach(async () => {
@@ -266,5 +266,46 @@ describe('city repository — nomes para o vocabulario', () => {
 
     expect((await listCities()).map((c) => c.name)).toEqual(['Candido Mendes']);
     expect(await listPlaceNamesForVocabulary()).toEqual(['Barao de Tromai', 'Candido Mendes']);
+  });
+});
+
+describe('city repository — busca pelo POP do SGP', () => {
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE cities, contacts CASCADE');
+  });
+
+  afterAll(async () => {
+    await closePool();
+  });
+
+  // O POP real de Barao de Tromai, confirmado em producao em 2026-09-22, tem
+  // barra, caixa mista e acento parcial: "Barão de tromai/MA". A chave
+  // normalizada e o que faz o casamento funcionar sem fuzzy.
+  test('casa o valor cru do SGP com o POP cadastrado, ignorando caixa, acento e espacos', async () => {
+    const pai = await createPlace({ name: 'Cândido Mendes', kind: 'city' });
+    const povoado = await createPlace({
+      name: 'Barão de Tromaí', kind: 'locality', parentId: pai.id, sgpPop: 'Barão de tromai/MA',
+    });
+
+    expect((await findPlaceBySgpPop('Barão de tromai/MA')).id).toBe(povoado.id);
+    expect((await findPlaceBySgpPop('BARAO DE TROMAI/MA')).id).toBe(povoado.id);
+    expect((await findPlaceBySgpPop('  barão   de  tromai/ma  ')).id).toBe(povoado.id);
+  });
+
+  test('nao casa por semelhanca: POP e identificador, nao texto digitado', async () => {
+    const pai = await createPlace({ name: 'Cândido Mendes', kind: 'city' });
+    await createPlace({ name: 'Barão de Tromaí', kind: 'locality', parentId: pai.id, sgpPop: 'Barão de tromai/MA' });
+
+    expect(await findPlaceBySgpPop('Barao de tromai')).toBeNull();
+    expect(await findPlaceBySgpPop('Barão de tromai/MAA')).toBeNull();
+    expect(await findPlaceBySgpPop('Barra de tromai/MA')).toBeNull();
+  });
+
+  test('POP vazio ou ausente nao casa com quem esta sem POP', async () => {
+    await createPlace({ name: 'Sem pop', kind: 'city' });
+
+    expect(await findPlaceBySgpPop(null)).toBeNull();
+    expect(await findPlaceBySgpPop('')).toBeNull();
+    expect(await findPlaceBySgpPop('   ')).toBeNull();
   });
 });

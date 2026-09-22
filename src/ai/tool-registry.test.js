@@ -1269,11 +1269,20 @@ describe('buscar_cliente com o CPF de outra pessoa (titularEOutraPessoa)', () =>
     identidade: { nivel: 'forte', origem: 'phone', primeiroNome: 'Agnieska', contracts: [] },
   });
 
-  test('não grava o vínculo do contato nem a cidade, e mantém o primeiro nome de quem fala', async () => {
+  test('não grava o vínculo do contato, nem a cidade, nem a localidade, e mantém o primeiro nome de quem fala', async () => {
     const c = ctxTerceiro();
+    c.contact.cityId = 'cidade-de-quem-fala';
+    c.contact.localityId = null;
+
     await findTool('buscar_cliente').executar({ cpf: '90460835315', titularEOutraPessoa: true }, c);
+
     expect(setContactSgpLink).not.toHaveBeenCalled();
+    // A cidade E a localidade moram na mesma função: o POP do contrato do
+    // TITULAR nunca pode virar a localidade de quem está falando, que pode não
+    // ser cliente nenhum.
     expect(preencherCidadePeloSgp).not.toHaveBeenCalled();
+    expect(c.contact.cityId).toBe('cidade-de-quem-fala');
+    expect(c.contact.localityId).toBeNull();
     expect(c.contact.sgpDocument).toBeUndefined();
     expect(c.identidade.primeiroNome).toBe('Agnieska');
   });

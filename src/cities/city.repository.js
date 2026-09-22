@@ -134,6 +134,26 @@ async function listPlaceNamesForVocabulary() {
   return result.rows.map((row) => row.name).filter(Boolean);
 }
 
+/**
+ * Acha o lugar cujo POP do SGP corresponde ao nome recebido. Casamento EXATO
+ * sobre a chave normalizada — acento, caixa e espaço não contam; parecido, sim.
+ * POP é identificador de sistema, não texto digitado por humano: aceitar
+ * "parecido" aqui mandaria o cliente para a localidade errada.
+ *
+ * Normaliza com a MESMA função que gravou `sgp_pop_key`, então o valor cru do
+ * SGP entra como veio. O índice único garante que no máximo uma linha responde.
+ */
+async function findPlaceBySgpPop(sgpPop) {
+  const chave = normalizar(sgpPop);
+  if (!chave) return null;
+  const result = await getPool().query(
+    `SELECT ${COLUNAS} FROM cities WHERE sgp_pop_key = $1`,
+    [chave]
+  );
+  if (result.rowCount === 0) return null;
+  return toCity(result.rows[0]);
+}
+
 async function findCityById(id) {
   const result = await getPool().query(`SELECT ${COLUNAS} FROM cities WHERE id = $1`, [id]);
   if (result.rowCount === 0) return null;
@@ -141,6 +161,6 @@ async function findCityById(id) {
 }
 
 module.exports = {
-  listCities, listPlaces, listPlaceNamesForVocabulary,
+  listCities, listPlaces, listPlaceNamesForVocabulary, findPlaceBySgpPop,
   createCity, createPlace, updatePlace, deleteCity, findCityById,
 };

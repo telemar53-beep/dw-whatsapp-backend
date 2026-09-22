@@ -7,6 +7,7 @@ const {
   setContactSgpLink,
 } = require('./contact.repository');
 const { createAgent } = require('../agents/agent.repository');
+const { claimProtocolNumber } = require('../assignment-messages/assignment-message.repository');
 const { createReason } = require('../reasons/reason.repository');
 const { createSector } = require('../sectors/sector.repository');
 const { createCity } = require('../cities/city.repository');
@@ -1463,5 +1464,98 @@ describe('listClosedConversationsByContact — quem atendeu, quem encerrou e por
     expect(historico.assignedAgentName).toBeNull();
     expect(historico.closedByAgentName).toBeNull();
     expect(historico.closeReasonName).toBeNull();
+  });
+});
+
+// Depois de um F5 a tela remonta a partir de /queue e /mine. Essas duas
+// consultas nao traziam protocolo nem o nome do responsavel: esses campos so
+// chegavam por evento de socket, que numa pagina recem-carregada ja passou.
+// O resultado era o cabecalho perder o protocolo ao recarregar.
+describe('o que /queue e /mine devolvem depois de um F5', () => {
+  let contactId;
+  let channelId;
+  let agentId;
+
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE conversations, contacts, channels, agents, conversation_events, sectors, cities CASCADE');
+    const contact = await findOrCreateContactByPhoneNumber('+5511977775555', 'Joana');
+    const channel = await createChannel({
+      type: 'meta_cloud',
+      name: 'Canal Teste',
+      phoneNumber: '+5511999990009',
+      config: { phoneNumberId: '111', accessToken: 'tok' },
+    });
+    const agent = await createAgent({ name: 'Maria Souza', email: 'maria@exemplo.com', password: 'segredo123', role: 'agent' });
+    contactId = contact.id;
+    channelId = channel.id;
+    agentId = agent.id;
+    await updateContact(contactId, { internalNote: 'Ja reclamou 3x no Procon' });
+  });
+
+  afterAll(async () => {
+    await closePool();
+  });
+
+  test('a fila traz protocolo, responsavel e nota interna quando ja persistidos', async () => {
+    const criada = await createConversation(contactId, channelId);
+    await claimConversation(criada.id, agentId);
+    await claimProtocolNumber(criada.id);
+    // Volta para a fila com protocolo ja emitido, como numa transferencia.
+    await getPool().query("UPDATE conversations SET status = 'waiting' WHERE id = $1", [criada.id]);
+
+    const [daFila] = await listWaitingConversations();
+
+    expect(daFila.protocolNumber).not.toBeNull();
+    expect(daFila.assignedAgentId).toBe(agentId);
+    expect(daFila.assignedAgentName).toBe('Maria Souza');
+    expect(daFila.contactInternalNote).toBe('Ja reclamou 3x no Procon');
+  });
+
+  test('as minhas conversas trazem os tres campos', async () => {
+    const criada = await createConversation(contactId, channelId);
+    await claimConversation(criada.id, agentId);
+    const protocolo = await claimProtocolNumber(criada.id);
+
+    const [minha] = await listConversationsByAgent(agentId);
+
+    expect(minha.protocolNumber).toBe(protocolo);
+    expect(minha.protocolNumber).not.toBeNull();
+    expect(minha.assignedAgentId).toBe(agentId);
+    expect(minha.assignedAgentName).toBe('Maria Souza');
+    expect(minha.contactInternalNote).toBe('Ja reclamou 3x no Procon');
+  });
+
+  // A consulta da lista e a da conversa completa sao SQL diferentes; o valor
+  // do protocolo tem de ser o mesmo nas duas, senao a tela mostra um numero
+  // ao abrir e outro depois do F5.
+  test('o protocolo da lista e o MESMO da conversa completa', async () => {
+    const criada = await createConversation(contactId, channelId);
+    await claimConversation(criada.id, agentId);
+    const protocolo = await claimProtocolNumber(criada.id);
+
+    const [minha] = await listConversationsByAgent(agentId);
+    const completa = await getConversationWithContact(criada.id);
+
+    expect(minha.protocolNumber).toBe(protocolo);
+    expect(minha.protocolNumber).toBe(completa.protocolNumber);
+  });
+
+  test('conversa sem responsavel traz nome nulo, nao quebra', async () => {
+    await createConversation(contactId, channelId);
+
+    const [daFila] = await listWaitingConversations();
+
+    expect(daFila.assignedAgentId).toBeNull();
+    expect(daFila.assignedAgentName).toBeNull();
+    expect(daFila.protocolNumber).toBeNull();
+  });
+
+  test('contato sem nota interna devolve null, nao undefined', async () => {
+    await updateContact(contactId, { internalNote: null });
+    await createConversation(contactId, channelId);
+
+    const [daFila] = await listWaitingConversations();
+
+    expect(daFila.contactInternalNote).toBeNull();
   });
 });

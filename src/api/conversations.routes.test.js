@@ -2269,3 +2269,88 @@ describe('POST /api/conversations/:id/messages/template', () => {
     expect(enqueueOutboundMessage).not.toHaveBeenCalled();
   });
 });
+
+// Depois do F5 a tela remonta so com o que estas duas rotas devolverem. E a
+// nota interna que elas passaram a carregar e dado administrativo: quem a
+// recebe depende de quem perguntou (ADR-008).
+describe('F5: protocolo, responsavel e nota interna nas listas', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const MINHA = {
+    id: 'conv-1',
+    assignedAgentId: 'agent-1',
+    protocolNumber: '20260922-0007',
+    assignedAgentName: 'Maria Souza',
+    contactInternalNote: 'Ja reclamou 3x no Procon',
+  };
+  const DE_OUTRO = {
+    id: 'conv-2',
+    assignedAgentId: 'agent-2',
+    protocolNumber: '20260922-0008',
+    assignedAgentName: 'Joao Lima',
+    contactInternalNote: 'Cliente de um colega',
+  };
+
+  function pedir(rota, agentId, role) {
+    return request(buildApp()).get(rota).set('Authorization', `Bearer ${tokenFor(agentId, role)}`);
+  }
+
+  test('/mine devolve protocolo, nome do responsavel e a nota da minha conversa', async () => {
+    listConversationsByAgent.mockResolvedValue([MINHA]);
+
+    const res = await pedir('/api/conversations/mine', 'agent-1', 'agent');
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].protocolNumber).toBe('20260922-0007');
+    expect(res.body[0].assignedAgentName).toBe('Maria Souza');
+    expect(res.body[0].contactInternalNote).toBe('Ja reclamou 3x no Procon');
+  });
+
+  test('/queue devolve protocolo e responsavel para qualquer atendente', async () => {
+    listWaitingConversations.mockResolvedValue([DE_OUTRO]);
+
+    const res = await pedir('/api/conversations/queue', 'agent-1', 'agent');
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].protocolNumber).toBe('20260922-0008');
+    expect(res.body[0].assignedAgentName).toBe('Joao Lima');
+  });
+
+  // O teste que o item pede: sem permissao, sem nota.
+  test('atendente NAO recebe a nota interna de conversa que nao e dele', async () => {
+    listWaitingConversations.mockResolvedValue([DE_OUTRO]);
+
+    const res = await pedir('/api/conversations/queue', 'agent-1', 'agent');
+
+    expect(res.body[0].contactInternalNote).toBeUndefined();
+    expect('contactInternalNote' in res.body[0]).toBe(false);
+    expect(res.text).not.toContain('Cliente de um colega');
+  });
+
+  test('admin e gerente recebem a nota de qualquer conversa', async () => {
+    for (const role of ['admin', 'manager']) {
+      listWaitingConversations.mockResolvedValue([DE_OUTRO]);
+      const res = await pedir('/api/conversations/queue', 'chefe', role);
+      expect(res.body[0].contactInternalNote).toBe('Cliente de um colega');
+    }
+  });
+
+  test('numa lista misturada, so a minha vem com nota', async () => {
+    listWaitingConversations.mockResolvedValue([MINHA, DE_OUTRO]);
+
+    const res = await pedir('/api/conversations/queue', 'agent-1', 'agent');
+
+    expect(res.body[0].contactInternalNote).toBe('Ja reclamou 3x no Procon');
+    expect('contactInternalNote' in res.body[1]).toBe(false);
+    expect(res.text).not.toContain('Cliente de um colega');
+  });
+
+  test('sem token nao devolve nada', async () => {
+    listWaitingConversations.mockResolvedValue([DE_OUTRO]);
+
+    const res = await request(buildApp()).get('/api/conversations/queue');
+
+    expect(res.status).toBe(401);
+    expect(res.text).not.toContain('Cliente de um colega');
+  });
+});

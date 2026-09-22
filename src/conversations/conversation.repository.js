@@ -35,6 +35,7 @@ function toConversationSummary(row) {
     contactCityId: row.contact_city_id,
     contactCityName: row.contact_city_name,
     contactInternalNote: row.contact_internal_note,
+    assignedAgentName: row.assigned_agent_name !== undefined ? row.assigned_agent_name : null,
     contactSgpDocument: row.contact_sgp_document ?? null,
     sectorName: row.sector_name,
     channelName: row.channel_name !== undefined ? row.channel_name : null,
@@ -447,10 +448,12 @@ async function listConversationsByContact(contactId) {
 
 async function listWaitingConversations() {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.internal_note AS contact_internal_note,
+            aa.name AS assigned_agent_name,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
             r.name AS ai_triage_reason_name,
@@ -460,6 +463,7 @@ async function listWaitingConversations() {
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      LEFT JOIN channels ch ON ch.id = c.channel_id
+     LEFT JOIN agents aa ON aa.id = c.assigned_agent_id
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id
@@ -655,10 +659,12 @@ async function listClosedSince(since, { limit, offset, filters }) {
 
 async function listConversationsByAgent(agentId) {
   const result = await getPool().query(
-    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
+    `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
             ct.avatar_path AS contact_avatar_path,
             ct.city_id AS contact_city_id, ci.name AS contact_city_name, ct.sgp_document AS contact_sgp_document,
+            ct.internal_note AS contact_internal_note,
+            aa.name AS assigned_agent_name,
             s.name AS sector_name,
             ch.name AS channel_name, ch.type AS channel_type,
             r.name AS ai_triage_reason_name,
@@ -668,6 +674,7 @@ async function listConversationsByAgent(agentId) {
      FROM conversations c
      JOIN contacts ct ON ct.id = c.contact_id
      LEFT JOIN channels ch ON ch.id = c.channel_id
+     LEFT JOIN agents aa ON aa.id = c.assigned_agent_id
      LEFT JOIN sectors s ON s.id = c.sector_id
      LEFT JOIN contact_reasons r ON r.id = c.ai_triage_reason_id
      LEFT JOIN cities ci ON ci.id = ct.city_id

@@ -28,6 +28,7 @@ const {
   listClosedConversationsByAgent,
   countClosedConversationsByAgent,
   getConversationWithContact,
+  findConversationStatusById,
   claimConversation,
   transferConversation,
   closeConversation,
@@ -316,6 +317,118 @@ describe('GET /api/conversations/:id/messages', () => {
       const res = await request(buildApp()).get(`/api/conversations/${CONVERSATION_ID}/messages`);
       expect(res.status).toBe(401);
     });
+  });
+});
+
+describe('assumir e transferir conversa silent', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    claimConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'quem-1' });
+    transferConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'outro-1' });
+    adminTransferConversation.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'outro-1' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'outro-1' });
+  });
+
+  function assumir(role) {
+    return request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/claim`)
+      .set('Authorization', `Bearer ${tokenFor('quem-1', role)}`);
+  }
+
+  function transferir(role) {
+    return request(buildApp())
+      .post(`/api/conversations/${CONVERSATION_ID}/transfer`)
+      .set('Authorization', `Bearer ${tokenFor('quem-1', role)}`)
+      .send({ toAgentId: 'outro-1' });
+  }
+
+  test('atendente nao assume conversa silent, e o repositorio nem e chamado', async () => {
+    findConversationStatusById.mockResolvedValue('silent');
+
+    const res = await assumir('agent');
+
+    expect(res.status).toBe(403);
+    expect(claimConversation).not.toHaveBeenCalled();
+  });
+
+  test('atendente nao transfere conversa silent, e o repositorio nem e chamado', async () => {
+    findConversationStatusById.mockResolvedValue('silent');
+
+    const res = await transferir('agent');
+
+    expect(res.status).toBe(403);
+    expect(transferConversation).not.toHaveBeenCalled();
+    expect(adminTransferConversation).not.toHaveBeenCalled();
+  });
+
+  test('administrador continua assumindo conversa silent', async () => {
+    findConversationStatusById.mockResolvedValue('silent');
+
+    const res = await assumir('admin');
+
+    expect(res.status).toBe(200);
+    expect(claimConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'quem-1');
+  });
+
+  test('gerente continua assumindo conversa silent', async () => {
+    findConversationStatusById.mockResolvedValue('silent');
+
+    expect((await assumir('manager')).status).toBe(200);
+  });
+
+  test('administrador continua transferindo conversa silent', async () => {
+    findConversationStatusById.mockResolvedValue('silent');
+
+    const res = await transferir('admin');
+
+    expect(res.status).toBe(200);
+    expect(adminTransferConversation).toHaveBeenCalled();
+  });
+
+  test('quem e administrativo nem consulta o status', async () => {
+    findConversationStatusById.mockResolvedValue('silent');
+
+    await assumir('admin');
+
+    expect(findConversationStatusById).not.toHaveBeenCalled();
+  });
+
+  test('assumir conversa da fila continua funcionando para o atendente', async () => {
+    findConversationStatusById.mockResolvedValue('waiting');
+
+    const res = await assumir('agent');
+
+    expect(res.status).toBe(200);
+    expect(claimConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'quem-1');
+  });
+
+  test('assumir conversa em automacao continua funcionando', async () => {
+    findConversationStatusById.mockResolvedValue('waiting');
+    expect((await assumir('agent')).status).toBe(200);
+  });
+
+  test('transferir conversa atribuida continua funcionando para o atendente', async () => {
+    findConversationStatusById.mockResolvedValue('assigned');
+
+    const res = await transferir('agent');
+
+    expect(res.status).toBe(200);
+    expect(transferConversation).toHaveBeenCalledWith(CONVERSATION_ID, 'quem-1', 'outro-1');
+  });
+
+  test('conversa encerrada continua caindo no 409 de sempre, nao em 403', async () => {
+    findConversationStatusById.mockResolvedValue('closed');
+    claimConversation.mockResolvedValue(null);
+
+    expect((await assumir('agent')).status).toBe(409);
+  });
+
+  test('sem token continua 401, e nada e consultado', async () => {
+    const res = await request(buildApp()).post(`/api/conversations/${CONVERSATION_ID}/claim`);
+
+    expect(res.status).toBe(401);
+    expect(findConversationStatusById).not.toHaveBeenCalled();
+    expect(claimConversation).not.toHaveBeenCalled();
   });
 });
 

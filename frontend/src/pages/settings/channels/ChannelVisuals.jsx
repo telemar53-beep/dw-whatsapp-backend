@@ -3,31 +3,41 @@ import whatsappLogo from '../../../assets/brands/whatsapp.svg';
 import dialog360Logo from '../../../assets/brands/360dialog.svg';
 import { IconServer } from '../../../components/icons/WaIcons';
 
-// Onde existe marca real no repositorio, a marca vem no lugar de glifo
-// funcional. As duas sao do Simple Icons 16.0.0 (colecao CC0) e ja estavam em
-// `assets/brands/` — ver o README de lá.
+// A identidade principal dos tres canais e o WHATSAPP, porque e o que o canal
+// E: o atendente precisa reconhecer primeiro o WhatsApp e so depois COMO aquele
+// numero esta conectado. Antes, Meta Cloud mostrava so a marca da Meta e a
+// 360dialog so o badge dela — a marca do provedor ocupava o lugar do canal.
 //
-// Baileys usa a marca do WHATSAPP porque e o que o canal e de fato: uma sessao
-// de WhatsApp pareada por QR. O `whatsapp.svg` estava no repositorio e era usado
-// so no titulo da pagina de Canais; a linha do canal ficava com IconDevice, um
-// celular generico. Quem diz que NAO e a API oficial e o texto ao lado
-// ("Baileys · Nao oficial" na tabela, "Baileys (nao oficial)" no modal) — esse
-// texto e obrigatorio e nao sai.
+// O provedor volta como SELO secundario, num canto, sem competir com a marca
+// principal. Baileys nao tem selo: nao existe logotipo proprio, e quem diz que
+// a conexao nao e oficial e o texto obrigatorio ao lado ("Baileys · Nao
+// oficial"), que continua onde estava.
 //
-// A 360dialog e o unico caso que NAO usa mask, e de proposito. As marcas da Meta
-// e do WhatsApp sao glifos monocromaticos de path unico (Simple Icons), feitos
-// para serem pintados em qualquer cor — `currentColor` ali e o uso correto. A
-// marca da 360dialog e um BADGE de app, com o wordmark "360D" vazado, e a
-// empresa distribui so tres cores (Black, White, Perf Green). Pintar esse badge
-// de roxo com `currentColor` seria recolorir o logotipo de terceiro, que as
-// diretrizes dela provavelmente nao permitem. Entao ela entra como <img>, na cor
-// que a propria empresa publica, sem modificacao. Ver o README de assets/brands.
+// Meta e WhatsApp sao glifos monocromaticos de path unico (Simple Icons 16.0.0,
+// colecao CC0) e por isso entram por `mask` com `currentColor` — e o uso certo
+// para esse tipo de glifo.
+//
+// A 360dialog e o unico que NAO usa mask, de proposito: a marca dela e um BADGE
+// de app com o wordmark "360D" vazado, e a empresa distribui so tres cores
+// (Black, White, Perf Green). Pintar esse badge com `currentColor` seria
+// recolorir logotipo de terceiro. Entra como <img>, na cor publicada pela
+// propria empresa, sem modificacao. Ver o README de assets/brands.
 export function ProviderMark({ type }) {
-  if (type === 'meta_cloud') return <span className="channel-brand-mark" style={{ maskImage: `url(${metaLogo})` }} />;
-  if (type === 'baileys') return <span className="channel-brand-mark" style={{ maskImage: `url(${whatsappLogo})` }} />;
-  if (type === '360dialog') return <img src={dialog360Logo} alt="" className="channel-brand-logo" />;
-  // Tipo desconhecido: simbolo funcional, como sempre foi.
-  return <IconServer size={18} />;
+  const provedores = {
+    meta_cloud: <span className="channel-brand-badge" style={{ maskImage: `url(${metaLogo})` }} />,
+    '360dialog': <img src={dialog360Logo} alt="" className="channel-brand-badge is-logo" />,
+    baileys: null,
+  };
+  if (!(type in provedores)) {
+    // Tipo desconhecido: simbolo funcional, como sempre foi. Sem imitar marca.
+    return <IconServer size={18} />;
+  }
+  return (
+    <span className="channel-brand">
+      <span className="channel-brand-mark" style={{ maskImage: `url(${whatsappLogo})` }} />
+      {provedores[type]}
+    </span>
+  );
 }
 
 export function QrStatusIcon() {

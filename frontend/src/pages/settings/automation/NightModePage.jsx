@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
 import SettingsPage from '../SettingsPage';
 import { Card, Field, Button, AsyncState, HelpText, inputClass } from '../../../components/ui';
-import { useAiTriageForm } from './useAiTriageForm';
+import { useAiTriageForm, CAMPOS_DO_NOTURNO } from './useAiTriageForm';
 import { useChannels } from '../../../hooks/useChannels';
 
 function NightModePage() {
-  const form = useAiTriageForm();
+  const form = useAiTriageForm(CAMPOS_DO_NOTURNO);
   const { channels, status: channelsStatus } = useChannels(true);
   const noturnos = channels.filter((c) => c.aiNightModeEnabled);
 

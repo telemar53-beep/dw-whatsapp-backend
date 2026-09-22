@@ -41,7 +41,7 @@ beforeEach(() => {
     status: 'ready',
   });
   useChannels.mockReturnValue({ channels: [], status: 'ready' });
-  api.updateAiTriageConfig.mockResolvedValue({});
+  api.patchAiTriageConfig.mockResolvedValue({});
 });
 
 describe('AiTriagePage', () => {
@@ -61,25 +61,23 @@ describe('AiTriagePage', () => {
     await userEvent.type(confidenceInput, '85');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar triagem com IA' }));
 
-    await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
+    // Esta página é dona de cinco campos. A janela noturna e o recibo de dia
+    // pertencem a outras duas telas e NÃO vão no corpo: o PATCH não encosta
+    // em coluna que não veio.
+    await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalledWith(
       {
         triageConfidenceThreshold: 0.85,
         triageMaxQuestions: 4,
         triageTimeoutMinutes: 12,
         triageExtraInstructions: 'Pergunte o CPF antes de tudo',
         triageResolvedReasonId: null,
-        // Config sem janela: os campos nascem vazios e salvam null (não mais
-        // o padrão 20:00/08:00 — essa página não mostra a janela).
-        nightStartTime: null,
-        nightEndTime: null,
-        triageReadReceiptsDaytime: false,
       },
       't'
     ));
   });
 
   test('mostra o erro devolvido pelo backend', async () => {
-    api.updateAiTriageConfig.mockRejectedValue({ body: { error: 'triageMaxQuestions must be an integer from 0 to 5' } });
+    api.patchAiTriageConfig.mockRejectedValue({ body: { error: 'triageMaxQuestions must be an integer from 0 to 5' } });
     renderInShell(<AiTriagePage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: 'Salvar triagem com IA' }));
@@ -102,13 +100,13 @@ describe('AiTriagePage', () => {
     const select = screen.getByLabelText(/encerrar sozinha/i);
     await userEvent.selectOptions(select, 'r-2');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar triagem com IA' }));
-    await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
+    await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalledWith(
       expect.objectContaining({ triageResolvedReasonId: 'r-2' }), 't'
     ));
 
     await userEvent.selectOptions(select, '');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar triagem com IA' }));
-    await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenLastCalledWith(
+    await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenLastCalledWith(
       expect.objectContaining({ triageResolvedReasonId: null }), 't'
     ));
   });

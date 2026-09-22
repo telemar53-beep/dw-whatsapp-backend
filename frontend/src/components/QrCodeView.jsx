@@ -9,10 +9,9 @@ import { Button } from './ui';
 // `/qr?token=<JWT>`: um quadrado branco no meio de uma tela escura, sem estado
 // de carregando, sem erro, e com o token do administrador na URL.
 //
-// O endpoint devolve um DOCUMENTO HTML (não JSON, não imagem), e essa dívida
-// continua sendo do backend. O que dá para fazer só aqui é buscar esse HTML com
-// `Authorization: Bearer`, ler o `src` da imagem e desenhar a imagem no tema.
-// Nenhum token vai para a URL por este caminho.
+// O endpoint passou a ter resposta de API: `Accept: application/json` devolve
+// o data URI do QR num campo, sem documento HTML no meio. A busca é com
+// `Authorization: Bearer` e nenhum token vai para a URL por este caminho.
 //
 // Estados: só os que os dados atuais permitem determinar. NÃO existe tempo
 // restante, validade nem "expirado": o Baileys troca a string do QR em memória

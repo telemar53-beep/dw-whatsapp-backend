@@ -29,7 +29,7 @@ beforeEach(() => {
   useAuth.mockReturnValue({ token: 't', agent: { role: 'admin' } });
   useAiConfig.mockReturnValue({ config: saved, status: 'ready', loading: false, refresh: vi.fn() });
   useChannels.mockReturnValue({ channels: [], status: 'ready' });
-  api.updateAiTriageConfig.mockResolvedValue({});
+  api.patchAiTriageConfig.mockResolvedValue({});
 });
 
 describe('NightModePage', () => {
@@ -38,27 +38,23 @@ describe('NightModePage', () => {
     expect(screen.getByRole('button', { name: 'Salvar janela noturna' })).toBeInTheDocument();
   });
 
-  // Contrato de gravação (spec regra 8): esta página divide o PUT /triage com
-  // AiTriagePage e IdentificationPage; o backend trata campo ausente como
-  // "desligado", então salvar aqui precisa mandar os oito campos sempre, com
-  // os valores das outras duas páginas preservados tal como vieram do GET.
-  test('contrato: salva os oito campos do PUT /triage, mesmo mexendo só na janela', async () => {
+  // Contrato de gravação: esta página divide a linha de `ai_config` com
+  // AiTriagePage e IdentificationPage. Enquanto o backend só tinha update
+  // total, salvar aqui precisava mandar os oito campos — e mandar os oito era
+  // reverter, em silêncio, o que outra tela tivesse mudado. Com o PATCH
+  // parcial, esta página manda SÓ a janela, e a triagem e o recibo de dia
+  // ficam intactos no banco por não virem no corpo.
+  test('contrato: salva só a janela, e nada da triagem nem da identificação', async () => {
     renderInShell(<NightModePage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: 'Salvar janela noturna' }));
 
-    await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
+    await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalledWith(
       {
-        triageConfidenceThreshold: 0.65,
-        triageMaxQuestions: 4,
-        triageTimeoutMinutes: 12,
-        triageExtraInstructions: 'Pergunte o CPF antes de tudo',
-        triageResolvedReasonId: null,
         // Config sem janela: os campos nascem vazios e salvam null (não mais
         // o padrão 20:00/08:00).
         nightStartTime: null,
         nightEndTime: null,
-        triageReadReceiptsDaytime: false,
       },
       't'
     ));
@@ -72,7 +68,7 @@ describe('NightModePage', () => {
     expect(screen.getByLabelText('Fim')).toHaveValue('08:00');
 
     await userEvent.click(screen.getByRole('button', { name: 'Salvar janela noturna' }));
-    await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
+    await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalledWith(
       expect.objectContaining({ nightStartTime: '20:00', nightEndTime: '08:00' }), 't'
     ));
   });
@@ -88,7 +84,7 @@ describe('NightModePage', () => {
     await userEvent.type(fim, '07:00');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar janela noturna' }));
 
-    await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
+    await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalledWith(
       expect.objectContaining({ nightStartTime: '19:30', nightEndTime: '07:00' }), 't'
     ));
   });
@@ -100,7 +96,7 @@ describe('NightModePage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Salvar janela noturna' }));
 
     expect(await screen.findByText('Informe início e fim do atendimento noturno, ou deixe os dois vazios')).toBeInTheDocument();
-    expect(api.updateAiTriageConfig).not.toHaveBeenCalled();
+    expect(api.patchAiTriageConfig).not.toHaveBeenCalled();
   });
 
   // Revisão final desta leva: a config sai do banco sem janela (os dois

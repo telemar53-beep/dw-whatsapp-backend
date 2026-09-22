@@ -537,18 +537,25 @@ export function updateAiTriageConfig(payload, token) {
   return apiFetch('/api/admin/ai/triage', { method: 'PUT', body: payload, token });
 }
 
-// O endpoint do QR devolve um DOCUMENTO HTML, e nao JSON nem imagem — divida
-// registrada do backend, fora do escopo desta etapa. Aqui a gente busca esse
-// HTML autenticando pelo HEADER (nada de token na URL), le o `src` da imagem
-// com DOMParser e so devolve se for mesmo um data:image/. Sem regex sobre
-// markup e sem confiar em qualquer string que vier.
+// Update parcial: manda so os campos que a tela edita, e o backend nao encosta
+// nas outras colunas. O PUT acima continua existindo para quem precisar gravar
+// a configuracao inteira de uma vez.
+export function patchAiTriageConfig(payload, token) {
+  return apiFetch('/api/admin/ai/triage', { method: 'PATCH', body: payload, token });
+}
+
+// O endpoint do QR agora tem resposta de API: com `Accept: application/json`
+// ele devolve `{ image, channelId, channelName }`, onde `image` e o data URI
+// do PNG. Autenticacao pelo HEADER (nada de token na URL). O data URI ainda
+// passa pelo teste do prefixo antes de virar `src`: o que chega da rede so
+// vira atributo de imagem depois de provar que e mesmo um data:image/.
 const PREFIXO_DE_IMAGEM = /^data:image\/(png|jpeg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
 
 export async function fetchChannelQrImage(channelId, token) {
   let resposta;
   try {
     resposta = await fetch(`${API_BASE_URL}/api/admin/channels/${channelId}/qr`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
     });
   } catch (err) {
     throw Object.assign(new Error('Falha de rede ao buscar o QR code'), { motivo: 'erro' });
@@ -564,10 +571,17 @@ export async function fetchChannelQrImage(channelId, token) {
     throw Object.assign(new Error(`QR code indisponível (${resposta.status})`), { motivo: 'erro' });
   }
 
-  const html = await resposta.text();
-  const documento = new DOMParser().parseFromString(html, 'text/html');
-  const imagem = documento.querySelector('img[src]');
-  const src = imagem ? imagem.getAttribute('src') : null;
+  // Antes daqui saia um DOMParser pescando o primeiro `<img src>` do documento
+  // HTML que a rota devolvia. Agora a rota tem resposta de API: pedimos JSON
+  // pelo Accept e lemos o campo. O HTML continua existindo para quem abrir a
+  // URL no navegador, mas a tela nao depende mais do formato dele.
+  let corpo;
+  try {
+    corpo = await resposta.json();
+  } catch (err) {
+    corpo = null;
+  }
+  const src = corpo && typeof corpo.image === 'string' ? corpo.image : null;
 
   // Se o formato mudar, isto falha ALTO: estado de erro na tela, com "Tentar de
   // novo". Nada de cair de volta para o iframe com token na URL.

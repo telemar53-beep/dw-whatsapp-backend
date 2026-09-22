@@ -18,8 +18,8 @@ function Dependencia({ pronta, ativo, inativo }) {
 
 function IdentificationPage() {
   // Esta tela é dona de UM campo só. Os demais da mesma linha de configuração
-  // pertencem à Triagem com IA e ao Atendimento noturno, e são relidos do
-  // servidor no instante do save — ver useAiTriageForm.
+  // pertencem à Triagem com IA e ao Atendimento noturno, e não são enviados
+  // daqui — o PATCH não encosta em coluna que não veio. Ver useAiTriageForm.
   const form = useAiTriageForm(CAMPOS_DA_IDENTIFICACAO);
   const { config: ia } = useAiConfig();
   const { config: empresa, status: statusEmpresa } = useCompanyConfig();

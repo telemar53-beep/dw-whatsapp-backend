@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth, requireRole, requireIntegrationsAccess } = require('../auth/auth.middleware');
-const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, updateAssistantSuggestionsEnabled, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
+const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, patchTriageConfig, updateAssistantSuggestionsEnabled, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
+const { CAMPOS_ATUALIZAVEIS } = require('../ai/ai-config.campos');
 const { listTools, findTool } = require('../ai/tool-registry');
 const { listModels } = require('../ai/openai-client');
 const { findReasonById } = require('../reasons/reason.repository');
@@ -167,6 +168,114 @@ router.put('/triage', requireAuth, requireRole('admin'), async (req, res) => {
 
 // Separada do `mode` de proposito: desligar a IA pelo modo levaria junto a
 // triagem e a transcricao de audio, que continuam desejadas. Nasce desligada.
+// Update PARCIAL da configuração de triagem (ADR-011).
+//
+// O PUT acima continua existindo e intocado: o painel de hoje manda as oito
+// colunas por decisão explícita, e quebrar esse contrato quebraria as três
+// telas que compartilham a linha. O PATCH é o caminho novo — manda só o que
+// mudou, e o que não veio fica exatamente como está no banco.
+//
+// A diferença entre "não veio" e `false`/`0`/`""` é `hasOwnProperty`, nunca
+// um teste de veracidade: `{ triageMaxQuestions: 0 }` grava zero, e um corpo
+// sem essa chave não encosta na coluna.
+//
+// Vazio continua sendo desligar, como no PUT: `''` ou `null` no motivo e nas
+// horas significam "sem encerramento pela IA" e "sem janela noturna". O que
+// muda é que agora dá para desligar UM sem mexer nos outros sete.
+const HORA_HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function enviado(corpo, campo) {
+  return Object.prototype.hasOwnProperty.call(corpo, campo) && corpo[campo] !== undefined;
+}
+
+// Cada validador devolve `{ valor }` ou `{ erro }`. São as MESMAS regras do
+// PUT — se divergirem, existem dois contratos para a mesma coluna.
+const VALIDADORES = {
+  triageConfidenceThreshold(v) {
+    const tipoValido = typeof v === 'number' || (typeof v === 'string' && v.trim() !== '');
+    if (!tipoValido) return { erro: 'triageConfidenceThreshold must be a number between 0 and 1' };
+    const t = Number(v);
+    if (!Number.isFinite(t) || t < 0 || t > 1) return { erro: 'triageConfidenceThreshold must be between 0 and 1' };
+    return { valor: t };
+  },
+  triageMaxQuestions(v) {
+    if (!Number.isInteger(v) || v < 0 || v > 5) return { erro: 'triageMaxQuestions must be an integer from 0 to 5' };
+    return { valor: v };
+  },
+  triageTimeoutMinutes(v) {
+    if (!Number.isInteger(v) || v < 1 || v > 60) return { erro: 'triageTimeoutMinutes must be an integer from 1 to 60' };
+    return { valor: v };
+  },
+  triageExtraInstructions(v) {
+    if (typeof v !== 'string') return { erro: 'triageExtraInstructions must be a string' };
+    return { valor: v };
+  },
+  triageReadReceiptsDaytime(v) {
+    if (typeof v !== 'boolean') return { erro: 'triageReadReceiptsDaytime must be a boolean' };
+    return { valor: v };
+  },
+  nightStartTime(v) {
+    if (v === null || v === '') return { valor: null };
+    if (typeof v !== 'string' || !HORA_HH_MM.test(v)) return { erro: 'nightStartTime and nightEndTime must be HH:MM or empty' };
+    return { valor: v };
+  },
+  nightEndTime(v) {
+    if (v === null || v === '') return { valor: null };
+    if (typeof v !== 'string' || !HORA_HH_MM.test(v)) return { erro: 'nightStartTime and nightEndTime must be HH:MM or empty' };
+    return { valor: v };
+  },
+};
+
+router.patch('/triage', requireAuth, requireRole('admin'), async (req, res) => {
+  const corpo = req.body || {};
+
+  // Whitelist: campo fora da lista é recusado em vez de ignorado em silêncio,
+  // para ninguém achar que mandou `systemPrompt` por aqui e foi gravado.
+  const desconhecidos = Object.keys(corpo).filter((c) => !CAMPOS_ATUALIZAVEIS.includes(c));
+  if (desconhecidos.length > 0) {
+    return res.status(400).json({ error: `Unknown or non-updatable fields: ${desconhecidos.join(', ')}` });
+  }
+
+  const mudancas = {};
+  for (const campo of CAMPOS_ATUALIZAVEIS) {
+    if (!enviado(corpo, campo)) continue;
+    if (campo === 'triageResolvedReasonId') continue;
+    const { valor, erro } = VALIDADORES[campo](corpo[campo]);
+    if (erro) return res.status(400).json({ error: erro });
+    mudancas[campo] = valor;
+  }
+
+  // O motivo autoriza a IA a ENCERRAR sozinha, então precisa existir e estar
+  // ativo — a mesma checagem do PUT, com ida ao banco.
+  if (enviado(corpo, 'triageResolvedReasonId')) {
+    const bruto = corpo.triageResolvedReasonId;
+    if (bruto === null || bruto === '') {
+      mudancas.triageResolvedReasonId = null;
+    } else {
+      const erroMotivo = { error: 'triageResolvedReasonId must be null or an active reason id' };
+      if (typeof bruto !== 'string' || !UUID_PATTERN.test(bruto)) return res.status(400).json(erroMotivo);
+      const motivo = await findReasonById(bruto);
+      if (!motivo || !motivo.active) return res.status(400).json(erroMotivo);
+      mudancas.triageResolvedReasonId = motivo.id;
+    }
+  }
+
+  // Meia janela é o risco que só o PATCH cria: mandar apenas o começo deixaria
+  // o fim como está e poderia gravar uma janela sem fim. Por isso a regra é
+  // conferida contra o estado FINAL (banco + mudanças), não contra o corpo.
+  if (enviado(corpo, 'nightStartTime') || enviado(corpo, 'nightEndTime')) {
+    const atual = await getAiConfig();
+    const inicioFinal = 'nightStartTime' in mudancas ? mudancas.nightStartTime : (atual && atual.nightStartTime) || null;
+    const fimFinal = 'nightEndTime' in mudancas ? mudancas.nightEndTime : (atual && atual.nightEndTime) || null;
+    if (Boolean(inicioFinal) !== Boolean(fimFinal)) {
+      return res.status(400).json({ error: 'nightStartTime and nightEndTime must be provided together' });
+    }
+  }
+
+  const config = await patchTriageConfig(mudancas);
+  res.json(toConfigResponse(config));
+});
+
 router.put('/assistant-suggestions', requireAuth, requireIntegrationsAccess, async (req, res) => {
   const { enabled } = req.body || {};
   if (typeof enabled !== 'boolean') {

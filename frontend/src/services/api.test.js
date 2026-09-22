@@ -8,6 +8,7 @@ import {
   sendMessage,
   closeConversation,
   mediaUrl,
+  fetchChannelQrImage,
   listAgentsAdmin,
   createAgent,
   setAgentActive,
@@ -605,5 +606,80 @@ describe('getCampaign', () => {
     global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{}') });
     await getCampaign('campaign-1', 'tok-123');
     expect(global.fetch).toHaveBeenCalledWith('http://localhost:3000/api/campaigns/campaign-1', expect.objectContaining({ method: 'GET' }));
+  });
+});
+
+// A tela do QR lia um DOCUMENTO HTML e pescava o primeiro `<img src>` com
+// DOMParser: mexer no template do backend - ate no CSS - quebrava a tela sem
+// quebrar teste nenhum, porque essa funcao nao tinha teste. Agora ela pede
+// JSON pelo Accept e le um campo.
+describe('fetchChannelQrImage', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn();
+  });
+
+  function responder({ status = 200, corpo = {} } = {}) {
+    global.fetch.mockResolvedValue({
+      ok: status >= 200 && status < 300,
+      status,
+      json: () => Promise.resolve(corpo),
+      text: () => Promise.resolve(JSON.stringify(corpo)),
+    });
+  }
+
+  test('pede JSON e manda o token no header, nunca na URL', async () => {
+    responder({ corpo: { image: 'data:image/png;base64,AAAA', channelId: 'c1', channelName: 'Vendas' } });
+
+    await fetchChannelQrImage('c1', 'tok-123');
+
+    const [url, opcoes] = global.fetch.mock.calls[0];
+    expect(url).toBe('http://localhost:3000/api/admin/channels/c1/qr');
+    expect(url).not.toContain('token');
+    expect(opcoes.headers.Authorization).toBe('Bearer tok-123');
+    expect(opcoes.headers.Accept).toBe('application/json');
+  });
+
+  test('devolve o data URI do campo image', async () => {
+    responder({ corpo: { image: 'data:image/png;base64,AAAA', channelId: 'c1', channelName: 'Vendas' } });
+
+    await expect(fetchChannelQrImage('c1', 'tok-123')).resolves.toBe('data:image/png;base64,AAAA');
+  });
+
+  test('404 vira motivo indisponivel', async () => {
+    responder({ status: 404, corpo: { error: 'No QR code available for this channel' } });
+
+    await expect(fetchChannelQrImage('c1', 'tok-123')).rejects.toMatchObject({ motivo: 'indisponivel' });
+  });
+
+  test('401 e 403 viram motivo semPermissao', async () => {
+    responder({ status: 401 });
+    await expect(fetchChannelQrImage('c1', 'tok-123')).rejects.toMatchObject({ motivo: 'semPermissao' });
+    responder({ status: 403 });
+    await expect(fetchChannelQrImage('c1', 'tok-123')).rejects.toMatchObject({ motivo: 'semPermissao' });
+  });
+
+  test('falha de rede vira motivo erro', async () => {
+    global.fetch.mockRejectedValue(new TypeError('failed to fetch'));
+
+    await expect(fetchChannelQrImage('c1', 'tok-123')).rejects.toMatchObject({ motivo: 'erro' });
+  });
+
+  // O que chega da rede so vira `src` de imagem depois de provar que e mesmo
+  // um data:image/. Nao basta ser string.
+  test('recusa image que nao e um data URI de imagem', async () => {
+    for (const valor of ['javascript:alert(1)', 'http://exemplo/x.png', 'data:text/html;base64,AAAA', '', 42, undefined]) {
+      responder({ corpo: { image: valor } });
+      await expect(fetchChannelQrImage('c1', 'tok-123')).rejects.toMatchObject({ motivo: 'formatoInesperado' });
+    }
+  });
+
+  test('resposta que nao e JSON falha visivel, sem quebrar a tela', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new SyntaxError('Unexpected token <')),
+    });
+
+    await expect(fetchChannelQrImage('c1', 'tok-123')).rejects.toMatchObject({ motivo: 'formatoInesperado' });
   });
 });

@@ -5,6 +5,7 @@ const { analisarComprovante } = require('../ai/receipt-analysis');
 const { getAiConfig } = require('../ai/ai-config.repository');
 const { lookupClientByCpf } = require('../integrations/sgp-client');
 const { mensagemSegura } = require('../ai/safe-error-log');
+const { apresentarConversas } = require('../conversations/conversation.presenter');
 const { requireAuth, hasAdminLevelAccess } = require('../auth/auth.middleware');
 const {
   listWaitingConversations,
@@ -60,14 +61,21 @@ const MAX_SIZE_BY_MESSAGE_TYPE = {
   document: 100 * 1024 * 1024,
 };
 
+// Depois de um F5 a tela remonta a partir daqui: estas duas rotas sao a
+// unica fonte da conversa. Antes elas nao traziam protocolo nem responsavel
+// -- esses campos so chegavam pelo socket, num evento que ja tinha passado --
+// entao recarregar a pagina apagava o protocolo do cabecalho.
+//
+// A nota interna passa pelo presenter, nao pela query: e dado administrativo
+// e quem a recebe depende de quem esta perguntando (ADR-008).
 router.get('/queue', async (req, res) => {
   const conversations = await listWaitingConversations();
-  res.json(conversations);
+  res.json(apresentarConversas(conversations, req.agent));
 });
 
 router.get('/mine', async (req, res) => {
   const conversations = await listConversationsByAgent(req.agent.agentId);
-  res.json(conversations);
+  res.json(apresentarConversas(conversations, req.agent));
 });
 
 const MINE_CLOSED_DEFAULT_LIMIT = 20;

@@ -8,6 +8,7 @@ const {
   createCampaign,
   findCampaignById,
   listCampaigns,
+  countCampaigns,
   createCampaignRecipients,
   listCampaignRecipients,
   updateCampaignRecipientStatus,
@@ -173,9 +174,39 @@ router.post('/', async (req, res) => {
   res.status(201).json(campaign);
 });
 
+const LIST_DEFAULT_LIMIT = 20;
+const LIST_MAX_LIMIT = 100;
+
+// Le um inteiro de query string sem "consertar" nada. Aqui um clamp seria
+// perigoso: a presenca do parametro e o que decide o FORMATO da resposta, e um
+// valor errado viraria um envelope que o cliente nao pediu.
+function parseInteiro(raw, { min, max }) {
+  if (!/^\d+$/.test(String(raw))) return null;
+  const valor = Number(raw);
+  if (valor < min || valor > max) return null;
+  return valor;
+}
+
 router.get('/', async (req, res) => {
-  const campaigns = await listCampaigns();
-  res.json(campaigns);
+  const querPaginar = req.query.limit !== undefined || req.query.offset !== undefined;
+  if (!querPaginar) {
+    // Ninguem pediu pagina: array puro, do jeito que sempre foi.
+    const campaigns = await listCampaigns();
+    return res.json(campaigns);
+  }
+
+  const limit = req.query.limit === undefined
+    ? LIST_DEFAULT_LIMIT
+    : parseInteiro(req.query.limit, { min: 1, max: LIST_MAX_LIMIT });
+  const offset = req.query.offset === undefined
+    ? 0
+    : parseInteiro(req.query.offset, { min: 0, max: Number.MAX_SAFE_INTEGER });
+  if (limit === null || offset === null) {
+    return res.status(400).json({ error: `limit must be an integer from 1 to ${LIST_MAX_LIMIT} and offset a non-negative integer` });
+  }
+
+  const [items, total] = await Promise.all([listCampaigns({ limit, offset }), countCampaigns()]);
+  res.json({ items, total, hasMore: offset + items.length < total });
 });
 
 router.get('/:id', async (req, res) => {

@@ -90,11 +90,20 @@ async function findCampaignById(id) {
   return toCampaignWithChannel(result.rows[0]);
 }
 
-async function listCampaigns() {
+// Sem limit/offset a consulta sai exatamente como sempre saiu, sem LIMIT: e o
+// que mantem a resposta atual da rota byte a byte igual.
+async function listCampaigns({ limit, offset } = {}) {
+  const paginado = limit !== undefined && offset !== undefined;
   const result = await getPool().query(
-    `SELECT ${CAMPAIGN_COLUMNS_JOINED}, ch.name AS channel_name ${CAMPAIGN_FROM_JOINED} ${CAMPAIGN_ORDER}`
+    `SELECT ${CAMPAIGN_COLUMNS_JOINED}, ch.name AS channel_name ${CAMPAIGN_FROM_JOINED} ${CAMPAIGN_ORDER}${paginado ? ' LIMIT $1 OFFSET $2' : ''}`,
+    paginado ? [limit, offset] : []
   );
   return result.rows.map(toCampaignWithChannel);
+}
+
+async function countCampaigns() {
+  const result = await getPool().query(`SELECT COUNT(*)::int AS count FROM campaigns`);
+  return Number(result.rows[0].count);
 }
 
 async function createCampaignRecipients(campaignId, recipients) {
@@ -146,6 +155,7 @@ module.exports = {
   createCampaign,
   findCampaignById,
   listCampaigns,
+  countCampaigns,
   createCampaignRecipients,
   listCampaignRecipients,
   updateCampaignRecipientStatus,

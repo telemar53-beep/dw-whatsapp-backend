@@ -3,6 +3,7 @@ const {
   createCampaign,
   findCampaignById,
   listCampaigns,
+  countCampaigns,
   createCampaignRecipients,
   listCampaignRecipients,
   updateCampaignRecipientStatus,
@@ -160,6 +161,64 @@ describe('campaign repository', () => {
 
     expect(primeira).toEqual(segunda);
     expect(primeira.sort()).toEqual(criadas.map((c) => c.id).sort());
+  });
+
+  describe('paginacao da lista', () => {
+    async function tresCampanhas() {
+      const agent = await makeAgent();
+      const channel = await makeChannel();
+      const criadas = [];
+      for (const nome of ['primeira', 'segunda', 'terceira']) {
+        criadas.push(await createCampaign({
+          name: nome, channelId: channel.id, messageType: 'text', content: 'a', createdBy: agent.id, totalRecipients: 1,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      return criadas;
+    }
+
+    test('sem opcoes devolve tudo, como antes', async () => {
+      const criadas = await tresCampanhas();
+      const todas = await listCampaigns();
+      expect(todas).toHaveLength(3);
+      expect(todas[0].id).toBe(criadas[2].id);
+    });
+
+    test('um objeto de opcoes vazio tambem devolve tudo', async () => {
+      await tresCampanhas();
+      expect(await listCampaigns({})).toHaveLength(3);
+    });
+
+    test('pagina sem repetir nem pular campanha', async () => {
+      const criadas = await tresCampanhas();
+      const maisNovaPrimeiro = [criadas[2].id, criadas[1].id, criadas[0].id];
+
+      const p1 = await listCampaigns({ limit: 2, offset: 0 });
+      const p2 = await listCampaigns({ limit: 2, offset: 2 });
+      const p3 = await listCampaigns({ limit: 2, offset: 4 });
+
+      expect([...p1, ...p2].map((c) => c.id)).toEqual(maisNovaPrimeiro);
+      expect(p3).toEqual([]);
+    });
+
+    test('a pagina carrega o nome do canal igual a lista inteira', async () => {
+      await tresCampanhas();
+      const [daPagina] = await listCampaigns({ limit: 1, offset: 0 });
+      const [daListaInteira] = await listCampaigns();
+      expect(daPagina).toEqual(daListaInteira);
+      expect(daPagina.channelName).toBeTruthy();
+    });
+
+    test('countCampaigns conta todas, independente da pagina', async () => {
+      await tresCampanhas();
+      expect(await countCampaigns()).toBe(3);
+      await listCampaigns({ limit: 1, offset: 0 });
+      expect(await countCampaigns()).toBe(3);
+    });
+
+    test('countCampaigns devolve zero quando nao ha campanha', async () => {
+      expect(await countCampaigns()).toBe(0);
+    });
   });
 
   test('createCampaignRecipients inserts every recipient with the given status', async () => {

@@ -11,6 +11,7 @@ const {
   createCampaign,
   findCampaignById,
   listCampaigns,
+  countCampaigns,
   createCampaignRecipients,
   listCampaignRecipients,
   updateCampaignRecipientStatus,
@@ -225,11 +226,108 @@ describe('POST /api/campaigns', () => {
 });
 
 describe('GET /api/campaigns', () => {
+  beforeEach(() => jest.clearAllMocks());
+
   test('lists campaigns', async () => {
     listCampaigns.mockResolvedValue([{ id: 'campaign-1' }]);
     const res = await request(buildApp()).get('/api/campaigns').set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual([{ id: 'campaign-1' }]);
+  });
+
+  test('sem parametro nenhum a resposta continua sendo o array puro', async () => {
+    listCampaigns.mockResolvedValue([{ id: 'campaign-1' }, { id: 'campaign-2' }]);
+
+    const res = await request(buildApp())
+      .get('/api/campaigns')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(listCampaigns).toHaveBeenCalledWith();
+    expect(countCampaigns).not.toHaveBeenCalled();
+  });
+
+  test('parametro desconhecido nao liga a paginacao', async () => {
+    listCampaigns.mockResolvedValue([{ id: 'campaign-1' }]);
+
+    const res = await request(buildApp())
+      .get('/api/campaigns?ordem=nome&busca=aviso')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(listCampaigns).toHaveBeenCalledWith();
+  });
+
+  test('com limit a resposta vira envelope com items, total e hasMore', async () => {
+    listCampaigns.mockResolvedValue([{ id: 'campaign-1' }]);
+    countCampaigns.mockResolvedValue(3);
+
+    const res = await request(buildApp())
+      .get('/api/campaigns?limit=1')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ items: [{ id: 'campaign-1' }], total: 3, hasMore: true });
+    expect(listCampaigns).toHaveBeenCalledWith({ limit: 1, offset: 0 });
+  });
+
+  test('so offset tambem liga a paginacao, com limit padrao', async () => {
+    listCampaigns.mockResolvedValue([]);
+    countCampaigns.mockResolvedValue(0);
+
+    await request(buildApp())
+      .get('/api/campaigns?offset=40')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(listCampaigns).toHaveBeenCalledWith({ limit: 20, offset: 40 });
+  });
+
+  test('hasMore sai de offset + items.length < total', async () => {
+    listCampaigns.mockResolvedValue([{ id: 'c3' }, { id: 'c4' }]);
+    countCampaigns.mockResolvedValue(4);
+
+    const res = await request(buildApp())
+      .get('/api/campaigns?limit=2&offset=2')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.body.hasMore).toBe(false);
+    expect(res.body.total).toBe(4);
+  });
+
+  test('pagina vazia depois do fim se descreve honestamente', async () => {
+    listCampaigns.mockResolvedValue([]);
+    countCampaigns.mockResolvedValue(2);
+
+    const res = await request(buildApp())
+      .get('/api/campaigns?limit=20&offset=99')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.body).toEqual({ items: [], total: 2, hasMore: false });
+  });
+
+  test('valor invalido devolve 400 em vez de ajustar em silencio', async () => {
+    for (const query of ['limit=abc', 'limit=0', 'limit=101', 'limit=-1', 'offset=-1', 'offset=abc', 'limit=1.5']) {
+      jest.clearAllMocks();
+      const res = await request(buildApp())
+        .get(`/api/campaigns?${query}`)
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+      expect(res.status).toBe(400);
+      expect(listCampaigns).not.toHaveBeenCalled();
+      expect(countCampaigns).not.toHaveBeenCalled();
+    }
+  });
+
+  test('o teto de 100 e aceito na borda', async () => {
+    listCampaigns.mockResolvedValue([]);
+    countCampaigns.mockResolvedValue(0);
+
+    const res = await request(buildApp())
+      .get('/api/campaigns?limit=100')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(200);
+    expect(listCampaigns).toHaveBeenCalledWith({ limit: 100, offset: 0 });
   });
 });
 

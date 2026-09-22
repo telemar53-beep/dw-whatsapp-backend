@@ -72,6 +72,10 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        {/* Dentro do AuthProvider porque precisa do JWT da sessão para pedir o
+            token de mídia; fora do SocketProvider porque não depende dele — a
+            emissão é uma chamada HTTP a cada 25 minutos, não um evento. */}
+        <MediaTokenProvider>
         <SocketProvider>
           <TituloDaAba />
           <Routes>
@@ -167,6 +171,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </SocketProvider>
+        </MediaTokenProvider>
       </AuthProvider>
     </BrowserRouter>
   );

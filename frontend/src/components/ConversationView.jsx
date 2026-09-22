@@ -14,6 +14,7 @@ import CloseReasonModal from './CloseReasonModal';
 import ContactAvatar from './ContactAvatar';
 import EditContactModal from './EditContactModal';
 import SgpLookupPanel from './SgpLookupPanel';
+import { PAINEL, CONVERSA_MINIMA } from '../hooks/useWorkspaceLayout';
 import AiSuggestionCard from './AiSuggestionCard';
 import SendTemplateModal from './SendTemplateModal';
 import { useAlert } from '../hooks/useAlert';
@@ -175,14 +176,16 @@ function HeaderChip({ children, title, strong = false, className = '' }) {
   );
 }
 
-function HeaderIconButton({ label, onClick, children, expanded }) {
+function HeaderIconButton({ label, onClick, children, expanded, controls, botaoRef }) {
   return (
     <button
+      ref={botaoRef}
       type="button"
       onClick={onClick}
       aria-label={label}
       title={label}
       aria-expanded={expanded}
+      aria-controls={expanded && controls ? controls : undefined}
       className={`${ACTION} w-8 text-chat-icon hover:bg-white/[0.08] hover:text-chat-text`}
     >
       {children}
@@ -272,11 +275,65 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
   const [customerPanelOpen, setCustomerPanelOpen] = useState(false);
   const [customerPanelDismissed, setCustomerPanelDismissed] = useState(false);
+  // O espaço é medido AQUI, no próprio componente, e não herdado da viewport.
+  // Dentro do ConversationModal as duas divergem: a janela pode ter 1400px e o
+  // diálogo 700px. Era essa divergência que deixava o painel do SGP em
+  // `fixed inset-0` cobrindo a conversa inteira abaixo de 1024px.
+  const raizRef = useRef(null);
+  const voltarRef = useRef(null);
+  const gatilhoSgpRef = useRef(null);
+  const gatilhoClienteRef = useRef(null);
+  const ultimoGatilhoRef = useRef(null);
+  const [larguraReal, setLarguraReal] = useState(0);
   // Quando o espaço não comporta lista + conversa + painel, o painel deixa de
   // ser coluna e ocupa a área de trabalho, com volta explícita. Nunca por cima
   // da conversa: mensagem escondida atrás de painel foi problema real antes.
+  useEffect(() => {
+    const no = raizRef.current;
+    if (!no || typeof ResizeObserver === 'undefined') return undefined;
+    const observador = new ResizeObserver(([entrada]) => {
+      setLarguraReal(Math.round(entrada.contentRect.width));
+    });
+    observador.observe(no);
+    return () => observador.disconnect();
+  }, []);
+
   const painelAberto = sgpPanelOpen || (workspace && customerPanelOpen && !customerPanelDismissed);
-  const painelAlternado = painelModo === 'alternado' && painelAberto;
+  // `painelModo` continua valendo quando quem monta já decidiu (a mesa, pelo
+  // `useWorkspaceLayout`). Fora dela — o modal — a decisão sai da medida: se a
+  // conversa não mantém seu piso com o painel ao lado, o painel substitui.
+  const cabeAoLado = larguraReal === 0 || larguraReal >= PAINEL + CONVERSA_MINIMA;
+  const modoEfetivo = painelModo === 'alternado' || !cabeAoLado ? 'alternado' : 'coluna';
+  const painelAlternado = modoEfetivo === 'alternado' && painelAberto;
+
+  function fecharPaineisEDevolverFoco() {
+    setSgpPanelOpen(false);
+    setCustomerPanelOpen(false);
+    setCustomerPanelDismissed(true);
+    const gatilho = ultimoGatilhoRef.current;
+    if (gatilho && gatilho.current) gatilho.current.focus();
+  }
+
+  // ESC fecha o painel e volta para a conversa. Nao entra na pilha de dialogos
+  // de proposito: o painel nao e modal, e um dialogo aberto por cima dele tem
+  // de continuar sendo o dono do ESC.
+  useEffect(() => {
+    if (!painelAberto) return undefined;
+    function aoTeclar(evento) {
+      if (evento.key !== 'Escape') return;
+      if (document.querySelector('[data-dialog]')) return;
+      evento.stopPropagation();
+      fecharPaineisEDevolverFoco();
+    }
+    document.addEventListener('keydown', aoTeclar);
+    return () => document.removeEventListener('keydown', aoTeclar);
+  });
+
+  // Ao substituir a conversa, o foco precisa entrar no painel — senao ele fica
+  // atras, num botao que a pessoa nao ve mais.
+  useEffect(() => {
+    if (painelAlternado && voltarRef.current) voltarRef.current.focus();
+  }, [painelAlternado]);
 
   useEffect(() => {
     if (onPainelAbertoChange) onPainelAbertoChange(painelAberto);
@@ -479,7 +536,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const timeline = buildTimeline(messages);
 
   return (
-    <div className={`${workspace ? 'chat-workspace-conversation' : ''} ${painelAlternado ? 'is-painel-alternado' : ''} flex h-full`}>
+    <div ref={raizRef} className={`conv-raiz ${workspace ? 'chat-workspace-conversation' : ''} ${painelAlternado ? 'is-painel-alternado' : ''} flex h-full`}>
       <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
       <div className="chat-workspace-header @container z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/[0.07] px-2 py-2.5 md:px-5">
         {/* A base é 240px, não 0. Com `flex-1` puro (base 0%) o item nunca
@@ -545,7 +602,8 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
             <IconHistory size={20} />
           </HeaderIconButton>
-          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} onClick={() => setSgpPanelOpen((prev) => !prev)}>
+          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} controls="conv-painel-sgp" botaoRef={gatilhoSgpRef}
+            onClick={() => { ultimoGatilhoRef.current = gatilhoSgpRef; setSgpPanelOpen((prev) => !prev); }}>
             <IconSearch size={20} />
           </HeaderIconButton>
           {/* Este grupo é do modal (`!workspace`). Havia aqui um
@@ -595,12 +653,18 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
             <IconHistory size={20} />
           </HeaderIconButton>
-          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} onClick={() => setSgpPanelOpen((prev) => !prev)}>
+          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} controls="conv-painel-sgp" botaoRef={gatilhoSgpRef}
+            onClick={() => { ultimoGatilhoRef.current = gatilhoSgpRef; setSgpPanelOpen((prev) => !prev); }}>
             <IconSearch size={20} />
             <span className="chat-context-label">SGP</span>
           </HeaderIconButton>
           {workspace && (
-            <HeaderIconButton label="Dados do cliente" expanded={customerPanelOpen} onClick={() => { setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false); }}>
+            <HeaderIconButton label="Dados do cliente" expanded={customerPanelOpen && !customerPanelDismissed} controls="conv-painel-cliente" botaoRef={gatilhoClienteRef}
+              onClick={() => {
+                ultimoGatilhoRef.current = gatilhoClienteRef;
+                if (customerPanelOpen && !customerPanelDismissed) { setCustomerPanelOpen(false); setCustomerPanelDismissed(true); return; }
+                setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false);
+              }}>
               <IconInfo size={20} />
               <span className="chat-context-label">Cliente</span>
             </HeaderIconButton>
@@ -886,13 +950,14 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
       )}
       </div>
       {painelAlternado && (
-        <button type="button" onClick={fecharPaineis} className="chat-painel-voltar">
+        <button ref={voltarRef} type="button" onClick={fecharPaineisEDevolverFoco} className="chat-painel-voltar">
           <IconArrowLeft size={16} />
           Voltar à conversa
         </button>
       )}
       {alertDialog}
       {sgpPanelOpen ? (
+        <div className="conv-painel-slot" id="conv-painel-sgp">
         <SgpLookupPanel
           onSendMessage={(content) => sendMessage(content)}
           onSendPdf={handleSendSgpPdf}
@@ -902,8 +967,9 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           onClose={() => setSgpPanelOpen(false)}
           initialCpf={conversation.contactSgpDocument || ''}
         />
+        </div>
       ) : workspace ? (
-        <div className={`chat-workspace-customer ${customerPanelOpen ? 'is-open' : ''} ${customerPanelDismissed ? 'is-dismissed' : ''}`}>
+        <div id="conv-painel-cliente" className={`conv-painel-slot chat-workspace-customer ${customerPanelOpen ? 'is-open' : ''} ${customerPanelDismissed ? 'is-dismissed' : ''}`}>
           <CustomerPanel conversation={conversation} displayName={displayName} cityName={cityName} onClose={() => { setCustomerPanelOpen(false); setCustomerPanelDismissed(true); }} />
         </div>
       ) : null}

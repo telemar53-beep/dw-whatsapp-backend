@@ -69,16 +69,15 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
   }
 
   return (
-    <WaDialog variant="close-reason" onClose={onClose} labelledBy="close-reason-title" size="max-w-[820px]">
-      <div className="flex shrink-0 items-start gap-3 px-6 pb-4 pt-5">
-        <span aria-hidden="true" className="mt-0.5 shrink-0 text-accent">
-          {closeReasonHeaderIcon}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 id="close-reason-title" className="text-[18px] font-semibold leading-[26px] text-wa-text">Motivo do contato</h2>
-          <p className="mt-1 text-[14px] leading-[19px] text-wa-muted">Selecione o motivo principal deste atendimento.</p>
-        </div>
-      </div>
+    <WaDialog
+      variant="close-reason"
+      onClose={onClose}
+      title="Encerrar atendimento"
+      description="Selecione o motivo principal deste atendimento."
+      icon={closeReasonHeaderIcon}
+      tone="perigo"
+      size="max-w-[820px]"
+    >
 
       <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-5">
         <AsyncState
@@ -101,7 +100,9 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
         {error && <WaError className="mt-4">{error}</WaError>}
       </div>
 
-      <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t border-wa-border px-6 py-4">
+      <div className="dw-dialog-footer flex-wrap">
+        <span className="dw-dialog-nota">O cliente recebe a mensagem de encerramento e o motivo alimenta o Relatório.</span>
+        <span className="dw-dialog-acoes">
         <button
           type="button"
           onClick={onClose}
@@ -118,6 +119,7 @@ function CloseReasonModal({ onConfirm, onClose, suggestedReasonId }) {
           <span aria-hidden="true">{checkCircleIcon}</span>
           Encerrar atendimento
         </button>
+        </span>
       </div>
     </WaDialog>
   );

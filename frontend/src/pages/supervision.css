@@ -1,87 +1,662 @@
-.supervision-workspace {color:#d8e2e9;background:var(--color-ui-surface-canvas)}
-.supervision-workspace > header {padding:12px 16px}
-.supervision-workspace .supervision-toolbar {padding:8px 12px;gap:8px;flex-direction:column;align-items:stretch}
-.supervision-toolbar > div:last-child {margin-left:0;gap:6px}
-.supervision-toolbar input[type=text] {height:32px;font-size:12px;padding:0 10px;width:200px;border-radius:6px}
-.supervision-toolbar button {font-size:12px;border-radius:6px}
-.supervision-toolbar button[aria-expanded] {height:32px;padding:0 10px}
-.supervision-central {display:grid;grid-template-columns:248px minmax(0,1fr);flex:1;min-height:0}
-.supervision-team {background:#29363e;border-right:1px solid var(--color-ui-line);overflow-y:auto;min-height:0}
-.supervision-team header {display:flex;justify-content:space-between;align-items:center;padding:14px 12px 4px;gap:8px;font-size:13px;font-weight:600}
-.supervision-team header span,.supervision-team > p {font-size:11px;font-weight:400;color:#acbeca}
-.supervision-team > p {padding:0 12px 12px}
-.supervision-team li button {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;text-align:left;width:100%;padding:11px 12px;border-top:1px solid var(--color-ui-line)}
-.supervision-team li button:hover {background:var(--color-ui-state-hover)}
-.supervision-team li button[aria-pressed=true] {background:#d18e5820;box-shadow:inset 2px 0 #e5a16d}
-.supervision-agent-name {font-size:13px;overflow-wrap:anywhere}
-.supervision-team strong {font-size:14px;font-variant-numeric:tabular-nums;color:#edbd99}
-.supervision-team strong small {font-size:10px;font-weight:400;color:#aebec8}
-.supervision-presence {grid-column:1/-1;font-size:10.5px;color:#adbec9;display:flex;align-items:center;gap:5px}
-.supervision-presence i {width:6px;height:6px;border-radius:50%;background:#71808b}
-.supervision-presence i.is-online {background:var(--color-ui-presence-online)}
-.supervision-load {grid-column:1/-1;height:3px;background:#ffffff09;margin-top:3px;border-radius:2px}
-.supervision-load > span {display:block;height:100%;background:#bb936f;border-radius:2px}
-.supervision-operation {min-width:0;min-height:0;display:flex;flex-direction:column}
-.supervision-states {display:flex;gap:4px;padding:9px 12px;border-bottom:1px solid var(--color-ui-line);flex-wrap:wrap}
-.supervision-states button {display:flex;gap:10px;align-items:center;padding:6px 10px;font-size:12px;border-radius:5px;color:#aebfca}
-.supervision-states strong {font-variant-numeric:tabular-nums;font-size:12px}
-.supervision-states button[aria-pressed=true] {background:#d29a6520;color:#f0bd95}
-.supervision-column-labels,.supervision-record {display:grid;grid-template-columns:minmax(180px,2fr) minmax(110px,1fr) minmax(100px,.8fr) 125px 55px;gap:12px;align-items:center;padding:8px 14px}
-.supervision-column-labels {font-size:10px;color:#96aebb;border-bottom:1px solid var(--color-ui-line)}
-.supervision-live {overflow:auto;min-height:0;flex:1}
-.supervision-group-heading {display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--color-ui-surface-panel);font-size:11px;color:#c4d1da}
-.supervision-group-heading span {font-size:11px;color:#a7bac7}
-.supervision-empty {font-size:12px;padding:12px 14px;color:#94aab9}
-.supervision-record {border-bottom:1px solid var(--color-ui-line);font-size:12px;min-height:62px}
-.supervision-record:hover {background:var(--color-ui-state-hover)}
-.supervision-record > div {min-width:0;overflow-wrap:anywhere}
-.supervision-record-location,.supervision-record-state {display:flex;flex-direction:column;gap:3px}
-.supervision-record small {color:#9eb4c2;font-size:10.5px}
-.supervision-record-state > small:last-child {font-size:9px;color:#91a4b1}
-.supervision-open {color:#e5b58e;font-size:11px;padding:5px 0}
-.supervision-record .chat-conversation-row {position:relative;cursor:pointer;padding-right:24px}
-.supervision-record .chat-conversation-summary {display:flex;align-items:center;gap:8px}
-.supervision-record .chat-conversation-name {font-size:13px;font-weight:600;overflow-wrap:anywhere}
-.supervision-record .chat-conversation-time {display:none}
-.supervision-record .chat-conversation-preview {display:flex;align-items:center;gap:4px;color:#acbeca;font-size:11px;min-width:0;margin-top:3px}
-.supervision-record .chat-conversation-snippet {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.supervision-record .chat-conversation-context {font-size:10px;color:#c0b1d5;line-height:14px;margin-top:3px}
-.supervision-record .chat-conversation-context > span+span:before {content:'·';padding:0 4px;color:#8c9ca8}
+/* Supervisão — sala de controle da operação.
+   Mesmo material de Relatórios (grafite com filete interno, sombra difusa,
+   borda refinada, acento laranja do produto), ritmo diferente: Relatórios é
+   leitura de análise e respira; aqui a tela é vigiada por horas e precisa
+   continuar densa. O que muda de peso é o ESTADO, que é o sinal mais alto
+   desta página.
+
+   Quatro tons de estado, um papel cada, sempre no mesmo lugar (ponto do
+   sub-filtro, cabeçalho do grupo, aresta da linha, pastilha):
+     andamento  laranja  - trabalho humano ativo, a cor do produto
+     espera     âmbar    - fila parada esperando gente
+     automação  roxo     - IA, o mesmo roxo que o produto já usa para IA
+     encerrado  verde    - fechado, fora da operação viva
+   Cor de estado nunca aparece sozinha: toda ocorrência tem rótulo em texto.
+   Os tons de tinta valem 4,9:1 ou mais sobre as duas superfícies da tela.
+
+   ATENÇÃO: esta folha fica FORA de @layer, então vence utilitário do Tailwind
+   por ordem, não por especificidade. */
+.supervision-workspace {
+  color: var(--sv-ink);
+  background: var(--color-chat-canvas);
+
+  --sv-panel: #2b343b;
+  --sv-panel-top: #333d45;
+  --sv-aside: #222a31;
+  --sv-line: #ffffff1a;
+  --sv-line-soft: #ffffff0d;
+  --sv-ink: #eef2f5;
+  --sv-ink-muted: #b3c0c9;
+  --sv-ink-faint: #9aaab5;
+  --sv-hover: #ffffff0a;
+  --sv-shadow: 0 22px 38px -28px rgba(0, 0, 0, 0.95), 0 3px 10px -6px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 #ffffff12;
+
+  /* `-ink` é o passo legível para texto; o passo base é para marca (ponto,
+     barra, aresta), onde 3:1 basta. */
+  --sv-andamento: #f28c45;
+  --sv-andamento-ink: #f6a469;
+  --sv-espera: #e0a83c;
+  --sv-espera-ink: #e8b95c;
+  --sv-automacao: #9b7ae8;
+  --sv-automacao-ink: #b49aef;
+  --sv-encerrado: #5fb89b;
+  --sv-encerrado-ink: #74c7ac;
+  --sv-online: #33d9a6;
+}
+
+/* Um tom declarado uma vez alimenta ponto, aresta, pastilha e cabeçalho. */
+.supervision-workspace [data-tom='andamento'] { --sv-tom: var(--sv-andamento); --sv-tom-ink: var(--sv-andamento-ink); }
+.supervision-workspace [data-tom='espera'] { --sv-tom: var(--sv-espera); --sv-tom-ink: var(--sv-espera-ink); }
+.supervision-workspace [data-tom='automacao'] { --sv-tom: var(--sv-automacao); --sv-tom-ink: var(--sv-automacao-ink); }
+.supervision-workspace [data-tom='encerrado'] { --sv-tom: var(--sv-encerrado); --sv-tom-ink: var(--sv-encerrado-ink); }
+
+.supervision-workspace button:focus-visible,
+.supervision-workspace [role='button']:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------- Cabeçalho da página ---------- */
+.supervision-workspace > header { padding: 14px 18px 12px; }
+.supervision-workspace > header p { margin-top: 4px; font-size: 13px; line-height: 18px; }
+
+/* ---------- Barra de controle: abas, filtros, busca ---------- */
+.supervision-workspace .supervision-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 0 18px 12px;
+  border-top: 0;
+  border-bottom: 1px solid var(--sv-line-soft);
+  background: transparent;
+}
+/* Filtros e buscas são dois grupos com papéis diferentes: recortar e
+   localizar. Cada um ganha sua cápsula, e o divisor solto some. */
+.supervision-toolbar > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: 0;
+}
+.supervision-toolbar > div:last-child > span[aria-hidden] { display: none; }
+.supervision-toolbar button[aria-expanded] {
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 10px;
+  border: 1px solid var(--sv-line);
+  background: #ffffff08;
+  color: var(--sv-ink-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.supervision-toolbar button[aria-expanded]:hover {
+  border-color: #ffffff2e;
+  background: #ffffff12;
+  color: var(--sv-ink);
+}
+.supervision-toolbar button[aria-expanded='true'] {
+  border-color: var(--color-accent-line);
+  background: var(--color-accent-surface);
+  color: var(--color-accent-soft);
+}
+.supervision-toolbar input[type='text'] {
+  height: 34px;
+  width: 210px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--sv-line);
+  background: #00000026;
+  color: var(--sv-ink);
+  font-size: 12.5px;
+}
+.supervision-toolbar input[type='text']::placeholder { color: var(--sv-ink-faint); }
+.supervision-toolbar input[type='text']:focus-visible {
+  border-color: var(--color-accent-line);
+  box-shadow: 0 0 0 3px var(--color-accent-surface);
+  outline: none;
+}
+
+/* Abas: a selecionada é um plano cheio, não um contorno — é o recorte em
+   vigor, e precisa ganhar da vizinha de longe. */
+.supervision-toolbar [role='tab'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 10px;
+  border: 1px solid var(--sv-line);
+  background: #ffffff06;
+  color: var(--sv-ink-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.supervision-toolbar [role='tab'] > span {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 22px;
+  height: 20px;
+  margin-left: 0;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: #ffffff14;
+  box-shadow: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.supervision-toolbar [role='tab']:hover { border-color: #ffffff2e; background: #ffffff0e; color: var(--sv-ink); }
+.supervision-toolbar [role='tab'][aria-selected='true'],
+.supervision-toolbar [role='tab'][aria-selected='true']:hover {
+  border-color: var(--color-accent-line);
+  background: var(--color-accent-surface-strong);
+  color: #ffd2ad;
+  font-weight: 600;
+}
+.supervision-toolbar [role='tab'][aria-selected='true'] > span { background: #00000033; }
+.chat-theme .supervision-workspace .supervision-toolbar [role='tab'] > span { color: #f3f6f8; }
+.chat-theme .supervision-workspace .supervision-toolbar [role='tab'][aria-selected='true'] > span { color: #ffd2ad; }
+
+@media (min-width: 1150px) {
+  .supervision-workspace .supervision-toolbar { flex-direction: row; align-items: center; justify-content: space-between; }
+  .supervision-toolbar > div:last-child { margin-left: auto; }
+}
+
+/* ---------- Composição central: dois painéis sobre a tela ---------- */
+.supervision-central {
+  display: grid;
+  grid-template-columns: 268px minmax(0, 1fr);
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  padding: 12px 18px 16px;
+}
+.supervision-team,
+.supervision-operation {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--sv-line);
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--sv-shadow);
+}
+
+/* ---------- Equipe e carga ---------- */
+.supervision-team {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background-color: var(--sv-aside);
+  background-image: linear-gradient(180deg, #ffffff08, transparent 120px);
+}
+.supervision-team header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 14px 0;
+}
+.supervision-team header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--sv-ink);
+}
+.supervision-online-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sv-online) 16%, transparent);
+  color: var(--sv-online);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.supervision-online-chip i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.supervision-team > p { padding: 5px 14px 12px; font-size: 11.5px; line-height: 16px; color: var(--sv-ink-faint); }
+.supervision-team > ul { padding: 0 8px 10px; }
+
+.supervision-team li button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'avatar nome carga' 'avatar presenca carga' 'barra barra barra';
+  align-items: center;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 11px;
+  text-align: left;
+}
+.supervision-team li button:hover { background: var(--sv-hover); }
+/* Selecionado é filtro em vigor: plano cheio com aresta de acento. */
+.supervision-team li button[aria-pressed='true'] {
+  background: var(--color-accent-surface);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+.supervision-agent-avatar {
+  grid-area: avatar;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #ffffff16;
+  color: #e3eaee;
+  font-size: 12px;
+  font-weight: 600;
+}
+.supervision-agent-name {
+  grid-area: nome;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sv-ink);
+}
+.supervision-team strong {
+  grid-area: carga;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 8px;
+  background: var(--color-accent-surface);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent-soft);
+}
+/* Sem carga não é um valor a destacar: a pastilha se apaga em vez de anunciar zero. */
+.supervision-team strong[data-zero='true'] { background: #ffffff0d; color: var(--sv-ink-faint); }
+.supervision-presence {
+  grid-area: presenca;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--sv-ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.supervision-presence i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: #6d7c87; }
+.supervision-presence em { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-style: normal; }
+.supervision-presence em::before { content: '·'; padding: 0 4px; }
+.supervision-presence i.is-online { background: var(--sv-online); box-shadow: 0 0 0 3px color-mix(in oklab, var(--sv-online) 18%, transparent); }
+/* Offline recua como conjunto: um atendente fora do turno não deve disputar
+   atenção com a fila. Continua legível, e volta inteiro no hover. */
+.supervision-team li button[data-online='false'] { opacity: 0.62; }
+.supervision-team li button[data-online='false']:hover,
+.supervision-team li button[data-online='false']:focus-visible { opacity: 1; }
+.supervision-team li button[data-online='false'] strong { color: var(--sv-ink-faint); }
+.supervision-load {
+  grid-area: barra;
+  height: 5px;
+  margin: 7px 0 2px;
+  border-radius: 999px;
+  background: #ffffff12;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+/* Sem carga, o trilho cheio na base do item lia como divisor de lista. */
+.supervision-load[data-zero='true'] { background: transparent; box-shadow: none; }
+.supervision-load > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--color-accent);
+  background-image: linear-gradient(180deg, #ffffff2e, #ffffff00 65%);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.supervision-team > p[role='status'],
+.supervision-team > p[role='alert'] { font-size: 12px; }
+
+/* ---------- Operação ---------- */
+.supervision-operation {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--sv-panel);
+  background-image: linear-gradient(180deg, var(--sv-panel-top), var(--sv-panel) 140px);
+  overflow: hidden;
+}
+/* Sub-filtros de estado: cada um carrega o ponto do seu tom, e o ativo veste
+   esse tom em vez do mesmo laranja para todos. */
+.supervision-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--sv-line-soft);
+}
+.supervision-states button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--sv-ink-muted);
+  font-size: 12.5px;
+}
+.supervision-states button i { width: 7px; height: 7px; border-radius: 50%; background: var(--sv-tom, var(--sv-ink-faint)); }
+.supervision-states strong { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--sv-ink); }
+.supervision-states button:hover { background: var(--sv-hover); color: var(--sv-ink); }
+.supervision-states button[aria-pressed='true'] {
+  background: color-mix(in oklab, var(--sv-tom, var(--color-accent)) 16%, transparent);
+  border-color: color-mix(in oklab, var(--sv-tom, var(--color-accent)) 34%, transparent);
+  color: var(--sv-tom-ink, var(--color-accent-soft));
+  font-weight: 600;
+}
+.supervision-states button[aria-pressed='true'] strong { color: inherit; }
+
+.supervision-live { flex: 1; min-height: 0; overflow: auto; }
+
+.supervision-column-labels,
+.supervision-record {
+  display: grid;
+  grid-template-columns: minmax(200px, 2.1fr) minmax(112px, 1fr) minmax(104px, 0.85fr) 122px 64px;
+  gap: 14px;
+  align-items: center;
+  padding: 8px 16px;
+}
+.supervision-column-labels {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-bottom: 1px solid var(--sv-line);
+  background: var(--sv-panel-top);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sv-ink-faint);
+}
+
+/* Cabeçalho do grupo: gruda no topo ao rolar, carrega o ponto do estado e a
+   contagem numa pastilha. É o que diz em que fila o olho está. */
+/* O deslocamento existe para o cabeçalho parar ABAIXO dos rótulos de coluna.
+   Quando não há rótulos (fila vazia, busca por telefone), `top` fixo empurrava
+   o cabeçalho 31px para baixo sozinho — e, como sticky não reserva espaço, ele
+   cobria a primeira linha do conteúdo. Medido: sobreposição de 31px sobre a
+   frase "Nenhum atendimento em andamento.". O recuo agora só existe quando há
+   o que recuar. */
+.supervision-group-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--sv-line-soft);
+  border-bottom: 1px solid var(--sv-line-soft);
+  background: color-mix(in oklab, var(--sv-tom) 28%, var(--sv-panel));
+  box-shadow: inset 3px 0 0 var(--sv-tom);
+}
+.supervision-group-heading h2 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--sv-tom-ink);
+}
+.supervision-group-heading span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--sv-tom) 22%, transparent);
+  color: var(--sv-tom-ink);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.supervision-live:has(.supervision-column-labels) .supervision-group-heading { top: 33px; } /* altura medida da faixa de rótulos */
+
+.supervision-empty { padding: 16px; font-size: 12.5px; color: var(--sv-ink-faint); }
+
+/* ---------- Linha de atendimento ---------- */
+.supervision-record {
+  position: relative;
+  border-bottom: 1px solid var(--sv-line-soft);
+  font-size: 12.5px;
+  min-height: 62px;
+}
+/* Aresta do estado: fina o bastante para não poluir 20 linhas, presente o
+   bastante para marcar onde uma fila acaba e a outra começa. */
+.supervision-record::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: color-mix(in oklab, var(--sv-tom) 42%, transparent);
+}
+.supervision-record:hover { background: var(--sv-hover); }
+.supervision-record:hover::before { background: var(--sv-tom); }
+.supervision-record > div { min-width: 0; }
+
+.supervision-record-location,
+.supervision-record-state { display: flex; flex-direction: column; gap: 2px; line-height: 16px; }
+.supervision-record-location span,
+.supervision-record-owner { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sv-ink); }
+.supervision-record-location small { font-size: 11px; color: var(--sv-ink-faint); }
+/* Dado ausente continua dito por extenso, mas em itálico e recuado: é falta de
+   informação, não um valor. */
+.supervision-record .is-ausente { font-style: italic; color: #8496a2; }
+
+.supervision-owner { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.supervision-owner i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff14;
+  color: #dbe3e8;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.supervision-record-state time { font-variant-numeric: tabular-nums; color: var(--sv-ink); }
+.supervision-record-state small { font-size: 10.5px; color: var(--sv-ink-faint); }
+.supervision-state-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sv-tom) 16%, transparent);
+  color: var(--sv-tom-ink);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.supervision-state-pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* "Abrir" é a ação da linha: fica discreta em repouso e assume o acento quando
+   a linha está sob o cursor, em vez de gritar em todas as linhas ao mesmo tempo. */
+.supervision-open {
+  justify-self: end;
+  padding: 5px 11px;
+  border: 1px solid var(--sv-line);
+  border-radius: 8px;
+  background: #ffffff08;
+  color: var(--sv-ink-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.supervision-record:hover .supervision-open,
+.supervision-open:hover,
+.supervision-open:focus-visible {
+  border-color: var(--color-accent-line);
+  background: var(--color-accent-surface);
+  color: var(--color-accent-soft);
+}
+
+/* ---------- Linha do cliente (ConversationListItem compacto) ---------- */
+.supervision-record .chat-conversation-row { position: relative; cursor: pointer; padding: 0 26px 0 0; }
+.supervision-record .chat-conversation-summary { display: flex; align-items: center; gap: 8px; }
+.supervision-record .chat-conversation-name { font-size: 13.5px; font-weight: 600; color: var(--sv-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.supervision-record .chat-conversation-time { display: none; }
+.supervision-record .chat-conversation-preview {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--sv-ink-muted);
+}
+.supervision-record .chat-conversation-snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.supervision-record .chat-conversation-context { margin-top: 3px; font-size: 10.5px; line-height: 14px; color: var(--sv-automacao-ink); }
+.supervision-record .chat-conversation-context > span + span::before { content: '·'; padding: 0 4px; color: #8496a2; }
+.supervision-record .chat-conversation-unread { background: var(--color-accent); }
 /* Mesmo motivo do dashboard: o botao saiu de dentro da linha e o <li> assume
-   o contexto de posicionamento. O <li> ocupa a mesma caixa da linha, entao
-   right:0/top:0 continuam caindo no mesmo lugar. */
-.supervision-record .chat-conversation-entry {position:relative}
-.supervision-record .chat-conversation-close {position:absolute;right:0;top:0;color:#b4b6b8;padding:3px}
-.supervision-workspace button:focus-visible,.supervision-workspace [role=button]:focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
-@media(max-width:1200px){.supervision-central{grid-template-columns:210px minmax(0,1fr)}.supervision-column-labels,.supervision-record{grid-template-columns:minmax(150px,1.5fr) minmax(95px,1fr) minmax(85px,.8fr) 105px 42px;gap:8px;padding:8px 10px}}
-@media(max-width:950px){.supervision-column-labels{display:none}.supervision-record{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 50px;gap:6px 12px}.supervision-record-contact{grid-column:1/3}.supervision-open{grid-column:3;grid-row:1/3}.supervision-record-state{grid-column:1/3;flex-direction:row;flex-wrap:wrap;gap:8px}}
-@media(max-width:650px){.supervision-central{display:flex;flex-direction:column;overflow:auto}.supervision-team{flex:none;max-height:180px;border-right:0;border-bottom:1px solid var(--color-ui-line)}.supervision-team ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.supervision-operation{min-height:300px;flex:1}.supervision-toolbar input[type=text]{width:100%}.supervision-toolbar form{flex:1;min-width:140px}}
-.supervision-workspace > header p {font-size:12px;margin-top:3px;line-height:17px}
-.supervision-record-state {line-height:15px;gap:2px}
-.supervision-record-state small {line-height:13px}
-.supervision-toolbar [role=tab] > span {position:static;margin-left:8px;min-width:24px;height:22px;padding:0 5px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;line-height:20px;font-weight:700;font-variant-numeric:tabular-nums;box-shadow:none}
-@media(min-width:1400px){.supervision-workspace .supervision-toolbar{flex-direction:row;align-items:center;justify-content:space-between}}
-.supervision-toolbar [role=tab] {display:inline-flex;align-items:center;height:32px;padding:4px 10px;white-space:nowrap;font-size:12px;font-weight:500;color:#d9e2e8;border:1px solid #ffffff29;background:#ffffff06}
-.supervision-toolbar [role=tab] > span {flex:none;background:#ffffff12;color:#f3f6f8;border-radius:4px}
-.supervision-toolbar [role=tab][aria-selected=true] {background:color-mix(in oklab, var(--color-ui-marker-supervision) 15%, transparent);border-color:#d990558c;color:#fff0e3;box-shadow:inset 0 -2px var(--color-ui-marker-supervision)}
-.supervision-toolbar [role=tab][aria-selected=true] > span {background:color-mix(in oklab, var(--color-ui-marker-supervision) 20%, transparent);color:#ffcfaa}
-.supervision-toolbar [role=tab]:hover {border-color:#d9905573;background:#ffffff0c}
-/* A aba selecionada ENFRAQUECIA no hover: `[role=tab]:hover` e
-   `[role=tab][aria-selected=true]` empatam em (0,3,0) e o hover vem depois, entao
-   a borda caia de #d990558c (0,55) para #d9905573 (0,45) — o fundo reforcava e a
-   borda recuava. Esta regra ja esta em (0,4,0) e ja vencia; faltava ela declarar
-   a borda tambem. Fundo preservado em 19%. */
-.supervision-toolbar [role=tab][aria-selected=true]:hover {background:color-mix(in oklab, var(--color-ui-marker-supervision) 19%, transparent);border-color:#d990558c}
-@media(min-width:1100px){.supervision-workspace .supervision-toolbar{flex-direction:row;align-items:center;justify-content:space-between}}
+   o contexto de posicionamento. */
+.supervision-record .chat-conversation-entry { position: relative; }
+.supervision-record .chat-conversation-close { position: absolute; right: 0; top: 2px; padding: 3px; color: var(--sv-ink-faint); }
+.supervision-record .chat-conversation-close:hover { color: var(--sv-ink); }
 
-/* Keep count contrast above the shared orange-badge text rule. */
-.chat-theme .supervision-workspace .supervision-toolbar [role=tab] > span {color:#f3f6f8}
-.chat-theme .supervision-workspace .supervision-toolbar [role=tab][aria-selected=true] > span {color:#ffcfaa}
+/* Chevron do filtro: sem ele os três botões não se liam como menus. */
+.supervision-chevron { width: 13px; height: 13px; margin-left: 6px; opacity: 0.72; }
+.supervision-toolbar button[aria-expanded='true'] .supervision-chevron { transform: rotate(180deg); }
 
-/* Encerrados: falha visível e contagem que não se passa por total. */
-.supervision-closed-error {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:10px 8px 0;padding:10px 12px;border:1px solid color-mix(in oklab, var(--color-ui-error-ink) 20%, transparent);border-radius:10px;background:var(--color-ui-error-surface);color:var(--color-ui-error-ink);font-size:13px}
-.supervision-closed-error button {flex:none;padding:4px 10px;border:1px solid color-mix(in oklab, var(--color-ui-error-ink) 40%, transparent);border-radius:8px;font-size:12.5px;font-weight:500;color:inherit}
-.supervision-closed-error button:hover {background:color-mix(in oklab, var(--color-ui-error-ink) 8%, transparent)}
-.supervision-parcial-aviso {margin:10px 10px 2px;font-size:11.5px;line-height:1.5;color:#9fb3c0}
-.supervision-contagem-parcial {font-size:11px;font-weight:400;white-space:nowrap}
-.supervision-contagem-parcial b {font-size:14px;font-weight:700}
+/* Vazio mantém a grade: sem o círculo, a coluna do responsável começava num
+   x diferente nas linhas sem dono e as colunas dançavam ao rolar. */
+.supervision-owner i[data-vazio] { background: #ffffff0a; box-shadow: inset 0 0 0 1px var(--sv-line-soft); }
+
+/* Encerrados usa a mesma caixa da operação: a aba trocava o conteúdo e a
+   estrutura ao mesmo tempo, e a tela parecia ter quebrado. */
+.supervision-vazio-central { padding: 44px 16px; text-align: center; font-size: 13px; color: var(--sv-ink-faint); }
+.supervision-carregar-mais {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 14px 16px 18px;
+  padding: 11px;
+  border: 1px solid var(--sv-line-soft);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--sv-ink-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.supervision-carregar-mais:hover:not(:disabled) { background: var(--sv-hover); color: var(--sv-ink); }
+.supervision-carregar-mais:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------- Encerrados: falha visível e contagem honesta ---------- */
+.supervision-closed-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 12px 16px 0;
+  padding: 10px 13px;
+  border: 1px solid color-mix(in oklab, var(--color-ui-error-ink) 20%, transparent);
+  border-radius: 11px;
+  background: var(--color-ui-error-surface);
+  color: var(--color-ui-error-ink);
+  font-size: 13px;
+}
+.supervision-closed-error button {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in oklab, var(--color-ui-error-ink) 40%, transparent);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: inherit;
+}
+.supervision-closed-error button:hover { background: color-mix(in oklab, var(--color-ui-error-ink) 8%, transparent); }
+.supervision-parcial-aviso { margin: 12px 16px 2px; font-size: 11.5px; line-height: 1.55; color: var(--sv-ink-faint); }
+.supervision-contagem-parcial { font-size: 11px; font-weight: 400; white-space: nowrap; }
+.supervision-contagem-parcial b { font-size: 13px; font-weight: 700; }
+
+/* ---------- Larguras menores ----------
+   Desktop manda na composição; abaixo disso as colunas cedem em ordem fixa —
+   primeiro o respiro, depois os rótulos, depois a grade vira bloco. */
+@media (max-width: 1300px) {
+  .supervision-central { grid-template-columns: 234px minmax(0, 1fr); padding: 10px 12px 12px; }
+  .supervision-column-labels,
+  .supervision-record { grid-template-columns: minmax(170px, 2.4fr) minmax(104px, 1.05fr) minmax(92px, 0.8fr) 98px 58px; gap: 10px; padding: 8px 12px; }
+}
+/* Abaixo disso o cliente e a cidade são os que não podem encolher mais: o
+   horário perde a data e o "Abrir" perde o rótulo antes deles. */
+@media (max-width: 1120px) {
+  .supervision-central { grid-template-columns: 212px minmax(0, 1fr); }
+  .supervision-presence em { display: none; }
+  .supervision-column-labels,
+  .supervision-record { grid-template-columns: minmax(168px, 2.6fr) minmax(104px, 1.1fr) minmax(88px, 0.75fr) 92px 50px; gap: 9px; }
+  .supervision-open { padding: 5px 8px; }
+}
+@media (max-width: 1100px) {
+  .supervision-workspace .supervision-toolbar { padding: 0 12px 10px; }
+  .supervision-workspace > header { padding: 12px 12px 10px; }
+}
+/* Medido: abaixo de ~1080px a soma dos mínimos das 5 colunas (538px) não
+   cabe no espaço da lista (514px) e ela passava a rolar na horizontal.
+   É aqui que a grade tem de virar bloco, não mais embaixo. */
+@media (max-width: 1080px) {
+  .supervision-column-labels { display: none; }
+  .supervision-group-heading { top: 0; }
+  .supervision-record {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 10px 12px 11px 15px;
+  }
+  .supervision-record-contact { grid-column: 1 / -1; }
+  .supervision-record-location,
+  .supervision-record-owner { flex-direction: row; align-items: center; gap: 8px; font-size: 12px; }
+  .supervision-record-location { flex-wrap: wrap; }
+  .supervision-record-location small { font-size: 11.5px; }
+  .supervision-record-state { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .supervision-record-state small { display: none; }
+  .supervision-open { grid-column: 2; grid-row: 2 / 5; align-self: center; justify-self: end; }
+  .supervision-toolbar form { flex: 1 1 210px; min-width: 0; }
+  .supervision-toolbar input[type='text'] { width: 100%; }
+}
+@media (max-width: 700px) {
+  .supervision-central { display: flex; flex-direction: column; overflow: auto; padding: 10px; }
+  .supervision-team { flex: none; max-height: 232px; }
+  .supervision-team > ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; }
+  .supervision-operation { flex: 1; min-height: 340px; }
+  .supervision-toolbar input[type='text'] { width: 100%; }
+  .supervision-toolbar form { flex: 1; min-width: 150px; }
+  .supervision-toolbar > div:last-child { gap: 6px; }
+}
+@media (max-width: 480px) {
+  .supervision-team > ul { grid-template-columns: minmax(0, 1fr); }
+  .supervision-record { padding-left: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .supervision-load > span { transition: none; }
+}

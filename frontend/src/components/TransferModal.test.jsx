@@ -38,7 +38,10 @@ describe('TransferModal', () => {
     const onClose = vi.fn();
     render(<TransferModal conversationId="c1" onClose={onClose} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Transferir para other@dw.com' }));
+    // A transferencia virou dois passos: escolher a linha e confirmar no
+    // rodape, para nao repetir um botao identico por atendente.
+    await userEvent.click(screen.getByRole('radio', { name: /other@dw.com/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Transferir para/ }));
 
     await waitFor(() => expect(api.transferConversation).toHaveBeenCalledWith('c1', 'agent-2', 'tok-123'));
     expect(onClose).toHaveBeenCalled();
@@ -49,7 +52,10 @@ describe('TransferModal', () => {
     const onClose = vi.fn();
     render(<TransferModal conversationId="c1" onClose={onClose} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Transferir para other@dw.com' }));
+    // A transferencia virou dois passos: escolher a linha e confirmar no
+    // rodape, para nao repetir um botao identico por atendente.
+    await userEvent.click(screen.getByRole('radio', { name: /other@dw.com/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Transferir para/ }));
 
     expect(await screen.findByText('Agent is not online')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();

@@ -22,43 +22,116 @@
 .chat-workspace .chat-workspace-list [role=status] { padding: 12px; }
 .chat-workspace .chat-workspace-list > div:last-child > button[aria-haspopup=dialog] { padding: 7px 12px; gap: 7px; }
 .chat-workspace .chat-workspace-list > div:last-child > button[aria-haspopup=dialog] > span { font-size: 11px; }
-.chat-workspace .chat-conversation-row { position: relative; min-width: 0; min-height: 52px; padding: 5px 10px 5px 12px; border-bottom: 1px solid var(--chat-line-soft); cursor: pointer; }
+/* ---------- Item da lista de conversas ----------
+   Cada cliente é uma UNIDADE: foto à esquerda, três linhas com pesos
+   declarados, fichas de cidade/setor na base, filete de estado na aresta e um
+   divisor entre um cliente e o próximo. O que a lista tinha antes era um bloco
+   de texto cinza em quatro tamanhos entre 11,5 e 14px, sem âncora visual —
+   medido: prévia e linha de contexto na MESMA cor (#a9bcc8) com 1px de
+   diferença de tamanho.
+   Altura fixa de 78px: hoje ela oscilava entre 52 e 66px conforme o dado, e a
+   lista não tinha ritmo vertical. */
+.chat-workspace .chat-conversation-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'fig nome' 'fig prev' 'fig ctx';
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 0;
+  min-width: 0;
+  min-height: 68px;
+  padding: 6px 12px 6px 14px;
+  border-bottom: 1px solid var(--chat-line-soft);
+  cursor: pointer;
+}
 .chat-workspace .chat-conversation-entry { position: relative; }
+/* Filete de estado: mesmo vocabulário de Supervisão — laranja em atendimento,
+   âmbar esperando, roxo com a IA. Nunca sozinho: a aba já nomeia o estado. */
+.chat-workspace .chat-conversation-row::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--chat-estado, transparent);
+  opacity: .55;
+}
+.chat-workspace .chat-conversation-row[data-estado='atendimento'] { --chat-estado: #f28c45; }
+.chat-workspace .chat-conversation-row[data-estado='espera'] { --chat-estado: #e0a83c; }
+.chat-workspace .chat-conversation-row[data-estado='automacao'] { --chat-estado: #9b7ae8; }
+.chat-workspace .chat-conversation-row[data-estado='encerrado'] { --chat-estado: #5fb89b; }
 .chat-workspace .chat-conversation-row:hover,
 .chat-workspace .chat-conversation-entry:hover .chat-conversation-row { background: var(--chat-state-hover); }
+.chat-workspace .chat-conversation-row:hover::after { opacity: 1; }
 .chat-workspace .chat-conversation-row:focus-visible { outline: 2px solid var(--chat-accent-soft); outline-offset: -2px; }
-.chat-workspace .chat-conversation-row.is-selected { background: linear-gradient(90deg,var(--chat-state-selected),var(--chat-state-selected-soft)); border-radius: 6px; }
-.chat-workspace .chat-conversation-row.is-selected:before { content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 2px; background: var(--chat-accent-soft); border-radius: 2px; }
-.chat-workspace .chat-conversation-summary { display: flex; gap: 6px; align-items: center; min-width: 0; }
-.chat-workspace .chat-conversation-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 19px; font-weight: 500; color: var(--chat-ink); }
-.chat-workspace .is-unread .chat-conversation-name { color: var(--color-ui-ink-strong); font-weight: 650; }
-.chat-workspace .chat-conversation-time { font-size: 12px; line-height: 16px; color: var(--color-ui-ink-faint); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.chat-workspace .is-unread .chat-conversation-time { color: var(--chat-accent-soft); }
-.chat-workspace .chat-conversation-unread { width: 8px; height: 8px; border-radius: 50%; background: var(--chat-accent-soft); flex-shrink: 0; }
-.chat-workspace .chat-conversation-preview { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 2px; font-size: 12.5px; line-height: 17px; color: var(--color-ui-ink-muted); }
+/* Selecionado tem presença: superfície cheia, contorno e o filete inteiro. */
+.chat-workspace .chat-conversation-row.is-selected {
+  background: linear-gradient(90deg, var(--chat-state-selected), var(--chat-state-selected-soft));
+  box-shadow: inset 0 0 0 1px rgba(242, 140, 69, .34);
+}
+.chat-workspace .chat-conversation-row.is-selected::after { opacity: 1; width: 4px; background: var(--chat-accent-soft); }
+
+.chat-workspace .chat-conversation-figure { grid-area: fig; display: block; line-height: 0; }
+
+.chat-workspace .chat-conversation-summary { grid-area: nome; display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.chat-workspace .chat-conversation-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--color-ui-ink-strong); }
+.chat-workspace .is-unread .chat-conversation-name { color: #ffffff; }
+.chat-workspace .chat-conversation-time { font-size: 11.5px; line-height: 16px; color: var(--color-ui-ink-faint); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.chat-workspace .is-unread .chat-conversation-time { color: var(--chat-accent-soft); font-weight: 600; }
+
+.chat-workspace .chat-conversation-preview { grid-area: prev; display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12.5px; line-height: 17px; color: var(--color-ui-ink-muted); }
 .chat-workspace .chat-conversation-snippet { flex: 1; min-width: 0; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
-.chat-workspace .chat-conversation-context { display: flex; align-items: baseline; min-width: 0; margin-top: 2px; color: var(--color-ui-ink-muted); font-size: 11.5px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chat-workspace .chat-conversation-context > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.chat-workspace .chat-conversation-context > span + span::before { content: '·'; margin: 0 5px; color: var(--color-ui-ink-faint); }
-.chat-workspace .chat-conversation-ai { color: var(--color-ui-ink-ai); font-size: 11.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chat-workspace .chat-conversation-unread { flex-shrink: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--chat-accent-soft); box-shadow: 0 0 0 3px rgba(229, 161, 109, .16); }
+
+/* Fichas: cidade e setor deixam de ser texto solto no fim da linha. */
+.chat-workspace .chat-conversation-context { grid-area: ctx; display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: 1px; font-size: 11px; line-height: 15px; color: var(--color-ui-ink-muted); }
+.chat-workspace .chat-conversation-chip {
+  min-width: 0;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--chat-line-soft);
+  background: rgba(255, 255, 255, .05);
+  color: #c2d0d9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-workspace .chat-conversation-chip.is-dono { background: transparent; border-color: transparent; color: var(--color-ui-ink-faint); padding-left: 0; }
+/* Nada na linha de contexto pode quebrar em duas: "Confiança baixa" quebrava e
+   esticava o item de 78 para ~90px, destruindo o ritmo da lista. */
+.chat-workspace .chat-conversation-context > * { white-space: nowrap; }
+.chat-workspace .chat-conversation-alerta {
+  /* Bandeira de largura fixa: como texto ela era o 4o elemento da linha e
+     empurrava cidade/setor para as reticencias; encolhendo, virava "bai...".
+     O texto inteiro vive no title e no nome acessivel. */
+  flex: none;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(224, 168, 60, .16);
+  color: var(--color-wa-warn-text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-workspace .chat-conversation-ai { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-ui-ink-ai); }
+
 /* Prioridade horizontal da linha de contexto: cidade e setor inteiros, texto da
-   IA cedendo primeiro.
-   Todos os itens nasciam com o `flex-shrink: 1` padrao — inclusive o texto da IA,
-   cujo `flex: 0 1 auto` tambem dava fator 1 e portanto prioridade nenhuma. Como a
-   regra acima da `text-overflow: ellipsis` a TODO span, faltando largura o
-   flexbox dividia a falta entre os tres e os tres cortavam juntos: medido a 332px
-   de lista, "Candido Mendes" perdia 4px, "Suporte" 2px e o texto da IA 8px, o que
-   na tela virava "Candido Me... . Sup... . Triagem IA: Suporte te...".
-   Cidade, setor e atendente (spans sem classe) mantem fator 1; o texto da IA e os
-   chips de estado dela (spans com classe) recebem fator alto e absorvem a falta
-   antes de qualquer um deles perder um caractere. Fator alto em vez de
-   `flex-shrink: 0` nos primeiros de proposito: num caso extremo eles ainda cedem,
-   em vez de estourar a linha e serem cortados sem reticencia. `flex-grow` fica 0
-   para nada deslocar quando sobra espaco. */
-.chat-workspace .chat-conversation-context > span:not([class]) { flex: 0 1 auto; }
-.chat-workspace .chat-conversation-context > span[class] { flex: 0 200 auto; min-width: 0; }
-.chat-workspace .chat-conversation-entry:has(.chat-conversation-close) .chat-conversation-row { padding-right: 30px; }
-.chat-workspace .chat-conversation-close { position: absolute; right: 4px; top: 8px; height: 24px; width: 24px; display: grid; place-items: center; color: var(--chat-accent-soft); border-radius: 5px; }
+   IA cedendo primeiro. Regra aprovada, preservada — só deixou de depender de
+   "ter classe ou não", que quebrava assim que cidade/setor viraram fichas.
+   Todos os itens nasciam com o `flex-shrink: 1` padrao — inclusive o texto da
+   IA, cujo `flex: 0 1 auto` tambem dava fator 1 e portanto prioridade nenhuma.
+   Faltando largura o flexbox dividia a falta entre os tres e os tres cortavam
+   juntos: medido a 332px de lista, "Candido Mendes" perdia 4px, "Suporte" 2px e
+   o texto da IA 8px — na tela, "Candido Me... . Sup... . Triagem IA: Suporte...".
+   Fator alto em vez de `flex-shrink: 0` nas fichas de proposito: num caso
+   extremo elas ainda cedem, em vez de estourar a linha. */
+.chat-workspace .chat-conversation-context > .chat-conversation-chip { flex: 0 1 auto; }
+.chat-workspace .chat-conversation-context > .chat-conversation-chip.is-dono,
+.chat-workspace .chat-conversation-context > .chat-conversation-ai,
+.chat-workspace .chat-conversation-context > span:not(.chat-conversation-chip) { flex: 0 200 auto; min-width: 0; }
+
+.chat-workspace .chat-conversation-entry:has(.chat-conversation-close) .chat-conversation-row { padding-right: 34px; }
+.chat-workspace .chat-conversation-close { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); height: 26px; width: 26px; display: grid; place-items: center; color: var(--chat-accent-soft); border-radius: 7px; }
 .chat-workspace .chat-conversation-close:hover { background: var(--color-ui-line); }
 .chat-workspace .chat-workspace-conversation { min-width: 0; min-height: 0; position: relative; background: var(--chat-surface-canvas); }
 .chat-workspace .chat-workspace-conversation > div:first-child { min-width: 0; min-height: 0; }
@@ -123,6 +196,55 @@
 .chat-workspace .chat-workspace-panel-section dd { font-size: 11px; text-align: right; overflow-wrap: anywhere; min-width: 0; }
 @media(max-width:700px) { .chat-workspace .chat-workspace-header { padding: 8px; } .chat-workspace .chat-workspace-timeline { padding: 10px 12px; } .chat-workspace .chat-ai-suggestion { display: flex; flex-direction: column; } }
 
+/* ---------- Painel lateral (SGP / Cliente) — os DOIS contextos ----------
+   O painel tinha `position: fixed; inset: 0` e só era neutralizado por um
+   override que exigia o ancestral `.chat-workspace-conversation`. O
+   `ConversationModal` não produz esse ancestral, então abaixo de 1024px o
+   painel do SGP cobria cabeçalho, mensagens e compositor do diálogo inteiro,
+   sem volta além do seu próprio "×" — contra o invariante da tela.
+   Agora a posição some da origem e a regra vive aqui, presa a `.conv-raiz`,
+   que existe na mesa E no modal. Coluna quando cabe, substituição quando não;
+   sobreposição em nenhum caso. */
+.conv-raiz > .conv-painel-slot {
+  flex: 0 0 268px;
+  width: 268px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border-left: 1px solid var(--workspace-line);
+  background: var(--chat-surface-panel);
+}
+.conv-raiz.is-painel-alternado { flex-direction: column; }
+/* Substituição: a conversa sai de cena e o painel assume a área toda. Quem
+   sai é o primeiro filho (cabeçalho + timeline + compositor). */
+.conv-raiz.is-painel-alternado > div:first-child { display: none; }
+.conv-raiz.is-painel-alternado > .conv-painel-slot {
+  flex: 1 1 auto;
+  width: 100%;
+  border-left: 0;
+}
+.conv-raiz .conv-painel { min-width: 0; }
+/* A grade de ações do SGP colapsa pelo espaço REAL do painel: numa coluna de
+   268px, duas colunas davam ~127px por célula e o rótulo cortava. */
+.conv-raiz .conv-painel { container-type: inline-size; }
+.sgp-acoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container (max-width: 268px) { .sgp-acoes { grid-template-columns: minmax(0, 1fr); } }
+.chat-painel-voltar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  width: 100%;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--chat-line-soft);
+  background: var(--color-accent-surface);
+  color: var(--chat-accent-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.chat-painel-voltar:hover { color: var(--color-ui-ink-strong); }
+.chat-painel-voltar:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
+
 /* ---------- Larguras da mesa ----------
    Uma regra só, decidida em JS pelo espaço REAL (useWorkspaceLayout): a
    conversa tem piso de 420px e nunca cede. Quem cede, em ordem fixa, é a
@@ -159,5 +281,3 @@
 .chat-workspace .chat-workspace-conversation.is-painel-alternado { flex-direction: column; }
 .chat-workspace .chat-workspace-conversation.is-painel-alternado > div:first-child { display: none; }
 .chat-workspace .chat-workspace-conversation.is-painel-alternado > :is(aside, .chat-workspace-customer) { flex: 1 1 auto; width: 100%; border-left: 0; }
-.chat-workspace .chat-painel-voltar { display: flex; align-items: center; gap: 6px; flex: none; padding: 10px 16px; font-size: 12.5px; color: var(--color-ui-ink-muted); border-bottom: 1px solid var(--chat-line-soft); }
-.chat-workspace .chat-painel-voltar:hover { color: var(--color-ui-ink-strong); }

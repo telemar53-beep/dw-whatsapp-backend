@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { mediaUrl } from '../services/api';
 import { receiptVerdict } from '../utils/receiptVerdict';
 import { IconPlay, IconPause, IconMic, IconDownload, IconPin, IconAttach } from './icons/WaIcons';
 import PixCardMessage from './PixCardMessage';
-import { useDialogLayer } from './ui/Dialog';
+import { useDialogLayer, primeiroFocavel, prenderTabEm } from './ui/Dialog';
 import { descreverErro } from '../utils/errorMessages';
 
 // Tipos que guardam arquivo no disco — os únicos que a retenção pode esvaziar.
@@ -312,6 +313,24 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
   // de arrasto continuam exatamente como estavam.
   const camadaDoVisualizador = useDialogLayer(open, closeViewer);
 
+  // O visualizador se anunciava `aria-modal` mas vivia DENTRO da bolha da
+  // mensagem, sem portal: a promessa de modal era falsa para quem usa leitor
+  // de tela. E o foco nunca entrava — abria e continuava na miniatura, atras
+  // do overlay, com o Tab passeando pela conversa por baixo. Aqui ele e modal
+  // de verdade, e portanto merece trap.
+  const visorRef = useRef(null);
+  const abridorRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    abridorRef.current = document.activeElement;
+    const alvo = primeiroFocavel(visorRef.current) || visorRef.current;
+    if (alvo) alvo.focus();
+    return () => {
+      const anterior = abridorRef.current;
+      if (anterior && document.contains(anterior)) anterior.focus();
+    };
+  }, [open]);
+
   // Sempre a partir do valor atual: zoom e offset andam juntos, e voltar ao
   // ajuste tem que recentralizar, senão a imagem some para fora da tela.
   function applyZoom(next) {
@@ -379,11 +398,14 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
           style={{ maxHeight: 340, maxWidth: 330, minWidth: 120 }}
         />
       </button>}
-      {open && failedUrl !== url && (
+      {open && failedUrl !== url && createPortal(
         <div
+          ref={visorRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-label="Visualizar imagem"
+          onKeyDown={(event) => prenderTabEm(visorRef.current, event)}
           onClick={() => {
             // Soltar o mouse fora da imagem depois de arrastar não pode fechar:
             // seria fechar sem querer no meio da navegação.
@@ -395,7 +417,7 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
           }}
           onWheel={(event) => applyZoom(zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP))}
           style={{ zIndex: camadaDoVisualizador.zIndex }}
-          className="dialog-image-viewer fixed inset-0 flex items-center justify-center overflow-hidden bg-[#0b141a]/95 p-4"
+          className="chat-theme dialog-image-viewer fixed inset-0 flex items-center justify-center overflow-hidden bg-[#0b141a]/95 p-4"
         >
           <button
             type="button"
@@ -428,7 +450,10 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
 
           <div
             onClick={(event) => event.stopPropagation()}
-            className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur"
+            /* Sem `flex-wrap`, dentro de um pai `overflow-hidden`, abaixo de
+               ~320px "Ajustar" e "Baixar" ficavam fora da vista e sem nenhuma
+               forma de alcancar. Agora a barra quebra em duas linhas. */
+            className="dialog-image-zoom absolute bottom-5 left-1/2 flex max-w-[calc(100vw-24px)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-[18px] border border-white/10 bg-black/70 px-2 py-1.5 backdrop-blur"
           >
             <ViewerButton label="Diminuir zoom" onClick={() => applyZoom(zoom - ZOOM_STEP)} disabled={zoom <= ZOOM_MIN}>
               −
@@ -455,7 +480,8 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
               Baixar
             </a>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

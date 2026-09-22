@@ -145,7 +145,7 @@ function FinanceiroSection({ contractId, onSendMessage, onSendPdf, onSendPix, on
       )}
 
       {state && !state.loading && state.error && (
-        <p className="rounded-[12px] bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">
+        <p role="alert" className="rounded-[12px] bg-wa-error-bg px-3 py-2 text-[13px] text-wa-error-text">
           {state.errorMessage || 'Não foi possível consultar o SGP agora.'}
         </p>
       )}
@@ -167,7 +167,7 @@ function FinanceiroSection({ contractId, onSendMessage, onSendPdf, onSendPix, on
               <Chip tone="warn">Em aberto</Chip>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-1.5 border-t border-wa-border pt-3">
+            <div className="mt-3 sgp-acoes grid gap-1.5 border-t border-wa-border pt-3">
               {duplicate.pixCode && (
                 <SendAction
                   label="Cód Pix"
@@ -231,6 +231,7 @@ function FinanceiroSection({ contractId, onSendMessage, onSendPdf, onSendPix, on
 
             {feedback && (
               <p
+                role={feedback.kind === 'sent' ? 'status' : 'alert'}
                 className={`mt-2.5 flex items-center gap-1.5 text-[12px] ${
                   feedback.kind === 'sent' ? 'text-wa-chip-text' : 'text-wa-error-text'
                 }`}
@@ -285,7 +286,7 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
     : [];
 
   return (
-    <aside aria-label="Consulta SGP" className="dialog-sgp-panel fixed inset-0 z-[var(--z-nav)] flex flex-col bg-wa-surface-soft font-wa backdrop-blur-2xl lg:static lg:z-auto lg:my-2.5 lg:mr-2.5 lg:h-auto lg:w-[300px] lg:shrink-0 lg:rounded-[20px] lg:border lg:border-wa-surface-line lg:bg-wa-surface lg:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.85)]">
+    <aside role="region" aria-label="Consulta SGP" className="dialog-sgp-panel conv-painel flex h-full w-full min-h-0 flex-col bg-wa-surface-soft font-wa">
       <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-wa-surface-line px-3">
         <span className="text-wa-icon">
           <IconIdCard size={18} />
@@ -331,12 +332,12 @@ function SgpLookupPanel({ onSendMessage, onSendPdf, onSendPix, onSendPixQr, onSe
           </p>
         )}
         {error === 'not_found' && (
-          <p className="rounded-[12px] border border-wa-border bg-wa-field px-3 py-2.5 text-[13.5px] leading-[19px] text-wa-muted">
+          <p role="status" className="rounded-[12px] border border-wa-border bg-wa-field px-3 py-2.5 text-[13.5px] leading-[19px] text-wa-muted">
             Cliente não encontrado. Confira o documento e busque de novo.
           </p>
         )}
         {error === 'error' && (
-          <p className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13px] text-wa-error-text">
+          <p role="alert" className="rounded-[12px] bg-wa-error-bg px-3 py-2.5 text-[13px] text-wa-error-text">
             {errorMessage || 'Não foi possível consultar o SGP agora.'}
           </p>
         )}

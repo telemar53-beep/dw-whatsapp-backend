@@ -1,6 +1,13 @@
 /* Temporary UI surfaces: common scale, individual compositions below. */
-.dw-dialog {border-radius:14px;height:auto;min-height:0;max-height:calc(100dvh - 40px);color:var(--color-wa-text);box-shadow:0 24px 80px #0006}
-.dw-dialog .dw-dialog-heading {padding:17px 22px 12px;border-bottom:1px solid #ffffff10;flex:none}
+.dw-dialog {border-radius:18px;height:auto;min-height:0;max-height:calc(100dvh - 40px);color:var(--color-wa-text);box-shadow:0 40px 80px -30px rgba(0,0,0,.92),0 3px 10px -6px rgba(0,0,0,.6),inset 0 1px 0 #ffffff12}
+/* Cabecalho: icone tonal + titulo + apoio, na mesma linha. */
+.dw-dialog .dw-dialog-heading {display:flex;align-items:flex-start;gap:12px;padding:15px 22px 13px;border-bottom:1px solid #ffffff10;flex:none}
+.dw-dialog .dw-dialog-heading-texto {min-width:0;flex:1}
+.dw-dialog-icon {flex:none;width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:color-mix(in oklab,var(--dw-tom,var(--color-accent)) 26%,transparent);color:var(--dw-tom,var(--color-accent));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--dw-tom,var(--color-accent)) 40%,transparent)}
+.dw-dialog-icon[data-tom=perigo] {--dw-tom:#e05a48}
+.dw-dialog-icon[data-tom=info] {--dw-tom:#5aa2e8}
+.dw-dialog-icon[data-tom=ok] {--dw-tom:#5fb89b}
+.dw-dialog-icon[data-tom=ia] {--dw-tom:#9b7ae8}
 /* Botao fechar da base: um so, mesma posicao em todo dialogo, visivel tambem
    no celular (o do ConversationModal era hidden md:flex e sumia justamente
    onde ele mais faz falta). Alvo de 32px. */
@@ -20,7 +27,13 @@
 .dw-dialog form > div:last-child:has(> button) button,.dw-dialog > div:last-child:has(> button) button,.dw-dialog-footer button {padding:7px 13px;border-radius:7px}
 /* Corpo: o UNICO eixo de rolagem do dialogo. Cabecalho e rodape nao rolam. */
 .dw-dialog-body {flex:1 1 auto;min-height:0;overflow-y:auto;padding:14px 22px}
+/* Rodape: `[Cancelar][acao]` a direita sempre. Quando o dialogo declara uma
+   consequencia, ela fica a esquerda e o rodape se abre — sem nota, nada muda
+   nos dialogos que ja existiam. */
 .dw-dialog-footer {display:flex;justify-content:flex-end;align-items:center}
+.dw-dialog-footer:has(.dw-dialog-nota) {justify-content:space-between;gap:14px}
+.dw-dialog-nota {font-size:11.5px;line-height:16px;color:var(--color-wa-meta);min-width:0}
+.dw-dialog-acoes {flex:none;display:flex;align-items:center;gap:8px}
 .dialog-provider-options {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:18px 22px;gap:12px}
 .dialog-provider-option {display:flex;flex-direction:column;align-items:start;gap:8px;padding:14px;text-align:left;border:1px solid #ffffff14;border-radius:9px;background:#ffffff03;transition:background .15s,border-color .15s}
 .dialog-provider-option:hover {background:#ffffff07;border-color:#c39b7566}
@@ -74,14 +87,7 @@
 .dialog-template-compose:empty {display:none}
 .dialog-template-compose > div:first-child {margin-top:0}
 /* History: aligned chronology and a persistent contextual summary. */
-[data-dialog=history]:has(.dialog-history-heading) {max-width:540px;min-height:0;height:auto;max-height:min(620px,calc(100dvh - 40px))}
-[data-dialog=history] .dialog-history-heading {padding:14px 18px 6px}
-[data-dialog=history] .dialog-history-heading h2 {font-size:17px;line-height:24px}
 [data-dialog=history] .dialog-history-results {flex:0 1 auto;min-height:0;padding:0 18px 4px;overflow-y:auto}
-[data-dialog=history]:has(.dialog-history-heading) > div:last-child {padding:8px 18px}
-[data-dialog=history] .dialog-history-list > li {border-bottom:1px solid #ffffff0d}
-[data-dialog=history] .dialog-history-list > li:last-child {border-bottom:0}
-[data-dialog=history] .dialog-history-list button {padding:9px 2px;align-items:start}
 [data-dialog=closed] {height:auto;min-height:0;max-height:min(70dvh,640px);max-width:1100px}
 [data-dialog=closed]:not(:has(.dialog-closed-content ul)) {max-width:520px}
 [data-dialog=closed] .dw-dialog-heading {padding:13px 18px 10px}
@@ -89,9 +95,50 @@
 .dialog-closed-count {font-size:13px;line-height:20px;font-variant-numeric:tabular-nums;color:var(--color-wa-muted);font-weight:500}
 [data-dialog=closed] .dialog-closed-content {flex:0 1 auto;min-height:0;padding:10px 18px 14px;overflow-y:auto}
 [data-dialog=closed] .dialog-closed-content > p {padding:8px 0;margin:0}
-.dialog-history-record {display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-items:start}
-.dialog-history-record > span:first-child {font-size:13px;font-variant-numeric:tabular-nums;font-weight:600}
-.dialog-history-record > span:last-child {white-space:normal;font-size:12px;line-height:18px;overflow-wrap:anywhere}
+/* Histórico — UM envelope nas duas vistas.
+   A lista era travada em 540px por `:has(.dialog-history-heading)` e o detalhe
+   voltava aos 768px do `max-w-3xl`: abrir um atendimento fazia o diálogo
+   crescer, e parecia que tinha aberto outro modal. Agora as duas vistas usam
+   os mesmos 640px, e a troca é de conteúdo, não de moldura. */
+[data-dialog=history] {max-height:min(660px,calc(100dvh - 40px))}
+[data-dialog=history] .dialog-history-results {flex:1 1 auto;min-height:0;padding:6px 14px 10px;overflow-y:auto}
+.dialog-history-list {display:flex;flex-direction:column;gap:6px}
+.dialog-history-item {display:flex;width:100%;align-items:center;gap:11px;padding:9px 10px;border:1px solid var(--color-ui-line);border-radius:11px;background:#ffffff05;text-align:left}
+.dialog-history-item:hover {background:var(--color-wa-hover);border-color:var(--color-wa-border-strong)}
+.dialog-history-item:focus-visible {outline:2px solid var(--color-focus-ring);outline-offset:2px}
+.dialog-history-data {flex:none;width:50px;text-align:center}
+.dialog-history-data b {display:block;font-size:15px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--color-wa-text)}
+.dialog-history-data small {font-size:9.5px;letter-spacing:.05em;color:var(--color-wa-meta)}
+.dialog-history-record {flex:1;min-width:0;display:grid;gap:2px}
+.dialog-history-motivo {font-size:13.5px;font-weight:600;color:var(--color-wa-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dialog-history-apoio {font-size:11.5px;line-height:16px;color:var(--color-wa-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dialog-history-go {flex:none;font-size:15px;color:var(--color-wa-meta)}
+.dialog-history-migalha {padding:10px 16px;border-bottom:1px solid var(--color-wa-border)}
+.dialog-history-voltar {display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--color-wa-link)}
+.dialog-history-voltar:hover {text-decoration:underline}
+.dialog-history-voltar:focus-visible {outline:2px solid var(--color-focus-ring);outline-offset:2px;border-radius:6px}
+/* Nova conversa: Pais e Telefone lado a lado enquanto o espaco REAL do
+   dialogo permitir. */
+.dialog-inicio-linha {container-type:inline-size}
+.dialog-inicio-fone {display:grid;grid-template-columns:minmax(120px,.8fr) minmax(0,1.5fr);gap:12px}
+@container (max-width: 330px) {.dialog-inicio-fone {grid-template-columns:minmax(0,1fr)}}
+
+/* Equipe: grupos empilhados numa coluna. */
+.dialog-team-grupos {display:flex;flex-direction:column;gap:10px}
+.dialog-team-grupo {border:1px solid var(--color-wa-border);border-radius:12px;overflow:hidden}
+
+/* Transferir: a linha e a escolha. */
+.dialog-transfer-linha {transition:background-color .15s}
+.dialog-transfer-linha:hover {background:var(--color-wa-hover)}
+.dialog-transfer-linha:focus-visible {outline:2px solid var(--color-focus-ring);outline-offset:-2px}
+.dialog-transfer-linha.is-escolhido {background:var(--color-accent-surface);box-shadow:inset 0 0 0 1px var(--color-accent-line)}
+.dialog-transfer-marca {flex:none;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--color-wa-border-strong)}
+.dialog-transfer-marca.is-escolhido {border-color:var(--color-accent);background:radial-gradient(circle,var(--color-accent) 0 44%,transparent 46%)}
+.dialog-transfer-grupo {display:flex;align-items:center;gap:7px;padding:12px 4px 6px;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--color-wa-meta)}
+.dialog-transfer-grupo i {width:7px;height:7px;border-radius:50%;background:#6d7c87}
+.dialog-transfer-grupo i[data-on] {background:var(--color-ui-presence-online)}
+.dialog-transfer-grupo b {margin-left:auto;font-weight:700}
+
 .dialog-history-summary {display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:12px 22px;border-bottom:1px solid #ffffff10;background:#ffffff02}
 .dialog-history-summary dt {font-size:11px;color:#a1b4c0}
 .dialog-history-summary dd {font-size:12px;margin-top:3px}

@@ -421,3 +421,151 @@ describe('campo de periodo personalizado', () => {
     clickSpy.mockRestore();
   });
 });
+
+// Redesign de Relatórios: a lista da equipe passou a ser o centro da tela e
+// precisa continuar legível com quase 20 atendentes.
+describe('desempenho da equipe no painel', () => {
+  function admin(byAgent, bySector = [], byReason = []) {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
+    api.getMetrics.mockResolvedValue({ period: 'today', scope: 'admin', byAgent, bySector, byReason });
+  }
+  function atendente(agentId, agentName, closedCount, avgResolutionMinutes = 10, avgFirstResponseMinutes = 2) {
+    return { agentId, agentName, closedCount, avgResolutionMinutes, avgFirstResponseMinutes };
+  }
+
+  test('mostra só o primeiro nome do atendente', async () => {
+    admin([atendente('a1', 'Gabriela Reis Menezes', 5)]);
+    renderPage();
+
+    expect(await screen.findByRole('rowheader', { name: 'Gabriela' })).toBeInTheDocument();
+    expect(screen.queryByText('Gabriela Reis Menezes')).not.toBeInTheDocument();
+  });
+
+  test('desempata primeiros nomes iguais com o mínimo necessário', async () => {
+    admin([atendente('a1', 'Ana Paula Pereira', 5), atendente('a2', 'Ana Carolina Souza', 3)]);
+    renderPage();
+
+    expect(await screen.findByRole('rowheader', { name: 'Ana P.' })).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: 'Ana S.' })).toBeInTheDocument();
+  });
+
+  test('ordena por atendimentos por padrão, do maior para o menor', async () => {
+    admin([atendente('a1', 'Bruno Lima', 4), atendente('a2', 'Carla Dias', 9), atendente('a3', 'Ari Melo', 6)]);
+    renderPage();
+
+    await screen.findByRole('rowheader', { name: 'Carla' });
+    const nomes = screen.getAllByRole('rowheader').map((celula) => celula.textContent);
+    // A posição (1, 2, 3) e a inicial do avatar ficam na mesma célula, fora do
+    // nome acessível — por isso a leitura aqui é pelo texto bruto.
+    expect(nomes).toEqual(['1CCarla', '2AAri', '3BBruno']);
+  });
+
+  test('trocar a ordenação reordena a lista sem buscar de novo', async () => {
+    admin([
+      atendente('a1', 'Bruno Lima', 9, 90),
+      atendente('a2', 'Carla Dias', 4, 12),
+    ]);
+    renderPage();
+    await screen.findByRole('rowheader', { name: 'Bruno' });
+
+    await userEvent.selectOptions(screen.getByRole('combobox'), 'resolution');
+
+    expect(screen.getAllByRole('rowheader').map((c) => c.textContent)).toEqual(['1CCarla', '2BBruno']);
+    expect(api.getMetrics).toHaveBeenCalledTimes(1);
+  });
+
+  test('atendente sem média vai para o fim ao ordenar por tempo', async () => {
+    admin([atendente('a1', 'Bruno Lima', 9, null), atendente('a2', 'Carla Dias', 4, 30)]);
+    renderPage();
+    await screen.findByRole('rowheader', { name: 'Bruno' });
+
+    await userEvent.selectOptions(screen.getByRole('combobox'), 'resolution');
+
+    expect(screen.getAllByRole('rowheader').map((c) => c.textContent)).toEqual(['1CCarla', '2BBruno']);
+  });
+
+  test('com mais de dez atendentes a lista abre resumida e o botão revela o resto', async () => {
+    const equipe = Array.from({ length: 14 }, (_, i) => atendente(`a${i}`, `Atendente${String.fromCharCode(65 + i)} Silva`, 20 - i));
+    admin(equipe);
+    renderPage();
+
+    await screen.findByRole('rowheader', { name: 'AtendenteA' });
+    expect(screen.getAllByRole('rowheader')).toHaveLength(10);
+
+    await userEvent.click(screen.getByRole('button', { name: /ver todos os atendentes \(14\)/i }));
+
+    expect(screen.getAllByRole('rowheader')).toHaveLength(14);
+  });
+
+  test('com dez atendentes ou menos não existe botão de expandir', async () => {
+    admin([atendente('a1', 'Ana Souza', 5)]);
+    renderPage();
+
+    await screen.findByRole('rowheader', { name: 'Ana' });
+    expect(screen.queryByRole('button', { name: /ver todos os atendentes/i })).not.toBeInTheDocument();
+  });
+
+  test('o indicador de atendentes conta quem teve encerramento no período', async () => {
+    admin([atendente('a1', 'Ana Souza', 5), atendente('a2', 'Bruno Lima', 3)]);
+    renderPage();
+
+    await screen.findByRole('rowheader', { name: 'Ana' });
+    const resumo = screen.getByLabelText('Resumo do período');
+    expect(resumo).toHaveTextContent('Atendentes no período');
+    expect(resumo).toHaveTextContent('8'); // 5 + 3 encerrados
+    expect(resumo).toHaveTextContent('2'); // dois atendentes
+  });
+});
+
+describe('setores e motivos como cartões do painel', () => {
+  function admin(bySector, byReason = []) {
+    useAuth.mockReturnValue({ token: 'tok-123', agent: { id: 'admin-1', role: 'admin' } });
+    api.getMetrics.mockResolvedValue({
+      period: 'today',
+      scope: 'admin',
+      byAgent: [{ agentId: 'a1', agentName: 'Ana Souza', closedCount: 1, avgResolutionMinutes: 1, avgFirstResponseMinutes: 1 }],
+      bySector,
+      byReason,
+    });
+  }
+
+  test('mostra a participação de cada setor sobre o total do próprio cartão', async () => {
+    admin([
+      { sectorId: 's1', sectorName: 'Financeiro', closedCount: 75 },
+      { sectorId: 's2', sectorName: 'Suporte', closedCount: 25 },
+    ]);
+    renderPage();
+
+    const setores = await screen.findByLabelText('Atendimentos por setor');
+    expect(setores).toHaveTextContent('75%');
+    expect(setores).toHaveTextContent('25%');
+  });
+
+  test('ordena as fatias da maior para a menor', async () => {
+    admin([
+      { sectorId: 's1', sectorName: 'Comercial', closedCount: 2 },
+      { sectorId: null, sectorName: 'Sem setor', closedCount: 40 },
+      { sectorId: 's2', sectorName: 'Suporte', closedCount: 8 },
+    ]);
+    renderPage();
+
+    const setores = await screen.findByLabelText('Atendimentos por setor');
+    const nomes = [...setores.querySelectorAll('.report-distribution-name')].map((n) => n.textContent);
+    expect(nomes).toEqual(['Sem setor', 'Suporte', 'Comercial']);
+  });
+
+  test('acima de oito motivos o cartão resume e oferece ver todos', async () => {
+    admin(
+      [],
+      Array.from({ length: 11 }, (_, i) => ({ reasonId: `r${i}`, reasonName: `Motivo ${i}`, closedCount: 11 - i }))
+    );
+    renderPage();
+
+    const motivos = await screen.findByLabelText('Motivos de contato');
+    expect(motivos.querySelectorAll('.report-distribution li')).toHaveLength(8);
+
+    await userEvent.click(screen.getByRole('button', { name: /ver todos \(11\)/i }));
+
+    expect(motivos.querySelectorAll('.report-distribution li')).toHaveLength(11);
+  });
+});

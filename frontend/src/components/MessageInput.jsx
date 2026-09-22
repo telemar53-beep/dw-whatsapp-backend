@@ -58,13 +58,24 @@ function pickSupportedAudioMimeType() {
 // `display:none`, que também não entra — juntos, eliminavam QUALQUER caminho de
 // teclado para anexar arquivo. Só existia esse uso, e ele virou botão: o galho
 // saiu para ninguém recriar o mesmo beco sem saída.
-function ComposerButton({ label, onClick, disabled, active, children }) {
+function ComposerButton({ label, onClick, disabled, active, children, haspopup, controls, botaoRef }) {
   const className = `flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring ${
     active ? 'bg-white/10 text-chat-text' : 'text-chat-icon'
   } ${disabled ? 'pointer-events-none opacity-40' : 'cursor-pointer hover:bg-white/[0.08]'}`;
 
   return (
-    <button type="button" onClick={onClick} disabled={disabled} title={label} aria-label={label} className={className}>
+    <button
+      ref={botaoRef}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      aria-haspopup={haspopup}
+      aria-expanded={haspopup ? Boolean(active) : undefined}
+      aria-controls={haspopup && active ? controls : undefined}
+      className={className}
+    >
       {children}
     </button>
   );
@@ -92,6 +103,10 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
   const popoverRef = useRef(null);
+  const gatilhoEmojiRef = useRef(null);
+  const gatilhoRespostasRef = useRef(null);
+  const primeiroEmojiRef = useRef(null);
+  const primeiroItemRef = useRef(null);
   // O rascunho de texto de cada conversa. O componente não remonta ao trocar de
   // conversa — só muda a prop —, então sem isto o que ficou escrito para um
   // cliente aparecia na conversa do próximo, e enviar mandava para a pessoa
@@ -116,6 +131,48 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
 
+  // Foco inicial: sem ele o popover abre e o teclado continua no gatilho,
+  // sem nada para navegar.
+  useEffect(() => {
+    if (showingEmojis && primeiroEmojiRef.current) primeiroEmojiRef.current.focus();
+  }, [showingEmojis]);
+  useEffect(() => {
+    if (showingQuickReplies && primeiroItemRef.current) primeiroItemRef.current.focus();
+  }, [showingQuickReplies, quickReplies.length]);
+
+  // Navegacao por setas dentro da grade de emojis: 8 por linha, como o layout.
+  function navegarNaGrade(evento) {
+    const passos = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 8, ArrowUp: -8 };
+    const passo = passos[evento.key];
+    if (!passo) return;
+    const botoes = [...evento.currentTarget.querySelectorAll('button')];
+    const atual = botoes.indexOf(document.activeElement);
+    if (atual === -1) return;
+    evento.preventDefault();
+    const proximo = botoes[Math.min(botoes.length - 1, Math.max(0, atual + passo))];
+    if (proximo) proximo.focus();
+  }
+
+  function navegarNoMenu(evento) {
+    const passo = evento.key === 'ArrowDown' ? 1 : evento.key === 'ArrowUp' ? -1 : 0;
+    if (!passo) return;
+    const itens = [...evento.currentTarget.querySelectorAll('[role=menuitem]')];
+    const atual = itens.indexOf(document.activeElement);
+    if (atual === -1) return;
+    evento.preventDefault();
+    const proximo = itens[(atual + passo + itens.length) % itens.length];
+    if (proximo) proximo.focus();
+  }
+
+  function fecharPopovers(devolverFoco) {
+    const eraEmoji = showingEmojis;
+    setShowingQuickReplies(false);
+    setShowingEmojis(false);
+    if (!devolverFoco) return;
+    const gatilho = eraEmoji ? gatilhoEmojiRef.current : gatilhoRespostasRef.current;
+    if (gatilho) gatilho.focus();
+  }
+
   useEffect(() => {
     if (!showingQuickReplies && !showingEmojis) return undefined;
     function onPointerDown(event) {
@@ -125,10 +182,10 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
       }
     }
     function onKeyDown(event) {
-      if (event.key === 'Escape') {
-        setShowingQuickReplies(false);
-        setShowingEmojis(false);
-      }
+      if (event.key !== 'Escape') return;
+      // ESC fechava, mas o foco ficava onde estava — dentro de um popover que
+      // deixou de existir. Devolver ao gatilho e o par obrigatorio do ESC.
+      fecharPopovers(true);
     }
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
@@ -415,6 +472,9 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               <ComposerButton
                 label="Respostas rápidas"
                 active={showingQuickReplies}
+                haspopup="menu"
+                controls="composer-respostas"
+                botaoRef={gatilhoRespostasRef}
                 onClick={() => {
                   setShowingQuickReplies((prev) => !prev);
                   setShowingEmojis(false);
@@ -425,6 +485,9 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               <ComposerButton
                 label="Emojis"
                 active={showingEmojis}
+                haspopup="dialog"
+                controls="composer-emojis"
+                botaoRef={gatilhoEmojiRef}
                 onClick={() => {
                   setShowingEmojis((prev) => !prev);
                   setShowingQuickReplies(false);
@@ -445,13 +508,23 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 className="min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
               />
 
+              {/* Popover, NAO modal: nome acessivel, foco inicial no primeiro
+                  emoji, setas navegando a grade, ESC devolvendo o foco ao
+                  gatilho — e Tab saindo normalmente. Sem trap. */}
               {showingEmojis && (
-                <div className="dialog-emoji-picker animate-wa-pop absolute bottom-full left-0 z-[var(--z-popover)] mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-ui-surface-overlay/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-                  <p className="dialog-popover-heading">Emojis</p>
+                <div
+                  id="composer-emojis"
+                  role="dialog"
+                  aria-label="Emojis"
+                  onKeyDown={navegarNaGrade}
+                  className="dialog-emoji-picker animate-wa-pop absolute bottom-full left-0 z-[var(--z-popover)] mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-ui-surface-overlay/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+                >
+                  <p className="dialog-popover-heading" aria-hidden="true">Emojis</p>
                   <div className="grid grid-cols-8 gap-1">
-                    {EMOJIS.map((emoji) => (
+                    {EMOJIS.map((emoji, i) => (
                       <button
                         key={emoji}
+                        ref={i === 0 ? primeiroEmojiRef : undefined}
                         type="button"
                         onClick={() => appendEmoji(emoji)}
                         className="rounded-md py-1 text-[20px] leading-none transition-colors hover:bg-white/10"
@@ -463,20 +536,31 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 </div>
               )}
 
+              {/* O comportamento real e de MENU: uma lista de escolhas que
+                  preenche o campo. Setas navegam, Enter escolhe, ESC devolve o
+                  foco. Sem trap. */}
               {showingQuickReplies && (
-                <div className="dialog-quick-replies animate-wa-pop chat-scroll absolute bottom-full left-0 z-[var(--z-popover)] mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-ui-surface-overlay/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-                  <p className="dialog-popover-heading">Respostas rápidas</p>
+                <div
+                  id="composer-respostas"
+                  role="menu"
+                  aria-label="Respostas rápidas"
+                  onKeyDown={navegarNoMenu}
+                  className="dialog-quick-replies animate-wa-pop chat-scroll absolute bottom-full left-0 z-[var(--z-popover)] mb-2 max-h-72 w-72 max-w-[92vw] overflow-y-auto rounded-2xl border border-white/10 bg-ui-surface-overlay/95 py-1.5 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+                >
+                  <p className="dialog-popover-heading" aria-hidden="true">Respostas rápidas</p>
                   <AsyncState
                     status={quickRepliesStatus}
                     isEmpty={quickReplies.length === 0}
                     emptyMessage="Nenhuma resposta rápida cadastrada."
                     skeletonLines={2}
                   >
-                    <ul>
-                      {quickReplies.map((quickReply) => (
-                        <li key={quickReply.id}>
+                    <ul role="none">
+                      {quickReplies.map((quickReply, i) => (
+                        <li key={quickReply.id} role="none">
                           <button
+                            ref={i === 0 ? primeiroItemRef : undefined}
                             type="button"
+                            role="menuitem"
                             onClick={() => {
                               setContent(quickReply.content);
                               setShowingQuickReplies(false);

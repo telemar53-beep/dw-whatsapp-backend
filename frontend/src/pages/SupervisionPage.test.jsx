@@ -540,7 +540,9 @@ describe('contadores confiáveis', () => {
     const andamento = within(estados).getByRole('button', { name: /andamento/i });
     expect(andamento).toHaveTextContent('0');
     expect(andamento).not.toHaveTextContent('—');
-    expect(screen.getByText(/online · sem atendimentos/i)).toBeInTheDocument();
+    // A presença é "Online" + a atividade num <em> separado (o "·" é
+    // decoração de CSS), então a asserção olha o bloco inteiro.
+    expect(screen.getByText('Livre').closest('.supervision-presence')).toHaveTextContent(/online/i);
   });
 });
 

@@ -8,8 +8,11 @@ const {
   createCampaign,
   findCampaignById,
   listCampaigns,
+  countCampaigns,
   createCampaignRecipients,
   listCampaignRecipients,
+  listCampaignRecipientsPage,
+  countCampaignRecipientsByStatus,
   updateCampaignRecipientStatus,
   incrementCampaignCounter,
   deleteCampaign,
@@ -173,9 +176,39 @@ router.post('/', async (req, res) => {
   res.status(201).json(campaign);
 });
 
+const LIST_DEFAULT_LIMIT = 20;
+const LIST_MAX_LIMIT = 100;
+
+// Le um inteiro de query string sem "consertar" nada. Aqui um clamp seria
+// perigoso: a presenca do parametro e o que decide o FORMATO da resposta, e um
+// valor errado viraria um envelope que o cliente nao pediu.
+function parseInteiro(raw, { min, max }) {
+  if (!/^\d+$/.test(String(raw))) return null;
+  const valor = Number(raw);
+  if (valor < min || valor > max) return null;
+  return valor;
+}
+
 router.get('/', async (req, res) => {
-  const campaigns = await listCampaigns();
-  res.json(campaigns);
+  const querPaginar = req.query.limit !== undefined || req.query.offset !== undefined;
+  if (!querPaginar) {
+    // Ninguem pediu pagina: array puro, do jeito que sempre foi.
+    const campaigns = await listCampaigns();
+    return res.json(campaigns);
+  }
+
+  const limit = req.query.limit === undefined
+    ? LIST_DEFAULT_LIMIT
+    : parseInteiro(req.query.limit, { min: 1, max: LIST_MAX_LIMIT });
+  const offset = req.query.offset === undefined
+    ? 0
+    : parseInteiro(req.query.offset, { min: 0, max: Number.MAX_SAFE_INTEGER });
+  if (limit === null || offset === null) {
+    return res.status(400).json({ error: `limit must be an integer from 1 to ${LIST_MAX_LIMIT} and offset a non-negative integer` });
+  }
+
+  const [items, total] = await Promise.all([listCampaigns({ limit, offset }), countCampaigns()]);
+  res.json({ items, total, hasMore: offset + items.length < total });
 });
 
 router.get('/:id', async (req, res) => {
@@ -185,6 +218,50 @@ router.get('/:id', async (req, res) => {
   }
   const recipients = await listCampaignRecipients(campaign.id);
   res.json({ ...campaign, recipients });
+});
+
+const RECIPIENTS_DEFAULT_LIMIT = 200;
+const RECIPIENTS_MAX_LIMIT = 500;
+
+// Os mesmos quatro valores do CHECK de campaign_recipients.status. Ficam aqui
+// porque sao validacao de entrada HTTP: o banco ja recusa o resto, e a rota
+// so precisa transformar isso em 400 em vez de deixar virar erro de query.
+const RECIPIENT_STATUSES = ['pending', 'sent', 'failed', 'skipped'];
+
+// Aqui o clamp e seguro, ao contrario da listagem: a resposta e sempre
+// envelopada, entao um limite ajustado nao troca o formato de nada.
+function clamp(raw, { fallback, min, max }) {
+  const valor = parseInt(raw, 10);
+  if (!Number.isInteger(valor)) return fallback;
+  return Math.min(Math.max(valor, min), max);
+}
+
+router.get('/:id/recipients', async (req, res) => {
+  const { status } = req.query;
+  if (status !== undefined && !RECIPIENT_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `status must be one of: ${RECIPIENT_STATUSES.join(', ')}` });
+  }
+
+  const campaign = await findCampaignById(req.params.id);
+  if (!campaign) {
+    return res.status(404).json({ error: 'Campaign not found' });
+  }
+
+  const limit = clamp(req.query.limit, { fallback: RECIPIENTS_DEFAULT_LIMIT, min: 1, max: RECIPIENTS_MAX_LIMIT });
+  const offset = clamp(req.query.offset, { fallback: 0, min: 0, max: Number.MAX_SAFE_INTEGER });
+  const [items, counts] = await Promise.all([
+    listCampaignRecipientsPage(campaign.id, { limit, offset, status }),
+    countCampaignRecipientsByStatus(campaign.id),
+  ]);
+
+  // O total sai das proprias contagens: com filtro e o valor daquele status,
+  // sem filtro e a soma dos quatro. Derivar em vez de consultar de novo poupa
+  // uma query e, mais importante, impede que total e counts se contradigam.
+  const total = status === undefined
+    ? Object.values(counts).reduce((soma, valor) => soma + valor, 0)
+    : counts[status];
+
+  res.json({ items, total, hasMore: offset + items.length < total, counts });
 });
 
 module.exports = router;

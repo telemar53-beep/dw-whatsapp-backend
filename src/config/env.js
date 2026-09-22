@@ -27,6 +27,14 @@ function contentProblems(env, keys) {
   if ((env.JWT_SECRET || '').length < JWT_SECRET_MIN_LENGTH) {
     problems.push(`JWT_SECRET tem menos de ${JWT_SECRET_MIN_LENGTH} caracteres`);
   }
+  if ((env.MEDIA_TOKEN_SECRET || '').length < JWT_SECRET_MIN_LENGTH) {
+    problems.push(`MEDIA_TOKEN_SECRET tem menos de ${JWT_SECRET_MIN_LENGTH} caracteres`);
+  }
+  // Iguais anulariam a separacao: o token de midia passaria a valer como token
+  // de sessao, que e exatamente o que esta variavel separada existe para evitar.
+  if (env.MEDIA_TOKEN_SECRET && env.MEDIA_TOKEN_SECRET === env.JWT_SECRET) {
+    problems.push('MEDIA_TOKEN_SECRET e JWT_SECRET sao iguais: isso anula a separacao entre token de midia e token de sessao');
+  }
   if (/localhost|127\.0\.0\.1/.test(env.PUBLIC_BASE_URL || '')) {
     problems.push('PUBLIC_BASE_URL aponta para a maquina local, entao nenhum webhook chegaria');
   }
@@ -43,6 +51,7 @@ function loadConfig() {
     'BAILEYS_SESSIONS_DIR',
     'MEDIA_STORAGE_DIR',
     'PUBLIC_BASE_URL',
+    'MEDIA_TOKEN_SECRET',
   ];
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) {
@@ -59,6 +68,7 @@ function loadConfig() {
     port: Number(process.env.PORT) || 3000,
     databaseUrl: process.env.DATABASE_URL,
     jwtSecret: process.env.JWT_SECRET,
+    mediaTokenSecret: process.env.MEDIA_TOKEN_SECRET,
     redisUrl: process.env.REDIS_URL,
     metaVerifyToken: process.env.META_VERIFY_TOKEN,
     metaAppSecret: process.env.META_APP_SECRET,

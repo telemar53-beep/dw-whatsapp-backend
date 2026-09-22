@@ -1,6 +1,7 @@
 const express = require('express');
 const { login, changePassword } = require('./auth.service');
-const { requireAuth } = require('./auth.middleware');
+const { requireAuth, hasAdminLevelAccess } = require('./auth.middleware');
+const { signMediaToken, MEDIA_TOKEN_EXPIRY_SECONDS } = require('./media-token.service');
 const { loginLimiter } = require('../config/rate-limiters');
 
 const router = express.Router();
@@ -35,6 +36,33 @@ router.put('/password', requireAuth, async (req, res, next) => {
   } catch (err) {
     if (err.code === 'INVALID_CURRENT_PASSWORD') {
       return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    next(err);
+  }
+});
+
+/**
+ * Emite o token de leitura de mídia do agente logado.
+ *
+ * Uma chamada serve TODOS os recursos dele — avatares da lista, mídias da
+ * conversa, download. Um token por recurso multiplicaria as emissões pelo
+ * número de bolhas e avatares na tela, que hoje não tem teto.
+ *
+ * Autentica pelo JWT de sessão no header, como qualquer rota normal: é o único
+ * lugar onde os dois tokens se encontram, e a troca acontece por header, nunca
+ * por URL.
+ */
+router.post('/media-token', requireAuth, (req, res, next) => {
+  try {
+    const token = signMediaToken({
+      agentId: req.agent.agentId,
+      podeVerSilent: hasAdminLevelAccess(req.agent),
+    });
+    res.json({ mediaToken: token, expiresInSeconds: MEDIA_TOKEN_EXPIRY_SECONDS });
+  } catch (err) {
+    if (err.code === 'MEDIA_TOKEN_SECRET_MISSING') {
+      console.error('Não foi possível emitir token de mídia', err.message);
+      return res.status(503).json({ error: 'Media token is not configured on this server' });
     }
     next(err);
   }

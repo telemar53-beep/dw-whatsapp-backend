@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getConversationHistory, getMessages } from '../services/api';
 import MessageAttachment from './MessageAttachment';
 import WaDialog, { waGhostButtonClass } from './WaDialog';
-import { IconArrowLeft } from './icons/WaIcons';
+import { IconArrowLeft, IconHistory } from './icons/WaIcons';
 import { AsyncState } from './ui';
 
 // Quem atendeu e quem encerrou nem sempre é a mesma pessoa: o admin pode
@@ -93,7 +93,7 @@ function ConversationHistoryModal({ contactId, onClose }) {
     : `${history.length} ${history.length === 1 ? 'atendimento encerrado' : 'atendimentos encerrados'}`;
 
   return (
-    <WaDialog variant="history" onClose={onClose} closeOnBackdrop title={titulo} description={descricao} size="max-w-[640px]">
+    <WaDialog variant="history" onClose={onClose} closeOnBackdrop title={titulo} description={descricao} size="max-w-[640px]" icon={<IconHistory size={18} />} tone="info">
       {selected ? (
         <>
           <div className="dialog-history-migalha shrink-0">
@@ -159,10 +159,13 @@ function ConversationHistoryModal({ contactId, onClose }) {
           </AsyncState>
         </div>
       )}
-      <div className="flex shrink-0 justify-end px-4 py-3">
-        <button onClick={onClose} className={waGhostButtonClass}>
-          Fechar
-        </button>
+      <div className="dw-dialog-footer">
+        <span className="dw-dialog-nota">Somente leitura.</span>
+        <span className="dw-dialog-acoes">
+          <button onClick={onClose} className={waGhostButtonClass}>
+            Fechar
+          </button>
+        </span>
       </div>
     </WaDialog>
   );

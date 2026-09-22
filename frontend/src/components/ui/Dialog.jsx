@@ -153,6 +153,8 @@ export function Dialog({
   role = 'dialog',
   size = 'max-w-md',
   variant = 'standard',
+  icon,
+  tone,
   orientation = 'col',
   onClose,
   closeOnBackdrop = false,
@@ -313,14 +315,21 @@ export function Dialog({
         )}
         {title && (
           <div className="dw-dialog-heading shrink-0 px-6 pb-2 pt-5">
-            <h2 id={tituloId} className="text-[18px] leading-[26px] text-wa-text">
-              {title}
-            </h2>
-            {description && (
-              <p id={descricaoId} className="mt-1.5 text-[14px] leading-[20px] text-wa-muted">
-                {description}
-              </p>
-            )}
+            {/* Slot do icone tonal: a cor diz do que o dialogo trata (laranja
+                transferir, vermelho encerrar, azul historico, verde equipe,
+                roxo template). Opcional — sem `icon` o cabecalho fica como
+                antes, e nenhum dialogo existente muda sem pedir. */}
+            {icon && <span className="dw-dialog-icon" data-tom={tone} aria-hidden="true">{icon}</span>}
+            <div className="dw-dialog-heading-texto">
+              <h2 id={tituloId} className="text-[18px] leading-[26px] text-wa-text">
+                {title}
+              </h2>
+              {description && (
+                <p id={descricaoId} className="mt-1.5 text-[14px] leading-[20px] text-wa-muted">
+                  {description}
+                </p>
+              )}
+            </div>
           </div>
         )}
         {children}

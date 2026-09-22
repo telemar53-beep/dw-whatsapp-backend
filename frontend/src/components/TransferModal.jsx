@@ -75,12 +75,19 @@ function IconBars({ size = 14 }) {
   );
 }
 
-function AgentRow({ agent, online, busy, onTransfer }) {
+function AgentRow({ agent, online, selecionado, onEscolher }) {
   const active = agent.activeConversations || 0;
   const level = loadLevel({ online, active });
   const displayName = agent.name || agent.email;
   return (
-    <li className="flex items-center gap-3 px-3.5 py-2.5">
+    <li>
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selecionado}
+      onClick={onEscolher}
+      className={`dialog-transfer-linha flex w-full items-center gap-3 px-3.5 py-2.5 text-left ${selecionado ? 'is-escolhido' : ''}`}
+    >
       <span className="relative shrink-0">
         <AgentAvatar agentId={agent.id} avatarPath={agent.avatarPath} name={displayName} size={46} />
         <span
@@ -113,20 +120,17 @@ function AgentRow({ agent, online, busy, onTransfer }) {
           )}
         </span>
       </span>
-      <button
-        type="button"
-        onClick={onTransfer}
-        disabled={busy}
-        aria-label={`Transferir para ${displayName}`}
-        className="flex shrink-0 items-center gap-2 rounded-[10px] border border-chat-orange/60 bg-chat-orange/20 px-3.5 py-2 text-[13.5px] font-semibold text-[#ffb08a] transition-colors hover:bg-chat-orange/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50"
-      >
-        <span className="text-chat-orange">
-          <IconArrowRight size={15} />
-        </span>
-        Transferir
-      </button>
+      <span aria-hidden="true" className={`dialog-transfer-marca ${selecionado ? 'is-escolhido' : ''}`} />
+    </button>
     </li>
   );
+}
+
+// So o primeiro nome no botao: o nome inteiro estourava o rodape em telas
+// estreitas. O nome completo continua na linha escolhida.
+function primeiroNomeDe(a) {
+  const partes = String(a.name || a.email || '').trim().split(/\s+/).filter(Boolean);
+  return partes[0] || 'atendente';
 }
 
 function TransferModal({ conversationId, onClose }) {
@@ -137,6 +141,7 @@ function TransferModal({ conversationId, onClose }) {
   const [sort, setSort] = useState('load');
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [escolhido, setEscolhido] = useState(null);
 
   const isOnline = (a) => onlineIds.has(a.id);
   const query = normalize(search.trim());
@@ -151,6 +156,14 @@ function TransferModal({ conversationId, onClose }) {
       const loadOrder = (a.activeConversations || 0) - (b.activeConversations || 0);
       return loadOrder || nameOrder;
     });
+
+  // Agrupar por disponibilidade e a ordem de "menor carga". Pedir "Nome" e
+  // pedir uma lista alfabetica: agrupar ali quebraria a ordem que a pessoa
+  // acabou de escolher, e o proprio "Ordenar por" deixaria de fazer sentido.
+  const agrupar = sort !== 'name';
+  const disponiveis = agrupar ? agents.filter(isOnline) : agents;
+  const offline = agrupar ? agents.filter((a) => !isOnline(a)) : [];
+  const escolhidoAgora = agents.find((a) => a.id === escolhido) || null;
 
   async function handleSelect(toAgentId) {
     setError(null);
@@ -167,16 +180,14 @@ function TransferModal({ conversationId, onClose }) {
   const hasOthers = allAgents.some((a) => a.id !== agent.id);
 
   return (
-    <WaDialog variant="transfer" onClose={onClose} labelledBy="transfer-modal-title" size="max-w-[760px]">
-      <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5">
-        <span aria-hidden="true" className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-chat-orange/20 text-chat-orange">
-          <IconTransfer size={30} />
-        </span>
-        <div className="min-w-0 flex-1 pt-1">
-          <h2 id="transfer-modal-title" className="text-[18px] font-semibold leading-[26px] text-wa-text">Transferir atendimento</h2>
-          <p className="mt-0.5 text-[13.5px] leading-[18px] text-wa-muted">Escolha um atendente para transferir esta conversa.</p>
-        </div>
-      </div>
+    <WaDialog
+      variant="transfer"
+      onClose={onClose}
+      title="Transferir atendimento"
+      description="Escolha um atendente para transferir esta conversa."
+      icon={<IconTransfer size={18} />}
+      size="max-w-[760px]"
+    >
 
       <div className="flex shrink-0 flex-wrap gap-2.5 px-5">
         <label className="flex h-[42px] min-w-0 flex-1 basis-[240px] items-center gap-2.5 rounded-[10px] border border-wa-border bg-white/[0.05] px-3 transition focus-within:border-white/25">
@@ -217,11 +228,26 @@ function TransferModal({ conversationId, onClose }) {
       <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-3">
         <AsyncState status={status} isEmpty={!hasOthers} emptyMessage="Nenhum outro atendente disponível.">
           {agents.length > 0 ? (
-            <ul className="divide-y divide-wa-border overflow-hidden rounded-[12px] border border-wa-border bg-white/[0.03]">
-              {agents.map((a) => (
-                <AgentRow key={a.id} agent={a} online={isOnline(a)} busy={busyId === a.id} onTransfer={() => handleSelect(a.id)} />
-              ))}
-            </ul>
+            <div role="radiogroup" aria-label="Atendente que vai receber">
+              {agrupar && disponiveis.length > 0 && <p className="dialog-transfer-grupo"><i aria-hidden="true" data-on="true" />Disponíveis<b>{disponiveis.length}</b></p>}
+              {disponiveis.length > 0 && (
+                <ul className="divide-y divide-wa-border overflow-hidden rounded-[12px] border border-wa-border bg-white/[0.03]">
+                  {disponiveis.map((a) => (
+                    <AgentRow key={a.id} agent={a} online={isOnline(a)} selecionado={escolhido === a.id} onEscolher={() => setEscolhido(a.id)} />
+                  ))}
+                </ul>
+              )}
+              {/* Offline no fim, e nao no meio da lista: quem esta fora do
+                  turno nao deve competir com quem pode receber agora. */}
+              {offline.length > 0 && <p className="dialog-transfer-grupo"><i aria-hidden="true" />Offline<b>{offline.length}</b></p>}
+              {offline.length > 0 && (
+                <ul className="divide-y divide-wa-border overflow-hidden rounded-[12px] border border-wa-border bg-white/[0.03]">
+                  {offline.map((a) => (
+                    <AgentRow key={a.id} agent={a} online={false} selecionado={escolhido === a.id} onEscolher={() => setEscolhido(a.id)} />
+                  ))}
+                </ul>
+              )}
+            </div>
           ) : (
             <p className="px-2 py-5 text-center text-[13px] text-wa-muted">Nenhum atendente encontrado com esse nome.</p>
           )}
@@ -229,18 +255,26 @@ function TransferModal({ conversationId, onClose }) {
         {error && <WaError className="mt-3">{error}</WaError>}
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 border-t border-wa-border px-5 py-3">
-        <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-wa-icon">
-          <IconInfo size={18} />
+      <div className="dw-dialog-footer">
+        <span className="dw-dialog-nota">A transferência será registrada no histórico da conversa.</span>
+        <span className="dw-dialog-acoes">
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-[10px] border border-wa-border-strong bg-white/[0.06] px-5 py-2 text-[13.5px] font-medium text-wa-text transition-colors hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => escolhidoAgora && handleSelect(escolhidoAgora.id)}
+            disabled={!escolhidoAgora || busyId !== null}
+            className="flex shrink-0 items-center gap-2 rounded-[10px] bg-accent px-5 py-2 text-[13.5px] font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50"
+          >
+            <IconArrowRight size={15} />
+            {escolhidoAgora ? `Transferir para ${primeiroNomeDe(escolhidoAgora)}` : 'Transferir'}
+          </button>
         </span>
-        <p className="min-w-0 flex-1 text-[13px] text-wa-muted">A transferência será registrada no histórico da conversa.</p>
-        <button
-          type="button"
-          onClick={onClose}
-          className="shrink-0 rounded-[10px] border border-wa-border-strong bg-white/[0.06] px-6 py-2 text-[13.5px] font-medium text-wa-text transition-colors hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-        >
-          Cancelar
-        </button>
       </div>
     </WaDialog>
   );

@@ -58,7 +58,7 @@ function TeammateRow({ teammate, tone }) {
 function Section({ tone, title, count, summary, children }) {
   const color = tone === 'busy' ? 'bg-[#f5a524]' : tone === 'available' ? 'bg-chat-online' : 'bg-white/35';
   return (
-    <section className="min-w-0 border-b border-wa-border last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0">
+    <section className="dialog-team-grupo min-w-0">
       <header className="border-b border-wa-border px-3 py-2.5">
         <h3 className="flex items-center gap-2 text-[13.5px] font-semibold text-wa-text">
           <span aria-hidden="true" className={`h-2 w-2 rounded-full ${color}`} />
@@ -99,16 +99,21 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
   const showBusy = filter === 'all' || filter === 'online' || filter === 'busy';
   const showAvailable = filter === 'all' || filter === 'online';
   const showOffline = filter === 'all' || filter === 'offline';
-  const columns = filter === 'all' ? 'md:grid-cols-3' : filter === 'online' ? 'md:grid-cols-2' : 'md:grid-cols-1';
+  // Grupo vazio nao ocupa espaco quando ha outros na tela; com filtro ativo a
+  // frase continua, porque ali ela e a resposta.
+  const esconderVazios = filter === 'all';
 
   return (
-    <WaDialog variant="team" onClose={onClose} closeOnBackdrop labelledBy="team-modal-title" size="max-w-[980px]">
-      <div className="flex shrink-0 items-start gap-3 px-5 pb-3 pt-5 sm:px-6">
-        <div className="min-w-0 flex-1">
-          <h2 id="team-modal-title" className="text-[18px] font-semibold leading-[26px] text-wa-text">Nossa equipe</h2>
-          <p className="mt-0.5 text-[13px] leading-[18px] text-wa-muted">{plural(counts.all, 'integrante na equipe', 'integrantes na equipe')} · veja a disponibilidade para transferir</p>
-        </div>
-      </div>
+    <WaDialog
+      variant="team"
+      onClose={onClose}
+      closeOnBackdrop
+      title="Nossa equipe"
+      description={`${plural(counts.all, 'integrante na equipe', 'integrantes na equipe')} · ${counts.online} online agora`}
+      icon={<IconTeam size={18} />}
+      tone="ok"
+      size="max-w-[620px]"
+    >
 
       <div className="shrink-0 border-b border-wa-border px-5 pb-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-3">
@@ -167,18 +172,18 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
           {agents.length > 0 && visible.length === 0 ? (
             <p className="px-2 py-5 text-center text-[13px] text-wa-muted">Nenhum integrante encontrado com esse filtro.</p>
           ) : (
-            <div className={`grid overflow-hidden rounded-[12px] border border-wa-border ${columns}`}>
-              {showBusy && (
+            <div className="dialog-team-grupos">
+              {showBusy && !(esconderVazios && busy.length === 0) && (
                 <Section tone="busy" title="Em atendimento" count={busy.length} summary="Já estão com conversas ativas">
                   {busy.map((teammate) => <TeammateRow key={teammate.id} teammate={teammate} tone="busy" />)}
                 </Section>
               )}
-              {showAvailable && (
+              {showAvailable && !(esconderVazios && available.length === 0) && (
                 <Section tone="available" title="Disponíveis" count={available.length} summary="Online e sem atendimentos ativos">
                   {available.map((teammate) => <TeammateRow key={teammate.id} teammate={teammate} tone="available" />)}
                 </Section>
               )}
-              {showOffline && (
+              {showOffline && !(esconderVazios && offline.length === 0) && (
                 <Section tone="offline" title="Offline" count={offline.length} summary="Não disponíveis no momento">
                   {offline.map((teammate) => <TeammateRow key={teammate.id} teammate={teammate} tone="offline" />)}
                 </Section>
@@ -188,7 +193,9 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
         </AsyncState>
       </div>
 
-      <div className="flex shrink-0 items-center justify-end border-t border-wa-border px-5 py-2.5 sm:px-6">
+      <div className="dw-dialog-footer">
+        <span className="dw-dialog-nota">A carga vem dos atendimentos ativos de cada um.</span>
+        <span className="dw-dialog-acoes">
         <button
           type="button"
           onClick={onClose}
@@ -196,6 +203,7 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
         >
           Fechar
         </button>
+        </span>
       </div>
     </WaDialog>
   );

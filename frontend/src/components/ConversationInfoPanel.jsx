@@ -3,6 +3,7 @@ import ContactAvatar from './ContactAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import { useSectors } from '../hooks/useSectors';
 import { setConversationSector } from '../services/api';
+import { nomeDoLocal } from '../utils/place';
 
 const IDENTIFIED_BY_LABELS = {
   memory: 'memória',
@@ -96,7 +97,7 @@ function ConversationInfoPanel({ conversation }) {
       <div className="my-6 border-t border-wa-border" />
 
       <div className="flex flex-col gap-4">
-        <InfoRow label="Cidade" value={conversation.contactCityName || 'Não informada'} />
+        <InfoRow label="Cidade" value={nomeDoLocal(conversation.contactLocalityName, conversation.contactCityName) || 'Não informada'} />
         <InfoRow label="Setor" value={conversation.sectorName || 'Não definido'} />
         {canEditSector && (
           <label className="-mt-2.5 flex flex-col gap-1">

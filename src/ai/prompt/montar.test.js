@@ -86,7 +86,7 @@ test('com SGP indisponível, nem o pedido de documento nem o fluxo financeiro en
 // diagnóstico inteiro, e suprimi-lo sem motivo deixa o cliente sem atendimento.
 test('sem aviso de cidade, nenhuma linha de falha regional entra no prompt', () => {
   const texto = montarContexto(estadoBase());
-  expect(texto).not.toMatch(/AVISO ATIVO NA CIDADE DO CLIENTE/);
+  expect(texto).not.toMatch(/AVISO ATIVO PARA/);
   expect(texto).not.toMatch(/falha regional em andamento/);
 });
 

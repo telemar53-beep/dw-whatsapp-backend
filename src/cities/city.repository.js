@@ -121,10 +121,26 @@ async function deleteCity(id) {
   return result.rowCount > 0;
 }
 
+/**
+ * Só os nomes, de TODOS os registros: município, localidade e legado ainda não
+ * classificado. Consulta explícita, separada de listCities(), justamente para
+ * não mexer no significado do padrão — que continua sendo "município".
+ *
+ * Existe para o vocabulário da transcrição: converter um povoado legado em
+ * localidade não pode tirar o nome dele de um vocabulário onde já estava.
+ */
+async function listPlaceNamesForVocabulary() {
+  const result = await getPool().query('SELECT name FROM cities ORDER BY name ASC');
+  return result.rows.map((row) => row.name).filter(Boolean);
+}
+
 async function findCityById(id) {
   const result = await getPool().query(`SELECT ${COLUNAS} FROM cities WHERE id = $1`, [id]);
   if (result.rowCount === 0) return null;
   return toCity(result.rows[0]);
 }
 
-module.exports = { listCities, listPlaces, createCity, createPlace, updatePlace, deleteCity, findCityById };
+module.exports = {
+  listCities, listPlaces, listPlaceNamesForVocabulary,
+  createCity, createPlace, updatePlace, deleteCity, findCityById,
+};

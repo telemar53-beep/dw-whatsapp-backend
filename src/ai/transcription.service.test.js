@@ -11,7 +11,7 @@ const {
   findMessageById, markTranscriptionProcessing, saveTranscription, markTranscriptionFailed,
 } = require('../conversations/message.repository');
 const { getMediaFilePath } = require('../media/media-storage');
-const { listCities } = require('../cities/city.repository');
+const { listPlaceNamesForVocabulary } = require('../cities/city.repository');
 const { transcribeMessage } = require('./transcription.service');
 
 const CONFIG = {
@@ -59,7 +59,7 @@ describe('transcribeMessage', () => {
   // vão como vocabulário do Whisper, somadas ao prompt configurado.
   describe('cidades do cadastro como vocabulário da transcrição', () => {
     test('soma os nomes das cidades ao prompt configurado', async () => {
-      listCities.mockResolvedValue([{ id: 'c1', name: 'Godofredo Viana' }, { id: 'c2', name: 'Carutapera' }]);
+      listPlaceNamesForVocabulary.mockResolvedValue(['Godofredo Viana', 'Carutapera']);
       findMessageById.mockResolvedValue(AUDIO);
       transcribeAudio.mockResolvedValue({ texto: 'Centro de Godofredo Viana' });
       saveTranscription.mockResolvedValue({});
@@ -69,9 +69,25 @@ describe('transcribeMessage', () => {
       expect(transcribeAudio).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'PPPoE, ONU, Godofredo Viana, Carutapera' }));
     });
 
+    // Converter um povoado legado em localidade nao pode tirar o nome dele do
+    // vocabulario: a consulta e a de vocabulario, que inclui municipio,
+    // localidade e legado, e nao listCities().
+    test('o povoado entra no vocabulario junto com o municipio e os termos tecnicos', async () => {
+      listPlaceNamesForVocabulary.mockResolvedValue(['Barão de Tromaí', 'Cândido Mendes']);
+      findMessageById.mockResolvedValue(AUDIO);
+      transcribeAudio.mockResolvedValue({ texto: 'ok' });
+      saveTranscription.mockResolvedValue({});
+
+      await transcribeMessage('m-1');
+
+      expect(transcribeAudio).toHaveBeenCalledWith(expect.objectContaining({
+        prompt: 'PPPoE, ONU, Barão de Tromaí, Cândido Mendes',
+      }));
+    });
+
     test('sem prompt configurado, vai só a lista de cidades', async () => {
       getAiConfig.mockResolvedValue({ ...CONFIG, transcriptionPrompt: null });
-      listCities.mockResolvedValue([{ id: 'c1', name: 'Godofredo Viana' }]);
+      listPlaceNamesForVocabulary.mockResolvedValue(['Godofredo Viana']);
       findMessageById.mockResolvedValue(AUDIO);
       transcribeAudio.mockResolvedValue({ texto: 'ok' });
       saveTranscription.mockResolvedValue({});
@@ -83,7 +99,7 @@ describe('transcribeMessage', () => {
 
     test('sem cidades e sem prompt, não manda prompt nenhum', async () => {
       getAiConfig.mockResolvedValue({ ...CONFIG, transcriptionPrompt: '' });
-      listCities.mockResolvedValue([]);
+      listPlaceNamesForVocabulary.mockResolvedValue([]);
       findMessageById.mockResolvedValue(AUDIO);
       transcribeAudio.mockResolvedValue({ texto: 'ok' });
       saveTranscription.mockResolvedValue({});
@@ -94,7 +110,7 @@ describe('transcribeMessage', () => {
     });
 
     test('falha ao ler as cidades não derruba a transcrição', async () => {
-      listCities.mockRejectedValue(new Error('db down'));
+      listPlaceNamesForVocabulary.mockRejectedValue(new Error('db down'));
       findMessageById.mockResolvedValue(AUDIO);
       transcribeAudio.mockResolvedValue({ texto: 'ok' });
       saveTranscription.mockResolvedValue({});

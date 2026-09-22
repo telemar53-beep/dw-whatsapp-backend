@@ -3,6 +3,7 @@ import MessageStatusTicks from './MessageStatusTicks';
 import { IconCheckCircle } from './icons/WaIcons';
 import { useConfirm } from '../hooks/useConfirm';
 import { useDicaFlutuante, DicaFlutuante } from './DicaFlutuante';
+import { nomeDoLocal } from '../utils/place';
 
 const MEDIA_TYPE_LABELS = {
   image: '📷 Foto',
@@ -47,6 +48,10 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
   // puxando uma cidade diferente, era justamente o dado que sumia — então ela
   // virou um chip próprio na segunda linha, que não disputa espaço com o nome.
   const nameLabel = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
+  // "Barão de Tromaí · Cândido Mendes" quando há localidade; só o município
+  // quando não há. Calculado uma vez: o mesmo texto vale nos três pontos em
+  // que a linha mostra o lugar.
+  const local = nomeDoLocal(conversation.contactLocalityName, conversation.contactCityName);
   const previewText = getPreviewText(conversation);
   // Na fila, a hora que importa é a da CHEGADA: a lista é ordenada por ela, e
   // mostrar a da última mensagem fazia a fila parecer fora de ordem sem estar —
@@ -148,9 +153,9 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
                 ids da sessao. Um numero aqui seria inventado. */}
             {unread && <span className="chat-conversation-unread" title="Mensagem não lida" aria-label="Mensagem não lida" />}
           </div>
-          {(conversation.contactCityName || conversation.sectorName || conversation.triageState === 'pending' || conversation.aiTriageCompletedAt || conversation.assignedAgentName) && (
+          {(local || conversation.sectorName || conversation.triageState === 'pending' || conversation.aiTriageCompletedAt || conversation.assignedAgentName) && (
             <div className="chat-conversation-context">
-              {conversation.contactCityName && <span className="chat-conversation-chip">{conversation.contactCityName}</span>}
+              {local && <span className="chat-conversation-chip" title={local}>{local}</span>}
               {conversation.sectorName && <span className="chat-conversation-chip">{conversation.sectorName}</span>}
               {conversation.triageState === 'pending' && <span className="chat-conversation-ai">IA em triagem</span>}
               {conversation.aiTriageCompletedAt && <>
@@ -222,9 +227,9 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
             </span>
             {compact && unread && <span title="Mensagem não lida" className="h-[9px] w-[9px] shrink-0 rounded-full bg-chat-orange" />}
             {!compact && <span className="flex shrink-0 items-center gap-1.5">
-              {conversation.contactCityName && (
-                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-[1px] text-[11px] font-medium text-chat-muted">
-                  {conversation.contactCityName}
+              {local && (
+                <span title={local} className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-[1px] text-[11px] font-medium text-chat-muted">
+                  {local}
                 </span>
               )}
               {conversation.assignedAgentName && (
@@ -245,9 +250,9 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
               )}
             </span>}
           </span>
-          {compact && (conversation.contactCityName || conversation.assignedAgentName || conversation.sectorName) && (
+          {compact && (local || conversation.assignedAgentName || conversation.sectorName) && (
             <span className="flex min-w-0 flex-wrap items-center gap-1">
-              {[conversation.contactCityName, conversation.assignedAgentName, conversation.sectorName].filter(Boolean).map((label, index) => (
+              {[local, conversation.assignedAgentName, conversation.sectorName].filter(Boolean).map((label, index) => (
                 <span key={`${label}-${index}`} title={label} className="max-w-[90px] truncate rounded-md border border-white/10 bg-white/[0.05] px-1.5 py-[1px] text-[10px] font-medium text-chat-muted">{label}</span>
               ))}
             </span>

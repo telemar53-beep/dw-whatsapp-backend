@@ -629,6 +629,31 @@ describe('a cidade não some atrás de um nome comprido', () => {
     expect(screen.queryByText('Candido Mendes')).not.toBeInTheDocument();
   });
 
+  test('com localidade, a linha mostra a localidade e o municipio', () => {
+    renderItem({
+      contactDisplayName: 'Carlos',
+      contactPhoneNumber: '+551199',
+      contactCityName: 'Cândido Mendes',
+      contactLocalityName: 'Barão de Tromaí',
+    });
+
+    expect(screen.getByText('Barão de Tromaí · Cândido Mendes')).toBeInTheDocument();
+    // E nao duas etiquetas separadas para o mesmo lugar.
+    expect(screen.queryByText('Cândido Mendes')).not.toBeInTheDocument();
+  });
+
+  test('sem localidade, a linha continua mostrando so o municipio', () => {
+    renderItem({
+      contactDisplayName: 'Carlos',
+      contactPhoneNumber: '+551199',
+      contactCityName: 'Cândido Mendes',
+      contactLocalityName: null,
+    });
+
+    expect(screen.getByText('Cândido Mendes')).toBeInTheDocument();
+    expect(screen.queryByText(/·/)).not.toBeInTheDocument();
+  });
+
   test('a cidade convive com o setor na mesma linha', () => {
     renderItem({
       contactDisplayName: 'Carlos',

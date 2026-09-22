@@ -19,6 +19,7 @@ import TransferModal from '../components/TransferModal';
 import { PageHeader, Tabs } from '../components/ui';
 import { descreverErro } from '../utils/errorMessages';
 import { shortenAgentNames, agentInitial } from '../utils/agentDisplayName';
+import { nomeDoLocal } from '../utils/place';
 
 // O estado é o sinal mais alto desta tela: cada um tem um tom próprio que
 // aparece no mesmo lugar em todo canto — ponto do sub-filtro, cabeçalho do
@@ -146,9 +147,11 @@ function SupervisionRow({ conversation, onSelect, onQuickClose, stateLabel, tom 
   const donoCurto = conversation.assignedAgentShortName || primeiroNome(dono);
   const origem = conversation.closedAt ? 'Encerramento' : conversation.lastMessageAt ? 'Última mensagem' : conversation.createdAt ? 'Abertura' : '';
   return <li className="supervision-record" data-tom={tom || estado.tom}>
-    <div className="supervision-record-contact"><ul><ConversationListItem conversation={{ ...conversation, contactCityName: null, sectorName: null, assignedAgentName: null }} onSelect={onSelect} compact onQuickClose={onQuickClose} /></ul></div>
+    <div className="supervision-record-contact"><ul><ConversationListItem conversation={{ ...conversation, contactCityName: null, contactLocalityName: null, sectorName: null, assignedAgentName: null }} onSelect={onSelect} compact onQuickClose={onQuickClose} /></ul></div>
     <div className="supervision-record-location">
-      <span className={conversation.contactCityName ? '' : 'is-ausente'}>{conversation.contactCityName || 'Cidade não informada'}</span>
+      <span className={nomeDoLocal(conversation.contactLocalityName, conversation.contactCityName) ? '' : 'is-ausente'}>
+        {nomeDoLocal(conversation.contactLocalityName, conversation.contactCityName) || 'Cidade não informada'}
+      </span>
       <small className={conversation.sectorName ? '' : 'is-ausente'}>{conversation.sectorName || 'Sem setor'}</small>
     </div>
     <div className="supervision-record-owner">

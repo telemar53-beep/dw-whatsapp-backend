@@ -28,7 +28,7 @@ describe('módulo aviso-cidade', () => {
 
     test('cita a cidade e a mensagem do aviso, interpolados', () => {
       const t = texto('Viseu', 'Rompimento de fibra na região, equipe já está a caminho.');
-      expect(t).toMatch(/AVISO ATIVO NA CIDADE DO CLIENTE \(Viseu\): Rompimento de fibra na região, equipe já está a caminho\./);
+      expect(t).toMatch(/AVISO ATIVO PARA Viseu: Rompimento de fibra na região, equipe já está a caminho\./);
     });
 
     test('suprime verificação de equipamento e promessa de previsão', () => {

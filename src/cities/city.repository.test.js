@@ -1,6 +1,6 @@
 const { getPool, closePool } = require('../db/pool');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
-const { listCities, listPlaces, createCity, createPlace, updatePlace, deleteCity, findCityById } = require('./city.repository');
+const { listCities, listPlaces, listPlaceNamesForVocabulary, createCity, createPlace, updatePlace, deleteCity, findCityById } = require('./city.repository');
 
 describe('city repository', () => {
   beforeEach(async () => {
@@ -222,5 +222,49 @@ describe('city repository — escrita de lugares', () => {
 
     const { rows } = await getPool().query('SELECT sgp_pop_key FROM cities WHERE id = $1', [lugar.id]);
     expect(rows[0].sgp_pop_key).toBe('barao');
+  });
+});
+
+describe('city repository — nomes para o vocabulario', () => {
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE cities, contacts CASCADE');
+  });
+
+  afterAll(async () => {
+    await closePool();
+  });
+
+  test('inclui municipio, localidade e registro legado', async () => {
+    const pai = await createPlace({ name: 'Candido Mendes', kind: 'city' });
+    await createPlace({ name: 'Barao de Tromai', kind: 'locality', parentId: pai.id });
+    await getPool().query("INSERT INTO cities (name) VALUES ('Aurizona')");
+
+    const nomes = await listPlaceNamesForVocabulary();
+
+    expect(nomes).toEqual(['Aurizona', 'Barao de Tromai', 'Candido Mendes']);
+  });
+
+  // O ponto da tarefa: converter um legado em localidade nao pode tirar o nome
+  // dele do vocabulario que ja existia.
+  test('converter um legado em localidade NAO tira o nome do vocabulario', async () => {
+    const pai = await createPlace({ name: 'Candido Mendes', kind: 'city' });
+    const legado = await getPool().query("INSERT INTO cities (name) VALUES ('Barao de Tromai') RETURNING id");
+
+    const antes = await listPlaceNamesForVocabulary();
+    expect(antes).toContain('Barao de Tromai');
+
+    await getPool().query("UPDATE cities SET kind = 'locality', parent_id = $2 WHERE id = $1", [legado.rows[0].id, pai.id]);
+
+    const depois = await listPlaceNamesForVocabulary();
+    expect(depois).toContain('Barao de Tromai');
+    expect(depois).toEqual(antes);
+  });
+
+  test('listCities continua sem devolver localidade: o padrao nao muda', async () => {
+    const pai = await createPlace({ name: 'Candido Mendes', kind: 'city' });
+    await createPlace({ name: 'Barao de Tromai', kind: 'locality', parentId: pai.id });
+
+    expect((await listCities()).map((c) => c.name)).toEqual(['Candido Mendes']);
+    expect(await listPlaceNamesForVocabulary()).toEqual(['Barao de Tromai', 'Candido Mendes']);
   });
 });

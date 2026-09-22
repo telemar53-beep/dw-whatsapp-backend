@@ -9,7 +9,7 @@ const {
   markTranscriptionFailed,
 } = require('../conversations/message.repository');
 const { getMediaFilePath } = require('../media/media-storage');
-const { listCities } = require('../cities/city.repository');
+const { listPlaceNamesForVocabulary } = require('../cities/city.repository');
 const { mensagemSegura } = require('./safe-error-log');
 
 // O WhatsApp manda nota de voz como 'audio/ogg; codecs=opus' — o parâmetro depois
@@ -30,16 +30,21 @@ function recusa(motivo) {
  * é o mesmo que o player do atendente usa, então nunca é apagado aqui.
  */
 // Teste real 2026-09-15: "Centro de Godofredo Viana" virou "Tengo do Fredo" e a
-// triagem gastou uma pergunta pedindo de novo. Os nomes das cidades do
-// cadastro vão como vocabulário do Whisper (o campo `prompt` da API), somados
-// ao prompt configurado em Integrações. Falha ao ler as cidades não derruba a
-// transcrição: fica só o prompt configurado.
+// triagem gastou uma pergunta pedindo de novo. Os nomes do cadastro vão como
+// vocabulário do Whisper (o campo `prompt` da API), somados ao prompt
+// configurado em Integrações. Falha ao ler os nomes não derruba a transcrição:
+// fica só o prompt configurado.
+//
+// A consulta é a de vocabulário, não listCities(): ela inclui município,
+// localidade e registro legado. Com listCities(), converter um povoado legado
+// em localidade tiraria o nome dele de um vocabulário onde já estava — e a
+// transcrição pioraria justamente no nome que motivou esta função existir.
 async function promptDaTranscricao(config) {
   let cidades = [];
   try {
-    cidades = ((await listCities()) || []).map((c) => c && c.name).filter(Boolean);
+    cidades = (await listPlaceNamesForVocabulary()) || [];
   } catch (err) {
-    console.error(`Failed to list cities for the transcription prompt: ${mensagemSegura(err)}`);
+    console.error(`Failed to list place names for the transcription prompt: ${mensagemSegura(err)}`);
   }
   const partes = [config.transcriptionPrompt, ...cidades].filter((p) => typeof p === 'string' && p.trim());
   return partes.length > 0 ? partes.join(', ') : undefined;

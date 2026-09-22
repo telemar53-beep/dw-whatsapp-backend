@@ -366,6 +366,25 @@ export function deleteCity(id, token) {
   return apiFetch(`/api/admin/cities/${id}`, { method: 'DELETE', token });
 }
 
+// GET /api/plans (a consulta operacional, sem a observação interna) NÃO ganha
+// cliente aqui: nenhuma tela o consome, e exportar função que ninguém chama é
+// código morto. Ele existe para o backend, quando os planos chegarem à IA.
+export function listPlansForAdmin(token) {
+  return apiFetch('/api/admin/plans', { token });
+}
+
+export function createPlan(payload, token) {
+  return apiFetch('/api/admin/plans', { method: 'POST', body: payload, token });
+}
+
+export function updatePlan(id, payload, token) {
+  return apiFetch(`/api/admin/plans/${id}`, { method: 'PATCH', body: payload, token });
+}
+
+export function deletePlan(id, token) {
+  return apiFetch(`/api/admin/plans/${id}`, { method: 'DELETE', token });
+}
+
 export function listCityNotices(token) {
   return apiFetch('/api/admin/cities/notices', { token });
 }

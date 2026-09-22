@@ -936,6 +936,9 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
             ...conversation,
             contactDisplayName: contactOverride ? contactOverride.displayName : conversation.contactDisplayName,
             contactCityId: contactOverride ? contactOverride.cityId : conversation.contactCityId,
+            // Sem esta linha, reabrir o modal depois de editar mostraria a
+            // localidade antiga: a cidade vinha do override e ela não.
+            contactLocalityId: contactOverride ? contactOverride.localityId : conversation.contactLocalityId,
           }}
           onClose={() => setEditingContact(false)}
           onSaved={(updated) => setContactOverride(updated)}

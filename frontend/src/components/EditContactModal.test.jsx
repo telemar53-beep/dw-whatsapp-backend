@@ -1,9 +1,9 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import EditContactModal from './EditContactModal';
 import { useAuth } from '../contexts/AuthContext';
-import { useCities } from '../hooks/useCities';
+import { usePlaces } from '../hooks/useCities';
 import * as api from '../services/api';
 
 vi.mock('../contexts/AuthContext');
@@ -13,10 +13,12 @@ vi.mock('../services/api');
 beforeEach(() => {
   vi.clearAllMocks();
   useAuth.mockReturnValue({ token: 'tok-123' });
-  useCities.mockReturnValue({
-    cities: [
-      { id: 'city-1', name: 'Bahia' },
-      { id: 'city-2', name: 'São Luís' },
+  // O modal passou a usar usePlaces: precisa da hierarquia para encadear
+  // município e localidade. Os municípios de sempre continuam aqui.
+  usePlaces.mockReturnValue({
+    places: [
+      { id: 'city-1', name: 'Bahia', kind: 'city', parentId: null },
+      { id: 'city-2', name: 'São Luís', kind: 'city', parentId: null },
     ],
     status: 'ready',
     refresh: vi.fn(),
@@ -35,14 +37,14 @@ describe('EditContactModal', () => {
   test('pre-fills the current name and city', () => {
     render(<EditContactModal conversation={CONVERSATION} onClose={vi.fn()} onSaved={vi.fn()} />);
     expect(screen.getByLabelText(/nome/i)).toHaveValue('Carlos');
-    expect(screen.getByLabelText(/cidade/i)).toHaveValue('city-1');
+    expect(screen.getByLabelText('Município')).toHaveValue('city-1');
   });
 
   test('pre-fills with no city selected when the contact has none', () => {
     render(
       <EditContactModal conversation={{ ...CONVERSATION, contactCityId: null }} onClose={vi.fn()} onSaved={vi.fn()} />
     );
-    expect(screen.getByLabelText(/cidade/i)).toHaveValue('');
+    expect(screen.getByLabelText('Município')).toHaveValue('');
   });
 
   test('pre-fills the internal note when the contact has one', () => {
@@ -69,14 +71,14 @@ describe('EditContactModal', () => {
 
     await userEvent.clear(screen.getByLabelText(/nome/i));
     await userEvent.type(screen.getByLabelText(/nome/i), 'Carlos Editado');
-    await userEvent.selectOptions(screen.getByLabelText(/cidade/i), 'city-2');
+    await userEvent.selectOptions(screen.getByLabelText('Município'), 'city-2');
     await userEvent.type(screen.getByLabelText(/nota interna/i), 'Cliente VIP');
     await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
 
     await waitFor(() =>
       expect(api.updateContact).toHaveBeenCalledWith(
         'contact-1',
-        { displayName: 'Carlos Editado', cityId: 'city-2', internalNote: 'Cliente VIP' },
+        { displayName: 'Carlos Editado', cityId: 'city-2', localityId: null, internalNote: 'Cliente VIP' },
         'tok-123'
       )
     );
@@ -84,6 +86,8 @@ describe('EditContactModal', () => {
       displayName: 'Carlos Editado',
       cityId: 'city-2',
       cityName: 'São Luís',
+      localityId: undefined,
+      localityName: null,
       internalNote: 'Cliente VIP',
     });
     expect(onClose).toHaveBeenCalled();
@@ -111,10 +115,102 @@ describe('EditContactModal', () => {
   });
 
   test('em carregamento, o seletor de cidade mostra "Carregando…" e fica desabilitado', () => {
-    useCities.mockReturnValue({ cities: [], status: 'loading', refresh: vi.fn() });
+    usePlaces.mockReturnValue({ places: [], status: 'loading', refresh: vi.fn() });
     render(<EditContactModal conversation={CONVERSATION} onClose={vi.fn()} onSaved={vi.fn()} />);
 
-    expect(screen.getByLabelText(/cidade/i)).toBeDisabled();
-    expect(screen.queryByText('Nenhuma')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Município')).toBeDisabled();
+    expect(screen.getByLabelText('Localidade')).toBeDisabled();
+    expect(screen.queryByText('Nenhum')).not.toBeInTheDocument();
+  });
+});
+
+describe('EditContactModal — municipio e localidade', () => {
+  const LUGARES = [
+    { id: 'm1', name: 'Candido Mendes', kind: 'city', parentId: null },
+    { id: 'm2', name: 'Carutapera', kind: 'city', parentId: null },
+    { id: 'p1', name: 'Barao de Tromai', kind: 'locality', parentId: 'm1' },
+    { id: 'l1', name: 'Aurizona', kind: 'unclassified', parentId: null },
+  ];
+
+  const CONVERSA = {
+    contactId: 'c1', contactDisplayName: 'Ana',
+    contactCityId: 'm1', contactLocalityId: null, contactInternalNote: '',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuth.mockReturnValue({ token: 'tok-123' });
+    usePlaces.mockReturnValue({ places: LUGARES, status: 'ready' });
+  });
+
+  test('o seletor de municipio nao oferece povoado, mas oferece o legado', () => {
+    render(<EditContactModal conversation={CONVERSA} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const municipio = within(screen.getByLabelText('Município'));
+    expect(municipio.getByRole('option', { name: 'Candido Mendes' })).toBeInTheDocument();
+    expect(municipio.getByRole('option', { name: 'Aurizona' })).toBeInTheDocument();
+    expect(municipio.queryByRole('option', { name: 'Barao de Tromai' })).not.toBeInTheDocument();
+  });
+
+  test('a localidade so oferece filhas do municipio escolhido', async () => {
+    render(<EditContactModal conversation={CONVERSA} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(within(screen.getByLabelText('Localidade')).getByRole('option', { name: 'Barao de Tromai' }))
+      .toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('Município'), 'm2');
+
+    expect(within(screen.getByLabelText('Localidade')).queryByRole('option', { name: 'Barao de Tromai' }))
+      .not.toBeInTheDocument();
+  });
+
+  test('sem municipio, a localidade fica desabilitada', () => {
+    render(
+      <EditContactModal
+        conversation={{ ...CONVERSA, contactCityId: null }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('Localidade')).toBeDisabled();
+  });
+
+  test('trocar de municipio limpa a localidade escolhida', async () => {
+    api.updateContact.mockResolvedValue({
+      displayName: 'Ana', cityId: 'm2', localityId: null, internalNote: null,
+    });
+    render(
+      <EditContactModal
+        conversation={{ ...CONVERSA, contactLocalityId: 'p1' }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    );
+
+    await userEvent.selectOptions(screen.getByLabelText('Município'), 'm2');
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    await waitFor(() => expect(api.updateContact).toHaveBeenCalledWith(
+      'c1',
+      { displayName: 'Ana', cityId: 'm2', localityId: null, internalNote: null },
+      'tok-123'
+    ));
+  });
+
+  test('salva municipio e localidade juntos e devolve os dois nomes', async () => {
+    api.updateContact.mockResolvedValue({
+      displayName: 'Ana', cityId: 'm1', localityId: 'p1', internalNote: null,
+    });
+    const onSaved = vi.fn();
+    render(<EditContactModal conversation={CONVERSA} onClose={vi.fn()} onSaved={onSaved} />);
+
+    await userEvent.selectOptions(screen.getByLabelText('Localidade'), 'p1');
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({
+      cityId: 'm1', cityName: 'Candido Mendes',
+      localityId: 'p1', localityName: 'Barao de Tromai',
+    })));
   });
 });

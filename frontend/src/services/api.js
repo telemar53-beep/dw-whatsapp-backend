@@ -152,20 +152,18 @@ export function sendConversationTemplate(conversationId, templateId, templateVar
   });
 }
 
-// `mediaToken` e o token dedicado, com segredo proprio e 30 minutos. Sem ele
-// (token ainda nao emitido, ou componente fora do provider) cai no `token` de
-// sessao, que e o caminho LEGADO e sai numa etapa propria.
-export function mediaUrl(messageId, mediaToken, tokenDeSessao) {
-  if (mediaToken) return `${API_BASE_URL}/api/media/${messageId}?mediaToken=${mediaToken}`;
-  return `${API_BASE_URL}/api/media/${messageId}?token=${tokenDeSessao}`;
+// So o token dedicado entra na URL. O JWT de sessao NUNCA - ele vale 12 horas
+// e da acesso a tudo; numa URL viraria credencial em texto claro no log do
+// balanceador, no historico do navegador e em qualquer print.
+export function mediaUrl(messageId, mediaToken) {
+  return `${API_BASE_URL}/api/media/${messageId}?mediaToken=${mediaToken}`;
 }
 
 // `avatarPath` entra na URL só como marcador de versão: quando o backend troca
 // a foto, o caminho muda e o navegador para de reaproveitar a imagem antiga do cache.
-export function avatarUrl(contactId, mediaToken, avatarPath, tokenDeSessao) {
+export function avatarUrl(contactId, mediaToken, avatarPath) {
   const version = avatarPath ? `&v=${encodeURIComponent(avatarPath)}` : '';
-  const credencial = mediaToken ? `mediaToken=${mediaToken}` : `token=${tokenDeSessao}`;
-  return `${API_BASE_URL}/api/contacts/${contactId}/avatar?${credencial}${version}`;
+  return `${API_BASE_URL}/api/contacts/${contactId}/avatar?mediaToken=${mediaToken}${version}`;
 }
 
 export function updateContact(id, payload, token) {
@@ -491,9 +489,8 @@ export function deleteMyAvatar(token) {
   return apiFetch('/api/agents/me/avatar', { method: 'DELETE', token });
 }
 
-export function agentAvatarUrl(agentId, mediaToken, tokenDeSessao) {
-  if (mediaToken) return `${API_BASE_URL}/api/agents/${agentId}/avatar?mediaToken=${mediaToken}`;
-  return `${API_BASE_URL}/api/agents/${agentId}/avatar?token=${tokenDeSessao}`;
+export function agentAvatarUrl(agentId, mediaToken) {
+  return `${API_BASE_URL}/api/agents/${agentId}/avatar?mediaToken=${mediaToken}`;
 }
 
 // Troca o JWT de sessao (por header) por um token que so le midia. Uma chamada

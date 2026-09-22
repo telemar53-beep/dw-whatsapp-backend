@@ -221,13 +221,14 @@ describe('GET /api/agents/:id/avatar', () => {
     expect(res.headers['content-type']).toBe('image/jpeg');
   });
 
-  test('accepts the token via query string', async () => {
-    findAgentById.mockResolvedValue({ id: 'agent-2', avatarPath: 'whatever.jpg' });
-    getMediaFilePath.mockReturnValue(tempFile);
-
+  // Era o caminho legado da migracao. O JWT de sessao numa URL e uma
+  // credencial de 12 horas em texto claro no log do proxy, no historico do
+  // navegador e em qualquer print. Agora a URL so aceita ?mediaToken=.
+  test('o JWT de sessao na query NAO autentica mais', async () => {
     const res = await request(buildApp()).get(`/api/agents/agent-2/avatar?token=${tokenFor('agent-1', 'agent')}`);
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
+    expect(findAgentById).not.toHaveBeenCalled();
   });
 
   test('returns 401 with no token', async () => {

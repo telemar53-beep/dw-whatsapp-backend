@@ -70,22 +70,43 @@ describe('autenticação de leitura de mídia', () => {
     expect(res.status).toBe(401);
   });
 
-  test('o token de mídia também não passa pelo caminho legado ?token=', async () => {
-    const res = await pedir(`?token=${signMediaToken({ agentId: 'agent-1' })}`);
-    expect(res.status).toBe(401);
+  describe('o JWT de sessão na query MORREU', () => {
+    test('?token= com um JWT de sessão VÁLIDO não autentica mais', async () => {
+      const res = await pedir(`?token=${sessao('agent-1', 'agent')}`);
+
+      expect(res.status).toBe(401);
+      expect(findMessageById).not.toHaveBeenCalled();
+    });
+
+    test('nem para administrador', async () => {
+      const res = await pedir(`?token=${sessao('admin-1', 'admin')}`);
+      expect(res.status).toBe(401);
+    });
+
+    test('nem combinado com um mediaToken inválido', async () => {
+      const res = await pedir(`?mediaToken=lixo&token=${sessao('admin-1', 'admin')}`);
+      expect(res.status).toBe(401);
+    });
+
+    test('o token de mídia na query legada também não vale', async () => {
+      const res = await pedir(`?token=${signMediaToken({ agentId: 'agent-1' })}`);
+      expect(res.status).toBe(401);
+    });
   });
 
-  describe('compatibilidade: o caminho legado continua valendo nesta etapa', () => {
-    test('header Authorization com o JWT de sessão continua servindo mídia', async () => {
+  describe('o header Authorization continua valendo: não vaza em URL', () => {
+    test('JWT de sessão por header serve mídia', async () => {
       const res = await request(buildApp())
         .get('/api/media/msg-1')
         .set('Authorization', `Bearer ${sessao('agent-1', 'agent')}`);
       expect(res.status).toBe(200);
     });
 
-    test('?token= com o JWT de sessão continua servindo mídia', async () => {
-      const res = await pedir(`?token=${sessao('agent-1', 'agent')}`);
-      expect(res.status).toBe(200);
+    test('token de mídia por header NÃO serve: ele é feito para a URL', async () => {
+      const res = await request(buildApp())
+        .get('/api/media/msg-1')
+        .set('Authorization', `Bearer ${signMediaToken({ agentId: 'agent-1' })}`);
+      expect(res.status).toBe(401);
     });
 
     test('sem credencial nenhuma, 401', async () => {
@@ -118,10 +139,13 @@ describe('autenticação de leitura de mídia', () => {
       expect(res.status).toBe(403);
     });
 
-    test('pelo caminho legado a regra também continua: atendente barrado, admin não', async () => {
-      expect((await pedir(`?token=${sessao('agent-1', 'agent')}`)).status).toBe(403);
-      expect((await pedir(`?token=${sessao('admin-1', 'admin')}`)).status).toBe(200);
-      expect((await pedir(`?token=${sessao('manager-1', 'manager')}`)).status).toBe(200);
+    test('pelo header a regra também continua: atendente barrado, admin e gerente não', async () => {
+      function porHeader(role) {
+        return request(buildApp()).get('/api/media/msg-1').set('Authorization', `Bearer ${sessao('x', role)}`);
+      }
+      expect((await porHeader('agent')).status).toBe(403);
+      expect((await porHeader('admin')).status).toBe(200);
+      expect((await porHeader('manager')).status).toBe(200);
     });
   });
 });

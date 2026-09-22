@@ -176,14 +176,12 @@ describe('mediaUrl', () => {
     expect(mediaUrl('msg-123', 'media-abc')).toBe('http://localhost:3000/api/media/msg-123?mediaToken=media-abc');
   });
 
-  test('cai no token de sessao enquanto o de midia nao chegou (legado)', () => {
-    expect(mediaUrl('msg-123', null, 'tok-abc')).toBe('http://localhost:3000/api/media/msg-123?token=tok-abc');
-  });
 
-  test('o token de sessao nunca aparece na URL quando ha token de midia', () => {
-    const url = mediaUrl('msg-123', 'media-abc', 'tok-de-sessao');
-    expect(url).not.toContain('tok-de-sessao');
-    expect(url).not.toContain('token=tok');
+  test('nao existe mais caminho para o JWT de sessao entrar na URL', () => {
+    // A funcao nem aceita mais um segundo token: o unico argumento de
+    // credencial e o mediaToken.
+    expect(mediaUrl.length).toBe(2);
+    expect(mediaUrl('msg-123', 'media-abc')).not.toMatch(/[?&]token=/);
   });
 });
 
@@ -578,9 +576,6 @@ describe('agentAvatarUrl', () => {
     expect(agentAvatarUrl('agent-1', 'media-abc')).toBe('http://localhost:3000/api/agents/agent-1/avatar?mediaToken=media-abc');
   });
 
-  test('cai no token de sessao enquanto o de midia nao chegou (legado)', () => {
-    expect(agentAvatarUrl('agent-1', null, 'tok-abc')).toBe('http://localhost:3000/api/agents/agent-1/avatar?token=tok-abc');
-  });
 });
 
 describe('createCampaign', () => {

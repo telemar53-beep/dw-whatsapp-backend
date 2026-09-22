@@ -2,13 +2,13 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MessageAttachment from './MessageAttachment';
-import { useAuth } from '../contexts/AuthContext';
+import { useMediaToken } from '../contexts/MediaTokenContext';
 
-vi.mock('../contexts/AuthContext');
+vi.mock('../contexts/MediaTokenContext');
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useAuth.mockReturnValue({ token: 'tok-123' });
+  useMediaToken.mockReturnValue({ obterToken: () => 'media-tok', pronto: true });
 });
 
 describe('MessageAttachment', () => {
@@ -20,7 +20,7 @@ describe('MessageAttachment', () => {
   test('renders an image with the authenticated media URL', () => {
     render(<MessageAttachment message={{ id: 'm2', messageType: 'image', mediaPath: 'foo.jpg', mediaFilename: null }} />);
     const img = screen.getByRole('img');
-    expect(img.src).toBe('http://localhost:3000/api/media/m2?token=tok-123');
+    expect(img.src).toBe('http://localhost:3000/api/media/m2?mediaToken=media-tok');
     expect(img.className).toContain('max-w-full');
   });
 
@@ -32,7 +32,7 @@ describe('MessageAttachment', () => {
   test('renders an audio player', () => {
     render(<MessageAttachment message={{ id: 'm4', messageType: 'audio', mediaPath: 'baz.ogg' }} />);
     expect(document.querySelector('audio')).toBeInTheDocument();
-    expect(document.querySelector('audio').src).toBe('http://localhost:3000/api/media/m4?token=tok-123');
+    expect(document.querySelector('audio').src).toBe('http://localhost:3000/api/media/m4?mediaToken=media-tok');
     expect(document.querySelector('audio').className).toContain('max-w-full');
   });
 
@@ -45,7 +45,7 @@ describe('MessageAttachment', () => {
   test('renders a document download link with the filename', () => {
     render(<MessageAttachment message={{ id: 'm6', messageType: 'document', mediaPath: 'doc.pdf', mediaFilename: 'comprovante.pdf' }} />);
     const link = screen.getByRole('link', { name: /comprovante\.pdf/i });
-    expect(link.href).toBe('http://localhost:3000/api/media/m6?token=tok-123');
+    expect(link.href).toBe('http://localhost:3000/api/media/m6?mediaToken=media-tok');
   });
 
   test('renders a native Pix card for a pix message, instead of the raw code', () => {
@@ -379,5 +379,33 @@ describe('video na timeline', () => {
   test('nao mostra tamanho de arquivo, porque o backend nao fornece', () => {
     const { container } = render(<MessageAttachment message={video({ mediaFilename: 'clipe.mp4' })} />);
     expect(container.textContent).not.toMatch(/\d+([.,]\d+)?\s*(KB|MB|GB)/i);
+  });
+});
+
+describe('antes do primeiro media token', () => {
+  beforeEach(() => {
+    useMediaToken.mockReturnValue({ obterToken: () => null, pronto: false });
+  });
+
+  test('imagem nao e requisitada e nao aparece como indisponivel', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm2', messageType: 'image', mediaPath: 'foto.jpg' }} />);
+
+    expect(container.querySelector('img')).toBeNull();
+    // "Imagem indisponivel" e a mensagem de arquivo apagado pela retencao:
+    // dizer isso enquanto so falta a credencial seria mentira.
+    expect(screen.queryByText(/indisponível/i)).not.toBeInTheDocument();
+  });
+
+  test('audio nao e requisitado: sem <audio>, sem preload, sem erro falso', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm4', messageType: 'audio', mediaPath: 'a.ogg' }} />);
+
+    expect(container.querySelector('audio')).toBeNull();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  test('video tambem nao e requisitado', () => {
+    const { container } = render(<MessageAttachment message={{ id: 'm5', messageType: 'video', mediaPath: 'v.mp4' }} />);
+
+    expect(container.querySelector('video')).toBeNull();
   });
 });

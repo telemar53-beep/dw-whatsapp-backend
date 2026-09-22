@@ -354,8 +354,17 @@ export function registerExistingTemplateAdmin(data, token) {
   return apiFetch('/api/admin/templates/register-existing', { method: 'POST', body: data, token });
 }
 
-export function listCities(token) {
-  return apiFetch('/api/cities', { token });
+// Sem opcoes, devolve o conjunto legado: municipio e registro ainda nao
+// classificado. A hierarquia completa so vem com includeLocalities, e de
+// proposito — esquecer de pedir causa ausencia de recurso, nunca um povoado
+// aparecendo como municipio.
+export function listCities(token, options) {
+  const query = options && options.includeLocalities ? '?includeLocalities=true' : '';
+  return apiFetch(`/api/cities${query}`, { token });
+}
+
+export function updateCity(id, payload, token) {
+  return apiFetch(`/api/admin/cities/${id}`, { method: 'PATCH', body: payload, token });
 }
 
 export function createCity(payload, token) {

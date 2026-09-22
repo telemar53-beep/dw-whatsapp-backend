@@ -948,6 +948,122 @@ describe('conversation repository', () => {
     expect(page2.map((c) => c.id)).toEqual([first.id]);
   });
 
+  describe('encerrados com filtros opcionais', () => {
+    let otherChannelId;
+    let agentA;
+    let agentB;
+    let sectorX;
+    let sectorY;
+    let convA; // canal padrao, agente A, setor X
+    let convB; // outro canal, agente B, setor Y
+    let convC; // canal padrao, agente B, setor Y
+    let since;
+
+    beforeEach(async () => {
+      const otherChannel = await createChannel({
+        type: 'meta_cloud',
+        name: 'Canal Secundario',
+        phoneNumber: '+5511999990010',
+        config: { phoneNumberId: '222', accessToken: 'tok' },
+      });
+      otherChannelId = otherChannel.id;
+      agentA = await createAgent({ email: 'filtro-a@dw.com', password: 'secret123', role: 'agent' });
+      agentB = await createAgent({ email: 'filtro-b@dw.com', password: 'secret123', role: 'agent' });
+      sectorX = await createSector({ name: 'Suporte Filtro' });
+      sectorY = await createSector({ name: 'Financeiro Filtro' });
+
+      convA = await createConversation(contactId, channelId);
+      await setConversationSector(convA.id, sectorX.id);
+      await claimConversation(convA.id, agentA.id);
+      await closeConversation(convA.id, agentA.id);
+
+      convB = await createConversation(contactId, otherChannelId);
+      await setConversationSector(convB.id, sectorY.id);
+      await claimConversation(convB.id, agentB.id);
+      await closeConversation(convB.id, agentB.id);
+
+      convC = await createConversation(contactId, channelId);
+      await setConversationSector(convC.id, sectorY.id);
+      await claimConversation(convC.id, agentB.id);
+      await closeConversation(convC.id, agentB.id);
+
+      since = new Date(Date.now() - 60 * 60 * 1000);
+    });
+
+    test('sem filtro devolve tudo, exatamente como antes', async () => {
+      const items = await listClosedSince(since, { limit: 20, offset: 0 });
+      expect(items.map((c) => c.id)).toEqual([convC.id, convB.id, convA.id]);
+      expect(await countClosedSince(since)).toBe(3);
+    });
+
+    test('um objeto de filtros vazio equivale a nao filtrar', async () => {
+      const items = await listClosedSince(since, { limit: 20, offset: 0, filters: {} });
+      expect(items.map((c) => c.id)).toEqual([convC.id, convB.id, convA.id]);
+      expect(await countClosedSince(since, {})).toBe(3);
+    });
+
+    test('filtra por canal', async () => {
+      const filters = { channelIds: [channelId] };
+      const items = await listClosedSince(since, { limit: 20, offset: 0, filters });
+      expect(items.map((c) => c.id)).toEqual([convC.id, convA.id]);
+      expect(await countClosedSince(since, filters)).toBe(2);
+    });
+
+    test('filtra por atendente', async () => {
+      const filters = { agentIds: [agentB.id] };
+      const items = await listClosedSince(since, { limit: 20, offset: 0, filters });
+      expect(items.map((c) => c.id)).toEqual([convC.id, convB.id]);
+      expect(await countClosedSince(since, filters)).toBe(2);
+    });
+
+    test('filtra por setor', async () => {
+      const filters = { sectorIds: [sectorY.id] };
+      const items = await listClosedSince(since, { limit: 20, offset: 0, filters });
+      expect(items.map((c) => c.id)).toEqual([convC.id, convB.id]);
+      expect(await countClosedSince(since, filters)).toBe(2);
+    });
+
+    test('aceita varios valores no mesmo filtro', async () => {
+      const filters = { channelIds: [channelId, otherChannelId] };
+      const items = await listClosedSince(since, { limit: 20, offset: 0, filters });
+      expect(items.map((c) => c.id)).toEqual([convC.id, convB.id, convA.id]);
+      expect(await countClosedSince(since, filters)).toBe(3);
+    });
+
+    test('combina filtros de dimensoes diferentes com E', async () => {
+      const filters = { channelIds: [channelId], sectorIds: [sectorY.id] };
+      const items = await listClosedSince(since, { limit: 20, offset: 0, filters });
+      expect(items.map((c) => c.id)).toEqual([convC.id]);
+      expect(await countClosedSince(since, filters)).toBe(1);
+    });
+
+    test('pagina dentro do recorte filtrado', async () => {
+      const filters = { channelIds: [channelId] };
+      const page1 = await listClosedSince(since, { limit: 1, offset: 0, filters });
+      const page2 = await listClosedSince(since, { limit: 1, offset: 1, filters });
+      const page3 = await listClosedSince(since, { limit: 1, offset: 2, filters });
+      expect(page1.map((c) => c.id)).toEqual([convC.id]);
+      expect(page2.map((c) => c.id)).toEqual([convA.id]);
+      expect(page3).toEqual([]);
+      expect(await countClosedSince(since, filters)).toBe(2);
+    });
+
+    test('devolve pagina vazia e total zero quando nada casa', async () => {
+      const semUso = await createSector({ name: 'Setor Sem Encerrados' });
+      const filters = { sectorIds: [semUso.id] };
+      expect(await listClosedSince(since, { limit: 20, offset: 0, filters })).toEqual([]);
+      expect(await countClosedSince(since, filters)).toBe(0);
+    });
+
+    test('o filtro nao altera os campos de cada item', async () => {
+      const filters = { channelIds: [channelId], agentIds: [agentA.id] };
+      const [item] = await listClosedSince(since, { limit: 20, offset: 0, filters });
+      const [semFiltro] = await listClosedSince(since, { limit: 20, offset: 2 });
+      expect(item).toEqual(semFiltro);
+      expect(item.closedAt).toBeDefined();
+    });
+  });
+
   test('countClosedConversationsByAgent counts only that agent\'s closed conversations', async () => {
     const agent = await createAgent({ email: 'my-closed-1@dw.com', password: 'secret123', role: 'agent' });
     const otherAgent = await createAgent({ email: 'my-closed-2@dw.com', password: 'secret123', role: 'agent' });

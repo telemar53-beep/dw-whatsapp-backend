@@ -122,6 +122,69 @@ describe('GET /api/metrics', () => {
     expect(getMetricsForAgent).toHaveBeenCalledWith('agent-1', expect.any(Date));
   });
 
+  test('echoes days back for a custom period', async () => {
+    getMetricsForAgent.mockResolvedValue({ closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null });
+
+    const res = await request(buildApp())
+      .get('/api/metrics?period=custom&days=45')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.body.days).toBe(45);
+  });
+
+  test('echoes days back for a custom period on the admin scope too', async () => {
+    getMetricsForAllAgents.mockResolvedValue([]);
+    getMetricsBySector.mockResolvedValue([]);
+    getMetricsByReason.mockResolvedValue([]);
+
+    const res = await request(buildApp())
+      .get('/api/metrics?period=custom&days=90')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.body.scope).toBe('admin');
+    expect(res.body.days).toBe(90);
+  });
+
+  test('the echoed days is the number that produced the slice, not the raw string', async () => {
+    getMetricsForAgent.mockResolvedValue({ closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null });
+    const antes = Date.now();
+
+    const res = await request(buildApp())
+      .get('/api/metrics?period=custom&days=10')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.body.days).toBe(10);
+    const [, since] = getMetricsForAgent.mock.calls[0];
+    const diasDoRecorte = (antes - since.getTime()) / (24 * 60 * 60 * 1000);
+    expect(Math.round(diasDoRecorte)).toBe(res.body.days);
+  });
+
+  test('omits days for the fixed periods, keeping the current payload shape', async () => {
+    for (const period of ['today', '7d', '30d']) {
+      jest.clearAllMocks();
+      getMetricsForAgent.mockResolvedValue({ closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null });
+
+      const res = await request(buildApp())
+        .get(`/api/metrics?period=${period}`)
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).not.toHaveProperty('days');
+      expect(Object.keys(res.body).sort()).toEqual(['own', 'period', 'scope']);
+    }
+  });
+
+  test('ignores a days value sent alongside a fixed period', async () => {
+    getMetricsForAgent.mockResolvedValue({ closedCount: 0, avgResolutionMinutes: null, avgFirstResponseMinutes: null });
+
+    const res = await request(buildApp())
+      .get('/api/metrics?period=7d&days=99')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).not.toHaveProperty('days');
+  });
+
   test('returns 400 for a custom period with no days value', async () => {
     const res = await request(buildApp())
       .get('/api/metrics?period=custom')

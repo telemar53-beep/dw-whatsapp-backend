@@ -228,4 +228,8 @@
 /* Short viewports still allow necessary content scrolling without losing fields. */
 [data-dialog=help] > div:nth-child(2),[data-dialog=users] > div:last-child,[data-dialog=city] > div:last-child,[data-dialog=sector] > div:last-child,[data-dialog=reason] > div:last-child,[data-dialog=confirm] > div,[data-dialog=alert] > div {min-height:0;overflow-y:auto}
 .dialog-provider-symbol .channel-brand-mark {display:block;width:24px;height:24px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
+.dialog-provider-symbol .channel-brand {position:relative;display:block;line-height:0}
+.dialog-provider-symbol .channel-brand-badge {position:absolute;right:-3px;bottom:-3px;width:13px;height:13px;border-radius:50%;box-shadow:0 0 0 2px var(--color-wa-panel)}
+.dialog-provider-symbol .channel-brand-badge:not(.is-logo) {background:#0081fb;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
+.dialog-provider-symbol .channel-brand-badge.is-logo {object-fit:contain;background:#0b1f21}
 .dialog-provider-symbol .channel-brand-logo {display:block;width:20px;height:20px;object-fit:contain}

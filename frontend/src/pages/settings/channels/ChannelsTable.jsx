@@ -10,6 +10,13 @@ import { STATUS_LABELS } from './channelStatus';
 import { channelSummary } from './channelSummary';
 
 const PROVIDER_LABELS = { baileys: 'Baileys', meta_cloud: 'Meta Cloud', '360dialog': '360dialog' };
+// Como a conexao e feita, dito por extenso. A 360dialog e BSP: oficial, mas
+// intermediada — "API oficial" apagava essa diferenca, que e justamente o que
+// o segundo nivel da linha existe para dizer.
+const CONEXAO_LABELS = { baileys: 'Não oficial', meta_cloud: 'API oficial', '360dialog': 'BSP oficial' };
+export function conexaoLabel(type) {
+  return CONEXAO_LABELS[type] || (isOfficialChannelType(type) ? 'API oficial' : 'Não oficial');
+}
 const TYPE_OPTIONS = [
   ['all', 'Todos os tipos'],
   ['baileys', 'Baileys'],
@@ -187,7 +194,7 @@ function ChannelRow({ channel, selected, summaryContext, actions, canManage }) {
               {formatPhone(channel.phoneNumber)}
               {channel.hidden ? ' · oculto' : ''}
             </p>
-            <p className="settings-channel-provider mt-0.5 text-[11.5px] text-wa-muted">{providerLabel(channel.type)} · {official ? 'API oficial' : 'Não oficial'}</p>
+            <p className="settings-channel-provider mt-0.5 text-[11.5px] text-wa-muted">{providerLabel(channel.type)} · {conexaoLabel(channel.type)}</p>
           </div>
       </div>
       <div className="settings-channel-link min-w-0 sm:pl-[50px] lg:pl-0">

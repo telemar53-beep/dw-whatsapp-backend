@@ -1,19 +1,19 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import AgentAvatar from './AgentAvatar';
-import { useAuth } from '../contexts/AuthContext';
+import { useMediaToken } from '../contexts/MediaTokenContext';
 
-vi.mock('../contexts/AuthContext');
+vi.mock('../contexts/MediaTokenContext');
 
 beforeEach(() => {
-  useAuth.mockReturnValue({ token: 'tok-123' });
+  useMediaToken.mockReturnValue({ obterToken: () => 'media-tok', pronto: true });
 });
 
 describe('AgentAvatar', () => {
   test('renders the photo with the authenticated avatar URL when avatarPath is set', () => {
     render(<AgentAvatar agentId="a1" avatarPath="avatars/a1.jpg" name="Carlos" />);
     const img = screen.getByRole('img');
-    expect(img.src).toBe('http://localhost:3000/api/agents/a1/avatar?token=tok-123');
+    expect(img.src).toBe('http://localhost:3000/api/agents/a1/avatar?mediaToken=media-tok');
   });
 
   test('renders the first letter of the name when there is no avatarPath', () => {

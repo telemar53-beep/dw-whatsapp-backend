@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { useMediaResourceUrl } from '../hooks/useMediaResourceUrl';
 import { avatarUrl } from '../services/api';
 
@@ -23,11 +22,10 @@ function initialFor(displayName, phoneNumber) {
 // `dark` troca o disco claro do WhatsApp pelo disco laranja→cobre da página de
 // atendimento (a mesma cor dos botões, para o avatar pertencer ao tema).
 function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber, size = 40, dark = false }) {
-  const { token } = useAuth();
   const [failedPath, setFailedPath] = useState(null);
   const construir = useCallback(
-    (mediaToken) => avatarUrl(contactId, mediaToken, avatarPath, token),
-    [contactId, avatarPath, token]
+    (mediaToken) => avatarUrl(contactId, mediaToken, avatarPath),
+    [contactId, avatarPath]
   );
   const { url, tentarDeNovo, pronto } = useMediaResourceUrl(construir);
   const boxStyle = { width: size, height: size };

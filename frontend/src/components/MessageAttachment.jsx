@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { mediaUrl } from '../services/api';
 import { useMediaResourceUrl } from '../hooks/useMediaResourceUrl';
 import { receiptVerdict } from '../utils/receiptVerdict';
@@ -702,7 +701,6 @@ function ReceiptAnalysis({ messageId, onAnalyze }) {
 }
 
 function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) {
-  const { token } = useAuth();
   const outbound = message.direction === 'outbound';
 
   if (message.messageType === 'pix') {
@@ -750,7 +748,7 @@ function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) 
   // Congelada no mount: renovar o token NAO pode trocar o src do que ja esta
   // tocando ou carregado. `tentarDeNovo` refaz uma vez em caso de falha, e
   // `urlAgora` da a URL fresca para acoes que o usuario dispara na hora.
-  const construir = useCallback((mediaToken) => mediaUrl(message.id, mediaToken, token), [message.id, token]);
+  const construir = useCallback((mediaToken) => mediaUrl(message.id, mediaToken), [message.id]);
   const { url, tentarDeNovo, urlAgora, pronto } = useMediaResourceUrl(construir);
 
   // `pronto` e o unico portao: enquanto o primeiro token de midia nao chega,

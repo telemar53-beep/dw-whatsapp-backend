@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { useMediaResourceUrl } from '../hooks/useMediaResourceUrl';
 import { agentAvatarUrl } from '../services/api';
 
@@ -22,9 +21,8 @@ function toneFor(name) {
 }
 
 function AgentAvatar({ agentId, avatarPath, name, size = 40, shape = 'circle', colorful = false }) {
-  const { token } = useAuth();
   const [falhou, setFalhou] = useState(false);
-  const construir = useCallback((mediaToken) => agentAvatarUrl(agentId, mediaToken, token), [agentId, token]);
+  const construir = useCallback((mediaToken) => agentAvatarUrl(agentId, mediaToken), [agentId]);
   const { url, tentarDeNovo, pronto } = useMediaResourceUrl(construir);
   const boxStyle = { width: size, height: size };
   const shapeClass = shape === 'square' ? 'rounded-[14px]' : 'rounded-full';

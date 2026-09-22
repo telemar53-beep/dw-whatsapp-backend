@@ -1,20 +1,20 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import ContactAvatar from './ContactAvatar';
-import { useAuth } from '../contexts/AuthContext';
+import { useMediaToken } from '../contexts/MediaTokenContext';
 
-vi.mock('../contexts/AuthContext');
+vi.mock('../contexts/MediaTokenContext');
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useAuth.mockReturnValue({ token: 'tok-123' });
+  useMediaToken.mockReturnValue({ obterToken: () => 'media-tok', pronto: true });
 });
 
 describe('ContactAvatar', () => {
   test('renders the photo with the authenticated avatar URL when avatarPath is set', () => {
     render(<ContactAvatar contactId="c1" avatarPath="avatars/c1.jpg" displayName="Carlos" phoneNumber="+5511999990000" />);
     const img = screen.getByRole('img');
-    expect(img.src).toBe('http://localhost:3000/api/contacts/c1/avatar?token=tok-123&v=avatars%2Fc1.jpg');
+    expect(img.src).toBe('http://localhost:3000/api/contacts/c1/avatar?mediaToken=media-tok&v=avatars%2Fc1.jpg');
   });
 
   test('shows initials when a stored photo cannot be loaded', () => {
@@ -61,5 +61,38 @@ describe('ContactAvatar', () => {
   test('falls back past a whitespace-only display name to the phone digit', () => {
     render(<ContactAvatar contactId="c1" avatarPath={null} displayName="   " phoneNumber="+5511999990000" />);
     expect(screen.getByText('5')).toBeInTheDocument();
+  });
+});
+
+// O legado ?token=<JWT de sessao> saiu. O intervalo entre abrir o app e o
+// primeiro media token chegar era justamente o que ele sustentava - e precisa
+// continuar sem requisicao sem credencial, sem foto quebrada e sem retry.
+describe('antes do primeiro media token', () => {
+  beforeEach(() => {
+    useMediaToken.mockReturnValue({ obterToken: () => null, pronto: false });
+  });
+
+  test('nao monta <img> nenhum: nada e requisitado sem credencial', () => {
+    render(<ContactAvatar contactId="c1" avatarPath="avatars/c1.jpg" displayName="Carlos" />);
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  test('mostra as iniciais, nao uma foto quebrada', () => {
+    render(<ContactAvatar contactId="c1" avatarPath="avatars/c1.jpg" displayName="Carlos Lima" />);
+
+    expect(screen.getByText('CL')).toBeInTheDocument();
+  });
+
+  test('quando o token chega, a foto aparece com mediaToken e sem JWT de sessao', () => {
+    const { rerender } = render(<ContactAvatar contactId="c1" avatarPath="avatars/c1.jpg" displayName="Carlos" />);
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+
+    useMediaToken.mockReturnValue({ obterToken: () => 'media-tok', pronto: true });
+    rerender(<ContactAvatar contactId="c1" avatarPath="avatars/c1.jpg" displayName="Carlos" />);
+
+    const img = screen.getByRole('img');
+    expect(img.src).toContain('mediaToken=media-tok');
+    expect(img.src).not.toMatch(/[?&]token=/);
   });
 });

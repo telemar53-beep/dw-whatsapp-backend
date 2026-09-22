@@ -201,11 +201,17 @@ async function sendPixOrFallback({ adapter, channel, to, pixCode, metadata }) {
 // vai a todos os conectados como message:new (quem está com a conversa
 // aberta acrescenta a bolha; a tela filtra pela conversa). Com dono, continua
 // message:updated só para ele, como sempre.
+// A conversa silenciada é a exceção: é um disparo (campanha ou SGP) que o
+// cliente ainda não respondeu, não está em fila nenhuma e ninguém pode
+// atendê-la. O payload levaria telefone, documento do SGP, nota interna e o
+// texto inteiro ao navegador de todo atendente conectado, e nenhum consumidor
+// da tela faz nada com ele. Quando o cliente responde, quem avisa a fila é o
+// queue:new da ingestão — não este worker.
 function avisarTela(conversation, conversationId, message) {
   if (!message) return;
   if (conversation.assignedAgentId) {
     emitToAgent(conversation.assignedAgentId, 'message:updated', { conversationId, message });
-  } else {
+  } else if (conversation.status !== 'silent') {
     broadcast('message:new', { conversation, message });
   }
 }

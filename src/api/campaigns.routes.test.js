@@ -14,6 +14,8 @@ const {
   countCampaigns,
   createCampaignRecipients,
   listCampaignRecipients,
+  listCampaignRecipientsPage,
+  countCampaignRecipientsByStatus,
   updateCampaignRecipientStatus,
   incrementCampaignCounter,
   deleteCampaign,
@@ -328,6 +330,143 @@ describe('GET /api/campaigns', () => {
 
     expect(res.status).toBe(200);
     expect(listCampaigns).toHaveBeenCalledWith({ limit: 100, offset: 0 });
+  });
+});
+
+describe('GET /api/campaigns/:id/recipients', () => {
+  const CAMPAIGN_ID = '11111111-1111-1111-1111-111111111111';
+  const TODOS_ZERADOS = { pending: 0, sent: 0, failed: 0, skipped: 0 };
+
+  function pedir(query = '') {
+    return request(buildApp())
+      .get(`/api/campaigns/${CAMPAIGN_ID}/recipients${query}`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findCampaignById.mockResolvedValue({ id: 'campaign-1' });
+    listCampaignRecipientsPage.mockResolvedValue([]);
+    countCampaignRecipientsByStatus.mockResolvedValue(TODOS_ZERADOS);
+  });
+
+  test('devolve a pagina com total, hasMore e as contagens por status', async () => {
+    listCampaignRecipientsPage.mockResolvedValue([{ id: 'r1', status: 'sent' }]);
+    countCampaignRecipientsByStatus.mockResolvedValue({ pending: 2, sent: 2, failed: 1, skipped: 0 });
+
+    const res = await pedir('?limit=1');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      items: [{ id: 'r1', status: 'sent' }],
+      total: 5,
+      hasMore: true,
+      counts: { pending: 2, sent: 2, failed: 1, skipped: 0 },
+    });
+    expect(listCampaignRecipientsPage).toHaveBeenCalledWith('campaign-1', { limit: 1, offset: 0, status: undefined });
+  });
+
+  test('sem filtro o total e a soma dos quatro status', async () => {
+    listCampaignRecipientsPage.mockResolvedValue([{ id: 'r1' }]);
+    countCampaignRecipientsByStatus.mockResolvedValue({ pending: 2, sent: 2, failed: 1, skipped: 3 });
+
+    const res = await pedir();
+
+    expect(res.body.total).toBe(8);
+  });
+
+  test('com filtro o total e so do recorte, e counts continua sendo a campanha inteira', async () => {
+    listCampaignRecipientsPage.mockResolvedValue([{ id: 'r2', status: 'sent' }, { id: 'r4', status: 'sent' }]);
+    countCampaignRecipientsByStatus.mockResolvedValue({ pending: 2, sent: 2, failed: 1, skipped: 0 });
+
+    const res = await pedir('?status=sent');
+
+    expect(res.body.total).toBe(2);
+    expect(res.body.counts).toEqual({ pending: 2, sent: 2, failed: 1, skipped: 0 });
+    expect(listCampaignRecipientsPage).toHaveBeenCalledWith('campaign-1', { limit: 200, offset: 0, status: 'sent' });
+  });
+
+  test('hasMore sai de offset + items.length < total', async () => {
+    listCampaignRecipientsPage.mockResolvedValue([{ id: 'r3' }, { id: 'r4' }]);
+    countCampaignRecipientsByStatus.mockResolvedValue({ pending: 0, sent: 4, failed: 0, skipped: 0 });
+
+    const semSobra = await pedir('?limit=2&offset=2');
+    expect(semSobra.body.hasMore).toBe(false);
+
+    const comSobra = await pedir('?limit=2&offset=0');
+    expect(comSobra.body.hasMore).toBe(true);
+  });
+
+  test('aceita os quatro status do banco', async () => {
+    for (const status of ['pending', 'sent', 'failed', 'skipped']) {
+      const res = await pedir(`?status=${status}`);
+      expect(res.status).toBe(200);
+    }
+  });
+
+  test('status fora dos quatro devolve 400 sem consultar', async () => {
+    for (const query of ['?status=enviado', '?status=SENT', '?status=', '?status=constructor']) {
+      jest.clearAllMocks();
+      findCampaignById.mockResolvedValue({ id: 'campaign-1' });
+      const res = await pedir(query);
+      expect(res.status).toBe(400);
+      expect(listCampaignRecipientsPage).not.toHaveBeenCalled();
+    }
+  });
+
+  test('limit e offset invalidos sao ajustados, porque aqui o formato nao muda', async () => {
+    await pedir('?limit=abc');
+    expect(listCampaignRecipientsPage).toHaveBeenCalledWith('campaign-1', { limit: 200, offset: 0, status: undefined });
+
+    jest.clearAllMocks();
+    findCampaignById.mockResolvedValue({ id: 'campaign-1' });
+    listCampaignRecipientsPage.mockResolvedValue([]);
+    countCampaignRecipientsByStatus.mockResolvedValue(TODOS_ZERADOS);
+    await pedir('?limit=9999&offset=-4');
+    expect(listCampaignRecipientsPage).toHaveBeenCalledWith('campaign-1', { limit: 500, offset: 0, status: undefined });
+  });
+
+  test('pagina vazia se descreve honestamente', async () => {
+    countCampaignRecipientsByStatus.mockResolvedValue({ pending: 0, sent: 0, failed: 0, skipped: 2 });
+
+    const res = await pedir('?status=sent');
+
+    expect(res.body).toEqual({ items: [], total: 0, hasMore: false, counts: { pending: 0, sent: 0, failed: 0, skipped: 2 } });
+  });
+
+  test('campanha inexistente devolve 404, igual a rota irma', async () => {
+    findCampaignById.mockResolvedValue(null);
+
+    const res = await pedir();
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Campaign not found' });
+    expect(listCampaignRecipientsPage).not.toHaveBeenCalled();
+  });
+
+  test('id que nao e uuid devolve 404 pelo guard do router', async () => {
+    const res = await request(buildApp())
+      .get('/api/campaigns/nao-e-uuid/recipients')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  test('sem token devolve 401', async () => {
+    const res = await request(buildApp()).get(`/api/campaigns/${CAMPAIGN_ID}/recipients`);
+    expect(res.status).toBe(401);
+  });
+
+  test('a rota de detalhe continua devolvendo todos os destinatarios', async () => {
+    findCampaignById.mockResolvedValue({ id: 'campaign-1', totalRecipients: 2 });
+    listCampaignRecipients.mockResolvedValue([{ id: 'r1' }, { id: 'r2' }]);
+
+    const res = await request(buildApp())
+      .get(`/api/campaigns/${CAMPAIGN_ID}`)
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    expect(res.body.recipients).toEqual([{ id: 'r1' }, { id: 'r2' }]);
+    expect(listCampaignRecipientsPage).not.toHaveBeenCalled();
   });
 });
 

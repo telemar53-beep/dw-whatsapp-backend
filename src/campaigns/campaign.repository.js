@@ -131,6 +131,39 @@ async function listCampaignRecipients(campaignId) {
   return result.rows.map(toRecipient);
 }
 
+// created_at empata com facilidade: os destinatarios entram todos no mesmo
+// INSERT. Sem o id como desempate a ordem seria indefinida e a paginacao
+// poderia repetir ou pular linha entre duas paginas.
+const RECIPIENT_ORDER = `ORDER BY created_at ASC, id ASC`;
+
+const RECIPIENT_STATUSES = ['pending', 'sent', 'failed', 'skipped'];
+
+async function listCampaignRecipientsPage(campaignId, { limit, offset, status }) {
+  const filtraStatus = status !== undefined;
+  const result = await getPool().query(
+    `SELECT ${RECIPIENT_COLUMNS} FROM campaign_recipients
+     WHERE campaign_id = $1${filtraStatus ? ' AND status = $4' : ''}
+     ${RECIPIENT_ORDER}
+     LIMIT $2 OFFSET $3`,
+    filtraStatus ? [campaignId, limit, offset, status] : [campaignId, limit, offset]
+  );
+  return result.rows.map(toRecipient);
+}
+
+// Sempre a campanha inteira, nunca o recorte filtrado: e esta contagem que
+// permite a tela paginar sem que os numeros por resultado passem a mentir.
+async function countCampaignRecipientsByStatus(campaignId) {
+  const result = await getPool().query(
+    `SELECT status, COUNT(*)::int AS count FROM campaign_recipients WHERE campaign_id = $1 GROUP BY status`,
+    [campaignId]
+  );
+  const counts = Object.fromEntries(RECIPIENT_STATUSES.map((status) => [status, 0]));
+  for (const row of result.rows) {
+    counts[row.status] = Number(row.count);
+  }
+  return counts;
+}
+
 async function updateCampaignRecipientStatus(id, { status, errorMessage, contactId, conversationId }) {
   const result = await getPool().query(
     `UPDATE campaign_recipients SET status = $2, error_message = $3, contact_id = $4, conversation_id = $5, processed_at = now()
@@ -158,6 +191,8 @@ module.exports = {
   countCampaigns,
   createCampaignRecipients,
   listCampaignRecipients,
+  listCampaignRecipientsPage,
+  countCampaignRecipientsByStatus,
   updateCampaignRecipientStatus,
   incrementCampaignCounter,
   deleteCampaign,

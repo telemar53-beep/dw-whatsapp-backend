@@ -6,6 +6,8 @@ const {
   countCampaigns,
   createCampaignRecipients,
   listCampaignRecipients,
+  listCampaignRecipientsPage,
+  countCampaignRecipientsByStatus,
   updateCampaignRecipientStatus,
   incrementCampaignCounter,
   deleteCampaign,
@@ -218,6 +220,128 @@ describe('campaign repository', () => {
 
     test('countCampaigns devolve zero quando nao ha campanha', async () => {
       expect(await countCampaigns()).toBe(0);
+    });
+  });
+
+  describe('pagina de destinatarios', () => {
+    async function campanhaComDestinatarios() {
+      const agent = await makeAgent();
+      const channel = await makeChannel();
+      const campaign = await createCampaign({
+        channelId: channel.id, messageType: 'text', content: 'a', createdBy: agent.id, totalRecipients: 5,
+      });
+      // 2 pendentes, 2 enviados, 1 falhou, 0 pulados.
+      const criados = await createCampaignRecipients(campaign.id, [
+        { rawPhoneNumber: '1', phoneNumber: '+5511900000001', status: 'pending' },
+        { rawPhoneNumber: '2', phoneNumber: '+5511900000002', status: 'sent' },
+        { rawPhoneNumber: '3', phoneNumber: '+5511900000003', status: 'pending' },
+        { rawPhoneNumber: '4', phoneNumber: '+5511900000004', status: 'sent' },
+        { rawPhoneNumber: '5', phoneNumber: '+5511900000005', status: 'failed', errorMessage: 'Numero invalido' },
+      ]);
+      return { campaign, criados };
+    }
+
+    test('pagina sem repetir nem pular destinatario', async () => {
+      const { campaign, criados } = await campanhaComDestinatarios();
+
+      const p1 = await listCampaignRecipientsPage(campaign.id, { limit: 2, offset: 0 });
+      const p2 = await listCampaignRecipientsPage(campaign.id, { limit: 2, offset: 2 });
+      const p3 = await listCampaignRecipientsPage(campaign.id, { limit: 2, offset: 4 });
+      const p4 = await listCampaignRecipientsPage(campaign.id, { limit: 2, offset: 6 });
+
+      const percorrido = [...p1, ...p2, ...p3].map((r) => r.id);
+      // Os destinatarios entram todos no MESMO insert, entao created_at empata
+      // para os cinco e quem ordena de fato e o desempate por id. A ordem nao
+      // e a da planilha colada - nao existe coluna de posicao -, mas e estavel,
+      // que e o que a paginacao precisa para nao repetir nem pular linha.
+      expect(percorrido).toHaveLength(5);
+      expect(new Set(percorrido).size).toBe(5);
+      expect([...percorrido].sort()).toEqual(criados.map((r) => r.id).sort());
+      expect(p4).toEqual([]);
+    });
+
+    test('a ordem e deterministica mesmo com created_at empatado', async () => {
+      const { campaign } = await campanhaComDestinatarios();
+      await getPool().query(`UPDATE campaign_recipients SET created_at = now() WHERE campaign_id = $1`, [campaign.id]);
+
+      const primeira = (await listCampaignRecipientsPage(campaign.id, { limit: 5, offset: 0 })).map((r) => r.id);
+      const segunda = (await listCampaignRecipientsPage(campaign.id, { limit: 5, offset: 0 })).map((r) => r.id);
+
+      expect(primeira).toEqual(segunda);
+      expect(primeira).toHaveLength(5);
+    });
+
+    test('filtra por status', async () => {
+      const { campaign } = await campanhaComDestinatarios();
+
+      const enviados = await listCampaignRecipientsPage(campaign.id, { limit: 20, offset: 0, status: 'sent' });
+
+      expect(enviados).toHaveLength(2);
+      expect(enviados.every((r) => r.status === 'sent')).toBe(true);
+    });
+
+    test('pagina dentro do recorte filtrado', async () => {
+      const { campaign } = await campanhaComDestinatarios();
+
+      const p1 = await listCampaignRecipientsPage(campaign.id, { limit: 1, offset: 0, status: 'pending' });
+      const p2 = await listCampaignRecipientsPage(campaign.id, { limit: 1, offset: 1, status: 'pending' });
+      const p3 = await listCampaignRecipientsPage(campaign.id, { limit: 1, offset: 2, status: 'pending' });
+
+      expect(p1).toHaveLength(1);
+      expect(p2).toHaveLength(1);
+      expect(p1[0].id).not.toBe(p2[0].id);
+      expect(p3).toEqual([]);
+    });
+
+    test('nao vaza destinatario de outra campanha', async () => {
+      const { campaign } = await campanhaComDestinatarios();
+      const outra = await campanhaComDestinatarios();
+
+      const daPrimeira = await listCampaignRecipientsPage(campaign.id, { limit: 50, offset: 0 });
+
+      expect(daPrimeira).toHaveLength(5);
+      expect(daPrimeira.every((r) => r.campaignId === campaign.id)).toBe(true);
+      expect(outra.campaign.id).not.toBe(campaign.id);
+    });
+
+    test('os campos de cada destinatario sao os mesmos da leitura sem pagina', async () => {
+      const { campaign } = await campanhaComDestinatarios();
+
+      const [daPagina] = await listCampaignRecipientsPage(campaign.id, { limit: 1, offset: 0 });
+      const todos = await listCampaignRecipients(campaign.id);
+      const mesmoRegistro = todos.find((r) => r.id === daPagina.id);
+
+      // Pelo id, nao pela posicao: a leitura sem pagina ordena so por
+      // created_at, que empata, entao as duas podem devolver ordens diferentes.
+      expect(daPagina).toEqual(mesmoRegistro);
+      expect(Object.keys(daPagina).sort()).toEqual(Object.keys(todos[0]).sort());
+    });
+
+    test('countCampaignRecipientsByStatus devolve os quatro status, com zero onde nao ha', async () => {
+      const { campaign } = await campanhaComDestinatarios();
+
+      const counts = await countCampaignRecipientsByStatus(campaign.id);
+
+      expect(counts).toEqual({ pending: 2, sent: 2, failed: 1, skipped: 0 });
+    });
+
+    test('a contagem e da campanha inteira e nao muda com filtro aplicado', async () => {
+      const { campaign } = await campanhaComDestinatarios();
+
+      await listCampaignRecipientsPage(campaign.id, { limit: 1, offset: 0, status: 'sent' });
+
+      expect(await countCampaignRecipientsByStatus(campaign.id)).toEqual({ pending: 2, sent: 2, failed: 1, skipped: 0 });
+    });
+
+    test('campanha sem destinatario devolve tudo zerado', async () => {
+      const agent = await makeAgent();
+      const channel = await makeChannel();
+      const campaign = await createCampaign({
+        channelId: channel.id, messageType: 'text', content: 'a', createdBy: agent.id, totalRecipients: 0,
+      });
+
+      expect(await listCampaignRecipientsPage(campaign.id, { limit: 20, offset: 0 })).toEqual([]);
+      expect(await countCampaignRecipientsByStatus(campaign.id)).toEqual({ pending: 0, sent: 0, failed: 0, skipped: 0 });
     });
   });
 

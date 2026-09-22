@@ -21,6 +21,8 @@ function tokenFor(agentId, role) {
   return jwt.sign({ agentId, role }, process.env.JWT_SECRET);
 }
 
+const CITY_ID = '22222222-2222-4222-8222-222222222222';
+
 describe('GET /api/contacts/:contactId/avatar', () => {
   let tempFile;
 
@@ -83,20 +85,22 @@ describe('PATCH /api/contacts/:id', () => {
   beforeEach(() => jest.clearAllMocks());
 
   test('updates the contact and returns it', async () => {
-    updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Maria Editada', cityId: 'city-1' });
+    updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Maria Editada', cityId: CITY_ID });
 
     const res = await request(buildApp())
       .patch('/api/contacts/contact-1')
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
-      .send({ displayName: 'Maria Editada', cityId: 'city-1' });
+      .send({ displayName: 'Maria Editada', cityId: CITY_ID });
 
     expect(res.status).toBe(200);
-    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria Editada', cityId: 'city-1', internalNote: null });
+    // internalNote nao foi enviado, entao nao entra no patch: campo omitido
+    // permanece inalterado (ADR-011).
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria Editada', cityId: CITY_ID });
     expect(res.body.displayName).toBe('Maria Editada');
   });
 
-  test('trims the display name and treats a missing cityId as null', async () => {
-    updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Maria', cityId: null });
+  test('trims the display name and nao toca em cityId quando ele nao vem', async () => {
+    updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Maria', cityId: CITY_ID });
 
     const res = await request(buildApp())
       .patch('/api/contacts/contact-1')
@@ -104,7 +108,7 @@ describe('PATCH /api/contacts/:id', () => {
       .send({ displayName: '  Maria  ' });
 
     expect(res.status).toBe(200);
-    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria', cityId: null, internalNote: null });
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria' });
   });
 
   test('treats a blank display name as null', async () => {
@@ -116,7 +120,7 @@ describe('PATCH /api/contacts/:id', () => {
       .send({ displayName: '   ', cityId: null });
 
     expect(res.status).toBe(200);
-    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: null, cityId: null, internalNote: null });
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: null, cityId: null });
   });
 
   test('returns 400 when displayName is not a string', async () => {
@@ -138,7 +142,7 @@ describe('PATCH /api/contacts/:id', () => {
       .send({ displayName: 'Maria', internalNote: '  Cliente VIP  ' });
 
     expect(res.status).toBe(200);
-    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria', cityId: null, internalNote: 'Cliente VIP' });
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria', internalNote: 'Cliente VIP' });
   });
 
   test('treats a blank internal note as null', async () => {
@@ -150,7 +154,7 @@ describe('PATCH /api/contacts/:id', () => {
       .send({ displayName: 'Maria', internalNote: '   ' });
 
     expect(res.status).toBe(200);
-    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria', cityId: null, internalNote: null });
+    expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria', internalNote: null });
   });
 
   test('returns 400 when internalNote is not a string', async () => {
@@ -178,5 +182,133 @@ describe('PATCH /api/contacts/:id', () => {
       .send({ displayName: 'Maria' });
 
     expect(res.status).toBe(404);
+  });
+
+  // ADR-011: "campo nao enviado deve permanecer inalterado". Antes, a chave
+  // ausente era indistinguivel de null e o UPDATE apagava o valor: quem
+  // mandasse so o nome zerava a cidade e a nota interna do contato.
+  describe('campo omitido permanece inalterado', () => {
+    function patch(body) {
+      updateContact.mockResolvedValue({ id: 'contact-1' });
+      return request(buildApp())
+        .patch('/api/contacts/contact-1')
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+        .send(body);
+    }
+
+    test('mandar so o nome nao toca em cidade nem em nota interna', async () => {
+      await patch({ displayName: 'Maria' });
+      expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: 'Maria' });
+    });
+
+    test('mandar so a cidade nao toca em nome nem em nota interna', async () => {
+      await patch({ cityId: CITY_ID });
+      expect(updateContact).toHaveBeenCalledWith('contact-1', { cityId: CITY_ID });
+    });
+
+    test('mandar so a nota interna nao toca em nome nem em cidade', async () => {
+      await patch({ internalNote: 'Cliente VIP' });
+      expect(updateContact).toHaveBeenCalledWith('contact-1', { internalNote: 'Cliente VIP' });
+    });
+
+    test('body vazio nao altera campo nenhum', async () => {
+      await patch({});
+      expect(updateContact).toHaveBeenCalledWith('contact-1', {});
+    });
+
+    test('null explicito continua apagando, que e diferente de omitir', async () => {
+      await patch({ displayName: null, cityId: null, internalNote: null });
+      expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: null, cityId: null, internalNote: null });
+    });
+
+    test('string vazia tambem apaga', async () => {
+      await patch({ displayName: '', internalNote: '' });
+      expect(updateContact).toHaveBeenCalledWith('contact-1', { displayName: null, internalNote: null });
+    });
+  });
+
+  describe('a resposta nao devolve dado interno que ninguem pediu', () => {
+    test('devolve so os campos que a edicao de cliente usa', async () => {
+      updateContact.mockResolvedValue({
+        id: 'contact-1',
+        displayName: 'Maria',
+        cityId: CITY_ID,
+        internalNote: 'Cliente VIP',
+        // Tudo abaixo vem do repositorio e nao pode sair na resposta.
+        phoneNumber: '5511999998888',
+        avatarPath: 'contatos/abc.jpg',
+        avatarCheckedAt: '2026-09-22T10:00:00.000Z',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        sgpClientId: '4321',
+        sgpContractId: '9876',
+        sgpDocument: '12345678900',
+        sgpFirstName: 'Maria',
+      });
+
+      const res = await request(buildApp())
+        .patch('/api/contacts/contact-1')
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+        .send({ displayName: 'Maria' });
+
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body).sort()).toEqual(['cityId', 'displayName', 'id', 'internalNote']);
+      expect(res.body).toEqual({
+        id: 'contact-1',
+        displayName: 'Maria',
+        cityId: CITY_ID,
+        internalNote: 'Cliente VIP',
+      });
+    });
+
+    test('o documento do SGP nao sai nem para administrador', async () => {
+      updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Maria', sgpDocument: '12345678900' });
+
+      const res = await request(buildApp())
+        .patch('/api/contacts/contact-1')
+        .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+        .send({ displayName: 'Maria' });
+
+      expect(res.body).not.toHaveProperty('sgpDocument');
+      expect(JSON.stringify(res.body)).not.toContain('12345678900');
+    });
+  });
+
+  describe('cityId invalido', () => {
+    test('valor que nao e uuid para em 400, sem chegar ao banco', async () => {
+      for (const cityId of ['nao-e-uuid', '123', { a: 1 }, []]) {
+        jest.clearAllMocks();
+        const res = await request(buildApp())
+          .patch('/api/contacts/contact-1')
+          .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+          .send({ cityId });
+
+        expect(res.status).toBe(400);
+        expect(updateContact).not.toHaveBeenCalled();
+      }
+    });
+
+    test('uuid valido passa', async () => {
+      updateContact.mockResolvedValue({ id: 'contact-1' });
+
+      const res = await request(buildApp())
+        .patch('/api/contacts/contact-1')
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+        .send({ cityId: CITY_ID });
+
+      expect(res.status).toBe(200);
+      expect(updateContact).toHaveBeenCalledWith('contact-1', { cityId: CITY_ID });
+    });
+
+    test('null continua limpando a cidade', async () => {
+      updateContact.mockResolvedValue({ id: 'contact-1' });
+
+      const res = await request(buildApp())
+        .patch('/api/contacts/contact-1')
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+        .send({ cityId: null });
+
+      expect(res.status).toBe(200);
+      expect(updateContact).toHaveBeenCalledWith('contact-1', { cityId: null });
+    });
   });
 });

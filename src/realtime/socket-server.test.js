@@ -43,6 +43,18 @@ describe('socket server', () => {
     });
   });
 
+  // O token de midia so serve para ler arquivo. O socket entrega conversa,
+  // mensagem e dado de contato — nao pode aceita-lo de jeito nenhum.
+  test('recusa um token de midia: ele nao autentica o socket', (done) => {
+    const { signMediaToken } = require('../auth/media-token.service');
+    const client = connect(signMediaToken({ agentId: 'agent-1', podeVerSilent: true }));
+    client.on('connect_error', (err) => {
+      expect(err.message).toBe('Unauthorized');
+      client.close();
+      done();
+    });
+  });
+
   test('emitToAgent only delivers to the connection in that agent room', (done) => {
     const tokenA = jwt.sign({ agentId: 'agent-a', role: 'agent' }, process.env.JWT_SECRET);
     const tokenB = jwt.sign({ agentId: 'agent-b', role: 'agent' }, process.env.JWT_SECRET);

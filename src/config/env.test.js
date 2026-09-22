@@ -20,6 +20,7 @@ describe('loadConfig', () => {
     process.env.BAILEYS_SESSIONS_DIR = './.baileys-sessions';
     process.env.MEDIA_STORAGE_DIR = './.media-storage';
     process.env.PUBLIC_BASE_URL = 'http://localhost:3000';
+    process.env.MEDIA_TOKEN_SECRET = 'media-secret';
   }
 
   test('throws when DATABASE_URL is missing', () => {
@@ -92,6 +93,7 @@ describe('loadConfig', () => {
       mediaStorageDir: './.media-storage',
       frontendOrigin: null,
       publicBaseUrl: 'http://localhost:3000',
+      mediaTokenSecret: 'media-secret',
     });
   });
 
@@ -148,6 +150,7 @@ describe('loadConfig — conteudo das variaveis em producao', () => {
     process.env.BAILEYS_SESSIONS_DIR = '/var/data/baileys-sessions';
     process.env.MEDIA_STORAGE_DIR = '/var/data/media';
     process.env.PUBLIC_BASE_URL = 'https://dw-whatsapp-backend.onrender.com';
+    process.env.MEDIA_TOKEN_SECRET = '9c1f0b7a4e2d8f6c3b5a7e9d1c4f8b2a6e0d3c7f5b9a1e4d8c2f6b0a3e7d5c9f';
   });
 
   afterAll(() => {
@@ -214,5 +217,21 @@ describe('loadConfig — conteudo das variaveis em producao', () => {
     process.env.JWT_SECRET = 'secret';
     process.env.PUBLIC_BASE_URL = 'http://localhost:3000';
     expect(() => loadConfig()).not.toThrow();
+  });
+
+
+  test('exige MEDIA_TOKEN_SECRET: sem ela nao ha como emitir token de midia', () => {
+    delete process.env.MEDIA_TOKEN_SECRET;
+    expect(() => loadConfig()).toThrow('Missing required environment variables: MEDIA_TOKEN_SECRET');
+  });
+
+  test('recusa MEDIA_TOKEN_SECRET igual ao JWT_SECRET: isso anularia a separacao', () => {
+    process.env.MEDIA_TOKEN_SECRET = process.env.JWT_SECRET;
+    expect(() => loadConfig()).toThrow(/anula a separacao/);
+  });
+
+  test('recusa MEDIA_TOKEN_SECRET curta demais', () => {
+    process.env.MEDIA_TOKEN_SECRET = 'curta';
+    expect(() => loadConfig()).toThrow(/MEDIA_TOKEN_SECRET tem menos de/);
   });
 });

@@ -74,11 +74,30 @@ async function findContactByPhoneNumber(phoneNumber) {
   return toContact(result.rows[0]);
 }
 
-async function updateContact(id, { displayName, cityId, internalNote }) {
+/**
+ * Atualização PARCIAL de verdade: campo ausente do objeto permanece como está,
+ * e só `null` apaga (ADR-011). A distinção entre "não enviou" e "enviou null"
+ * some se ela for feita com `|| null`, então ela viaja até o SQL como um
+ * booleano por campo — o mesmo idioma que `setContactSgpLink` já usa aqui.
+ * Nenhuma coluna do SGP é tocada: quem cuida delas é `setContactSgpLink`.
+ */
+async function updateContact(id, patch = {}) {
+  const manterNome = !('displayName' in patch);
+  const manterCidade = !('cityId' in patch);
+  const manterNota = !('internalNote' in patch);
   const result = await getPool().query(
-    `UPDATE contacts SET display_name = $2, city_id = $3, internal_note = $4 WHERE id = $1
+    `UPDATE contacts SET
+       display_name  = CASE WHEN $3::boolean THEN display_name  ELSE $2 END,
+       city_id       = CASE WHEN $5::boolean THEN city_id       ELSE $4::uuid END,
+       internal_note = CASE WHEN $7::boolean THEN internal_note ELSE $6 END
+     WHERE id = $1
      RETURNING id, phone_number, display_name, avatar_path, avatar_checked_at, city_id, internal_note, created_at, sgp_client_id, sgp_contract_id, sgp_document, sgp_first_name`,
-    [id, displayName || null, cityId || null, internalNote || null]
+    [
+      id,
+      manterNome ? null : patch.displayName ?? null, manterNome,
+      manterCidade ? null : patch.cityId ?? null, manterCidade,
+      manterNota ? null : patch.internalNote ?? null, manterNota,
+    ]
   );
   if (result.rowCount === 0) return null;
   return toContact(result.rows[0]);

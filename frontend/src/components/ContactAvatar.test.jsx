@@ -19,6 +19,10 @@ describe('ContactAvatar', () => {
 
   test('shows initials when a stored photo cannot be loaded', () => {
     render(<ContactAvatar contactId="c1" avatarPath="missing.jpg" displayName="Carlos Lima" />);
+    // A primeira falha refaz a URL uma vez com o token atual - a foto pode ter
+    // falhado so porque o token da URL venceu. So a segunda desiste.
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.getByRole('img')).toBeInTheDocument();
     fireEvent.error(screen.getByRole('img'));
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.getByText('CL')).toBeInTheDocument();

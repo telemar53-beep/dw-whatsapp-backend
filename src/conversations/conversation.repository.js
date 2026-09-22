@@ -572,15 +572,43 @@ async function listInAutomationConversations() {
   return result.rows.map(toConversationSummary);
 }
 
-async function countClosedSince(since) {
+const CLOSED_FILTER_COLUMNS = {
+  channelIds: 'c.channel_id',
+  agentIds: 'c.assigned_agent_id',
+  sectorIds: 'c.sector_id',
+};
+
+// Monta as condicoes opcionais de canal/atendente/setor dos encerrados a partir
+// do indice de placeholder informado. A pagina e o total usam esta mesma funcao
+// com o mesmo objeto de filtros: e o que garante que os dois enxerguem
+// exatamente o mesmo recorte. Filtro ausente ou vazio nao gera condicao.
+function closedFilterClauses(filters, firstIndex) {
+  const conditions = [];
+  const values = [];
+  for (const [key, column] of Object.entries(CLOSED_FILTER_COLUMNS)) {
+    const ids = filters && filters[key];
+    if (!Array.isArray(ids) || ids.length === 0) continue;
+    values.push(ids);
+    conditions.push(`${column} = ANY($${firstIndex + values.length - 1}::uuid[])`);
+  }
+  return { clause: conditions.length > 0 ? ` AND ${conditions.join(' AND ')}` : '', values };
+}
+
+async function countClosedSince(since, filters) {
+  const { clause, values } = closedFilterClauses(filters, 2);
   const result = await getPool().query(
-    `SELECT COUNT(*)::int AS count FROM conversation_events WHERE event_type = 'closed' AND created_at >= $1`,
-    [since]
+    `SELECT COUNT(*)::int AS count
+     FROM conversation_events ce
+     JOIN conversations c ON c.id = ce.conversation_id
+     WHERE ce.event_type = 'closed' AND ce.created_at >= $1${clause}`,
+    [since, ...values]
   );
   return Number(result.rows[0].count);
 }
 
-async function listClosedSince(since, { limit, offset }) {
+async function listClosedSince(since, { limit, offset, filters }) {
+  const { clause, values } = closedFilterClauses(filters, 2);
+  const limitIndex = 2 + values.length;
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
@@ -607,10 +635,10 @@ async function listClosedSince(since, { limit, offset }) {
        ORDER BY m.created_at DESC
        LIMIT 1
      ) lm ON true
-     WHERE ce.event_type = 'closed' AND ce.created_at >= $1
+     WHERE ce.event_type = 'closed' AND ce.created_at >= $1${clause}
      ORDER BY ce.created_at DESC
-     LIMIT $2 OFFSET $3`,
-    [since, limit, offset]
+     LIMIT $${limitIndex} OFFSET $${limitIndex + 1}`,
+    [since, ...values, limit, offset]
   );
   return result.rows.map((row) => ({ ...toConversationSummary(row), closedAt: row.closed_at }));
 }

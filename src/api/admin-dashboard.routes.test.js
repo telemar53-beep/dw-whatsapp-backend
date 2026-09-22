@@ -48,6 +48,19 @@ describe('GET /api/admin/dashboard/conversations', () => {
     });
   });
 
+  test('the closed-today count stays unfiltered: filters belong to the closed-today listing only', async () => {
+    listInProgressConversations.mockResolvedValue([]);
+    listWaitingForAgentConversations.mockResolvedValue([]);
+    listInAutomationConversations.mockResolvedValue([]);
+    countClosedSince.mockResolvedValue(5);
+
+    await request(buildApp())
+      .get('/api/admin/dashboard/conversations?channelId=11111111-1111-4111-8111-111111111111')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(countClosedSince).toHaveBeenCalledWith(expect.any(Date));
+  });
+
   test('returns 403 for a non-admin agent', async () => {
     const res = await request(buildApp())
       .get('/api/admin/dashboard/conversations')
@@ -61,6 +74,11 @@ describe('GET /api/admin/dashboard/conversations', () => {
   });
 });
 
+const SEM_FILTRO = { channelIds: [], agentIds: [], sectorIds: [] };
+const UUID_1 = '11111111-1111-4111-8111-111111111111';
+const UUID_2 = '22222222-2222-4222-8222-222222222222';
+const UUID_3 = '33333333-3333-4333-8333-333333333333';
+
 describe('GET /api/admin/dashboard/conversations/closed-today', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -73,8 +91,8 @@ describe('GET /api/admin/dashboard/conversations/closed-today', () => {
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ items: [{ id: 'conv-1', closedAt: '2026-09-09T10:00:00.000Z' }], hasMore: true });
-    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 1, offset: 0 });
+    expect(res.body).toEqual({ items: [{ id: 'conv-1', closedAt: '2026-09-09T10:00:00.000Z' }], hasMore: true, total: 3 });
+    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 1, offset: 0, filters: SEM_FILTRO });
   });
 
   test('returns hasMore false when the page reaches the end', async () => {
@@ -95,7 +113,7 @@ describe('GET /api/admin/dashboard/conversations/closed-today', () => {
     await request(buildApp())
       .get('/api/admin/dashboard/conversations/closed-today')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
-    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 20, offset: 0 });
+    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 20, offset: 0, filters: SEM_FILTRO });
 
     jest.clearAllMocks();
     listClosedSince.mockResolvedValue([]);
@@ -103,7 +121,7 @@ describe('GET /api/admin/dashboard/conversations/closed-today', () => {
     await request(buildApp())
       .get('/api/admin/dashboard/conversations/closed-today?limit=999')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
-    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 50, offset: 0 });
+    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 50, offset: 0, filters: SEM_FILTRO });
   });
 
   test('clamps negative limit to a positive minimum', async () => {
@@ -113,7 +131,108 @@ describe('GET /api/admin/dashboard/conversations/closed-today', () => {
     await request(buildApp())
       .get('/api/admin/dashboard/conversations/closed-today?limit=-5')
       .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
-    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 1, offset: 0 });
+    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 1, offset: 0, filters: SEM_FILTRO });
+  });
+
+  test('exposes the filtered total alongside the page', async () => {
+    listClosedSince.mockResolvedValue([{ id: 'conv-1' }]);
+    countClosedSince.mockResolvedValue(7);
+
+    const res = await request(buildApp())
+      .get('/api/admin/dashboard/conversations/closed-today?limit=1')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.body.total).toBe(7);
+  });
+
+  test('passes channel, agent and sector filters to both the page and the total', async () => {
+    listClosedSince.mockResolvedValue([]);
+    countClosedSince.mockResolvedValue(0);
+
+    await request(buildApp())
+      .get(`/api/admin/dashboard/conversations/closed-today?channelId=${UUID_1}&agentId=${UUID_2}&sectorId=${UUID_3}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    const esperado = { channelIds: [UUID_1], agentIds: [UUID_2], sectorIds: [UUID_3] };
+    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), { limit: 20, offset: 0, filters: esperado });
+    expect(countClosedSince).toHaveBeenCalledWith(expect.any(Date), esperado);
+  });
+
+  test('the page and the total always receive the very same filter object', async () => {
+    listClosedSince.mockResolvedValue([]);
+    countClosedSince.mockResolvedValue(0);
+
+    await request(buildApp())
+      .get(`/api/admin/dashboard/conversations/closed-today?channelId=${UUID_1}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(listClosedSince.mock.calls[0][1].filters).toBe(countClosedSince.mock.calls[0][1]);
+  });
+
+  test('accepts several comma-separated uuids and drops duplicates', async () => {
+    listClosedSince.mockResolvedValue([]);
+    countClosedSince.mockResolvedValue(0);
+
+    await request(buildApp())
+      .get(`/api/admin/dashboard/conversations/closed-today?channelId=${UUID_1},${UUID_2},${UUID_1}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(countClosedSince).toHaveBeenCalledWith(expect.any(Date), {
+      channelIds: [UUID_1, UUID_2],
+      agentIds: [],
+      sectorIds: [],
+    });
+  });
+
+  test('treats an empty filter param as no filter at all', async () => {
+    listClosedSince.mockResolvedValue([]);
+    countClosedSince.mockResolvedValue(0);
+
+    await request(buildApp())
+      .get('/api/admin/dashboard/conversations/closed-today?channelId=&sectorId=,,')
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(countClosedSince).toHaveBeenCalledWith(expect.any(Date), SEM_FILTRO);
+  });
+
+  test('returns 400 for a filter value that is not a uuid, without touching the database', async () => {
+    for (const query of ['channelId=nao-e-uuid', `agentId=${UUID_1},nao-e-uuid`, 'sectorId=123']) {
+      jest.clearAllMocks();
+      const res = await request(buildApp())
+        .get(`/api/admin/dashboard/conversations/closed-today?${query}`)
+        .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+      expect(res.status).toBe(400);
+      expect(listClosedSince).not.toHaveBeenCalled();
+      expect(countClosedSince).not.toHaveBeenCalled();
+    }
+  });
+
+  test('keeps paginating inside the filtered slice', async () => {
+    listClosedSince.mockResolvedValue([{ id: 'conv-2' }]);
+    countClosedSince.mockResolvedValue(5);
+
+    const res = await request(buildApp())
+      .get(`/api/admin/dashboard/conversations/closed-today?channelId=${UUID_1}&limit=1&offset=3`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(listClosedSince).toHaveBeenCalledWith(expect.any(Date), {
+      limit: 1,
+      offset: 3,
+      filters: { channelIds: [UUID_1], agentIds: [], sectorIds: [] },
+    });
+    expect(res.body).toEqual({ items: [{ id: 'conv-2' }], hasMore: true, total: 5 });
+  });
+
+  test('reports an empty filtered page honestly', async () => {
+    listClosedSince.mockResolvedValue([]);
+    countClosedSince.mockResolvedValue(0);
+
+    const res = await request(buildApp())
+      .get(`/api/admin/dashboard/conversations/closed-today?sectorId=${UUID_3}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+
+    expect(res.body).toEqual({ items: [], hasMore: false, total: 0 });
   });
 
   test('returns 403 for a non-admin agent', async () => {

@@ -86,10 +86,17 @@ router.patch('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   // kind e parent_id mudam o SIGNIFICADO do registro dentro da hierarquia e
   // podem invalidar vinculos que ja existem. Nao corrigir registros em massa em
   // silencio, nao mover clientes automaticamente: 409 e tratamento explicito.
-  const mudaEstrutura = 'kind' in corpo || 'parentId' in corpo;
+  //
+  // A guarda compara VALORES, nao a presenca das chaves. O formulario manda o
+  // registro inteiro a cada salvamento, entao olhar so a presenca fazia toda
+  // edicao comum parecer mudanca estrutural: marcar "Atendida" em Barao de
+  // Tromai devolvia 409 dizendo que 24 contatos usavam o povoado (relato de
+  // 2026-09-22). Mandar kind e parentId IGUAIS aos atuais nao e mudanca.
+  const kind = 'kind' in corpo ? corpo.kind : atual.kind;
+  const parentId = ('parentId' in corpo ? corpo.parentId : atual.parentId) || null;
+  const mudaEstrutura = kind !== atual.kind || parentId !== (atual.parentId || null);
+
   if (mudaEstrutura) {
-    const kind = 'kind' in corpo ? corpo.kind : atual.kind;
-    const parentId = 'parentId' in corpo ? corpo.parentId : atual.parentId;
     const erro = await validarEstrutura({ kind, parentId });
     if (erro) return res.status(400).json({ error: erro });
 

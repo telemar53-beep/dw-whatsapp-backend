@@ -316,3 +316,87 @@ describe('DELETE /api/admin/cities/:id — com filhas', () => {
     expect(deleteCity).not.toHaveBeenCalled();
   });
 });
+
+// Bug real relatado em 2026-09-22: marcar "Atendida" em Barao de Tromai
+// devolvia 409 dizendo que 24 contatos usavam o povoado. O formulario manda o
+// registro inteiro, e a guarda olhava a PRESENCA das chaves kind/parentId em
+// vez de comparar VALORES — entao toda edicao comum parecia mudanca estrutural.
+describe('PATCH /api/admin/cities/:id — edicao comum nao e mudanca estrutural', () => {
+  const POVOADO = { id: 'p1', name: 'Barao de Tromai', kind: 'locality', parentId: 'm1' };
+  const COM_CONTATOS = { contatosComoMunicipio: 0, contatosComoLocalidade: 24, filhas: 0, avisos: 0 };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findCityById.mockImplementation(async (id) => (
+      id === 'p1' ? POVOADO : { id: 'm1', name: 'Candido Mendes', kind: 'city', parentId: null }
+    ));
+    dependenciasDoLugar.mockResolvedValue(COM_CONTATOS);
+    updatePlace.mockImplementation(async (id, patch) => ({ ...POVOADO, ...patch }));
+  });
+
+  test('marcar Atendida numa localidade com contatos NAO devolve 409', async () => {
+    const res = await request(buildApp()).patch('/api/admin/cities/p1').set('Authorization', ADMIN())
+      .send({ name: 'Barao de Tromai', kind: 'locality', parentId: 'm1', sgpPop: null, active: true, served: true, note: '' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.served).toBe(true);
+  });
+
+  test('o tipo e o municipio continuam os mesmos depois da edicao comum', async () => {
+    await request(buildApp()).patch('/api/admin/cities/p1').set('Authorization', ADMIN())
+      .send({ name: 'Barao de Tromai', kind: 'locality', parentId: 'm1', sgpPop: null, active: true, served: true, note: '' });
+
+    const patch = updatePlace.mock.calls[0][1];
+    // kind e parentId iguais aos atuais nao precisam entrar no UPDATE, e o que
+    // NAO pode e virarem outra coisa ou sumirem.
+    if ('kind' in patch) expect(patch.kind).toBe('locality');
+    if ('parentId' in patch) expect(patch.parentId).toBe('m1');
+    expect(patch.served).toBe(true);
+  });
+
+  test('desativar tambem e edicao comum', async () => {
+    const res = await request(buildApp()).patch('/api/admin/cities/p1').set('Authorization', ADMIN())
+      .send({ kind: 'locality', parentId: 'm1', active: false });
+
+    expect(res.status).toBe(200);
+    expect(updatePlace).toHaveBeenCalledWith('p1', expect.objectContaining({ active: false }));
+  });
+
+  test('payload sem kind nem parentId segue funcionando', async () => {
+    const res = await request(buildApp()).patch('/api/admin/cities/p1').set('Authorization', ADMIN())
+      .send({ served: true });
+
+    expect(res.status).toBe(200);
+    expect(updatePlace).toHaveBeenCalledWith('p1', { served: true });
+  });
+
+  test('registro legado pode ter served alterado sem esbarrar na validacao de kind', async () => {
+    const legado = { id: 'l1', name: 'Aurizona', kind: 'unclassified', parentId: null };
+    findCityById.mockResolvedValue(legado);
+    updatePlace.mockImplementation(async (id, patch) => ({ ...legado, ...patch }));
+    dependenciasDoLugar.mockResolvedValue({ ...COM_CONTATOS, contatosComoLocalidade: 0, contatosComoMunicipio: 10 });
+
+    const res = await request(buildApp()).patch('/api/admin/cities/l1').set('Authorization', ADMIN())
+      .send({ kind: 'unclassified', parentId: null, served: true });
+
+    expect(res.status).toBe(200);
+    expect(updatePlace).toHaveBeenCalledWith('l1', expect.objectContaining({ served: true }));
+  });
+
+  test('mudanca estrutural DE VERDADE com dependencias continua em 409', async () => {
+    const res = await request(buildApp()).patch('/api/admin/cities/p1').set('Authorization', ADMIN())
+      .send({ kind: 'locality', parentId: 'm2', served: true });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('structural change blocked');
+    expect(updatePlace).not.toHaveBeenCalled();
+  });
+
+  test('trocar o tipo com dependencias continua em 409', async () => {
+    const res = await request(buildApp()).patch('/api/admin/cities/p1').set('Authorization', ADMIN())
+      .send({ kind: 'city', parentId: null });
+
+    expect(res.status).toBe(409);
+    expect(updatePlace).not.toHaveBeenCalled();
+  });
+});

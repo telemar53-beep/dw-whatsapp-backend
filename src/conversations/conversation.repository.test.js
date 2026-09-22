@@ -20,6 +20,7 @@ const {
   adminTransferConversation,
   adminCloseConversation,
   getConversationWithContact,
+  findConversationStatusById,
   findConversationByProtocolNumber,
   listConversationsByContact,
   listWaitingConversations,
@@ -833,6 +834,25 @@ describe('conversation repository', () => {
     expect(activated.status).toBe('waiting');
     const found = await findOpenConversation(contactId, channelId);
     expect(found.status).toBe('waiting');
+  });
+
+  test('findConversationStatusById devolve o status de cada estado possivel', async () => {
+    const agent = await createAgent({ email: 'status-1@dw.com', password: 'secret123', role: 'agent' });
+    const silenciosa = await createConversation(contactId, channelId, null, 'silent');
+    expect(await findConversationStatusById(silenciosa.id)).toBe('silent');
+
+    await activateConversation(silenciosa.id);
+    expect(await findConversationStatusById(silenciosa.id)).toBe('waiting');
+
+    await claimConversation(silenciosa.id, agent.id);
+    expect(await findConversationStatusById(silenciosa.id)).toBe('assigned');
+
+    await closeConversation(silenciosa.id, agent.id);
+    expect(await findConversationStatusById(silenciosa.id)).toBe('closed');
+  });
+
+  test('findConversationStatusById devolve null quando a conversa nao existe', async () => {
+    expect(await findConversationStatusById('00000000-0000-0000-0000-000000000000')).toBeNull();
   });
 
   test('activateConversation returns null for a conversation that is not silent', async () => {

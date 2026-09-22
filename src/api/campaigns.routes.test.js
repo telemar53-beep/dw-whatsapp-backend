@@ -50,12 +50,12 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: 'Aviso importante', recipients: '5511999990000\n5511999990001,Maria' });
 
     expect(res.status).toBe(201);
     expect(createCampaign).toHaveBeenCalledWith(expect.objectContaining({
-      channelId: 'channel-1', messageType: 'text', content: 'Aviso importante', createdBy: 'agent-1', totalRecipients: 2,
+      channelId: 'channel-1', messageType: 'text', content: 'Aviso importante', createdBy: 'admin-1', totalRecipients: 2,
     }));
     expect(createCampaignRecipients).toHaveBeenCalledWith('campaign-1', [
       { rawPhoneNumber: '5511999990000', phoneNumber: '5511999990000', displayName: null, status: 'pending' },
@@ -72,7 +72,7 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-2', templateId: 'tpl-1', templateVariables: ['Joao'], recipients: '5511999990000' });
 
     expect(res.status).toBe(201);
@@ -86,7 +86,7 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: 'Oi', recipients: 'abc\n,SemNumero' });
 
     expect(res.status).toBe(400);
@@ -100,7 +100,7 @@ describe('POST /api/campaigns', () => {
 
     await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: 'Oi', recipients: '5511999990000\n5511999990000' });
 
     expect(createCampaign).toHaveBeenCalledWith(expect.objectContaining({ totalRecipients: 1 }));
@@ -116,7 +116,7 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: 'Oi', recipients: 'abc\n5511999990000' });
 
     expect(res.status).toBe(201);
@@ -132,7 +132,7 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: 'Oi', recipients: '5511999990000' });
 
     expect(res.status).toBe(201);
@@ -150,7 +150,7 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: 'Oi', recipients: '5511999990000' });
 
     expect(res.status).toBe(201);
@@ -163,7 +163,7 @@ describe('POST /api/campaigns', () => {
   test('returns 400 when channelId is missing', async () => {
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ content: 'Oi', recipients: '5511999990000' });
 
     expect(res.status).toBe(400);
@@ -179,7 +179,7 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: 'Oi', recipients: '5511999990000' });
 
     expect(res.status).toBe(400);
@@ -191,7 +191,7 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: '   ', recipients: '5511999990000' });
 
     expect(res.status).toBe(400);
@@ -205,7 +205,7 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: 'Oi', recipients: hugeList });
 
     expect(res.status).toBe(400);
@@ -219,7 +219,7 @@ describe('POST /api/campaigns', () => {
 
     const res = await request(buildApp())
       .post('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
       .send({ channelId: 'channel-1', content: 'Oi', recipients: '5511999990000' });
 
     expect(res.status).toBe(500);
@@ -232,7 +232,7 @@ describe('GET /api/campaigns', () => {
 
   test('lists campaigns', async () => {
     listCampaigns.mockResolvedValue([{ id: 'campaign-1' }]);
-    const res = await request(buildApp()).get('/api/campaigns').set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    const res = await request(buildApp()).get('/api/campaigns').set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual([{ id: 'campaign-1' }]);
   });
@@ -242,7 +242,7 @@ describe('GET /api/campaigns', () => {
 
     const res = await request(buildApp())
       .get('/api/campaigns')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(Array.isArray(res.body)).toBe(true);
     expect(listCampaigns).toHaveBeenCalledWith();
@@ -254,7 +254,7 @@ describe('GET /api/campaigns', () => {
 
     const res = await request(buildApp())
       .get('/api/campaigns?ordem=nome&busca=aviso')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(Array.isArray(res.body)).toBe(true);
     expect(listCampaigns).toHaveBeenCalledWith();
@@ -266,7 +266,7 @@ describe('GET /api/campaigns', () => {
 
     const res = await request(buildApp())
       .get('/api/campaigns?limit=1')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ items: [{ id: 'campaign-1' }], total: 3, hasMore: true });
@@ -279,7 +279,7 @@ describe('GET /api/campaigns', () => {
 
     await request(buildApp())
       .get('/api/campaigns?offset=40')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(listCampaigns).toHaveBeenCalledWith({ limit: 20, offset: 40 });
   });
@@ -290,7 +290,7 @@ describe('GET /api/campaigns', () => {
 
     const res = await request(buildApp())
       .get('/api/campaigns?limit=2&offset=2')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.body.hasMore).toBe(false);
     expect(res.body.total).toBe(4);
@@ -302,7 +302,7 @@ describe('GET /api/campaigns', () => {
 
     const res = await request(buildApp())
       .get('/api/campaigns?limit=20&offset=99')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.body).toEqual({ items: [], total: 2, hasMore: false });
   });
@@ -312,7 +312,7 @@ describe('GET /api/campaigns', () => {
       jest.clearAllMocks();
       const res = await request(buildApp())
         .get(`/api/campaigns?${query}`)
-        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+        .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
       expect(res.status).toBe(400);
       expect(listCampaigns).not.toHaveBeenCalled();
@@ -326,7 +326,7 @@ describe('GET /api/campaigns', () => {
 
     const res = await request(buildApp())
       .get('/api/campaigns?limit=100')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.status).toBe(200);
     expect(listCampaigns).toHaveBeenCalledWith({ limit: 100, offset: 0 });
@@ -340,7 +340,7 @@ describe('GET /api/campaigns/:id/recipients', () => {
   function pedir(query = '') {
     return request(buildApp())
       .get(`/api/campaigns/${CAMPAIGN_ID}/recipients${query}`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
   }
 
   beforeEach(() => {
@@ -447,7 +447,7 @@ describe('GET /api/campaigns/:id/recipients', () => {
   test('id que nao e uuid devolve 404 pelo guard do router', async () => {
     const res = await request(buildApp())
       .get('/api/campaigns/nao-e-uuid/recipients')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.status).toBe(404);
   });
@@ -463,7 +463,7 @@ describe('GET /api/campaigns/:id/recipients', () => {
 
     const res = await request(buildApp())
       .get(`/api/campaigns/${CAMPAIGN_ID}`)
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.body.recipients).toEqual([{ id: 'r1' }, { id: 'r2' }]);
     expect(listCampaignRecipientsPage).not.toHaveBeenCalled();
@@ -477,7 +477,7 @@ describe('GET /api/campaigns/:id', () => {
 
     const res = await request(buildApp())
       .get('/api/campaigns/11111111-1111-1111-1111-111111111111')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.status).toBe(200);
     expect(res.body.id).toBe('campaign-1');
@@ -488,16 +488,99 @@ describe('GET /api/campaigns/:id', () => {
     findCampaignById.mockResolvedValue(null);
     const res = await request(buildApp())
       .get('/api/campaigns/22222222-2222-2222-2222-222222222222')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
     expect(res.status).toBe(404);
   });
 
   test('returns 404 for a malformed id', async () => {
     const res = await request(buildApp())
       .get('/api/campaigns/not-a-uuid')
-      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+      .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
 
     expect(res.status).toBe(404);
     expect(findCampaignById).not.toHaveBeenCalled();
+  });
+});
+
+describe('nivel de acesso da area de Campanhas', () => {
+  const ID = '11111111-1111-4111-8111-111111111111';
+
+  // As quatro rotas do arquivo, para que nenhuma fique de fora do gate.
+  const ROTAS = [
+    ['get', '/api/campaigns'],
+    ['get', `/api/campaigns/${ID}`],
+    ['get', `/api/campaigns/${ID}/recipients`],
+    ['post', '/api/campaigns'],
+  ];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listCampaigns.mockResolvedValue([]);
+    findCampaignById.mockResolvedValue({ id: 'campaign-1' });
+    listCampaignRecipients.mockResolvedValue([]);
+    listCampaignRecipientsPage.mockResolvedValue([]);
+    countCampaignRecipientsByStatus.mockResolvedValue({ pending: 0, sent: 0, failed: 0, skipped: 0 });
+  });
+
+  test('atendente recebe 403 em todas as rotas, sem chegar ao banco', async () => {
+    for (const [metodo, caminho] of ROTAS) {
+      jest.clearAllMocks();
+      const res = await request(buildApp())[metodo](caminho)
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`)
+        .send({});
+
+      expect(res.status).toBe(403);
+      expect(res.body).toEqual({ error: 'Insufficient permissions' });
+      expect(listCampaigns).not.toHaveBeenCalled();
+      expect(findCampaignById).not.toHaveBeenCalled();
+      expect(createCampaign).not.toHaveBeenCalled();
+      expect(enqueueCampaignRecipient).not.toHaveBeenCalled();
+    }
+  });
+
+  test('administrador entra em todas as rotas de leitura', async () => {
+    for (const [, caminho] of ROTAS.filter(([metodo]) => metodo === 'get')) {
+      const res = await request(buildApp()).get(caminho)
+        .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`);
+      expect(res.status).toBe(200);
+    }
+  });
+
+  test('gerente entra em todas as rotas de leitura, igual ao administrador', async () => {
+    for (const [, caminho] of ROTAS.filter(([metodo]) => metodo === 'get')) {
+      const res = await request(buildApp()).get(caminho)
+        .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`);
+      expect(res.status).toBe(200);
+    }
+  });
+
+  test('gerente cria campanha normalmente', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch1', type: 'baileys', status: 'connected', config: {} });
+    createCampaign.mockResolvedValue({ id: 'campaign-1', channelId: 'ch1' });
+    createCampaignRecipients.mockResolvedValue([{ id: 'r1', phoneNumber: '+5511900000001', status: 'pending' }]);
+    enqueueCampaignRecipient.mockResolvedValue(undefined);
+
+    const res = await request(buildApp())
+      .post('/api/campaigns')
+      .set('Authorization', `Bearer ${tokenFor('manager-1', 'manager')}`)
+      .send({ channelId: 'ch1', name: 'Aviso', content: 'ola', recipients: '+5511900000001' });
+
+    expect(res.status).toBe(201);
+    expect(createCampaign).toHaveBeenCalled();
+  });
+
+  test('o atendente e barrado antes do guard de uuid: 403, nao 404', async () => {
+    const res = await request(buildApp())
+      .get('/api/campaigns/nao-e-uuid')
+      .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+
+    // A permissao vem antes do router.param, entao o 403 nao revela se a
+    // campanha existe nem se o id era valido.
+    expect(res.status).toBe(403);
+  });
+
+  test('sem token continua sendo 401, nao 403', async () => {
+    const res = await request(buildApp()).get('/api/campaigns');
+    expect(res.status).toBe(401);
   });
 });

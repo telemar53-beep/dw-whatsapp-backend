@@ -52,12 +52,39 @@ describe('rotas', () => {
   });
 
   test('/campaigns/abc redireciona para /campanhas/abc', async () => {
-    loginAs({ id: 'a1', role: 'agent' });
+    loginAs({ id: 'a1', role: 'admin' });
     api.getCampaign.mockResolvedValue({ id: 'abc', name: 'Promo', sentCount: 0, failedCount: 0, skippedCount: 0, totalRecipients: 0, processedCount: 0, recipients: [] });
     window.history.pushState({}, '', '/campaigns/abc');
     render(<App />);
     expect(await screen.findByRole('heading', { name: 'Promo' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/campanhas/abc');
+  });
+
+  test('atendente em /campanhas vê acesso negado dentro do shell', async () => {
+    loginAs({ id: 'a1', role: 'agent' });
+    window.history.pushState({}, '', '/campanhas');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: /sem acesso a campanhas/i })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: /navegação principal/i })).toBeInTheDocument();
+  });
+
+  test('atendente tambem nao entra pelo detalhe nem pela url legada', async () => {
+    for (const url of ['/campanhas/abc', '/campaigns/abc']) {
+      loginAs({ id: 'a1', role: 'agent' });
+      window.history.pushState({}, '', url);
+      const { unmount } = render(<App />);
+      expect(await screen.findByRole('heading', { name: /sem acesso a campanhas/i })).toBeInTheDocument();
+      expect(api.getCampaign).not.toHaveBeenCalled();
+      unmount();
+    }
+  });
+
+  test('gerente entra em /campanhas', async () => {
+    loginAs({ id: 'm1', role: 'manager' });
+    api.listCampaigns.mockResolvedValue([]);
+    window.history.pushState({}, '', '/campanhas');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: /campanhas/i })).toBeInTheDocument();
   });
 
   test('/configuracoes leva o admin à primeira página permitida', async () => {

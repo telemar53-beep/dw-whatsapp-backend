@@ -27,9 +27,17 @@ describe('NAV_ITEMS', () => {
   test('tem os cinco itens na ordem do menu', () => {
     expect(NAV_ITEMS.map((i) => i.label)).toEqual(['Atendimento', 'Supervisão', 'Campanhas', 'Relatórios', 'Configurações']);
   });
-  test('Supervisão e Configurações exigem nível admin', () => {
+  test('Supervisão, Campanhas e Configurações exigem nível admin', () => {
     expect(NAV_ITEMS.find((i) => i.key === 'supervisao').level).toBe('admin');
     expect(NAV_ITEMS.find((i) => i.key === 'configuracoes').level).toBe('admin');
+    expect(NAV_ITEMS.find((i) => i.key === 'campanhas').level).toBe('admin');
+  });
+
+  test('o nível de Campanhas vale para administrador e gerente, e não para atendente', () => {
+    const campanhas = NAV_ITEMS.find((i) => i.key === 'campanhas');
+    expect(hasLevel({ role: 'admin' }, campanhas.level)).toBe(true);
+    expect(hasLevel({ role: 'manager' }, campanhas.level)).toBe(true);
+    expect(hasLevel({ role: 'agent' }, campanhas.level)).toBe(false);
   });
 });
 

@@ -10,6 +10,7 @@ const {
   listWaitingConversations,
   listConversationsByAgent,
   getConversationWithContact,
+  findConversationStatusById,
   claimConversation,
   transferConversation,
   closeConversation,
@@ -212,11 +213,26 @@ router.get('/:id/messages', async (req, res) => {
   if (!conversation) {
     return res.status(404).json({ error: 'Conversation not found' });
   }
+  // Conversa silenciada e um disparo (campanha ou SGP) que o cliente ainda nao
+  // respondeu: nao esta em fila nenhuma e ninguem deveria estar atendendo.
+  // Admin e gerente continuam lendo, que e como se audita o que foi enviado.
+  // O criterio e o status, nunca a posse: ler a conversa da fila antes de
+  // assumir e o fluxo normal do atendente e precisa continuar valendo.
+  if (conversation.status === 'silent' && !hasAdminLevelAccess(req.agent)) {
+    return res.status(403).json({ error: 'This conversation is not available until the customer replies' });
+  }
   const messages = await listMessagesByConversation(req.params.id);
   res.json(messages);
 });
 
 router.post('/:id/claim', async (req, res) => {
+  // A guarda fica aqui, e nao em claimConversation: a mesma funcao e usada
+  // por POST /start para adotar legitimamente uma conversa dormente, e mexer
+  // nela quebraria essa adocao. Conversa da fila continua sendo assumida
+  // normalmente - so a silenciada, que nao esta em fila nenhuma, e barrada.
+  if (!hasAdminLevelAccess(req.agent) && (await findConversationStatusById(req.params.id)) === 'silent') {
+    return res.status(403).json({ error: 'This conversation is not available until the customer replies' });
+  }
   const conversation = await claimConversation(req.params.id, req.agent.agentId);
   if (!conversation) {
     return res.status(409).json({ error: 'Conversation already assigned or closed' });
@@ -439,6 +455,11 @@ router.post('/:id/transfer', async (req, res) => {
     return res.status(400).json({ error: 'toAgentId is required' });
   }
   const isAdmin = hasAdminLevelAccess(req.agent);
+  // Mesma regra do claim: transferir uma conversa silenciada seria uma forma
+  // indireta de assumi-la, entao o atendente tambem nao pode.
+  if (!isAdmin && (await findConversationStatusById(req.params.id)) === 'silent') {
+    return res.status(403).json({ error: 'This conversation is not available until the customer replies' });
+  }
   const conversation = isAdmin
     ? await adminTransferConversation(req.params.id, toAgentId)
     : await transferConversation(req.params.id, req.agent.agentId, toAgentId);

@@ -59,14 +59,20 @@ describe('iniciaisDaEmpresa', () => {
 });
 
 describe('SideNav', () => {
-  test('atendente vê Atendimento, Campanhas e Relatórios; não vê Supervisão nem Configurações', () => {
+  test('atendente vê Atendimento e Relatórios; não vê Campanhas, Supervisão nem Configurações', () => {
     renderNav({ role: 'agent' });
     expect(screen.getByRole('link', { name: /atendimento/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /campanhas/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /relatórios/i })).toBeInTheDocument();
+    // Campanha dispara mensagem real: a area e administrativa.
+    expect(screen.queryByRole('link', { name: /campanhas/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /supervisão/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /configurações/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /atendimentos encerrados/i })).toBeInTheDocument();
+  });
+
+  test('gerente vê Campanhas no menu, igual ao administrador', () => {
+    renderNav({ role: 'manager' });
+    expect(screen.getByRole('link', { name: /campanhas/i })).toBeInTheDocument();
   });
 
   test('gerente vê Supervisão e Configurações e não vê o botão de encerrados', () => {

@@ -290,6 +290,146 @@ describe('startOutboundWorker', () => {
     expect(broadcast).not.toHaveBeenCalled();
   });
 
+  // Conversa silenciada e um disparo (campanha ou SGP) que o cliente ainda
+  // nao respondeu: nao esta em fila nenhuma, ninguem pode atende-la, e o
+  // payload carrega telefone, documento do SGP, nota interna e o texto todo.
+  // Nenhum consumidor da tela faz nada com ele, entao nao sai do servidor.
+  test('conversa silenciada: nenhum message:new sai, nem global nem direcionado', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-silent',
+      status: 'silent',
+      assignedAgentId: null,
+      contactPhoneNumber: '5511999998888',
+      contactSgpDocument: '12345678900',
+      contactInternalNote: 'cliente reclamou na semana passada',
+    });
+    findChannelById.mockResolvedValue({
+      id: 'channel-1',
+      type: 'meta_cloud',
+      config: { phoneNumberId: '123', accessToken: 'tok' },
+    });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' });
+    recordMessageSent.mockResolvedValue({ id: 'msg-1', status: 'sent', whatsappMessageId: 'wamid.OUT1' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-silent', channelId: 'channel-1', content: 'Seu boleto vence em 10/09' });
+
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(emitToAgent).not.toHaveBeenCalled();
+  });
+
+  test('conversa silenciada: tambem nao emite nada no caminho de falha', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-silent',
+      status: 'silent',
+      assignedAgentId: null,
+      contactPhoneNumber: '5511999998888',
+    });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    metaCloudAdapter.sendTextMessage.mockRejectedValue(new Error('network error'));
+    markMessageFailed.mockResolvedValue({ id: 'msg-2', status: 'failed' });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      handler({ messageId: 'msg-2', conversationId: 'conv-silent', channelId: 'channel-1', content: 'Ola' })
+    ).rejects.toThrow('network error');
+
+    expect(broadcast).not.toHaveBeenCalled();
+    expect(emitToAgent).not.toHaveBeenCalled();
+  });
+
+  // O caso que a guarda NAO pode alcancar: conversa em triagem pela IA esta
+  // em waiting e tambem nao tem dono. E a correcao de 2026-09-15.
+  test('waiting sem dono continua com o broadcast global, no sucesso', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      status: 'waiting',
+      assignedAgentId: null,
+      contactPhoneNumber: '5511999998888',
+    });
+    findChannelById.mockResolvedValue({
+      id: 'channel-1',
+      type: 'meta_cloud',
+      config: { phoneNumberId: '123', accessToken: 'tok' },
+    });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' });
+    recordMessageSent.mockResolvedValue({ id: 'msg-1', status: 'sent', whatsappMessageId: 'wamid.OUT1' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Segue seu boleto' });
+
+    expect(broadcast).toHaveBeenCalledWith('message:new', {
+      conversation: { id: 'conv-1', status: 'waiting', assignedAgentId: null, contactPhoneNumber: '5511999998888' },
+      message: { id: 'msg-1', status: 'sent', whatsappMessageId: 'wamid.OUT1' },
+    });
+  });
+
+  test('waiting sem dono continua com o broadcast global, na falha', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      status: 'waiting',
+      assignedAgentId: null,
+      contactPhoneNumber: '5511999998888',
+    });
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });
+    metaCloudAdapter.sendTextMessage.mockRejectedValue(new Error('network error'));
+    markMessageFailed.mockResolvedValue({ id: 'msg-2', status: 'failed' });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      handler({ messageId: 'msg-2', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' })
+    ).rejects.toThrow('network error');
+
+    expect(broadcast).toHaveBeenCalledWith('message:new', expect.objectContaining({
+      message: { id: 'msg-2', status: 'failed' },
+    }));
+  });
+
+  test('conversa com dono continua recebendo message:updated direcionado, e nada global', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      status: 'assigned',
+      assignedAgentId: 'agent-1',
+      contactPhoneNumber: '5511999998888',
+    });
+    findChannelById.mockResolvedValue({
+      id: 'channel-1',
+      type: 'meta_cloud',
+      config: { phoneNumberId: '123', accessToken: 'tok' },
+    });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' });
+    recordMessageSent.mockResolvedValue({ id: 'msg-1', status: 'sent', whatsappMessageId: 'wamid.OUT1' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola cliente' });
+
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:updated', {
+      conversationId: 'conv-1',
+      message: { id: 'msg-1', status: 'sent', whatsappMessageId: 'wamid.OUT1' },
+    });
+    expect(broadcast).not.toHaveBeenCalled();
+  });
+
+  // Se um dia alguem atribuir uma conversa silenciada, o dono ganha
+  // precedencia: a guarda nao pode roubar o aviso de quem esta atendendo.
+  test('silent COM dono continua avisando o dono', async () => {
+    getConversationWithContact.mockResolvedValue({
+      id: 'conv-1',
+      status: 'silent',
+      assignedAgentId: 'agent-1',
+      contactPhoneNumber: '5511999998888',
+    });
+    findChannelById.mockResolvedValue({
+      id: 'channel-1',
+      type: 'meta_cloud',
+      config: { phoneNumberId: '123', accessToken: 'tok' },
+    });
+    metaCloudAdapter.sendTextMessage.mockResolvedValue({ whatsappMessageId: 'wamid.OUT1' });
+    recordMessageSent.mockResolvedValue({ id: 'msg-1', status: 'sent', whatsappMessageId: 'wamid.OUT1' });
+
+    await handler({ messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: 'Ola' });
+
+    expect(emitToAgent).toHaveBeenCalledWith('agent-1', 'message:updated', expect.any(Object));
+    expect(broadcast).not.toHaveBeenCalled();
+  });
+
   test('falls back to findMessageById for the emit when markMessageFailed returns null (status webhook already recorded the real motivo)', async () => {
     getConversationWithContact.mockResolvedValue({
       id: 'conv-1',

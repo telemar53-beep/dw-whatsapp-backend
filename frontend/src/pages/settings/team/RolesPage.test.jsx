@@ -17,6 +17,14 @@ describe('RolesPage', () => {
     const cells = within(openai).getAllByRole('cell').map((c) => c.textContent);
     expect(cells).toEqual(['Não', 'Não', 'Sim', 'Sim']);
   });
+  test('a linha de Campanhas segue o nível administrativo, sem edição nesta tela', () => {
+    useAuth.mockReturnValue({ token: 'tok', agent: { role: 'admin' } });
+    renderInShell(<RolesPage />, { path: '/configuracoes/equipe/perfis' });
+    const campanhas = screen.getByRole('row', { name: /campanhas/i });
+    // A tabela é gerada de NAV_ITEMS: mudar o level lá muda esta linha sozinho.
+    expect(within(campanhas).getAllByRole('cell').map((c) => c.textContent)).toEqual(['Não', 'Sim', 'Sim', 'Sim']);
+  });
+
   test('lista as regras que não dependem de página', () => {
     useAuth.mockReturnValue({ token: 'tok', agent: { role: 'admin' } });
     renderInShell(<RolesPage />, { path: '/configuracoes/equipe/perfis' });

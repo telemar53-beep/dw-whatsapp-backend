@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../auth/auth.middleware');
+const { requireAuth, requireRole } = require('../auth/auth.middleware');
 const { findChannelById } = require('../channels/channel.repository');
 const { findTemplateById } = require('../templates/template.repository');
 const { substituteVariables } = require('../templates/template-validator');
@@ -21,6 +21,12 @@ const { enqueueCampaignRecipient } = require('../queue/campaign-queue');
 
 const router = express.Router();
 router.use(requireAuth);
+// Disparo em massa e acao de nivel administrativo: criar uma campanha ja
+// enfileira mensagem real para ate 2000 numeros. requireRole('admin') aqui
+// vale admin + gerente, e no router cobre todas as rotas do arquivo, inclusive
+// as que vierem depois. Fica antes do router.param de proposito: assim um
+// atendente recebe 403 mesmo num id malformado, em vez de 404.
+router.use(requireRole('admin'));
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

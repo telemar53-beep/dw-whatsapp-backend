@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getConversationHistory, getMessages } from '../services/api';
 import MessageAttachment from './MessageAttachment';
 import WaDialog, { waGhostButtonClass } from './WaDialog';
-import { IconArrowLeft, IconHistory } from './icons/WaIcons';
+import { IconArrowLeft } from './icons/WaIcons';
 import { AsyncState } from './ui';
 
 // Quem atendeu e quem encerrou nem sempre é a mesma pessoa: o admin pode
@@ -18,8 +18,24 @@ function quemAtendeu(conversation) {
   return atendeu || (encerrou ? `Encerrado por ${encerrou}` : null);
 }
 
-function linhaDoHistorico(conversation) {
-  return [conversation.channelName, quemAtendeu(conversation), conversation.closeReasonName, statusLabel(conversation.status)]
+function diaDoAtendimento(createdAt) {
+  if (!createdAt) return '--';
+  const d = new Date(createdAt);
+  return Number.isNaN(d.getTime()) ? '--' : String(d.getDate()).padStart(2, '0');
+}
+
+function mesDoAtendimento(createdAt) {
+  if (!createdAt) return '';
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase();
+}
+
+// A data completa fica na linha de apoio, junto de quem atendeu e do canal: o
+// bloco da esquerda mostra so dia e mes. Nada de duracao nem hora de
+// encerramento — a consulta do historico nao devolve nem uma nem outra.
+function linhaDeApoio(conversation) {
+  return [inicioDoAtendimento(conversation.createdAt), quemAtendeu(conversation), conversation.channelName, statusLabel(conversation.status)]
     .filter(Boolean)
     .join(' · ');
 }
@@ -61,24 +77,30 @@ function ConversationHistoryModal({ contactId, onClose }) {
       .catch(() => {});
   }
 
+  const voltarRef = useRef(null);
+  // A troca lista -> detalhe muda a tela inteira: o foco tem de acompanhar,
+  // senao ele fica num botao que nao existe mais e o leitor de tela nao e
+  // avisado de nada.
+  useEffect(() => {
+    if (selected && voltarRef.current) voltarRef.current.focus();
+  }, [selected]);
+
+  const titulo = selected
+    ? `${selected.closeReasonName || 'Atendimento'} · ${inicioDoAtendimento(selected.createdAt)}`
+    : 'Atendimentos anteriores';
+  const descricao = selected
+    ? [quemAtendeu(selected), selected.channelName].filter(Boolean).join(' · ')
+    : `${history.length} ${history.length === 1 ? 'atendimento encerrado' : 'atendimentos encerrados'}`;
+
   return (
-    <WaDialog variant="history" onClose={onClose} closeOnBackdrop ariaLabel="Atendimentos anteriores" size="max-w-3xl">
+    <WaDialog variant="history" onClose={onClose} closeOnBackdrop title={titulo} description={descricao} size="max-w-[640px]">
       {selected ? (
         <>
-          <div className="flex shrink-0 items-center gap-3 border-b border-wa-border px-4 py-3">
-            <button
-              onClick={() => setSelected(null)}
-              aria-label="Voltar"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-wa-icon hover:bg-wa-hover"
-            >
-              <IconArrowLeft size={20} />
+          <div className="dialog-history-migalha shrink-0">
+            <button ref={voltarRef} onClick={() => setSelected(null)} aria-label="Voltar para atendimentos anteriores" className="dialog-history-voltar">
+              <IconArrowLeft size={16} />
+              Atendimentos anteriores
             </button>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[16px] leading-[21px] text-wa-text">
-                Atendimento · {inicioDoAtendimento(selected.createdAt, ' às ')}
-              </span>
-              <span className="block truncate text-[13px] leading-[17px] text-wa-muted">{selected.channelName}</span>
-            </span>
           </div>
           <dl className="dialog-history-summary">
             <div><dt>Responsável</dt><dd>{selected.assignedAgentName || 'Não informado'}</dd></div>
@@ -110,40 +132,32 @@ function ConversationHistoryModal({ contactId, onClose }) {
           </div>
         </>
       ) : (
-        <>
-          <div className="dialog-history-heading shrink-0 px-6 pb-2 pt-5">
-            <h2 className="text-[17px] leading-[26px] text-wa-text">Atendimentos anteriores</h2>
-          </div>
-          <div className="dialog-history-results wa-scroll min-h-0 flex-1 overflow-y-auto px-6 py-1">
-            <AsyncState status={historyStatus} isEmpty={history.length === 0} emptyMessage="Nenhum atendimento anterior encontrado.">
-              <ul className="dialog-history-list">
-                {history.map((conversation) => (
-                  <li key={conversation.id}>
-                    <button
-                      onClick={() => openConversation(conversation)}
-                      className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-wa-hover"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-wa-avatar text-wa-avatar-text"
-                      >
-                        <IconHistory size={19} />
-                      </span>
-                      <span className="dialog-history-record min-w-0 flex-1">
-                        <span className="block text-[15px] leading-[20px] text-wa-text">
-                          {inicioDoAtendimento(conversation.createdAt)}
-                        </span>
-                        <span className="block truncate text-[13px] leading-[18px] text-wa-muted">
-                          {linhaDoHistorico(conversation)}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </AsyncState>
-          </div>
-        </>
+        <div className="dialog-history-results wa-scroll min-h-0 flex-1 overflow-y-auto">
+          <AsyncState status={historyStatus} isEmpty={history.length === 0} emptyMessage="Nenhum atendimento anterior encontrado.">
+            <ul className="dialog-history-list">
+              {history.map((conversation) => (
+                <li key={conversation.id}>
+                  <button onClick={() => openConversation(conversation)} className="dialog-history-item">
+                    {/* Data em bloco proprio: e o que ordena a leitura. O
+                        motivo sobe para o primeiro nivel, porque num cliente
+                        que volta ele vale mais que a data; a autoria e o canal
+                        descem para a linha de apoio. Antes os quatro campos
+                        dividiam UMA linha de 12px com `truncate`. */}
+                    <span className="dialog-history-data" aria-hidden="true">
+                      <b>{diaDoAtendimento(conversation.createdAt)}</b>
+                      <small>{mesDoAtendimento(conversation.createdAt)}</small>
+                    </span>
+                    <span className="dialog-history-record">
+                      <span className="dialog-history-motivo">{conversation.closeReasonName || 'Sem motivo registrado'}</span>
+                      <span className="dialog-history-apoio">{linhaDeApoio(conversation)}</span>
+                    </span>
+                    <span className="dialog-history-go" aria-hidden="true">›</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </AsyncState>
+        </div>
       )}
       <div className="flex shrink-0 justify-end px-4 py-3">
         <button onClick={onClose} className={waGhostButtonClass}>

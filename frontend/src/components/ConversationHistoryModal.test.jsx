@@ -20,7 +20,9 @@ describe('ConversationHistoryModal', () => {
     ]);
     render(<ConversationHistoryModal contactId="contact-1" onClose={vi.fn()} />);
 
-    expect(await screen.findByText('Berg')).toBeInTheDocument();
+    // O motivo virou o primeiro nivel da linha e a autoria/canal desceram
+    // para a linha de apoio: a asserçao olha o campo, nao a concatenacao.
+    expect(await screen.findByText(/Berg/)).toBeInTheDocument();
     expect(api.getConversationHistory).toHaveBeenCalledWith('contact-1', 'tok-123');
   });
 
@@ -40,7 +42,7 @@ describe('ConversationHistoryModal', () => {
     ]);
     render(<ConversationHistoryModal contactId="contact-1" onClose={vi.fn()} />);
 
-    await userEvent.click(await screen.findByText('Berg'));
+    await userEvent.click(await screen.findByText(/Berg/));
 
     await waitFor(() => expect(api.getMessages).toHaveBeenCalledWith('conv-old', 'tok-123'));
     expect(await screen.findByText('Problema resolvido semana passada')).toBeInTheDocument();
@@ -54,7 +56,7 @@ describe('ConversationHistoryModal', () => {
     api.getMessages.mockResolvedValue([]);
     render(<ConversationHistoryModal contactId="contact-1" onClose={vi.fn()} />);
 
-    await userEvent.click(await screen.findByText('Berg'));
+    await userEvent.click(await screen.findByText(/Berg/));
     await waitFor(() => expect(screen.getByRole('button', { name: /voltar/i })).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: /voltar/i }));
 
@@ -92,7 +94,9 @@ describe('quem atendeu, quem encerrou e por quê', () => {
   test('mostra um nome só quando quem atendeu também encerrou', async () => {
     renderComHistorico({ assignedAgentName: 'Tatiane', closedByAgentName: 'Tatiane' });
 
-    expect(await screen.findByText(/DW Telcom 1 · Tatiane/)).toBeInTheDocument();
+    const linha = await screen.findByText(/Tatiane/);
+    expect(linha).toHaveTextContent('DW Telcom 1');
+    expect(linha.textContent.match(/Tatiane/g)).toHaveLength(1);
   });
 
   test('mostra os dois nomes quando o admin encerrou o atendimento de outra pessoa', async () => {
@@ -110,7 +114,7 @@ describe('quem atendeu, quem encerrou e por quê', () => {
   test('sem atendente, mostra só o canal', async () => {
     renderComHistorico({ assignedAgentName: null, closedByAgentName: null, closeReasonName: null });
 
-    expect(await screen.findByText('DW Telcom 1')).toBeInTheDocument();
+    expect(await screen.findByText(/DW Telcom 1/)).toBeInTheDocument();
   });
 
   test('encerrado pela IA, sem atendente, ainda mostra o motivo', async () => {
@@ -135,19 +139,25 @@ describe('horários reais de início', () => {
     expect(rows[0]).toHaveTextContent('19/09/2026 · 20:03');
     expect(rows[1]).toHaveTextContent('19/09/2026 · 09:10');
     expect(rows[2]).toHaveTextContent('19/09/2026 · 14:35');
-    expect(rows[0]).toHaveTextContent('Ana Clara · Troca de senha · Finalizado');
+    // Motivo no primeiro nivel; data, autoria, canal e situacao na de apoio.
+    expect(rows[0]).toHaveTextContent('Troca de senha');
+    expect(rows[0]).toHaveTextContent('Ana Clara');
+    expect(rows[0]).toHaveTextContent('Finalizado');
     expect(screen.queryByText(/23:59/)).not.toBeInTheDocument();
     await userEvent.click(rows[0]);
-    expect(await screen.findByText('Atendimento · 19/09/2026 às 20:03')).toBeInTheDocument();
+    // O nome do dialogo acompanha a vista: era fixo em "Atendimentos
+    // anteriores" mesmo exibindo UMA conversa.
+    expect(await screen.findByRole('heading', { name: /Troca de senha · 19\/09\/2026 · 20:03/ })).toBeInTheDocument();
     expect(screen.getByText('Responsável')).toBeInTheDocument();
-    expect(screen.getByText('Ana Clara')).toBeInTheDocument();
+    // "Ana Clara" aparece na descricao do dialogo e na ficha Responsavel.
+    expect(screen.getAllByText('Ana Clara').length).toBeGreaterThan(0);
     expect(screen.getByText('Finalizado')).toBeInTheDocument();
     expect(screen.queryByText(/Duração|Setor|Assumido|Encerramento/)).not.toBeInTheDocument();
   });
   test('não substitui início ausente por updatedAt', async () => {
     api.getConversationHistory.mockResolvedValue([{ id: 'missing', updatedAt: '2026-09-19T20:03:00', status: 'closed' }]);
     render(<ConversationHistoryModal contactId="same-contact" onClose={vi.fn()} />);
-    expect(await screen.findByText('Início não informado')).toBeInTheDocument();
+    expect(await screen.findByText(/Início não informado/)).toBeInTheDocument();
     expect(screen.queryByText(/20:03/)).not.toBeInTheDocument();
   });
 });

@@ -74,14 +74,7 @@
 .dialog-template-compose:empty {display:none}
 .dialog-template-compose > div:first-child {margin-top:0}
 /* History: aligned chronology and a persistent contextual summary. */
-[data-dialog=history]:has(.dialog-history-heading) {max-width:540px;min-height:0;height:auto;max-height:min(620px,calc(100dvh - 40px))}
-[data-dialog=history] .dialog-history-heading {padding:14px 18px 6px}
-[data-dialog=history] .dialog-history-heading h2 {font-size:17px;line-height:24px}
 [data-dialog=history] .dialog-history-results {flex:0 1 auto;min-height:0;padding:0 18px 4px;overflow-y:auto}
-[data-dialog=history]:has(.dialog-history-heading) > div:last-child {padding:8px 18px}
-[data-dialog=history] .dialog-history-list > li {border-bottom:1px solid #ffffff0d}
-[data-dialog=history] .dialog-history-list > li:last-child {border-bottom:0}
-[data-dialog=history] .dialog-history-list button {padding:9px 2px;align-items:start}
 [data-dialog=closed] {height:auto;min-height:0;max-height:min(70dvh,640px);max-width:1100px}
 [data-dialog=closed]:not(:has(.dialog-closed-content ul)) {max-width:520px}
 [data-dialog=closed] .dw-dialog-heading {padding:13px 18px 10px}
@@ -89,9 +82,28 @@
 .dialog-closed-count {font-size:13px;line-height:20px;font-variant-numeric:tabular-nums;color:var(--color-wa-muted);font-weight:500}
 [data-dialog=closed] .dialog-closed-content {flex:0 1 auto;min-height:0;padding:10px 18px 14px;overflow-y:auto}
 [data-dialog=closed] .dialog-closed-content > p {padding:8px 0;margin:0}
-.dialog-history-record {display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-items:start}
-.dialog-history-record > span:first-child {font-size:13px;font-variant-numeric:tabular-nums;font-weight:600}
-.dialog-history-record > span:last-child {white-space:normal;font-size:12px;line-height:18px;overflow-wrap:anywhere}
+/* Histórico — UM envelope nas duas vistas.
+   A lista era travada em 540px por `:has(.dialog-history-heading)` e o detalhe
+   voltava aos 768px do `max-w-3xl`: abrir um atendimento fazia o diálogo
+   crescer, e parecia que tinha aberto outro modal. Agora as duas vistas usam
+   os mesmos 640px, e a troca é de conteúdo, não de moldura. */
+[data-dialog=history] {max-height:min(660px,calc(100dvh - 40px))}
+[data-dialog=history] .dialog-history-results {flex:1 1 auto;min-height:0;padding:6px 14px 10px;overflow-y:auto}
+.dialog-history-list {display:flex;flex-direction:column;gap:6px}
+.dialog-history-item {display:flex;width:100%;align-items:center;gap:11px;padding:9px 10px;border:1px solid var(--color-ui-line);border-radius:11px;background:#ffffff05;text-align:left}
+.dialog-history-item:hover {background:var(--color-wa-hover);border-color:var(--color-wa-border-strong)}
+.dialog-history-item:focus-visible {outline:2px solid var(--color-focus-ring);outline-offset:2px}
+.dialog-history-data {flex:none;width:50px;text-align:center}
+.dialog-history-data b {display:block;font-size:15px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--color-wa-text)}
+.dialog-history-data small {font-size:9.5px;letter-spacing:.05em;color:var(--color-wa-meta)}
+.dialog-history-record {flex:1;min-width:0;display:grid;gap:2px}
+.dialog-history-motivo {font-size:13.5px;font-weight:600;color:var(--color-wa-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dialog-history-apoio {font-size:11.5px;line-height:16px;color:var(--color-wa-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dialog-history-go {flex:none;font-size:15px;color:var(--color-wa-meta)}
+.dialog-history-migalha {padding:10px 16px;border-bottom:1px solid var(--color-wa-border)}
+.dialog-history-voltar {display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--color-wa-link)}
+.dialog-history-voltar:hover {text-decoration:underline}
+.dialog-history-voltar:focus-visible {outline:2px solid var(--color-focus-ring);outline-offset:2px;border-radius:6px}
 .dialog-history-summary {display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:12px 22px;border-bottom:1px solid #ffffff10;background:#ffffff02}
 .dialog-history-summary dt {font-size:11px;color:#a1b4c0}
 .dialog-history-summary dd {font-size:12px;margin-top:3px}

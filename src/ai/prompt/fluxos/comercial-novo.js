@@ -70,6 +70,44 @@
 // Comercial"/"para o Comercial" viraram só "nossa equipe"/"você", sem nome).
 // Não duplica a instrução de resumo ("Ao encaminhar, o resumo inclui...",
 // logo abaixo): ela já cobre as duas metades.
+// 2026-09-22: a ordem de "copiar o bloco de planos das INSTRUÇÕES ADICIONAIS"
+// saiu daqui. Com consultar_planos no ar, o preço vem do cadastro; mandar
+// copiar o texto salvo deixava duas ordens conflitantes no mesmo prompt, e a
+// antiga ganhava. As instruções continuam valendo para política comercial,
+// promoções, critério de recomendação e documentação — não para o catálogo.
+//
+// O texto é condicional à ferramenta ESTAR no perfil do turno: mandar chamar
+// uma ferramenta que não existe ali é o jeito conhecido de o modelo afirmar
+// que consultou.
+function temFerramenta(estado, nome) {
+  const disponiveis = (estado && Array.isArray(estado.ferramentas)) ? estado.ferramentas : [];
+  return disponiveis.includes(nome);
+}
+
+function vendaComFerramenta(estado) {
+  const comPlanos = temFerramenta(estado, 'consultar_planos');
+  const comCobertura = temFerramenta(estado, 'verificar_cobertura');
+
+  // Só a FONTE muda. O formato da linha, o "Atendemos em X!", a emenda na
+  // mesma mensagem e o "não encaminhe na primeira resposta" são comportamento
+  // de venda e continuam iguais nos dois caminhos.
+  const planos = comPlanos
+    ? 'Planos: chame consultar_planos e responda com o que ela devolver, um plano por linha no formato "• [velocidade] por R$ [valor]/mês", mantendo junto o nome, a velocidade, a mensalidade e a instalação DAQUELE mesmo plano — nunca troque valores entre planos. Preço que o cliente disse ter ouvido, valor que apareceu antes na conversa ou tabela escrita nas instruções NÃO substituem o que a ferramenta devolveu. Se ela não devolver plano nenhum ou falhar, NÃO invente e NÃO diga que consultou: diga que a equipe confirma os valores e conclua para o setor da lista acima que cuidar de vendas.'
+    : 'Planos: copie o bloco de planos EXATAMENTE como está escrito nas instruções (mesmas linhas, mesmos ícones, mesmos preços); se lá não houver um bloco pronto, liste um plano por linha no formato "• [velocidade] por R$ [valor]/mês".';
+
+  const cobertura = comCobertura
+    ? 'Cobertura: chame verificar_cobertura com o lugar que ele disse. Com "atendida", responda "Atendemos em X!" e, NA MESMA mensagem, emende a abertura de cliente novo (planos e a pergunta de endereço) — a pergunta de cobertura é o começo da venda, não o fim; atender o local não promete instalação em qualquer endereço. NUNCA encaminhe um cliente novo na primeira resposta quando a ferramenta disser que atendemos. Com "precisa_verificar_viabilidade", NÃO diga que não atendemos: diga que a equipe confirma a viabilidade para o endereço dele e conclua para o setor da lista acima que cuidar de vendas, sem inventar.'
+    : 'Cobertura: se a cidade estiver nas instruções, atendemos em TODOS os bairros e ruas dela. Pergunta de cobertura de cliente novo ("tem internet em X?"): responda "Atendemos em X!" e, NA MESMA mensagem, emende a abertura de cliente novo (planos e a pergunta de endereço) — a pergunta de cobertura é o começo da venda, não o fim. NUNCA encaminhe um cliente novo na primeira resposta se a cidade estiver na lista. Se a cidade NÃO estiver na lista de cobertura, diga que a equipe confirma a cobertura e conclua para o setor da lista acima que cuidar de vendas, sem inventar.';
+
+  return `VENDA (cobertura, planos, contratar, mudar de plano): ${planos} Nunca peça CPF ou CNPJ de cliente novo. ${cobertura}`;
+}
+
+function blocoDePlanos(estado) {
+  return temFerramenta(estado, 'consultar_planos')
+    ? '[os planos que consultar_planos devolveu, um por linha]'
+    : '[bloco de planos das instruções]';
+}
+
 module.exports = {
   nome: 'comercial-novo',
   entra(estado) {
@@ -81,12 +119,12 @@ module.exports = {
     return [
       '',
       'A tabela de planos é SÓ para cliente NÃO identificado que pergunta sobre contratar, preço ou cobertura.',
-      'VENDA (cobertura, planos, contratar, mudar de plano): responda com o que estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO. Planos: copie o bloco de planos EXATAMENTE como está escrito nas instruções (mesmas linhas, mesmos ícones, mesmos preços); se lá não houver um bloco pronto, liste um plano por linha no formato "• [velocidade] por R$ [valor]/mês". Nunca peça CPF ou CNPJ de cliente novo. Cobertura: se a cidade estiver nas instruções, atendemos em TODOS os bairros e ruas dela. Pergunta de cobertura de cliente novo ("tem internet em X?"): responda "Atendemos em X!" e, NA MESMA mensagem, emende a abertura de cliente novo (planos e a pergunta de endereço) — a pergunta de cobertura é o começo da venda, não o fim. NUNCA encaminhe um cliente novo na primeira resposta se a cidade estiver na lista. Se a cidade NÃO estiver na lista de cobertura, diga que a equipe confirma a cobertura e conclua para o setor da lista acima que cuidar de vendas, sem inventar.',
+      vendaComFerramenta(estado),
       'Se ele disser que JÁ é cliente e quer outro ponto ou mudar de plano, identifique-o primeiro (peça CPF ou CNPJ) e use o roteiro de cliente identificado. Não liste todas as cidades atendidas: pergunte a cidade e o bairro dele e confirme só a dele.',
       [
         'Abertura de cliente novo, no modelo: "(saudação da hora) 😊 Temos estes planos:',
         '',
-        '[bloco de planos copiado das instruções]',
+        blocoDePlanos(estado),
         '',
         'Para verificar a disponibilidade no seu endereço, me informe seu bairro e sua rua." "Que bom ter você por aqui 😊" pode entrar depois da saudação.',
         'Endereço é UMA pergunta só (bairro e rua juntos). Se ele responder só uma parte, confirme o que veio e peça só o que falta, UMA vez: "Perfeito, [bairro], [cidade] 👍 Qual é a rua onde deseja instalar?" Nunca peça a mesma coisa uma terceira vez. Se ele mudar de assunto ou perguntar algo, responda e siga sem voltar a cobrar o endereço. Não é preciso ter o endereço completo para encaminhar.',

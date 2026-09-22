@@ -521,7 +521,15 @@ router.put('/:id/sector', async (req, res) => {
     return res.status(404).json({ error: 'Conversation not found' });
   }
   const completa = await getConversationWithContact(updated.id);
-  broadcast('queue:new', { conversation: completa, message: null });
+  // Mesma regra do outbound-worker: conversa silenciada e um disparo que o
+  // cliente ainda nao respondeu, e queue:new entra na fila de TODO atendente
+  // conectado sem olhar status -- useQueue.onNew acrescenta o que receber. O
+  // payload ainda levaria telefone, documento do SGP e nota interna.
+  // O dashboard continua recebendo: e sala de admin e gerente, que sao
+  // justamente quem pode ver disparo, e a tela deles ja separa silent.
+  if (completa.status !== 'silent') {
+    broadcast('queue:new', { conversation: completa, message: null });
+  }
   broadcastToDashboard('dashboard:conversation', { conversation: completa });
   res.json(completa);
 });

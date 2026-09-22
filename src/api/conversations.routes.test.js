@@ -2074,6 +2074,129 @@ describe('PUT /api/conversations/:id/sector', () => {
     expect(broadcast).toHaveBeenCalledWith('queue:new', { conversation: expect.objectContaining({ id: CONVERSATION_ID }), message: null });
     expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', { conversation: expect.objectContaining({ id: CONVERSATION_ID }) });
   });
+
+  // Achado A da auditoria: esta rota emitia queue:new sem olhar o status, e
+  // useQueue.onNew acrescenta na fila o que receber, sem filtrar. Uma conversa
+  // silenciada -- disparo que o cliente ainda nao respondeu -- aparecia na
+  // fila de todo atendente conectado, com telefone, documento do SGP e nota
+  // interna no payload.
+  describe('conversa silenciada nao entra na fila pelo queue:new', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      listSectors.mockResolvedValue([{ id: 's-2', name: 'Suporte' }]);
+    });
+
+    function trocarSetor(role) {
+      return request(buildApp())
+        .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+        .set('Authorization', `Bearer ${tokenFor('admin-1', role)}`)
+        .send({ sectorId: 's-2' });
+    }
+
+    test('silent: o setor e alterado normalmente, mas queue:new NAO sai', async () => {
+      getConversationWithContact
+        .mockResolvedValueOnce({ id: CONVERSATION_ID, status: 'silent', assignedAgentId: null })
+        .mockResolvedValueOnce({ id: CONVERSATION_ID, status: 'silent', assignedAgentId: null, sectorId: 's-2', contactInternalNote: 'nota interna' });
+      setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, status: 'silent', sectorId: 's-2' });
+
+      const res = await trocarSetor('admin');
+
+      // A troca acontece: o commit nao mexe em setConversationSector.
+      expect(res.status).toBe(200);
+      expect(setConversationSector).toHaveBeenCalledWith(CONVERSATION_ID, 's-2');
+      expect(res.body.sectorId).toBe('s-2');
+
+      // O que muda e so o aviso para a fila geral.
+      expect(broadcast).not.toHaveBeenCalled();
+    });
+
+    test('silent: nada do payload sai para a fila', async () => {
+      getConversationWithContact
+        .mockResolvedValueOnce({ id: CONVERSATION_ID, status: 'silent', assignedAgentId: null })
+        .mockResolvedValueOnce({
+          id: CONVERSATION_ID, status: 'silent', assignedAgentId: null, sectorId: 's-2',
+          contactPhoneNumber: '+5511999998888', contactSgpDocument: '12345678900', contactInternalNote: 'nota interna',
+        });
+      setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, status: 'silent', sectorId: 's-2' });
+
+      await trocarSetor('admin');
+
+      const enviado = JSON.stringify(broadcast.mock.calls);
+      expect(enviado).not.toContain('5511999998888');
+      expect(enviado).not.toContain('12345678900');
+      expect(enviado).not.toContain('nota interna');
+    });
+
+    // O dashboard e sala de admin e gerente -- quem pode ver disparo -- e a
+    // tela deles ja separa silent. Continua recebendo, como antes.
+    test('silent: o dashboard continua sendo avisado', async () => {
+      getConversationWithContact
+        .mockResolvedValueOnce({ id: CONVERSATION_ID, status: 'silent', assignedAgentId: null })
+        .mockResolvedValueOnce({ id: CONVERSATION_ID, status: 'silent', assignedAgentId: null, sectorId: 's-2' });
+      setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, status: 'silent', sectorId: 's-2' });
+
+      await trocarSetor('admin');
+
+      expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', {
+        conversation: expect.objectContaining({ id: CONVERSATION_ID, status: 'silent' }),
+      });
+    });
+
+    test('waiting: queue:new continua saindo como antes', async () => {
+      getConversationWithContact
+        .mockResolvedValueOnce({ id: CONVERSATION_ID, status: 'waiting', assignedAgentId: null })
+        .mockResolvedValueOnce({ id: CONVERSATION_ID, status: 'waiting', assignedAgentId: null, sectorId: 's-2' });
+      setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, status: 'waiting', sectorId: 's-2' });
+
+      const res = await trocarSetor('admin');
+
+      expect(res.status).toBe(200);
+      expect(broadcast).toHaveBeenCalledWith('queue:new', {
+        conversation: expect.objectContaining({ id: CONVERSATION_ID, status: 'waiting' }),
+        message: null,
+      });
+      expect(broadcastToDashboard).toHaveBeenCalled();
+    });
+
+    test('assigned: queue:new continua saindo como antes', async () => {
+      getConversationWithContact
+        .mockResolvedValueOnce({ id: CONVERSATION_ID, status: 'assigned', assignedAgentId: 'admin-1' })
+        .mockResolvedValueOnce({ id: CONVERSATION_ID, status: 'assigned', assignedAgentId: 'admin-1', sectorId: 's-2' });
+      setConversationSector.mockResolvedValue({ id: CONVERSATION_ID, status: 'assigned', sectorId: 's-2' });
+
+      const res = await trocarSetor('admin');
+
+      expect(res.status).toBe(200);
+      expect(broadcast).toHaveBeenCalledWith('queue:new', {
+        conversation: expect.objectContaining({ id: CONVERSATION_ID, status: 'assigned' }),
+        message: null,
+      });
+    });
+
+    // O resto do fluxo nao muda: validacao, autorizacao e a chamada ao
+    // repositorio seguem iguais, inclusive para conversa silent.
+    test('o resto do fluxo continua igual', async () => {
+      getConversationWithContact.mockResolvedValue({ id: CONVERSATION_ID, status: 'silent', assignedAgentId: null });
+
+      // setor desconhecido continua 400, e o repositorio nem e chamado
+      const invalido = await request(buildApp())
+        .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+        .set('Authorization', `Bearer ${tokenFor('admin-1', 'admin')}`)
+        .send({ sectorId: 's-nao-existe' });
+      expect(invalido.status).toBe(400);
+      expect(setConversationSector).not.toHaveBeenCalled();
+
+      // atendente que nao e o dono continua 403
+      const semPermissao = await request(buildApp())
+        .put(`/api/conversations/${CONVERSATION_ID}/sector`)
+        .set('Authorization', `Bearer ${tokenFor('agent-9', 'agent')}`)
+        .send({ sectorId: 's-2' });
+      expect(semPermissao.status).toBe(403);
+      expect(setConversationSector).not.toHaveBeenCalled();
+      expect(broadcast).not.toHaveBeenCalled();
+      expect(broadcastToDashboard).not.toHaveBeenCalled();
+    });
+  });
 });
 
 // A triagem ja analisava comprovante; o atendente humano nao tinha como pedir a

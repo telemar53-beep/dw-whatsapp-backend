@@ -78,8 +78,22 @@ function App() {
 
             <Route element={<Shell />}>
               <Route path="/" element={<DashboardPage />} />
-              <Route path="/campanhas" element={<CampaignsPage />} />
-              <Route path="/campanhas/:id" element={<CampaignDetailPage />} />
+              <Route
+                path="/campanhas"
+                element={
+                  <ProtectedRoute level="admin" areaLabel="Campanhas">
+                    <CampaignsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/campanhas/:id"
+                element={
+                  <ProtectedRoute level="admin" areaLabel="Campanhas">
+                    <CampaignDetailPage />
+                  </ProtectedRoute>
+                }
+              />
             </Route>
 
             <Route element={<Shell dense />}>

@@ -21,7 +21,7 @@ export const SETTINGS_BASE = '/configuracoes';
 export const NAV_ITEMS = [
   { key: 'atendimento', label: 'Atendimento', to: '/', match: '/', icon: IconChats, level: 'auth' },
   { key: 'supervisao', label: 'Supervisão', to: '/supervisao', match: '/supervisao/*', icon: IconTeam, level: 'admin' },
-  { key: 'campanhas', label: 'Campanhas', to: '/campanhas', match: '/campanhas/*', icon: IconMegaphone, level: 'auth' },
+  { key: 'campanhas', label: 'Campanhas', to: '/campanhas', match: '/campanhas/*', icon: IconMegaphone, level: 'admin' },
   { key: 'relatorios', label: 'Relatórios', to: '/relatorios', match: '/relatorios/*', icon: IconChart, level: 'auth' },
   { key: 'configuracoes', label: 'Configurações', to: SETTINGS_BASE, match: `${SETTINGS_BASE}/*`, icon: IconSettings, level: 'admin' },
 ];

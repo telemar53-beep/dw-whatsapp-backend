@@ -2,21 +2,19 @@
 .channel-status-icon {display:none}
 .settings-channel-center .settings-channel-symbol {border:1px solid #ffffff0a;border-radius:7px;background:#263940;color:#9abfd0}
 .settings-channel-center .settings-channel-symbol[data-provider=meta_cloud] {color:#83b6fb;background:#3987ff12;border-color:#75aaff20}
-/* 24px, nao 20: a 20 o glifo da Meta perde forma (desvio de 8,97% contra a
-   referencia vetorial; a 24 cai para 7,27%) e o usuario relatou que lia como
-   mancha. O box de 30px nao muda — sobram 3px de folga de cada lado. */
-.channel-brand-mark {display:block;width:24px;height:24px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
-/* A 360dialog entra como imagem na cor publicada pela propria empresa, sem
-   recolorir. Fica 20px porque e um BADGE preenchido: no mesmo tamanho de um
-   glifo vazado ele pesaria muito mais na linha. */
-/* Selo do provedor: canto inferior direito da marca do WhatsApp, com um anel
-   na cor da caixa para nao encostar no glifo. Pequeno de proposito — ele diz
-   COMO o numero esta conectado, nao O QUE o canal e. */
-.channel-brand {position:relative;display:block;line-height:0}
-.channel-brand-badge {position:absolute;right:-3px;bottom:-3px;width:13px;height:13px;border-radius:50%;box-shadow:0 0 0 2px var(--chat-surface-panel,#2b343b)}
-.channel-brand-badge:not(.is-logo) {background:#0081fb;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
+/* As marcas sao <svg> inline com `fill: currentColor` — nada de mask, nada de
+   url(), nada de data URI. A cor e declarada AQUI porque esta folha fica fora
+   de @layer e vence a utility do Tailwind: com a cor vindo so da classe
+   `text-[#85d9a4]` do JSX, o glifo saia num azul-acinzentado herdado
+   (rgb(154,191,208) medido), e nao no verde do WhatsApp. */
+.channel-brand {position:relative;display:block;line-height:0;color:#25d366}
+.channel-brand-mark {display:block;width:24px;height:24px}
+/* Selo do provedor: canto inferior direito, com anel na cor da caixa para nao
+   encostar no glifo. Pequeno de proposito — ele diz COMO o numero esta
+   conectado, nao O QUE o canal e. */
+.channel-brand-badge {position:absolute;right:-4px;bottom:-4px;width:13px;height:13px;border-radius:50%;box-shadow:0 0 0 2px var(--chat-surface-panel,#2b343b)}
+.channel-brand-badge:not(.is-logo) {color:#0081fb;background:var(--chat-surface-panel,#2b343b);padding:1px}
 .channel-brand-badge.is-logo {object-fit:contain;background:#0b1f21}
-.channel-brand-logo {display:block;width:20px;height:20px;object-fit:contain}
 /* A marca do WhatsApp no titulo de Canais: a regra existia desde antes,
    presa a um ancestral (.settings-group-header) que nao existe mais no
    JSX — entao o unico uso de whatsapp.svg no produto nunca desenhava. */

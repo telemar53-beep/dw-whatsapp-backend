@@ -138,6 +138,8 @@ describe('visualizador de imagem com zoom', () => {
 
   test('shows a readable state when an audio file fails to load', () => {
     const { container } = render(<MessageAttachment message={{ id: 'm4', messageType: 'audio', mediaPath: 'missing.ogg' }} />);
+    // A primeira falha refaz a URL uma vez: pode ter sido so o token vencendo.
+    fireEvent.error(container.querySelector('audio'));
     fireEvent.error(container.querySelector('audio'));
     expect(screen.getByRole('status')).toHaveTextContent('Áudio indisponível');
     expect(screen.queryByRole('button', { name: 'Reproduzir áudio' })).not.toBeInTheDocument();

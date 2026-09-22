@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { mediaUrl } from '../services/api';
+import { useMediaResourceUrl } from '../hooks/useMediaResourceUrl';
 import { receiptVerdict } from '../utils/receiptVerdict';
 import { IconPlay, IconPause, IconMic, IconDownload, IconPin, IconAttach } from './icons/WaIcons';
 import PixCardMessage from './PixCardMessage';
@@ -65,7 +66,7 @@ const DOC_COLORS = {
   RAR: '#7d6b3e',
 };
 
-function VoiceNote({ url, seed, outbound, avatar, dark }) {
+function VoiceNote({ url, onFalha, seed, outbound, avatar, dark }) {
   const audioRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -135,7 +136,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
   if (dark) {
     return (
       <div className={`chat-voice-note ${outbound ? 'is-outbound' : 'is-inbound'}`}>
-        <audio ref={audioRef} src={url} preload="metadata" onError={() => setUnavailable(true)} className="max-w-full hidden" />
+        <audio ref={audioRef} src={url} preload="metadata" onError={() => { if (!onFalha || !onFalha()) setUnavailable(true); }} className="max-w-full hidden" />
         <div className="flex w-[min(19rem,72vw)] max-w-full min-w-0 items-center gap-[10px]">
           <button
             type="button"
@@ -210,7 +211,7 @@ function VoiceNote({ url, seed, outbound, avatar, dark }) {
 
   return (
     <div className="pt-0.5">
-      <audio ref={audioRef} src={url} preload="metadata" onError={() => setUnavailable(true)} className="max-w-full hidden" />
+      <audio ref={audioRef} src={url} preload="metadata" onError={() => { if (!onFalha || !onFalha()) setUnavailable(true); }} className="max-w-full hidden" />
       <div className="flex w-[min(17.5rem,62vw)] items-start gap-2">
         <button
           type="button"
@@ -291,7 +292,21 @@ function clampZoom(value) {
   return Math.min(Math.max(value, ZOOM_MIN), ZOOM_MAX);
 }
 
-function ImageBubble({ url, alt, filename, hasCaption, dark }) {
+// Um link pode ficar 40 minutos parado no DOM e so entao ser clicado - com o
+// token da hora em que foi montado, ja vencido. Em vez de trocar o href o
+// tempo todo (o que reintroduziria o re-download), ele e atualizado no
+// instante anterior ao clique: onPointerDown cobre clique, ctrl+clique e botao
+// do meio; onFocus cobre teclado. A semantica de link fica intacta.
+function useHrefNaHoraDoClique(url, urlAgora) {
+  const [href, setHref] = useState(null);
+  const atualizar = useCallback(() => {
+    if (urlAgora) setHref(urlAgora());
+  }, [urlAgora]);
+  return { href: href || url, aoAproximar: { onPointerDown: atualizar, onFocus: atualizar } };
+}
+
+function ImageBubble({ url, urlAgora, onFalha, alt, filename, hasCaption, dark }) {
+  const baixar = useHrefNaHoraDoClique(url, urlAgora);
   const [open, setOpen] = useState(false);
   const [failedUrl, setFailedUrl] = useState(null);
   const [zoom, setZoom] = useState(1);
@@ -431,7 +446,7 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
           <img
             src={url}
             alt={alt || 'Imagem'}
-            onError={() => { setFailedUrl(url); setOpen(false); }}
+            onError={() => { if (!onFalha || !onFalha()) { setFailedUrl(url); setOpen(false); } }}
             draggable={false}
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={() => (zoom > ZOOM_MIN ? resetView() : applyZoom(2))}
@@ -472,7 +487,8 @@ function ImageBubble({ url, alt, filename, hasCaption, dark }) {
               Ajustar
             </button>
             <a
-              href={url}
+              href={baixar.href}
+              {...baixar.aoAproximar}
               download={filename || 'imagem'}
               onClick={(event) => event.stopPropagation()}
               className="rounded-full px-3 py-1 text-[13px] text-white/80 transition hover:bg-white/10 hover:text-white"
@@ -520,7 +536,7 @@ function ViewerButton({ label, onClick, disabled, children }) {
 // NAO mostra tamanho do arquivo: a tabela `messages` guarda media_path,
 // media_mime_type e media_filename — tamanho nao existe, e inventar seria pior
 // que omitir.
-function VideoCard({ url, filename, outbound, dark }) {
+function VideoCard({ url, onFalha, filename, outbound, dark }) {
   const [indisponivel, setIndisponivel] = useState(false);
 
   const moldura = dark
@@ -563,14 +579,16 @@ function VideoCard({ url, filename, outbound, dark }) {
   );
 }
 
-function DocumentCard({ url, filename, outbound, dark }) {
+function DocumentCard({ url, urlAgora, filename, outbound, dark }) {
+  const abrir = useHrefNaHoraDoClique(url, urlAgora);
   const label = filename || 'Documento';
   const extension = fileExtension(filename) || 'ARQUIVO';
   const color = DOC_COLORS[extension] || '#667781';
 
   return (
     <a
-      href={url}
+      href={abrir.href}
+      {...abrir.aoAproximar}
       target="_blank"
       rel="noreferrer"
       className={`flex w-[min(18rem,62vw)] items-center gap-3 rounded-[12px] px-3 py-2.5 transition-colors ${
@@ -729,13 +747,23 @@ function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) 
     );
   }
 
-  const url = mediaUrl(message.id, token);
+  // Congelada no mount: renovar o token NAO pode trocar o src do que ja esta
+  // tocando ou carregado. `tentarDeNovo` refaz uma vez em caso de falha, e
+  // `urlAgora` da a URL fresca para acoes que o usuario dispara na hora.
+  const construir = useCallback((mediaToken) => mediaUrl(message.id, mediaToken, token), [message.id, token]);
+  const { url, tentarDeNovo, urlAgora, pronto } = useMediaResourceUrl(construir);
+
+  // `pronto` e o unico portao: enquanto o primeiro token de midia nao chega,
+  // nao ha URL para montar. O valor da URL em si nao e condicao de render.
+  if (!pronto) return null;
 
   if (message.messageType === 'image') {
     return (
       <>
         <ImageBubble
           url={url}
+          urlAgora={urlAgora}
+          onFalha={tentarDeNovo}
           alt={message.mediaFilename || 'Imagem'}
           filename={message.mediaFilename}
           hasCaption={Boolean(message.content)}
@@ -755,6 +783,8 @@ function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) 
       <img
         src={url}
         alt={message.mediaFilename || 'Figurinha'}
+        // Antes a figurinha nao tinha onError: falha virava imagem quebrada.
+        onError={() => tentarDeNovo()}
         className="max-w-full"
         style={{ width: 128, height: 128, objectFit: 'contain' }}
       />
@@ -764,18 +794,18 @@ function MessageAttachment({ message, avatar, dark = false, onAnalyzeReceipt }) 
   if (message.messageType === 'audio') {
     return (
       <div className="flex flex-col gap-1.5">
-        <VoiceNote url={url} seed={message.id || ''} outbound={outbound} avatar={avatar} dark={dark} />
+        <VoiceNote url={url} onFalha={tentarDeNovo} seed={message.id || ''} outbound={outbound} avatar={avatar} dark={dark} />
         <TranscriptionBlock message={message} dark={dark} />
       </div>
     );
   }
 
   if (message.messageType === 'video') {
-    return <VideoCard url={url} filename={message.mediaFilename} outbound={outbound} dark={dark} />;
+    return <VideoCard url={url} onFalha={tentarDeNovo} filename={message.mediaFilename} outbound={outbound} dark={dark} />;
   }
 
   if (message.messageType === 'document') {
-    return <DocumentCard url={url} filename={message.mediaFilename} outbound={outbound} dark={dark} />;
+    return <DocumentCard url={url} urlAgora={urlAgora} filename={message.mediaFilename} outbound={outbound} dark={dark} />;
   }
 
   return null;

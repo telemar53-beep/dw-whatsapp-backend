@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useMediaResourceUrl } from '../hooks/useMediaResourceUrl';
 import { avatarUrl } from '../services/api';
 
 // "Mariana Costa" vira MC; um nome só vira a primeira letra; sem nome, o
@@ -24,14 +25,21 @@ function initialFor(displayName, phoneNumber) {
 function ContactAvatar({ contactId, avatarPath, displayName, phoneNumber, size = 40, dark = false }) {
   const { token } = useAuth();
   const [failedPath, setFailedPath] = useState(null);
+  const construir = useCallback(
+    (mediaToken) => avatarUrl(contactId, mediaToken, avatarPath, token),
+    [contactId, avatarPath, token]
+  );
+  const { url, tentarDeNovo, pronto } = useMediaResourceUrl(construir);
   const boxStyle = { width: size, height: size };
 
-  if (avatarPath && failedPath !== avatarPath) {
+  if (avatarPath && failedPath !== avatarPath && pronto) {
     return (
       <img
-        src={avatarUrl(contactId, token, avatarPath)}
+        src={url}
         alt={displayName || phoneNumber || 'Contato'}
-        onError={() => setFailedPath(avatarPath)}
+        // A URL foi montada no mount e o token pode ter vencido desde entao.
+        // Refaz UMA vez com o token atual; se falhar de novo, cai nas iniciais.
+        onError={() => { if (!tentarDeNovo()) setFailedPath(avatarPath); }}
         style={boxStyle}
         className={`shrink-0 rounded-full object-cover ${dark ? 'bg-white/[0.13]' : 'bg-wa-avatar'}`}
       />

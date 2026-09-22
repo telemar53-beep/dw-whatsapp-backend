@@ -152,15 +152,20 @@ export function sendConversationTemplate(conversationId, templateId, templateVar
   });
 }
 
-export function mediaUrl(messageId, token) {
-  return `${API_BASE_URL}/api/media/${messageId}?token=${token}`;
+// `mediaToken` e o token dedicado, com segredo proprio e 30 minutos. Sem ele
+// (token ainda nao emitido, ou componente fora do provider) cai no `token` de
+// sessao, que e o caminho LEGADO e sai numa etapa propria.
+export function mediaUrl(messageId, mediaToken, tokenDeSessao) {
+  if (mediaToken) return `${API_BASE_URL}/api/media/${messageId}?mediaToken=${mediaToken}`;
+  return `${API_BASE_URL}/api/media/${messageId}?token=${tokenDeSessao}`;
 }
 
 // `avatarPath` entra na URL só como marcador de versão: quando o backend troca
 // a foto, o caminho muda e o navegador para de reaproveitar a imagem antiga do cache.
-export function avatarUrl(contactId, token, avatarPath) {
+export function avatarUrl(contactId, mediaToken, avatarPath, tokenDeSessao) {
   const version = avatarPath ? `&v=${encodeURIComponent(avatarPath)}` : '';
-  return `${API_BASE_URL}/api/contacts/${contactId}/avatar?token=${token}${version}`;
+  const credencial = mediaToken ? `mediaToken=${mediaToken}` : `token=${tokenDeSessao}`;
+  return `${API_BASE_URL}/api/contacts/${contactId}/avatar?${credencial}${version}`;
 }
 
 export function updateContact(id, payload, token) {
@@ -486,8 +491,15 @@ export function deleteMyAvatar(token) {
   return apiFetch('/api/agents/me/avatar', { method: 'DELETE', token });
 }
 
-export function agentAvatarUrl(agentId, token) {
-  return `${API_BASE_URL}/api/agents/${agentId}/avatar?token=${token}`;
+export function agentAvatarUrl(agentId, mediaToken, tokenDeSessao) {
+  if (mediaToken) return `${API_BASE_URL}/api/agents/${agentId}/avatar?mediaToken=${mediaToken}`;
+  return `${API_BASE_URL}/api/agents/${agentId}/avatar?token=${tokenDeSessao}`;
+}
+
+// Troca o JWT de sessao (por header) por um token que so le midia. Uma chamada
+// serve todos os recursos do agente; o provider repete aos 25 minutos.
+export function fetchMediaToken(token) {
+  return apiFetch('/api/auth/media-token', { method: 'POST', token });
 }
 
 export function createCampaign(payload, token) {

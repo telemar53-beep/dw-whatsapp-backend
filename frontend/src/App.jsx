@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from '
 import { AuthProvider } from './contexts/AuthContext';
 import { useTituloDaAba } from './hooks/useTituloDaAba';
 import { SocketProvider } from './contexts/SocketContext';
+import { MediaTokenProvider } from './contexts/MediaTokenContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppShell from './components/AppShell';
 import LoginPage from './pages/LoginPage';

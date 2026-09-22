@@ -40,6 +40,18 @@ function toRecipient(row) {
 const CAMPAIGN_COLUMNS = `id, name, channel_id, message_type, content, template_name, template_language, template_variables, created_by, total_recipients, sent_count, failed_count, skipped_count, created_at`;
 const RECIPIENT_COLUMNS = `id, campaign_id, raw_phone_number, phone_number, display_name, status, error_message, contact_id, conversation_id, created_at, processed_at`;
 
+// As mesmas colunas prefixadas, para as leituras que fazem JOIN com channels.
+// Precisa ser uma constante separada: channels tambem tem id, name e
+// created_at, entao a lista sem prefixo sairia ambigua. E CAMPAIGN_COLUMNS nao
+// pode ganhar prefixo porque e o RETURNING do INSERT de createCampaign.
+const CAMPAIGN_COLUMNS_JOINED = CAMPAIGN_COLUMNS.split(', ').map((column) => `c.${column}`).join(', ');
+
+// O nome do canal sai do JOIN e e espalhado aqui, fora de toCampaign, para que
+// o caminho de escrita (que nao tem o JOIN) continue exatamente como estava.
+function toCampaignWithChannel(row) {
+  return { ...toCampaign(row), channelName: row.channel_name };
+}
+
 async function createCampaign({ name, channelId, messageType, content, templateName, templateLanguage, templateVariables, createdBy, totalRecipients }) {
   const result = await getPool().query(
     `INSERT INTO campaigns (name, channel_id, message_type, content, template_name, template_language, template_variables, created_by, total_recipients)
@@ -60,15 +72,29 @@ async function createCampaign({ name, channelId, messageType, content, templateN
   return toCampaign(result.rows[0]);
 }
 
+// LEFT JOIN de proposito: channel_id e NOT NULL com FK, mas um INNER faria uma
+// campanha sumir da lista se algo ficasse inconsistente, e some sem aviso e
+// pior do que nome vazio.
+const CAMPAIGN_FROM_JOINED = `FROM campaigns c LEFT JOIN channels ch ON ch.id = c.channel_id`;
+
+// created_at nao e unico: duas campanhas criadas no mesmo instante empatam e a
+// ordem passa a ser indefinida, o que quebraria a paginacao. O id desempata.
+const CAMPAIGN_ORDER = `ORDER BY c.created_at DESC, c.id DESC`;
+
 async function findCampaignById(id) {
-  const result = await getPool().query(`SELECT ${CAMPAIGN_COLUMNS} FROM campaigns WHERE id = $1`, [id]);
+  const result = await getPool().query(
+    `SELECT ${CAMPAIGN_COLUMNS_JOINED}, ch.name AS channel_name ${CAMPAIGN_FROM_JOINED} WHERE c.id = $1`,
+    [id]
+  );
   if (result.rowCount === 0) return null;
-  return toCampaign(result.rows[0]);
+  return toCampaignWithChannel(result.rows[0]);
 }
 
 async function listCampaigns() {
-  const result = await getPool().query(`SELECT ${CAMPAIGN_COLUMNS} FROM campaigns ORDER BY created_at DESC`);
-  return result.rows.map(toCampaign);
+  const result = await getPool().query(
+    `SELECT ${CAMPAIGN_COLUMNS_JOINED}, ch.name AS channel_name ${CAMPAIGN_FROM_JOINED} ${CAMPAIGN_ORDER}`
+  );
+  return result.rows.map(toCampaignWithChannel);
 }
 
 async function createCampaignRecipients(campaignId, recipients) {

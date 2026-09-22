@@ -98,6 +98,70 @@ describe('campaign repository', () => {
     expect(campaigns[1].id).toBe(first.id);
   });
 
+  test('listCampaigns traz o nome do canal junto', async () => {
+    const agent = await makeAgent();
+    const channel = await makeChannel();
+    await createCampaign({ channelId: channel.id, messageType: 'text', content: 'a', createdBy: agent.id, totalRecipients: 1 });
+
+    const [campanha] = await listCampaigns();
+
+    expect(campanha.channelName).toBe(channel.name);
+    expect(campanha.channelId).toBe(channel.id);
+  });
+
+  test('findCampaignById tambem traz o nome do canal', async () => {
+    const agent = await makeAgent();
+    const channel = await makeChannel();
+    const criada = await createCampaign({ channelId: channel.id, messageType: 'text', content: 'a', createdBy: agent.id, totalRecipients: 1 });
+
+    const campanha = await findCampaignById(criada.id);
+
+    expect(campanha.channelName).toBe(channel.name);
+  });
+
+  test('o nome do canal nao muda nenhum outro campo da campanha', async () => {
+    const agent = await makeAgent();
+    const channel = await makeChannel();
+    const criada = await createCampaign({
+      name: 'Aviso',
+      channelId: channel.id,
+      messageType: 'text',
+      content: 'ola',
+      createdBy: agent.id,
+      totalRecipients: 3,
+    });
+
+    const campanha = await findCampaignById(criada.id);
+
+    // O campo novo e espalhado no call site, nunca dentro de toCampaign: o
+    // INSERT ... RETURNING de createCampaign nao tem o JOIN e nao pode mudar.
+    const { channelName, ...semOCampoNovo } = campanha;
+    expect(channelName).toBe(channel.name);
+    expect(semOCampoNovo).toEqual(criada);
+    expect(criada).not.toHaveProperty('channelName');
+  });
+
+  test('listCampaigns ordena por data e desempata por id, de forma deterministica', async () => {
+    const agent = await makeAgent();
+    const channel = await makeChannel();
+    // Mesmo created_at nos tres: sem desempate, a ordem do Postgres e indefinida.
+    const criadas = await Promise.all([1, 2, 3].map((n) => createCampaign({
+      name: `Campanha ${n}`,
+      channelId: channel.id,
+      messageType: 'text',
+      content: 'a',
+      createdBy: agent.id,
+      totalRecipients: 1,
+    })));
+    await getPool().query(`UPDATE campaigns SET created_at = now()`);
+
+    const primeira = (await listCampaigns()).map((c) => c.id);
+    const segunda = (await listCampaigns()).map((c) => c.id);
+
+    expect(primeira).toEqual(segunda);
+    expect(primeira.sort()).toEqual(criadas.map((c) => c.id).sort());
+  });
+
   test('createCampaignRecipients inserts every recipient with the given status', async () => {
     const agent = await makeAgent();
     const channel = await makeChannel();

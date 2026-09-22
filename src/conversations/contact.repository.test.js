@@ -151,6 +151,49 @@ describe('contact repository', () => {
     expect(updated).toBeNull();
   });
 
+  // ADR-011: campo nao enviado permanece inalterado. Antes, a chave ausente
+  // virava null no caminho todo e o UPDATE apagava o valor.
+  test('updateContact preserva o que nao foi enviado', async () => {
+    const city = await createCity({ name: 'Bahia' });
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+    await updateContact(contact.id, { displayName: 'Maria', cityId: city.id, internalNote: 'Nota que precisa sobreviver' });
+
+    const soONome = await updateContact(contact.id, { displayName: 'Maria Editada' });
+
+    expect(soONome.displayName).toBe('Maria Editada');
+    expect(soONome.cityId).toBe(city.id);
+    expect(soONome.internalNote).toBe('Nota que precisa sobreviver');
+
+    const soACidade = await updateContact(contact.id, { cityId: null });
+    expect(soACidade.cityId).toBeNull();
+    expect(soACidade.displayName).toBe('Maria Editada');
+    expect(soACidade.internalNote).toBe('Nota que precisa sobreviver');
+
+    const soANota = await updateContact(contact.id, { internalNote: 'Nota nova' });
+    expect(soANota.internalNote).toBe('Nota nova');
+    expect(soANota.displayName).toBe('Maria Editada');
+  });
+
+  test('updateContact sem campo nenhum nao altera nada', async () => {
+    const city = await createCity({ name: 'Bahia' });
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+    const antes = await updateContact(contact.id, { displayName: 'Maria', cityId: city.id, internalNote: 'Nota' });
+
+    const depois = await updateContact(contact.id, {});
+
+    expect(depois).toEqual(antes);
+  });
+
+  test('updateContact nunca toca nos campos do SGP', async () => {
+    const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
+    await setContactSgpLink(contact.id, { sgpClientId: '4321', sgpContractId: '9876', sgpDocument: '12345678900', sgpFirstName: 'Maria' });
+
+    const updated = await updateContact(contact.id, { displayName: 'Outro nome', cityId: null, internalNote: null });
+
+    expect(updated.sgpDocument).toBe('12345678900');
+    expect(Number(updated.sgpClientId)).toBe(4321);
+  });
+
   test('updateContact stores an internal note', async () => {
     const contact = await findOrCreateContactByPhoneNumber('+5511988887777', 'Maria');
 

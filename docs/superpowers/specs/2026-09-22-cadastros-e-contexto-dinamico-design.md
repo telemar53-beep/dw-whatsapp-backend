@@ -282,11 +282,13 @@ Consulta de leitura em produção, **2026-09-22**. A premissa inicial de que tod
 
 | Registro | `id` | Contatos | Município |
 |---|---|---|---|
-| Aurizona | `c55ba683-e8f3-4ab5-80a0-5ba96eb393af` | 10 | **não confirmado** |
+| Aurizona | `c55ba683-e8f3-4ab5-80a0-5ba96eb393af` | 10 | **Godofredo Viana** |
 | Barão de Tromaí | `7da9519e-78ac-442f-a8c4-98f54e769ca6` | 24 | **Cândido Mendes** (`e0713c35-f6d9-429e-a89f-bd1232a04d45`) |
-| Chega tudo | `95a5648d-6e88-4356-a923-1f140c82ab10` | 32 | **não confirmado** |
+| Chega tudo | `95a5648d-6e88-4356-a923-1f140c82ab10` | 32 | **Centro Novo do Maranhão** |
 
-Apenas Barão de Tromaí tem o município confirmado. **Aurizona e "Chega tudo" não devem ter o município adivinhado** — a confirmação pertence à conversão e **não bloqueia o planejamento da estrutura**.
+✅ **Mapeamentos confirmados pela operação em 2026-09-22.** Nenhum foi deduzido.
+
+⚠️ **"Centro Novo do Maranhão" está no cadastro como "Centro Novo".** O registro existente é **reutilizado**: não criar outro município e **não renomear** nesta tarefa. Renomear, se for desejado, é edição comum e decisão à parte.
 
 ### Regras da conversão
 
@@ -760,7 +762,7 @@ Não são tarefas de desenvolvimento. São perguntas que só dado real responde,
 | 3 | O vencimento devolvido pelo `fatura2via` representa a fatura renegociada ou o original? | Etapa 5 | Leitura real de um contrato com fatura renegociada |
 | 4 | ~~Versão do PostgreSQL~~ | ~~Etapa 1~~ | ✅ **Respondida 2026-09-22: 16.15.** FK composta de A6 viável |
 | 5 | ~~Quantas cidades em produção, há duplicadas?~~ | ~~Etapa 1~~ | ✅ **Respondida 2026-09-22: 13 registros, nenhuma duplicata.** Revelou o achado de A11 |
-| 6 | Qual o município de **Aurizona** e de **"Chega tudo"**? | **A conversão de A11**, não a Etapa 1 | Confirmação do proprietário. Não deduzir |
+| 6 | ~~Município de Aurizona e de "Chega tudo"~~ | ~~conversão de A11~~ | ✅ **Respondida 2026-09-22 pela operação:** Godofredo Viana e Centro Novo do Maranhão. Ver A11 |
 
 Nenhuma dessas consultas pode ser destrutiva ou paga.
 

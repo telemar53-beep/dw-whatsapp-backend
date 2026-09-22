@@ -82,7 +82,7 @@ describe('módulo comercial-novo', () => {
 
     test('recomendação de plano responde antes de encaminhar, sem citar preço real', () => {
       const t = texto();
-      expect(t).toMatch(/Se ele perguntar qual plano é o melhor ou pedir indicação/);
+      expect(t).toMatch(/RECOMENDAÇÃO/);
       expect(t).toMatch(/Nunca encaminhe deixando uma pergunta dele sem resposta/);
     });
 
@@ -189,10 +189,15 @@ describe('módulo comercial-novo', () => {
     // Antes: ai-orchestrator.test.js:1452-1453. Mesmo print: perguntado "qual
     // é o melhor?", a IA encaminhou sem responder. As duas saídas possíveis
     // estão escritas — com critério nas instruções, ou sem.
-    test('"qual é o melhor?": recomenda pelo critério das instruções, ou explica a diferença e pergunta o uso', () => {
+    // Corrigido em 2026-09-22 (teste real): a regra antiga só disparava quando
+    // ele PEDIA indicação e mandava perguntar "quantas pessoas" — o número que
+    // não decide velocidade. Agora o gatilho inclui ele CONTAR como usa, e o
+    // critério é o uso simultâneo.
+    test('"qual é o melhor?" e "é assim que eu uso" disparam a mesma recomendação', () => {
       const t = texto();
-      expect(t).toMatch(/se as instruções trouxerem critério de recomendação, recomende um plano com uma frase de motivo/);
-      expect(t).toMatch(/se não trouxerem, explique que a diferença entre os planos é a velocidade e pergunte quantas pessoas ou aparelhos vão usar/);
+      expect(t).toMatch(/quando ele pedir indicação OU quando ele contar como vai usar/);
+      expect(t).toMatch(/Se as instruções trouxerem critério de recomendação, siga-o/);
+      expect(t).not.toMatch(/pergunte quantas pessoas ou aparelhos vão usar/);
     });
 
     // Antes: ai-orchestrator.test.js:1446. O modelo antigo terminava em
@@ -323,5 +328,79 @@ describe('comercial-novo com consultar_planos disponivel', () => {
 
     expect(t).toMatch(/chame consultar_planos/);
     expect(t).not.toMatch(/copie o bloco de planos/);
+  });
+});
+
+// Caso real de 2026-09-22, conversa 1f8f21c4: depois de ver os quatro planos,
+// o cliente disse "Tenho 2 TVs e 7 filhos". A IA repetiu o catalogo inteiro e
+// recomendou 600 Mega pela contagem de filhos.
+describe('recomendacao de plano — correcao do caso real', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos', 'verificar_cobertura'];
+
+  function texto(ferramentas = COM) {
+    return comercialNovo.linhas(estadoBase({ ferramentas })).join('\n');
+  }
+
+  test('contar como usa dispara a recomendacao, mesmo sem pedir indicacao', () => {
+    expect(texto()).toMatch(/quando ele contar como vai usar \(pessoas, aparelhos, TVs, trabalho, jogos\), mesmo sem perguntar nada/);
+  });
+
+  test('proibe repetir a tabela ja apresentada', () => {
+    const t = texto();
+
+    expect(t).toMatch(/NÃO repita a tabela de planos/);
+    expect(t).toMatch(/repetir faz a conversa andar para trás/);
+  });
+
+  test('so reapresenta quando ele pedir para rever ou comparar', () => {
+    expect(texto()).toMatch(/Reapresente as opções SÓ se ele pedir para rever ou comparar/);
+  });
+
+  test('proibe escolher a velocidade pela quantidade de pessoas ou filhos', () => {
+    const t = texto();
+
+    expect(t).toMatch(/NÃO escolha a velocidade pela quantidade de pessoas ou de filhos/);
+    expect(t).toMatch(/uso SIMULTÂNEO/);
+  });
+
+  test('falta de informacao vira UMA pergunta util sobre uso simultaneo', () => {
+    const t = texto();
+
+    expect(t).toMatch(/faça UMA pergunta útil/);
+    expect(t).toMatch(/quantos aparelhos costumam usar ao mesmo tempo/);
+  });
+
+  test('com informacao suficiente, recomenda direto sem perguntar mais', () => {
+    expect(texto()).toMatch(/Se o que ele já contou bastar, recomende direto, sem perguntar mais nada/);
+  });
+
+  test('a recomendacao leva plano, mensalidade consultada e motivo curto', () => {
+    const t = texto();
+
+    expect(t).toMatch(/diga qual plano, a mensalidade que consultar_planos devolveu e uma frase curta de motivo/);
+  });
+
+  test('proibe inventar capacidade e garantir desempenho', () => {
+    const t = texto();
+
+    expect(t).toMatch(/NUNCA invente capacidade/);
+    expect(t).toMatch(/aguenta X aparelhos/);
+    expect(t).toMatch(/nem garanta desempenho/);
+    expect(t).toMatch(/nunca empurre o mais caro/);
+  });
+
+  test('sem a ferramenta, nao promete uma mensalidade "consultada" que nao existe', () => {
+    const t = texto(['buscar_cliente', 'concluir_triagem']);
+
+    expect(t).toMatch(/a mensalidade da fonte que você usou/);
+    expect(t).not.toMatch(/consultar_planos devolveu/);
+  });
+
+  test('o resto do fluxo de venda segue intacto', () => {
+    const t = texto();
+
+    expect(t).toMatch(/Nunca encaminhe deixando uma pergunta dele sem resposta/);
+    expect(t).toMatch(/Endereço é UMA pergunta só/);
+    expect(t).toMatch(/O QUE PRECISA PARA FAZER O CADASTRO/);
   });
 });

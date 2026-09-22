@@ -212,3 +212,62 @@ describe('comercial-cliente com consultar_planos disponivel', () => {
     expect(t).toMatch(/copiando o bloco das INSTRUÇÕES ADICIONAIS DA OPERAÇÃO exatamente como está lá/);
   });
 });
+
+describe('recomendacao para cliente identificado — mesma correcao', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos'];
+
+  function texto(ferramentas = COM) {
+    return comercialCliente.linhas(estadoBase({
+      ferramentas,
+      identidade: { nivel: 'forte', origem: 'cpf', primeiroNome: 'Ana', contracts: [], contestado: false, sgpIndisponivel: false },
+    })).join('\n');
+  }
+
+  test('o criterio e o uso simultaneo, nao a contagem de moradores', () => {
+    const t = texto();
+
+    expect(t).toMatch(/uso SIMULTÂNEO/);
+    expect(t).toMatch(/não pela quantidade de moradores/);
+    expect(t).not.toMatch(/pergunte quantas pessoas ou aparelhos vão usar/);
+  });
+
+  test('contar como usa avanca a recomendacao sem repetir a tabela', () => {
+    const t = texto();
+
+    expect(t).toMatch(/avance para a recomendação sem repetir a tabela/);
+    expect(t).toMatch(/só reapresente se ele pedir para rever ou comparar/);
+  });
+
+  test('uma pergunta util quando falta, recomendacao direta quando basta', () => {
+    const t = texto();
+
+    expect(t).toMatch(/faça UMA pergunta útil sobre uso simultâneo/);
+    expect(t).toMatch(/se o que ele contou bastar, recomende direto/);
+  });
+
+  test('a recomendacao leva plano, mensalidade consultada e motivo', () => {
+    expect(texto()).toMatch(/diga qual plano, a mensalidade que consultar_planos devolveu e uma frase curta de motivo/);
+  });
+
+  test('proibicoes preservadas e a de capacidade acrescentada', () => {
+    const t = texto();
+
+    expect(t).toMatch(/Nunca empurre o mais caro/);
+    expect(t).toMatch(/nunca invente vantagem que não esteja nas instruções/);
+    expect(t).toMatch(/nunca invente capacidade ou desempenho/);
+  });
+
+  test('sem a ferramenta, nao cita uma consulta que nao houve', () => {
+    const t = texto(['buscar_cliente', 'concluir_triagem']);
+
+    expect(t).toMatch(/a mensalidade da fonte que você usou/);
+    expect(t).not.toMatch(/consultar_planos devolveu/);
+  });
+
+  test('a regra de nao relistar apos a escolha continua existindo, sem duplicata', () => {
+    const t = texto();
+
+    expect(t).toMatch(/Se ele JÁ escolheu um plano, não liste os planos de novo/);
+    expect(t).toMatch(/MUDANÇA DE ENDEREÇO/);
+  });
+});

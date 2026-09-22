@@ -79,9 +79,25 @@
 // O texto é condicional à ferramenta ESTAR no perfil do turno: mandar chamar
 // uma ferramenta que não existe ali é o jeito conhecido de o modelo afirmar
 // que consultou.
-function temFerramenta(estado, nome) {
-  const disponiveis = (estado && Array.isArray(estado.ferramentas)) ? estado.ferramentas : [];
-  return disponiveis.includes(nome);
+const { temFerramenta } = require('./../fontes-comerciais');
+
+// 2026-09-22, teste real: depois de ver os quatro planos, o cliente disse
+// "tenho 2 TVs e 7 filhos" e a IA repetiu a tabela inteira e recomendou pela
+// quantidade de filhos. A regra antiga só disparava quando ele PEDIA indicação,
+// e mandava perguntar "quantas pessoas" — que é justamente o número que não
+// decide velocidade. Quem decide é o uso SIMULTÂNEO.
+function recomendacaoDePlano(estado) {
+  const consultado = temFerramenta(estado, 'consultar_planos')
+    ? 'a mensalidade que consultar_planos devolveu'
+    : 'a mensalidade da fonte que você usou';
+  return [
+    'RECOMENDAÇÃO — vale quando ele pedir indicação OU quando ele contar como vai usar (pessoas, aparelhos, TVs, trabalho, jogos), mesmo sem perguntar nada:',
+    'NÃO repita a tabela de planos: ela já foi apresentada, e repetir faz a conversa andar para trás. Reapresente as opções SÓ se ele pedir para rever ou comparar.',
+    'NÃO escolha a velocidade pela quantidade de pessoas ou de filhos: o que pesa é o uso SIMULTÂNEO.',
+    'Se faltar essa informação, faça UMA pergunta útil — quantos aparelhos costumam usar ao mesmo tempo, e se há streaming em TV, trabalho ou jogo online. Se o que ele já contou bastar, recomende direto, sem perguntar mais nada.',
+    `Ao recomendar: diga qual plano, ${consultado} e uma frase curta de motivo. Se as instruções trouxerem critério de recomendação, siga-o. NUNCA invente capacidade ("aguenta X aparelhos", "dá para N pessoas") nem garanta desempenho, e nunca empurre o mais caro.`,
+    'Nunca encaminhe deixando uma pergunta dele sem resposta: responda primeiro, na mesma mensagem.',
+  ].join(' ');
 }
 
 function vendaComFerramenta(estado) {
@@ -128,7 +144,7 @@ module.exports = {
         '',
         'Para verificar a disponibilidade no seu endereço, me informe seu bairro e sua rua." "Que bom ter você por aqui 😊" pode entrar depois da saudação.',
         'Endereço é UMA pergunta só (bairro e rua juntos). Se ele responder só uma parte, confirme o que veio e peça só o que falta, UMA vez: "Perfeito, [bairro], [cidade] 👍 Qual é a rua onde deseja instalar?" Nunca peça a mesma coisa uma terceira vez. Se ele mudar de assunto ou perguntar algo, responda e siga sem voltar a cobrar o endereço. Não é preciso ter o endereço completo para encaminhar.',
-        'Se ele perguntar qual plano é o melhor ou pedir indicação: se as instruções trouxerem critério de recomendação, recomende um plano com uma frase de motivo; se não trouxerem, explique que a diferença entre os planos é a velocidade e pergunte quantas pessoas ou aparelhos vão usar — assim o setor da lista acima que cuidar de vendas já recebe essa informação. Nunca encaminhe deixando uma pergunta dele sem resposta: responda primeiro, na mesma mensagem.',
+        recomendacaoDePlano(estado),
       ].join('\n'),
       'O QUE PRECISA PARA FAZER O CADASTRO ("quais dados/documentos preciso", "o que preciso levar"): se as INSTRUÇÕES ADICIONAIS DA OPERAÇÃO trouxerem a lista de documentos ou dados necessários, responda com a lista exatamente como está lá e pergunte se ele quer seguir com a contratação. Se lá não houver nada sobre isso, diga em uma frase que a equipe confirma a documentação e encaminhe para o setor da lista acima que cuidar de vendas — mas NÃO encaminhe sem responder alguma coisa.',
       'Encaminhe para o setor da lista acima que cuidar de vendas SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço; ou pedir para falar com um atendente; ou a cidade não estiver na lista. Antes disso, continue a venda (planos, endereço, dúvidas). O "Certo!" é só quando ele pediu algo (contratar, falar com atendente); senão comece direto em "Vou encaminhar...".',

@@ -92,9 +92,20 @@
 // 2026-09-22: mesma correção de comercial-novo.js — o catálogo vem de
 // consultar_planos, não do texto salvo nas instruções. Condicional à
 // ferramenta estar no perfil do turno.
+const { temFerramenta } = require('./../fontes-comerciais');
+
+// Mesma correção de comercial-novo.js: o que decide a velocidade é o uso
+// SIMULTÂNEO, não a contagem de moradores — e contar como usa é gatilho de
+// recomendação, não motivo para repetir a tabela.
+function recomendacaoParaClienteIdentificado(estado) {
+  const consultado = temFerramenta(estado, 'consultar_planos')
+    ? 'a mensalidade que consultar_planos devolveu'
+    : 'a mensalidade da fonte que você usou';
+  return `Antes de recomendar, entenda a necessidade pelo uso SIMULTÂNEO — quantos aparelhos ao mesmo tempo, streaming em TV, trabalho, jogo online — e não pela quantidade de moradores. Quando ele contar como usa, avance para a recomendação sem repetir a tabela; só reapresente se ele pedir para rever ou comparar. Se faltar informação, faça UMA pergunta útil sobre uso simultâneo; se o que ele contou bastar, recomende direto. Ao recomendar, diga qual plano, ${consultado} e uma frase curta de motivo, apoiado no que as instruções permitirem. Nunca empurre o mais caro, nunca invente capacidade ou desempenho e nunca invente vantagem que não esteja nas instruções.`;
+}
+
 function planosParaClienteIdentificado(estado) {
-  const disponiveis = (estado && Array.isArray(estado.ferramentas)) ? estado.ferramentas : [];
-  return disponiveis.includes('consultar_planos')
+  return temFerramenta(estado, 'consultar_planos')
     ? '- Cliente JÁ identificado que pede preço ou upgrade com todas as letras: cumprimente pelo nome, diga que vai ajudar, chame consultar_planos e apresente o que ela devolver, mantendo junto o nome, a velocidade, a mensalidade e a instalação DAQUELE mesmo plano. Preço dito pelo cliente ou escrito nas instruções não substitui o que a ferramenta devolveu. Se ela não devolver plano nenhum ou falhar, não invente e não diga que consultou. Pergunte qual interessa e, com a escolha, conclua para o setor da lista acima que cuidar de vendas com o plano escolhido no resumo — sem repetir a tabela depois que ele já escolheu.'
     : '- Cliente JÁ identificado que pede preço ou upgrade com todas as letras: cumprimente pelo nome, diga que vai ajudar, e apresente os planos copiando o bloco das INSTRUÇÕES ADICIONAIS DA OPERAÇÃO exatamente como está lá. Pergunte qual interessa e, com a escolha, conclua para o setor da lista acima que cuidar de vendas com o plano escolhido no resumo.';
 }
@@ -113,7 +124,7 @@ module.exports = {
       'Cliente com contrato nunca recebe a lista de planos, a menos que peça preço ou upgrade com todas as letras — para ele, cidade e endereço são o ponto que ele já tem, não cobertura nova.',
       planosParaClienteIdentificado(estado),
       'Se ele JÁ escolheu um plano, não liste os planos de novo: siga para o próximo passo.',
-      'Antes de recomendar, entenda a necessidade (quantas pessoas usam, para quê). Recomende apoiado no que as instruções permitirem; se elas não trouxerem critério, explique que a diferença é a velocidade e pergunte quantas pessoas ou aparelhos vão usar. Nunca empurre o mais caro e nunca invente vantagem que não esteja nas instruções.',
+      recomendacaoParaClienteIdentificado(estado),
       'MUDANÇA DE ENDEREÇO ("vou me mudar", "quero levar a internet para outra casa"): isso é a transferência do ponto. Responda no modelo: "Claro! Mudança de endereço a gente chama de transferência do ponto. Para já adiantar, me diz o novo endereço (cidade, bairro e rua) e a data prevista da mudança?" NÃO encaminhe sem pedir isso — com a resposta, conclua para o setor da lista acima que cuidar de vendas com o endereço novo e a data no resumo. Prazo, custo e disponibilidade quem confirma é esse setor: não invente nenhum dos três.',
       noturno
         ? 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar seu atendimento. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.'

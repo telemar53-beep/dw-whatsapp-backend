@@ -411,6 +411,126 @@ describe('GET /api/admin/channels/:id/qr', () => {
       .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
     expect(res.status).toBe(404);
   });
+
+  // A tela lia o QR fazendo parse do HTML e pescando o primeiro `<img src>`.
+  // Mexer no template - ate no CSS - quebrava a tela sem quebrar teste nenhum.
+  // Agora existe resposta de API, e o HTML continua para quem nao pede JSON.
+  describe('resposta de API com Accept: application/json', () => {
+    function canalComQr() {
+      findChannelById.mockResolvedValue({ id: 'channel-4', type: 'baileys', name: 'WhatsApp Vendas', status: 'awaiting_qr' });
+      baileysManager.getQrForChannel.mockReturnValue('raw-qr-text');
+      QRCode.toDataURL.mockResolvedValue('data:image/png;base64,FAKEDATA');
+    }
+    function pedir(id, accept) {
+      const req = request(buildApp())
+        .get(`/api/admin/channels/${id}/qr`)
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'admin')}`);
+      return accept === undefined ? req : req.set('Accept', accept);
+    }
+
+    test('QR disponivel volta como JSON, sem documento HTML', async () => {
+      canalComQr();
+
+      const res = await pedir('channel-4', 'application/json');
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/application\/json/);
+      expect(res.body).toEqual({
+        image: 'data:image/png;base64,FAKEDATA',
+        channelId: 'channel-4',
+        channelName: 'WhatsApp Vendas',
+      });
+      expect(res.text).not.toContain('<!DOCTYPE html>');
+      expect(res.text).not.toContain('<img');
+    });
+
+    // O consumidor antigo nao pode quebrar: quem nao pede JSON continua
+    // recebendo exatamente o documento de antes.
+    test('sem Accept continua devolvendo o HTML de sempre', async () => {
+      canalComQr();
+
+      const res = await pedir('channel-4', undefined);
+
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/text\/html/);
+      expect(res.text).toContain('<!DOCTYPE html>');
+      expect(res.text).toContain('<img src="data:image/png;base64,FAKEDATA"');
+    });
+
+    test('Accept: text/html tambem continua no HTML', async () => {
+      canalComQr();
+
+      const res = await pedir('channel-4', 'text/html');
+
+      expect(res.headers['content-type']).toMatch(/text\/html/);
+      expect(res.text).toContain('<!DOCTYPE html>');
+    });
+
+    // Este ramo nao tinha teste nenhum: getQrForChannel devolve null enquanto
+    // o Baileys ainda nao emitiu a string.
+    test('QR ainda nao emitido: 404 em JSON, sem image', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-4', type: 'baileys', name: 'WhatsApp Vendas', status: 'awaiting_qr' });
+      baileysManager.getQrForChannel.mockReturnValue(null);
+
+      const res = await pedir('channel-4', 'application/json');
+
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({ error: 'No QR code available for this channel' });
+      expect(res.body.image).toBeUndefined();
+      expect(QRCode.toDataURL).not.toHaveBeenCalled();
+    });
+
+    test('canal conectado: 404 em JSON', async () => {
+      findChannelById.mockResolvedValue({ id: 'channel-6', type: 'baileys', status: 'connected' });
+
+      const res = await pedir('channel-6', 'application/json');
+
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({ error: 'No QR code available for this channel' });
+    });
+
+    test('sem token: 401, e o QR nem chega a ser gerado', async () => {
+      canalComQr();
+
+      const res = await request(buildApp())
+        .get('/api/admin/channels/channel-4/qr')
+        .set('Accept', 'application/json');
+
+      expect(res.status).toBe(401);
+      expect(res.body.image).toBeUndefined();
+      expect(QRCode.toDataURL).not.toHaveBeenCalled();
+      expect(baileysManager.getQrForChannel).not.toHaveBeenCalled();
+    });
+
+    test('atendente comum: 403, e o QR nem chega a ser gerado', async () => {
+      canalComQr();
+
+      const res = await request(buildApp())
+        .get('/api/admin/channels/channel-4/qr')
+        .set('Authorization', `Bearer ${tokenFor('agent-9', 'agent')}`)
+        .set('Accept', 'application/json');
+
+      expect(res.status).toBe(403);
+      expect(res.body.image).toBeUndefined();
+      expect(QRCode.toDataURL).not.toHaveBeenCalled();
+      expect(baileysManager.getQrForChannel).not.toHaveBeenCalled();
+    });
+
+    // O fluxo do Baileys e o mesmo nos dois formatos: mesma leitura da string
+    // em memoria, mesma geracao da imagem, e nada alem disso e tocado.
+    test('fluxo Baileys identico ao do HTML', async () => {
+      canalComQr();
+      await pedir('channel-4', 'application/json');
+
+      expect(baileysManager.getQrForChannel).toHaveBeenCalledTimes(1);
+      expect(baileysManager.getQrForChannel).toHaveBeenCalledWith('channel-4');
+      expect(QRCode.toDataURL).toHaveBeenCalledTimes(1);
+      expect(QRCode.toDataURL).toHaveBeenCalledWith('raw-qr-text');
+      expect(baileysManager.startBaileysConnection).not.toHaveBeenCalled();
+      expect(baileysManager.stopBaileysChannel).not.toHaveBeenCalled();
+      expect(baileysManager.reconnectBaileysChannel).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('PATCH /api/admin/channels/:id', () => {

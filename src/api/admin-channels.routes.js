@@ -372,6 +372,21 @@ router.get('/:id/qr', requireAuth, requireIntegrationsAccess, async (req, res) =
     return res.status(404).json({ error: 'No QR code available for this channel' });
   }
   const qrImageDataUrl = await QRCode.toDataURL(qr);
+
+  // Resposta de API para quem pede JSON; o documento HTML continua para quem
+  // não pede. A tela lia o QR fazendo parse do HTML e pescando o primeiro
+  // `<img src>` — mexer no template quebrava a tela sem quebrar teste nenhum.
+  // `Accept: application/json` devolve o data URI direto, e quem não manda
+  // Accept (curl, um navegador aberto na URL) continua recebendo o HTML de
+  // sempre: 'html' é o primeiro da lista, então `*/*` escolhe ele.
+  if (req.accepts(['html', 'json']) === 'json') {
+    return res.status(200).json({
+      image: qrImageDataUrl,
+      channelId: channel.id,
+      channelName: channel.name,
+    });
+  }
+
   res.status(200).send(`<!DOCTYPE html>
 <html>
 <head>

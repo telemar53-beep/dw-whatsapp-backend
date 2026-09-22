@@ -218,6 +218,105 @@ describe('GET /api/conversations/:id/messages', () => {
     expect(res.status).toBe(404);
     expect(getConversationWithContact).not.toHaveBeenCalled();
   });
+
+  describe('conversa silent: disparo que o cliente ainda nao respondeu', () => {
+    function pedir(role) {
+      return request(buildApp())
+        .get(`/api/conversations/${CONVERSATION_ID}/messages`)
+        .set('Authorization', `Bearer ${tokenFor('quem-1', role)}`);
+    }
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      listMessagesByConversation.mockResolvedValue([{ id: 'msg-1', content: 'Seu boleto vence em 10/09' }]);
+    });
+
+    test('atendente recebe 403 e nenhuma mensagem', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'silent', assignedAgentId: null });
+
+      const res = await pedir('agent');
+
+      expect(res.status).toBe(403);
+      expect(res.body).not.toHaveProperty('0');
+      expect(listMessagesByConversation).not.toHaveBeenCalled();
+    });
+
+    test('administrador continua lendo, para poder auditar o que foi disparado', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'silent', assignedAgentId: null });
+
+      const res = await pedir('admin');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([{ id: 'msg-1', content: 'Seu boleto vence em 10/09' }]);
+    });
+
+    test('gerente tambem continua lendo', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'silent', assignedAgentId: null });
+
+      const res = await pedir('manager');
+
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe('o que o atendente NAO pode perder', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      listMessagesByConversation.mockResolvedValue([{ id: 'msg-1', content: 'Oi' }]);
+    });
+
+    function comoAtendente() {
+      return request(buildApp())
+        .get(`/api/conversations/${CONVERSATION_ID}/messages`)
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    }
+
+    // O caso mais importante desta mudanca: ler a conversa da fila ANTES de
+    // assumir e o fluxo central do produto. Ela e waiting e nao tem dono.
+    test('le conversa da fila, sem dono, antes de assumir', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'waiting', assignedAgentId: null });
+
+      const res = await comoAtendente();
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([{ id: 'msg-1', content: 'Oi' }]);
+    });
+
+    test('le conversa em automacao, em triagem pela IA e sem dono', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'waiting', assignedAgentId: null, triageState: 'pending' });
+
+      expect((await comoAtendente()).status).toBe(200);
+    });
+
+    test('le a propria conversa atribuida', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'agent-1' });
+
+      expect((await comoAtendente()).status).toBe(200);
+    });
+
+    test('le conversa atribuida a outro atendente', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'assigned', assignedAgentId: 'outro-agente' });
+
+      expect((await comoAtendente()).status).toBe(200);
+    });
+
+    test('le conversa encerrada, inclusive de outro atendente, no historico do contato', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'closed', assignedAgentId: 'outro-agente' });
+
+      expect((await comoAtendente()).status).toBe(200);
+    });
+
+    test('le a conversa depois que o cliente respondeu e ela deixou de ser silent', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', status: 'waiting', assignedAgentId: null });
+
+      expect((await comoAtendente()).status).toBe(200);
+    });
+
+    test('sem token continua 401, nao 403', async () => {
+      const res = await request(buildApp()).get(`/api/conversations/${CONVERSATION_ID}/messages`);
+      expect(res.status).toBe(401);
+    });
+  });
 });
 
 describe('POST /api/conversations/:id/claim', () => {

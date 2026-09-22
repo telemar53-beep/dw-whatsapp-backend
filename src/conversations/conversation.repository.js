@@ -317,6 +317,16 @@ async function getThirdPartyScope(conversationId) {
   return result.rows[0].ai_triage_third_party || null;
 }
 
+// Leitura minima, so pela chave primaria. Existe porque a rota de midia
+// precisa saber se a conversa esta silenciada e e chamada uma vez por bolha de
+// audio/video (o player faz preload); getConversationWithContact resolveria,
+// mas paga cinco JOINs e um LATERAL sobre messages para devolver um campo.
+async function findConversationStatusById(conversationId) {
+  const result = await getPool().query('SELECT status FROM conversations WHERE id = $1', [conversationId]);
+  if (result.rowCount === 0) return null;
+  return result.rows[0].status;
+}
+
 async function activateConversation(conversationId) {
   const result = await getPool().query(
     `UPDATE conversations SET status = 'waiting', updated_at = now()
@@ -790,6 +800,7 @@ module.exports = {
   incrementTriageAttempts,
   activateConversation,
   getConversationWithContact,
+  findConversationStatusById,
   findConversationByProtocolNumber,
   listConversationsByContact,
   listWaitingConversations,

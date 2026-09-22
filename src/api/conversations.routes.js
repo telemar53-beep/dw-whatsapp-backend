@@ -212,6 +212,14 @@ router.get('/:id/messages', async (req, res) => {
   if (!conversation) {
     return res.status(404).json({ error: 'Conversation not found' });
   }
+  // Conversa silenciada e um disparo (campanha ou SGP) que o cliente ainda nao
+  // respondeu: nao esta em fila nenhuma e ninguem deveria estar atendendo.
+  // Admin e gerente continuam lendo, que e como se audita o que foi enviado.
+  // O criterio e o status, nunca a posse: ler a conversa da fila antes de
+  // assumir e o fluxo normal do atendente e precisa continuar valendo.
+  if (conversation.status === 'silent' && !hasAdminLevelAccess(req.agent)) {
+    return res.status(403).json({ error: 'This conversation is not available until the customer replies' });
+  }
   const messages = await listMessagesByConversation(req.params.id);
   res.json(messages);
 });

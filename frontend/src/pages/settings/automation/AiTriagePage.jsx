@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import SettingsPage from '../SettingsPage';
 import { Field, Button, Toggle, AsyncState, inputClass } from '../../../components/ui';
-import { useAiTriageForm } from './useAiTriageForm';
+import { useAiTriageForm, CAMPOS_DA_TRIAGEM } from './useAiTriageForm';
 import { useAiConfig } from '../../../hooks/useAiConfig';
 import { useReasons } from '../../../hooks/useReasons';
 import { useChannels } from '../../../hooks/useChannels';
@@ -17,7 +17,7 @@ const STATUS_BADGE_CLASS = {
 };
 
 function AiTriagePage() {
-  const form = useAiTriageForm();
+  const form = useAiTriageForm(CAMPOS_DA_TRIAGEM);
   const { token } = useAuth();
   const { config, refresh: refreshAiConfig } = useAiConfig();
   const { reasons, status: reasonsStatus } = useReasons();

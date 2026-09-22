@@ -537,6 +537,13 @@ export function updateAiTriageConfig(payload, token) {
   return apiFetch('/api/admin/ai/triage', { method: 'PUT', body: payload, token });
 }
 
+// Update parcial: manda so os campos que a tela edita, e o backend nao encosta
+// nas outras colunas. O PUT acima continua existindo para quem precisar gravar
+// a configuracao inteira de uma vez.
+export function patchAiTriageConfig(payload, token) {
+  return apiFetch('/api/admin/ai/triage', { method: 'PATCH', body: payload, token });
+}
+
 // O endpoint do QR agora tem resposta de API: com `Accept: application/json`
 // ele devolve `{ image, channelId, channelName }`, onde `image` e o data URI
 // do PNG. Autenticacao pelo HEADER (nada de token na URL). O data URI ainda

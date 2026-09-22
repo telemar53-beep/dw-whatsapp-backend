@@ -33,7 +33,7 @@ beforeEach(() => {
   // outras duas páginas vão para o PUT com o valor atual do servidor, e não
   // com o que estava em cache aqui.
   api.getAiConfig.mockResolvedValue(saved);
-  api.updateAiTriageConfig.mockResolvedValue({});
+  api.patchAiTriageConfig.mockResolvedValue({});
 });
 
 describe('IdentificationPage', () => {
@@ -42,28 +42,19 @@ describe('IdentificationPage', () => {
     expect(screen.getByRole('button', { name: 'Salvar identificação' })).toBeInTheDocument();
   });
 
-  // Contrato de gravação (spec regra 8): esta página divide o PUT /triage com
-  // AiTriagePage e NightModePage; o backend trata campo ausente como
-  // "desligado", então salvar aqui precisa mandar os oito campos sempre. Os
-  // sete que não são desta tela vêm da RELEITURA feita no instante do save.
-  test('contrato: salva os oito campos do PUT /triage, mesmo mexendo só nos dela', async () => {
+  // Contrato de gravação: esta página divide a linha de `ai_config` com
+  // AiTriagePage e NightModePage. Enquanto o backend só tinha update total,
+  // salvar aqui precisava mandar os oito campos, e os sete que não são desta
+  // tela vinham de uma releitura no instante do save — mitigação que encurtava
+  // a janela de sobreposição sem eliminá-la. Com o PATCH parcial esta tela
+  // manda SÓ o campo dela.
+  test('contrato: salva só o campo dela, e nada da triagem nem da janela', async () => {
     renderInShell(<IdentificationPage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: 'Salvar identificação' }));
 
-    await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
-      {
-        triageConfidenceThreshold: 0.65,
-        triageMaxQuestions: 4,
-        triageTimeoutMinutes: 12,
-        triageExtraInstructions: 'Pergunte o CPF antes de tudo',
-        triageResolvedReasonId: null,
-        // Config sem janela: os campos nascem vazios e salvam null (não mais
-        // o padrão 20:00/08:00 — essa página não mostra a janela).
-        nightStartTime: null,
-        nightEndTime: null,
-        triageReadReceiptsDaytime: false,
-      },
+    await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalledWith(
+      { triageReadReceiptsDaytime: false },
       't'
     ));
   });
@@ -96,33 +87,38 @@ describe('IdentificationPage', () => {
     expect(screen.getByText(/nenhum comprovante confere/i)).toBeInTheDocument();
   });
 
-  // Regra da Etapa 5.6: se não der para conferir o estado atual, NÃO grava.
-  // Gravar com o cache antigo poderia reverter, em silêncio, a Triagem ou a
-  // janela noturna que outra pessoa acabou de mudar.
-  test('falha ao reler a configuração impede o save e preserva o formulário', async () => {
-    api.getAiConfig.mockRejectedValue(new Error('rede caiu'));
+  // Estes dois testes cobriam a releitura antes do save: a mitigação que
+  // existia porque o backend fazia update total. Ela saiu junto com o PUT, e
+  // o que passou a valer é o que vai abaixo — o save não depende de conferir
+  // nada, e o que não é desta tela simplesmente não é enviado.
+  test('não relê a configuração para salvar: o PATCH preserva o resto sozinho', async () => {
     renderInShell(<IdentificationPage />, { path: PATH });
 
     await userEvent.click(screen.getByLabelText(/ler comprovantes também de dia/i));
     await userEvent.click(screen.getByRole('button', { name: 'Salvar identificação' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/não foi possível conferir a configuração atual/i);
-    expect(api.updateAiTriageConfig).not.toHaveBeenCalled();
-    // O que o admin marcou continua marcado.
-    expect(screen.getByLabelText(/ler comprovantes também de dia/i)).toBeChecked();
+    await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalled());
+    expect(api.getAiConfig).not.toHaveBeenCalled();
   });
 
-  // O valor das outras áreas vem do servidor no instante do save, não do que
-  // esta página carregou minutos antes.
-  test('usa o valor recém-lido das outras páginas, não o do cache', async () => {
-    api.getAiConfig.mockResolvedValue({ ...saved, triageMaxQuestions: 9, nightStartTime: '22:00', nightEndTime: '06:00' });
+  // O cache desta página pode estar velho em relação às outras duas — e não
+  // importa mais: esses campos não entram no corpo, então não há o que
+  // reverter.
+  test('cache velho das outras telas não é enviado nem reverte nada', async () => {
+    useAiConfig.mockReturnValue({
+      config: { ...saved, triageMaxQuestions: 9, nightStartTime: '22:00', nightEndTime: '06:00' },
+      status: 'ready', loading: false, refresh: vi.fn(),
+    });
     renderInShell(<IdentificationPage />, { path: PATH });
 
     await userEvent.click(screen.getByRole('button', { name: 'Salvar identificação' }));
 
-    await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ triageMaxQuestions: 9, nightStartTime: '22:00', nightEndTime: '06:00' }), 't'
-    ));
+    await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalled());
+    const corpo = api.patchAiTriageConfig.mock.calls[0][0];
+    expect(Object.keys(corpo)).toEqual(['triageReadReceiptsDaytime']);
+    expect('triageMaxQuestions' in corpo).toBe(false);
+    expect('nightStartTime' in corpo).toBe(false);
+    expect('nightEndTime' in corpo).toBe(false);
   });
 
   describe('ler comprovantes também de dia', () => {
@@ -135,7 +131,7 @@ describe('IdentificationPage', () => {
       expect(screen.getByText(/Nenhuma liberação de dia/i)).toBeInTheDocument();
 
       await userEvent.click(screen.getByRole('button', { name: 'Salvar identificação' }));
-      await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
+      await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalledWith(
         expect.objectContaining({ triageReadReceiptsDaytime: false }), 't'
       ));
     });
@@ -146,7 +142,7 @@ describe('IdentificationPage', () => {
       await userEvent.click(screen.getByLabelText(/ler comprovantes também de dia/i));
       await userEvent.click(screen.getByRole('button', { name: 'Salvar identificação' }));
 
-      await waitFor(() => expect(api.updateAiTriageConfig).toHaveBeenCalledWith(
+      await waitFor(() => expect(api.patchAiTriageConfig).toHaveBeenCalledWith(
         expect.objectContaining({ triageReadReceiptsDaytime: true }), 't'
       ));
     });

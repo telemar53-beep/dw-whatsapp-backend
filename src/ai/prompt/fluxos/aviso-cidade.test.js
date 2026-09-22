@@ -41,7 +41,7 @@ describe('módulo aviso-cidade', () => {
     // andamento na cidade dele, não só deixar de receber o roteiro normal.
     test('diz ao cliente que há falha regional em andamento na cidade dele, usando o aviso', () => {
       const t = texto();
-      expect(t).toMatch(/informe que há uma falha regional em andamento nessa cidade \(use o aviso acima\)/);
+      expect(t).toMatch(/informe que há uma falha regional em andamento nesse local \(use o aviso acima\)/);
     });
 
     test('resumo cita "falha regional" e conclui para o setor da lista acima que cuidar de suporte', () => {

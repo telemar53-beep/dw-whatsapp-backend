@@ -33,7 +33,7 @@ module.exports = {
       // e `aviso.cidade` ja traz o nome do lugar que venceu a selecao. Dizer
       // "cidade do cliente" seria errado quando quem vence e a localidade.
       `AVISO ATIVO PARA ${aviso.cidade}: ${aviso.mensagem}`,
-      'Se ele reclamar de internet lenta, caindo ou sem acesso: informe que há uma falha regional em andamento nessa cidade (use o aviso acima), NÃO peça verificações de equipamento, NÃO prometa previsão, e conclua para o setor da lista acima que cuidar de suporte na mesma resposta com "falha regional" no resumo. Se o assunto for outro, atenda normalmente.',
+      'Se ele reclamar de internet lenta, caindo ou sem acesso: informe que há uma falha regional em andamento nesse local (use o aviso acima), NÃO peça verificações de equipamento, NÃO prometa previsão, e conclua para o setor da lista acima que cuidar de suporte na mesma resposta com "falha regional" no resumo. Se o assunto for outro, atenda normalmente.',
     ];
   },
 };

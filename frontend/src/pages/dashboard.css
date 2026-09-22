@@ -196,6 +196,55 @@
 .chat-workspace .chat-workspace-panel-section dd { font-size: 11px; text-align: right; overflow-wrap: anywhere; min-width: 0; }
 @media(max-width:700px) { .chat-workspace .chat-workspace-header { padding: 8px; } .chat-workspace .chat-workspace-timeline { padding: 10px 12px; } .chat-workspace .chat-ai-suggestion { display: flex; flex-direction: column; } }
 
+/* ---------- Painel lateral (SGP / Cliente) — os DOIS contextos ----------
+   O painel tinha `position: fixed; inset: 0` e só era neutralizado por um
+   override que exigia o ancestral `.chat-workspace-conversation`. O
+   `ConversationModal` não produz esse ancestral, então abaixo de 1024px o
+   painel do SGP cobria cabeçalho, mensagens e compositor do diálogo inteiro,
+   sem volta além do seu próprio "×" — contra o invariante da tela.
+   Agora a posição some da origem e a regra vive aqui, presa a `.conv-raiz`,
+   que existe na mesa E no modal. Coluna quando cabe, substituição quando não;
+   sobreposição em nenhum caso. */
+.conv-raiz > .conv-painel-slot {
+  flex: 0 0 268px;
+  width: 268px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border-left: 1px solid var(--workspace-line);
+  background: var(--chat-surface-panel);
+}
+.conv-raiz.is-painel-alternado { flex-direction: column; }
+/* Substituição: a conversa sai de cena e o painel assume a área toda. Quem
+   sai é o primeiro filho (cabeçalho + timeline + compositor). */
+.conv-raiz.is-painel-alternado > div:first-child { display: none; }
+.conv-raiz.is-painel-alternado > .conv-painel-slot {
+  flex: 1 1 auto;
+  width: 100%;
+  border-left: 0;
+}
+.conv-raiz .conv-painel { min-width: 0; }
+/* A grade de ações do SGP colapsa pelo espaço REAL do painel: numa coluna de
+   268px, duas colunas davam ~127px por célula e o rótulo cortava. */
+.conv-raiz .conv-painel { container-type: inline-size; }
+.sgp-acoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container (max-width: 268px) { .sgp-acoes { grid-template-columns: minmax(0, 1fr); } }
+.chat-painel-voltar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  width: 100%;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--chat-line-soft);
+  background: var(--color-accent-surface);
+  color: var(--chat-accent-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.chat-painel-voltar:hover { color: var(--color-ui-ink-strong); }
+.chat-painel-voltar:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
+
 /* ---------- Larguras da mesa ----------
    Uma regra só, decidida em JS pelo espaço REAL (useWorkspaceLayout): a
    conversa tem piso de 420px e nunca cede. Quem cede, em ordem fixa, é a
@@ -232,5 +281,3 @@
 .chat-workspace .chat-workspace-conversation.is-painel-alternado { flex-direction: column; }
 .chat-workspace .chat-workspace-conversation.is-painel-alternado > div:first-child { display: none; }
 .chat-workspace .chat-workspace-conversation.is-painel-alternado > :is(aside, .chat-workspace-customer) { flex: 1 1 auto; width: 100%; border-left: 0; }
-.chat-workspace .chat-painel-voltar { display: flex; align-items: center; gap: 6px; flex: none; padding: 10px 16px; font-size: 12.5px; color: var(--color-ui-ink-muted); border-bottom: 1px solid var(--chat-line-soft); }
-.chat-workspace .chat-painel-voltar:hover { color: var(--color-ui-ink-strong); }

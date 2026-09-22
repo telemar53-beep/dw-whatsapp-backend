@@ -14,6 +14,16 @@ const MEDIA_TYPE_LABELS = {
   pix: '💠 Pix',
 };
 
+// O filete lateral diz o estado sem gastar uma linha de texto. Mesmo
+// vocabulario de Supervisao: laranja em atendimento, ambar esperando, roxo com
+// a IA. Deriva so de campos que a lista ja recebe.
+function estadoDaConversa(conversation) {
+  if (conversation.status === 'closed') return 'encerrado';
+  if (conversation.assignedAgentId || conversation.status === 'assigned') return 'atendimento';
+  if (conversation.triageState === 'pending') return 'automacao';
+  return 'espera';
+}
+
 function getPreviewText(conversation) {
   // O conteúdo de uma mensagem 'pix' é o código copia e cola — nunca deve aparecer
   // na prévia da lista, então esse tipo é checado antes do lastMessageContent.
@@ -112,27 +122,46 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
             IDENTICA — a selecao existia so como classe CSS. */}
         <div role="button" tabIndex={0} onClick={handleSelect} onKeyDown={handleKeyDown}
           aria-current={selected ? 'true' : undefined}
+          data-estado={estadoDaConversa(conversation)}
           className={`chat-conversation-row ${selected ? 'is-selected' : ''} ${unread ? 'is-unread' : ''}`}>
+          {/* A foto ancora a varredura vertical: sem ela o item era 100% texto
+              cinza em quatro tamanhos. `ContactAvatar` ja cai para as iniciais
+              quando o contato nao tem foto. */}
+          <span className="chat-conversation-figure">
+            <ContactAvatar
+              contactId={conversation.contactId}
+              avatarPath={conversation.contactAvatarPath}
+              displayName={conversation.contactDisplayName}
+              phoneNumber={conversation.contactPhoneNumber}
+              size={36}
+            />
+          </span>
           <div className="chat-conversation-summary">
             <span className="chat-conversation-name" title={nameLabel}>{nameLabel}</span>
-            {unread && <span className="chat-conversation-unread" title="Mensagem não lida" aria-label="Mensagem não lida" />}
             {messageTime && <span className="chat-conversation-time" title={showArrivalTime ? 'Horário de chegada à fila' : 'Horário da última mensagem'}>{messageTime}</span>}
           </div>
           <div className="chat-conversation-preview">
             {conversation.lastMessageDirection === 'outbound' && <MessageStatusTicks status={conversation.lastMessageStatus} />}
             <span className="chat-conversation-snippet">{previewText}</span>
+            {/* Marca, nao contador: o servidor nao devolve quantas mensagens
+                nao lidas existem — `useUnreadMyConversations` guarda um Set de
+                ids da sessao. Um numero aqui seria inventado. */}
+            {unread && <span className="chat-conversation-unread" title="Mensagem não lida" aria-label="Mensagem não lida" />}
           </div>
           {(conversation.contactCityName || conversation.sectorName || conversation.triageState === 'pending' || conversation.aiTriageCompletedAt || conversation.assignedAgentName) && (
             <div className="chat-conversation-context">
-              {conversation.contactCityName && <span>{conversation.contactCityName}</span>}
-              {conversation.sectorName && <span>{conversation.sectorName}</span>}
+              {conversation.contactCityName && <span className="chat-conversation-chip">{conversation.contactCityName}</span>}
+              {conversation.sectorName && <span className="chat-conversation-chip">{conversation.sectorName}</span>}
               {conversation.triageState === 'pending' && <span className="chat-conversation-ai">IA em triagem</span>}
               {conversation.aiTriageCompletedAt && <>
-                <span className="chat-conversation-ai">Triagem IA{conversation.aiTriageReasonName ? `: ${conversation.aiTriageReasonName}` : ''}</span>
-                {conversation.aiTriageLowConfidence && <span className="text-wa-warn-text">Confiança baixa</span>}
+                {/* "IA · motivo" no lugar de "Triagem IA: motivo": a cor lavanda ja diz
+                    de onde vem, e o prefixo longo custava ~55px da linha que cidade
+                    e setor precisam. */}
+                <span className="chat-conversation-ai">IA{conversation.aiTriageReasonName ? ` · ${conversation.aiTriageReasonName}` : ''}</span>
+                {conversation.aiTriageLowConfidence && <span className="chat-conversation-alerta" title="A triagem da IA ficou com confiança baixa" aria-label="Triagem com confiança baixa">⚠</span>}
                 {conversation.aiTriageResolvedByAi && <span className="chat-conversation-ai">Resolvido pela IA</span>}
               </>}
-              {conversation.assignedAgentName && <span>{conversation.assignedAgentName}</span>}
+              {conversation.assignedAgentName && <span className="chat-conversation-chip is-dono">{conversation.assignedAgentName}</span>}
             </div>
           )}
         </div>

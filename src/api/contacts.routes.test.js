@@ -1,5 +1,6 @@
 jest.mock('../conversations/contact.repository');
 jest.mock('../media/media-storage');
+jest.mock('../cities/city.repository');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -8,6 +9,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { findContactById, updateContact } = require('../conversations/contact.repository');
 const { getMediaFilePath } = require('../media/media-storage');
+const { findCityById } = require('../cities/city.repository');
 const contactsRoutes = require('./contacts.routes');
 
 function buildApp() {
@@ -311,5 +313,121 @@ describe('PATCH /api/contacts/:id', () => {
       expect(res.status).toBe(200);
       expect(updateContact).toHaveBeenCalledWith('contact-1', { cityId: null });
     });
+  });
+});
+
+describe('PATCH /api/contacts/:id — localidade', () => {
+  const MUNICIPIO_A = '11111111-1111-4111-8111-111111111111';
+  const MUNICIPIO_B = '22222222-2222-4222-8222-222222222222';
+  const POVOADO_DE_A = '33333333-3333-4333-8333-333333333333';
+
+  function tokenDeAtendente() {
+    return `Bearer ${jwt.sign({ agentId: 'agent-1', role: 'agent' }, process.env.JWT_SECRET)}`;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findCityById.mockImplementation(async (id) => {
+      if (id === MUNICIPIO_A) return { id: MUNICIPIO_A, name: 'Cidade A', kind: 'city', parentId: null };
+      if (id === MUNICIPIO_B) return { id: MUNICIPIO_B, name: 'Cidade B', kind: 'city', parentId: null };
+      if (id === POVOADO_DE_A) return { id: POVOADO_DE_A, name: 'Povoado de A', kind: 'locality', parentId: MUNICIPIO_A };
+      return null;
+    });
+  });
+
+  test('aceita localidade cujo pai e o municipio enviado', async () => {
+    updateContact.mockResolvedValue({
+      id: 'c1', displayName: 'Ana', cityId: MUNICIPIO_A, localityId: POVOADO_DE_A, internalNote: null,
+    });
+
+    const res = await request(buildApp()).patch('/api/contacts/c1')
+      .set('Authorization', tokenDeAtendente())
+      .send({ cityId: MUNICIPIO_A, localityId: POVOADO_DE_A });
+
+    expect(res.status).toBe(200);
+    expect(res.body.localityId).toBe(POVOADO_DE_A);
+    expect(updateContact).toHaveBeenCalledWith('c1', { cityId: MUNICIPIO_A, localityId: POVOADO_DE_A });
+  });
+
+  test('recusa localidade de outro municipio com 400', async () => {
+    const res = await request(buildApp()).patch('/api/contacts/c1')
+      .set('Authorization', tokenDeAtendente())
+      .send({ cityId: MUNICIPIO_B, localityId: POVOADO_DE_A });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('locality does not belong to city');
+    expect(updateContact).not.toHaveBeenCalled();
+  });
+
+  test('recusa um municipio no lugar da localidade', async () => {
+    const res = await request(buildApp()).patch('/api/contacts/c1')
+      .set('Authorization', tokenDeAtendente())
+      .send({ cityId: MUNICIPIO_A, localityId: MUNICIPIO_B });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('locality does not belong to city');
+  });
+
+  test('recusa localityId que nao e uuid', async () => {
+    const res = await request(buildApp()).patch('/api/contacts/c1')
+      .set('Authorization', tokenDeAtendente())
+      .send({ localityId: 'nao-e-uuid' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('localityId must be a UUID or null');
+  });
+
+  test('localityId null apaga a localidade', async () => {
+    updateContact.mockResolvedValue({
+      id: 'c1', displayName: 'Ana', cityId: MUNICIPIO_A, localityId: null, internalNote: null,
+    });
+
+    const res = await request(buildApp()).patch('/api/contacts/c1')
+      .set('Authorization', tokenDeAtendente())
+      .send({ localityId: null });
+
+    expect(res.status).toBe(200);
+    expect(updateContact).toHaveBeenCalledWith('c1', { localityId: null });
+  });
+
+  test('trocar so o municipio limpa a localidade que deixou de pertencer a ele', async () => {
+    findContactById.mockResolvedValue({ id: 'c1', cityId: MUNICIPIO_A, localityId: POVOADO_DE_A });
+    updateContact.mockResolvedValue({
+      id: 'c1', displayName: 'Ana', cityId: MUNICIPIO_B, localityId: null, internalNote: null,
+    });
+
+    const res = await request(buildApp()).patch('/api/contacts/c1')
+      .set('Authorization', tokenDeAtendente())
+      .send({ cityId: MUNICIPIO_B });
+
+    expect(res.status).toBe(200);
+    expect(res.body.localityId).toBeNull();
+    expect(updateContact).toHaveBeenCalledWith('c1', { cityId: MUNICIPIO_B, localityId: null });
+  });
+
+  test('trocar para o MESMO municipio nao mexe na localidade', async () => {
+    findContactById.mockResolvedValue({ id: 'c1', cityId: MUNICIPIO_A, localityId: POVOADO_DE_A });
+    updateContact.mockResolvedValue({
+      id: 'c1', displayName: 'Ana', cityId: MUNICIPIO_A, localityId: POVOADO_DE_A, internalNote: null,
+    });
+
+    await request(buildApp()).patch('/api/contacts/c1')
+      .set('Authorization', tokenDeAtendente())
+      .send({ cityId: MUNICIPIO_A });
+
+    expect(updateContact).toHaveBeenCalledWith('c1', { cityId: MUNICIPIO_A });
+  });
+
+  test('editar so o nome nao encosta em cidade nem localidade', async () => {
+    updateContact.mockResolvedValue({
+      id: 'c1', displayName: 'Nova', cityId: MUNICIPIO_A, localityId: POVOADO_DE_A, internalNote: null,
+    });
+
+    await request(buildApp()).patch('/api/contacts/c1')
+      .set('Authorization', tokenDeAtendente())
+      .send({ displayName: 'Nova' });
+
+    expect(updateContact).toHaveBeenCalledWith('c1', { displayName: 'Nova' });
+    expect(findContactById).not.toHaveBeenCalled();
   });
 });

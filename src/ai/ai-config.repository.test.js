@@ -1,6 +1,6 @@
 const { getPool, closePool } = require('../db/pool');
 const {
-  getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, listToolPermissions, setToolPermission, isToolEnabled,
+  getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, patchTriageConfig, listToolPermissions, setToolPermission, isToolEnabled,
   updateAssistantSuggestionsEnabled,
 } = require('./ai-config.repository');
 
@@ -210,5 +210,175 @@ describe('assistantSuggestionsEnabled', () => {
     expect(depois.mode).toBe(antes.mode);
     expect(depois.transcriptionEnabled).toBe(antes.transcriptionEnabled);
     expect(depois.triageMaxQuestions).toBe(antes.triageMaxQuestions);
+  });
+});
+
+// ADR-011: campo não enviado permanece inalterado. `updateTriageConfig` grava
+// as oito colunas sempre — é o que faz três telas que editam pedaços da mesma
+// linha reverterem umas às outras. `patchTriageConfig` só toca no que veio.
+describe('patchTriageConfig: update parcial sem reset lateral', () => {
+  // ai_config e uma linha singleton que a migration semeia e NINGUEM trunca
+  // entre os testes. Sobrescrever o system_prompt aqui sem devolver o valor
+  // original deixaria o banco de teste corrompido para as proximas execucoes
+  // -- e o teste do seed, que roda antes, passaria a falhar sozinho.
+  let linhaOriginal;
+
+  beforeAll(async () => {
+    const { rows } = await getPool().query('SELECT * FROM ai_config WHERE id = 1');
+    linhaOriginal = rows[0];
+  });
+
+  afterAll(async () => {
+    await getPool().query(
+      `UPDATE ai_config SET
+         model = $1, mode = $2, system_prompt = $3, api_key = $4,
+         triage_confidence_threshold = $5, triage_max_questions = $6, triage_timeout_minutes = $7,
+         triage_extra_instructions = $8, triage_resolved_reason_id = $9,
+         night_start_time = $10, night_end_time = $11, triage_read_receipts_daytime = $12,
+         transcription_enabled = $13, transcription_model = $14, transcription_prompt = $15
+       WHERE id = 1`,
+      [
+        linhaOriginal.model, linhaOriginal.mode, linhaOriginal.system_prompt, linhaOriginal.api_key,
+        linhaOriginal.triage_confidence_threshold, linhaOriginal.triage_max_questions,
+        linhaOriginal.triage_timeout_minutes, linhaOriginal.triage_extra_instructions,
+        linhaOriginal.triage_resolved_reason_id, linhaOriginal.night_start_time,
+        linhaOriginal.night_end_time, linhaOriginal.triage_read_receipts_daytime,
+        linhaOriginal.transcription_enabled, linhaOriginal.transcription_model,
+        linhaOriginal.transcription_prompt,
+      ]
+    );
+    await closePool();
+  });
+
+  beforeEach(async () => {
+    await getPool().query(`
+      UPDATE ai_config SET
+        model = 'gpt-5.4-mini', mode = 'assistant', system_prompt = 'PROMPT ORIGINAL', api_key = 'sk-guardada',
+        triage_confidence_threshold = 0.800, triage_max_questions = 2, triage_timeout_minutes = 3,
+        triage_extra_instructions = 'instrucoes originais',
+        night_start_time = '20:00', night_end_time = '08:00',
+        triage_read_receipts_daytime = true,
+        transcription_enabled = true, transcription_model = 'whisper-1', transcription_prompt = 'vocabulario'
+      WHERE id = 1`);
+  });
+
+  test('altera somente um campo e os outros sete ficam intactos', async () => {
+    const depois = await patchTriageConfig({ triageMaxQuestions: 5 });
+
+    expect(depois.triageMaxQuestions).toBe(5);
+    expect(Number(depois.triageConfidenceThreshold)).toBeCloseTo(0.8, 3);
+    expect(depois.triageTimeoutMinutes).toBe(3);
+    expect(depois.triageExtraInstructions).toBe('instrucoes originais');
+    expect(depois.nightStartTime).toBe('20:00');
+    expect(depois.nightEndTime).toBe('08:00');
+    expect(depois.triageReadReceiptsDaytime).toBe(true);
+  });
+
+  // O ponto exato da ADR-011: false, 0 e "" são VALORES, não ausência.
+  test('false grava false', async () => {
+    const depois = await patchTriageConfig({ triageReadReceiptsDaytime: false });
+
+    expect(depois.triageReadReceiptsDaytime).toBe(false);
+    expect(depois.triageExtraInstructions).toBe('instrucoes originais');
+  });
+
+  test('0 grava zero, não vira o default', async () => {
+    const depois = await patchTriageConfig({ triageMaxQuestions: 0 });
+
+    expect(depois.triageMaxQuestions).toBe(0);
+    expect(Number(depois.triageConfidenceThreshold)).toBeCloseTo(0.8, 3);
+  });
+
+  test('string vazia grava vazio, não mantém o texto antigo', async () => {
+    const depois = await patchTriageConfig({ triageExtraInstructions: '' });
+
+    expect(depois.triageExtraInstructions).toBe('');
+    expect(depois.triageMaxQuestions).toBe(2);
+  });
+
+  test('campo omitido não muda: mexer na janela não zera a triagem', async () => {
+    const depois = await patchTriageConfig({ nightStartTime: '22:00', nightEndTime: '06:00' });
+
+    expect(depois.nightStartTime).toBe('22:00');
+    expect(depois.nightEndTime).toBe('06:00');
+    expect(depois.triageMaxQuestions).toBe(2);
+    expect(depois.triageTimeoutMinutes).toBe(3);
+    expect(depois.triageExtraInstructions).toBe('instrucoes originais');
+    expect(depois.triageReadReceiptsDaytime).toBe(true);
+  });
+
+  // O inverso, que era o vetor real: salvar a Triagem apagava a janela.
+  test('mexer na triagem NÃO apaga a janela noturna', async () => {
+    const depois = await patchTriageConfig({ triageMaxQuestions: 4, triageExtraInstructions: 'novas' });
+
+    expect(depois.nightStartTime).toBe('20:00');
+    expect(depois.nightEndTime).toBe('08:00');
+  });
+
+  test('null desliga a janela, e só ela', async () => {
+    const depois = await patchTriageConfig({ nightStartTime: null, nightEndTime: null });
+
+    expect(depois.nightStartTime).toBeNull();
+    expect(depois.nightEndTime).toBeNull();
+    expect(depois.triageReadReceiptsDaytime).toBe(true);
+    expect(depois.triageExtraInstructions).toBe('instrucoes originais');
+  });
+
+  test('objeto vazio não muda nada', async () => {
+    const antes = await getAiConfig();
+    const depois = await patchTriageConfig({});
+
+    expect(depois.triageMaxQuestions).toBe(antes.triageMaxQuestions);
+    expect(depois.triageExtraInstructions).toBe(antes.triageExtraInstructions);
+    expect(depois.nightStartTime).toBe(antes.nightStartTime);
+  });
+
+  // A whitelist é o que impede o caminho novo de virar porta dos fundos para
+  // as colunas que têm regra própria em outra rota.
+  test('não grava campo fora da whitelist, mesmo se pedirem', async () => {
+    await patchTriageConfig({
+      triageMaxQuestions: 1,
+      systemPrompt: 'PROMPT INVADIDO',
+      model: 'modelo-invadido',
+      mode: 'automatic',
+      apiKey: 'sk-invadida',
+      transcriptionEnabled: false,
+    });
+
+    const depois = await getAiConfig();
+    expect(depois.triageMaxQuestions).toBe(1);
+    expect(depois.systemPrompt).toBe('PROMPT ORIGINAL');
+    expect(depois.model).toBe('gpt-5.4-mini');
+    expect(depois.mode).toBe('assistant');
+    expect(depois.apiKey).toBe('sk-guardada');
+    expect(depois.transcriptionEnabled).toBe(true);
+  });
+
+  test('nenhum reset de system_prompt, modelo, chave ou transcrição em patch nenhum', async () => {
+    for (const mudanca of [
+      { triageMaxQuestions: 5 },
+      { triageReadReceiptsDaytime: false },
+      { triageExtraInstructions: '' },
+      { nightStartTime: null, nightEndTime: null },
+      { triageConfidenceThreshold: 0.5 },
+    ]) {
+      await patchTriageConfig(mudanca);
+      const depois = await getAiConfig();
+      expect(depois.systemPrompt).toBe('PROMPT ORIGINAL');
+      expect(depois.model).toBe('gpt-5.4-mini');
+      expect(depois.mode).toBe('assistant');
+      expect(depois.apiKey).toBe('sk-guardada');
+      expect(depois.transcriptionEnabled).toBe(true);
+      expect(depois.transcriptionModel).toBe('whisper-1');
+      expect(depois.transcriptionPrompt).toBe('vocabulario');
+    }
+  });
+
+  test('as permissões de ferramenta não são tocadas', async () => {
+    await setToolPermission('gerar_pix', true);
+
+    await patchTriageConfig({ triageMaxQuestions: 3 });
+
+    expect(await isToolEnabled('gerar_pix')).toBe(true);
   });
 });

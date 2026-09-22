@@ -5,7 +5,7 @@ jest.mock('../reasons/reason.repository');
 const express = require('express');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
-const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, updateAssistantSuggestionsEnabled, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
+const { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, patchTriageConfig, updateAssistantSuggestionsEnabled, listToolPermissions, setToolPermission } = require('../ai/ai-config.repository');
 const { listModels, OpenAiAuthError } = require('../ai/openai-client');
 const { findReasonById } = require('../reasons/reason.repository');
 const adminAiRoutes = require('./admin-ai.routes');
@@ -487,5 +487,178 @@ describe('PUT /api/admin/ai/assistant-suggestions', () => {
 
     expect(res.status).toBe(403);
     expect(updateAssistantSuggestionsEnabled).not.toHaveBeenCalled();
+  });
+});
+
+// PATCH /triage — update parcial (ADR-011). O PUT continua existindo e com o
+// mesmo contrato: o painel de hoje manda as oito colunas por decisão
+// explícita, e três telas compartilham essa linha.
+describe('PATCH /api/admin/ai/triage', () => {
+  const CONFIG_GRAVADA = {
+    id: 1, apiKey: 'sk-1234567890abcd', model: 'gpt-x', mode: 'assistant', systemPrompt: 'PROMPT ORIGINAL',
+    triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 3,
+    triageExtraInstructions: 'instrucoes originais', triageResolvedReasonId: null,
+    nightStartTime: '20:00', nightEndTime: '08:00', triageReadReceiptsDaytime: true,
+  };
+
+  beforeEach(() => {
+    getAiConfig.mockResolvedValue(CONFIG_GRAVADA);
+    patchTriageConfig.mockImplementation(async (mudancas) => ({ ...CONFIG_GRAVADA, ...mudancas }));
+  });
+
+  function enviar(corpo, role) {
+    return request(buildApp())
+      .patch('/api/admin/ai/triage')
+      .set('Authorization', 'Bearer ' + tokenFor(role || 'admin'))
+      .send(corpo);
+  }
+
+  test('altera somente um campo, e so ele chega ao repositorio', async () => {
+    const res = await enviar({ triageMaxQuestions: 5 });
+
+    expect(res.status).toBe(200);
+    expect(patchTriageConfig).toHaveBeenCalledWith({ triageMaxQuestions: 5 });
+  });
+
+  // Se `false`, `0` e `''` fossem confundidos com ausente, seria impossivel
+  // desligar, zerar ou limpar qualquer um desses campos.
+  test('false chega como false', async () => {
+    await enviar({ triageReadReceiptsDaytime: false });
+    expect(patchTriageConfig).toHaveBeenCalledWith({ triageReadReceiptsDaytime: false });
+  });
+
+  test('0 chega como zero', async () => {
+    await enviar({ triageMaxQuestions: 0 });
+    expect(patchTriageConfig).toHaveBeenCalledWith({ triageMaxQuestions: 0 });
+  });
+
+  test('string vazia chega como string vazia', async () => {
+    await enviar({ triageExtraInstructions: '' });
+    expect(patchTriageConfig).toHaveBeenCalledWith({ triageExtraInstructions: '' });
+  });
+
+  test('campo omitido nao aparece no objeto entregue ao repositorio', async () => {
+    await enviar({ triageMaxQuestions: 4 });
+
+    const mudancas = patchTriageConfig.mock.calls[0][0];
+    expect(Object.keys(mudancas)).toEqual(['triageMaxQuestions']);
+    expect('nightStartTime' in mudancas).toBe(false);
+    expect('triageExtraInstructions' in mudancas).toBe(false);
+    expect('triageResolvedReasonId' in mudancas).toBe(false);
+  });
+
+  // A whitelist recusa em vez de ignorar em silencio: quem mandar systemPrompt
+  // por aqui precisa saber que nao foi gravado.
+  test('recusa campo fora da whitelist', async () => {
+    for (const corpo of [
+      { systemPrompt: 'invadido' },
+      { model: 'outro' },
+      { mode: 'automatic' },
+      { apiKey: 'sk-invadida' },
+      { transcriptionEnabled: false },
+      { maxToolsPerInteraction: 99 },
+      { triageMaxQuestions: 3, systemPrompt: 'junto com um valido' },
+    ]) {
+      const res = await enviar(corpo);
+      expect(res.status).toBe(400);
+      expect(patchTriageConfig).not.toHaveBeenCalled();
+    }
+  });
+
+  test('valida com as mesmas regras do PUT', async () => {
+    expect((await enviar({ triageMaxQuestions: 9 })).status).toBe(400);
+    expect((await enviar({ triageMaxQuestions: 1.5 })).status).toBe(400);
+    expect((await enviar({ triageTimeoutMinutes: 0 })).status).toBe(400);
+    expect((await enviar({ triageConfidenceThreshold: 2 })).status).toBe(400);
+    expect((await enviar({ triageConfidenceThreshold: null })).status).toBe(400);
+    expect((await enviar({ triageExtraInstructions: 42 })).status).toBe(400);
+    expect((await enviar({ triageReadReceiptsDaytime: 'sim' })).status).toBe(400);
+    expect((await enviar({ nightStartTime: '25:00' })).status).toBe(400);
+    expect(patchTriageConfig).not.toHaveBeenCalled();
+  });
+
+  // Risco que so o PATCH cria: mandar meia janela deixaria a outra metade
+  // como esta. A regra e conferida contra o estado final, nao contra o corpo.
+  test('meia janela e recusada olhando o que ja esta gravado', async () => {
+    getAiConfig.mockResolvedValue({ ...CONFIG_GRAVADA, nightStartTime: null, nightEndTime: null });
+
+    const res = await enviar({ nightStartTime: '22:00' });
+
+    expect(res.status).toBe(400);
+    expect(patchTriageConfig).not.toHaveBeenCalled();
+  });
+
+  test('completar a janela que falta e aceito', async () => {
+    getAiConfig.mockResolvedValue({ ...CONFIG_GRAVADA, nightStartTime: '20:00', nightEndTime: null });
+
+    const res = await enviar({ nightEndTime: '06:00' });
+
+    expect(res.status).toBe(200);
+    expect(patchTriageConfig).toHaveBeenCalledWith({ nightEndTime: '06:00' });
+  });
+
+  test('desligar so o comeco da janela, com o fim ja gravado, e recusado', async () => {
+    const res = await enviar({ nightStartTime: null });
+
+    expect(res.status).toBe(400);
+    expect(patchTriageConfig).not.toHaveBeenCalled();
+  });
+
+  test('desligar a janela inteira e aceito', async () => {
+    const res = await enviar({ nightStartTime: '', nightEndTime: '' });
+
+    expect(res.status).toBe(200);
+    expect(patchTriageConfig).toHaveBeenCalledWith({ nightStartTime: null, nightEndTime: null });
+  });
+
+  test('motivo inexistente ou inativo e recusado, como no PUT', async () => {
+    findReasonById.mockResolvedValue(null);
+    expect((await enviar({ triageResolvedReasonId: MOTIVO_ID })).status).toBe(400);
+
+    findReasonById.mockResolvedValue({ id: MOTIVO_ID, name: 'x', active: false });
+    expect((await enviar({ triageResolvedReasonId: MOTIVO_ID })).status).toBe(400);
+
+    expect((await enviar({ triageResolvedReasonId: 'nao-e-uuid' })).status).toBe(400);
+    expect(patchTriageConfig).not.toHaveBeenCalled();
+  });
+
+  test('desligar o encerramento pela IA sem mexer no resto', async () => {
+    const res = await enviar({ triageResolvedReasonId: null });
+
+    expect(res.status).toBe(200);
+    expect(patchTriageConfig).toHaveBeenCalledWith({ triageResolvedReasonId: null });
+  });
+
+  test('corpo vazio e aceito e nao muda nada', async () => {
+    const res = await enviar({});
+
+    expect(res.status).toBe(200);
+    expect(patchTriageConfig).toHaveBeenCalledWith({});
+  });
+
+  test('exige admin, como o PUT', async () => {
+    expect((await enviar({ triageMaxQuestions: 1 }, 'agent')).status).toBe(403);
+    expect((await request(buildApp()).patch('/api/admin/ai/triage').send({})).status).toBe(401);
+    expect(patchTriageConfig).not.toHaveBeenCalled();
+  });
+
+  // O PUT nao pode ter sido tocado: e o que as tres telas usam hoje.
+  test('o PUT continua com o contrato de sempre', async () => {
+    updateTriageConfig.mockResolvedValue(CONFIG_GRAVADA);
+
+    const res = await request(buildApp())
+      .put('/api/admin/ai/triage')
+      .set('Authorization', 'Bearer ' + tokenFor('admin'))
+      .send({
+        triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+        triageExtraInstructions: 'x', nightStartTime: '21:00', nightEndTime: '07:00',
+        triageReadReceiptsDaytime: true,
+      });
+
+    expect(res.status).toBe(200);
+    expect(updateTriageConfig).toHaveBeenCalledWith(expect.objectContaining({
+      triageConfidenceThreshold: 0.9, triageMaxQuestions: 3, triageTimeoutMinutes: 5,
+    }));
+    expect(patchTriageConfig).not.toHaveBeenCalled();
   });
 });

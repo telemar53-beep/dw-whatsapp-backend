@@ -1,4 +1,5 @@
 const { getPool } = require('../db/pool');
+const { COLUNAS_ATUALIZAVEIS, CAMPOS_ATUALIZAVEIS } = require('./ai-config.campos');
 
 function toConfig(row) {
   return {
@@ -123,4 +124,38 @@ async function isToolEnabled(toolName) {
   return result.rows[0].enabled;
 }
 
-module.exports = { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, updateAssistantSuggestionsEnabled, listToolPermissions, setToolPermission, isToolEnabled };
+// Update PARCIAL da configuração de triagem (ADR-011).
+//
+// `updateTriageConfig` grava as oito colunas sempre, então quem quisesse mudar
+// só a janela noturna tinha de reenviar as outras sete — e reenviar significa
+// reenviar o que estava em cache, revertendo em silêncio o que outra pessoa
+// mudou no meio. Três telas editam pedaços dessa mesma linha.
+//
+// Aqui só entra no SET a coluna cuja chave veio no objeto. Ausente não é
+// `null`, não é `false` e não é o default: a coluna nem aparece no UPDATE.
+// É por isso que a checagem é `hasOwnProperty` e não `!== undefined` — um
+// `{ nightStartTime: undefined }` explícito também é tratado como ausente,
+// que é o que o JSON de uma requisição jamais produz mas um objeto montado em
+// código pode.
+//
+// A whitelist mora em ai-config.campos.js — ver o porquê lá.
+
+async function patchTriageConfig(campos) {
+  const enviados = CAMPOS_ATUALIZAVEIS.filter(
+    (campo) => campos && Object.prototype.hasOwnProperty.call(campos, campo) && campos[campo] !== undefined
+  );
+
+  // Nada para mudar: devolve o que está gravado, sem tocar em updated_at.
+  if (enviados.length === 0) return getAiConfig();
+
+  const atribuicoes = enviados.map((campo, i) => `${COLUNAS_ATUALIZAVEIS[campo]} = $${i + 1}`);
+  const valores = enviados.map((campo) => campos[campo]);
+
+  const result = await getPool().query(
+    `UPDATE ai_config SET ${atribuicoes.join(', ')}, updated_at = now() WHERE id = 1 RETURNING *`,
+    valores
+  );
+  return toConfig(result.rows[0]);
+}
+
+module.exports = { getAiConfig, updateAiConfig, updateTranscriptionConfig, updateTriageConfig, patchTriageConfig, updateAssistantSuggestionsEnabled, listToolPermissions, setToolPermission, isToolEnabled };

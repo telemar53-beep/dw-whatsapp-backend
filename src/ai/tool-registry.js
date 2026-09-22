@@ -26,6 +26,9 @@ const { analisarComprovante } = require('./receipt-analysis');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('./billing-delivery.repository');
 const { descreverUsoAnterior } = require('./receipt-usage-text');
+const { listarPlanosDisponiveis } = require('../plans/plan.repository');
+const { listPlaces, findCityById } = require('../cities/city.repository');
+const { encontrarCidade } = require('../cities/city-matcher');
 
 // A imagem só sai do servidor depois de passar por estes dois filtros: o
 // que a OpenAI consegue ler de verdade, e um teto de bytes.
@@ -437,6 +440,29 @@ function legivel(serializado) {
   return String(serializado).slice(0, 160);
 }
 
+// Formatacao deterministica, sem Intl: o valor vai para o MODELO, e o formato
+// tem de ser o mesmo em qualquer maquina. Um bug de locale no Intl ja custou
+// caro neste projeto, e aqui nao ha nada que justifique o risco.
+function reais(valor) {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) return null;
+  return `R$ ${numero.toFixed(2).replace('.', ',')}`;
+}
+
+// O que o modelo ve de um plano. A forma e montada AQUI, campo a campo, em vez
+// de repassar a linha do cadastro: a observacao interna e os campos
+// administrativos nao podem vazar por descuido de um SELECT que cresceu.
+function planoParaModelo(plano) {
+  return {
+    id: plano.id,
+    nome: plano.name,
+    velocidadeMbps: plano.speedMbps,
+    mensalidade: plano.monthlyPrice,
+    mensalidadeFormatada: reais(plano.monthlyPrice),
+    instalacao: plano.installCondition || null,
+  };
+}
+
 const TOOLS = [
   {
     nome: 'buscar_cliente',
@@ -811,6 +837,72 @@ const TOOLS = [
         suspensos,
         offline,
         ...(instrucao ? { instrucao } : {}),
+      };
+    },
+  },
+  {
+    nome: 'consultar_planos',
+    categoria: 'CONSULTA',
+    descricao: 'Lista os planos que a operação vende hoje, com velocidade, mensalidade e condição de instalação. Use ANTES de falar de preço, de velocidade oferecida ou de condição comercial. Não precisa de CPF, contrato nem identificação.',
+    // Catálogo comercial: não há contrato a conferir, e quem pergunta preço
+    // quase nunca é cliente ainda. Sem exigeIdentidadeForte de propósito.
+    isentoDeProprietario: true,
+    parametros: { type: 'object', properties: {}, required: [] },
+    validar() { return { ok: true, args: {} }; },
+    async executar() {
+      const planos = await listarPlanosDisponiveis();
+      if (planos.length === 0) {
+        return {
+          planos: [],
+          instrucao: 'Não há plano cadastrado. NÃO invente plano, velocidade nem preço, e não repita valores que você tenha visto antes: encaminhe para o setor da lista acima que cuidar de vendas e contratação.',
+        };
+      }
+      return {
+        planos: planos.map(planoParaModelo),
+        instrucao: 'Estes são os planos oficiais. Ofereça SOMENTE o que está aqui, mantendo junto o nome, a velocidade, a mensalidade e a instalação de cada um — não troque preço entre planos. Um valor que o cliente mencionou, ou que apareceu antes na conversa, NÃO substitui esta lista: se divergir, vale esta. Não liste tudo quando ele já escolheu.',
+      };
+    },
+  },
+  {
+    nome: 'verificar_cobertura',
+    categoria: 'CONSULTA',
+    descricao: 'Verifica se a operação atende a cidade, o povoado ou a localidade que o cliente informou. Use quando ele perguntar se tem internet no lugar dele. Não precisa de CPF, contrato nem identificação.',
+    isentoDeProprietario: true,
+    parametros: {
+      type: 'object',
+      properties: {
+        local: { type: 'string', description: 'Cidade, povoado ou localidade, como o cliente escreveu.' },
+      },
+      required: ['local'],
+    },
+    validar(args) {
+      const local = args && typeof args.local === 'string' ? args.local.trim() : '';
+      if (!local) return erro('local is required');
+      return { ok: true, args: { local } };
+    },
+    async executar(args) {
+      // Mesmo casamento do preenchimento automatico de cidade: tolerante a
+      // acento, caixa e espaco, e SEM chute quando ha mais de uma candidata
+      // parecida. Ambiguidade cai no mesmo lugar que ausencia — a verificar.
+      const lugar = encontrarCidade(args.local, await listPlaces());
+
+      // Ausencia no cadastro NAO e recusa. O cadastro nasceu para localizar
+      // contato, nao para desenhar a fronteira comercial: dizer "nao
+      // atendemos" com base nele perderia venda por falta de cadastro.
+      if (!lugar || !lugar.active || !lugar.served) {
+        return {
+          situacao: 'precisa_verificar_viabilidade',
+          consultado: args.local,
+          instrucao: 'NÃO diga que não atendemos e NÃO afirme que atendemos. Diga que a equipe confirma a viabilidade para o endereço dele e conclua para o setor da lista acima que cuidar de vendas e contratação.',
+        };
+      }
+
+      const pai = lugar.parentId ? await findCityById(lugar.parentId) : null;
+      return {
+        situacao: 'atendida',
+        local: lugar.name,
+        municipio: pai ? pai.name : null,
+        instrucao: 'Atendemos nesse local: diga isso e siga a conversa de venda. Atender o local NÃO garante instalação em qualquer rua ou endereço — a viabilidade do endereço exato é confirmada pela equipe, então não prometa instalação.',
       };
     },
   },

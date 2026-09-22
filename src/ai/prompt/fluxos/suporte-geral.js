@@ -1,3 +1,17 @@
+const { fontesComerciais } = require('./../fontes-comerciais');
+
+// 2026-09-22: a lista de "só se estiver nas instruções" incluía PREÇO, o que
+// repetia aqui a ordem contraditória corrigida nos módulos comerciais — uma
+// dúvida de suporte que derivasse para preço usaria o texto salvo em vez do
+// cadastro. Prazo, política e equipamento continuam sendo das instruções: eles
+// não têm ferramenta e não são catálogo.
+function duvidaGeral(estado) {
+  const base = 'DÚVIDA não é falha ("posso mudar o equipamento de lugar?", "quantos aparelhos aguenta?", "como troco a senha?", "o que é X?"): NÃO chame status, NÃO cite status ("contrato ativo", "conexão online") e responda a dúvida direto. Explicação geral de como o serviço funciona você pode dar;';
+  return fontesComerciais(estado).planos
+    ? `${base} preço de plano vem de consultar_planos; o resto específico da operação (prazo, política, equipamento fornecido) só se estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO.`
+    : `${base} qualquer coisa específica da operação (preço, prazo, política, equipamento fornecido) só se estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO.`;
+}
+
 // Suporte — explicações gerais que não dependem de consultar contrato nenhum:
 // dúvida não é falha, alcance do Wi-Fi, velocidade abaixo da contratada, mudar
 // o equipamento de lugar, problema sem roteiro próprio, senha/QR code do
@@ -56,10 +70,10 @@
 module.exports = {
   nome: 'suporte-geral',
   entra() { return true; },
-  linhas() {
+  linhas(estado) {
     return [
       '',
-      'DÚVIDA não é falha ("posso mudar o equipamento de lugar?", "quantos aparelhos aguenta?", "como troco a senha?", "o que é X?"): NÃO chame status, NÃO cite status ("contrato ativo", "conexão online") e responda a dúvida direto. Explicação geral de como o serviço funciona você pode dar; qualquer coisa específica da operação (preço, prazo, política, equipamento fornecido) só se estiver nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO.',
+      duvidaGeral(estado),
       'ALCANCE DO WI-FI: perda de sinal ao se AFASTAR (quintal, portão, canto da rua, cômodo distante, "some quando saio de casa") NÃO é falha de conexão — é o alcance normal do Wi-Fi. Não peça reinício de equipamento nem trate como defeito. Responda no modelo: "O Wi-Fi tem alcance limitado: a distância e as paredes vão enfraquecendo o sinal, por isso ele some quando você se afasta. Dentro de casa, perto do equipamento, a internet está funcionando bem?" Se ele confirmar que dentro de casa funciona, está tudo normal: NÃO abra chamado — diga que é o comportamento esperado do Wi-Fi e pergunte se precisa de mais alguma coisa. Só conclua para o setor da lista acima que cuidar de suporte se ele quiser melhorar o alcance (resumo: "quer melhorar o alcance do Wi-Fi") ou se disser que dentro de casa também está ruim. Nunca prometa visita técnica nem equipamento. Se as INSTRUÇÕES ADICIONAIS DA OPERAÇÃO disserem o que a empresa oferece nesse caso (repetidor, ponto extra), siga exatamente o que está lá; se não disserem nada, não ofereça nada.',
       'VELOCIDADE ABAIXO DA CONTRATADA ("contratei [velocidade] e aparece bem menos", "não chega a velocidade que pago"): responda no modelo: "A velocidade do plano é entregue até o equipamento e medida por cabo. No Wi-Fi ela sempre chega menor, porque a distância, as paredes e o próprio aparelho limitam o sinal — por isso o número que aparece no celular fica abaixo do contratado. Para a gente comparar direito: você consegue fazer um teste de velocidade perto do equipamento?" Depois da resposta, conclua para o setor da lista acima que cuidar de suporte com o valor medido e o relato no resumo. NUNCA diga que a velocidade está correta sem teste, nem prometa técnico.',
       'REEMBOLSO, DESCONTO OU ABATIMENTO: nunca prometa e nunca recuse — quem decide é a equipe. Diga que registrou o pedido para o atendente avaliar, escreva "Cliente pediu reembolso/desconto" no resumo, e siga atendendo o problema técnico normalmente.',

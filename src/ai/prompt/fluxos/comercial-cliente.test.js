@@ -171,3 +171,44 @@ describe('módulo comercial-cliente', () => {
     });
   });
 });
+
+describe('comercial-cliente com consultar_planos disponivel', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos'];
+  const SEM = ['buscar_cliente', 'concluir_triagem'];
+
+  function texto(ferramentas) {
+    return comercialCliente.linhas(estadoBase({
+      ferramentas,
+      identidade: { nivel: 'forte', origem: 'cpf', primeiroNome: 'Ana', contracts: [], contestado: false, sgpIndisponivel: false },
+    })).join('\n');
+  }
+
+  test('manda consultar em vez de copiar o bloco das instrucoes', () => {
+    const t = texto(COM);
+
+    expect(t).toMatch(/chame consultar_planos/);
+    expect(t).not.toMatch(/copiando o bloco das INSTRUÇÕES ADICIONAIS/);
+  });
+
+  test('mantem a associacao plano-preco-instalacao e nao repete a tabela apos a escolha', () => {
+    const t = texto(COM);
+
+    expect(t).toMatch(/DAQUELE mesmo plano/);
+    expect(t).toMatch(/sem repetir a tabela depois que ele já escolheu/);
+  });
+
+  test('preco do cliente ou das instrucoes nao substitui o cadastro', () => {
+    expect(texto(COM)).toMatch(/não substitui o que a ferramenta devolveu/);
+  });
+
+  test('falha ou catalogo vazio nao autorizam inventar nem afirmar que consultou', () => {
+    expect(texto(COM)).toMatch(/não invente e não diga que consultou/i);
+  });
+
+  test('sem a ferramenta, o texto antigo fica intacto e nao manda chamar nada', () => {
+    const t = texto(SEM);
+
+    expect(t).not.toMatch(/chame consultar_planos/);
+    expect(t).toMatch(/copiando o bloco das INSTRUÇÕES ADICIONAIS DA OPERAÇÃO exatamente como está lá/);
+  });
+});

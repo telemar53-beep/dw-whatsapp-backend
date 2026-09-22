@@ -247,3 +247,81 @@ describe('módulo comercial-novo', () => {
     });
   });
 });
+
+describe('comercial-novo com consultar_planos disponivel', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos', 'verificar_cobertura'];
+  const SEM = ['buscar_cliente', 'concluir_triagem'];
+
+  function texto(ferramentas, extra = {}) {
+    return comercialNovo.linhas(estadoBase({ ferramentas, ...extra })).join('\n');
+  }
+
+  test('manda chamar a ferramenta, e NAO copiar o bloco das instrucoes', () => {
+    const t = texto(COM);
+
+    expect(t).toMatch(/chame consultar_planos/);
+    expect(t).not.toMatch(/copie o bloco de planos/);
+  });
+
+  test('exige manter nome, velocidade, mensalidade e instalacao do MESMO plano', () => {
+    const t = texto(COM);
+
+    expect(t).toMatch(/nunca troque valores entre planos/i);
+    expect(t).toMatch(/DAQUELE mesmo plano/);
+  });
+
+  test('instrucoes antigas e preco dito pelo cliente nao substituem o cadastro', () => {
+    const t = texto(COM);
+
+    expect(t).toMatch(/cliente disse ter ouvido/i);
+    expect(t).toMatch(/tabela escrita nas instruções NÃO substituem/);
+  });
+
+  test('catalogo vazio ou falha nao autorizam inventar nem dizer que consultou', () => {
+    const t = texto(COM);
+
+    expect(t).toMatch(/NÃO invente e NÃO diga que consultou/);
+  });
+
+  test('cobertura passa a vir da ferramenta, sem virar "nao atendemos"', () => {
+    const t = texto(COM);
+
+    expect(t).toMatch(/chame verificar_cobertura/);
+    expect(t).toMatch(/NÃO diga que não atendemos/);
+    // Comportamento de venda preservado.
+    expect(t).toMatch(/a pergunta de cobertura é o começo da venda, não o fim/);
+    expect(t).toMatch(/Atendemos em X!/);
+  });
+
+  test('o modelo da abertura aponta para o retorno da ferramenta', () => {
+    expect(texto(COM)).toContain('[os planos que consultar_planos devolveu, um por linha]');
+    expect(texto(SEM)).toContain('[bloco de planos das instruções]');
+  });
+
+  // O prompt nao pode mandar chamar ferramenta que nao existe no perfil.
+  test('sem a ferramenta no perfil, NAO manda chamar nada e o caminho antigo fica igual', () => {
+    const t = texto(SEM);
+
+    expect(t).not.toMatch(/chame consultar_planos/);
+    expect(t).not.toMatch(/chame verificar_cobertura/);
+    expect(t).toMatch(/copie o bloco de planos EXATAMENTE como está escrito nas instruções/);
+  });
+
+  test('so uma das duas disponivel nao manda chamar a outra', () => {
+    const t = texto(['buscar_cliente', 'consultar_planos']);
+
+    expect(t).toMatch(/chame consultar_planos/);
+    expect(t).not.toMatch(/chame verificar_cobertura/);
+  });
+
+  // Instrucoes de producao com precos conflitantes continuam saindo no prompt
+  // (painel.js), mas aqui a ordem e consultar a ferramenta.
+  test('com instrucoes antigas cheias de preco, a ordem continua sendo consultar', () => {
+    const t = texto(COM, {
+      config: { ...estadoBase().config, triageExtraInstructions: '500 Mega por R$ 80/mês' },
+    });
+
+    expect(t).toMatch(/chame consultar_planos/);
+    expect(t).not.toMatch(/copie o bloco de planos/);
+  });
+});

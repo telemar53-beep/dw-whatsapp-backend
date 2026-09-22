@@ -420,3 +420,86 @@ test('sem motivo de encerramento configurado, o prompt de terceiro não traz a i
   const texto = montarContexto(estadoBase({ terceiro: { titular: '[nome do titular]' } }));
   expect(texto).not.toContain('NÃO conclua a triagem nesse momento');
 });
+
+// Coerencia da COMPOSICAO, nao de um modulo isolado. O defeito de 2026-09-22
+// nao estava em nenhum modulo sozinho: estava no prompt montado, onde painel
+// mandava consultar a ferramenta e comercial-novo mandava copiar o texto.
+describe('fontes comerciais na composicao final', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos', 'verificar_cobertura'];
+  const SEM = ['buscar_cliente', 'concluir_triagem'];
+  const INSTRUCOES_ANTIGAS = 'PLANOS\n500 Mega — R$ 80/mês\n600 Mega — R$ 95/mês';
+
+  function prompt(ferramentas, extra = {}) {
+    return montarContexto(estadoBase({ ferramentas, ...extra }));
+  }
+
+  test('com as ferramentas, nenhuma ordem manda usar SOMENTE as instrucoes para plano ou cobertura', () => {
+    const t = prompt(COM, { config: { ...estadoBase().config, triageExtraInstructions: INSTRUCOES_ANTIGAS } });
+
+    expect(t).not.toMatch(/copie o bloco de planos/);
+    expect(t).not.toMatch(/Preço, planos e cobertura: informe SOMENTE/);
+    expect(t).not.toMatch(/mandam em preço, planos, cobertura e política comercial/);
+  });
+
+  test('com tabela antiga conflitante nas instrucoes, a ordem e consultar e a ferramenta prevalece', () => {
+    const t = prompt(COM, { config: { ...estadoBase().config, triageExtraInstructions: INSTRUCOES_ANTIGAS } });
+
+    // O texto salvo continua saindo inteiro: nao apagamos configuracao.
+    expect(t).toContain(INSTRUCOES_ANTIGAS);
+    expect(t).toMatch(/chame consultar_planos/);
+    expect(t).toMatch(/prevalece/i);
+  });
+
+  test('instrucoes vazias nao impedem o uso das ferramentas', () => {
+    const t = prompt(COM, { config: { ...estadoBase().config, triageExtraInstructions: null } });
+
+    expect(t).not.toMatch(/você não tem como confirmar sozinha/);
+    expect(t).toMatch(/chame consultar_planos/);
+    expect(t).toMatch(/verificar_cobertura/);
+  });
+
+  test('sem ferramenta nenhuma, o prompt antigo sai inteiro e nada manda chamar', () => {
+    const t = prompt(SEM, { config: { ...estadoBase().config, triageExtraInstructions: INSTRUCOES_ANTIGAS } });
+
+    expect(t).not.toMatch(/chame consultar_planos/);
+    expect(t).not.toMatch(/chame verificar_cobertura/);
+    expect(t).toMatch(/Preço, planos e cobertura: informe SOMENTE o que estiver escrito nas INSTRUÇÕES/);
+    expect(t).toMatch(/mandam em preço, planos, cobertura e política comercial/);
+  });
+
+  test('disponibilidade e por ferramenta: so planos nao manda chamar cobertura', () => {
+    const t = prompt(['buscar_cliente', 'consultar_planos']);
+
+    expect(t).toMatch(/chame consultar_planos/);
+    expect(t).not.toMatch(/chame verificar_cobertura/);
+    // O caminho antigo de cobertura continua.
+    expect(t).toMatch(/se a cidade estiver nas instruções/);
+  });
+
+  test('disponibilidade e por ferramenta: so cobertura nao manda chamar planos', () => {
+    const t = prompt(['buscar_cliente', 'verificar_cobertura']);
+
+    expect(t).toMatch(/chame verificar_cobertura/);
+    expect(t).not.toMatch(/chame consultar_planos/);
+    expect(t).toMatch(/copie o bloco de planos/);
+  });
+
+  test('o SGP continua sendo a fonte do plano CONTRATADO e do financeiro', () => {
+    const t = prompt(COM, {
+      identidade: { nivel: 'forte', origem: 'cpf', primeiroNome: 'Ana', contracts: [], contestado: false, sgpIndisponivel: false },
+      contratos: [{ id: 1, plano: 'Plano do contrato', velocidade: '500 Mbps', endereco: 'Rua X', status: 'Ativo' }],
+    });
+
+    // A linha de contrato (SGP) nao foi trocada por ferramenta comercial.
+    expect(t).toMatch(/contrato 1 — Plano do contrato/);
+    expect(t).toMatch(/NUNCA diga ao cliente: valores e vencimentos de faturas/);
+  });
+
+  test('o caminho de suporte nao foi reescrito', () => {
+    const t = prompt(COM);
+
+    expect(t).toMatch(/DÚVIDA não é falha/);
+    expect(t).toMatch(/ALCANCE DO WI-FI/);
+    expect(t).toMatch(/prazo, política, equipamento fornecido/);
+  });
+});

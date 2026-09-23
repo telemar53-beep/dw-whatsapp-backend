@@ -44,3 +44,45 @@ describe('AiSuggestionCard — ações executadas pela IA', () => {
     expect(screen.queryByText(/⚠/)).not.toBeInTheDocument();
   });
 });
+
+// Contenção de 22/09/2026. O card filtra `acoesExecutadas` por
+// `ROTULO_ACAO[nome]`: qualquer nome fora do catálogo some sem deixar rastro.
+// Era por ali que a ação bloqueada ia desaparecer da tela — o oposto do que
+// esta entrega existe para garantir.
+describe('AiSuggestionCard — ações propostas e NÃO executadas', () => {
+  const base = { id: 's-1', content: 'Posso liberar; confirma?' };
+
+  test('mostra a ação proposta e diz que ela não aconteceu', () => {
+    render(<AiSuggestionCard suggestion={{ ...base, acoesPropostas: ['desbloqueio_confianca'] }} onSend={vi.fn()} onEdit={vi.fn()} onDiscard={vi.fn()} />);
+    expect(screen.getByText(/não executou/i)).toBeInTheDocument();
+    expect(screen.getByText(/liberar em confiança no sgp/i)).toBeInTheDocument();
+  });
+
+  // O ponto que fez esta lista existir: a proposta NUNCA pode ser descrita com
+  // a frase no passado da lista de executadas.
+  test('a ação proposta não é descrita como executada', () => {
+    render(<AiSuggestionCard suggestion={{ ...base, acoesPropostas: ['desbloqueio_confianca'] }} onSend={vi.fn()} onEdit={vi.fn()} onDiscard={vi.fn()} />);
+    expect(screen.queryByText(/executada no sgp/i)).not.toBeInTheDocument();
+  });
+
+  // O gate barra por CLASSIFICAÇÃO, então o catálogo do frontend sempre vai
+  // ficar para trás de uma ferramenta nova. Ficar para trás pode; sumir, não.
+  test('ferramenta sem rótulo no catálogo ainda aparece', () => {
+    render(<AiSuggestionCard suggestion={{ ...base, acoesPropostas: ['cancelar_contrato_inventada'] }} onSend={vi.fn()} onEdit={vi.fn()} onDiscard={vi.fn()} />);
+    expect(screen.getByText(/cancelar_contrato_inventada/)).toBeInTheDocument();
+  });
+
+  test('as duas listas convivem sem se confundir', () => {
+    render(<AiSuggestionCard
+      suggestion={{ ...base, acoesExecutadas: ['gerar_pix'], acoesPropostas: ['desbloqueio_confianca'] }}
+      onSend={vi.fn()} onEdit={vi.fn()} onDiscard={vi.fn()}
+    />);
+    expect(screen.getByText(/código pix gerado/i)).toBeInTheDocument();
+    expect(screen.getByText(/liberar em confiança no sgp/i)).toBeInTheDocument();
+  });
+
+  test('sem ações propostas, o bloco não aparece', () => {
+    render(<AiSuggestionCard suggestion={{ ...base, acoesExecutadas: ['gerar_pix'] }} onSend={vi.fn()} onEdit={vi.fn()} onDiscard={vi.fn()} />);
+    expect(screen.queryByText(/não executou/i)).not.toBeInTheDocument();
+  });
+});

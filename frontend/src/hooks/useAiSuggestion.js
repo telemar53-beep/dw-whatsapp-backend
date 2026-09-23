@@ -25,9 +25,10 @@ export function useAiSuggestion(conversationId) {
     function onSuggestion(payload) {
       // Só a conversa aberta: o socket entrega tudo do atendente.
       if (payload.conversationId !== conversationId) return;
-      // A sugestão já traz `acoesExecutadas` (persistido no backend), então o
-      // evento e o GET entregam a mesma coisa — inclusive o aviso de ação
-      // sensível executada, que precisa sobreviver a um F5.
+      // A sugestão já traz `acoesExecutadas` e `acoesPropostas` (persistidos no
+      // backend), então o evento e o GET entregam a mesma coisa — inclusive o
+      // aviso de ação sensível executada e o de ação proposta e bloqueada, que
+      // precisam sobreviver a um F5.
       setSuggestion(payload.suggestion || null);
     }
     socket.on('ai:suggestion', onSuggestion);

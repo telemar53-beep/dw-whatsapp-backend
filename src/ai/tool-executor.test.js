@@ -10,10 +10,15 @@ jest.mock('./tool-registry', () => ({
   findTool: jest.fn(),
 }));
 jest.mock('../integrations/sgp-client');
+jest.mock('./trust-unlock.repository');
+jest.mock('../conversations/conversation.repository');
 jest.mock('../conversations/contact.repository');
 const { isToolEnabled } = require('./ai-config.repository');
 const { findTool } = require('./tool-registry');
 const sgpClient = require('../integrations/sgp-client');
+const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
+const conversationRepo = require('../conversations/conversation.repository');
+const contactRepo = require('../conversations/contact.repository');
 const { executeTool } = require('./tool-executor');
 
 const CONTEXTO = {
@@ -545,5 +550,283 @@ describe('tool-executor — contratoId dedutível com um contrato só (Task 10)'
     const r = await executeTool('enviar_boleto', {}, contexto);
     expect(r.ok).toBe(false);
     expect(r.motivo).toBe('invalid_args');
+  });
+});
+
+// Contencao de 2026-09-22. Caso real: no perfil assistente, runAiTurn executou
+// desbloqueio_confianca e o SGP liberou o acesso da cliente por 3 dias ANTES de
+// a atendente ver qualquer coisa. Nenhuma aprovacao humana no caminho.
+describe('tool-executor — acao no perfil assistente exige aprovacao humana', () => {
+  const ASSISTENTE = { ...CONTEXTO, perfil: 'assistente' };
+
+  function ferramenta(nome, categoria, executar = jest.fn()) {
+    return {
+      nome,
+      categoria,
+      isentoDeProprietario: true,
+      validar: () => ({ ok: true, args: {} }),
+      executar,
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isToolEnabled.mockResolvedValue(true);
+  });
+
+  test('ACAO_SENSIVEL nao executa e devolve pedido de acao humana', async () => {
+    const executar = jest.fn();
+    findTool.mockReturnValue(ferramenta('desbloqueio_confianca', 'ACAO_SENSIVEL', executar));
+
+    const r = await executeTool('desbloqueio_confianca', { contratoId: 1 }, ASSISTENTE);
+
+    expect(executar).not.toHaveBeenCalled();
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('action_requires_human_approval');
+    expect(r.instrucao).toBeTruthy();
+  });
+
+  test('a instrucao proibe afirmar que a acao aconteceu', async () => {
+    findTool.mockReturnValue(ferramenta('desbloqueio_confianca', 'ACAO_SENSIVEL'));
+
+    const r = await executeTool('desbloqueio_confianca', {}, ASSISTENTE);
+
+    expect(r.instrucao).toMatch(/NÃO diga que|nao diga que/i);
+    expect(r.instrucao).toMatch(/atendente/i);
+  });
+
+  test('ACAO tambem e bloqueada — nao so a sensivel', async () => {
+    for (const nome of ['encerrar_atendimento', 'transferir_atendimento', 'esquecer_identificacao', 'definir_motivo_atendimento', 'concluir_triagem']) {
+      const executar = jest.fn();
+      findTool.mockReturnValue(ferramenta(nome, 'ACAO', executar));
+
+      const r = await executeTool(nome, {}, ASSISTENTE);
+
+      expect(executar).not.toHaveBeenCalled();
+      expect(r.motivo).toBe('action_requires_human_approval');
+    }
+  });
+
+  test('CONSULTA continua executando normalmente', async () => {
+    const executar = jest.fn().mockResolvedValue({ plano: 'X' });
+    findTool.mockReturnValue(ferramenta('consultar_plano', 'CONSULTA', executar));
+
+    const r = await executeTool('consultar_plano', {}, ASSISTENTE);
+
+    expect(executar).toHaveBeenCalled();
+    expect(r.ok).toBe(true);
+    expect(r.resultado).toEqual({ plano: 'X' });
+  });
+
+  // Requisito 7: a protecao vem da CLASSIFICACAO, nao de uma lista de nomes.
+  // Uma ferramenta inventada agora, que nunca existiu no projeto, tem de cair
+  // na mesma trava.
+  test('ferramenta NOVA classificada como acao cai na protecao sozinha', async () => {
+    const executar = jest.fn();
+    findTool.mockReturnValue(ferramenta('cancelar_contrato_inventada', 'ACAO_SENSIVEL', executar));
+
+    const r = await executeTool('cancelar_contrato_inventada', {}, ASSISTENTE);
+
+    expect(executar).not.toHaveBeenCalled();
+    expect(r.motivo).toBe('action_requires_human_approval');
+  });
+
+  test('categoria desconhecida ou ausente tambem bloqueia: falha fechada', async () => {
+    for (const categoria of ['CATEGORIA_QUE_NAO_EXISTE', undefined, null, '']) {
+      const executar = jest.fn();
+      findTool.mockReturnValue(ferramenta('ferramenta_sem_categoria', categoria, executar));
+
+      const r = await executeTool('ferramenta_sem_categoria', {}, ASSISTENTE);
+
+      expect(executar).not.toHaveBeenCalled();
+      expect(r.motivo).toBe('action_requires_human_approval');
+    }
+  });
+
+  test('o bloqueio acontece ANTES de qualquer efeito: nem a validacao de posse roda', async () => {
+    const executar = jest.fn();
+    const tool = ferramenta('desbloqueio_confianca', 'ACAO_SENSIVEL', executar);
+    delete tool.isentoDeProprietario;
+    tool.chaveProprietario = 'contratoId';
+    findTool.mockReturnValue(tool);
+
+    const r = await executeTool('desbloqueio_confianca', { contratoId: 999 }, ASSISTENTE);
+
+    // Sem a trava, isto voltaria contract_not_owned — o que tambem recusaria,
+    // mas por outro motivo e depois de passar pelo gate errado.
+    expect(r.motivo).toBe('action_requires_human_approval');
+    expect(executar).not.toHaveBeenCalled();
+  });
+});
+
+describe('tool-executor — a triagem NAO muda', () => {
+  function ferramenta(nome, categoria, executar = jest.fn()) {
+    return { nome, categoria, isentoDeProprietario: true, validar: () => ({ ok: true, args: {} }), executar };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isToolEnabled.mockResolvedValue(true);
+  });
+
+  test('perfil triagem executa acao normalmente', async () => {
+    const executar = jest.fn().mockResolvedValue({ concluido: true });
+    findTool.mockReturnValue(ferramenta('concluir_triagem', 'ACAO', executar));
+    const ctx = { ...CONTEXTO, perfil: 'triagem', ferramentasPermitidas: ['concluir_triagem'] };
+
+    const r = await executeTool('concluir_triagem', {}, ctx);
+
+    expect(executar).toHaveBeenCalled();
+    expect(r.ok).toBe(true);
+  });
+
+  test('acao sensivel na triagem continua executando', async () => {
+    const executar = jest.fn().mockResolvedValue({ liberado: true });
+    findTool.mockReturnValue(ferramenta('desbloqueio_confianca', 'ACAO_SENSIVEL', executar));
+    const ctx = { ...CONTEXTO, perfil: 'triagem', ferramentasPermitidas: ['desbloqueio_confianca'] };
+
+    const r = await executeTool('desbloqueio_confianca', {}, ctx);
+
+    expect(executar).toHaveBeenCalled();
+    expect(r.resultado).toEqual({ liberado: true });
+  });
+
+  // Contexto sem perfil (harness de simulacao, chamadas antigas) segue o
+  // comportamento de antes: o gate so atua onde o perfil diz "assistente".
+  test('contexto sem perfil declarado nao e afetado', async () => {
+    const executar = jest.fn().mockResolvedValue({ ok: 1 });
+    findTool.mockReturnValue(ferramenta('transferir_atendimento', 'ACAO', executar));
+
+    const r = await executeTool('transferir_atendimento', {}, { ...CONTEXTO, ferramentasPermitidas: ['transferir_atendimento'] });
+
+    expect(executar).toHaveBeenCalled();
+    expect(r.ok).toBe(true);
+  });
+});
+
+// Contenção de 2026-09-22, prova de EFEITO. Os testes acima usam ferramenta
+// falsa e provam que `executar` não roda. Este usa a ferramenta REAL do
+// registro, com um contrato REALMENTE suspenso — o estado em que ela liberaria
+// —, e prova o que importa para a cliente: o SGP não é consultado nem
+// escrito, e nenhuma liberação é gravada em ai_trust_unlocks.
+describe('tool-executor — desbloqueio_confianca real não toca o SGP no assistente', () => {
+  const registryReal = jest.requireActual('./tool-registry');
+  // statusCode 4 = suspenso: sem isso a ferramenta pararia sozinha na guarda
+  // de status e o teste passaria sem provar nada sobre o gate.
+  const SUSPENSO = { id: 19631, statusCode: 4, status: 'Suspenso', plan: '600 Mega' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isToolEnabled.mockResolvedValue(true);
+    findTool.mockReturnValue(registryReal.findTool('desbloqueio_confianca'));
+    sgpClient.listInvoices.mockResolvedValue([]);
+    listTrustUnlocksByContract.mockResolvedValue([]);
+  });
+
+  test('não consulta o SGP e não grava liberação', async () => {
+    const contexto = {
+      perfil: 'assistente',
+      conversationId: 'c-1',
+      contact: { id: 'ct-1', sgpDocument: '52998224725' },
+      contracts: [SUSPENSO],
+      sgpCache: {},
+      identidade: { nivel: 'forte', origem: 'cpf', primeiroNome: 'Cliente' },
+    };
+
+    const r = await executeTool('desbloqueio_confianca', { contratoId: 19631 }, contexto);
+
+    expect(sgpClient.listInvoices).not.toHaveBeenCalled();
+    expect(recordTrustUnlock).not.toHaveBeenCalled();
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('action_requires_human_approval');
+  });
+
+  // Contraprova: a MESMA ferramenta, o MESMO contrato suspenso, mudando só o
+  // perfil. Sem ela, o teste acima passaria mesmo se a ferramenta estivesse
+  // parando por qualquer outro motivo (contrato não elegível, guarda de
+  // status, mock faltando) e não pelo gate.
+  test('contraprova: na triagem a mesma chamada CHEGA ao SGP', async () => {
+    const contexto = {
+      perfil: 'triagem',
+      conversationId: 'c-1',
+      contact: { id: 'ct-1', sgpDocument: '52998224725' },
+      contracts: [SUSPENSO],
+      sgpCache: {},
+      ferramentasPermitidas: ['desbloqueio_confianca'],
+      identidade: { nivel: 'forte', origem: 'cpf', primeiroNome: 'Cliente' },
+    };
+
+    const r = await executeTool('desbloqueio_confianca', { contratoId: 19631 }, contexto);
+
+    // O que importa aqui é que a execução PASSOU do gate e foi até o SGP. O
+    // desfecho depois disso depende de mocks que este teste não monta de
+    // propósito — ele não é sobre a regra de elegibilidade.
+    expect(sgpClient.listInvoices).toHaveBeenCalledWith(19631);
+    expect(r.motivo).not.toBe('action_requires_human_approval');
+  });
+});
+
+// Requisitos 2, 3, 4 e 5 do dono, provados pelo EFEITO e com as ferramentas
+// REAIS do registro: o que importa não é a ferramenta devolver `ok:false`, é
+// a conversa não fechar, o setor não mudar e o vínculo do contato não sumir.
+describe('tool-executor — ações reais não produzem efeito no assistente', () => {
+  const registryReal = jest.requireActual('./tool-registry');
+  const ASSISTENTE = {
+    perfil: 'assistente',
+    conversationId: 'c-1',
+    contact: { id: 'ct-1', sgpClientId: 9, sgpContractId: 17402, sgpDocument: '52998224725' },
+    contracts: [{ id: 17402 }],
+    sgpCache: {},
+    identidade: { nivel: 'forte', origem: 'cpf', primeiroNome: 'Cliente' },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isToolEnabled.mockResolvedValue(true);
+    conversationRepo.getConversationWithContact.mockResolvedValue({ id: 'c-1', status: 'waiting', sectorId: 's-1' });
+    conversationRepo.listSectors = undefined;
+  });
+
+  test('encerrar_atendimento: a conversa NÃO é fechada', async () => {
+    findTool.mockReturnValue(registryReal.findTool('encerrar_atendimento'));
+
+    const r = await executeTool('encerrar_atendimento', { resumo: 'resolvido' }, ASSISTENTE);
+
+    expect(conversationRepo.closeConversationByAi).not.toHaveBeenCalled();
+    expect(r.motivo).toBe('action_requires_human_approval');
+  });
+
+  test('transferir_atendimento: o setor NÃO muda', async () => {
+    findTool.mockReturnValue(registryReal.findTool('transferir_atendimento'));
+
+    const r = await executeTool('transferir_atendimento', { setorId: 's-2', resumo: 'x' }, ASSISTENTE);
+
+    expect(conversationRepo.setConversationSector).not.toHaveBeenCalled();
+    expect(r.motivo).toBe('action_requires_human_approval');
+  });
+
+  test('esquecer_identificacao: o vínculo do contato NÃO é apagado', async () => {
+    findTool.mockReturnValue(registryReal.findTool('esquecer_identificacao'));
+
+    const r = await executeTool('esquecer_identificacao', {}, ASSISTENTE);
+
+    expect(contactRepo.setContactSgpLink).not.toHaveBeenCalled();
+    expect(conversationRepo.markPhoneContested).not.toHaveBeenCalled();
+    expect(r.motivo).toBe('action_requires_human_approval');
+  });
+
+  // Requisito 5 com ferramenta real: o gate não pode ter emparedado a consulta
+  // junto — é ela que faz a sugestão valer alguma coisa para a atendente.
+  test('consultar_plano (CONSULTA) continua executando e devolvendo o dado', async () => {
+    findTool.mockReturnValue(registryReal.findTool('consultar_plano'));
+    const contexto = {
+      ...ASSISTENTE,
+      contracts: [{ id: 17402, statusCode: 1, status: 'Ativo', plan: '600 Mega', internetPlan: '600 Mbps', login: 'cli17402' }],
+    };
+
+    const r = await executeTool('consultar_plano', { contratoId: 17402 }, contexto);
+
+    expect(r.ok).toBe(true);
+    expect(r.resultado).toEqual({ plano: '600 Mega', velocidade: '600 Mbps', loginPPPoE: 'cli17402' });
   });
 });

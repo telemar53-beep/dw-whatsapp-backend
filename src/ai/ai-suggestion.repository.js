@@ -11,11 +11,15 @@ function toSuggestion(row) {
     // (ex.: liberação em confiança). Persistido aqui, e não só no evento de
     // socket, para o atendente ver o aviso também depois de um F5.
     acoesExecutadas: Array.isArray(row.acoes_executadas) ? row.acoes_executadas : [],
+    // Ações que a IA pediu e o gate de aprovação humana barrou. Lista separada
+    // das executadas de propósito: as duas viram avisos com redações opostas na
+    // tela, e confundir uma com a outra foi o defeito de 22/09/2026.
+    acoesPropostas: Array.isArray(row.acoes_propostas) ? row.acoes_propostas : [],
     createdAt: row.created_at,
   };
 }
 
-async function createSuggestion({ conversationId, messageId, content, acoesExecutadas = [] }) {
+async function createSuggestion({ conversationId, messageId, content, acoesExecutadas = [], acoesPropostas = [] }) {
   // Sem isto, um rascunho anterior (A) continua 'pending' depois que a IA gera
   // um novo (B) para uma mensagem mais recente do cliente: A ressurge na
   // próxima carga da tela e o atendente pode mandar uma resposta obsoleta.
@@ -28,9 +32,9 @@ async function createSuggestion({ conversationId, messageId, content, acoesExecu
       [conversationId]
     );
     const result = await client.query(
-      `INSERT INTO ai_suggestions (conversation_id, message_id, content, acoes_executadas)
-       VALUES ($1, $2, $3, $4::jsonb) RETURNING *`,
-      [conversationId, messageId || null, content, JSON.stringify(acoesExecutadas || [])]
+      `INSERT INTO ai_suggestions (conversation_id, message_id, content, acoes_executadas, acoes_propostas)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb) RETURNING *`,
+      [conversationId, messageId || null, content, JSON.stringify(acoesExecutadas || []), JSON.stringify(acoesPropostas || [])]
     );
     return toSuggestion(result.rows[0]);
   });

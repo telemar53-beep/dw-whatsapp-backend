@@ -277,6 +277,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // (contexto.contracts) é o que tool-executor.js usa para a checagem de
     // propriedade (chaveProprietario).
     contexto = {
+      perfil: 'triagem',
       conversationId: conversation.id, contact, contracts: identidadeEfetiva.contracts || [], sgpCache: {},
       identidade: identidadeEfetiva, terceiro, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem, config), registroFerramentas: [],
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
@@ -310,7 +311,11 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     tools = toOpenAiTools(habilitadas);
 
     const contracts = await carregarContratos(contact);
-    contexto = { conversationId: conversation.id, contact, contracts, sgpCache: {} };
+    // O perfil é DECLARADO, não inferido. Inferir por `identidade` abriria o
+    // buraco de volta: buscar_cliente grava contexto.identidade no meio do
+    // turno, e a partir dali o discriminador antigo passaria a ler "triagem"
+    // — as ferramentas seguintes escapariam do gate de aprovação humana.
+    contexto = { perfil: 'assistente', conversationId: conversation.id, contact, contracts, sgpCache: {} };
     systemContent = await montarContextoSistema(config, contact, contracts, habilitadas);
   }
 
@@ -621,6 +626,10 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
 
   return {
     texto, toolsExecutadas: toolsExecuted, erro,
+    // O worker precisa saber o que foi RECUSADO, não só o que rodou: uma ação
+    // barrada por exigir aprovação humana é justamente o que a atendente tem
+    // de ver, e sem isto ela desapareceria quando o modelo não escrevesse nada.
+    toolsRecusadas: toolsRefused,
     triagemConcluida: contexto.triagemConcluida || null,
     atendimentoEncerrado: Boolean(contexto.atendimentoEncerrado),
     // O worker usa isto para saber se pode mandar a frase de sucesso por

@@ -57,7 +57,7 @@ describe('ai-worker', () => {
 
     await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
 
-    expect(createSuggestion).toHaveBeenCalledWith({ conversationId: 'c-1', messageId: null, content: 'Seu plano é 600MB.', acoesExecutadas: [] });
+    expect(createSuggestion).toHaveBeenCalledWith({ conversationId: 'c-1', messageId: null, content: 'Seu plano é 600MB.', acoesExecutadas: [], acoesPropostas: [] });
     expect(emitToAgent).toHaveBeenCalledWith('a-1', 'ai:suggestion', expect.objectContaining({ conversationId: 'c-1' }));
   });
 
@@ -939,5 +939,141 @@ describe('sugestao para o atendente e opcional', () => {
     await handleAiJob({ conversationId: 'conv-1', messageId: 'msg-1' });
 
     expect(createSuggestion).not.toHaveBeenCalled();
+  });
+});
+
+// Contencao de 2026-09-22: no assistente, acao virou proposta. A tentativa
+// precisa ficar VISIVEL para a atendente — inclusive quando o modelo nao
+// escreve nada, que antes fazia o turno inteiro sumir (`if (!texto) return`).
+describe('ai-worker — assistente: acao bloqueada nao pode sumir', () => {
+  const CONVERSA = {
+    id: 'conv-1', contactId: 'ct-1', channelId: 'ch-1',
+    status: 'waiting', triageState: 'completed', assignedAgentId: 'ag-1',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getConversationWithContact.mockResolvedValue(CONVERSA);
+    getAiConfig.mockResolvedValue({ mode: 'assistant', assistantSuggestionsEnabled: true, transcriptionFeedAi: false });
+    findLatestInboundMessageId.mockResolvedValue('m-1');
+    findContactById.mockResolvedValue({ id: 'ct-1' });
+    createSuggestion.mockResolvedValue({ id: 's-1', content: 'x', acoesExecutadas: [] });
+  });
+
+  test('com texto e acao bloqueada, a sugestao registra a acao proposta', async () => {
+    runAiTurn.mockResolvedValue({
+      texto: 'Posso liberar o acesso em confiança deste contrato, confirma?',
+      toolsExecutadas: [],
+      toolsRecusadas: [{ nome: 'desbloqueio_confianca', motivo: 'action_requires_human_approval' }],
+    });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'm-1' });
+
+    expect(createSuggestion).toHaveBeenCalledWith(expect.objectContaining({
+      acoesPropostas: ['desbloqueio_confianca'],
+    }));
+  });
+
+  // Era aqui que a tentativa sumia: sem texto, o worker saia antes de criar
+  // qualquer registro — e, no mundo antigo, a acao JA tinha acontecido.
+  test('SEM texto, mas com acao bloqueada, ainda cria sugestao visivel', async () => {
+    runAiTurn.mockResolvedValue({
+      texto: '',
+      toolsExecutadas: [],
+      toolsRecusadas: [{ nome: 'desbloqueio_confianca', motivo: 'action_requires_human_approval' }],
+    });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'm-1' });
+
+    expect(createSuggestion).toHaveBeenCalled();
+    const arg = createSuggestion.mock.calls[0][0];
+    expect(arg.content).toMatch(/desbloqueio_confianca/);
+    expect(arg.content).toMatch(/não foi executada|nao foi executada/i);
+  });
+
+  test('SEM texto e SEM acao nenhuma continua nao criando sugestao', async () => {
+    runAiTurn.mockResolvedValue({ texto: '', toolsExecutadas: [], toolsRecusadas: [] });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'm-1' });
+
+    expect(createSuggestion).not.toHaveBeenCalled();
+  });
+
+  test('recusa que NAO e de aprovacao humana nao vira acao proposta', async () => {
+    runAiTurn.mockResolvedValue({
+      texto: 'Não consegui consultar agora.',
+      toolsExecutadas: [],
+      toolsRecusadas: [{ nome: 'consultar_faturas', motivo: 'invalid_args' }],
+    });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'm-1' });
+
+    expect(createSuggestion).toHaveBeenCalledWith(expect.objectContaining({ acoesExecutadas: [] }));
+  });
+
+  test('acao realmente executada continua sendo registrada como executada', async () => {
+    runAiTurn.mockResolvedValue({
+      texto: 'Pronto.',
+      toolsExecutadas: [{ nome: 'consultar_plano' }],
+      toolsRecusadas: [],
+    });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'm-1' });
+
+    expect(createSuggestion).toHaveBeenCalledWith(expect.objectContaining({
+      acoesExecutadas: ['consultar_plano'],
+    }));
+  });
+});
+
+// Requisito 8 do dono: nenhuma sugestão pode declarar sucesso de uma ação
+// bloqueada. A frase do modelo não dá para prender em teste, mas a lista
+// `acoesExecutadas` dá — e é ela que a tela mostra como "o que a IA fez".
+describe('ai-worker — ação bloqueada nunca aparece como executada', () => {
+  const CONVERSA = {
+    id: 'conv-1', contactId: 'ct-1', channelId: 'ch-1',
+    status: 'waiting', triageState: 'completed', assignedAgentId: 'ag-1',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getConversationWithContact.mockResolvedValue(CONVERSA);
+    getAiConfig.mockResolvedValue({ mode: 'assistant', assistantSuggestionsEnabled: true, transcriptionFeedAi: false });
+    findLatestInboundMessageId.mockResolvedValue('m-1');
+    findContactById.mockResolvedValue({ id: 'ct-1' });
+    createSuggestion.mockResolvedValue({ id: 's-1', content: 'x', acoesExecutadas: [] });
+  });
+
+  test('o nome da ação bloqueada NUNCA entra cru na lista de executadas', async () => {
+    runAiTurn.mockResolvedValue({
+      texto: 'Dá para liberar; confirma?',
+      toolsExecutadas: [{ nome: 'consultar_plano' }],
+      toolsRecusadas: [{ nome: 'desbloqueio_confianca', motivo: 'action_requires_human_approval' }],
+    });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'm-1' });
+
+    const { acoesExecutadas, acoesPropostas } = createSuggestion.mock.calls[0][0];
+    // `acoesExecutadas` é rotulada no passado pelo card: um nome bloqueado ali
+    // vira "executada no SGP" na tela da atendente.
+    expect(acoesExecutadas).not.toContain('desbloqueio_confianca');
+    expect(acoesExecutadas).toContain('consultar_plano');
+    expect(acoesPropostas).toContain('desbloqueio_confianca');
+  });
+
+  // Executada e bloqueada com o MESMO nome no mesmo turno (o modelo insistiu):
+  // a entrada crua tem de continuar sendo só a que executou de verdade.
+  test('mesma ferramenta executada e bloqueada: cada uma com sua marca', async () => {
+    runAiTurn.mockResolvedValue({
+      texto: 'ok',
+      toolsExecutadas: [{ nome: 'transferir_atendimento' }],
+      toolsRecusadas: [{ nome: 'transferir_atendimento', motivo: 'action_requires_human_approval' }],
+    });
+
+    await handleAiJob({ conversationId: 'conv-1', messageId: 'm-1' });
+
+    const { acoesExecutadas, acoesPropostas } = createSuggestion.mock.calls[0][0];
+    expect(acoesExecutadas).toEqual(['transferir_atendimento']);
+    expect(acoesPropostas).toEqual(['transferir_atendimento']);
   });
 });

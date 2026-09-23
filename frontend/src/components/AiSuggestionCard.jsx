@@ -9,9 +9,32 @@ const ROTULO_ACAO = {
   definir_motivo_atendimento: 'Motivo do atendimento registrado',
 };
 
+// A MESMA ferramenta, do outro lado do gate de aprovação humana: a IA pediu e
+// não aconteceu. Rótulos próprios porque os de cima estão todos no passado
+// ("executada", "gerado") — reusá-los aqui afirmaria à atendente exatamente o
+// que o gate impediu de acontecer.
+const ROTULO_PROPOSTA = {
+  desbloqueio_confianca: 'Liberar em confiança no SGP',
+  gerar_pix: 'Gerar código PIX',
+  gerar_segunda_via: 'Gerar segunda via de boleto',
+  transferir_atendimento: 'Transferir o atendimento de setor',
+  definir_motivo_atendimento: 'Registrar o motivo do atendimento',
+  encerrar_atendimento: 'Encerrar o atendimento',
+  esquecer_identificacao: 'Apagar a identificação do cliente',
+  concluir_triagem: 'Concluir a triagem',
+};
+
+// Ferramenta nova, ainda sem rótulo aqui, NÃO pode sumir da tela: o gate barra
+// por classificação, então o catálogo do frontend sempre vai ficar para trás.
+// Sumir em silêncio é o defeito, não o texto feio.
+function rotuloDaProposta(nome) {
+  return ROTULO_PROPOSTA[nome] || `Executar ${nome}`;
+}
+
 function AiSuggestionCard({ suggestion, onSend, onEdit, onDiscard }) {
   if (!suggestion) return null;
   const acoes = (suggestion.acoesExecutadas || []).filter((nome) => ROTULO_ACAO[nome]);
+  const propostas = suggestion.acoesPropostas || [];
   return (
     <div className="chat-ai-suggestion mx-3 mb-2 rounded-2xl border border-wa-border bg-wa-field p-3">
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-wa-muted">Sugestão da IA</p>
@@ -21,6 +44,16 @@ function AiSuggestionCard({ suggestion, onSend, onEdit, onDiscard }) {
             <li key={nome}>⚠ {ROTULO_ACAO[nome]}</li>
           ))}
         </ul>
+      )}
+      {propostas.length > 0 && (
+        <div className="mb-2 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-2 text-xs text-wa-text">
+          <p className="mb-1 font-medium">A IA propôs e NÃO executou — depende de você:</p>
+          <ul>
+            {propostas.map((nome) => (
+              <li key={nome}>• {rotuloDaProposta(nome)}</li>
+            ))}
+          </ul>
+        </div>
       )}
       <p className="mb-3 whitespace-pre-wrap text-sm text-wa-text">{suggestion.content}</p>
       <div className="flex gap-2">

@@ -1471,3 +1471,101 @@ describe('messageId no contexto do turno', () => {
     expect(ctxVisto.messageId).toBeNull();
   });
 });
+
+// Contenção de 2026-09-22 — prova de FIAÇÃO, não de unidade. O gate de
+// aprovação humana vive no tool-executor, mas só atua se o orquestrador
+// DECLARAR o perfil no contexto. Sem estes testes, apagar `perfil:
+// 'assistente'` da linha do contexto passaria por todo o resto da suíte e o
+// buraco voltaria inteiro: a suíte do executor continuaria verde, porque lá o
+// perfil é montado à mão no teste.
+describe('ai-orchestrator — o perfil vai declarado no contexto', () => {
+  test('perfil assistente chega ao executor marcado como assistente', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: null, tool_calls: [{ id: 't1', type: 'function', function: { name: 'desbloqueio_confianca', arguments: '{"contratoId":19631}' } }] },
+        usage: { promptTokens: 1, completionTokens: 1 },
+      })
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: 'Dá para liberar o acesso dela; confirma?' },
+        usage: { promptTokens: 1, completionTokens: 1 },
+      });
+    executeTool.mockResolvedValue({ ok: false, motivo: 'action_requires_human_approval', detalhe: null, instrucao: 'peça à atendente' });
+
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    expect(executeTool).toHaveBeenCalledWith(
+      'desbloqueio_confianca',
+      expect.anything(),
+      expect.objectContaining({ perfil: 'assistente' })
+    );
+  });
+
+  test('perfil triagem chega ao executor marcado como triagem', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: null, tool_calls: [{ id: 't1', type: 'function', function: { name: 'consultar_plano', arguments: '{}' } }] },
+        usage: { promptTokens: 1, completionTokens: 1 },
+      })
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: 'Certo!' },
+        usage: { promptTokens: 1, completionTokens: 1 },
+      });
+    executeTool.mockResolvedValue({ ok: true, resultado: {} });
+
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT, perfil: 'triagem', identidade: { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false } });
+
+    expect(executeTool).toHaveBeenCalledWith(
+      'consultar_plano',
+      expect.anything(),
+      expect.objectContaining({ perfil: 'triagem' })
+    );
+  });
+
+  // A tentativa recusada não pode morrer dentro do turno: é ela que o worker
+  // usa para deixar a ação visível para a atendente.
+  test('a recusa de aprovação humana volta em toolsRecusadas', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: null, tool_calls: [{ id: 't1', type: 'function', function: { name: 'desbloqueio_confianca', arguments: '{}' } }] },
+        usage: { promptTokens: 1, completionTokens: 1 },
+      })
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: 'ok' },
+        usage: { promptTokens: 1, completionTokens: 1 },
+      });
+    executeTool.mockResolvedValue({ ok: false, motivo: 'action_requires_human_approval', detalhe: null, instrucao: 'x' });
+
+    const turno = await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    expect(turno.toolsRecusadas).toEqual([
+      expect.objectContaining({ nome: 'desbloqueio_confianca', motivo: 'action_requires_human_approval' }),
+    ]);
+    expect(turno.toolsExecutadas).toEqual([]);
+  });
+
+  // A `instrucao` da recusa é o único texto que diz ao modelo "isso NÃO
+  // aconteceu". Se ela não chegar na mensagem role:'tool', o modelo continua
+  // livre para escrever "já liberei" — que é exatamente o que aconteceu em
+  // produção, só que lá a liberação tinha acontecido mesmo.
+  test('a instrução da recusa chega ao modelo na volta seguinte', async () => {
+    createChatCompletion
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: null, tool_calls: [{ id: 't1', type: 'function', function: { name: 'desbloqueio_confianca', arguments: '{}' } }] },
+        usage: { promptTokens: 1, completionTokens: 1 },
+      })
+      .mockResolvedValueOnce({
+        message: { role: 'assistant', content: 'ok' },
+        usage: { promptTokens: 1, completionTokens: 1 },
+      });
+    executeTool.mockResolvedValue({ ok: false, motivo: 'action_requires_human_approval', detalhe: null, instrucao: 'NÃO diga que fez' });
+
+    await runAiTurn({ conversation: CONVERSATION, contact: CONTACT });
+
+    const segundaChamada = createChatCompletion.mock.calls[1][0];
+    const msgTool = segundaChamada.messages.find((m) => m.role === 'tool' && m.tool_call_id === 't1');
+    expect(JSON.parse(msgTool.content)).toEqual({
+      erro: 'action_requires_human_approval',
+      instrucao: 'NÃO diga que fez',
+    });
+  });
+});

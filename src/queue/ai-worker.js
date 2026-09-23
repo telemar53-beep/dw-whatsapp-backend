@@ -21,6 +21,13 @@ const { isNightModeActive } = require('../ai/night-mode');
 const { enviarAvisoDeCidadeSePreciso, selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
 const { findCityById } = require('../cities/city.repository');
 
+// Quando o modelo não escreve nada mas propôs uma ação, a sugestão não pode
+// ficar vazia: a atendente precisa ler o que foi proposto e por que não
+// aconteceu. Texto de sistema, nunca enviado ao cliente sem ela mandar.
+function textoDeAcaoProposta(acoes) {
+  return `A assistente tentou executar ${acoes.join(', ')} e a ação NÃO foi executada: neste atendimento quem confirma é você. Confira o pedido do cliente e decida.`;
+}
+
 async function handleAiJob(data) {
   if (data.tipo === 'triage-timeout') return handleTriageTimeout(data.conversationId);
   const { conversationId, messageId } = data;
@@ -63,20 +70,36 @@ async function handleAiJob(data) {
   // guarda o que o modelo escreveu; o cliente recebe o formato do WhatsApp.
   const turno = await runAiTurn({ conversation, contact });
   const texto = paraWhatsApp(turno.texto);
-  if (!texto) return;
+
+  // Ações que a IA quis fazer e o gate barrou por exigirem a atendente. Elas
+  // são o item MAIS importante da sugestão: é o que ela precisa decidir.
+  const acoesPropostas = (turno.toolsRecusadas || [])
+    .filter((t) => t && t.motivo === 'action_requires_human_approval')
+    .map((t) => t.nome);
+
+  // Sem texto E sem nada a mostrar, não há sugestão a criar — como antes.
+  // COM ação proposta, sair aqui faria a tentativa desaparecer em silêncio, que
+  // é metade do defeito de 22/09/2026: a outra metade era ela ter acontecido.
+  if (!texto && acoesPropostas.length === 0) return;
 
   // A chave é separada do `mode` de propósito: desligar pelo modo levaria junto
   // a triagem e a transcrição de áudio, que continuam sendo desejadas.
   if (config.mode === 'assistant' && config.assistantSuggestionsEnabled) {
-    // As ações executadas ficam gravadas NA sugestão: uma ferramenta sensível
-    // (liberação em confiança) age no serviço do cliente no turno, antes de o
-    // atendente ver o texto — ele precisa saber que aconteceu, e precisa
-    // continuar sabendo depois de um F5, quando a tela relê pelo GET.
+    // As ações ficam gravadas NA sugestão para o atendente continuar vendo
+    // depois de um F5, quando a tela relê pelo GET. Em DUAS listas: o card
+    // rotula cada nome de `acoesExecutadas` com uma frase no passado
+    // ("Liberação em confiança executada no SGP"), então pôr ali o que foi
+    // apenas proposto faria a tela afirmar justamente o que o gate impediu.
     const acoesExecutadas = (turno.toolsExecutadas || []).map((t) => t.nome);
-    const suggestion = await createSuggestion({ conversationId, messageId: null, content: texto, acoesExecutadas });
+    const conteudo = texto || textoDeAcaoProposta(acoesPropostas);
+    const suggestion = await createSuggestion({
+      conversationId, messageId: null, content: conteudo, acoesExecutadas, acoesPropostas,
+    });
     emitToAgent(conversation.assignedAgentId, 'ai:suggestion', { conversationId, suggestion });
     return;
   }
+
+  if (!texto) return;
 
   // Modo automático entra na Fase 2; por ora o job termina sem enviar nada.
 }

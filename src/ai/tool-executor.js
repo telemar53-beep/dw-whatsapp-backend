@@ -1,4 +1,4 @@
-const { findTool, perfilTriagem, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
+const { findTool, perfilTriagem, temEfeitoReal, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
 const { minimizarParaTerceiro } = require('./third-party-minimize');
 const { isToolEnabled } = require('./ai-config.repository');
 const { mensagemSegura } = require('./safe-error-log');
@@ -50,10 +50,31 @@ function logFalha(nome, err) {
   console.error(`AI tool ${nome} failed: ${mensagemSegura(err)}`);
 }
 
+// CONTENÇÃO (22/09/2026). Caso real: no perfil assistente, o turno executou
+// desbloqueio_confianca e o SGP liberou o acesso da cliente por 3 dias ANTES de
+// a atendente ver a sugestão. Sugerir não pode agir.
+//
+// No assistente há uma pessoa no comando, e é ela quem decide o efeito. A
+// ferramenta de leitura continua rodando — é o que monta a sugestão. A de ação
+// para aqui, antes de tudo: antes da posse, antes da identidade, antes de
+// qualquer chamada externa.
+//
+// Vale por CLASSIFICAÇÃO (tool-registry: temEfeitoReal), nunca por lista de
+// nomes. Categoria desconhecida ou ausente também bloqueia — falha fechada.
+//
+// A triagem não é tocada: lá não há atendente, e a execução automática é o
+// desenho. O gate só atua onde o perfil diz, com todas as letras, "assistente".
+const INSTRUCAO_ACAO_HUMANA = 'Esta ação NÃO foi executada e NÃO vai acontecer sozinha: neste atendimento quem executa é a atendente. NÃO diga que fez, que liberou, que transferiu, que encerrou nem que está em andamento. Escreva a sugestão explicando à ATENDENTE o que dá para fazer e o que ela precisa confirmar, e deixe a decisão com ela.';
+
+function exigeAprovacaoHumana(contexto, tool) {
+  return contexto && contexto.perfil === 'assistente' && temEfeitoReal(tool);
+}
+
 /**
  * A ordem destas verificações é parte do design:
- * existe → habilitada → argumentos válidos → o contrato é deste contato →
- * executa com timeout. Nada toca o SGP antes da quarta verificação passar.
+ * existe → habilitada → precisa de aprovação humana → argumentos válidos →
+ * o contrato é deste contato → executa com timeout. Nada toca o SGP antes da
+ * quinta verificação passar.
  *
  * Tudo fica dentro do try: uma recusa nunca é uma exceção, então qualquer
  * falha inesperada em qualquer um destes passos (inclusive um erro transitório
@@ -76,6 +97,12 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       if (!contexto.ferramentasPermitidas.includes(nome)) return recusa('tool_not_in_profile', nome);
     } else if (!(await isToolEnabled(nome))) {
       return recusa('tool_disabled', nome);
+    }
+
+    // Antes de validar argumento, conferir posse ou tocar em qualquer coisa
+    // externa: no assistente, ação é proposta, não execução.
+    if (exigeAprovacaoHumana(contexto, tool)) {
+      return recusa('action_requires_human_approval', nome, INSTRUCAO_ACAO_HUMANA);
     }
 
     // Com um contrato só, o contratoId é dedutível — e obrigar o modelo a escolher

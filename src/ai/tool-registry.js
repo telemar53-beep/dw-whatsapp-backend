@@ -100,6 +100,22 @@ function totalDaPaginacao(paginacao) {
 }
 
 /**
+ * Categorias que NÃO produzem efeito fora do sistema: só leem. Tudo o mais é
+ * ação — inclusive uma categoria nova que alguém invente, ou uma ferramenta
+ * que esqueça de declarar a sua.
+ *
+ * A checagem é por CLASSIFICAÇÃO, não por lista de nomes, de propósito: uma
+ * lista de nomes só protege contra o que já existe, e foi exatamente assim que
+ * desbloqueio_confianca alterou o serviço de uma cliente sem aprovação humana
+ * (22/09/2026). Ferramenta nova com efeito cai na trava sozinha.
+ */
+const CATEGORIAS_SOMENTE_LEITURA = ['CONSULTA'];
+
+function temEfeitoReal(tool) {
+  return !tool || !CATEGORIAS_SOMENTE_LEITURA.includes(tool.categoria);
+}
+
+/**
  * True quando o turno usa o perfil de triagem — seja porque o servidor já
  * fixou a lista de ferramentas (contexto.ferramentasPermitidas), seja porque
  * já existe contexto.identidade. Mesmo discriminador usado pelo executor
@@ -1910,6 +1926,7 @@ function toOpenAiTools(nomesHabilitados) {
 }
 
 module.exports = {
+  temEfeitoReal, CATEGORIAS_SOMENTE_LEITURA,
   listTools, findTool, toOpenAiTools, perfilTriagem, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO,
   escopoDoContrato, faturaEmAlgumContrato,
 };

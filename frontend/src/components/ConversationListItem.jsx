@@ -3,7 +3,7 @@ import MessageStatusTicks from './MessageStatusTicks';
 import { IconCheckCircle } from './icons/WaIcons';
 import { useConfirm } from '../hooks/useConfirm';
 import { useDicaFlutuante, DicaFlutuante } from './DicaFlutuante';
-import { nomeDoLocal } from '../utils/place';
+import { nomeDoLocal, localMaisEspecifico } from '../utils/place';
 
 const MEDIA_TYPE_LABELS = {
   image: '📷 Foto',
@@ -39,7 +39,7 @@ function formatMessageTime(lastMessageAt) {
   return new Date(lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected, divided = true, showArrivalTime = false, compact = false, rail = false }) {
+function ConversationListItem({ conversation, onSelect, onQuickClose, unread, selected, divided = true, showArrivalTime = false, compact = false, rail = false, soLocalidade = false }) {
   // A confirmacao e do proprio item: o dialogo vai para o portal, entao nao
   // precisa de Provider nenhum para existir em qualquer lista.
   const { confirm, confirmDialog } = useConfirm();
@@ -51,7 +51,13 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
   // "Barão de Tromaí · Cândido Mendes" quando há localidade; só o município
   // quando não há. Calculado uma vez: o mesmo texto vale nos três pontos em
   // que a linha mostra o lugar.
-  const local = nomeDoLocal(conversation.contactLocalityName, conversation.contactCityName);
+  //
+  // `soLocalidade` é opt-in da fila de espera (2026-09-22): lá o atendente bate
+  // o olho para reconhecer o atendimento, e o município junto só gasta largura.
+  // Sai desligado para nenhuma outra lista mudar sem alguém pedir.
+  const local = soLocalidade
+    ? localMaisEspecifico(conversation.contactLocalityName, conversation.contactCityName)
+    : nomeDoLocal(conversation.contactLocalityName, conversation.contactCityName);
   const previewText = getPreviewText(conversation);
   // Na fila, a hora que importa é a da CHEGADA: a lista é ordenada por ela, e
   // mostrar a da última mensagem fazia a fila parecer fora de ordem sem estar —

@@ -61,3 +61,49 @@ describe('QueueList', () => {
     expect(screen.getByText('Nenhum atendimento em espera.')).toBeInTheDocument();
   });
 });
+
+// Prova de FIAÇÃO, não de unidade. A regra vive em place.js e a decisão em
+// ConversationListItem, mas nada disso chega à tela se QueueList esquecer de
+// repassar a prop — e os testes daqueles dois continuariam verdes.
+describe('QueueList repassa soLocalidade para a linha', () => {
+  const CONVERSA = {
+    id: 'q1',
+    contactDisplayName: 'Carlos',
+    contactPhoneNumber: '+551199',
+    contactCityName: 'Cândido Mendes',
+    contactLocalityName: 'Barão de Tromaí',
+    createdAt: '2026-09-22T12:00:00.000Z',
+  };
+
+  function renderFila(props) {
+    render(<QueueList conversations={[CONVERSA]} status="success" onSelect={vi.fn()} {...props} />);
+  }
+
+  test('com soLocalidade, a linha mostra só a localidade', () => {
+    renderFila({ soLocalidade: true });
+
+    expect(screen.getByText('Barão de Tromaí')).toBeInTheDocument();
+    expect(screen.queryByText(/Cândido Mendes/)).not.toBeInTheDocument();
+  });
+
+  // A aba "Automação" usa o MESMO QueueList e não passa a prop: ela não pode
+  // ter mudado junto.
+  test('sem a prop, a linha continua com localidade · município', () => {
+    renderFila({});
+
+    expect(screen.getByText('Barão de Tromaí · Cândido Mendes')).toBeInTheDocument();
+  });
+
+  test('sem localidade, a fila mostra o município', () => {
+    render(
+      <QueueList
+        conversations={[{ ...CONVERSA, contactLocalityName: null }]}
+        status="success"
+        onSelect={vi.fn()}
+        soLocalidade
+      />
+    );
+
+    expect(screen.getByText('Cândido Mendes')).toBeInTheDocument();
+  });
+});

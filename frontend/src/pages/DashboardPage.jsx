@@ -250,6 +250,7 @@ function DashboardPage() {
                 emptyMessage="Nenhum atendimento em espera."
                 compact
                 rail={emRail}
+                soLocalidade
               />
             )}
             {activeTab === 'automation' && (

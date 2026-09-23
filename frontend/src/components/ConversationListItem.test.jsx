@@ -804,3 +804,95 @@ describe('rail: o nome da conversa aparece de verdade', () => {
     expect(c2.querySelector('.chat-rail-row')).toHaveClass('is-selected');
   });
 });
+
+// Fila de espera (2026-09-22): lá o lugar aparece sozinho, no nível mais
+// específico. `soLocalidade` é opt-in — sem a prop, nada muda em lista nenhuma.
+describe('ConversationListItem com soLocalidade (fila de espera)', () => {
+  function renderFila(conversation) {
+    render(
+      <ul>
+        <ConversationListItem conversation={{ id: 'c1', ...conversation }} onSelect={vi.fn()} soLocalidade />
+      </ul>
+    );
+  }
+
+  test('com localidade, mostra SÓ a localidade', () => {
+    renderFila({
+      contactDisplayName: 'Carlos',
+      contactPhoneNumber: '+551199',
+      contactCityName: 'Cândido Mendes',
+      contactLocalityName: 'Barão de Tromaí',
+    });
+
+    expect(screen.getByText('Barão de Tromaí')).toBeInTheDocument();
+    expect(screen.queryByText(/Cândido Mendes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/·/)).not.toBeInTheDocument();
+  });
+
+  test('outro par localidade/município segue a mesma regra', () => {
+    renderFila({
+      contactDisplayName: 'Ana',
+      contactPhoneNumber: '+551199',
+      contactCityName: 'Godofredo Viana',
+      contactLocalityName: 'Aurizona',
+    });
+
+    expect(screen.getByText('Aurizona')).toBeInTheDocument();
+    expect(screen.queryByText(/Godofredo Viana/)).not.toBeInTheDocument();
+  });
+
+  test('sem localidade, mostra o município', () => {
+    renderFila({
+      contactDisplayName: 'Carlos',
+      contactPhoneNumber: '+551199',
+      contactCityName: 'Cândido Mendes',
+      contactLocalityName: null,
+    });
+
+    expect(screen.getByText('Cândido Mendes')).toBeInTheDocument();
+  });
+
+  test('localidade vazia ou só espaços também cai para o município', () => {
+    renderFila({
+      contactDisplayName: 'Carlos',
+      contactPhoneNumber: '+551199',
+      contactCityName: 'Cândido Mendes',
+      contactLocalityName: '   ',
+    });
+
+    expect(screen.getByText('Cândido Mendes')).toBeInTheDocument();
+  });
+
+  test('sem localidade E sem município, nenhum chip de lugar', () => {
+    renderFila({
+      contactDisplayName: 'Carlos',
+      contactPhoneNumber: '+551199',
+      contactCityName: null,
+      contactLocalityName: null,
+    });
+
+    expect(screen.getByText('Carlos')).toBeInTheDocument();
+    expect(screen.queryByText(/Cândido Mendes|Barão/)).not.toBeInTheDocument();
+  });
+
+  // A trava que impede a mudança de vazar: SEM a prop, o comportamento antigo
+  // continua igual em todas as outras listas.
+  test('SEM a prop, a linha continua mostrando localidade · município', () => {
+    render(
+      <ul>
+        <ConversationListItem
+          conversation={{
+            id: 'c2',
+            contactDisplayName: 'Carlos',
+            contactPhoneNumber: '+551199',
+            contactCityName: 'Cândido Mendes',
+            contactLocalityName: 'Barão de Tromaí',
+          }}
+          onSelect={vi.fn()}
+        />
+      </ul>
+    );
+
+    expect(screen.getByText('Barão de Tromaí · Cândido Mendes')).toBeInTheDocument();
+  });
+});

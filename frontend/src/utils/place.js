@@ -13,3 +13,19 @@ export function nomeDoLocal(localityName, cityName) {
   if (localidade && municipio && localidade !== municipio) return `${localidade} · ${municipio}`;
   return localidade || municipio || null;
 }
+
+// A fila de espera quer o lugar MAIS ESPECÍFICO, sem o município junto: a linha
+// existe para o atendente bater o olho e reconhecer o atendimento, e "Barão de
+// Tromaí · Cândido Mendes" gasta a largura repetindo o que a localidade já
+// resolve. No painel da conversa e na Supervisão continua valendo nomeDoLocal:
+// lá o município importa, porque é o que o SGP conhece.
+//
+// Mora aqui, coladinha na outra, porque as duas respondem à mesma pergunta
+// ("como o lugar do cliente aparece") e separá-las é como uma das duas acabaria
+// divergindo.
+export function localMaisEspecifico(localityName, cityName) {
+  const localidade = (localityName || '').trim();
+  const municipio = (cityName || '').trim();
+
+  return localidade || municipio || null;
+}

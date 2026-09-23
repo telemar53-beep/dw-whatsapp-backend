@@ -1,7 +1,7 @@
 import ConversationListItem from './ConversationListItem';
 import { AsyncState } from './ui';
 
-function QueueList({ conversations, status, onSelect, onQuickClose, emptyMessage = 'Nenhum atendimento em espera.', selectedId, unreadIds, compact = false, rail = false }) {
+function QueueList({ conversations, status, onSelect, onQuickClose, emptyMessage = 'Nenhum atendimento em espera.', selectedId, unreadIds, compact = false, rail = false, soLocalidade = false }) {
   return (
     <AsyncState status={status} isEmpty={conversations.length === 0} emptyMessage={<span className="block px-4 pt-4 text-center">{emptyMessage}</span>}>
       <ul>
@@ -16,6 +16,7 @@ function QueueList({ conversations, status, onSelect, onQuickClose, emptyMessage
             showArrivalTime
             compact={compact}
             rail={rail}
+            soLocalidade={soLocalidade}
           />
         ))}
       </ul>

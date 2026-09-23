@@ -25,7 +25,7 @@ function baseMime(mimeType) {
   return String(mimeType || '').split(';')[0].trim();
 }
 
-function transcode(buffer, formato) {
+function transcode(buffer, formato, ladoMaior) {
   const { spawn } = require('child_process');
   return new Promise((resolve, reject) => {
     const ffmpeg = spawn(ffmpegPath, [
@@ -34,7 +34,7 @@ function transcode(buffer, formato) {
       '-i', 'pipe:0',
       // Só encolhe: `min(iw,MAX)` impede que uma imagem pequena seja ampliada,
       // o que aumentaria o arquivo em vez de reduzir. -2 mantém a proporção.
-      '-vf', `scale='min(${MAX_DIMENSION},iw)':-2`,
+      '-vf', `scale='min(${ladoMaior},iw)':-2`,
       '-q:v', String(JPEG_QUALITY),
       '-frames:v', '1',
       '-f', formato,
@@ -63,14 +63,22 @@ function transcode(buffer, formato) {
  * (formato que o ffmpeg não lê, bytes corrompidos, resultado maior que o
  * original) devolve o arquivo original intacto.
  */
-async function compressInboundImage(buffer, mimeType) {
+async function compressInboundImage(
+  buffer,
+  mimeType,
+  // Os dois padrões são exatamente os valores de antes: quem chama sem opções
+  // — o caminho da mídia recebida — não muda em um byte. Existem para o avatar,
+  // que tem outra escala: um comprovante precisa ser legível, um avatar é
+  // pintado em 68px no maior uso da tela. Ver saveAvatarImage.
+  { ladoMaior = MAX_DIMENSION, limiarBytes = COMPRESSION_THRESHOLD_BYTES } = {}
+) {
   const alvo = COMPRESSIBLE[baseMime(mimeType)];
-  if (!alvo || !buffer || buffer.length <= COMPRESSION_THRESHOLD_BYTES) {
+  if (!alvo || !buffer || buffer.length <= limiarBytes) {
     return { buffer, mimeType };
   }
 
   try {
-    const comprimido = await transcode(buffer, alvo.formato);
+    const comprimido = await transcode(buffer, alvo.formato, ladoMaior);
     // Resultado maior que o original acontece (PNG já otimizado, por exemplo):
     // nesse caso o original é que fica.
     if (!comprimido.length || comprimido.length >= buffer.length) return { buffer, mimeType };

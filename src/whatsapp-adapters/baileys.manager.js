@@ -6,7 +6,7 @@ const { createChannel, updateChannelStatus, listChannels } = require('../channel
 const { ingestInboundMessage } = require('../conversations/inbound-message.service');
 const { setContactAvatarPath, claimContactAvatarRefresh, findContactByPhoneNumber } = require('../conversations/contact.repository');
 const { applyParsedMessageStatusUpdates } = require('../conversations/message-status.service');
-const { saveMediaFile, saveInboundMedia, deleteMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
+const { saveAvatarImage, saveInboundMedia, deleteMediaFile, extensionForMimeType, getMediaFilePath } = require('../media/media-storage');
 const { broadcast } = require('../realtime/socket-server');
 const { formatarData, formatarValor } = require('../payments/payment-card');
 const { getCompanyConfig } = require('../company/company-config.repository');
@@ -235,7 +235,11 @@ async function refreshContactAvatar(sock, phoneJid, contactId, { force = false }
       return false;
     }
     const response = await axios.get(url, { responseType: 'arraybuffer' });
-    const avatarPath = await saveMediaFile(Buffer.from(response.data), '.jpg');
+    // Comprime antes de gravar, como o upload do atendente. O tipo vem do
+    // próprio cabeçalho, com jpeg de reserva: era o que o `.jpg` fixo assumia
+    // antes, e a foto de perfil do WhatsApp é jpeg na prática.
+    const tipo = (response.headers && response.headers['content-type']) || 'image/jpeg';
+    const { avatarPath } = await saveAvatarImage(Buffer.from(response.data), tipo);
     await setContactAvatarPath(contactId, avatarPath);
     broadcast('contact:avatar-updated', { contactId, avatarPath });
     if (previousPath && previousPath !== avatarPath) {

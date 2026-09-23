@@ -226,7 +226,9 @@ describe('GET /api/integrations/sgp/messages', () => {
     // 'connected', so a meta_cloud channel is permanently 'disconnected'. Mocking it that way is what
     // makes "without checking channel connectivity" an assertion instead of a coincidence.
     const TEMPLATE_CHANNEL = { id: 'channel-2', type: 'meta_cloud', status: 'disconnected', config: { phoneNumberId: '999', accessToken: 'tok', wabaId: 'waba-1' } };
-    const TEMPLATE = { id: 'tpl-1', name: 'aviso_cobranca', language: 'pt_BR', variableCount: 2, headerType: null };
+    // status e purpose sao NOT NULL na tabela: uma fixture sem eles nao existe em
+    // producao, e era so por isso que o caminho passava sem conferir aprovacao.
+    const TEMPLATE = { id: 'tpl-1', name: 'aviso_cobranca', language: 'pt_BR', variableCount: 2, headerType: null, status: 'APPROVED', purpose: 'disparo' };
 
     beforeEach(() => {
       verifySgpApiKey.mockResolvedValue({ status: 'ok', channelId: 'channel-2', mode: 'template', defaultTemplateId: null });
@@ -279,6 +281,26 @@ describe('GET /api/integrations/sgp/messages', () => {
         .query({ phoneNumber: '5598999990000', content: 'variables=João|150,00||template=nao_existe', token: 'the-key' });
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/not found/i);
+    });
+
+    test('returns 400 and does not enqueue when the template is not APPROVED', async () => {
+      findTemplateByNameAndWaba.mockResolvedValue({ ...TEMPLATE, status: 'PAUSED' });
+      const res = await request(buildApp())
+        .get('/api/integrations/sgp/messages')
+        .query({ phoneNumber: '5598999990000', content: 'variables=João|150,00||template=aviso_cobranca', token: 'the-key' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/approv/i);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+    });
+
+    test('returns 400 and does not enqueue when the template purpose is not "disparo"', async () => {
+      findTemplateByNameAndWaba.mockResolvedValue({ ...TEMPLATE, purpose: 'atendimento' });
+      const res = await request(buildApp())
+        .get('/api/integrations/sgp/messages')
+        .query({ phoneNumber: '5598999990000', content: 'variables=João|150,00||template=aviso_cobranca', token: 'the-key' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/dispatch/i);
+      expect(enqueueOutboundMessage).not.toHaveBeenCalled();
     });
 
     test('returns 400 when the variable count does not match', async () => {

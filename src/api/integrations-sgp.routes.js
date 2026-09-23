@@ -83,6 +83,20 @@ router.get('/messages', sgpLimiter, requireSgpApiKey, async (req, res) => {
     if (!template) {
       return res.status(400).json({ error: `Template "${payload.templateName}" not found for this channel` });
     }
+    // Os outros tres caminhos que enviam template (/start, envio numa conversa e
+    // campanha) conferem APPROVED antes de enfileirar; este nao conferia. Um
+    // template pausado ou rejeitado passava daqui, virava linha em messages e so
+    // morria na chamada ao provedor — erro de API no log, sem dizer a quem
+    // configurou a regra no SGP o que estava errado. As duas causas ficam
+    // separadas de proposito: "nao aprovado na Meta" e "marcado para atendimento"
+    // se resolvem em lugares diferentes, e colapsa-las num "not found" custaria
+    // uma tarde de procura pelo nome errado.
+    if (template.status !== 'APPROVED') {
+      return res.status(400).json({ error: `Template "${template.name}" is not approved by Meta (status: ${template.status})` });
+    }
+    if (template.purpose !== 'disparo') {
+      return res.status(400).json({ error: `Template "${template.name}" is not marked for dispatch (purpose: ${template.purpose})` });
+    }
     if (payload.variables.length !== template.variableCount) {
       return res.status(400).json({ error: `Template "${template.name}" requires exactly ${template.variableCount} variable(s)` });
     }

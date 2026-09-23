@@ -1,4 +1,5 @@
 const { fontesComerciais } = require('./fontes-comerciais');
+const { ROTULO_DE_PLANO } = require('./formato-plano');
 
 // 2026-09-22: esta linha mandava informar preço, planos e cobertura SOMENTE
 // pelo texto das instruções. `fatos` sempre entra no prompt, então era a
@@ -17,7 +18,7 @@ function fonteDoComercial(estado) {
 
   const partes = [];
   if (planos) {
-    partes.push('Preço e planos: chame consultar_planos e informe SOMENTE o que ela devolver, mantendo junto o nome, a velocidade, a mensalidade e a instalação DAQUELE mesmo plano. Valor que o cliente disse ter ouvido não é oferta oficial.');
+    partes.push(`Preço e planos: chame consultar_planos e informe SOMENTE o que ela devolver — ${ROTULO_DE_PLANO}. Valor que o cliente disse ter ouvido não é oferta oficial.`);
   } else {
     partes.push('Preço e planos: informe SOMENTE o que estiver escrito nas INSTRUÇÕES ADICIONAIS DA OPERAÇÃO abaixo, exatamente como está lá.');
   }

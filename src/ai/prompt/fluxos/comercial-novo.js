@@ -80,6 +80,7 @@
 // uma ferramenta que não existe ali é o jeito conhecido de o modelo afirmar
 // que consultou.
 const { temFerramenta } = require('./../fontes-comerciais');
+const { ROTULO_DE_PLANO } = require('./../formato-plano');
 
 // 2026-09-22, teste real: depois de ver os quatro planos, o cliente disse
 // "tenho 2 TVs e 7 filhos" e a IA repetiu a tabela inteira e recomendou pela
@@ -108,7 +109,7 @@ function vendaComFerramenta(estado) {
   // mesma mensagem e o "não encaminhe na primeira resposta" são comportamento
   // de venda e continuam iguais nos dois caminhos.
   const planos = comPlanos
-    ? 'Planos: chame consultar_planos e responda com o que ela devolver, um plano por linha no formato "• [velocidade] por R$ [valor]/mês", mantendo junto o nome, a velocidade, a mensalidade e a instalação DAQUELE mesmo plano — nunca troque valores entre planos. Preço que o cliente disse ter ouvido, valor que apareceu antes na conversa ou tabela escrita nas instruções NÃO substituem o que a ferramenta devolveu. Se ela não devolver plano nenhum ou falhar, NÃO invente e NÃO diga que consultou: diga que a equipe confirma os valores e conclua para o setor da lista acima que cuidar de vendas.'
+    ? `Planos: chame consultar_planos e responda com o que ela devolver, um plano por linha começando com "• ": ${ROTULO_DE_PLANO}. Nunca monte uma linha juntando pedaços de planos diferentes. Preço que o cliente disse ter ouvido, valor que apareceu antes na conversa ou tabela escrita nas instruções NÃO substituem o que a ferramenta devolveu. Se ela não devolver plano nenhum ou falhar, NÃO invente e NÃO diga que consultou: diga que a equipe confirma os valores e conclua para o setor da lista acima que cuidar de vendas.`
     : 'Planos: copie o bloco de planos EXATAMENTE como está escrito nas instruções (mesmas linhas, mesmos ícones, mesmos preços); se lá não houver um bloco pronto, liste um plano por linha no formato "• [velocidade] por R$ [valor]/mês".';
 
   const cobertura = comCobertura
@@ -147,7 +148,13 @@ module.exports = {
         recomendacaoDePlano(estado),
       ].join('\n'),
       'O QUE PRECISA PARA FAZER O CADASTRO ("quais dados/documentos preciso", "o que preciso levar"): se as INSTRUÇÕES ADICIONAIS DA OPERAÇÃO trouxerem a lista de documentos ou dados necessários, responda com a lista exatamente como está lá e pergunte se ele quer seguir com a contratação. Se lá não houver nada sobre isso, diga em uma frase que a equipe confirma a documentação e encaminhe para o setor da lista acima que cuidar de vendas — mas NÃO encaminhe sem responder alguma coisa.',
-      'Encaminhe para o setor da lista acima que cuidar de vendas SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço; ou pedir para falar com um atendente; ou a cidade não estiver na lista. Antes disso, continue a venda (planos, endereço, dúvidas). O "Certo!" é só quando ele pediu algo (contratar, falar com atendente); senão comece direto em "Vou encaminhar...".',
+      // 2026-09-22, teste real: com o lugar já dito, "já tiver dado o endereço"
+      // virava gatilho PERMANENTE de encaminhamento — e a mensagem seguinte do
+      // cliente ("tenho 2 TVs e 7 filhos"), que é pedido de ajuda para
+      // escolher, caiu direto no "Vou encaminhar". A cláusula passa a exigir
+      // que a venda esteja realmente sem pendência, e a frase seguinte nomeia
+      // o caso observado apontando para a RECOMENDAÇÃO acima, sem reescrevê-la.
+      'Encaminhe para o setor da lista acima que cuidar de vendas SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço E não houver mais nada de venda para tratar; ou pedir para falar com um atendente; ou a cidade não estiver na lista. Ele contar como usa (pessoas, aparelhos, TVs, trabalho, jogos) NÃO é pedido de encaminhamento: é pedido de ajuda para escolher, e já ter o endereço não autoriza encerrar aí — siga a RECOMENDAÇÃO acima. Antes disso, continue a venda (planos, endereço, dúvidas). O "Certo!" é só quando ele pediu algo (contratar, falar com atendente); senão comece direto em "Vou encaminhar...".',
       noturno
         ? 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar seu atendimento. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.'
         : 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar você. Um atendente continuará o atendimento por aqui." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.',

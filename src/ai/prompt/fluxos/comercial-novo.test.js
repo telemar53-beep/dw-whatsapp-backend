@@ -92,9 +92,12 @@ describe('módulo comercial-novo', () => {
       expect(t).toMatch(/mas NÃO encaminhe sem responder alguma coisa/);
     });
 
-    test('só encaminha nas condições previstas (plano escolhido, endereço dado, pediu atendente, ou cidade fora da lista)', () => {
+    // 2026-09-22: a cláusula do endereço ganhou a condição "E não houver mais
+    // nada de venda para tratar". Sozinha ela encerrava a venda no meio da
+    // escolha do plano — ver o describe de regressão no fim do arquivo.
+    test('só encaminha nas condições previstas (plano escolhido, endereço dado E venda sem pendência, pediu atendente, ou cidade fora da lista)', () => {
       const t = texto();
-      expect(t).toMatch(/SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço; ou pedir para falar com um atendente; ou a cidade não estiver na lista\./);
+      expect(t).toMatch(/SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço E não houver mais nada de venda para tratar; ou pedir para falar com um atendente; ou a cidade não estiver na lista\./);
     });
 
     test('resumo do encaminhamento inclui plano, cidade e bairro/rua', () => {
@@ -268,11 +271,16 @@ describe('comercial-novo com consultar_planos disponivel', () => {
     expect(t).not.toMatch(/copie o bloco de planos/);
   });
 
-  test('exige manter nome, velocidade, mensalidade e instalacao do MESMO plano', () => {
+  // 2026-09-22: esta guarda existe contra TROCAR valores entre planos. A
+  // redação antiga ("mantendo junto o nome, a velocidade, ...") conseguia isso
+  // exigindo a velocidade sempre, e era daí que vinha "500 Mega — 500 Mbps".
+  // O `rotulo` pronto mantém os campos juntos por construção; a guarda
+  // permanece, agora sem a exigência que criava a duplicidade.
+  test('exige que a linha de um plano nao misture dados de outro', () => {
     const t = texto(COM);
 
-    expect(t).toMatch(/nunca troque valores entre planos/i);
-    expect(t).toMatch(/DAQUELE mesmo plano/);
+    expect(t).toMatch(/Nunca monte uma linha juntando pedaços de planos diferentes/);
+    expect(t).toMatch(/escreva o `rotulo` de cada plano EXATAMENTE como veio/);
   });
 
   test('instrucoes antigas e preco dito pelo cliente nao substituem o cadastro', () => {
@@ -402,5 +410,117 @@ describe('recomendacao de plano — correcao do caso real', () => {
     expect(t).toMatch(/Nunca encaminhe deixando uma pergunta dele sem resposta/);
     expect(t).toMatch(/Endereço é UMA pergunta só/);
     expect(t).toMatch(/O QUE PRECISA PARA FAZER O CADASTRO/);
+  });
+});
+
+// Teste real de 2026-09-22, depois de ed893a7: a repetição da tabela parou,
+// mas "Tenho 2 TVs e 7 filhos" virou "Vou encaminhar você para o Comercial".
+// A causa estava AQUI: "ou já tiver dado o endereço" era gatilho suficiente e
+// PERMANENTE — com o lugar já dito no começo da conversa, qualquer mensagem
+// seguinte autorizava encerrar, inclusive um pedido de ajuda para escolher.
+describe('encaminhamento — contar como usa NÃO encerra a venda', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos', 'verificar_cobertura'];
+  const texto = () => comercialNovo.linhas(estadoBase({ ferramentas: COM })).join('\n');
+
+  test('ter o endereço sozinho não basta mais para encaminhar', () => {
+    const t = texto();
+
+    expect(t).toMatch(/já tiver dado o endereço E não houver mais nada de venda para tratar/);
+    // A forma antiga, incondicional, não pode voltar.
+    expect(t).not.toMatch(/ou já tiver dado o endereço;/);
+  });
+
+  test('o caso observado é nomeado: contar como usa é pedido de ajuda', () => {
+    const t = texto();
+
+    expect(t).toMatch(/contar como usa.*NÃO é pedido de encaminhamento/);
+    expect(t).toMatch(/pedido de ajuda para escolher/);
+  });
+
+  test('e aponta de volta para a RECOMENDAÇÃO, sem reescrevê-la', () => {
+    const t = texto();
+
+    expect(t).toMatch(/já ter o endereço não autoriza encerrar aí — siga a RECOMENDAÇÃO acima/);
+    // Uma regra só: a orientação de como recomendar continua aparecendo uma
+    // única vez, no bloco RECOMENDAÇÃO.
+    expect(t.match(/faça UMA pergunta útil/g)).toHaveLength(1);
+  });
+
+  test('os gatilhos legítimos de encaminhamento continuam de pé', () => {
+    const t = texto();
+
+    expect(t).toMatch(/ele escolher um plano ou pedir para contratar/);
+    expect(t).toMatch(/ou pedir para falar com um atendente/);
+    expect(t).toMatch(/ou a cidade não estiver na lista/);
+  });
+});
+
+// Regressão do atendimento inteiro, na ordem em que aconteceu. Não roda o
+// modelo (sem chamada paga): prova que o PROMPT que ele recebe manda fazer o
+// que o dono espera em cada passo.
+describe('regressão do atendimento de 2026-09-22 (planos → uso → recomendação)', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos', 'verificar_cobertura'];
+  const t = () => comercialNovo.linhas(estadoBase({ ferramentas: COM })).join('\n');
+
+  test('passo 1 — "quais os planos para instalar lá": apresenta os planos sem encerrar', () => {
+    expect(t()).toMatch(/NUNCA encaminhe um cliente novo na primeira resposta quando a ferramenta disser que atendemos/);
+  });
+
+  test('passo 2 — "tenho 2 TVs e 7 filhos": NÃO repete a tabela', () => {
+    expect(t()).toMatch(/NÃO repita a tabela de planos/);
+  });
+
+  test('passo 2 — NÃO encaminha', () => {
+    expect(t()).toMatch(/contar como usa.*NÃO é pedido de encaminhamento/);
+  });
+
+  test('passo 2 — NÃO escolhe pelo número de filhos', () => {
+    expect(t()).toMatch(/NÃO escolha a velocidade pela quantidade de pessoas ou de filhos/);
+  });
+
+  test('passo 2 — faz no máximo UMA pergunta sobre uso simultâneo', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/faça UMA pergunta útil/);
+    expect(texto).toMatch(/quantos aparelhos costumam usar ao mesmo tempo/);
+  });
+
+  test('passo 3 — com a resposta, recomenda UMA opção com mensalidade e motivo', () => {
+    expect(t()).toMatch(/diga qual plano, a mensalidade que consultar_planos devolveu e uma frase curta de motivo/);
+  });
+});
+
+describe('apresentação dos planos — sem velocidade repetida', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos', 'verificar_cobertura'];
+  const texto = (ferramentas = COM) => comercialNovo.linhas(estadoBase({ ferramentas })).join('\n');
+
+  test('manda usar o rotulo pronto, um por linha', () => {
+    const t = texto();
+
+    expect(t).toMatch(/um plano por linha começando com "• "/);
+    expect(t).toMatch(/escreva o `rotulo` de cada plano EXATAMENTE como veio/);
+  });
+
+  test('proíbe acrescentar a velocidade por conta própria', () => {
+    expect(texto()).toMatch(/nunca acrescente a velocidade a um rótulo que não a traz/);
+  });
+
+  test('a instalação comum sai UMA vez, fora das linhas', () => {
+    expect(texto()).toMatch(/com `instalacaoComum`, escreva a instalação UMA vez depois da lista, nunca por linha/);
+  });
+
+  test('o formato antigo, que produzia a velocidade repetida, saiu', () => {
+    expect(texto()).not.toMatch(/mantendo junto o nome, a velocidade, a mensalidade e a instalação/);
+  });
+
+  test('a guarda contra trocar valores entre planos continua', () => {
+    expect(texto()).toMatch(/Nunca monte uma linha juntando pedaços de planos diferentes/);
+  });
+
+  test('sem a ferramenta, o texto de reserva das instruções segue intacto', () => {
+    const t = texto(['buscar_cliente', 'concluir_triagem']);
+
+    expect(t).toMatch(/copie o bloco de planos EXATAMENTE como está escrito nas instruções/);
+    expect(t).not.toMatch(/rotulo/);
   });
 });

@@ -190,10 +190,14 @@ describe('comercial-cliente com consultar_planos disponivel', () => {
     expect(t).not.toMatch(/copiando o bloco das INSTRUÇÕES ADICIONAIS/);
   });
 
+  // 2026-09-22: mesma correção de comercial-novo. "DAQUELE mesmo plano" vinha
+  // de uma frase que exigia a velocidade sempre — origem de "500 Mega — 500
+  // Mbps". O `rotulo` pronto mantém a associação por construção.
   test('mantem a associacao plano-preco-instalacao e nao repete a tabela apos a escolha', () => {
     const t = texto(COM);
 
-    expect(t).toMatch(/DAQUELE mesmo plano/);
+    expect(t).toMatch(/escreva o `rotulo` de cada plano EXATAMENTE como veio/);
+    expect(t).toMatch(/Nunca monte uma linha juntando pedaços de planos diferentes/);
     expect(t).toMatch(/sem repetir a tabela depois que ele já escolheu/);
   });
 

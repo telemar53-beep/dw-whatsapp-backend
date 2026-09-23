@@ -93,6 +93,7 @@
 // consultar_planos, não do texto salvo nas instruções. Condicional à
 // ferramenta estar no perfil do turno.
 const { temFerramenta } = require('./../fontes-comerciais');
+const { ROTULO_DE_PLANO } = require('./../formato-plano');
 
 // Mesma correção de comercial-novo.js: o que decide a velocidade é o uso
 // SIMULTÂNEO, não a contagem de moradores — e contar como usa é gatilho de
@@ -106,7 +107,7 @@ function recomendacaoParaClienteIdentificado(estado) {
 
 function planosParaClienteIdentificado(estado) {
   return temFerramenta(estado, 'consultar_planos')
-    ? '- Cliente JÁ identificado que pede preço ou upgrade com todas as letras: cumprimente pelo nome, diga que vai ajudar, chame consultar_planos e apresente o que ela devolver, mantendo junto o nome, a velocidade, a mensalidade e a instalação DAQUELE mesmo plano. Preço dito pelo cliente ou escrito nas instruções não substitui o que a ferramenta devolveu. Se ela não devolver plano nenhum ou falhar, não invente e não diga que consultou. Pergunte qual interessa e, com a escolha, conclua para o setor da lista acima que cuidar de vendas com o plano escolhido no resumo — sem repetir a tabela depois que ele já escolheu.'
+    ? `- Cliente JÁ identificado que pede preço ou upgrade com todas as letras: cumprimente pelo nome, diga que vai ajudar, chame consultar_planos e apresente o que ela devolver: ${ROTULO_DE_PLANO}. Nunca monte uma linha juntando pedaços de planos diferentes. Preço dito pelo cliente ou escrito nas instruções não substitui o que a ferramenta devolveu. Se ela não devolver plano nenhum ou falhar, não invente e não diga que consultou. Pergunte qual interessa e, com a escolha, conclua para o setor da lista acima que cuidar de vendas com o plano escolhido no resumo — sem repetir a tabela depois que ele já escolheu.`
     : '- Cliente JÁ identificado que pede preço ou upgrade com todas as letras: cumprimente pelo nome, diga que vai ajudar, e apresente os planos copiando o bloco das INSTRUÇÕES ADICIONAIS DA OPERAÇÃO exatamente como está lá. Pergunte qual interessa e, com a escolha, conclua para o setor da lista acima que cuidar de vendas com o plano escolhido no resumo.';
 }
 

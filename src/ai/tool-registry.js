@@ -465,17 +465,67 @@ function reais(valor) {
   return `R$ ${numero.toFixed(2).replace('.', ',')}`;
 }
 
+// Teste real de 2026-09-22: a IA ofereceu "500 Mega — 500 Mbps — R$ 100/mês".
+// O nome comercial JÁ diz a velocidade, então repeti-la soa artificial no
+// WhatsApp.
+//
+// A regra é por COMPARAÇÃO, nunca por lista dos planos de hoje: tira os números
+// do nome e vê se algum bate com speed_mbps. "500 Mega" bate e a velocidade sai
+// da linha; "Plano Gamer" não tem número nenhum, então "800 Mbps" continua
+// aparecendo. "Combo 2 Telas" a 500 também mostra, porque 2 ≠ 500.
+//
+// A unidade do nome conta: "1 Giga" diz a mesma velocidade que speed_mbps 1000,
+// só em outra escala — sem isso a linha viraria "1 Giga — 1000 Mbps", que é
+// exatamente a duplicidade que esta função existe para tirar.
+function nomeJaDizVelocidade(nome, mbps) {
+  const velocidade = Number(mbps);
+  if (typeof nome !== 'string' || !Number.isFinite(velocidade)) return false;
+  const emGiga = /giga|gbps/i.test(nome);
+  return (nome.match(/\d+(?:[.,]\d+)?/g) || []).some((bruto) => {
+    const n = Number(bruto.replace(',', '.'));
+    return n === velocidade || (emGiga && n * 1000 === velocidade);
+  });
+}
+
+// A condição de instalação quando ela é a MESMA em todos os planos. Nesse caso
+// ela é da operação, não do plano: repetir "Instalação grátis" em cada linha
+// polui a lista. Condições diferentes devolvem null, e aí cada plano precisa
+// mesmo carregar a sua.
+//
+// Contrato: null ou texto com conteúdo, nunca string vazia. Quem chama testa
+// por `!== null`, então catálogo sem condição cadastrada precisa sair daqui
+// como null — devolver '' publicaria uma condição de instalação em branco.
+function condicaoComumDeInstalacao(planos) {
+  const condicoes = planos.map((p) => (p.installCondition || '').trim());
+  if (condicoes.length === 0 || condicoes.some((c) => !c)) return null;
+  return condicoes.every((c) => c === condicoes[0]) ? condicoes[0] : null;
+}
+
 // O que o modelo ve de um plano. A forma e montada AQUI, campo a campo, em vez
 // de repassar a linha do cadastro: a observacao interna e os campos
 // administrativos nao podem vazar por descuido de um SELECT que cresceu.
+//
+// `rotulo` vem pronto de proposito. Deixar a montagem da linha para o modelo
+// foi o que produziu a velocidade repetida: instrução de formato no prompt é
+// palpite, string calculada é fato.
 function planoParaModelo(plano) {
+  const mensalidadeFormatada = reais(plano.monthlyPrice);
+  const velocidade = Number.isFinite(Number(plano.speedMbps)) && !nomeJaDizVelocidade(plano.name, plano.speedMbps)
+    ? `${plano.speedMbps} Mbps`
+    : null;
+  // Centavos zerados saem só da LINHA: "R$ 100/mês" é como se escreve um valor
+  // redondo no WhatsApp. `mensalidadeFormatada` continua com os centavos, que
+  // é o valor exato — e R$ 99,90 mantém os dele nos dois lugares.
+  const naLinha = mensalidadeFormatada && mensalidadeFormatada.replace(/,00$/, '');
   return {
     id: plano.id,
     nome: plano.name,
     velocidadeMbps: plano.speedMbps,
     mensalidade: plano.monthlyPrice,
-    mensalidadeFormatada: reais(plano.monthlyPrice),
+    mensalidadeFormatada,
     instalacao: plano.installCondition || null,
+    rotulo: [plano.name, velocidade, naLinha ? `${naLinha}/mês` : null]
+      .filter(Boolean).join(' — '),
   };
 }
 
@@ -873,9 +923,14 @@ const TOOLS = [
           instrucao: 'Não há plano cadastrado. NÃO invente plano, velocidade nem preço, e não repita valores que você tenha visto antes: encaminhe para o setor da lista acima que cuidar de vendas e contratação.',
         };
       }
+      // A condição de instalação comum sai do plano e vira campo do topo: é o
+      // que permite escrevê-la uma vez só, no fim da lista. Chave ausente
+      // quando as condições divergem — aí o `instalacao` de cada plano manda.
+      const instalacaoComum = condicaoComumDeInstalacao(planos);
       return {
         planos: planos.map(planoParaModelo),
-        instrucao: 'Estes são os planos oficiais. Ofereça SOMENTE o que está aqui, mantendo junto o nome, a velocidade, a mensalidade e a instalação de cada um — não troque preço entre planos. Um valor que o cliente mencionou, ou que apareceu antes na conversa, NÃO substitui esta lista: se divergir, vale esta. Não liste tudo quando ele já escolheu.',
+        ...(instalacaoComum !== null ? { instalacaoComum } : {}),
+        instrucao: `Estes são os planos oficiais. Ofereça SOMENTE o que está aqui. Ao listar, escreva o \`rotulo\` de cada plano EXATAMENTE como veio, um por linha, começando com "• " — ele já traz o nome, a mensalidade e a velocidade só quando o nome não a diz. NUNCA acrescente a velocidade a um rótulo que não a traz, e nunca monte uma linha juntando pedaços de planos diferentes. ${instalacaoComum !== null ? 'A instalação é a mesma em todos: escreva `instalacaoComum` UMA vez, em linha própria depois da lista, e nunca dentro das linhas dos planos.' : 'As condições de instalação diferem entre os planos: diga a `instalacao` DAQUELE plano ao falar dele.'} Um valor que o cliente mencionou, ou que apareceu antes na conversa, NÃO substitui esta lista: se divergir, vale esta. Não liste tudo quando ele já escolheu.`,
       };
     },
   },

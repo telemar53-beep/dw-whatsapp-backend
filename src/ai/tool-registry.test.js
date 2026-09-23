@@ -4084,3 +4084,102 @@ describe('ferramentas comerciais', () => {
     });
   });
 });
+
+// Teste real de 2026-09-22: "500 Mega — 500 Mbps — R$ 100/mês". O nome já diz
+// a velocidade. A regra tem de ser por COMPARAÇÃO — deixar isso como instrução
+// de formato no prompt foi o que falhou.
+describe('consultar_planos — a linha do plano não repete a velocidade', () => {
+  function ctxAnonimo() {
+    return { conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, contracts: [] };
+  }
+  async function rotulos(planos) {
+    listarPlanosDisponiveis.mockResolvedValue(planos);
+    const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+    return r.planos.map((p) => p.rotulo);
+  }
+
+  beforeEach(() => jest.clearAllMocks());
+
+  test('nome que já traz a velocidade não a repete', async () => {
+    expect(await rotulos([{ id: 'p', name: '500 Mega', speedMbps: 500, monthlyPrice: 100, installCondition: 'Grátis' }]))
+      .toEqual(['500 Mega — R$ 100/mês']);
+  });
+
+  test('nome SEM a velocidade continua mostrando', async () => {
+    expect(await rotulos([{ id: 'p', name: 'Plano Gamer', speedMbps: 800, monthlyPrice: 165, installCondition: 'Grátis' }]))
+      .toEqual(['Plano Gamer — 800 Mbps — R$ 165/mês']);
+  });
+
+  // A regra não pode ser uma lista dos quatro planos de hoje: um plano
+  // inventado agora, com outro nome, tem de cair na mesma comparação.
+  test('nome com número que NÃO é a velocidade mostra a velocidade', async () => {
+    expect(await rotulos([{ id: 'p', name: 'Combo 2 Telas', speedMbps: 500, monthlyPrice: 100, installCondition: 'Grátis' }]))
+      .toEqual(['Combo 2 Telas — 500 Mbps — R$ 100/mês']);
+  });
+
+  test('mesma velocidade em outra unidade também conta', async () => {
+    expect(await rotulos([{ id: 'p', name: '1 Giga', speedMbps: 1000, monthlyPrice: 200, installCondition: 'Grátis' }]))
+      .toEqual(['1 Giga — R$ 200/mês']);
+  });
+
+  test('velocidade no meio do nome também conta', async () => {
+    expect(await rotulos([{ id: 'p', name: 'Fibra 600 Turbo', speedMbps: 600, monthlyPrice: 130, installCondition: 'Grátis' }]))
+      .toEqual(['Fibra 600 Turbo — R$ 130/mês']);
+  });
+
+  test('centavos reais aparecem; centavos zerados não', async () => {
+    expect(await rotulos([{ id: 'p', name: '500 Mega', speedMbps: 500, monthlyPrice: 99.9, installCondition: 'Grátis' }]))
+      .toEqual(['500 Mega — R$ 99,90/mês']);
+  });
+
+  test('o valor exato continua disponível com centavos', async () => {
+    listarPlanosDisponiveis.mockResolvedValue([{ id: 'p', name: '500 Mega', speedMbps: 500, monthlyPrice: 100, installCondition: 'Grátis' }]);
+    const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+    expect(r.planos[0].mensalidadeFormatada).toBe('R$ 100,00');
+  });
+});
+
+// "Instalação grátis" repetida em cada linha polui a lista no WhatsApp quando a
+// condição é a mesma em todos. Quando elas DIVERGEM, cada plano precisa mesmo
+// carregar a sua — e aí não existe condição comum.
+describe('consultar_planos — instalação comum sai uma vez só', () => {
+  function ctxAnonimo() {
+    return { conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, contracts: [] };
+  }
+  beforeEach(() => jest.clearAllMocks());
+
+  test('condição igual em todos vira campo único', async () => {
+    listarPlanosDisponiveis.mockResolvedValue([
+      { id: 'a', name: '500 Mega', speedMbps: 500, monthlyPrice: 100, installCondition: 'Grátis' },
+      { id: 'b', name: '800 Mega', speedMbps: 800, monthlyPrice: 165, installCondition: 'Grátis' },
+    ]);
+    const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+    expect(r.instalacaoComum).toBe('Grátis');
+    expect(r.instrucao).toMatch(/UMA vez/i);
+    // A linha do plano NÃO carrega a instalação: é isso que evita a repetição.
+    expect(r.planos[0].rotulo).not.toMatch(/Grátis/i);
+  });
+
+  test('condições diferentes NÃO viram condição comum', async () => {
+    listarPlanosDisponiveis.mockResolvedValue([
+      { id: 'a', name: '500 Mega', speedMbps: 500, monthlyPrice: 100, installCondition: 'Grátis' },
+      { id: 'b', name: '800 Mega', speedMbps: 800, monthlyPrice: 165, installCondition: 'R$ 150 em 3x' },
+    ]);
+    const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+    expect(r).not.toHaveProperty('instalacaoComum');
+    expect(r.planos[0].instalacao).toBe('Grátis');
+    expect(r.planos[1].instalacao).toBe('R$ 150 em 3x');
+    expect(r.instrucao).toMatch(/diferem/i);
+  });
+
+  test('sem condição cadastrada não inventa condição comum', async () => {
+    listarPlanosDisponiveis.mockResolvedValue([
+      { id: 'a', name: '500 Mega', speedMbps: 500, monthlyPrice: 100, installCondition: null },
+    ]);
+    const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+    expect(r).not.toHaveProperty('instalacaoComum');
+  });
+});

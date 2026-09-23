@@ -70,7 +70,12 @@
 [data-dialog=templates] form[aria-label='Cadastrar novo template'] > div:nth-child(-n+4) {grid-column:1}
 [data-dialog=templates] form > div:has(#template-body) {grid-column:2;grid-row:1/3}
 [data-dialog=templates] #template-body {min-height:120px}
-[data-dialog=templates] fieldset {grid-column:2;grid-row:3/6;border-left:1px solid #ffffff10;padding-left:16px}
+/* Coluna fixa, linha automatica. A regra nascia com grid-row:3/6 quando o
+   formulario tinha UM fieldset; com dois (exemplos e botoes) os dois caiam na
+   mesma area e se sobrepunham — titulo sobre titulo, rotulo sobre campo. Linha
+   automatica empilha quantos vierem. Nenhuma classe utilitaria corrigiria isso:
+   esta folha nao esta em @layer e vence as utilities do Tailwind. */
+[data-dialog=templates] fieldset {grid-column:2;border-left:1px solid #ffffff10;padding-left:16px}
 [data-dialog=templates] form > p,[data-dialog=templates] form > div:last-child,[data-dialog=templates] form[aria-label='Registrar template existente'] > div:has(#existing-template-language) {grid-column:1/-1}
 .dw-dialog[data-dialog=templates] form > div:last-child {justify-content:flex-end;padding:12px 0;position:sticky;bottom:0;z-index:1;background:var(--color-wa-panel);backdrop-filter:blur(8px);border-top:1px solid #ffffff10}
 /* Envio de template: biblioteca a esquerda, variaveis e previa a direita.

@@ -1105,6 +1105,69 @@ describe('createMetaTemplate — botoes de resposta rapida', () => {
     );
   });
 
+  test('com exemplos, o BODY leva example.body_text', async () => {
+    axios.post.mockResolvedValue({ data: { id: 'meta-tpl-4', status: 'PENDING' } });
+    const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
+
+    await createMetaTemplate(channel, {
+      name: 'aviso_fatura',
+      category: 'UTILITY',
+      language: 'pt_BR',
+      bodyText: 'Olá {{1}}, sua fatura de {{2}} vence em {{3}}.',
+      examples: ['Maria', 'R$ 129,90', '10/10/2026'],
+    });
+
+    expect(axios.post.mock.calls[0][1].components).toEqual([
+      {
+        type: 'BODY',
+        text: 'Olá {{1}}, sua fatura de {{2}} vence em {{3}}.',
+        example: { body_text: [['Maria', 'R$ 129,90', '10/10/2026']] },
+      },
+    ]);
+  });
+
+  // Exemplos e botoes sao componentes diferentes e nao podem se atrapalhar: o
+  // example vive DENTRO do BODY, o BUTTONS vem depois dele.
+  test('exemplos e botoes convivem no mesmo payload', async () => {
+    axios.post.mockResolvedValue({ data: { id: 'meta-tpl-5', status: 'PENDING' } });
+    const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
+
+    await createMetaTemplate(channel, {
+      name: 'agendar',
+      category: 'UTILITY',
+      language: 'pt_BR',
+      bodyText: 'Olá {{1}}, podemos agendar?',
+      buttons: ['Sim'],
+      examples: ['Maria'],
+    });
+
+    expect(axios.post.mock.calls[0][1].components).toEqual([
+      { type: 'BODY', text: 'Olá {{1}}, podemos agendar?', example: { body_text: [['Maria']] } },
+      { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'Sim' }] },
+    ]);
+  });
+
+  // Compatibilidade: quem nao manda exemplos tem de produzir o payload de antes,
+  // sem a chave `example` sequer existir no objeto.
+  test('sem exemplos, o BODY sai igual ao de antes', async () => {
+    axios.post.mockResolvedValue({ data: { id: 'meta-tpl-6', status: 'PENDING' } });
+    const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
+
+    await createMetaTemplate(channel, { name: 'aviso', category: 'UTILITY', language: 'pt_BR', bodyText: 'Aviso' });
+
+    expect(axios.post.mock.calls[0][1].components).toEqual([{ type: 'BODY', text: 'Aviso' }]);
+    expect(axios.post.mock.calls[0][1].components[0]).not.toHaveProperty('example');
+  });
+
+  test('lista de exemplos vazia nao vira example', async () => {
+    axios.post.mockResolvedValue({ data: { id: 'meta-tpl-7', status: 'PENDING' } });
+    const channel = { config: { accessToken: 'token-abc', wabaId: 'waba-1' } };
+
+    await createMetaTemplate(channel, { name: 'aviso', category: 'UTILITY', language: 'pt_BR', bodyText: 'Aviso', examples: [] });
+
+    expect(axios.post.mock.calls[0][1].components[0]).not.toHaveProperty('example');
+  });
+
   // Componente BUTTONS vazio faz a Meta recusar o template inteiro.
   test('sem botoes, o componente nem aparece', async () => {
     axios.post.mockResolvedValue({ data: { id: 'meta-tpl-3', status: 'PENDING' } });

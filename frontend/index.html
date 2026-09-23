@@ -10,6 +10,61 @@
          useTituloDaAba (GET /api/public/company). O favicon ainda e o
          arquivo desta instalacao: o backend nao entrega marca por tenant. -->
     <title>Atendimento</title>
+    <!-- Rede de segurança de ÚLTIMO recurso, e por isso vive aqui e não no
+         bundle: se o módulo da aplicação falhar ao carregar ou ao ser lido pelo
+         navegador, nada dentro dele roda — nem o error boundary do React. O
+         resultado, hoje, é tela branca sem uma palavra, e sem console remoto
+         (celular, máquina do escritório) não há como saber o motivo.
+
+         Escrito em ES5 de propósito: sem arrow, sem template literal, sem
+         const. Um script de diagnóstico que o navegador não consegue ler é
+         justamente o que não pode acontecer no navegador com problema.
+
+         Só age se #root continuar vazio: com a aplicação de pé, quem trata
+         erro é o boundary. -->
+    <script>
+      (function () {
+        function mostrar(titulo, detalhe) {
+          var root = document.getElementById('root');
+          if (!root || root.firstChild) return;
+          root.innerHTML = '';
+          var caixa = document.createElement('div');
+          caixa.setAttribute('role', 'alert');
+          caixa.style.cssText =
+            'max-width:640px;margin:0 auto;padding:24px 16px;color:#1f2933;' +
+            'font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.5';
+          var h = document.createElement('h1');
+          h.style.cssText = 'font-size:19px;margin:0 0 8px';
+          h.appendChild(document.createTextNode('Não foi possível abrir o atendimento'));
+          var p = document.createElement('p');
+          p.style.cssText = 'color:#52606d;margin:0 0 16px';
+          p.appendChild(document.createTextNode('A página não carregou. Envie o texto abaixo para quem cuida do sistema.'));
+          var pre = document.createElement('pre');
+          pre.style.cssText =
+            'white-space:pre-wrap;word-break:break-word;border:1px solid #cbd2d9;border-radius:8px;' +
+            'padding:12px;background:#f5f7fa;font-size:12px;margin:0';
+          pre.appendChild(document.createTextNode(titulo + '\n\n' + detalhe + '\n\n' + navigator.userAgent));
+          caixa.appendChild(h);
+          caixa.appendChild(p);
+          caixa.appendChild(pre);
+          root.appendChild(caixa);
+        }
+        window.addEventListener('error', function (evento) {
+          var erro = evento.error;
+          mostrar(
+            String((erro && erro.message) || evento.message || 'Erro ao carregar'),
+            String((erro && erro.stack) || (evento.filename || '') + ':' + (evento.lineno || ''))
+          );
+        });
+        window.addEventListener('unhandledrejection', function (evento) {
+          var motivo = evento.reason;
+          mostrar(
+            String((motivo && motivo.message) || motivo || 'Falha não tratada'),
+            String((motivo && motivo.stack) || '')
+          );
+        });
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

@@ -24,7 +24,7 @@ const KNOWN_STATUSES = new Set(['PENDING', 'APPROVED', 'REJECTED', 'PAUSED', 'DI
 
 class TemplateValidationError extends Error {}
 
-async function createTemplate({ channelId, name, category, language, bodyText, purpose, buttons }) {
+async function createTemplate({ channelId, name, category, language, bodyText, purpose, buttons, examples }) {
   if (!isValidTemplateName(name)) {
     throw new TemplateValidationError('Template name must contain only lowercase letters, numbers, and underscores');
   }
@@ -48,6 +48,13 @@ async function createTemplate({ channelId, name, category, language, bodyText, p
   } catch (err) {
     throw new TemplateValidationError(err.message);
   }
+  // Um exemplo por variavel, nem mais nem menos: a Meta reprova o template na
+  // revisao quando a conta nao bate, e descobrir isso horas depois custa o ciclo
+  // inteiro de aprovacao. Recusar aqui devolve o erro na tela, na hora.
+  const exemplos = examples || [];
+  if (exemplos.length !== variableCount) {
+    throw new TemplateValidationError(`This template has ${variableCount} variable(s) and needs exactly ${variableCount} example(s)`);
+  }
 
   const channel = await findChannelById(channelId);
   if (!channel || !isOfficialChannelType(channel.type)) {
@@ -57,7 +64,10 @@ async function createTemplate({ channelId, name, category, language, bodyText, p
     throw new TemplateValidationError('This channel has no WABA configured yet');
   }
 
-  const { metaTemplateId } = await ADAPTERS_BY_CHANNEL_TYPE[channel.type].createMetaTemplate(channel, { name, category, language, bodyText, buttons });
+  // `examples` cru, nao o normalizado: quem nao manda exemplos faz a chamada sair
+  // identica a de antes (chave ausente, e nao lista vazia), e nenhum consumidor
+  // anterior enxerga diferenca. A lista normalizada serve so para contar acima.
+  const { metaTemplateId } = await ADAPTERS_BY_CHANNEL_TYPE[channel.type].createMetaTemplate(channel, { name, category, language, bodyText, buttons, examples });
 
   try {
     return await createTemplateRecord({ wabaId: channel.config.wabaId, metaTemplateId, name, language, category, bodyText, variableCount, purpose, buttons: buttons || [] });

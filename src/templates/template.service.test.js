@@ -30,7 +30,11 @@ beforeEach(() => {
 });
 
 describe('createTemplate', () => {
-  const validInput = { channelId: 'ch-1', name: 'fatura_vencida', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá {{1}}, sua fatura venceu.' };
+  // O corpo tem {{1}} e a fixture nao trazia exemplo nenhum — exatamente a
+  // combinacao que a Meta aceita na criacao e reprova na revisao com
+  // INVALID_FORMAT. Alinhar a fixture ao que passa na revisao nao afrouxa o
+  // teste: era ela que descrevia um template impossivel de aprovar.
+  const validInput = { channelId: 'ch-1', name: 'fatura_vencida', category: 'UTILITY', language: 'pt_BR', bodyText: 'Olá {{1}}, sua fatura venceu.', examples: ['Maria'] };
 
   test('rejects an invalid name without calling Meta', async () => {
     await expect(createTemplate({ ...validInput, name: 'Fatura Vencida' })).rejects.toThrow(TemplateValidationError);
@@ -39,6 +43,28 @@ describe('createTemplate', () => {
 
   test('rejects a category outside MARKETING/UTILITY', async () => {
     await expect(createTemplate({ ...validInput, category: 'AUTHENTICATION' })).rejects.toThrow(TemplateValidationError);
+  });
+
+  // A conta errada e reprovada pela Meta na revisao, horas depois. Recusar aqui
+  // devolve o erro na tela, antes de gastar um ciclo de aprovacao.
+  test('rejects when the number of examples does not match the number of variables', async () => {
+    await expect(createTemplate({ ...validInput, examples: [] })).rejects.toThrow(TemplateValidationError);
+    await expect(createTemplate({ ...validInput, examples: ['Maria', 'sobrando'] })).rejects.toThrow(TemplateValidationError);
+    expect(metaCloudAdapter.createMetaTemplate).not.toHaveBeenCalled();
+  });
+
+  test('accepts a body with no variables and no examples at all', async () => {
+    findChannelById.mockResolvedValue({ id: 'ch-1', type: 'meta_cloud', config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' } });
+    metaCloudAdapter.createMetaTemplate.mockResolvedValue({ metaTemplateId: 'meta-tpl-10', status: 'PENDING' });
+    createTemplateRecord.mockResolvedValue({ id: 'local-2' });
+
+    await createTemplate({ ...validInput, bodyText: 'Aviso sem variavel.', examples: undefined });
+
+    // Sem a chave `examples`: e o que mantem o payload identico ao de antes.
+    expect(metaCloudAdapter.createMetaTemplate).toHaveBeenCalledWith(
+      { id: 'ch-1', type: 'meta_cloud', config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' } },
+      { name: 'fatura_vencida', category: 'UTILITY', language: 'pt_BR', bodyText: 'Aviso sem variavel.' }
+    );
   });
 
   test('rejects when the channel is not meta_cloud', async () => {
@@ -74,7 +100,7 @@ describe('createTemplate', () => {
 
     expect(metaCloudAdapter.createMetaTemplate).toHaveBeenCalledWith(
       { id: 'ch-1', type: 'meta_cloud', config: { phoneNumberId: '123', accessToken: 'tok', wabaId: 'waba-1' } },
-      { name: 'fatura_vencida', category: 'UTILITY', language: 'pt_BR', bodyText: validInput.bodyText }
+      { name: 'fatura_vencida', category: 'UTILITY', language: 'pt_BR', bodyText: validInput.bodyText, examples: ['Maria'] }
     );
     expect(createTemplateRecord).toHaveBeenCalledWith({
       wabaId: 'waba-1', metaTemplateId: 'meta-tpl-9', name: 'fatura_vencida', language: 'pt_BR', category: 'UTILITY', bodyText: validInput.bodyText, variableCount: 1, buttons: [],

@@ -517,3 +517,72 @@ describe('TemplatesAdminTab — prévia mostra os botões do template', () => {
     expect(within(screen.getByRole('region', { name: /prévia da mensagem/i })).getByText('Aviso')).toBeInTheDocument();
   });
 });
+
+// A Meta aceita a criação e reprova na revisão (INVALID_FORMAT) quando o corpo
+// tem variável e nenhum exemplo acompanha. Medido em produção em 23/09/2026:
+// dos seis templates da conta, os quatro com variável foram rejeitados e os dois
+// sem variável, aprovados.
+describe('TemplatesAdminTab — exemplos das variáveis', () => {
+  beforeEach(() => {
+    useTemplates.mockReturnValue({ templates: [], status: 'ready', refresh: vi.fn() });
+  });
+
+  async function abrirFormulario() {
+    render(<TemplatesAdminTab />);
+    await userEvent.click(screen.getByRole('button', { name: /novo template/i }));
+    return within(screen.getByRole('form', { name: /cadastrar novo template/i }));
+  }
+
+  test('corpo sem variável não pede exemplo nenhum', async () => {
+    const form = await abrirFormulario();
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Aviso sem variavel.');
+
+    expect(form.queryByLabelText(/exemplo para/i)).not.toBeInTheDocument();
+  });
+
+  // `{{` é escape do userEvent para um `{` literal, então cada chave da variável
+  // tem de ser dobrada: `{{{{1}}` chega ao campo como `{{1}}`. Sem isso o corpo
+  // entra com chave simples e nenhuma variável é detectada.
+  const CORPO_COM_DUAS = 'Olá {{{{1}}, sua fatura de {{{{2}} venceu.';
+
+  test('um campo de exemplo por variável do corpo, na hora em que ela é digitada', async () => {
+    const form = await abrirFormulario();
+    await userEvent.type(form.getByLabelText(/corpo/i), CORPO_COM_DUAS);
+
+    expect(form.getByLabelText('Exemplo para {{1}}')).toBeInTheDocument();
+    expect(form.getByLabelText('Exemplo para {{2}}')).toBeInTheDocument();
+    expect(form.queryByLabelText('Exemplo para {{3}}')).not.toBeInTheDocument();
+  });
+
+  test('envia os exemplos junto do template', async () => {
+    api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-ex' });
+    const form = await abrirFormulario();
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'aviso_fatura');
+    await userEvent.type(form.getByLabelText(/corpo/i), CORPO_COM_DUAS);
+    await userEvent.type(form.getByLabelText('Exemplo para {{1}}'), 'Maria');
+    await userEvent.type(form.getByLabelText('Exemplo para {{2}}'), 'R$ 129,90');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() =>
+      expect(api.createTemplateAdmin).toHaveBeenCalledWith(
+        expect.objectContaining({ examples: ['Maria', 'R$ 129,90'] }),
+        'tok-123'
+      )
+    );
+  });
+
+  // Mesma disciplina do service: chave ausente, nunca lista vazia — é o que
+  // mantém o payload de um template sem variável idêntico ao de antes.
+  test('sem variável, a chave examples nem vai no payload', async () => {
+    api.createTemplateAdmin.mockResolvedValue({ id: 'tpl-ex' });
+    const form = await abrirFormulario();
+    await userEvent.selectOptions(form.getByLabelText(/canal/i), 'ch-1');
+    await userEvent.type(form.getByLabelText(/^nome$/i), 'aviso');
+    await userEvent.type(form.getByLabelText(/corpo/i), 'Aviso sem variavel.');
+    await userEvent.click(form.getByRole('button', { name: /cadastrar/i }));
+
+    await waitFor(() => expect(api.createTemplateAdmin).toHaveBeenCalled());
+    expect(api.createTemplateAdmin.mock.calls[0][0]).not.toHaveProperty('examples');
+  });
+});

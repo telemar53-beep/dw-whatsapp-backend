@@ -173,19 +173,33 @@ async function downloadMetaMedia(mediaId, accessToken) {
 
 // Sem botao nenhum o componente BUTTONS nao pode ir: a Meta recusa o template
 // inteiro quando ele chega vazio.
-function templateComponents(bodyText, buttons) {
-  const components = [{ type: 'BODY', text: bodyText }];
+//
+// `example` segue a mesma disciplina, por outro motivo: um corpo com {{1}}..{{n}}
+// e aceito na criacao e REPROVADO na revisao com INVALID_FORMAT quando nao vem
+// acompanhado de valores de exemplo. Medido em producao em 23/09/2026: dos seis
+// templates da conta, os quatro com variavel foram rejeitados e os dois sem
+// variavel foram aprovados, sem excecao. `body_text` e uma lista de conjuntos de
+// exemplo, e mandamos um conjunto so.
+//
+// Sem exemplos o componente sai exatamente como saia antes — quem ja chamava
+// esta funcao sem o terceiro argumento nao muda de comportamento.
+function templateComponents(bodyText, buttons, examples) {
+  const body = { type: 'BODY', text: bodyText };
+  if (examples && examples.length > 0) {
+    body.example = { body_text: [examples] };
+  }
+  const components = [body];
   if (buttons && buttons.length > 0) {
     components.push({ type: 'BUTTONS', buttons: buttons.map((text) => ({ type: 'QUICK_REPLY', text })) });
   }
   return components;
 }
 
-async function createMetaTemplate(channel, { name, category, language, bodyText, buttons }) {
+async function createMetaTemplate(channel, { name, category, language, bodyText, buttons, examples }) {
   const { accessToken, wabaId } = channel.config;
   const response = await axios.post(
     `https://graph.facebook.com/v20.0/${wabaId}/message_templates`,
-    { name, category, language, components: templateComponents(bodyText, buttons) },
+    { name, category, language, components: templateComponents(bodyText, buttons, examples) },
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   return { metaTemplateId: response.data.id, status: response.data.status };

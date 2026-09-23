@@ -36,7 +36,7 @@ function invalidPurpose(purpose) {
 }
 
 router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
-  const { channelId, name, category, language, bodyText, purpose, buttons } = req.body || {};
+  const { channelId, name, category, language, bodyText, purpose, buttons, examples } = req.body || {};
   if (!channelId || !name || !category || !language || !bodyText) {
     return res.status(400).json({ error: 'channelId, name, category, language and bodyText are required' });
   }
@@ -46,8 +46,16 @@ router.post('/', requireAuth, requireRole('admin'), async (req, res) => {
   if (buttons !== undefined && !Array.isArray(buttons)) {
     return res.status(400).json({ error: 'buttons must be a list of texts' });
   }
+  // A quantidade certa quem confere e o service, que e quem conta as variaveis do
+  // corpo. Aqui so a forma: exemplo em branco chega a Meta como exemplo em branco.
+  if (examples !== undefined && !Array.isArray(examples)) {
+    return res.status(400).json({ error: 'examples must be a list of texts' });
+  }
+  if (Array.isArray(examples) && examples.some((e) => typeof e !== 'string' || !e.trim())) {
+    return res.status(400).json({ error: 'Each example must be a non-empty string' });
+  }
   try {
-    const template = await createTemplate({ channelId, name, category, language, bodyText, purpose, buttons });
+    const template = await createTemplate({ channelId, name, category, language, bodyText, purpose, buttons, examples });
     res.status(201).json(template);
   } catch (err) {
     if (err instanceof TemplateValidationError) {

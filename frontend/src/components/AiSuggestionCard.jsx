@@ -27,8 +27,12 @@ const ROTULO_PROPOSTA = {
 // Ferramenta nova, ainda sem rótulo aqui, NÃO pode sumir da tela: o gate barra
 // por classificação, então o catálogo do frontend sempre vai ficar para trás.
 // Sumir em silêncio é o defeito, não o texto feio.
+//
+// O fallback nomeia a proposta em vez de descrever uma ação — "Executar <nome>"
+// soava como um comando disponível, e não existe mecanismo de execução aqui:
+// a atendente faz à mão, pelo caminho normal.
 function rotuloDaProposta(nome) {
-  return ROTULO_PROPOSTA[nome] || `Executar ${nome}`;
+  return ROTULO_PROPOSTA[nome] || `Ação proposta: ${nome}`;
 }
 
 function AiSuggestionCard({ suggestion, onSend, onEdit, onDiscard }) {

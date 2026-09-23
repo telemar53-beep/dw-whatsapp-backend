@@ -54,7 +54,20 @@ const app = express();
 // address and rotate past the limiter.
 app.set('trust proxy', 1);
 
-app.use(cors({ origin: getAllowedOrigins() }));
+// `maxAge` em segundos = Access-Control-Max-Age. Sem ele, o navegador guarda o
+// preflight por poucos segundos (5 no Chrome) e volta a perguntar: medido em
+// produção em 23/09/2026, uma sessão de 63 requisições carregava um OPTIONS
+// junto de quase todas, dobrando as viagens até para uma resposta 304.
+//
+// O preflight em si é INEVITÁVEL: toda chamada manda `Authorization`, que é
+// cabeçalho não-simples, e a especificação do CORS obriga a pergunta prévia.
+// O que dá para fazer é não repeti-la.
+//
+// 7200 = 2 horas, que é o TETO que o Chrome respeita — pedir mais não compra
+// nada nele, e só valeria para o Firefox (24 h). O valor também define em
+// quanto tempo uma mudança nas origens permitidas passa a valer para quem já
+// está com a aba aberta: 2 horas mantém esse raio pequeno.
+app.use(cors({ origin: getAllowedOrigins(), maxAge: 7200 }));
 app.use(
   express.json({
     verify: (req, res, buf) => {

@@ -94,6 +94,11 @@ describe('loadConfig', () => {
       frontendOrigin: null,
       publicBaseUrl: 'http://localhost:3000',
       mediaTokenSecret: 'media-secret',
+      // Sem MEDIA_RETENTION_DAYS no ambiente, o padrão de 90 dias entra aqui.
+      // Esta asserção é de igualdade EXATA: campo novo em loadConfig quebra
+      // este teste, e isso é desejado — é o que obriga a decidir se o campo
+      // deveria mesmo existir. Foi essa trava que pegou a ausência em 8fba950.
+      mediaRetentionDays: 90,
     });
   });
 

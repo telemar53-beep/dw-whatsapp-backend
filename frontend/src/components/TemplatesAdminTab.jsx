@@ -5,6 +5,7 @@ import { useTemplates } from '../hooks/useTemplates';
 import { useChannels } from '../hooks/useChannels';
 import { createTemplateAdmin, deleteTemplateAdmin, syncTemplatesAdmin, registerExistingTemplateAdmin, setTemplatePurpose } from '../services/api';
 import { isOfficialChannelType } from '../utils/channelTypes';
+import { contarVariaveis } from '../utils/templatePreview';
 import WaDialog, { waErrorClass, WaError } from './WaDialog';
 import { AsyncState, Button, CABECALHO, CELULA, DataTable, ITEM_DE_MENU, RowMenu, inputClass } from './ui';
 import { IconSearch, IconRefresh, IconNewChat, IconMore, IconInfo, IconFile } from './icons/WaIcons';
@@ -175,10 +176,15 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
   const [language, setLanguage] = useState('pt_BR');
   const [bodyText, setBodyText] = useState('');
   const [buttons, setButtons] = useState(['', '', '']);
+  const [examples, setExamples] = useState([]);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const firstOfficialChannelId = officialChannels[0]?.id;
   const botoesPreenchidos = buttons.map((b) => b.trim()).filter(Boolean);
+  // Derivado do corpo, nunca guardado em estado próprio: editar o texto e
+  // acrescentar um {{5}} tem de fazer aparecer o quinto campo na hora.
+  const quantidadeDeVariaveis = contarVariaveis(bodyText);
+  const exemplosPreenchidos = Array.from({ length: quantidadeDeVariaveis }, (_, i) => (examples[i] || '').trim());
 
   // Os canais podem chegar depois do formulário abrir: preenche o primeiro
   // oficial assim que existir, sem obrigar o admin a mexer no select.
@@ -193,7 +199,16 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
     setError(null);
     setSubmitting(true);
     try {
-      await createTemplateAdmin({ channelId, name, category, language, bodyText, purpose, buttons: botoesPreenchidos }, token);
+      // Corpo sem variável não manda `examples` — nem lista vazia. Mesma regra do
+      // service: chave ausente deixa o payload idêntico ao de antes, e quem já
+      // criava template sem variável não vê diferença nenhuma.
+      await createTemplateAdmin(
+        {
+          channelId, name, category, language, bodyText, purpose, buttons: botoesPreenchidos,
+          ...(quantidadeDeVariaveis > 0 ? { examples: exemplosPreenchidos } : {}),
+        },
+        token
+      );
       onCreated();
     } catch (err) {
       setError(descreverErro(err, 'Falha ao criar template'));
@@ -273,6 +288,35 @@ function CreateTemplateForm({ officialChannels, initialChannelId, onCreated, onC
           required
         />
       </div>
+
+      {/* A Meta aceita a criação e reprova na revisão (INVALID_FORMAT) quando o
+          corpo tem variável e nenhum valor de exemplo acompanha. Os exemplos não
+          são enviados a ninguém: servem só para o revisor entender o que cada
+          {{n}} recebe. Por isso valem valores de verdade — "R$ 129,90" diz o que
+          "texto 2" não diz. */}
+      {quantidadeDeVariaveis > 0 && (
+        <fieldset className="space-y-2">
+          <legend className={LABEL}>Exemplos das variáveis</legend>
+          <p className="text-[12.5px] leading-[17px] text-wa-muted">
+            A Meta exige um exemplo por variável para aprovar o template. Use valores parecidos com os reais. Eles não
+            são enviados ao cliente.
+          </p>
+          {Array.from({ length: quantidadeDeVariaveis }, (_, i) => (
+            <div key={i}>
+              <label htmlFor={`template-example-${i}`} className="mb-1 block text-[12.5px] text-wa-muted">
+                {`Exemplo para {{${i + 1}}}`}
+              </label>
+              <input
+                id={`template-example-${i}`}
+                value={examples[i] || ''}
+                onChange={(e) => setExamples(Object.assign([...examples], { [i]: e.target.value }))}
+                className={inputClass}
+                required
+              />
+            </div>
+          ))}
+        </fieldset>
+      )}
 
       {/* Template não abre a janela de 24h: só a resposta do cliente abre. O
           botão é o caminho de um toque para ele responder — sem isso, iniciar

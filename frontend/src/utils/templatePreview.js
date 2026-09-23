@@ -10,3 +10,12 @@ export function substituirVariaveis(bodyText, variables = []) {
     return valor && valor.trim() ? valor : marcador;
   });
 }
+
+// Quantas variáveis o corpo tem, contando pelo MAIOR número usado e não pela
+// quantidade de marcadores: {{1}} repetido três vezes é uma variável só, e é
+// assim que o backend conta (extractVariableCount). Se as duas contas
+// divergissem, o formulário pediria um número de exemplos que a criação recusa.
+export function contarVariaveis(bodyText) {
+  const numeros = [...String(bodyText || '').matchAll(/\{\{(\d+)\}\}/g)].map((m) => Number(m[1]));
+  return numeros.length === 0 ? 0 : Math.max(...numeros);
+}

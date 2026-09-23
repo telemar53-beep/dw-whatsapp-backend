@@ -13,8 +13,11 @@ function getCampaignQueue() {
   return queue;
 }
 
+// Mesmo padrao das demais filas: o job concluido nao e lido por ninguem. O
+// estado de cada destinatario vive em `campaign_recipients`, que o worker
+// atualiza; manter o job no Redis so acumula copia do conteudo da campanha.
 function enqueueCampaignRecipient(data) {
-  return getCampaignQueue().add(data, { attempts: 1 });
+  return getCampaignQueue().add(data, { attempts: 1, removeOnComplete: true, removeOnFail: true });
 }
 
 function processCampaignQueue(handler) {

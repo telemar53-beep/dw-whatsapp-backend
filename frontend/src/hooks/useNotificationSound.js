@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { lerLocal, gravarLocal } from '../utils/armazenamentoLocal';
 
 const MUTE_STORAGE_KEY = 'dw_queue_notification_muted';
 
@@ -21,12 +22,12 @@ export function playChime() {
 }
 
 export function useNotificationSound() {
-  const [muted, setMuted] = useState(() => localStorage.getItem(MUTE_STORAGE_KEY) === 'true');
+  const [muted, setMuted] = useState(() => lerLocal(MUTE_STORAGE_KEY) === 'true');
 
   const toggleMuted = useCallback(() => {
     setMuted((prev) => {
       const next = !prev;
-      localStorage.setItem(MUTE_STORAGE_KEY, String(next));
+      gravarLocal(MUTE_STORAGE_KEY, String(next));
       return next;
     });
   }, []);

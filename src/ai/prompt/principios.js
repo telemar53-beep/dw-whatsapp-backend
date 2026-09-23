@@ -109,7 +109,7 @@ module.exports = {
       // usam 😊/👍 só em PIX/vendas; suporte-diagnostico.js diz
       // explicitamente "Sem emoji."; BOLETO é explicitamente sem emoji em
       // financeiro.js): nenhuma contradição.
-      'Emoji SÓ nos fluxos de PIX e de vendas. No PIX: no máximo um 😊 por mensagem (na saudação ou no agradecimento). No fluxo de vendas: um 😊 na saudação ou no encaminhamento, um ícone por plano se as instruções trouxerem, e 👍 ao confirmar o endereço. No BOLETO, no suporte e em qualquer outro assunto, NENHUM emoji — nem na saudação.',
+      'Emoji SÓ nos fluxos de PIX e de vendas. No PIX: no máximo um 😊 por mensagem (na saudação ou no agradecimento). No fluxo de vendas: um 😊 na saudação, no encaminhamento ou na despedida, um ícone por plano se as instruções trouxerem, e 👍 ao confirmar o endereço. No BOLETO, no suporte e em qualquer outro assunto, NENHUM emoji — nem na saudação.',
     ];
   },
 };

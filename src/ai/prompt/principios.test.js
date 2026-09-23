@@ -113,8 +113,13 @@ describe('módulo principios', () => {
     // Antes: ai-orchestrator.test.js:1484. A guarda de emoji acima trava as
     // duas pontas (onde pode, onde não pode); esta trava o miolo, que é o que
     // o dono ampliou em 2026-09-15: ícone por plano e 👍 no endereço.
-    test('no fluxo de vendas, o emoji vai além da saudação: ícone por plano e 👍 ao confirmar o endereço', () => {
-      expect(texto()).toMatch(/No fluxo de vendas: um 😊 na saudação ou no encaminhamento, um ícone por plano se as instruções trouxerem, e 👍 ao confirmar o endereço\./);
+    // 2026-09-22: a despedida entrou na lista. O roteiro comercial passou a
+    // responder a um agradecimento com "Por nada 😊 Se quiser seguir com a
+    // instalação, é só me chamar." — e despedida não era nem saudação nem
+    // encaminhamento, então as duas regras se contradiriam no mesmo prompt.
+    // Duas palavras aqui, só no ramo de vendas; PIX, boleto e suporte intactos.
+    test('no fluxo de vendas, o emoji vai além da saudação: despedida, ícone por plano e 👍 ao confirmar o endereço', () => {
+      expect(texto()).toMatch(/No fluxo de vendas: um 😊 na saudação, no encaminhamento ou na despedida, um ícone por plano se as instruções trouxerem, e 👍 ao confirmar o endereço\./);
     });
 
     // Antes: ai-orchestrator.test.js:1817 e :1822 (lacunas 4 e 2 das 7 do

@@ -92,12 +92,14 @@ describe('módulo comercial-novo', () => {
       expect(t).toMatch(/mas NÃO encaminhe sem responder alguma coisa/);
     });
 
-    // 2026-09-22: a cláusula do endereço ganhou a condição "E não houver mais
-    // nada de venda para tratar". Sozinha ela encerrava a venda no meio da
-    // escolha do plano — ver o describe de regressão no fim do arquivo.
-    test('só encaminha nas condições previstas (plano escolhido, endereço dado E venda sem pendência, pediu atendente, ou cidade fora da lista)', () => {
+    // A cláusula do endereço foi apertada duas vezes, pelo mesmo motivo:
+    // disparava sem intenção do cliente. Primeiro ganhou "E não houver mais nada
+    // de venda para tratar" (que corrigiu o meio da venda e quebrou o fim:
+    // "Ok muito obrigado" satisfazia a condição), depois passou a exigir que ele
+    // DIGA que quer seguir. Ver os dois describes de regressão no fim do arquivo.
+    test('só encaminha nas condições previstas (plano escolhido, endereço dado E intenção dita, pediu atendente, ou cidade fora da lista)', () => {
       const t = texto();
-      expect(t).toMatch(/SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço E não houver mais nada de venda para tratar; ou pedir para falar com um atendente; ou a cidade não estiver na lista\./);
+      expect(t).toMatch(/SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço E disser que quer seguir com a contratação ou a instalação; ou pedir para falar com um atendente; ou a cidade não estiver na lista\./);
     });
 
     test('resumo do encaminhamento inclui plano, cidade e bairro/rua', () => {
@@ -468,7 +470,7 @@ describe('encaminhamento — contar como usa NÃO encerra a venda', () => {
   test('ter o endereço sozinho não basta mais para encaminhar', () => {
     const t = texto();
 
-    expect(t).toMatch(/já tiver dado o endereço E não houver mais nada de venda para tratar/);
+    expect(t).toMatch(/já tiver dado o endereço E disser que quer seguir com a contratação ou a instalação/);
     // A forma antiga, incondicional, não pode voltar.
     expect(t).not.toMatch(/ou já tiver dado o endereço;/);
   });
@@ -637,5 +639,75 @@ describe('caso real 2026-09-22: turno 2 nao lista, nao recomenda, nao transfere'
 
     expect(texto).toMatch(/chame consultar_planos/);
     expect(texto).toMatch(/valor que apareceu antes na conversa ou tabela escrita nas instruções NÃO substituem o que a ferramenta devolveu/);
+  });
+});
+
+// Teste real de 2026-09-22, terceira rodada. Depois de confirmar cobertura,
+// apresentar planos, perguntar sobre uso simultâneo e recomendar 700 Mega, o
+// cliente disse "Ok muito obrigado" — e a IA respondeu "Vou encaminhar você
+// para o Comercial".
+//
+// A causa foi o qualificador "E não houver mais nada de venda para tratar",
+// posto na rodada anterior para impedir o encaminhamento no MEIO da venda.
+// Ele resolveu o meio e quebrou o fim: um agradecimento é a leitura mais clara
+// possível de "não há mais nada a tratar".
+describe('caso real: agradecer NAO e intencao de contratar', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos', 'verificar_cobertura'];
+  const t = () => comercialNovo.linhas(estadoBase({ ferramentas: COM })).join('\n');
+
+  test('a clausula do endereco agora exige INTENCAO, nao ausencia de assunto', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/já tiver dado o endereço E disser que quer seguir com a contratação ou a instalação/);
+    // A forma que transformou "Ok obrigado" em encaminhamento nao pode voltar.
+    expect(texto).not.toMatch(/não houver mais nada de venda para tratar/);
+  });
+
+  test('"ok", "obrigado", "valeu", "entendi" nao sao gatilho', () => {
+    const texto = t();
+
+    for (const palavra of ['"ok"', '"obrigado"', '"valeu"', '"entendi"']) {
+      expect(texto).toContain(palavra);
+    }
+    expect(texto).toMatch(/NÃO é escolha de plano, NÃO é pedido para contratar e NÃO é pedido de atendente/);
+  });
+
+  test('agradecimento nao encaminha NEM conclui a triagem', () => {
+    expect(t()).toMatch(/não encaminhe e não conclua por causa disso/);
+  });
+
+  test('a resposta e cordial e deixa a porta aberta', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/Responda curto e cordial, deixando a porta aberta/);
+    expect(texto).toMatch(/Se quiser seguir com a instalação, é só me chamar/);
+  });
+
+  test('so encaminha com intencao dita com todas as letras', () => {
+    const texto = t();
+
+    for (const frase of ['quero contratar', 'pode instalar', 'vamos fechar', 'quero esse plano']) {
+      expect(texto).toContain(frase);
+    }
+    expect(texto).toMatch(/Só encaminhe quando ele disser com todas as letras que quer avançar/);
+  });
+
+  test('os gatilhos legitimos continuam de pe', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/ele escolher um plano ou pedir para contratar/);
+    expect(texto).toMatch(/ou pedir para falar com um atendente/);
+    expect(texto).toMatch(/ou a cidade não estiver na lista/);
+  });
+
+  // As tres rodadas anteriores do mesmo atendimento continuam protegidas.
+  test('o resto do fluxo comercial segue intacto', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/QUANTIDADE NÃO É USO/);
+    expect(texto).toMatch(/consultar NÃO é reapresentar/);
+    expect(texto).toMatch(/contar como usa.*NÃO é pedido de encaminhamento/);
+    expect(texto).toMatch(/chame consultar_planos/);
+    expect(texto).toMatch(/chame verificar_cobertura/);
   });
 });

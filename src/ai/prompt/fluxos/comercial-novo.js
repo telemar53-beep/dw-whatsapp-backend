@@ -81,7 +81,7 @@
 // que consultou.
 const { temFerramenta } = require('./../fontes-comerciais');
 const { ROTULO_DE_PLANO } = require('./../formato-plano');
-const { QUANTIDADE_NAO_E_USO, CATALOGO_JA_APRESENTADO } = require('./../regra-recomendacao');
+const { QUANTIDADE_NAO_E_USO, CATALOGO_JA_APRESENTADO, AGRADECIMENTO_NAO_E_INTENCAO } = require('./../regra-recomendacao');
 
 // 2026-09-22, teste real: depois de ver os quatro planos, o cliente disse
 // "tenho 2 TVs e 7 filhos" e a IA repetiu a tabela inteira e recomendou pela
@@ -151,10 +151,17 @@ module.exports = {
       // 2026-09-22, teste real: com o lugar já dito, "já tiver dado o endereço"
       // virava gatilho PERMANENTE de encaminhamento — e a mensagem seguinte do
       // cliente ("tenho 2 TVs e 7 filhos"), que é pedido de ajuda para
-      // escolher, caiu direto no "Vou encaminhar". A cláusula passa a exigir
-      // que a venda esteja realmente sem pendência, e a frase seguinte nomeia
-      // o caso observado apontando para a RECOMENDAÇÃO acima, sem reescrevê-la.
-      'Encaminhe para o setor da lista acima que cuidar de vendas SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço E não houver mais nada de venda para tratar; ou pedir para falar com um atendente; ou a cidade não estiver na lista. Ele contar como usa (pessoas, aparelhos, TVs, trabalho, jogos) NÃO é pedido de encaminhamento: é pedido de ajuda para escolher, e já ter o endereço não autoriza encerrar aí — siga a RECOMENDAÇÃO acima. Antes disso, continue a venda (planos, endereço, dúvidas). O "Certo!" é só quando ele pediu algo (contratar, falar com atendente); senão comece direto em "Vou encaminhar...".',
+      // escolher, caiu direto no "Vou encaminhar". A frase seguinte nomeia o
+      // caso observado apontando para a RECOMENDAÇÃO acima, sem reescrevê-la.
+      //
+      // Terceira rodada do mesmo teste: o qualificador que eu tinha posto ali
+      // ("E não houver mais nada de venda para tratar") resolveu o meio da
+      // venda e QUEBROU o fim dela. "Ok muito obrigado", depois da
+      // recomendação, é a leitura mais clara possível de "não há mais nada de
+      // venda para tratar" — e virou "Vou encaminhar você para o Comercial".
+      // A cláusula deixa de se apoiar na AUSÊNCIA de assunto e passa a exigir a
+      // PRESENÇA de intenção dita com todas as letras.
+      `Encaminhe para o setor da lista acima que cuidar de vendas SOMENTE quando: ele escolher um plano ou pedir para contratar; ou já tiver dado o endereço E disser que quer seguir com a contratação ou a instalação; ou pedir para falar com um atendente; ou a cidade não estiver na lista. Ele contar como usa (pessoas, aparelhos, TVs, trabalho, jogos) NÃO é pedido de encaminhamento: é pedido de ajuda para escolher, e já ter o endereço não autoriza encerrar aí — siga a RECOMENDAÇÃO acima. ${AGRADECIMENTO_NAO_E_INTENCAO} Antes disso, continue a venda (planos, endereço, dúvidas). O "Certo!" é só quando ele pediu algo (contratar, falar com atendente); senão comece direto em "Vou encaminhar...".`,
       noturno
         ? 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar seu atendimento. No momento estamos fora do horário de atendimento, mas sua conversa ficará registrada e nossa equipe continuará por aqui assim que o expediente iniciar." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.'
         : 'Ao encaminhar para o setor da lista acima que cuidar de vendas (na MESMA resposta em que chama concluir_triagem), responda no modelo: "Certo! 😊 Vou encaminhar você. Um atendente continuará o atendimento por aqui." Se houver uma pergunta dele pendente, responda-a ANTES dessa frase, na mesma mensagem.',

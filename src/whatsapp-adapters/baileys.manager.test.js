@@ -11,13 +11,13 @@ jest.mock('../conversations/contact.repository');
 jest.mock('../conversations/message-status.service');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
-  saveMediaFile: jest.fn(),
+  saveAvatarImage: jest.fn(),
   saveInboundMedia: jest.fn(),
   deleteMediaFile: jest.fn().mockResolvedValue(undefined),
   getMediaFilePath: jest.fn(),
 }));
 jest.mock('../realtime/socket-server');
-const { saveInboundMedia, saveMediaFile } = require('../media/media-storage');
+const { saveInboundMedia, saveAvatarImage } = require('../media/media-storage');
 jest.mock('../company/company-config.repository');
 jest.mock('../config/env');
 jest.mock('fs', () => ({
@@ -790,7 +790,7 @@ describe('baileys.manager', () => {
 
   describe('contact avatar refresh', () => {
     let sock;
-    const { saveMediaFile, deleteMediaFile } = require('../media/media-storage');
+    const { saveAvatarImage, deleteMediaFile } = require('../media/media-storage');
 
     beforeEach(async () => {
       sock = createMockSock();
@@ -800,7 +800,7 @@ describe('baileys.manager', () => {
 
     async function flushAvatarFetch() {
       // The avatar refresh is fire-and-forget (never awaited by handleMessagesUpsert),
-      // so its own promise chain (claim -> profilePictureUrl -> axios.get -> saveMediaFile ->
+      // so its own promise chain (claim -> profilePictureUrl -> axios.get -> saveAvatarImage ->
       // setContactAvatarPath) needs a macrotask tick to fully settle before assertions.
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
@@ -817,7 +817,7 @@ describe('baileys.manager', () => {
       ingestInboundMessage.mockResolvedValue({ contact: { id: 'contact-new-1' }, contactJustCreated: true });
       sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/fake-avatar.jpg');
       axios.get.mockResolvedValue({ data: Buffer.from('fake-avatar-bytes') });
-      saveMediaFile.mockResolvedValue('generated-avatar.jpg');
+      saveAvatarImage.mockResolvedValue({ avatarPath: 'generated-avatar.jpg' });
 
       await inbound('5511999998888@s.whatsapp.net', 'AVATAR_MSG_1', 'Primeira mensagem');
       await flushAvatarFetch();
@@ -825,7 +825,7 @@ describe('baileys.manager', () => {
       expect(claimContactAvatarRefresh).toHaveBeenCalledWith('contact-new-1', manager.AVATAR_REFRESH_INTERVAL_MS);
       expect(sock.profilePictureUrl).toHaveBeenCalledWith('5511999998888@s.whatsapp.net', 'image');
       expect(axios.get).toHaveBeenCalledWith('https://pps.whatsapp.net/fake-avatar.jpg', { responseType: 'arraybuffer' });
-      expect(saveMediaFile).toHaveBeenCalled();
+      expect(saveAvatarImage).toHaveBeenCalled();
       expect(setContactAvatarPath).toHaveBeenCalledWith('contact-new-1', 'generated-avatar.jpg');
       expect(broadcast).toHaveBeenCalledWith('contact:avatar-updated', { contactId: 'contact-new-1', avatarPath: 'generated-avatar.jpg' });
       expect(deleteMediaFile).not.toHaveBeenCalled();
@@ -836,7 +836,7 @@ describe('baileys.manager', () => {
       claimContactAvatarRefresh.mockResolvedValue({ id: 'contact-existing-1', avatarPath: 'old-avatar.jpg' });
       sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/new-avatar.jpg');
       axios.get.mockResolvedValue({ data: Buffer.from('new-bytes') });
-      saveMediaFile.mockResolvedValue('new-avatar.jpg');
+      saveAvatarImage.mockResolvedValue({ avatarPath: 'new-avatar.jpg' });
 
       await inbound('5511999997777@s.whatsapp.net', 'AVATAR_MSG_2');
       await flushAvatarFetch();
@@ -913,7 +913,7 @@ describe('baileys.manager', () => {
   describe('contacts.update (profile picture changed on WhatsApp)', () => {
     let sock;
     const channel = { id: 'channel-picture', type: 'baileys' };
-    const { saveMediaFile, deleteMediaFile } = require('../media/media-storage');
+    const { saveAvatarImage, deleteMediaFile } = require('../media/media-storage');
 
     beforeEach(async () => {
       sock = createMockSock();
@@ -931,7 +931,7 @@ describe('baileys.manager', () => {
       claimContactAvatarRefresh.mockResolvedValue({ id: 'contact-known', avatarPath: 'old.jpg' });
       sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/changed.jpg');
       axios.get.mockResolvedValue({ data: Buffer.from('changed-bytes') });
-      saveMediaFile.mockResolvedValue('changed.jpg');
+      saveAvatarImage.mockResolvedValue({ avatarPath: 'changed.jpg' });
 
       await sock.handlers['contacts.update']([{ id: '5511999990001@s.whatsapp.net', imgUrl: 'changed' }]);
       await flush();
@@ -962,7 +962,7 @@ describe('baileys.manager', () => {
       findContactByPhoneNumber.mockResolvedValue({ id: 'contact-lid', phoneNumber: '5511999990002', avatarPath: null });
       sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/lid.jpg');
       axios.get.mockResolvedValue({ data: Buffer.from('lid-bytes') });
-      saveMediaFile.mockResolvedValue('lid.jpg');
+      saveAvatarImage.mockResolvedValue({ avatarPath: 'lid.jpg' });
 
       await sock.handlers['contacts.update']([{ id: '123456789@lid', imgUrl: 'changed' }]);
       await flush();
@@ -1300,7 +1300,7 @@ describe('baileys.manager', () => {
       const sock = createMockSock();
       sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/fake-avatar-2.jpg');
       axios.get.mockResolvedValue({ data: Buffer.from('fake-avatar-bytes-2') });
-      saveMediaFile.mockResolvedValue('generated-avatar-2.jpg');
+      saveAvatarImage.mockResolvedValue({ avatarPath: 'generated-avatar-2.jpg' });
       baileysLib.default.mockReturnValue(sock);
       const channel = { id: 'channel-backfill-1', type: 'baileys' };
       await manager.startBaileysConnection(channel);
@@ -1317,7 +1317,7 @@ describe('baileys.manager', () => {
       const sock = createMockSock();
       sock.profilePictureUrl.mockResolvedValue('https://pps.whatsapp.net/fake-avatar-3.jpg');
       axios.get.mockResolvedValue({ data: Buffer.from('fake-avatar-bytes-3') });
-      saveMediaFile.mockResolvedValue('generated-avatar-3.jpg');
+      saveAvatarImage.mockResolvedValue({ avatarPath: 'generated-avatar-3.jpg' });
       baileysLib.default.mockReturnValue(sock);
       const channel = { id: 'channel-backfill-3', type: 'baileys' };
       await manager.startBaileysConnection(channel);

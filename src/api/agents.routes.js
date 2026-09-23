@@ -5,7 +5,7 @@ const { requireAuth } = require('../auth/auth.middleware');
 const { listAgents, findAgentById, updateAgentProfile, setAgentAvatarPath } = require('../agents/agent.repository');
 const { isAgentOnline } = require('../realtime/presence');
 const { countAssignedConversationsByAgent } = require('../conversations/conversation.repository');
-const { saveMediaFile, getMediaFilePath, extensionForMimeType } = require('../media/media-storage');
+const { saveAvatarImage, getMediaFilePath } = require('../media/media-storage');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -50,7 +50,9 @@ router.post('/me/avatar', requireAuth, upload.single('file'), async (req, res) =
   if (!ALLOWED_AVATAR_MIME_TYPES.includes(file.mimetype)) {
     return res.status(400).json({ error: 'File must be an image (jpeg, png, webp or gif)' });
   }
-  const avatarPath = await saveMediaFile(file.buffer, extensionForMimeType(file.mimetype));
+  // Comprime antes de gravar: o limite de upload é 5 MB, e foto de celular
+  // chega nesse tamanho para ser pintada em 68px no maior uso da tela.
+  const { avatarPath } = await saveAvatarImage(file.buffer, file.mimetype);
   await setAgentAvatarPath(req.agent.agentId, avatarPath);
   res.status(200).json({ avatarPath });
 });

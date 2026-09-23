@@ -3,7 +3,7 @@ jest.mock('../realtime/presence');
 jest.mock('../conversations/conversation.repository');
 jest.mock('../media/media-storage', () => ({
   ...jest.requireActual('../media/media-storage'),
-  saveMediaFile: jest.fn(),
+  saveAvatarImage: jest.fn(),
   getMediaFilePath: jest.fn(),
 }));
 const fs = require('fs');
@@ -15,7 +15,7 @@ const jwt = require('jsonwebtoken');
 const { listAgents, findAgentById, updateAgentProfile, setAgentAvatarPath } = require('../agents/agent.repository');
 const { isAgentOnline } = require('../realtime/presence');
 const { countAssignedConversationsByAgent } = require('../conversations/conversation.repository');
-const { saveMediaFile, getMediaFilePath } = require('../media/media-storage');
+const { saveAvatarImage, getMediaFilePath } = require('../media/media-storage');
 const agentsRoutes = require('./agents.routes');
 
 function buildApp() {
@@ -135,7 +135,7 @@ describe('PATCH /api/agents/me', () => {
 
 describe('POST /api/agents/me/avatar', () => {
   test('saves the uploaded image and sets it as the avatar', async () => {
-    saveMediaFile.mockResolvedValue('avatars/generated-name.jpg');
+    saveAvatarImage.mockResolvedValue({ avatarPath: 'avatars/generated-name.jpg', mimeType: 'image/jpeg' });
     setAgentAvatarPath.mockResolvedValue(undefined);
 
     const res = await request(buildApp())
@@ -144,7 +144,7 @@ describe('POST /api/agents/me/avatar', () => {
       .attach('file', Buffer.from('fake-image-bytes'), { filename: 'foto.jpg', contentType: 'image/jpeg' });
 
     expect(res.status).toBe(200);
-    expect(saveMediaFile).toHaveBeenCalledWith(expect.any(Buffer), '.jpg');
+    expect(saveAvatarImage).toHaveBeenCalledWith(expect.any(Buffer), 'image/jpeg');
     expect(setAgentAvatarPath).toHaveBeenCalledWith('agent-1', 'avatars/generated-name.jpg');
     expect(res.body).toEqual({ avatarPath: 'avatars/generated-name.jpg' });
   });

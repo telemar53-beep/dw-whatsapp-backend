@@ -94,6 +94,7 @@
 // ferramenta estar no perfil do turno.
 const { temFerramenta } = require('./../fontes-comerciais');
 const { ROTULO_DE_PLANO } = require('./../formato-plano');
+const { QUANTIDADE_NAO_E_USO, CATALOGO_JA_APRESENTADO } = require('./../regra-recomendacao');
 
 // Mesma correção de comercial-novo.js: o que decide a velocidade é o uso
 // SIMULTÂNEO, não a contagem de moradores — e contar como usa é gatilho de
@@ -102,7 +103,7 @@ function recomendacaoParaClienteIdentificado(estado) {
   const consultado = temFerramenta(estado, 'consultar_planos')
     ? 'a mensalidade que consultar_planos devolveu'
     : 'a mensalidade da fonte que você usou';
-  return `Antes de recomendar, entenda a necessidade pelo uso SIMULTÂNEO — quantos aparelhos ao mesmo tempo, streaming em TV, trabalho, jogo online — e não pela quantidade de moradores. Quando ele contar como usa, avance para a recomendação sem repetir a tabela; só reapresente se ele pedir para rever ou comparar. Se faltar informação, faça UMA pergunta útil sobre uso simultâneo; se o que ele contou bastar, recomende direto. Ao recomendar, diga qual plano, ${consultado} e uma frase curta de motivo, apoiado no que as instruções permitirem. Nunca empurre o mais caro, nunca invente capacidade ou desempenho e nunca invente vantagem que não esteja nas instruções.`;
+  return `Antes de recomendar, entenda a necessidade pelo uso SIMULTÂNEO — quantos aparelhos ao mesmo tempo, streaming em TV, trabalho, jogo online — e não pela quantidade de moradores. ${CATALOGO_JA_APRESENTADO} ${QUANTIDADE_NAO_E_USO} Ao recomendar, diga qual plano, ${consultado} e uma frase curta de motivo apoiada no que ELE contou e no que as instruções permitirem. Nunca empurre o mais caro, nunca invente capacidade ou desempenho e nunca invente vantagem que não esteja nas instruções.`;
 }
 
 function planosParaClienteIdentificado(estado) {

@@ -235,18 +235,26 @@ describe('recomendacao para cliente identificado — mesma correcao', () => {
     expect(t).not.toMatch(/pergunte quantas pessoas ou aparelhos vão usar/);
   });
 
+  // 2026-09-22: mesma regra de comercial-novo, vinda de regra-recomendacao.js
+  // para os dois não divergirem.
   test('contar como usa avanca a recomendacao sem repetir a tabela', () => {
     const t = texto();
 
-    expect(t).toMatch(/avance para a recomendação sem repetir a tabela/);
-    expect(t).toMatch(/só reapresente se ele pedir para rever ou comparar/);
+    expect(t).toMatch(/NÃO repita a tabela/);
+    expect(t).toMatch(/consultar NÃO é reapresentar/);
+    expect(t).toMatch(/Reapresente todas as opções SÓ se ele pedir para rever, comparar ou ver os planos de novo/);
   });
 
-  test('uma pergunta util quando falta, recomendacao direta quando basta', () => {
+  // INVERTIDO em 2026-09-22, como em comercial-novo: "se o que ele contou
+  // bastar, recomende direto" era a discricionariedade que produziu a
+  // recomendação sem informação e a justificativa inventada.
+  test('quantidade nao basta: UMA pergunta antes de recomendar', () => {
     const t = texto();
 
-    expect(t).toMatch(/faça UMA pergunta útil sobre uso simultâneo/);
-    expect(t).toMatch(/se o que ele contou bastar, recomende direto/);
+    expect(t).toMatch(/QUANTIDADE NÃO É USO/);
+    expect(t).toMatch(/faça UMA pergunta útil antes de recomendar/);
+    expect(t).toMatch(/NÃO recomende neste mesmo turno/);
+    expect(t).not.toMatch(/recomende direto/);
   });
 
   test('a recomendacao leva plano, mensalidade consultada e motivo', () => {

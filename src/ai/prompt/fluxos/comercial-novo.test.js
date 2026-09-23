@@ -356,30 +356,73 @@ describe('recomendacao de plano — correcao do caso real', () => {
   test('proibe repetir a tabela ja apresentada', () => {
     const t = texto();
 
-    expect(t).toMatch(/NÃO repita a tabela de planos/);
+    expect(t).toMatch(/NÃO repita a tabela/);
     expect(t).toMatch(/repetir faz a conversa andar para trás/);
   });
 
-  test('so reapresenta quando ele pedir para rever ou comparar', () => {
-    expect(texto()).toMatch(/Reapresente as opções SÓ se ele pedir para rever ou comparar/);
-  });
-
-  test('proibe escolher a velocidade pela quantidade de pessoas ou filhos', () => {
+  // 2026-09-22: o que voltava a tabela era a confusão entre CONSULTAR e
+  // REAPRESENTAR — a ferramenta é chamada de novo (o preço tem de vir do
+  // cadastro) e o modelo tratava isso como ordem de mostrar tudo outra vez.
+  test('consultar de novo NAO e reapresentar', () => {
     const t = texto();
 
-    expect(t).toMatch(/NÃO escolha a velocidade pela quantidade de pessoas ou de filhos/);
+    expect(t).toMatch(/PODE chamar consultar_planos de novo para ter o preço atualizado/);
+    expect(t).toMatch(/consultar NÃO é reapresentar/);
+    expect(t).toMatch(/uma nova consulta não manda mostrar os planos outra vez/);
+  });
+
+  test('so reapresenta quando ele pedir para rever, comparar ou ver de novo', () => {
+    expect(texto()).toMatch(/Reapresente todas as opções SÓ se ele pedir para rever, comparar ou ver os planos de novo/);
+  });
+
+  test('comparar dois planos mostra so esses dois', () => {
+    expect(texto()).toMatch(/para comparar dois, mostre só esses dois/);
+  });
+
+  // A guarda antiga ("não escolha pela quantidade de pessoas ou de filhos") não
+  // impediu nada em produção: trocou a REDAÇÃO da justificativa, não a
+  // DECISÃO. Agora a quantidade é nomeada como insuficiente, item a item.
+  test('quantidade sozinha NAO basta para escolher velocidade', () => {
+    const t = texto();
+
+    expect(t).toMatch(/QUANTIDADE NÃO É USO/);
+    for (const item of ['filhos', 'pessoas na casa', 'TVs', 'celulares', 'aparelhos']) {
+      expect(t).toContain(item);
+    }
+    expect(t).toMatch(/NÃO basta para escolher velocidade/);
     expect(t).toMatch(/uso SIMULTÂNEO/);
   });
 
   test('falta de informacao vira UMA pergunta util sobre uso simultaneo', () => {
     const t = texto();
 
-    expect(t).toMatch(/faça UMA pergunta útil/);
-    expect(t).toMatch(/quantos aparelhos costumam usar ao mesmo tempo/);
+    expect(t).toMatch(/faça UMA pergunta útil antes de recomendar/);
+    expect(t).toMatch(/costumam ficar ligados ao mesmo tempo/);
+    expect(t).toMatch(/streaming em TV, trabalho ou jogo online/);
   });
 
-  test('com informacao suficiente, recomenda direto sem perguntar mais', () => {
-    expect(texto()).toMatch(/Se o que ele já contou bastar, recomende direto, sem perguntar mais nada/);
+  // INVERTIDO em 2026-09-22. Este teste protegia "se o que ele já contou
+  // bastar, recomende direto" — e essa discricionariedade ERA o defeito: o
+  // modelo julgou que "2 TVs e 7 filhos" bastava, recomendou, e como a regra
+  // também exigia "uma frase curta de motivo" tendo definido o uso simultâneo
+  // como único motivo válido, ele AFIRMOU simultaneidade que ninguém disse.
+  test('a discricionariedade de recomendar direto saiu', () => {
+    const t = texto();
+
+    expect(t).not.toMatch(/recomende direto/);
+    expect(t).toMatch(/NÃO recomende neste mesmo turno/);
+    expect(t).toMatch(/Só recomende depois que ele responder sobre o uso ao mesmo tempo/);
+  });
+
+  test('proibe inventar o uso para justificar o plano', () => {
+    const t = texto();
+
+    expect(t).toMatch(/NUNCA afirme que ele usa vários aparelhos ao mesmo tempo se ele não disse isso/);
+    expect(t).toMatch(/não invente o uso para justificar o plano/);
+  });
+
+  test('o motivo da recomendacao se apoia no que ELE contou', () => {
+    expect(texto()).toMatch(/uma frase curta de motivo apoiada no que ELE contou/);
   });
 
   test('a recomendacao leva plano, mensalidade consultada e motivo curto', () => {
@@ -467,22 +510,34 @@ describe('regressão do atendimento de 2026-09-22 (planos → uso → recomenda�
   });
 
   test('passo 2 — "tenho 2 TVs e 7 filhos": NÃO repete a tabela', () => {
-    expect(t()).toMatch(/NÃO repita a tabela de planos/);
+    const texto = t();
+
+    expect(texto).toMatch(/NÃO repita a tabela/);
+    // A nova consulta ao catálogo (obrigatória, o preço vem do cadastro) não
+    // autoriza mostrar tudo de novo — era exatamente isso que acontecia.
+    expect(texto).toMatch(/consultar NÃO é reapresentar/);
   });
 
   test('passo 2 — NÃO encaminha', () => {
     expect(t()).toMatch(/contar como usa.*NÃO é pedido de encaminhamento/);
   });
 
-  test('passo 2 — NÃO escolhe pelo número de filhos', () => {
-    expect(t()).toMatch(/NÃO escolha a velocidade pela quantidade de pessoas ou de filhos/);
+  test('passo 2 — NÃO escolhe pelo número de filhos nem de TVs', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/QUANTIDADE NÃO É USO/);
+    expect(texto).toMatch(/"tenho 2 TVs e 7 filhos" é quantidade, não uso/);
+  });
+
+  test('passo 2 — NÃO recomenda ainda', () => {
+    expect(t()).toMatch(/NÃO recomende neste mesmo turno/);
   });
 
   test('passo 2 — faz no máximo UMA pergunta sobre uso simultâneo', () => {
     const texto = t();
 
-    expect(texto).toMatch(/faça UMA pergunta útil/);
-    expect(texto).toMatch(/quantos aparelhos costumam usar ao mesmo tempo/);
+    expect(texto).toMatch(/faça UMA pergunta útil antes de recomendar/);
+    expect(texto).toMatch(/costumam ficar ligados ao mesmo tempo/);
   });
 
   test('passo 3 — com a resposta, recomenda UMA opção com mensalidade e motivo', () => {
@@ -522,5 +577,65 @@ describe('apresentação dos planos — sem velocidade repetida', () => {
 
     expect(t).toMatch(/copie o bloco de planos EXATAMENTE como está escrito nas instruções/);
     expect(t).not.toMatch(/rotulo/);
+  });
+});
+
+// Teste real de 2026-09-22, DEPOIS de c29c6d1: a apresentação inicial saiu
+// certa, mas "Tenho 2 TVs e 7 filhos" fez a IA recomendar 600 Mega, repetir o
+// catálogo inteiro e justificar com "vários aparelhos ao mesmo tempo" — que o
+// cliente nunca disse. O turno inteiro, passo a passo, sem chamar a OpenAI.
+describe('caso real 2026-09-22: turno 2 nao lista, nao recomenda, nao transfere', () => {
+  const COM = ['buscar_cliente', 'concluir_triagem', 'consultar_planos', 'verificar_cobertura'];
+  const t = () => comercialNovo.linhas(estadoBase({ ferramentas: COM })).join('\n');
+
+  test('turno 1 — pedir os planos permite apresentar todos', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/Liste o catálogo|Reapresente todas as opções|Temos estes planos/);
+    expect(texto).toMatch(/\[os planos que consultar_planos devolveu, um por linha\]/);
+  });
+
+  test('turno 2 — consultar de novo e permitido, reapresentar nao', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/PODE chamar consultar_planos de novo para ter o preço atualizado/);
+    expect(texto).toMatch(/uma nova consulta não manda mostrar os planos outra vez/);
+  });
+
+  test('turno 2 — exige UMA pergunta sobre uso simultaneo', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/faça UMA pergunta útil antes de recomendar/);
+    expect(texto).toMatch(/costumam ficar ligados ao mesmo tempo/);
+  });
+
+  test('turno 2 — NAO recomenda ainda', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/NÃO recomende neste mesmo turno/);
+    expect(texto).toMatch(/Só recomende depois que ele responder sobre o uso ao mesmo tempo/);
+  });
+
+  test('turno 2 — NAO inventa o uso simultaneo', () => {
+    expect(t()).toMatch(/NUNCA afirme que ele usa vários aparelhos ao mesmo tempo se ele não disse isso/);
+  });
+
+  test('turno 2 — NAO transfere para o setor de vendas', () => {
+    expect(t()).toMatch(/contar como usa.*NÃO é pedido de encaminhamento/);
+  });
+
+  test('"me mostra os planos de novo" reapresenta o catalogo', () => {
+    expect(t()).toMatch(/Reapresente todas as opções SÓ se ele pedir para rever, comparar ou ver os planos de novo/);
+  });
+
+  test('"compara 600 e 800" mostra so esses dois', () => {
+    expect(t()).toMatch(/para comparar dois, mostre só esses dois/);
+  });
+
+  test('o preco continua vindo do cadastro, nunca da conversa', () => {
+    const texto = t();
+
+    expect(texto).toMatch(/chame consultar_planos/);
+    expect(texto).toMatch(/valor que apareceu antes na conversa ou tabela escrita nas instruções NÃO substituem o que a ferramenta devolveu/);
   });
 });

@@ -81,6 +81,7 @@
 // que consultou.
 const { temFerramenta } = require('./../fontes-comerciais');
 const { ROTULO_DE_PLANO } = require('./../formato-plano');
+const { QUANTIDADE_NAO_E_USO, CATALOGO_JA_APRESENTADO } = require('./../regra-recomendacao');
 
 // 2026-09-22, teste real: depois de ver os quatro planos, o cliente disse
 // "tenho 2 TVs e 7 filhos" e a IA repetiu a tabela inteira e recomendou pela
@@ -93,10 +94,9 @@ function recomendacaoDePlano(estado) {
     : 'a mensalidade da fonte que você usou';
   return [
     'RECOMENDAÇÃO — vale quando ele pedir indicação OU quando ele contar como vai usar (pessoas, aparelhos, TVs, trabalho, jogos), mesmo sem perguntar nada:',
-    'NÃO repita a tabela de planos: ela já foi apresentada, e repetir faz a conversa andar para trás. Reapresente as opções SÓ se ele pedir para rever ou comparar.',
-    'NÃO escolha a velocidade pela quantidade de pessoas ou de filhos: o que pesa é o uso SIMULTÂNEO.',
-    'Se faltar essa informação, faça UMA pergunta útil — quantos aparelhos costumam usar ao mesmo tempo, e se há streaming em TV, trabalho ou jogo online. Se o que ele já contou bastar, recomende direto, sem perguntar mais nada.',
-    `Ao recomendar: diga qual plano, ${consultado} e uma frase curta de motivo. Se as instruções trouxerem critério de recomendação, siga-o. NUNCA invente capacidade ("aguenta X aparelhos", "dá para N pessoas") nem garanta desempenho, e nunca empurre o mais caro.`,
+    CATALOGO_JA_APRESENTADO,
+    QUANTIDADE_NAO_E_USO,
+    `Ao recomendar: diga qual plano, ${consultado} e uma frase curta de motivo apoiada no que ELE contou. Se as instruções trouxerem critério de recomendação, siga-o. NUNCA invente capacidade ("aguenta X aparelhos", "dá para N pessoas") nem garanta desempenho, e nunca empurre o mais caro.`,
     'Nunca encaminhe deixando uma pergunta dele sem resposta: responda primeiro, na mesma mensagem.',
   ].join(' ');
 }

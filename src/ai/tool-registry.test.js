@@ -4183,3 +4183,114 @@ describe('consultar_planos — instalação comum sai uma vez só', () => {
     expect(r).not.toHaveProperty('instalacaoComum');
   });
 });
+
+// Teste real de 2026-09-22, depois de c29c6d1. A ferramenta mandava "Ao
+// listar, escreva o rotulo de cada plano... um por linha" em TODA chamada — e
+// como o resultado de ferramenta é a última mensagem antes da resposta, essa
+// ordem fresca vencia o "NÃO repita a tabela" do prompt, lá em cima.
+//
+// consultar_planos é CATÁLOGO: entrega dado e diz como escrever UM plano.
+// Quantos planos cabem na resposta é decisão de conversa, e quem decide é o
+// roteiro comercial, com o histórico na mão.
+describe('consultar_planos — instrução neutra, sem ordem de listar', () => {
+  function ctxAnonimo() {
+    return { conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, contracts: [] };
+  }
+  async function instrucao() {
+    const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+    return r.instrucao;
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    listarPlanosDisponiveis.mockResolvedValue([
+      { id: 'a', name: '500 Mega', speedMbps: 500, monthlyPrice: 100, installCondition: 'Grátis' },
+      { id: 'b', name: '600 Mega', speedMbps: 600, monthlyPrice: 130, installCondition: 'Grátis' },
+    ]);
+  });
+
+  test('NÃO manda mais listar todos os planos', async () => {
+    const i = await instrucao();
+
+    expect(i).not.toMatch(/Ao listar/i);
+    expect(i).not.toMatch(/um por linha/i);
+    expect(i).toMatch(/listar todos os planos NÃO é obrigatório/i);
+  });
+
+  test('manda responder só o que o turno pede', async () => {
+    expect(await instrucao()).toMatch(/Apresente apenas o que o turno atual pede/i);
+  });
+
+  test('escolhendo ou comparando, cita só o plano necessário', async () => {
+    expect(await instrucao()).toMatch(/escolhendo, comparando ou recebendo uma indicação, cite só o plano/i);
+  });
+
+  test('pedir os planos, rever ou comparar libera o catálogo inteiro', async () => {
+    expect(await instrucao()).toMatch(/Liste o catálogo inteiro quando ele pedir os planos, pedir para rever ou pedir para comparar/i);
+  });
+
+  test('a instrução é a MESMA em toda chamada: ela não decide estado de conversa', async () => {
+    const primeira = await instrucao();
+    const segunda = await instrucao();
+
+    expect(segunda).toBe(primeira);
+  });
+
+  // O que a correção de c29c6d1 garantiu não pode ter ido junto.
+  test('como escrever UM plano continua na instrução', async () => {
+    const i = await instrucao();
+
+    expect(i).toMatch(/escreva o `rotulo` dele EXATAMENTE como veio/);
+    expect(i).toMatch(/nunca acrescente a velocidade a um rótulo que não a traz/);
+    expect(i).toMatch(/nunca monte uma linha juntando pedaços de planos diferentes/);
+  });
+
+  test('o preço do cadastro continua prevalecendo sobre qualquer outra fonte', async () => {
+    const i = await instrucao();
+
+    expect(i).toMatch(/Use SOMENTE estes valores para preço, plano e instalação/i);
+    expect(i).toMatch(/apareceu antes na conversa, NÃO os substitui/i);
+  });
+
+  test('os dados estruturados seguem completos', async () => {
+    const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+    expect(r.planos).toHaveLength(2);
+    expect(r.planos[0]).toMatchObject({
+      nome: '500 Mega', velocidadeMbps: 500, mensalidade: 100,
+      mensalidadeFormatada: 'R$ 100,00', instalacao: 'Grátis', rotulo: '500 Mega — R$ 100/mês',
+    });
+    expect(r.instalacaoComum).toBe('Grátis');
+  });
+
+  test('a observação interna continua fora da resposta', async () => {
+    listarPlanosDisponiveis.mockResolvedValue([
+      { id: 'a', name: '500 Mega', speedMbps: 500, monthlyPrice: 100, installCondition: 'Grátis', note: 'margem apertada', active: true, sortOrder: 3 },
+    ]);
+
+    const r = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+    expect(JSON.stringify(r)).not.toContain('margem apertada');
+    expect(r.planos[0]).not.toHaveProperty('note');
+  });
+
+  test('preço alterado no cadastro chega na consulta seguinte', async () => {
+    const antes = await findTool('consultar_planos').executar({}, ctxAnonimo());
+    expect(antes.planos[0].rotulo).toBe('500 Mega — R$ 100/mês');
+
+    listarPlanosDisponiveis.mockResolvedValue([{ id: 'a', name: '500 Mega', speedMbps: 500, monthlyPrice: 110, installCondition: 'Grátis' }]);
+    const depois = await findTool('consultar_planos').executar({}, ctxAnonimo());
+
+    expect(depois.planos[0].rotulo).toBe('500 Mega — R$ 110/mês');
+  });
+
+  // A ferramenta não ganhou responsabilidade de recomendação nem de
+  // diagnóstico de uso: continua catálogo, sem argumento nenhum.
+  test('continua sem parâmetros: catálogo, não diagnóstico de uso', () => {
+    const t = findTool('consultar_planos');
+
+    expect(t.parametros.properties).toEqual({});
+    expect(t.parametros.required).toEqual([]);
+    expect(t.categoria).toBe('CONSULTA');
+  });
+});

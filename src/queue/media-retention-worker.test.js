@@ -4,7 +4,7 @@ jest.mock('../media/media-storage');
 
 const { listExpiredMedia, clearMessageMedia } = require('../conversations/message.repository');
 const { deleteMediaFile } = require('../media/media-storage');
-const { handleMediaRetentionJob, RETENTION_MONTHS } = require('./media-retention-worker');
+const { handleMediaRetentionJob, diasDeRetencao } = require('./media-retention-worker');
 
 const ANTIGA = { id: 'msg-1', mediaPath: 'velho.jpg', messageType: 'image' };
 const OUTRA = { id: 'msg-2', mediaPath: 'velho2.mp4', messageType: 'video' };
@@ -20,7 +20,7 @@ describe('handleMediaRetentionJob', () => {
   test('apaga os arquivos vencidos e limpa a referência na mensagem', async () => {
     const resultado = await handleMediaRetentionJob();
 
-    expect(listExpiredMedia).toHaveBeenCalledWith(expect.objectContaining({ olderThanMonths: RETENTION_MONTHS }));
+    expect(listExpiredMedia).toHaveBeenCalledWith(expect.objectContaining({ olderThanDays: diasDeRetencao() }));
     expect(deleteMediaFile).toHaveBeenCalledWith('velho.jpg');
     expect(deleteMediaFile).toHaveBeenCalledWith('velho2.mp4');
     expect(clearMessageMedia).toHaveBeenCalledWith('msg-1');
@@ -65,7 +65,31 @@ describe('handleMediaRetentionJob', () => {
     await expect(handleMediaRetentionJob()).resolves.toEqual({ removidos: 0 });
   });
 
-  test('guarda 12 meses', () => {
-    expect(RETENTION_MONTHS).toBe(12);
+  test('guarda 90 dias por padrão', () => {
+    expect(diasDeRetencao()).toBe(90);
+  });
+
+  // A varredura APAGA arquivo: valor inválido tem de cair no padrão, nunca
+  // virar `now() - 0 dias` (leva a mídia de hoje) nem uma data no futuro.
+  test.each([['0'], ['-5'], ['abc'], ['']])('MEDIA_RETENTION_DAYS=%s cai no padrão', (valor) => {
+    const anterior = process.env.MEDIA_RETENTION_DAYS;
+    process.env.MEDIA_RETENTION_DAYS = valor;
+    try {
+      expect(diasDeRetencao()).toBe(90);
+    } finally {
+      if (anterior === undefined) delete process.env.MEDIA_RETENTION_DAYS;
+      else process.env.MEDIA_RETENTION_DAYS = anterior;
+    }
+  });
+
+  test('MEDIA_RETENTION_DAYS válido passa a valer', () => {
+    const anterior = process.env.MEDIA_RETENTION_DAYS;
+    process.env.MEDIA_RETENTION_DAYS = '30';
+    try {
+      expect(diasDeRetencao()).toBe(30);
+    } finally {
+      if (anterior === undefined) delete process.env.MEDIA_RETENTION_DAYS;
+      else process.env.MEDIA_RETENTION_DAYS = anterior;
+    }
   });
 });

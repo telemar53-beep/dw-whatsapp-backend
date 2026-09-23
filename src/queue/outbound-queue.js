@@ -51,7 +51,12 @@ async function enqueueOutboundMessage({ conversationId, channelId, content, mess
       headerLink: headerLink || null,
       repliedToMessageId: repliedToMessageId || null,
     },
-    { attempts: 3, backoff: { type: 'exponential', delay: 5000 } }
+    // removeOnComplete/removeOnFail como nas demais filas: sem eles o Bull guarda
+    // o job concluido no Redis para sempre, e o job de saida carrega `content`,
+    // `metadata` e `templateVariables` inteiros. Ninguem le job concluido nem
+    // falho — o resultado do envio vive em `messages`, e a falha ja e gravada la
+    // pelo worker. Com disparo em volume isso e memoria acumulada sem leitor.
+    { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: true, removeOnFail: true }
   );
   return message;
 }

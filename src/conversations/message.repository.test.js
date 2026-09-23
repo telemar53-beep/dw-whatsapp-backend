@@ -917,7 +917,7 @@ describe('retencao de midia', () => {
     const antiga = await criarMidia({ mesesAtras: 13, mediaPath: 'velho.jpg' });
     await criarMidia({ mesesAtras: 6, mediaPath: 'novo.jpg' });
 
-    const expirados = await listExpiredMedia({ olderThanMonths: 12 });
+    const expirados = await listExpiredMedia({ olderThanDays: 360 });
 
     expect(expirados.map((m) => m.id)).toEqual([antiga.id]);
     expect(expirados[0].mediaPath).toBe('velho.jpg');
@@ -927,7 +927,7 @@ describe('retencao de midia', () => {
     const antiga = await criarMidia({ mesesAtras: 13 });
     await clearMessageMedia(antiga.id);
 
-    expect(await listExpiredMedia({ olderThanMonths: 12 })).toEqual([]);
+    expect(await listExpiredMedia({ olderThanDays: 360 })).toEqual([]);
   });
 
   test('remover o arquivo mantem a mensagem e a legenda', async () => {
@@ -945,8 +945,8 @@ describe('retencao de midia', () => {
   test('respeita o limite pedido', async () => {
     await criarMidia({ mesesAtras: 7 });
 
-    expect(await listExpiredMedia({ olderThanMonths: 12 })).toEqual([]);
-    expect((await listExpiredMedia({ olderThanMonths: 6 })).length).toBe(1);
+    expect(await listExpiredMedia({ olderThanDays: 360 })).toEqual([]);
+    expect((await listExpiredMedia({ olderThanDays: 180 })).length).toBe(1);
   });
 
   test('mensagem de texto nunca entra na lista', async () => {
@@ -955,6 +955,6 @@ describe('retencao de midia', () => {
       sentAt: new Date(Date.now() - 24 * 30 * 24 * 60 * 60 * 1000),
     });
 
-    expect(await listExpiredMedia({ olderThanMonths: 12 })).toEqual([]);
+    expect(await listExpiredMedia({ olderThanDays: 360 })).toEqual([]);
   });
 });

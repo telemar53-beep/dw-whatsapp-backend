@@ -41,6 +41,20 @@ function contentProblems(env, keys) {
   return problems;
 }
 
+// Dias de retencao de midia. OPCIONAL de proposito: um provedor que nao a
+// define continua com 90, e nenhum deploy existente quebra por falta dela.
+//
+// Valor invalido cai no padrao em vez de valer. A rotina que usa este numero
+// APAGA arquivo: um `0` ou um negativo viraria `now() - 0 dias`, ou uma data no
+// futuro, e a primeira varredura levaria junto a midia que chegou hoje.
+const MEDIA_RETENTION_DAYS_DEFAULT = 90;
+
+function diasDeRetencao(bruto) {
+  const dias = Number(bruto);
+  if (!Number.isFinite(dias) || dias < 1) return MEDIA_RETENTION_DAYS_DEFAULT;
+  return Math.floor(dias);
+}
+
 function loadConfig() {
   const required = [
     'DATABASE_URL',
@@ -76,7 +90,8 @@ function loadConfig() {
     mediaStorageDir: process.env.MEDIA_STORAGE_DIR,
     frontendOrigin: process.env.FRONTEND_ORIGIN || null,
     publicBaseUrl: process.env.PUBLIC_BASE_URL.replace(/\/+$/, ''),
+    mediaRetentionDays: diasDeRetencao(process.env.MEDIA_RETENTION_DAYS),
   };
 }
 
-module.exports = { loadConfig };
+module.exports = { loadConfig, MEDIA_RETENTION_DAYS_DEFAULT };

@@ -109,15 +109,19 @@ async function updateMessageMedia(messageId, { mediaPath, mediaMimeType }) {
 //
 // `media_path IS NOT NULL` também exclui o que já foi limpo numa passagem
 // anterior: sem isso a varredura devolveria as mesmas linhas para sempre.
-async function listExpiredMedia({ olderThanMonths, limit = 500 }) {
+// Dias, e nao meses: a retencao virou o numero que dimensiona o disco em regime
+// (disco ≈ ritmo diario × dias de retencao), e mes e unidade grossa demais para
+// ajustar isso — alem de variar de 28 a 31 dias conforme o mes em que a
+// varredura roda.
+async function listExpiredMedia({ olderThanDays, limit = 500 }) {
   const result = await getPool().query(
     `SELECT id, media_path, media_mime_type, message_type, created_at
        FROM messages
       WHERE media_path IS NOT NULL
-        AND created_at < now() - ($1::int * interval '1 month')
+        AND created_at < now() - ($1::int * interval '1 day')
       ORDER BY created_at ASC
       LIMIT $2`,
-    [olderThanMonths, limit]
+    [olderThanDays, limit]
   );
   return result.rows.map((row) => ({
     id: row.id,

@@ -44,6 +44,13 @@ const router = express.Router();
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Teto de página, não tamanho de página: quem escolhe quantas quer é a tela.
+// O teto existe para um `?limit=999999` não virar a consulta sem limite que
+// estamos justamente saindo — o limite pedido pelo cliente nunca pode ser
+// maior do que o que o servidor aceita servir.
+const MAX_MESSAGES_LIMIT = 200;
+const MAX_QUEUE_LIMIT = 500;
+
 router.use(requireAuth);
 
 router.param('id', (req, res, next, id) => {
@@ -69,7 +76,12 @@ const MAX_SIZE_BY_MESSAGE_TYPE = {
 // A nota interna passa pelo presenter, nao pela query: e dado administrativo
 // e quem a recebe depende de quem esta perguntando (ADR-008).
 router.get('/queue', async (req, res) => {
-  const conversations = await listWaitingConversations();
+  // ADITIVO, como em /:id/messages: sem `limit`, a fila inteira, como sempre.
+  const limit = Number.parseInt(req.query.limit, 10);
+  if (req.query.limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > MAX_QUEUE_LIMIT)) {
+    return res.status(400).json({ error: `limit must be an integer between 1 and ${MAX_QUEUE_LIMIT}` });
+  }
+  const conversations = await listWaitingConversations({ limit: req.query.limit === undefined ? undefined : limit });
   res.json(apresentarConversas(conversations, req.agent));
 });
 
@@ -229,7 +241,26 @@ router.get('/:id/messages', async (req, res) => {
   if (conversation.status === 'silent' && !hasAdminLevelAccess(req.agent)) {
     return res.status(403).json({ error: 'This conversation is not available until the customer replies' });
   }
-  const messages = await listMessagesByConversation(req.params.id);
+  // ADITIVO: sem `limit`, a resposta é a de sempre — o histórico inteiro, num
+  // array. Nenhum consumidor atual quebra (ADR-010).
+  //
+  // O corpo continua sendo um ARRAY também com paginação, de propósito: virar
+  // `{ items, temMais }` mudaria o tipo da resposta, que é justamente o que a
+  // ADR-010 manda evitar. Quem chama descobre se há mais pedindo um a mais do
+  // que vai mostrar — recebeu o extra, existe página anterior. Sem cabeçalho
+  // novo, sem CORS a ajustar, sem requisição de sobra.
+  const limit = Number.parseInt(req.query.limit, 10);
+  if (req.query.limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > MAX_MESSAGES_LIMIT)) {
+    return res.status(400).json({ error: `limit must be an integer between 1 and ${MAX_MESSAGES_LIMIT}` });
+  }
+  const before = typeof req.query.before === 'string' && UUID_PATTERN.test(req.query.before) ? req.query.before : null;
+  if (req.query.before !== undefined && !before) {
+    return res.status(400).json({ error: 'before must be a message UUID' });
+  }
+  const messages = await listMessagesByConversation(req.params.id, {
+    limit: req.query.limit === undefined ? undefined : limit,
+    before,
+  });
   res.json(messages);
 });
 

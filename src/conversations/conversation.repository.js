@@ -451,7 +451,11 @@ async function listConversationsByContact(contactId) {
   return result.rows.map(toConversationSummary);
 }
 
-async function listWaitingConversations() {
+// ADITIVO: sem `limit`, é a consulta de antes — a fila inteira. Com `limit`,
+// corta. A ordem NÃO muda: continua `created_at ASC`, porque quem está
+// esperando há mais tempo tem de aparecer primeiro; cortar pelo fim da fila
+// esconderia justamente quem chegou primeiro.
+async function listWaitingConversations({ limit } = {}) {
   const result = await getPool().query(
     `SELECT c.id, c.contact_id, c.channel_id, c.status, c.assigned_agent_id, c.sector_id, c.triage_state, c.triage_attempts, c.protocol_number, c.suggested_reason_id, c.ai_triage_sector_id, c.ai_triage_reason_id, c.ai_triage_confidence, c.ai_triage_summary, c.ai_triage_identified_by, c.ai_triage_low_confidence, c.ai_triage_resolved_by_ai, c.ai_triage_completed_at, c.created_at, c.updated_at,
             ct.phone_number AS contact_phone_number, ct.display_name AS contact_display_name,
@@ -481,7 +485,9 @@ async function listWaitingConversations() {
        LIMIT 1
      ) lm ON true
      WHERE c.status = 'waiting'
-     ORDER BY c.created_at ASC`
+     ORDER BY c.created_at ASC
+     ${limit ? 'LIMIT $1' : ''}`,
+    limit ? [limit] : []
   );
   return result.rows.map(toConversationSummary);
 }

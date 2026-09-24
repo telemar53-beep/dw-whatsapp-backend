@@ -212,6 +212,52 @@ describe('GET /api/conversations/:id/messages', () => {
     expect(res.status).toBe(404);
   });
 
+  // Paginacao aditiva: sem `limit` a rota chama o repositorio como antes, e o
+  // corpo continua sendo um ARRAY em qualquer caso (ADR-010).
+  describe('paginacao', () => {
+    function pedir(query) {
+      return request(buildApp())
+        .get(`/api/conversations/${CONVERSATION_ID}/messages${query}`)
+        .set('Authorization', `Bearer ${tokenFor('agent-1', 'agent')}`);
+    }
+
+    test('sem limit, o repositorio e chamado sem opcoes de pagina', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1' });
+      listMessagesByConversation.mockResolvedValue([]);
+      await pedir('');
+      expect(listMessagesByConversation).toHaveBeenCalledWith(CONVERSATION_ID, { limit: undefined, before: null });
+    });
+
+    test('limit e before sao repassados ao repositorio', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1' });
+      listMessagesByConversation.mockResolvedValue([]);
+      await pedir(`?limit=51&before=${CONVERSATION_ID}`);
+      expect(listMessagesByConversation).toHaveBeenCalledWith(CONVERSATION_ID, { limit: 51, before: CONVERSATION_ID });
+    });
+
+    test('o corpo continua sendo um array com paginacao', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1' });
+      listMessagesByConversation.mockResolvedValue([{ id: 'msg-1' }]);
+      const res = await pedir('?limit=10');
+      expect(Array.isArray(res.body)).toBe(true);
+    });
+
+    // Sem teto, um ?limit=999999 seria a consulta sem limite de volta.
+    test.each([['0'], ['-1'], ['abc'], ['201']])('limit=%s e recusado com 400', async (valor) => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1' });
+      const res = await pedir(`?limit=${valor}`);
+      expect(res.status).toBe(400);
+      expect(listMessagesByConversation).not.toHaveBeenCalled();
+    });
+
+    test('before que nao e UUID e recusado com 400', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1' });
+      const res = await pedir('?limit=10&before=nao-e-uuid');
+      expect(res.status).toBe(400);
+      expect(listMessagesByConversation).not.toHaveBeenCalled();
+    });
+  });
+
   test('returns 404 without querying the repository when :id is not a UUID', async () => {
     const res = await request(buildApp())
       .get('/api/conversations/not-a-uuid/messages')

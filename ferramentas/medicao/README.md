@@ -104,6 +104,19 @@ Referência (24/09/2026):
 | `d8261d0` (1ª versão da E1.1) | 0 / +214 px | +2568 / +642 px |
 | `e57bea6` (E1.1 revisada) | 0 / 0 px | 0 / 0 px |
 
+E, para a âncora segura sobreviver a redimensionar a janela (a mesa troca de
+layout em 1100 px com o painel SGP aberto e a linha do tempo fica sem caixa
+por um quadro):
+
+```powershell
+$env:MEDICAO_DIST = "<build>"; node ferramentas/medicao/diagnostico/rolagem-redimensionar.mjs   # ~20 s, sai 1 se falhar
+```
+
+Passa se a âncora não se mexe no clique nem em 1100, 1800 e 1366 px (±4 px), se a
+ancoragem nativa fica desligada enquanto a âncora está segura e se um clique do
+usuário na linha do tempo a devolve. Referência (24/09/2026): `e57bea6` reprova
+(a âncora é solta no quadro sem caixa); `c950c37` aprova.
+
 ## O que sai
 
 Em `<saida>/`: `RESUMO.json` (o que o comparar lê, com `ambiente.ociosidade`),

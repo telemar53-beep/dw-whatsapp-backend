@@ -51,11 +51,14 @@ Regra do projeto desde 24/09: saída de subagente não vira requisito sem confer
    falha): 422 conferem, 581 corrigidas, 18 erradas no mérito (o que a linha afirmava sobre o
    sistema era falso), 34 duplicatas removidas (A.4) e 34 estados novos.
 4. **Conferência independente por amostra** (sorteio com semente fixa): todas as 18 "erradas no
-   mérito", 25 corrigidas, 10 conferidas e 5 duplicatas — **58 linhas, 1 erro (1,7%)**, abaixo do
-   teto de 2% combinado: lote aceito. O erro (ATD-INI-24) virou correção e revelou um defeito novo
-   (ATD-INI-29).
+   mérito", 25 corrigidas, 10 conferidas e 5 duplicatas — **58 linhas, 0 erro**, dentro do teto
+   de 2% combinado: lote aceito. Ao conferir ATD-INI-24 achei um defeito que ninguém tinha
+   registrado (ATD-INI-29). **Registro de um erro meu:** por algumas horas marquei ATD-INI-24 como
+   erro do auditor, afirmando que uma frase do backend chegava sem tradução; o meu script cortava
+   a frase no apóstrofo de "channel's". A auditoria dos overlays (grupo A) pegou; a linha voltou
+   ao que o auditor tinha escrito.
 5. **Conferência própria de tudo que era novo:** os 34 estados novos, os 3 endereços com
-   intervalo largo demais para a checagem valer (estreitados) e 3 correções pontuais.
+   intervalo largo demais para a checagem valer (estreitados) e 2 correções pontuais.
 6. **Verificador final** contra uma cópia de \`e5236da\` (nunca contra o disco, que pode estar em
    outra branch): **${fmt(m.total)} estados, 0 falhas, 0 linhas sem prova por script e sem
    conferência humana.** Intervalo "arq:n-m" vale inteiro; ":n" sem arquivo herda o último

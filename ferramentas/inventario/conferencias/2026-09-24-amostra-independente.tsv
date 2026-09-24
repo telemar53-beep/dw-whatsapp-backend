@@ -9,7 +9,7 @@ CV-IA-15	errada-no-merito	certo	conferido contra e5236da
 CV-SGP-20	errada-no-merito	certo	conferido contra e5236da
 ATD-TRF-23	errada-no-merito	certo	conferido contra e5236da
 ATD-ENC-15	errada-no-merito	certo	conferido contra e5236da
-ATD-INI-24	errada-no-merito	erro	a suspeita de frase crua tem caminho real: corrida da lista de templates na troca de canal (novo ATD-INI-29)
+ATD-INI-24	errada-no-merito	certo	conferida certa: a frase da WABA é traduzida (utils/errorMessages.js:76); eu tinha marcado erro por um defeito do meu script (cortava a frase no apóstrofo). Ao conferir, achei outro defeito real: ATD-INI-29
 REL-PG-22	errada-no-merito	certo	conferido contra e5236da
 REL-PG-28	errada-no-merito	certo	conferido contra e5236da
 CAM-DET-13	errada-no-merito	certo	conferido contra e5236da

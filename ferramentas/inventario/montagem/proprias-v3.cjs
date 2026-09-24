@@ -23,14 +23,13 @@ function inserirDepois(idAnterior, linha) {
 
 // colunas: 1 id · 2 tipo · 3 gatilho · 4 onde · 5 texto · 6 defeito
 trocarColuna('ACS-LOG-05', 4, 'pages/LoginPage.jsx:120 (form `aria-busy` :103)');
-trocarColuna(
-  'ATD-INI-24',
-  6,
-  '(suspeita, estreita) "This template does not belong to this channel\'s WABA" chega crua quando o template escolhido é de outro canal (ver ATD-INI-29); as outras frases de POST /start sem tradução (src/api/conversations.routes.js:114, :117, :138) a tela não alcança'
-);
+// ATD-INI-24 fica como a conferência deixou (sem defeito): a frase da WABA É
+// traduzida (utils/errorMessages.js:76). Eu tinha escrito o contrário — o meu
+// script de conferência cortava a frase do backend no apóstrofo de "channel's".
+// Correção pega pela auditoria dos overlays (grupo A), 24/09/2026.
 inserirDepois(
   'ATD-INI-28',
-  '| ATD-INI-29 | variante | trocar de canal entre dois canais oficiais antes de os templates do primeiro chegarem | components/StartConversationModal.jsx:75-77, :197-200 | (a lista e o template escolhido ficam os do canal anterior) | (suspeita) o .then da 75 não confere se o canal ainda é o mesmo: a resposta atrasada sobrescreve a do canal atual (classe CLASSE-01); "Iniciar conversa" volta "This template does not belong to this channel\'s WABA", sem tradução (src/api/conversations.routes.js:169-171) |'
+  '| ATD-INI-29 | variante | trocar de canal entre dois canais oficiais antes de os templates do primeiro chegarem | components/StartConversationModal.jsx:75-77, :197-200 | (a lista e o template escolhido ficam os do canal anterior) | (suspeita) o .then da 75 não confere se o canal ainda é o mesmo: a resposta atrasada sobrescreve a do canal atual (classe CLASSE-01); "Iniciar conversa" é recusado com "Este template não pertence à WABA deste canal." (src/api/conversations.routes.js:169-171, traduzida em utils/errorMessages.js:76) |'
 );
 
 // Um tipo por linha: o caso dominante do primitivo (27 de 37 usos sem onRetry)

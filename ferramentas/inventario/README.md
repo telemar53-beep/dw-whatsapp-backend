@@ -42,7 +42,7 @@ Grava `_verificacao5.tsv` ao lado do script (uma linha por estado) e imprime o r
 | Arquivo | O que é |
 |---|---|
 | `2026-09-24-conferencia-auditor.tsv` | Conferência humana (por subagente) das 1.055 linhas que o script não provava: 422 conferem, 581 corrigidas, 18 erradas no mérito, 34 duplicatas |
-| `2026-09-24-amostra-independente.tsv` | Minha conferência por amostra desse lote (sorteio com semente fixa, todas as erradas no mérito): 58 linhas, 1 erro (1,7%) — abaixo do teto de 2%, lote aceito |
+| `2026-09-24-amostra-independente.tsv` | Minha conferência por amostra desse lote (sorteio com semente fixa, todas as erradas no mérito): 58 linhas, 0 erro — lote aceito (a 1ª versão deste registro dizia 1 erro: era defeito do meu script, que cortava a frase no apóstrofo) |
 | `2026-09-24-conferencia-propria.tsv` | Minha conferência de tudo que o subagente escreveu de novo (34 estados), dos intervalos largos e das correções pontuais |
 
 ## Quando rodar de novo

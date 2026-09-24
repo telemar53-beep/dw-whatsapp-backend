@@ -36,6 +36,5 @@ CFG-INT-SGPE-28	confere	settings.css:151 @container(min-width:950px)
 MSG-IMG-06	corrigida	intervalo 415-500 estreitado para :415-421 (aria-label "Visualizar imagem" na 421) e :439 (Fechar imagem)
 MSG-AUD-01	corrigida	intervalo 137-207 estreitado para :137-145 ("Reproduzir áudio" na 143) e :14 (BAR_COUNT 38)
 CAM-NOV-17	corrigida	intervalo 111-178 estreitado para :111-116 ("Revisar campanha" na 116) e :163-164 (Voltar)
-ATD-INI-29	confere	StartConversationModal.jsx:75-77 .then sem guarda de canal; conversations.routes.js:169-171 frase sem tradução
-ATD-INI-24	corrigida	a conferência marcou sem defeito; há caminho real para a frase crua (ATD-INI-29)
+ATD-INI-29	confere	StartConversationModal.jsx:75-77 .then sem guarda de canal; conversations.routes.js:169-171 recusa; a frase é traduzida (utils/errorMessages.js:76)
 ACS-LOG-05	corrigida	endereço de antes de 0cdbebd: LoginPage tem 136 linhas; botão na 120, form na 103

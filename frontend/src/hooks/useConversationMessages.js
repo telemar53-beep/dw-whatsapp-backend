@@ -58,7 +58,16 @@ export function useConversationMessages(conversationId) {
         const sobrou = lista.length > POR_PAGINA;
         // A extra é a mais ANTIGA do lote, porque a lista vem em ordem
         // crescente: descartar do começo é o que mantém as 50 mais novas.
-        setMessages(sobrou ? lista.slice(1) : lista);
+        const historico = sobrou ? lista.slice(1) : lista;
+        // Mesclar, e não substituir: o que chegou pelo socket (ou foi enviado)
+        // com a carga no ar entrou na lista vazia da abertura. Se a consulta
+        // rodou antes de essa mensagem ser gravada, substituir a apagava da
+        // tela até reabrir a conversa. Ela é mais nova que o histórico: vai
+        // depois dele.
+        setMessages((naTela) => {
+          const trouxe = new Set(historico.map((m) => m.id));
+          return [...historico, ...naTela.filter((m) => !trouxe.has(m.id))];
+        });
         setTemAnteriores(sobrou);
         setStatus('ready');
       })

@@ -324,6 +324,58 @@ function adiado() {
 
 const lote = (prefixo, n) => Array.from({ length: n }, (_, i) => ({ id: `${prefixo}${i + 1}` }));
 
+// A carga inicial SUBSTITUÍA a lista. Mensagem que chegasse pelo socket (ou
+// fosse enviada) com a carga no ar entrava na lista vazia — e sumia quando a
+// carga voltava, se a consulta tivesse rodado antes de ela ser gravada. Só
+// voltava a aparecer reabrindo a conversa.
+describe('mensagem que chega com a carga inicial no ar', () => {
+  test('a que a carga não trouxe continua na tela, depois do histórico', async () => {
+    const carga = adiado();
+    api.getMessages.mockReturnValueOnce(carga.promise);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(api.getMessages).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      fakeSocket.trigger('message:new', { conversation: { id: 'conv-1' }, message: { id: 'x', content: 'chegou agora' } });
+    });
+    await act(async () => {
+      carga.resolve([{ id: 'h1' }, { id: 'h2' }]);
+    });
+
+    expect(result.current.messages.map((m) => m.id)).toEqual(['h1', 'h2', 'x']);
+  });
+
+  test('a que a carga já trouxe não duplica e fica no lugar do histórico', async () => {
+    const carga = adiado();
+    api.getMessages.mockReturnValueOnce(carga.promise);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(api.getMessages).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      fakeSocket.trigger('message:new', { conversation: { id: 'conv-1' }, message: { id: 'h2', content: 'do socket' } });
+    });
+    await act(async () => {
+      carga.resolve([{ id: 'h1' }, { id: 'h2', content: 'do banco' }, { id: 'h3' }]);
+    });
+
+    expect(result.current.messages.map((m) => m.id)).toEqual(['h1', 'h2', 'h3']);
+  });
+
+  test('a mensagem de antes de trocar de conversa não passa para a nova', async () => {
+    const cargaB = adiado();
+    api.getMessages.mockResolvedValueOnce([{ id: 'a1' }]).mockReturnValueOnce(cargaB.promise);
+    const { result, rerender } = renderHook(({ id }) => useConversationMessages(id), { initialProps: { id: 'conv-A' } });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    rerender({ id: 'conv-B' });
+    await act(async () => {
+      cargaB.resolve([{ id: 'b1' }]);
+    });
+
+    expect(result.current.messages.map((m) => m.id)).toEqual(['b1']);
+  });
+});
+
 describe('carregar mensagens anteriores', () => {
   // O cursor era lido de dentro de um updater de setMessages, logo depois de
   // setCarregandoAnteriores(true). Com uma atualização já pendente na fibra, o

@@ -34,7 +34,9 @@ describe('useConversationMessages', () => {
     api.getMessages.mockResolvedValue([{ id: 'm1', content: 'Oi' }]);
     const { result } = renderHook(() => useConversationMessages('conv-1'));
     await waitFor(() => expect(result.current.messages).toEqual([{ id: 'm1', content: 'Oi' }]));
-    expect(api.getMessages).toHaveBeenCalledWith('conv-1', 'tok-123');
+    // Pede 51 e não o histórico inteiro: 50 por página, mais uma de sonda para
+    // saber se existe trecho anterior sem mudar o formato da resposta.
+    expect(api.getMessages).toHaveBeenCalledWith('conv-1', 'tok-123', { limit: 51 });
   });
 
   test('message:new appends a message for this conversation', async () => {

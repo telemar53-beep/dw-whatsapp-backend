@@ -249,7 +249,16 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const { token, agent } = useAuth();
   // `status` já é o estado do atendimento neste componente; o do carregamento
   // das mensagens entra com nome próprio.
-  const { messages, status: messagesStatus, reloadMessages, sendMessage, appendMessage } = useConversationMessages(conversation.id);
+  const {
+    messages,
+    status: messagesStatus,
+    reloadMessages,
+    sendMessage,
+    appendMessage,
+    temAnteriores,
+    carregandoAnteriores,
+    carregarAnteriores,
+  } = useConversationMessages(conversation.id);
   // O relógio do cálculo da janela vive em estado, e não num `new Date()` solto
   // no corpo do render: assim a passagem do tempo (e o envio) conseguem
   // refazer a conta sem recarregar a página.
@@ -710,6 +719,23 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           <p role="status" className="mb-3 text-center text-[13px] leading-[18px] text-chat-faint">
             Carregando mensagens…
           </p>
+        )}
+
+        {/* A conversa abre com as 50 mais novas; o resto vem quando pedirem.
+            Botão, e não rolagem infinita: prepender enquanto a pessoa rola
+            para cima exige recolocar a posição do scroll a cada lote, e errar
+            isso faz a timeline pular na mão de quem está lendo. */}
+        {temAnteriores && (
+          <div className="mb-3 flex justify-center">
+            <button
+              type="button"
+              onClick={carregarAnteriores}
+              disabled={carregandoAnteriores}
+              className="rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-[12.5px] text-chat-muted transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            >
+              {carregandoAnteriores ? 'Carregando…' : 'Carregar mensagens anteriores'}
+            </button>
+          </div>
         )}
 
         {timeline.map((row) => {

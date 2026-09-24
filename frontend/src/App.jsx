@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from '
 import { AuthProvider } from './contexts/AuthContext';
 import { useTituloDaAba } from './hooks/useTituloDaAba';
 import { SocketProvider } from './contexts/SocketContext';
+import { AgentsProvider } from './contexts/AgentsContext';
 import { MediaTokenProvider } from './contexts/MediaTokenContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import RotaLazy from './components/RotaLazy';
@@ -107,6 +108,9 @@ function App() {
             emissão é uma chamada HTTP a cada 25 minutos, não um evento. */}
         <MediaTokenProvider>
         <SocketProvider>
+          {/* Uma cópia só da lista de atendentes para a sessão. Não busca nada
+              enquanto nenhum useAgents() estiver montado. */}
+          <AgentsProvider>
           <TituloDaAba />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
@@ -201,6 +205,7 @@ function App() {
             ))}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </AgentsProvider>
         </SocketProvider>
         </MediaTokenProvider>
       </AuthProvider>

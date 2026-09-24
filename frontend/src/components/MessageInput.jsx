@@ -87,8 +87,13 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
   // A microphone recording is a voice note; a file picked from disk is an attachment.
   const [fileIsRecording, setFileIsRecording] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState(null);
+  // Envio e erro são DA CONVERSA, não do campo: o componente não remonta ao
+  // trocar de conversa, e com um `sending` só um envio lento em A trancava a
+  // caixa de B — e, ao terminar, apagava o texto e o anexo que já estavam em B.
+  const [enviandoEm, setEnviandoEm] = useState([]);
+  const [erros, setErros] = useState({});
+  const sending = enviandoEm.includes(conversationId);
+  const error = erros[conversationId] || null;
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [showingQuickReplies, setShowingQuickReplies] = useState(false);
@@ -115,8 +120,8 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
   // `submit()` direto e não passa por ele. Como o campo só é limpo depois do
   // await, dois Enters numa rede lenta mandavam a mesma mensagem duas vezes
   // para o cliente. O ref tranca na hora; o estado `sending` sozinho depende de
-  // um novo render para valer.
-  const sendingRef = useRef(false);
+  // um novo render para valer. Guarda as conversas com envio em andamento.
+  const enviandoRef = useRef(new Set());
   const contentRef = useRef('');
   const draftsRef = useRef(new Map());
   const currentConversationRef = useRef(conversationId);
@@ -245,6 +250,10 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
+  function definirErro(alvo, texto) {
+    setErros((atual) => ({ ...atual, [alvo]: texto }));
+  }
+
   function clearAttachment() {
     setFile(null);
     setFileIsRecording(false);
@@ -272,7 +281,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
   }
 
   async function startRecording() {
-    setError(null);
+    definirErro(conversationId, null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = pickSupportedAudioMimeType();
@@ -297,7 +306,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
     } catch (err) {
-      setError('Não foi possível acessar o microfone');
+      definirErro(conversationId, 'Não foi possível acessar o microfone');
     }
   }
 
@@ -339,20 +348,25 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
 
   async function submit() {
     if (!content.trim() && !file) return;
-    if (sendingRef.current) return;
-    sendingRef.current = true;
-    setSending(true);
-    setError(null);
+    const origem = conversationId;
+    if (enviandoRef.current.has(origem)) return;
+    enviandoRef.current.add(origem);
+    setEnviandoEm((ids) => [...ids, origem]);
+    definirErro(origem, null);
     try {
       await onSend(content, file, replyingTo ? replyingTo.id : null, fileIsRecording);
-      draftsRef.current.delete(conversationId);
-      setContent('');
-      clearAttachment();
+      draftsRef.current.delete(origem);
+      // Se o atendente já está em outra conversa, o campo e o anexo na tela são
+      // dela: não se limpa nada ali.
+      if (currentConversationRef.current === origem) {
+        setContent('');
+        clearAttachment();
+      }
     } catch (err) {
-      setError(descreverErro(err, 'Falha ao enviar mensagem'));
+      definirErro(origem, descreverErro(err, 'Falha ao enviar mensagem'));
     } finally {
-      sendingRef.current = false;
-      setSending(false);
+      enviandoRef.current.delete(origem);
+      setEnviandoEm((ids) => ids.filter((id) => id !== origem));
     }
   }
 

@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MessageInput from './MessageInput';
 
@@ -479,6 +479,102 @@ describe('gravação em andamento na hora da troca', () => {
     rerender(<MessageInput conversationId="c2" onSend={vi.fn()} />);
 
     await waitFor(() => expect(fakeTrack.stop).toHaveBeenCalled());
+  });
+});
+
+// O componente não remonta ao trocar de conversa. Com um `sending` só, um envio
+// lento em A trancava a caixa de B (o Enter voltava calado, o botão ficava
+// desabilitado) e, ao terminar, apagava o texto e o anexo que já estavam em B.
+// A trava é por conversa — e nada é reenviado sozinho: o POST não é idempotente.
+describe('envio em andamento na hora da troca de conversa', () => {
+  function envioLento() {
+    const envios = [];
+    const onSend = vi.fn().mockImplementation(
+      () => new Promise((resolve, reject) => {
+        envios.push({ resolve, reject });
+      })
+    );
+    return { onSend, envios };
+  }
+
+  test('um envio lento em A não tranca o campo de B', async () => {
+    const { onSend } = envioLento();
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={onSend} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
+    await userEvent.type(campo, 'Para A{Enter}');
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+
+    rerender(<MessageInput conversationId="c2" onSend={onSend} />);
+    await userEvent.type(campo, 'Para B');
+    expect(screen.getByRole('button', { name: /^enviar$/i })).toBeEnabled();
+    fireEvent.keyDown(campo, { key: 'Enter' });
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(2));
+    expect(onSend).toHaveBeenLastCalledWith('Para B', null, null, false);
+  });
+
+  test('o fim do envio de A não apaga o texto nem o anexo que estão em B', async () => {
+    const { onSend, envios } = envioLento();
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={onSend} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
+    await userEvent.type(campo, 'Para A{Enter}');
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+
+    rerender(<MessageInput conversationId="c2" onSend={onSend} />);
+    await userEvent.type(campo, 'Rascunho de B');
+    fireEvent.paste(campo, {
+      clipboardData: {
+        items: [{ kind: 'file', type: 'image/png', getAsFile: () => new File(['x'], 'p.png', { type: 'image/png' }) }],
+        getData: () => '',
+      },
+    });
+    await screen.findByRole('button', { name: /remover/i });
+
+    await act(async () => {
+      envios[0].resolve({});
+    });
+
+    expect(campo).toHaveValue('Rascunho de B');
+    expect(screen.getByRole('button', { name: /remover/i })).toBeInTheDocument();
+  });
+
+  test('a falha do envio de A aparece em A, não em B, e não reenvia sozinha', async () => {
+    const { onSend, envios } = envioLento();
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={onSend} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
+    await userEvent.type(campo, 'Para A{Enter}');
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+
+    rerender(<MessageInput conversationId="c2" onSend={onSend} />);
+    await act(async () => {
+      envios[0].reject(new Error('rede'));
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    rerender(<MessageInput conversationId="c1" onSend={onSend} />);
+    expect(screen.getByRole('alert')).toHaveTextContent(/falha ao enviar mensagem/i);
+    // O texto volta para A, para o atendente decidir se tenta de novo.
+    expect(campo).toHaveValue('Para A');
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  test('voltar para A com o envio ainda pendente mantém A trancado', async () => {
+    const { onSend, envios } = envioLento();
+    const { rerender } = render(<MessageInput conversationId="c1" onSend={onSend} />);
+    const campo = screen.getByPlaceholderText('Digite uma mensagem…');
+    await userEvent.type(campo, 'Para A{Enter}');
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+
+    rerender(<MessageInput conversationId="c2" onSend={onSend} />);
+    rerender(<MessageInput conversationId="c1" onSend={onSend} />);
+    fireEvent.keyDown(campo, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /^enviar$/i })).toBeDisabled();
+
+    await act(async () => {
+      envios[0].resolve({});
+    });
+    expect(campo).toHaveValue('');
   });
 });
 

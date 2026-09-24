@@ -993,7 +993,10 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
       {alertDialog}
       {sgpPanelOpen ? (
         <div className="conv-painel-slot" id="conv-painel-sgp">
+        {/* Um painel por conversa: sem a key ele só recebia um initialCpf novo
+            e carregava para B o cliente, a fatura e o "enviado" de A. */}
         <SgpLookupPanel
+          key={conversation.id}
           onSendMessage={(content) => sendMessage(content)}
           onSendPdf={handleSendSgpPdf}
           onSendPix={handleSendSgpPix}

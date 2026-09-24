@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { getMessages, sendMessage as apiSendMessage } from '../services/api';
@@ -28,10 +28,19 @@ export function useConversationMessages(conversationId) {
   const [reloadToken, setReloadToken] = useState(0);
   const [temAnteriores, setTemAnteriores] = useState(false);
   const [carregandoAnteriores, setCarregandoAnteriores] = useState(false);
+  // O hook não remonta ao trocar de conversa: a resposta de um pedido feito em
+  // A pode voltar com B na tela. Quem responde depois de um await confere a
+  // conversa aberta (envio) ou a abertura da lista (anteriores) antes de mexer
+  // no estado.
+  const conversaAbertaRef = useRef(conversationId);
+  const aberturaRef = useRef(0);
 
   useEffect(() => {
+    conversaAbertaRef.current = conversationId;
+    aberturaRef.current += 1;
     setMessages([]);
     setTemAnteriores(false);
+    setCarregandoAnteriores(false);
     if (!conversationId || !token) {
       setStatus('ready');
       return undefined;
@@ -70,15 +79,20 @@ export function useConversationMessages(conversationId) {
   // mais irrita. O botão também não briga com o scroll até o fim já homologado
   // na abertura da conversa.
   const carregarAnteriores = useCallback(() => {
-    if (!conversationId || !token) return Promise.resolve();
+    // O cursor sai da lista do render em que o botão foi clicado — a que está
+    // na tela. Ele era lido de dentro de um updater de setMessages logo depois
+    // de setCarregandoAnteriores(true): com atualização pendente na fibra, o
+    // React 18 não roda o updater na hora, o cursor saía undefined e o pedido
+    // repetia o da abertura (?limit=51).
+    const cursor = messages[0] && messages[0].id;
+    if (!conversationId || !token || !cursor) return Promise.resolve();
+    const abertura = aberturaRef.current;
     setCarregandoAnteriores(true);
-    let cursor;
-    setMessages((prev) => {
-      cursor = prev[0] && prev[0].id;
-      return prev;
-    });
     return getMessages(conversationId, token, { limit: POR_PAGINA + 1, before: cursor })
       .then((lista) => {
+        // Trocou de conversa, ou esta foi reaberta, no meio do pedido: o trecho
+        // pertence a uma lista que não está mais na tela.
+        if (aberturaRef.current !== abertura) return;
         const sobrou = lista.length > POR_PAGINA;
         const trecho = sobrou ? lista.slice(1) : lista;
         // Pelo id: um lote que se sobreponha ao que já está na tela — mensagem
@@ -94,8 +108,10 @@ export function useConversationMessages(conversationId) {
         // Falhar aqui não pode apagar o que já está na tela: o histórico
         // continua lendo-se normalmente, e o botão segue disponível.
       })
-      .finally(() => setCarregandoAnteriores(false));
-  }, [conversationId, token]);
+      .finally(() => {
+        if (aberturaRef.current === abertura) setCarregandoAnteriores(false);
+      });
+  }, [conversationId, token, messages]);
 
   useEffect(() => {
     if (!socket || !conversationId) return undefined;
@@ -148,14 +164,20 @@ export function useConversationMessages(conversationId) {
     };
   }, [socket, conversationId]);
 
+  // Quem chama depois de um await (os envios do SGP no ConversationView) pode
+  // estar entregando a mensagem de uma conversa que já saiu da tela. Toda
+  // mensagem da API traz conversationId; a de outra conversa não entra aqui.
   const appendMessage = useCallback((message) => {
+    if (message && message.conversationId && message.conversationId !== conversaAbertaRef.current) return;
     setMessages((prev) => [...prev, message]);
   }, []);
 
   const sendMessage = useCallback(
     async (content, file, repliedToMessageId, isVoiceNote) => {
       const created = await apiSendMessage(conversationId, content, token, file, repliedToMessageId, isVoiceNote);
-      appendMessage(created);
+      // Continua enviada para a conversa em que o envio começou; só não vira
+      // bolha na que estiver aberta agora, se o atendente trocou no meio.
+      if (conversaAbertaRef.current === conversationId) appendMessage(created);
       return created;
     },
     [conversationId, token, appendMessage]

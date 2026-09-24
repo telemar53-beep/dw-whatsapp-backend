@@ -309,3 +309,208 @@ describe('useConversationMessages', () => {
     expect(result.current.messages[0].transcription).toBeUndefined();
   });
 });
+
+// Uma promessa que o teste resolve na hora que quiser: é assim que se monta a
+// corrida "a resposta chegou depois de o atendente trocar de conversa".
+function adiado() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+const lote = (prefixo, n) => Array.from({ length: n }, (_, i) => ({ id: `${prefixo}${i + 1}` }));
+
+describe('carregar mensagens anteriores', () => {
+  // O cursor era lido de dentro de um updater de setMessages, logo depois de
+  // setCarregandoAnteriores(true). Com uma atualização já pendente na fibra, o
+  // React 18 não executa o updater na hora: o cursor saía undefined, o
+  // getMessages descartava o `before` e a chamada repetia a da abertura
+  // (?limit=51). O botão existia e não trazia nada.
+  test('pede o trecho anterior à mensagem mais antiga que está na tela', async () => {
+    api.getMessages.mockResolvedValueOnce(lote('a', 51)).mockResolvedValueOnce(lote('o', 51));
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(50));
+    expect(result.current.messages[0].id).toBe('a2');
+    expect(result.current.temAnteriores).toBe(true);
+
+    await act(() => result.current.carregarAnteriores());
+
+    expect(api.getMessages).toHaveBeenLastCalledWith('conv-1', 'tok-123', { limit: 51, before: 'a2' });
+    expect(result.current.messages).toHaveLength(100);
+    expect(result.current.messages[0].id).toBe('o2');
+    expect(result.current.messages[50].id).toBe('a2');
+    expect(result.current.temAnteriores).toBe(true);
+    expect(result.current.carregandoAnteriores).toBe(false);
+  });
+
+  test('trocar de conversa com o pedido pendente não deixa a nova em "Carregando…"', async () => {
+    const anterioresDeA = adiado();
+    api.getMessages
+      .mockResolvedValueOnce(lote('a', 51))
+      .mockReturnValueOnce(anterioresDeA.promise)
+      .mockResolvedValueOnce(lote('b', 51));
+    const { result, rerender } = renderHook(({ id }) => useConversationMessages(id), {
+      initialProps: { id: 'conv-A' },
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(50));
+
+    let pedido;
+    act(() => {
+      pedido = result.current.carregarAnteriores();
+    });
+    expect(result.current.carregandoAnteriores).toBe(true);
+
+    rerender({ id: 'conv-B' });
+    await waitFor(() => expect(result.current.messages[0] && result.current.messages[0].id).toBe('b2'));
+
+    // O botão de B não pode nascer desabilitado pelo pedido de A.
+    expect(result.current.carregandoAnteriores).toBe(false);
+
+    await act(async () => {
+      anterioresDeA.resolve(lote('velhaDeA', 51));
+      await pedido;
+    });
+    expect(result.current.carregandoAnteriores).toBe(false);
+  });
+
+  test('a resposta atrasada de A não entra na lista de B nem acende o botão de B', async () => {
+    const anterioresDeA = adiado();
+    api.getMessages
+      .mockResolvedValueOnce(lote('a', 51))
+      .mockReturnValueOnce(anterioresDeA.promise)
+      .mockResolvedValueOnce(lote('b', 3));
+    const { result, rerender } = renderHook(({ id }) => useConversationMessages(id), {
+      initialProps: { id: 'conv-A' },
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(50));
+
+    let pedido;
+    act(() => {
+      pedido = result.current.carregarAnteriores();
+    });
+    rerender({ id: 'conv-B' });
+    await waitFor(() => expect(result.current.messages.map((m) => m.id)).toEqual(['b1', 'b2', 'b3']));
+    expect(result.current.temAnteriores).toBe(false);
+
+    await act(async () => {
+      anterioresDeA.resolve(lote('velhaDeA', 51));
+      await pedido;
+    });
+
+    expect(result.current.messages.map((m) => m.id)).toEqual(['b1', 'b2', 'b3']);
+    expect(result.current.temAnteriores).toBe(false);
+  });
+
+  // Ir para B e voltar para A recarrega A: o pedido feito na visita anterior
+  // foi calculado sobre uma lista que não existe mais, e juntá-lo à nova abriria
+  // um buraco na timeline se chegou mensagem no meio.
+  test('o pedido feito numa visita anterior não entra na conversa reaberta', async () => {
+    const anterioresDaPrimeiraVisita = adiado();
+    api.getMessages
+      .mockResolvedValueOnce(lote('a', 51))
+      .mockReturnValueOnce(anterioresDaPrimeiraVisita.promise)
+      .mockResolvedValueOnce(lote('b', 3))
+      .mockResolvedValueOnce(lote('a', 51));
+    const { result, rerender } = renderHook(({ id }) => useConversationMessages(id), {
+      initialProps: { id: 'conv-A' },
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(50));
+
+    let pedido;
+    act(() => {
+      pedido = result.current.carregarAnteriores();
+    });
+    rerender({ id: 'conv-B' });
+    await waitFor(() => expect(result.current.messages).toHaveLength(3));
+    rerender({ id: 'conv-A' });
+    await waitFor(() => expect(result.current.messages).toHaveLength(50));
+
+    await act(async () => {
+      anterioresDaPrimeiraVisita.resolve(lote('velha', 51));
+      await pedido;
+    });
+
+    expect(result.current.messages).toHaveLength(50);
+    expect(result.current.messages[0].id).toBe('a2');
+  });
+});
+
+describe('envio que termina com outra conversa aberta', () => {
+  test('a resposta do envio de A não vira bolha na conversa B', async () => {
+    const envio = adiado();
+    api.getMessages
+      .mockResolvedValueOnce([{ id: 'a1', conversationId: 'conv-A' }])
+      .mockResolvedValueOnce([{ id: 'b1', conversationId: 'conv-B' }]);
+    api.sendMessage.mockReturnValueOnce(envio.promise);
+    const { result, rerender } = renderHook(({ id }) => useConversationMessages(id), {
+      initialProps: { id: 'conv-A' },
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    let enviando;
+    act(() => {
+      enviando = result.current.sendMessage('texto para A');
+    });
+    rerender({ id: 'conv-B' });
+    await waitFor(() => expect(result.current.messages.map((m) => m.id)).toEqual(['b1']));
+
+    let criada;
+    await act(async () => {
+      envio.resolve({ id: 'enviada-em-A', conversationId: 'conv-A', content: 'texto para A' });
+      criada = await enviando;
+    });
+
+    // Continua enviada para A (é o certo) e quem chamou recebe a mensagem...
+    expect(api.sendMessage).toHaveBeenCalledWith('conv-A', 'texto para A', 'tok-123', undefined, undefined, undefined);
+    expect(criada).toEqual({ id: 'enviada-em-A', conversationId: 'conv-A', content: 'texto para A' });
+    // ...mas a bolha não aparece em B.
+    expect(result.current.messages.map((m) => m.id)).toEqual(['b1']);
+  });
+
+  test('appendMessage ignora uma mensagem que pertence a outra conversa', async () => {
+    api.getMessages.mockResolvedValue([{ id: 'b1', conversationId: 'conv-B' }]);
+    const { result } = renderHook(() => useConversationMessages('conv-B'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    act(() => {
+      result.current.appendMessage({ id: 'pix-de-A', conversationId: 'conv-A', messageType: 'pix' });
+    });
+
+    expect(result.current.messages.map((m) => m.id)).toEqual(['b1']);
+  });
+
+  // Guarda de regressão: a trava é pela conversa, não pela "visita". Quem sai e
+  // volta para A antes de o envio terminar tem de ver a bolha em A.
+  test('o envio de A que termina depois de voltar para A aparece em A', async () => {
+    const envio = adiado();
+    api.getMessages
+      .mockResolvedValueOnce([{ id: 'a1', conversationId: 'conv-A' }])
+      .mockResolvedValueOnce([{ id: 'b1', conversationId: 'conv-B' }])
+      .mockResolvedValueOnce([{ id: 'a1', conversationId: 'conv-A' }]);
+    api.sendMessage.mockReturnValueOnce(envio.promise);
+    const { result, rerender } = renderHook(({ id }) => useConversationMessages(id), {
+      initialProps: { id: 'conv-A' },
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    let enviando;
+    act(() => {
+      enviando = result.current.sendMessage('texto para A');
+    });
+    rerender({ id: 'conv-B' });
+    await waitFor(() => expect(result.current.messages.map((m) => m.id)).toEqual(['b1']));
+    rerender({ id: 'conv-A' });
+    await waitFor(() => expect(result.current.messages.map((m) => m.id)).toEqual(['a1']));
+
+    await act(async () => {
+      envio.resolve({ id: 'enviada-em-A', conversationId: 'conv-A', content: 'texto para A' });
+      await enviando;
+    });
+
+    expect(result.current.messages.map((m) => m.id)).toEqual(['a1', 'enviada-em-A']);
+  });
+});

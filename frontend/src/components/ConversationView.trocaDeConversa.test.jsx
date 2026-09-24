@@ -91,6 +91,31 @@ describe('carregar mensagens anteriores pela tela', () => {
     expect(api.getMessages).toHaveBeenLastCalledWith('conv-A', 'tok-123', { limit: 51, before: 'nova2' });
     expect(await screen.findByText('velha 2')).toBeInTheDocument();
   });
+
+  // Defeito que a E1 expôs: a linha do tempo rolava para o fim sempre que o
+  // NÚMERO de mensagens mudava. Com o "carregar anteriores" funcionando, quem
+  // clicava no topo era jogado para o fim no mesmo instante em que as
+  // anteriores entravam, sem ver o que carregou.
+  test('as anteriores entram sem jogar a linha do tempo para o fim', async () => {
+    const lote = (prefixo, n) =>
+      Array.from({ length: n }, (_, i) => ({ id: `${prefixo}${i + 1}`, conversationId: 'conv-A', direction: 'inbound', content: `${prefixo} ${i + 1}` }));
+    api.getMessages.mockResolvedValueOnce(lote('nova', 51)).mockResolvedValueOnce(lote('velha', 51));
+    const rolarAteOFim = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = rolarAteOFim;
+    try {
+      render(mostrar(A_SEM_SGP));
+      const botao = await screen.findByRole('button', { name: 'Carregar mensagens anteriores' });
+      const chamadasAntesDoClique = rolarAteOFim.mock.calls.length;
+
+      await userEvent.click(botao);
+      expect(await screen.findByText('velha 2')).toBeInTheDocument();
+
+      expect(rolarAteOFim.mock.calls.length).toBe(chamadasAntesDoClique);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
 });
 
 describe('trocar de conversa com a consulta do SGP no caminho', () => {

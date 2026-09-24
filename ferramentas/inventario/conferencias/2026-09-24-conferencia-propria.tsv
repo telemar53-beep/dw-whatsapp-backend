@@ -1,0 +1,41 @@
+id	status	evidencia
+ACS-GLB-15	confere	RotaLazy.falhou (:30, :33-35) só volta com reload; lazyEl (App.jsx:67-73) sem key: rotas irmãs reaproveitam a instância
+ACS-GLB-16	confere	index.html:52 window.addEventListener('error') sem captura; erro de download de <script> não borbulha
+PRM-WAE-02	confere	WaDialog.jsx:30 <p role="alert">
+CV-SGP-32	confere	feedback do SgpLookupPanel (:232-241) desmonta com o painel ou com a nova busca no meio do runAction
+CV-SGP-33	confere	sgp-query.routes.js:41-52 só confere assignedAgentId; closeConversation (conversation.repository.js:133) não limpa o dono; conversations.routes.js:302-303 recusa encerrada
+CV-PNL-08	confere	dashboard.css só é importada pela DashboardPage (rota lazy); modal fora da mesa sem as regras
+MSG-CMP-32	confere	ConversationView.jsx:475 setReplyingTo(null) depois do await do envio de A
+ATD-RT-17	confere	conversations.routes.js:561-563 queue:new para não-silent sem olhar dono/status; useQueue.onNew acrescenta tudo (:29-37)
+CVM-ENC-14	confere	overlays.css:96-97 largura por :has(.dialog-closed-content ul)
+ATD-LAY-15	confere	listaAberta (DashboardPage.jsx:63) só volta a false ao escolher item ou em Voltar à conversa (:175)
+CV-EDC-13	confere	Cancelar (:139) fecha com o salvar no ar; onSaved depois do await (:52-60); erro (:62) some
+CV-TPL-15	confere	Cancelar (:147-153) fecha com o envio no ar; erro (:47) some
+CV-AVA-06	confere	AgentAvatar.falhou (:24) boolean sem reset; ContactAvatar compara failedPath (:33)
+CVM-MOD-10	confere	ConversationView.jsx:334 desiste do ESC com qualquer [data-dialog]; dialogStack.js:42-50 fecha o topo (o modal)
+SUP-ENC-12	confere	useAttendanceDashboard.js:64-66 só soma
+CFG-CON-50	confere	admin-channels.routes.js:223-224 'wabaId must be a non-empty string' sem tradução; handleSaveWaba fecha o editor depois do await (:172-178)
+CFG-CON-51	confere	admin-channels.routes.js:191-192 'name must be 120 characters or fewer' sem tradução; handleSaveName fecha (:180-183)
+CFG-CON-52	confere	ChannelConnectionTab.jsx:28-31 estados do formulário não são zerados no setOpen(false) (:40)
+CFG-NOVO-16	confere	admin-channels.routes.js:71 só testa presença; nome com espaços passa
+CFG-EMP-18	confere	admin-company.routes.js:51-58 frases sem tradução
+CFG-CAD-MOT-23	confere	aviso só na confirmação (ReasonsAdminTab.jsx:76); chip compara só o id (:255)
+CFG-HOR-22	confere	BusinessHoursSection.jsx:40-54: Cancelar (:106) não desabilitado; sucesso grava; erro fica no formulário fechado
+CFG-MSG-AE-27	confere	mesmo padrão de CFG-HOR-22, conferido no padrão
+CFG-MSG-BV-23	confere	mesmo padrão de CFG-HOR-22, conferido no padrão
+CFG-MSG-AC-22	confere	mesmo padrão de CFG-HOR-22, conferido no padrão
+CFG-MSG-RR-29	confere	mesmo padrão de CFG-HOR-22, conferido no padrão
+CFG-MSG-TPL-77	confere	TemplatesAdminTab.jsx:587 filtro só age com channel.wabaId e template.wabaId
+CFG-MSG-TPL-78	confere	WaDialog (:752, :767) fecha com o envio no ar
+CFG-MSG-TPL-79	confere	template.service.js:135 grava match.category sem validar; CHECK (category IN ('MARKETING','UTILITY')) na migração 1788750000000:9
+CFG-MSG-AE-25	confere	AssignmentMessageSection.jsx:119-127 não lê agent.active
+CFG-MSG-AE-26	confere	useChannels(true) = includeHidden false (hooks/useChannels.js:5): oculto some da lista e fica em channelIds
+CFG-AUT-MENU-33	confere	settings.css:83 @container(min-width:800px)
+CFG-AUT-NOT-17	confere	settings.css:109-111 grade; :208 @container(max-width:650px) volta a 1 coluna
+CFG-INT-SGPE-28	confere	settings.css:151 @container(min-width:950px)
+MSG-IMG-06	corrigida	intervalo 415-500 estreitado para :415-421 (aria-label "Visualizar imagem" na 421) e :439 (Fechar imagem)
+MSG-AUD-01	corrigida	intervalo 137-207 estreitado para :137-145 ("Reproduzir áudio" na 143) e :14 (BAR_COUNT 38)
+CAM-NOV-17	corrigida	intervalo 111-178 estreitado para :111-116 ("Revisar campanha" na 116) e :163-164 (Voltar)
+ATD-INI-29	confere	StartConversationModal.jsx:75-77 .then sem guarda de canal; conversations.routes.js:169-171 frase sem tradução
+ATD-INI-24	corrigida	a conferência marcou sem defeito; há caminho real para a frase crua (ATD-INI-29)
+ACS-LOG-05	corrigida	endereço de antes de 0cdbebd: LoginPage tem 136 linhas; botão na 120, form na 103

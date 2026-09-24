@@ -1,0 +1,13 @@
+{
+  "name": "dw-medicao-interface",
+  "private": true,
+  "type": "module",
+  "description": "Medição do build de produção do frontend por CDP. Ferramenta de desenvolvimento: fora do bundle e fora do frontend/.",
+  "scripts": {
+    "medir": "node medir.mjs",
+    "comparar": "node comparar.mjs"
+  },
+  "engines": {
+    "node": ">=22.2"
+  }
+}

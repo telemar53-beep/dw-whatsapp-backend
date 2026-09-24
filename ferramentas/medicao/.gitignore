@@ -1,0 +1,4 @@
+# Saidas de cada rodada (prints, JSON, build gerado com --build) e perfis
+# temporarios do Chrome. So o codigo do harness vai para o Git.
+resultados/
+perfis/

@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 const LINHA = '[data-mensagem-id]';
+const TECLAS_DE_ROLAGEM = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
+const CAMPO = 'input, textarea, select, [contenteditable="true"]';
+const CAMPO_OU_BOTAO = `${CAMPO}, button, a[href], [role="button"]`;
 
-// Sem caixa (display:none por um quadro, na troca de layout da mesa), toda
-// medida sai zerada e todo evento de rolagem é do navegador, não de alguém.
+// Sem caixa (display:none: um quadro na troca de layout da mesa, ou todo o
+// tempo em que o painel ocupa a coluna no modo alternado), toda medida sai
+// zerada e todo evento de rolagem é do navegador, não de alguém.
 function temCaixa(linhaDoTempo) {
   return !linhaDoTempo.getClientRects || linhaDoTempo.getClientRects().length > 0;
 }
@@ -90,7 +94,9 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
   const segurar = useCallback(
     (linhaDoTempo, ancora) => {
       soltar();
-      const segura = { ancora, scrollTop: linhaDoTempo.scrollTop, observador: null };
+      // Sem caixa, o scrollTop lido é 0 e não diz nada: fica em aberto até o
+      // ResizeObserver repor a âncora quando a linha do tempo voltar.
+      const segura = { ancora, scrollTop: temCaixa(linhaDoTempo) ? linhaDoTempo.scrollTop : null, observador: null };
       seguraRef.current = segura;
       acertarAncoragemNativa();
       if (typeof ResizeObserver === 'undefined') return;
@@ -127,19 +133,37 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
       if (!temCaixa(linhaDoTempo)) return;
       // Rolagem que não foi a nossa correção = o usuário assumiu.
       const segura = seguraRef.current;
-      if (segura && Math.abs(linhaDoTempo.scrollTop - segura.scrollTop) > 1) soltar();
+      if (segura && segura.scrollTop !== null && Math.abs(linhaDoTempo.scrollTop - segura.scrollTop) > 1) soltar();
       const pedido = pedidoRef.current;
       if (pedido) pedido.ancora = primeiraVisivel(linhaDoTempo);
     };
-    // Roda, toque, clique e tecla também são assumir — e, no iOS, corrigir
-    // scrollTop durante a inércia do dedo corta o gesto.
+    // Roda e toque são o usuário rolando — e, no iOS, corrigir scrollTop
+    // durante a inércia do dedo corta o gesto.
     const aoMexer = () => soltar();
-    const MEXER = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+    // Clique e tecla, só os que rolam: apertar a barra de rolagem (o alvo é a
+    // própria linha do tempo) e as teclas de rolagem. Clicar no conteúdo (tocar
+    // um áudio, abrir uma foto, Responder) NÃO é rolar: soltar ali deixava a
+    // foto que ainda carrega acima empurrar a leitura no Safari (medido: 214 px).
+    const aoApertar = (evento) => {
+      if (evento && evento.target === linhaDoTempo) soltar();
+    };
+    const aoTeclar = (evento) => {
+      if (!evento || !TECLAS_DE_ROLAGEM.has(evento.key)) return;
+      const alvo = evento.target;
+      if (alvo && alvo.closest && alvo.closest(evento.key === ' ' ? CAMPO_OU_BOTAO : CAMPO)) return;
+      soltar();
+    };
     linhaDoTempo.addEventListener('scroll', aoRolar, { passive: true });
-    MEXER.forEach((tipo) => linhaDoTempo.addEventListener(tipo, aoMexer, { passive: true }));
+    linhaDoTempo.addEventListener('wheel', aoMexer, { passive: true });
+    linhaDoTempo.addEventListener('touchstart', aoMexer, { passive: true });
+    linhaDoTempo.addEventListener('pointerdown', aoApertar, { passive: true });
+    linhaDoTempo.addEventListener('keydown', aoTeclar);
     return () => {
       linhaDoTempo.removeEventListener('scroll', aoRolar);
-      MEXER.forEach((tipo) => linhaDoTempo.removeEventListener(tipo, aoMexer));
+      linhaDoTempo.removeEventListener('wheel', aoMexer);
+      linhaDoTempo.removeEventListener('touchstart', aoMexer);
+      linhaDoTempo.removeEventListener('pointerdown', aoApertar);
+      linhaDoTempo.removeEventListener('keydown', aoTeclar);
       soltar();
     };
   }, [linhaDoTempoRef, soltar]);

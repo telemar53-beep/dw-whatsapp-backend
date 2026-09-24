@@ -81,7 +81,8 @@ function cenario() {
       return linha;
     });
   }
-  const disparar = (tipo) => ouvintes[tipo].forEach((fn) => fn());
+  // Sem evento, o alvo é a própria linha do tempo (roda, toque, barra de rolagem).
+  const disparar = (tipo, evento = { target: linhaDoTempo }) => ouvintes[tipo].forEach((fn) => fn(evento));
   // O fim de verdade: a última linha encostada embaixo da tela.
   const fim = {
     scrollIntoView: vi.fn(() => {
@@ -272,19 +273,76 @@ describe('useRolagemDaLinhaDoTempo', () => {
     expect(c.linhaDoTempo.scrollTop).toBe(scrollTopDoUsuario);
   });
 
-  test.each(['wheel', 'touchstart', 'pointerdown', 'keydown'])('%s na linha do tempo também solta a âncora', (tipo) => {
+  // Um alvo dentro de uma bolha: um botão (tocar áudio, Responder) ou um texto.
+  const noConteudo = (tag = 'button') => ({ tagName: tag, closest: (sel) => (sel.includes(tag) ? {} : null) });
+
+  test.each([
+    ['a roda', 'wheel', undefined],
+    ['o toque', 'touchstart', undefined],
+    ['o clique na barra de rolagem', 'pointerdown', undefined],
+    ['PageDown', 'keydown', { key: 'PageDown', target: { closest: () => null } }],
+    ['a seta para cima', 'keydown', { key: 'ArrowUp', target: { closest: () => null } }],
+    ['o Espaço fora de botão e campo', 'keydown', { key: ' ', target: { closest: () => null } }],
+  ])('%s solta a âncora', (_, tipo, evento) => {
     const c = cenario();
     const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
     c.rolar(0);
     t.clicarEmAnteriores();
     t.chegaram(msgs('m1', 'm2', 'm3', 'm4'));
 
-    c.disparar(tipo);
+    if (evento) c.disparar(tipo, evento);
+    else c.disparar(tipo);
     const scrollTop = c.linhaDoTempo.scrollTop;
     c.crescer('m1', 214);
 
     expect(c.linhaDoTempo.scrollTop).toBe(scrollTop);
     expect(c.linhaDoTempo.style.overflowAnchor).toBe('');
+  });
+
+  // 3ª revisão, medido no Chrome imitando o Safari: soltar em QUALQUER clique ou
+  // tecla deixava a foto que ainda carregava acima empurrar a leitura 214 px
+  // quando o atendente tocava um áudio, abria uma foto ou clicava em Responder.
+  test.each([
+    ['o clique num botão de uma bolha', 'pointerdown', { target: noConteudo('button') }],
+    ['o clique num texto de uma bolha', 'pointerdown', { target: noConteudo('p') }],
+    ['uma tecla que não rola (Ctrl+C)', 'keydown', { key: 'c', ctrlKey: true, target: { closest: () => null } }],
+    ['o Espaço num botão', 'keydown', { key: ' ', target: noConteudo('button') }],
+  ])('%s NÃO solta a âncora', (_, tipo, evento) => {
+    const c = cenario();
+    const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
+    c.rolar(0);
+    const m3Antes = c.naTela('m3');
+    t.clicarEmAnteriores();
+    t.chegaram(msgs('m1', 'm2', 'm3', 'm4'));
+
+    c.disparar(tipo, evento);
+    c.crescer('m1', 214);
+
+    expect(c.naTela('m3')).toBe(m3Antes);
+    expect(c.linhaDoTempo.style.overflowAnchor).toBe('none');
+  });
+
+  // 3ª revisão: no modo alternado a conversa fica escondida enquanto o painel
+  // ocupa a coluna. Se o trecho chega assim, a correção fica para quando ela
+  // voltar — medido no Chrome real: sem isto, a leitura pulava 1102 px.
+  test('o trecho que chega com a linha do tempo escondida volta ao lugar quando ela reaparece', () => {
+    const c = cenario();
+    const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
+    c.rolar(30);
+    const m3Antes = c.naTela('m3');
+    t.clicarEmAnteriores();
+
+    c.esconder(true);
+    c.rolar(0); // escondida, o scrollTop lido é 0
+    t.chegaram(msgs('m1', 'm2', 'm3', 'm4'));
+    c.esconder(false);
+    // Ao mostrar, o navegador pode restaurar a posição com um `scroll` antes de
+    // o ResizeObserver agir: não é o usuário, e não pode soltar a âncora.
+    c.linhaDoTempo.scrollTop = 30;
+    c.ecoar();
+    c.crescer('m1', 0); // as linhas voltam a ter tamanho: o navegador avisa quem observa
+
+    expect(c.naTela('m3')).toBe(m3Antes);
   });
 
   // Medido no Chrome real pela 2ª revisão: na troca de layout da mesa (janela

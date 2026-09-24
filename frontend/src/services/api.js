@@ -20,8 +20,10 @@ const RECUSAS_DE_SESSAO = new Set(['Missing authorization token', 'Invalid or ex
 
 // `credencialNoPedido`: a chamada leva uma senha, e o 401 dela pode ser "senha
 // errada" em vez de "sessão expirada" — a troca de senha responde 401 "Current
-// password is incorrect". Sem isto, errar a senha atual deslogava (PRF-12). Na
-// dúvida (401 sem corpo, ou recusa de sessão), desloga como qualquer 401.
+// password is incorrect" e o login, 401 "Invalid credentials". Sem isto, errar a
+// senha atual deslogava (PRF-12), e errar a senha no /login com uma sessão
+// aberta apagava a sessão. Na dúvida (401 sem corpo, ou recusa de sessão),
+// desloga como qualquer 401.
 export async function apiFetch(path, { method = 'GET', body, token, credencialNoPedido = false } = {}) {
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const headers = {};
@@ -49,7 +51,7 @@ export async function apiFetch(path, { method = 'GET', body, token, credencialNo
 }
 
 export function login(email, password) {
-  return apiFetch('/api/auth/login', { method: 'POST', body: { email, password } });
+  return apiFetch('/api/auth/login', { method: 'POST', body: { email, password }, credencialNoPedido: true });
 }
 
 export function getQueue(token) {

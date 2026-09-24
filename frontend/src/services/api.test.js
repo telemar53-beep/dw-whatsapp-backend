@@ -236,6 +236,22 @@ describe('apiFetch 401 handling', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     setUnauthorizedHandler(null);
   });
+
+  // A mesma porta pelo login: o /login não tem guarda, e errar a senha ali com
+  // uma sessão aberta (401 "Invalid credentials", src/auth/auth.routes.js:19)
+  // apagava a sessão.
+  test('login com e-mail ou senha errados NÃO desloga a sessão aberta', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401('{"error":"Invalid credentials"}'));
+
+    await expect(login('a@dw.com', 'errada')).rejects.toMatchObject({
+      status: 401,
+      body: { error: 'Invalid credentials' },
+    });
+
+    expect(handler).not.toHaveBeenCalled();
+  });
 });
 
 describe('ApiError', () => {

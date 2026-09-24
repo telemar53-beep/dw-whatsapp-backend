@@ -65,12 +65,13 @@
         });
       })();
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Sora e Inter sao auto-hospedadas: ver src/fontes.css.
+         NAO volte a carregar a folha do fonts.googleapis.com daqui. Uma folha
+         de estilo de terceiro no cabecalho bloqueia a primeira pintura, e o
+         tempo desse terceiro passa inteiro para o usuario. Medido na tela de
+         login de producao: com 20 s de atraso no fonts.googleapis.com a tela
+         ficava 20,7 s montada e invisivel; com a mesma folha falhando rapido,
+         1,2 s. Nao e peso, e espera. -->
   </head>
   <body>
     <div id="root"></div>

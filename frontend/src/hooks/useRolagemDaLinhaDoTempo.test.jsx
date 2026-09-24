@@ -44,6 +44,7 @@ function cenario() {
   let ids = [];
   const linhaDoTempo = {
     scrollTop: 0,
+    style: {},
     linhas: [], // [{ id, topo, altura }] no sistema de coordenadas do conteúdo
     getBoundingClientRect: () => ({ top: 0, bottom: 500 }),
     querySelectorAll: vi.fn(() => linhaDoTempo.linhas.map(elemento)),
@@ -273,6 +274,40 @@ describe('useRolagemDaLinhaDoTempo', () => {
     c.fim.scrollIntoView.mockClear();
     t.mostrar({ messages: msgs('m1', 'm2', 'm3', 'm4') });
     expect(c.fim.scrollIntoView).toHaveBeenCalledWith({ block: 'end' });
+  });
+
+  // Medido no Chrome real: a ancoragem nativa escolhia como âncora a foto
+  // parcialmente visível acima da leitura; ao carregar, ela crescia para baixo
+  // e empurrava a leitura 214 px, brigando com a nossa correção. Desligada só
+  // enquanto a nossa trabalha.
+  test('a ancoragem nativa fica desligada do clique até o usuário assumir, e volta depois', () => {
+    const c = cenario();
+    const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
+    expect(c.linhaDoTempo.style.overflowAnchor).toBe('');
+
+    t.clicarEmAnteriores();
+    expect(c.linhaDoTempo.style.overflowAnchor).toBe('none');
+    t.chegaram(msgs('m1', 'm2', 'm3', 'm4'));
+    expect(c.linhaDoTempo.style.overflowAnchor).toBe('none');
+
+    c.rolar(c.linhaDoTempo.scrollTop - 30);
+    expect(c.linhaDoTempo.style.overflowAnchor).toBe('');
+  });
+
+  test('pedido que falha devolve a ancoragem nativa', () => {
+    const c = cenario();
+    const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
+    t.clicarEmAnteriores();
+    t.mostrar({ carregandoAnteriores: false });
+    expect(c.linhaDoTempo.style.overflowAnchor).toBe('');
+  });
+
+  test('trocar de conversa no meio devolve a ancoragem nativa', () => {
+    const c = cenario();
+    const t = montar(c, { messages: msgs('a3', 'a4'), conversationId: 'A' });
+    t.clicarEmAnteriores();
+    t.mostrar({ messages: msgs('b1'), conversationId: 'B', carregandoAnteriores: false });
+    expect(c.linhaDoTempo.style.overflowAnchor).toBe('');
   });
 
   test('mensagem atualizada no lugar (tique, transcrição) não mexe na rolagem', () => {

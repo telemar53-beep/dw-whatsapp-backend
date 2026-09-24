@@ -42,8 +42,15 @@ function reporAncora(linhaDoTempo, ancora) {
  *
  * DEPOIS de ancorar, a âncora continua SEGURA enquanto o conteúdo acima dela
  * cresce (foto e vídeo do trecho novo não reservam altura e carregam depois),
- * até o usuário rolar ou tocar. O Chrome faz isso sozinho (overflow-anchor); o
- * Safari não tem ancoragem nativa, e sem isto a leitura escorregava a cada foto.
+ * até o usuário rolar ou tocar. O Safari não tem ancoragem nativa: sem isto, a
+ * leitura escorregava a cada foto (medido: 2568 px).
+ *
+ * Do clique até o usuário assumir, a ancoragem NATIVA do Chrome fica desligada
+ * na linha do tempo (overflow-anchor: none), e volta depois. Medido no Chrome
+ * real: ela escolhe como âncora a foto parcialmente visível logo acima do que o
+ * atendente lê; quando a foto carrega, cresce para baixo e empurra a leitura
+ * (214 px) — e as duas correções brigavam. Com uma só, o Chrome se comporta
+ * como o Safari, que é o caso provado.
  *
  * useLayoutEffect, e não useEffect: a correção da posição tem de acontecer
  * antes da pintura, senão o conteúdo pisca deslocado por um quadro.
@@ -56,17 +63,27 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
   // Âncora já reposta, segurada até o usuário mexer: { ancora, scrollTop, observador }.
   const seguraRef = useRef(null);
 
+  // A ancoragem nativa do navegador fica desligada enquanto a nossa trabalha
+  // (pedido no ar ou âncora segura), e ligada no resto do tempo.
+  const acertarAncoragemNativa = useCallback(() => {
+    const linhaDoTempo = linhaDoTempoRef.current;
+    if (!linhaDoTempo || !linhaDoTempo.style) return;
+    linhaDoTempo.style.overflowAnchor = pedidoRef.current || seguraRef.current ? 'none' : '';
+  }, [linhaDoTempoRef]);
+
   const soltar = useCallback(() => {
     const segura = seguraRef.current;
     seguraRef.current = null;
     if (segura && segura.observador) segura.observador.disconnect();
-  }, []);
+    acertarAncoragemNativa();
+  }, [acertarAncoragemNativa]);
 
   const segurar = useCallback(
     (linhaDoTempo, ancora) => {
       soltar();
       const segura = { ancora, scrollTop: linhaDoTempo.scrollTop, observador: null };
       seguraRef.current = segura;
+      acertarAncoragemNativa();
       if (typeof ResizeObserver === 'undefined') return;
       // Chega depois do layout e antes da pintura: a correção não pisca.
       segura.observador = new ResizeObserver(() => {
@@ -80,7 +97,7 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
         segura.observador.observe(linha);
       }
     },
-    [soltar]
+    [soltar, acertarAncoragemNativa]
   );
 
   // Chamado no clique de "Carregar mensagens anteriores", antes do pedido sair.
@@ -91,7 +108,8 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
       conversationId,
       ancora: linhaDoTempo && linhaDoTempo.querySelectorAll ? primeiraVisivel(linhaDoTempo) : null,
     };
-  }, [linhaDoTempoRef, conversationId, soltar]);
+    acertarAncoragemNativa();
+  }, [linhaDoTempoRef, conversationId, soltar, acertarAncoragemNativa]);
 
   useEffect(() => {
     const linhaDoTempo = linhaDoTempoRef.current;
@@ -147,8 +165,9 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
     // Pedido que terminou sem trazer nada (falhou, ou o lote já estava todo na
     // tela): não fica pendurado medindo a cada rolagem.
     if (!carregandoAnteriores) pedidoRef.current = null;
+    acertarAncoragemNativa();
     anteriorRef.current = { conversationId, primeiro, ultimo };
-  }, [messages, conversationId, carregandoAnteriores, linhaDoTempoRef, fimRef, soltar, segurar]);
+  }, [messages, conversationId, carregandoAnteriores, linhaDoTempoRef, fimRef, soltar, segurar, acertarAncoragemNativa]);
 
   return { memorizarPosicao };
 }

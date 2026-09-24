@@ -161,6 +161,61 @@ describe('apiFetch 401 handling', () => {
     global.fetch.mockResolvedValue({ ok: false, status: 401, text: () => Promise.resolve('{}') });
     await expect(apiFetch('/api/conversations/queue')).rejects.toMatchObject({ status: 401 });
   });
+
+  // PRF-12: errar a senha atual na troca de senha DESLOGAVA. O backend responde
+  // 401 "Current password is incorrect" (src/auth/auth.routes.js:38), e todo 401
+  // era tratado como sessão expirada. Só 401 de SESSÃO desloga nessa chamada.
+  const resposta401 = (corpo) => ({ ok: false, status: 401, text: () => Promise.resolve(corpo) });
+
+  test('troca de senha com a senha atual errada NÃO desloga', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401('{"error":"Current password is incorrect"}'));
+
+    await expect(changePassword('errada', 'nova12345', 'tok-123')).rejects.toMatchObject({
+      status: 401,
+      body: { error: 'Current password is incorrect' },
+    });
+
+    expect(handler).not.toHaveBeenCalled();
+    setUnauthorizedHandler(null);
+  });
+
+  test.each(['Invalid or expired token', 'Missing authorization token'])(
+    'troca de senha com a sessão inválida ("%s") continua deslogando',
+    async (frase) => {
+      const handler = vi.fn();
+      setUnauthorizedHandler(handler);
+      global.fetch.mockResolvedValue(resposta401(JSON.stringify({ error: frase })));
+
+      await expect(changePassword('atual', 'nova12345', 'tok-velho')).rejects.toMatchObject({ status: 401 });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      setUnauthorizedHandler(null);
+    }
+  );
+
+  test('troca de senha com 401 sem corpo desloga (na dúvida, é sessão)', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401(''));
+
+    await expect(changePassword('atual', 'nova12345', 'tok-123')).rejects.toMatchObject({ status: 401 });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    setUnauthorizedHandler(null);
+  });
+
+  test('fora da troca de senha, todo 401 continua deslogando — inclusive com frase de credencial', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401('{"error":"Current password is incorrect"}'));
+
+    await expect(apiFetch('/api/conversations/queue', { token: 'tok-123' })).rejects.toMatchObject({ status: 401 });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    setUnauthorizedHandler(null);
+  });
 });
 
 describe('ApiError', () => {

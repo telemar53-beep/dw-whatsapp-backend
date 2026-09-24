@@ -14,7 +14,15 @@ export function setUnauthorizedHandler(handler) {
   unauthorizedHandler = handler;
 }
 
-export async function apiFetch(path, { method = 'GET', body, token } = {}) {
+// As duas frases com que o backend recusa uma SESSÃO (src/auth/auth.middleware.js).
+// Qualquer outro 401 de uma chamada que leva credencial é a credencial errada.
+const RECUSAS_DE_SESSAO = new Set(['Missing authorization token', 'Invalid or expired token']);
+
+// `credencialNoPedido`: a chamada leva uma senha, e o 401 dela pode ser "senha
+// errada" em vez de "sessão expirada" — a troca de senha responde 401 "Current
+// password is incorrect". Sem isto, errar a senha atual deslogava (PRF-12). Na
+// dúvida (401 sem corpo, ou recusa de sessão), desloga como qualquer 401.
+export async function apiFetch(path, { method = 'GET', body, token, credencialNoPedido = false } = {}) {
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const headers = {};
   if (!isFormData) {
@@ -31,7 +39,8 @@ export async function apiFetch(path, { method = 'GET', body, token } = {}) {
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    if (response.status === 401 && unauthorizedHandler) {
+    const credencialRecusada = credencialNoPedido && Boolean(data && data.error) && !RECUSAS_DE_SESSAO.has(data.error);
+    if (response.status === 401 && unauthorizedHandler && !credencialRecusada) {
       unauthorizedHandler();
     }
     throw new ApiError(response.status, data);
@@ -193,7 +202,7 @@ export function resetAgentPassword(agentId, token) {
 }
 
 export function changePassword(currentPassword, newPassword, token) {
-  return apiFetch('/api/auth/password', { method: 'PUT', body: { currentPassword, newPassword }, token });
+  return apiFetch('/api/auth/password', { method: 'PUT', body: { currentPassword, newPassword }, token, credencialNoPedido: true });
 }
 
 export function listChannelsForAgent(token) {

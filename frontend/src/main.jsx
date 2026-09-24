@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import './fontes.css';
 import './index.css';
 
 // O boundary fica DENTRO do StrictMode e por fora de tudo o mais: o primeiro

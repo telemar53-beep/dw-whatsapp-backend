@@ -58,7 +58,9 @@ Regra do projeto desde 24/09: saída de subagente não vira requisito sem confer
    a frase no apóstrofo de "channel's". A auditoria dos overlays (grupo A) pegou; a linha voltou
    ao que o auditor tinha escrito.
 5. **Conferência própria de tudo que era novo:** os 34 estados novos, os 3 endereços com
-   intervalo largo demais para a checagem valer (estreitados) e 2 correções pontuais.
+   intervalo largo demais para a checagem valer (estreitados) e 2 correções pontuais. Depois, os
+   **18 estados novos e 3 correções** trazidos pelas auditorias dos overlays da mesa (Apêndice E.6),
+   cada um conferido no código antes de entrar.
 6. **Verificador final** contra uma cópia de \`e5236da\` (nunca contra o disco, que pode estar em
    outra branch): **${fmt(m.total)} estados, 0 falhas, 0 linhas sem prova por script e sem
    conferência humana.** Intervalo "arq:n-m" vale inteiro; ":n" sem arquivo herda o último

@@ -34,7 +34,7 @@ Grava `_verificacao5.tsv` ao lado do script (uma linha por estado) e imprime o r
 
 ## Critério de pronto
 
-`"falha": 0` e `"semProvaESemConferencia": 0`. Em 24/09/2026, na base `e5236da`: 1.690 estados,
+`"falha": 0` e `"semProvaESemConferencia": 0`. Em 24/09/2026, na base `e5236da`: 1.708 estados,
 0 falhas, 0 sem prova e sem conferência.
 
 ## Conferências (trilha de auditoria)
@@ -43,7 +43,7 @@ Grava `_verificacao5.tsv` ao lado do script (uma linha por estado) e imprime o r
 |---|---|
 | `2026-09-24-conferencia-auditor.tsv` | Conferência humana (por subagente) das 1.055 linhas que o script não provava: 422 conferem, 581 corrigidas, 18 erradas no mérito, 34 duplicatas |
 | `2026-09-24-amostra-independente.tsv` | Minha conferência por amostra desse lote (sorteio com semente fixa, todas as erradas no mérito): 58 linhas, 0 erro — lote aceito (a 1ª versão deste registro dizia 1 erro: era defeito do meu script, que cortava a frase no apóstrofo) |
-| `2026-09-24-conferencia-propria.tsv` | Minha conferência de tudo que o subagente escreveu de novo (34 estados), dos intervalos largos e das correções pontuais |
+| `2026-09-24-conferencia-propria.tsv` | Minha conferência de tudo que os subagentes escreveram de novo (34 estados da conferência e 18 das auditorias dos overlays), dos intervalos largos e das correções pontuais |
 
 ## Quando rodar de novo
 

@@ -38,3 +38,24 @@ MSG-AUD-01	corrigida	intervalo 137-207 estreitado para :137-145 ("Reproduzir áu
 CAM-NOV-17	corrigida	intervalo 111-178 estreitado para :111-116 ("Revisar campanha" na 116) e :163-164 (Voltar)
 ATD-INI-29	confere	StartConversationModal.jsx:75-77 .then sem guarda de canal; conversations.routes.js:169-171 recusa; a frase é traduzida (utils/errorMessages.js:76)
 ACS-LOG-05	corrigida	endereço de antes de 0cdbebd: LoginPage tem 136 linhas; botão na 120, form na 103
+ATD-INI-08	corrigida	conversations.routes.js:152 (resolveWhatsAppJid só no Baileys) e :179 (oficial usa o número normalizado); frase incondicional na :173
+CV-HIS-13	corrigida	conversation.repository.js:796 WHERE c.status = closed; statusLabel devolve Finalizado
+CV-CAB-13	corrigida	o botão da :574 chama setEditingContact(true); texto de reserva na :595
+ATD-INI-30	confere	Dialog.alvoDoFocoInicial (:69-82) pega o 1º campo; no mount o select Canal não existe (:124-131); sem data-autofocus
+ATD-INI-31	confere	isOfficialChannel falso sem canal (:54); ramo Baileys :243-245
+ATD-ITEM-27	confere	useConfirm por item (:46); {confirmDialog} dentro do li (:194)
+PRM-CNF-02	confere	ConfirmDialog :21 ariaLabel={title ? undefined : message}, :22 describedBy; useConfirm (:25-35) não passa title
+CV-HIS-19	confere	efeito :85 só foca com selected; Voltar :100 desmonta ao voltar
+CV-HIS-20	confere	LIMIT 50 em conversation.repository.js:798; descrição :91-93 só conta
+MSG-EMO-06	confere	appendEmoji foca o campo (:346); Enter no campo chama submit (:380-384)
+MSG-EMO-07	confere	popovers absolute bottom-full (:534, :562); teto do campo COMPOSER_MAX_VH 0.45 (:22); corte é conta, medir
+MSG-RR-13	confere	role=menu (:559) com AsyncState dentro (:565); Skeleton com role=status (AsyncState.jsx:5)
+PRM-ALR-02	confere	avisar com a frase genérica (:521, :534, :547); useAlert (:8) sem reset; efeito de troca :371-383 não limpa
+MSG-IMG-18	confere	botão fechar absolute right-5 top-4 (:434-441); barra absolute bottom-5 (:470)
+CVM-MOD-11	confere	overlays.css:19-22 fora de @layer (comentário :77); casa textarea do MessageInput dentro de .dw-dialog; medir
+CVM-INF-15	confere	ConversationInfoPanel :25-27 Em andamento; ConversationView :150 Em atendimento
+CVM-ENC-15	confere	formatMessageTime só HH:mm (:38-41) na variante padrão (:222-226)
+PRF-18	confere	form do perfil :154 e da senha :177; Salvar alterações :201 é submit do profile-info-form
+ATD-AVT-08	confere	cartão fixed bottom-5 left-1/2 w-[min(92vw,26rem)] (:24-26); sobreposição por conta, medir
+CAS-SHL-09	confere	role=status em AppShell.jsx:74, SideNav.jsx:146, ConversationView.jsx:691
+CAS-SHL-10	confere	timeout 3000 (AppShell.jsx:29-31); worknav display:none abaixo de 768 (side-nav.css:9)

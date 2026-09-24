@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
+import { useRolagemDaLinhaDoTempo } from '../hooks/useRolagemDaLinhaDoTempo';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useAiSuggestion } from '../hooks/useAiSuggestion';
 import { useCompanyName } from '../hooks/useCompanyName';
@@ -361,6 +362,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const [editedSuggestion, setEditedSuggestion] = useState(null);
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const bottomRef = useRef(null);
+  const linhaDoTempoRef = useRef(null);
 
   // A mesma análise que a triagem faz, pedida pelo atendente sobre a imagem que
   // ele escolheu. Só para quem está com a conversa: a rota também confere isso.
@@ -391,11 +393,15 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     return () => clearInterval(relogio);
   }, [conversation.id]);
 
-  useEffect(() => {
-    if (bottomRef.current && bottomRef.current.scrollIntoView) {
-      bottomRef.current.scrollIntoView({ block: 'end' });
-    }
-  }, [messages.length, conversation.id]);
+  // Fim da conversa na abertura e em mensagem nova; posição de leitura segura
+  // quando o "Carregar mensagens anteriores" põe mensagens por cima.
+  const { memorizarPosicao } = useRolagemDaLinhaDoTempo({
+    linhaDoTempoRef,
+    fimRef: bottomRef,
+    messages,
+    conversationId: conversation.id,
+    carregandoAnteriores,
+  });
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
   const isAdmin = (agent.role === 'admin' || agent.role === 'manager') && conversation.status !== 'closed';
@@ -689,7 +695,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
       </div>}
 
       <p role="status" aria-live="polite" className="sr-only">{avisoDeMensagem}</p>
-      <div className="chat-workspace-timeline chat-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 md:px-8">
+      <div ref={linhaDoTempoRef} className="chat-workspace-timeline chat-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 md:px-8">
         <div className="chat-workspace-system-note mx-auto mb-3 flex w-fit max-w-[90%] items-center gap-1.5 rounded-full bg-white/[0.13] px-4 py-2 text-center text-[13px] leading-[18px] text-chat-muted">
           <span className="shrink-0 text-chat-faint">
             <IconLock size={13} />
@@ -729,7 +735,10 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           <div className="mb-3 flex justify-center">
             <button
               type="button"
-              onClick={carregarAnteriores}
+              onClick={() => {
+                memorizarPosicao();
+                carregarAnteriores();
+              }}
               disabled={carregandoAnteriores}
               className="rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-[12.5px] text-chat-muted transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
@@ -787,6 +796,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           return (
             <div
               key={row.key}
+              data-mensagem-id={message.id}
               className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${row.firstOfGroup ? 'mt-3' : 'mt-[6px]'}`}
             >
               <div

@@ -1,0 +1,516 @@
+{
+  "data": "2026-09-24T14:46:53.491Z",
+  "cenarios": [
+    {
+      "cenario": "appshell",
+      "chunkSegurado": "AppShell-*.js",
+      "chunkAchadoPor": "nome do arquivo",
+      "segurarMs": 5000,
+      "segurados": [
+        {
+          "url": "https://localhost:63478/assets/AppShell-DY4nzMpo.js",
+          "ms": 5000,
+          "em": 182
+        }
+      ],
+      "printAposNavegarMs": 1616,
+      "print": "m6/m6-appshell-1500ms.png",
+      "noMomentoDoPrint": {
+        "performanceNow": 1611.5999999996275,
+        "cascaMontada": false,
+        "barras": 4
+      },
+      "barras": [
+        {
+          "caixa": {
+            "x": 0,
+            "y": 8,
+            "w": 1202.078125,
+            "h": 14
+          },
+          "backgroundColorComputado": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+          "barraHex": "#ffffff",
+          "barraAlpha": 0.08,
+          "opacityAnimadaNoPrint": 0.707653,
+          "animacao": "pulse 2s infinite",
+          "ancestraisComFundo": [],
+          "fundoEfetivo": {
+            "hex": "#ffffff",
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "origem": "nenhum ancestral tem fundo: branco do canvas"
+          },
+          "barraComposta": {
+            "opacidade1": "#ffffff",
+            "opacidadeAtual": "#ffffff"
+          },
+          "contrasteWCAG": {
+            "computado_opacidade1": 1,
+            "computado_opacidadeAtual": 1,
+            "pixels_do_print": 1
+          },
+          "pixels": {
+            "barra": {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "share": 1
+            },
+            "fundoAbaixo": {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "share": 1
+            }
+          }
+        },
+        {
+          "caixa": {
+            "x": 0,
+            "y": 32,
+            "w": 1010.828125,
+            "h": 14
+          },
+          "backgroundColorComputado": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+          "barraHex": "#ffffff",
+          "barraAlpha": 0.08,
+          "opacityAnimadaNoPrint": 0.707653,
+          "animacao": "pulse 2s infinite",
+          "ancestraisComFundo": [],
+          "fundoEfetivo": {
+            "hex": "#ffffff",
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "origem": "nenhum ancestral tem fundo: branco do canvas"
+          },
+          "barraComposta": {
+            "opacidade1": "#ffffff",
+            "opacidadeAtual": "#ffffff"
+          },
+          "contrasteWCAG": {
+            "computado_opacidade1": 1,
+            "computado_opacidadeAtual": 1,
+            "pixels_do_print": 1
+          },
+          "pixels": {
+            "barra": {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "share": 1
+            },
+            "fundoAbaixo": {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "share": 1
+            }
+          }
+        },
+        {
+          "caixa": {
+            "x": 0,
+            "y": 56,
+            "w": 819.59375,
+            "h": 14
+          },
+          "backgroundColorComputado": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+          "barraHex": "#ffffff",
+          "barraAlpha": 0.08,
+          "opacityAnimadaNoPrint": 0.707653,
+          "animacao": "pulse 2s infinite",
+          "ancestraisComFundo": [],
+          "fundoEfetivo": {
+            "hex": "#ffffff",
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "origem": "nenhum ancestral tem fundo: branco do canvas"
+          },
+          "barraComposta": {
+            "opacidade1": "#ffffff",
+            "opacidadeAtual": "#ffffff"
+          },
+          "contrasteWCAG": {
+            "computado_opacidade1": 1,
+            "computado_opacidadeAtual": 1,
+            "pixels_do_print": 1
+          },
+          "pixels": {
+            "barra": {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "share": 1
+            },
+            "fundoAbaixo": {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "share": 1
+            }
+          }
+        },
+        {
+          "caixa": {
+            "x": 0,
+            "y": 80,
+            "w": 628.359375,
+            "h": 14
+          },
+          "backgroundColorComputado": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+          "barraHex": "#ffffff",
+          "barraAlpha": 0.08,
+          "opacityAnimadaNoPrint": 0.707653,
+          "animacao": "pulse 2s infinite",
+          "ancestraisComFundo": [],
+          "fundoEfetivo": {
+            "hex": "#ffffff",
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "origem": "nenhum ancestral tem fundo: branco do canvas"
+          },
+          "barraComposta": {
+            "opacidade1": "#ffffff",
+            "opacidadeAtual": "#ffffff"
+          },
+          "contrasteWCAG": {
+            "computado_opacidade1": 1,
+            "computado_opacidadeAtual": 1,
+            "pixels_do_print": 1
+          },
+          "pixels": {
+            "barra": {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "share": 1
+            },
+            "fundoAbaixo": {
+              "rgb": [
+                255,
+                255,
+                255
+              ],
+              "share": 1
+            }
+          }
+        }
+      ],
+      "marcosDepois": {
+        "raiz": 131.5,
+        "esqueleto": 131.5,
+        "casca": 5167.699999999255,
+        "mesa": 5214.800000000745,
+        "primeiroItem": 5228.4000000003725
+      }
+    },
+    {
+      "cenario": "dashboardpage",
+      "chunkSegurado": "DashboardPage-*.js",
+      "chunkAchadoPor": "nome do arquivo",
+      "segurarMs": 5000,
+      "segurados": [
+        {
+          "url": "https://localhost:63478/assets/DashboardPage-Be7c5m8w.js",
+          "ms": 5000,
+          "em": 265
+        }
+      ],
+      "printAposNavegarMs": 1625,
+      "print": "m6/m6-dashboardpage-1500ms.png",
+      "noMomentoDoPrint": {
+        "performanceNow": 1620.7000000011176,
+        "cascaMontada": true,
+        "barras": 4
+      },
+      "barras": [
+        {
+          "caixa": {
+            "x": 88,
+            "y": 20,
+            "w": 1114.078125,
+            "h": 14
+          },
+          "backgroundColorComputado": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+          "barraHex": "#ffffff",
+          "barraAlpha": 0.08,
+          "opacityAnimadaNoPrint": 0.500001,
+          "animacao": "pulse 2s infinite",
+          "ancestraisComFundo": [
+            {
+              "sel": "div.chat-theme.relative.flex",
+              "bg": "rgb(32, 39, 45)",
+              "img": null
+            }
+          ],
+          "fundoEfetivo": {
+            "hex": "#20272d",
+            "oklch": {
+              "L": 0.2685,
+              "C": 0.015,
+              "H": 244.2
+            },
+            "origem": "fundos declarados nos ancestrais"
+          },
+          "barraComposta": {
+            "opacidade1": "#32383e",
+            "opacidadeAtual": "#293035"
+          },
+          "contrasteWCAG": {
+            "computado_opacidade1": 1.277,
+            "computado_opacidadeAtual": 1.125,
+            "pixels_do_print": 1.117
+          },
+          "pixels": {
+            "barra": {
+              "rgb": [
+                41,
+                47,
+                53
+              ],
+              "share": 0.1776196928635953
+            },
+            "fundoAbaixo": {
+              "rgb": [
+                32,
+                39,
+                45
+              ],
+              "share": 0.16501053899427884
+            }
+          }
+        },
+        {
+          "caixa": {
+            "x": 88,
+            "y": 44,
+            "w": 936.828125,
+            "h": 14
+          },
+          "backgroundColorComputado": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+          "barraHex": "#ffffff",
+          "barraAlpha": 0.08,
+          "opacityAnimadaNoPrint": 0.500001,
+          "animacao": "pulse 2s infinite",
+          "ancestraisComFundo": [
+            {
+              "sel": "div.chat-theme.relative.flex",
+              "bg": "rgb(32, 39, 45)",
+              "img": null
+            }
+          ],
+          "fundoEfetivo": {
+            "hex": "#20272d",
+            "oklch": {
+              "L": 0.2685,
+              "C": 0.015,
+              "H": 244.2
+            },
+            "origem": "fundos declarados nos ancestrais"
+          },
+          "barraComposta": {
+            "opacidade1": "#32383e",
+            "opacidadeAtual": "#293035"
+          },
+          "contrasteWCAG": {
+            "computado_opacidade1": 1.277,
+            "computado_opacidadeAtual": 1.125,
+            "pixels_do_print": 1.117
+          },
+          "pixels": {
+            "barra": {
+              "rgb": [
+                41,
+                47,
+                53
+              ],
+              "share": 0.18057050592034446
+            },
+            "fundoAbaixo": {
+              "rgb": [
+                32,
+                39,
+                45
+              ],
+              "share": 0.17545748116254037
+            }
+          }
+        },
+        {
+          "caixa": {
+            "x": 88,
+            "y": 68,
+            "w": 759.59375,
+            "h": 14
+          },
+          "backgroundColorComputado": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+          "barraHex": "#ffffff",
+          "barraAlpha": 0.08,
+          "opacityAnimadaNoPrint": 0.500001,
+          "animacao": "pulse 2s infinite",
+          "ancestraisComFundo": [
+            {
+              "sel": "div.chat-theme.relative.flex",
+              "bg": "rgb(32, 39, 45)",
+              "img": null
+            }
+          ],
+          "fundoEfetivo": {
+            "hex": "#20272d",
+            "oklch": {
+              "L": 0.2685,
+              "C": 0.015,
+              "H": 244.2
+            },
+            "origem": "fundos declarados nos ancestrais"
+          },
+          "barraComposta": {
+            "opacidade1": "#32383e",
+            "opacidadeAtual": "#293035"
+          },
+          "contrasteWCAG": {
+            "computado_opacidade1": 1.277,
+            "computado_opacidadeAtual": 1.125,
+            "pixels_do_print": 1.117
+          },
+          "pixels": {
+            "barra": {
+              "rgb": [
+                41,
+                47,
+                53
+              ],
+              "share": 0.21675531914893617
+            },
+            "fundoAbaixo": {
+              "rgb": [
+                32,
+                39,
+                45
+              ],
+              "share": 0.21675531914893617
+            }
+          }
+        },
+        {
+          "caixa": {
+            "x": 88,
+            "y": 92,
+            "w": 582.359375,
+            "h": 14
+          },
+          "backgroundColorComputado": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+          "barraHex": "#ffffff",
+          "barraAlpha": 0.08,
+          "opacityAnimadaNoPrint": 0.500001,
+          "animacao": "pulse 2s infinite",
+          "ancestraisComFundo": [
+            {
+              "sel": "div.chat-theme.relative.flex",
+              "bg": "rgb(32, 39, 45)",
+              "img": null
+            }
+          ],
+          "fundoEfetivo": {
+            "hex": "#20272d",
+            "oklch": {
+              "L": 0.2685,
+              "C": 0.015,
+              "H": 244.2
+            },
+            "origem": "fundos declarados nos ancestrais"
+          },
+          "barraComposta": {
+            "opacidade1": "#32383e",
+            "opacidadeAtual": "#293035"
+          },
+          "contrasteWCAG": {
+            "computado_opacidade1": 1.277,
+            "computado_opacidadeAtual": 1.125,
+            "pixels_do_print": 1.117
+          },
+          "pixels": {
+            "barra": {
+              "rgb": [
+                41,
+                47,
+                53
+              ],
+              "share": 0.28347826086956524
+            },
+            "fundoAbaixo": {
+              "rgb": [
+                32,
+                39,
+                45
+              ],
+              "share": 0.28347826086956524
+            }
+          }
+        }
+      ],
+      "marcosDepois": {
+        "raiz": 102.80000000074506,
+        "esqueleto": 102.80000000074506,
+        "casca": 610,
+        "mesa": 5255.200000001118,
+        "primeiroItem": 5270.9000000003725
+      }
+    }
+  ],
+  "veredito": {
+    "afirmacao": "barras brancas a 8% sobre fundo branco, invisíveis",
+    "appshell": {
+      "barraBranca8": true,
+      "fundoBranco": true,
+      "contrasteMaximo": 1,
+      "contrastePixels": [
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "dashboardpage": {
+      "fundo": "#20272d",
+      "contrasteComputado": [
+        1.125,
+        1.125,
+        1.125,
+        1.125
+      ],
+      "contrastePixels": [
+        1.117,
+        1.117,
+        1.117,
+        1.117
+      ]
+    }
+  }
+}

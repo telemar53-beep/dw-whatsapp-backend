@@ -1,0 +1,941 @@
+{
+  "criterio": "estilo computado de elementos visíveis (caixa > 0, dentro da janela, não recortados por ancestral com overflow, sem sr-only, opacidade efetiva > 0) + ::before/::after pintados. Sem o indicador \"Reconectando…\" (artefato do socket bloqueado).",
+  "principal": {
+    "estado": "atendente-1366-1-conversa",
+    "elementosVisiveis": 266,
+    "pseudoVisiveis": 6,
+    "comSuperficie": 61,
+    "backgroundColorDistintos": 28,
+    "backgroundImageDistintos": 3,
+    "backdropFilterElementos": 1,
+    "boxShadowDistintos": 2,
+    "borderRadiusDistintos": 11,
+    "borderColorDistintos": 18,
+    "detalhe": {
+      "elementosVisiveis": 266,
+      "pseudoElementosVisiveis": 6,
+      "comSuperficie": 61,
+      "backgroundColor": {
+        "distintos": 28,
+        "top15": [
+          {
+            "valor": "rgba(255, 255, 255, 0.05)",
+            "n": 11,
+            "exemplos": [
+              "span.chat-conversation-chip @chat-conversation-chip"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.05,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgba(255, 255, 255, 0.13)",
+            "n": 7,
+            "exemplos": [
+              "span.flex.shrink-0.select-none… @worknav-account-trigger",
+              "img.shrink-0.rounded-full.object-cover… @chat-conversation-figure",
+              "span.flex.shrink-0.select-none… @chat-conversation-figure"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.13,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgb(242, 140, 69)",
+            "n": 7,
+            "exemplos": [
+              "button.chat-new-conversation.flex.h-9…[aria-label=\"Nova conversa\"] @chat-new-conversation",
+              "button#tab-inProgress.relative.flex.min-w-0…[role=tab] @chat-inbox-tabs",
+              "div.chat-conversation-row[role=button]::after @chat-conversation-row"
+            ],
+            "hex": "#f28c45",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.7371,
+              "C": 0.15,
+              "H": 52.8
+            },
+            "familia": "laranja-cobre"
+          },
+          {
+            "valor": "rgb(53, 67, 76)",
+            "n": 4,
+            "exemplos": [
+              "div.chat-workspace-bubble.is-inbound.group… @chat-workspace-bubble"
+            ],
+            "hex": "#35434c",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.3742,
+              "C": 0.0238,
+              "H": 236.5
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgb(32, 42, 49)",
+            "n": 2,
+            "exemplos": [
+              "label.flex.h-[42px].min-w-0… @chat-inbox-search",
+              "div.flex.w-full.gap-1…[role=tablist][aria-label=\"Filas\"] @chat-inbox-tabs"
+            ],
+            "hex": "#202a31",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.2786,
+              "C": 0.019,
+              "H": 238.9
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "oklab(0.999994 0.0000455678 0.0000200868 / 0.14)",
+            "n": 2,
+            "exemplos": [
+              "span.absolute.-right-1.-top-1.5… @chat-inbox-tabs"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.14,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 23.8
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgb(36, 47, 54)",
+            "n": 2,
+            "exemplos": [
+              "main.chat-workspace-main.block.min-w-0… @chat-workspace-main",
+              "div.conv-raiz.chat-workspace-conversation.flex… @conv-raiz"
+            ],
+            "hex": "#242f36",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.298,
+              "C": 0.0197,
+              "H": 236.2
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgba(255, 255, 255, 0.04)",
+            "n": 2,
+            "exemplos": [
+              "span.mr-1.rounded.px-1… @chat-workspace-bubble",
+              "span.inline-flex.shrink-0.text-chat-online @chat-workspace-bubble"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.04,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgb(51, 65, 74)",
+            "n": 2,
+            "exemplos": [
+              "div.relative.flex.min-h-[60px]… @chat-workspace-composer",
+              "button.flex.h-[54px].w-[54px]…[aria-label=\"Gravar áudio\"] @chat-workspace-composer"
+            ],
+            "hex": "#33414a",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.3666,
+              "C": 0.0239,
+              "H": 236.5
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgb(32, 39, 45)",
+            "n": 1,
+            "exemplos": [
+              "div.chat-theme.relative.flex… @chat-theme"
+            ],
+            "hex": "#20272d",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.2685,
+              "C": 0.015,
+              "H": 244.2
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "oklab(0.763011 0.0748115 0.110589 / 0.1)",
+            "n": 1,
+            "exemplos": [
+              "div.pointer-events-none.absolute.left-[38%]… @chat-theme"
+            ],
+            "hex": "#f29a58",
+            "alpha": 0.1,
+            "oklch": {
+              "L": 0.763,
+              "C": 0.1335,
+              "H": 55.9
+            },
+            "familia": "laranja-cobre"
+          },
+          {
+            "valor": "rgba(130, 150, 164, 0.07)",
+            "n": 1,
+            "exemplos": [
+              "div.pointer-events-none.absolute.-right-[6%]… @chat-theme"
+            ],
+            "hex": "#8296a4",
+            "alpha": 0.07,
+            "oklch": {
+              "L": 0.6621,
+              "C": 0.0309,
+              "H": 238.5
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgb(37, 45, 51)",
+            "n": 1,
+            "exemplos": [
+              "nav#sidenav.worknav.is-compact[aria-label=\"Navegação principal\"] @worknav"
+            ],
+            "hex": "#252d33",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.292,
+              "C": 0.0156,
+              "H": 240.5
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgba(242, 140, 69, 0.11)",
+            "n": 1,
+            "exemplos": [
+              "a.worknav-item.active[aria-label=\"Atendimento\"] @worknav-item"
+            ],
+            "hex": "#f28c45",
+            "alpha": 0.11,
+            "oklch": {
+              "L": 0.7371,
+              "C": 0.15,
+              "H": 52.8
+            },
+            "familia": "laranja-cobre"
+          },
+          {
+            "valor": "rgb(38, 49, 57)",
+            "n": 1,
+            "exemplos": [
+              "aside.chat-workspace-list.flex.w-full…[aria-label=\"Atendimentos\"] @chat-workspace-list"
+            ],
+            "hex": "#263139",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.3064,
+              "C": 0.0208,
+              "H": 239.9
+            },
+            "familia": "acromático"
+          }
+        ]
+      },
+      "backgroundImage": {
+        "distintos": 3,
+        "top15": [
+          {
+            "valor": "linear-gradient(90deg, rgba(183, 131, 89, 0.14), rgba(183, 131, 89, 0.043))",
+            "n": 1,
+            "exemplos": [
+              "div.chat-conversation-row.is-selected[role=button] @chat-conversation-row"
+            ]
+          },
+          {
+            "valor": "linear-gradient(90deg, rgba(46, 59, 67, 0.533), rgba(0, 0, 0, 0))",
+            "n": 1,
+            "exemplos": [
+              "div.chat-workspace-header.@container.z-10… @chat-workspace-header"
+            ]
+          },
+          {
+            "valor": "linear-gradient(rgb(34, 46, 53), rgb(36, 47, 54))",
+            "n": 1,
+            "exemplos": [
+              "div.chat-workspace-timeline.chat-scroll.min-h-0… @chat-workspace-timeline"
+            ]
+          }
+        ]
+      },
+      "backdropFilter": {
+        "elementos": 1,
+        "distintos": 1,
+        "lista": [
+          {
+            "sel": "span.absolute.bottom-[7px].right-[8px]…",
+            "ctx": "chat-workspace-bubble",
+            "valor": "blur(1px)",
+            "area": 720
+          }
+        ]
+      },
+      "boxShadow": {
+        "distintos": 2,
+        "top15": [
+          {
+            "valor": "rgba(244, 83, 31, 0.9) 0px 6px 16px -8px",
+            "n": 1,
+            "exemplos": [
+              "button#tab-inProgress.relative.flex.min-w-0…[role=tab] @chat-inbox-tabs"
+            ]
+          },
+          {
+            "valor": "rgba(242, 140, 69, 0.34) 0px 0px 0px 1px inset",
+            "n": 1,
+            "exemplos": [
+              "div.chat-conversation-row.is-selected[role=button] @chat-conversation-row"
+            ]
+          }
+        ]
+      },
+      "borderRadius": {
+        "distintos": 11,
+        "top15": [
+          {
+            "valor": "6px",
+            "n": 30,
+            "exemplos": [
+              "a.worknav-item.active[aria-label=\"Atendimento\"] @worknav-item",
+              "a.worknav-item[aria-label=\"Relatórios\"] @worknav-item",
+              "button.worknav-item[aria-label=\"Atendimentos encerrados\"] @worknav-item"
+            ]
+          },
+          {
+            "valor": "∞(rounded-full)",
+            "n": 17,
+            "exemplos": [
+              "div.pointer-events-none.absolute.left-[38%]… @chat-theme",
+              "div.pointer-events-none.absolute.-right-[6%]… @chat-theme",
+              "span.flex.shrink-0.select-none… @worknav-account-trigger"
+            ]
+          },
+          {
+            "valor": "5px",
+            "n": 4,
+            "exemplos": [
+              "button.worknav-collapse[aria-label=\"Expandir menu\"] @worknav-collapse",
+              "button.flex.h-8.shrink-0…[aria-label=\"Ver atendimentos anteriores\"] @chat-workspace-context-actions",
+              "button.flex.h-8.shrink-0…[aria-label=\"Consultar SGP\"] @chat-workspace-context-actions"
+            ]
+          },
+          {
+            "valor": "4px 11px 11px 11px",
+            "n": 4,
+            "exemplos": [
+              "div.chat-workspace-bubble.is-inbound.group… @chat-workspace-bubble"
+            ]
+          },
+          {
+            "valor": "8px",
+            "n": 3,
+            "exemplos": [
+              "button.chat-new-conversation.flex.h-9…[aria-label=\"Nova conversa\"] @chat-new-conversation",
+              "button.flex.h-8.shrink-0…[aria-label=\"Transferir atendimento\"] @chat-workspace-header-actions",
+              "button.flex.h-8.shrink-0…[aria-label=\"Encerrar atendimento\"] @chat-workspace-header-actions"
+            ]
+          },
+          {
+            "valor": "7px",
+            "n": 3,
+            "exemplos": [
+              "label.flex.h-[42px].min-w-0… @chat-inbox-search",
+              "div.flex.w-full.gap-1…[role=tablist][aria-label=\"Filas\"] @chat-inbox-tabs",
+              "button.flex.h-[54px].w-[54px]…[aria-label=\"Gravar áudio\"] @chat-workspace-composer"
+            ]
+          },
+          {
+            "valor": "10px",
+            "n": 3,
+            "exemplos": [
+              "button.flex.min-w-0.flex-1…[aria-label=\"Editar cliente: Maria José da Co\"] @chat-workspace-header-identity",
+              "div.flex.items-center.gap-0.5… @chat-workspace-context-actions",
+              "button.rounded-[10px].border.border-white/15… @chat-workspace-bubble"
+            ]
+          },
+          {
+            "valor": "11px 4px 11px 11px",
+            "n": 2,
+            "exemplos": [
+              "div.chat-workspace-bubble.is-outbound.is-ai… @chat-workspace-bubble",
+              "div.chat-workspace-bubble.is-outbound.group… @chat-workspace-bubble"
+            ]
+          },
+          {
+            "valor": "12px",
+            "n": 1,
+            "exemplos": [
+              "nav#sidenav.worknav.is-compact[aria-label=\"Navegação principal\"] @worknav"
+            ]
+          },
+          {
+            "valor": "4px",
+            "n": 1,
+            "exemplos": [
+              "span.mr-1.rounded.px-1… @chat-workspace-bubble"
+            ]
+          },
+          {
+            "valor": "9px",
+            "n": 1,
+            "exemplos": [
+              "div.relative.flex.min-h-[60px]… @chat-workspace-composer"
+            ]
+          }
+        ]
+      },
+      "borderColor": {
+        "distintos": 18,
+        "top15": [
+          {
+            "valor": "rgba(255, 255, 255, 0.04)",
+            "n": 72,
+            "exemplos": [
+              "div.flex.w-full.gap-1…[role=tablist][aria-label=\"Filas\"] @chat-inbox-tabs (top 1px)",
+              "div.flex.w-full.gap-1…[role=tablist][aria-label=\"Filas\"] @chat-inbox-tabs (right 1px)",
+              "div.flex.w-full.gap-1…[role=tablist][aria-label=\"Filas\"] @chat-inbox-tabs (bottom 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.04,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgba(255, 255, 255, 0.07)",
+            "n": 12,
+            "exemplos": [
+              "nav#sidenav.worknav.is-compact[aria-label=\"Navegação principal\"] @worknav (top 1px)",
+              "nav#sidenav.worknav.is-compact[aria-label=\"Navegação principal\"] @worknav (right 1px)",
+              "nav#sidenav.worknav.is-compact[aria-label=\"Navegação principal\"] @worknav (bottom 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.07,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgba(217, 148, 91, 0.17)",
+            "n": 4,
+            "exemplos": [
+              "a.worknav-item.active[aria-label=\"Atendimento\"] @worknav-item (top 1px)",
+              "a.worknav-item.active[aria-label=\"Atendimento\"] @worknav-item (right 1px)",
+              "a.worknav-item.active[aria-label=\"Atendimento\"] @worknav-item (bottom 1px)"
+            ],
+            "hex": "#d9945b",
+            "alpha": 0.17,
+            "oklch": {
+              "L": 0.7234,
+              "C": 0.1111,
+              "H": 59.3
+            },
+            "familia": "laranja-cobre"
+          },
+          {
+            "valor": "rgb(242, 140, 69)",
+            "n": 4,
+            "exemplos": [
+              "button.chat-new-conversation.flex.h-9…[aria-label=\"Nova conversa\"] @chat-new-conversation (top 1px)",
+              "button.chat-new-conversation.flex.h-9…[aria-label=\"Nova conversa\"] @chat-new-conversation (right 1px)",
+              "button.chat-new-conversation.flex.h-9…[aria-label=\"Nova conversa\"] @chat-new-conversation (bottom 1px)"
+            ],
+            "hex": "#f28c45",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.7371,
+              "C": 0.15,
+              "H": 52.8
+            },
+            "familia": "laranja-cobre"
+          },
+          {
+            "valor": "oklab(0.999994 0.0000455678 0.0000200868 / 0.09)",
+            "n": 4,
+            "exemplos": [
+              "label.flex.h-[42px].min-w-0… @chat-inbox-search (top 1px)",
+              "label.flex.h-[42px].min-w-0… @chat-inbox-search (right 1px)",
+              "label.flex.h-[42px].min-w-0… @chat-inbox-search (bottom 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.09,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 23.8
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "oklab(0.999994 0.0000455678 0.0000200868 / 0.1)",
+            "n": 4,
+            "exemplos": [
+              "span.rounded-full.border.border-white/10… @chat-workspace-list (top 1px)",
+              "span.rounded-full.border.border-white/10… @chat-workspace-list (right 1px)",
+              "span.rounded-full.border.border-white/10… @chat-workspace-list (bottom 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.1,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 23.8
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "oklab(0.999994 0.0000455678 0.0000200868 / 0.14)",
+            "n": 4,
+            "exemplos": [
+              "button.flex.h-8.shrink-0…[aria-label=\"Transferir atendimento\"] @chat-workspace-header-actions (top 1px)",
+              "button.flex.h-8.shrink-0…[aria-label=\"Transferir atendimento\"] @chat-workspace-header-actions (right 1px)",
+              "button.flex.h-8.shrink-0…[aria-label=\"Transferir atendimento\"] @chat-workspace-header-actions (bottom 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.14,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 23.8
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "oklab(0.793617 0.106522 0.0527184 / 0.4)",
+            "n": 4,
+            "exemplos": [
+              "button.flex.h-8.shrink-0…[aria-label=\"Encerrar atendimento\"] @chat-workspace-header-actions (top 1px)",
+              "button.flex.h-8.shrink-0…[aria-label=\"Encerrar atendimento\"] @chat-workspace-header-actions (right 1px)",
+              "button.flex.h-8.shrink-0…[aria-label=\"Encerrar atendimento\"] @chat-workspace-header-actions (bottom 1px)"
+            ],
+            "hex": "#ff9d93",
+            "alpha": 0.4,
+            "oklch": {
+              "L": 0.7936,
+              "C": 0.1189,
+              "H": 26.3
+            },
+            "familia": "vermelho-rosa"
+          },
+          {
+            "valor": "rgb(127, 149, 163)",
+            "n": 4,
+            "exemplos": [
+              "div.chat-workspace-bubble.is-inbound.group… @chat-workspace-bubble (left 3px)"
+            ],
+            "hex": "#7f95a3",
+            "alpha": 1,
+            "oklch": {
+              "L": 0.6574,
+              "C": 0.0326,
+              "H": 235.9
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "oklab(0.999994 0.0000455678 0.0000200868 / 0.15)",
+            "n": 4,
+            "exemplos": [
+              "button.rounded-[10px].border.border-white/15… @chat-workspace-bubble (top 1px)",
+              "button.rounded-[10px].border.border-white/15… @chat-workspace-bubble (right 1px)",
+              "button.rounded-[10px].border.border-white/15… @chat-workspace-bubble (bottom 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.15,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 23.8
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "oklab(0.999994 0.0000455678 0.0000200868 / 0.06)",
+            "n": 4,
+            "exemplos": [
+              "button.flex.h-[54px].w-[54px]…[aria-label=\"Gravar áudio\"] @chat-workspace-composer (top 1px)",
+              "button.flex.h-[54px].w-[54px]…[aria-label=\"Gravar áudio\"] @chat-workspace-composer (right 1px)",
+              "button.flex.h-[54px].w-[54px]…[aria-label=\"Gravar áudio\"] @chat-workspace-composer (bottom 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.06,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 23.8
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "oklab(0.999994 0.0000455678 0.0000200868 / 0.13)",
+            "n": 3,
+            "exemplos": [
+              "span.max-w-[180px].shrink-0.items-center… @chat-workspace-header-identity (left 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.13,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 23.8
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgba(185, 161, 215, 0.2)",
+            "n": 3,
+            "exemplos": [
+              "div.chat-workspace-bubble.is-outbound.is-ai… @chat-workspace-bubble (top 1px)",
+              "div.chat-workspace-bubble.is-outbound.is-ai… @chat-workspace-bubble (bottom 1px)",
+              "div.chat-workspace-bubble.is-outbound.is-ai… @chat-workspace-bubble (left 1px)"
+            ],
+            "hex": "#b9a1d7",
+            "alpha": 0.2,
+            "oklch": {
+              "L": 0.7486,
+              "C": 0.0805,
+              "H": 304.8
+            },
+            "familia": "roxo-lilas"
+          },
+          {
+            "valor": "rgba(255, 255, 255, 0.063)",
+            "n": 1,
+            "exemplos": [
+              "div.worknav-brand @worknav-brand (bottom 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.063,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "familia": "acromático"
+          },
+          {
+            "valor": "rgba(255, 255, 255, 0.05)",
+            "n": 1,
+            "exemplos": [
+              "div.worknav-group[role=group][aria-label=\"Acompanhamento\"] @worknav-group (top 1px)"
+            ],
+            "hex": "#ffffff",
+            "alpha": 0.05,
+            "oklch": {
+              "L": 1,
+              "C": 0,
+              "H": 89.9
+            },
+            "familia": "acromático"
+          }
+        ]
+      },
+      "filter": {
+        "distintos": 1,
+        "top15": [
+          {
+            "valor": "blur(150px)",
+            "n": 2,
+            "exemplos": [
+              "div.pointer-events-none.absolute.left-[38%]… @chat-theme",
+              "div.pointer-events-none.absolute.-right-[6%]… @chat-theme"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "comparativo": {
+    "atendente-1366-0-lista": {
+      "elementosVisiveis": 175,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 40,
+      "backgroundColorDistintos": 15,
+      "backgroundImageDistintos": 0,
+      "backdropFilterElementos": 0,
+      "boxShadowDistintos": 1,
+      "borderRadiusDistintos": 6,
+      "borderColorDistintos": 9
+    },
+    "atendente-1366-1-conversa": {
+      "elementosVisiveis": 266,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 61,
+      "backgroundColorDistintos": 28,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "atendente-1366-2-conversa-sgp-automatico": {
+      "elementosVisiveis": 299,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 72,
+      "backgroundColorDistintos": 34,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 12,
+      "borderColorDistintos": 20
+    },
+    "atendente-1366-3-conversa-transferencia": {
+      "elementosVisiveis": 290,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 62,
+      "backgroundColorDistintos": 26,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 0,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 12,
+      "borderColorDistintos": 17
+    },
+    "atendente-1366-4-dados-do-cliente": {
+      "elementosVisiveis": 296,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 63,
+      "backgroundColorDistintos": 29,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "atendente-1366-5-sgp": {
+      "elementosVisiveis": 299,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 72,
+      "backgroundColorDistintos": 34,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 12,
+      "borderColorDistintos": 20
+    },
+    "atendente-1366-6-aba-espera": {
+      "elementosVisiveis": 316,
+      "pseudoVisiveis": 9,
+      "comSuperficie": 68,
+      "backgroundColorDistintos": 27,
+      "backgroundImageDistintos": 2,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 1,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "atendente-1366-7-aba-automacao": {
+      "elementosVisiveis": 206,
+      "pseudoVisiveis": 2,
+      "comSuperficie": 41,
+      "backgroundColorDistintos": 27,
+      "backgroundImageDistintos": 2,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 1,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "atendente-1920-0-lista": {
+      "elementosVisiveis": 175,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 40,
+      "backgroundColorDistintos": 15,
+      "backgroundImageDistintos": 0,
+      "backdropFilterElementos": 0,
+      "boxShadowDistintos": 1,
+      "borderRadiusDistintos": 6,
+      "borderColorDistintos": 9
+    },
+    "atendente-1920-1-conversa": {
+      "elementosVisiveis": 319,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 68,
+      "backgroundColorDistintos": 28,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "atendente-1920-2-conversa-sgp-automatico": {
+      "elementosVisiveis": 354,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 79,
+      "backgroundColorDistintos": 34,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 12,
+      "borderColorDistintos": 20
+    },
+    "atendente-1920-3-conversa-transferencia": {
+      "elementosVisiveis": 344,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 71,
+      "backgroundColorDistintos": 26,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 0,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 12,
+      "borderColorDistintos": 17
+    },
+    "atendente-1920-4-dados-do-cliente": {
+      "elementosVisiveis": 351,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 70,
+      "backgroundColorDistintos": 29,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "atendente-1920-5-sgp": {
+      "elementosVisiveis": 354,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 79,
+      "backgroundColorDistintos": 34,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 12,
+      "borderColorDistintos": 20
+    },
+    "atendente-1920-6-aba-espera": {
+      "elementosVisiveis": 442,
+      "pseudoVisiveis": 14,
+      "comSuperficie": 93,
+      "backgroundColorDistintos": 27,
+      "backgroundImageDistintos": 2,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 1,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "atendente-1920-7-aba-automacao": {
+      "elementosVisiveis": 259,
+      "pseudoVisiveis": 2,
+      "comSuperficie": 48,
+      "backgroundColorDistintos": 27,
+      "backgroundImageDistintos": 2,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 1,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "admin-1366-0-lista": {
+      "elementosVisiveis": 182,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 40,
+      "backgroundColorDistintos": 15,
+      "backgroundImageDistintos": 0,
+      "backdropFilterElementos": 0,
+      "boxShadowDistintos": 1,
+      "borderRadiusDistintos": 6,
+      "borderColorDistintos": 9
+    },
+    "admin-1366-1-conversa": {
+      "elementosVisiveis": 273,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 61,
+      "backgroundColorDistintos": 28,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "admin-1366-2-conversa-sgp-automatico": {
+      "elementosVisiveis": 306,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 72,
+      "backgroundColorDistintos": 34,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 12,
+      "borderColorDistintos": 20
+    },
+    "admin-1366-3-conversa-transferencia": {
+      "elementosVisiveis": 297,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 62,
+      "backgroundColorDistintos": 26,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 0,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 12,
+      "borderColorDistintos": 17
+    },
+    "admin-1366-4-dados-do-cliente": {
+      "elementosVisiveis": 303,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 63,
+      "backgroundColorDistintos": 29,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "admin-1366-5-sgp": {
+      "elementosVisiveis": 306,
+      "pseudoVisiveis": 6,
+      "comSuperficie": 72,
+      "backgroundColorDistintos": 34,
+      "backgroundImageDistintos": 3,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 2,
+      "borderRadiusDistintos": 12,
+      "borderColorDistintos": 20
+    },
+    "admin-1366-6-aba-espera": {
+      "elementosVisiveis": 323,
+      "pseudoVisiveis": 9,
+      "comSuperficie": 68,
+      "backgroundColorDistintos": 27,
+      "backgroundImageDistintos": 2,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 1,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    },
+    "admin-1366-7-aba-automacao": {
+      "elementosVisiveis": 213,
+      "pseudoVisiveis": 2,
+      "comSuperficie": 41,
+      "backgroundColorDistintos": 27,
+      "backgroundImageDistintos": 2,
+      "backdropFilterElementos": 1,
+      "boxShadowDistintos": 1,
+      "borderRadiusDistintos": 11,
+      "borderColorDistintos": 18
+    }
+  }
+}

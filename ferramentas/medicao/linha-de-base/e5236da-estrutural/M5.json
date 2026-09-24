@@ -1,0 +1,594 @@
+{
+  "criterio": "para cada nó de texto visível, quantos elementos da cadeia (do pai até html) têm background-color com alfa > 0 ou background-image",
+  "principal": {
+    "estado": "atendente-1366-1-conversa",
+    "textos": 80,
+    "media": 3.35,
+    "mediana": 3,
+    "maximo": 6,
+    "distribuicao": {
+      "2": 23,
+      "3": 26,
+      "4": 14,
+      "5": 14,
+      "6": 3
+    },
+    "piorCaso": [
+      {
+        "texto": "Analisar comprovante",
+        "elemento": "button.rounded-[10px].border.border-white/15…",
+        "ctx": "chat-workspace-bubble",
+        "camadas": [
+          {
+            "sel": "button.rounded-[10px].border.border-white/15…",
+            "bg": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+            "img": null
+          },
+          {
+            "sel": "div.chat-workspace-bubble.is-inbound.group…",
+            "bg": "rgb(53, 67, 76)",
+            "img": null
+          },
+          {
+            "sel": "div.chat-workspace-timeline.chat-scroll.min-h-0…",
+            "bg": null,
+            "img": "linear-gradient(rgb(34, 46, 53), rgb(36, 47, 54))"
+          },
+          {
+            "sel": "div.conv-raiz.chat-workspace-conversation.flex…",
+            "bg": "rgb(36, 47, 54)",
+            "img": null
+          },
+          {
+            "sel": "main.chat-workspace-main.block.min-w-0…",
+            "bg": "rgb(36, 47, 54)",
+            "img": null
+          },
+          {
+            "sel": "div.chat-theme.relative.flex…",
+            "bg": "rgb(32, 39, 45)",
+            "img": null
+          }
+        ]
+      },
+      {
+        "texto": "13:16",
+        "elemento": "span.flex.shrink-0.items-center…",
+        "ctx": "chat-workspace-bubble",
+        "camadas": [
+          {
+            "sel": "span.absolute.bottom-[7px].right-[8px]…",
+            "bg": "oklab(0 0 0 / 0.35)",
+            "img": null
+          },
+          {
+            "sel": "div.chat-workspace-bubble.is-inbound.group…",
+            "bg": "rgb(53, 67, 76)",
+            "img": null
+          },
+          {
+            "sel": "div.chat-workspace-timeline.chat-scroll.min-h-0…",
+            "bg": null,
+            "img": "linear-gradient(rgb(34, 46, 53), rgb(36, 47, 54))"
+          },
+          {
+            "sel": "div.conv-raiz.chat-workspace-conversation.flex…",
+            "bg": "rgb(36, 47, 54)",
+            "img": null
+          },
+          {
+            "sel": "main.chat-workspace-main.block.min-w-0…",
+            "bg": "rgb(36, 47, 54)",
+            "img": null
+          },
+          {
+            "sel": "div.chat-theme.relative.flex…",
+            "bg": "rgb(32, 39, 45)",
+            "img": null
+          }
+        ]
+      },
+      {
+        "texto": "IA",
+        "elemento": "span.mr-1.rounded.px-1…",
+        "ctx": "chat-workspace-bubble",
+        "camadas": [
+          {
+            "sel": "span.mr-1.rounded.px-1…",
+            "bg": "rgba(255, 255, 255, 0.04)",
+            "img": null
+          },
+          {
+            "sel": "div.chat-workspace-bubble.is-outbound.is-ai…",
+            "bg": "rgb(57, 63, 75)",
+            "img": null
+          },
+          {
+            "sel": "div.chat-workspace-timeline.chat-scroll.min-h-0…",
+            "bg": null,
+            "img": "linear-gradient(rgb(34, 46, 53), rgb(36, 47, 54))"
+          },
+          {
+            "sel": "div.conv-raiz.chat-workspace-conversation.flex…",
+            "bg": "rgb(36, 47, 54)",
+            "img": null
+          },
+          {
+            "sel": "main.chat-workspace-main.block.min-w-0…",
+            "bg": "rgb(36, 47, 54)",
+            "img": null
+          },
+          {
+            "sel": "div.chat-theme.relative.flex…",
+            "bg": "rgb(32, 39, 45)",
+            "img": null
+          }
+        ]
+      }
+    ],
+    "zIndex": [
+      {
+        "z": "10",
+        "n": 2,
+        "visiveis": 2,
+        "exemplos": [
+          "div.relative.z-10.flex… (relative)",
+          "div.chat-workspace-header.@container.z-10… (static)"
+        ]
+      },
+      {
+        "z": "100",
+        "n": 1,
+        "visiveis": 1,
+        "exemplos": [
+          "nav#sidenav.worknav.is-compact[aria-label=\"Navegação principal\"] (relative)"
+        ]
+      },
+      {
+        "z": "200",
+        "n": 1,
+        "visiveis": 0,
+        "exemplos": [
+          "span.worknav-connection-tip (absolute)"
+        ]
+      }
+    ]
+  },
+  "comparativo": {
+    "atendente-1366-0-lista": {
+      "textos": 55,
+      "media": 2.55,
+      "mediana": 2,
+      "maximo": 5,
+      "distribuicao": {
+        "2": 30,
+        "3": 21,
+        "4": 3,
+        "5": 1
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1366-1-conversa": {
+      "textos": 80,
+      "media": 3.35,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 14,
+        "5": 14,
+        "6": 3
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1366-2-conversa-sgp-automatico": {
+      "textos": 86,
+      "media": 3.6,
+      "mediana": 3,
+      "maximo": 7,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 11,
+        "5": 16,
+        "6": 8,
+        "7": 2
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1366-3-conversa-transferencia": {
+      "textos": 87,
+      "media": 3.46,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 14,
+        "5": 23,
+        "6": 1
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1366-4-dados-do-cliente": {
+      "textos": 94,
+      "media": 3.45,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 28,
+        "5": 14,
+        "6": 3
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1366-5-sgp": {
+      "textos": 86,
+      "media": 3.6,
+      "mediana": 3,
+      "maximo": 7,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 11,
+        "5": 16,
+        "6": 8,
+        "7": 2
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1366-6-aba-espera": {
+      "textos": 95,
+      "media": 3.12,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 38,
+        "3": 28,
+        "4": 12,
+        "5": 14,
+        "6": 3
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1366-7-aba-automacao": {
+      "textos": 51,
+      "media": 3.76,
+      "mediana": 4,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 10,
+        "3": 12,
+        "4": 12,
+        "5": 14,
+        "6": 3
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1920-0-lista": {
+      "textos": 55,
+      "media": 2.55,
+      "mediana": 2,
+      "maximo": 5,
+      "distribuicao": {
+        "2": 30,
+        "3": 21,
+        "4": 3,
+        "5": 1
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1920-1-conversa": {
+      "textos": 93,
+      "media": 3.59,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 14,
+        "5": 26,
+        "6": 4
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1920-2-conversa-sgp-automatico": {
+      "textos": 102,
+      "media": 3.8,
+      "mediana": 4,
+      "maximo": 7,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 14,
+        "5": 28,
+        "6": 9,
+        "7": 2
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1920-3-conversa-transferencia": {
+      "textos": 101,
+      "media": 3.69,
+      "mediana": 4,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 14,
+        "5": 35,
+        "6": 3
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1920-4-dados-do-cliente": {
+      "textos": 110,
+      "media": 3.65,
+      "mediana": 4,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 31,
+        "5": 26,
+        "6": 4
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1920-5-sgp": {
+      "textos": 102,
+      "media": 3.8,
+      "mediana": 4,
+      "maximo": 7,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 14,
+        "5": 28,
+        "6": 9,
+        "7": 2
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1920-6-aba-espera": {
+      "textos": 138,
+      "media": 3.14,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 56,
+        "3": 40,
+        "4": 12,
+        "5": 26,
+        "6": 4
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "atendente-1920-7-aba-automacao": {
+      "textos": 64,
+      "media": 4.03,
+      "mediana": 4,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 10,
+        "3": 12,
+        "4": 12,
+        "5": 26,
+        "6": 4
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "admin-1366-0-lista": {
+      "textos": 55,
+      "media": 2.55,
+      "mediana": 2,
+      "maximo": 5,
+      "distribuicao": {
+        "2": 30,
+        "3": 21,
+        "4": 3,
+        "5": 1
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "admin-1366-1-conversa": {
+      "textos": 80,
+      "media": 3.35,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 14,
+        "5": 14,
+        "6": 3
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "admin-1366-2-conversa-sgp-automatico": {
+      "textos": 86,
+      "media": 3.6,
+      "mediana": 3,
+      "maximo": 7,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 11,
+        "5": 16,
+        "6": 8,
+        "7": 2
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "admin-1366-3-conversa-transferencia": {
+      "textos": 87,
+      "media": 3.46,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 14,
+        "5": 23,
+        "6": 1
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "admin-1366-4-dados-do-cliente": {
+      "textos": 94,
+      "media": 3.45,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 28,
+        "5": 14,
+        "6": 3
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "admin-1366-5-sgp": {
+      "textos": 86,
+      "media": 3.6,
+      "mediana": 3,
+      "maximo": 7,
+      "distribuicao": {
+        "2": 23,
+        "3": 26,
+        "4": 11,
+        "5": 16,
+        "6": 8,
+        "7": 2
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "admin-1366-6-aba-espera": {
+      "textos": 95,
+      "media": 3.12,
+      "mediana": 3,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 38,
+        "3": 28,
+        "4": 12,
+        "5": 14,
+        "6": 3
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    },
+    "admin-1366-7-aba-automacao": {
+      "textos": 51,
+      "media": 3.76,
+      "mediana": 4,
+      "maximo": 6,
+      "distribuicao": {
+        "2": 10,
+        "3": 12,
+        "4": 12,
+        "5": 14,
+        "6": 3
+      },
+      "zIndexValores": [
+        "10",
+        "100",
+        "200"
+      ]
+    }
+  }
+}

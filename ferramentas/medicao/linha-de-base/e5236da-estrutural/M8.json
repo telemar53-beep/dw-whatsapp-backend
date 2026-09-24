@@ -1,0 +1,497 @@
+{
+  "data": "2026-09-24T14:47:17.906Z",
+  "cacheDoNavegador": "ligado (perfil novo)",
+  "conversaA": {
+    "id": "5e39f712-314d-4c1a-8916-0a3e4a10f866",
+    "nome": "Maria José",
+    "observacao": "contato com CPF: o painel do SGP abre sozinho e consulta ao abrir a conversa"
+  },
+  "conversaB": {
+    "id": "6a41a1aa-05e0-4f04-878a-169a66ad15f1",
+    "nome": "Antônio Carlos",
+    "observacao": "na fila (Espera), sem CPF, não é minha: sem sugestão de IA e sem compositor"
+  },
+  "totais": {
+    "requisicoesApi": 23,
+    "preflights": 10,
+    "socketIo": 4,
+    "porEtapa": [
+      {
+        "etapa": "1. carregar /",
+        "api": 8,
+        "preflights": 5
+      },
+      {
+        "etapa": "2. abrir conversa A",
+        "api": 5,
+        "preflights": 4
+      },
+      {
+        "etapa": "3. abrir conversa B (aba Espera)",
+        "api": 6,
+        "preflights": 1
+      },
+      {
+        "etapa": "4. abrir conversa A de novo",
+        "api": 3,
+        "preflights": 0
+      },
+      {
+        "etapa": "5. fechar e reabrir o painel do SGP (conversa A)",
+        "api": 1,
+        "preflights": 0
+      },
+      {
+        "etapa": "6. trocar de aba Espera/Atendimento (2x)",
+        "api": 0,
+        "preflights": 0
+      }
+    ]
+  },
+  "tabela": [
+    {
+      "padrao": "GET /contacts/:id/avatar (img)",
+      "requisicoes": 8,
+      "preflights": 0,
+      "porEtapa": {
+        "1. carregar /": {
+          "requisicoes": 3,
+          "preflights": 0
+        },
+        "3. abrir conversa B (aba Espera)": {
+          "requisicoes": 5,
+          "preflights": 0
+        }
+      }
+    },
+    {
+      "padrao": "socket.io (polling; falha de transporte)",
+      "requisicoes": 4,
+      "preflights": 0,
+      "porEtapa": {
+        "1. carregar /": {
+          "requisicoes": 2,
+          "preflights": 0
+        },
+        "4. abrir conversa A de novo": {
+          "requisicoes": 1,
+          "preflights": 0
+        },
+        "5. fechar e reabrir o painel do SGP (conversa A)": {
+          "requisicoes": 1,
+          "preflights": 0
+        }
+      }
+    },
+    {
+      "padrao": "GET /sgp/clientes?cpf= (SGP)",
+      "requisicoes": 3,
+      "preflights": 1,
+      "porEtapa": {
+        "2. abrir conversa A": {
+          "requisicoes": 1,
+          "preflights": 1
+        },
+        "4. abrir conversa A de novo": {
+          "requisicoes": 1,
+          "preflights": 0
+        },
+        "5. fechar e reabrir o painel do SGP (conversa A)": {
+          "requisicoes": 1,
+          "preflights": 0
+        }
+      }
+    },
+    {
+      "padrao": "GET /conversations/:id/messages [A]",
+      "requisicoes": 2,
+      "preflights": 1,
+      "porEtapa": {
+        "2. abrir conversa A": {
+          "requisicoes": 1,
+          "preflights": 1
+        },
+        "4. abrir conversa A de novo": {
+          "requisicoes": 1,
+          "preflights": 0
+        }
+      }
+    },
+    {
+      "padrao": "GET /conversations/:id/ai-suggestion [A]",
+      "requisicoes": 2,
+      "preflights": 1,
+      "porEtapa": {
+        "2. abrir conversa A": {
+          "requisicoes": 1,
+          "preflights": 1
+        },
+        "4. abrir conversa A de novo": {
+          "requisicoes": 1,
+          "preflights": 0
+        }
+      }
+    },
+    {
+      "padrao": "POST /auth/media-token",
+      "requisicoes": 1,
+      "preflights": 1,
+      "porEtapa": {
+        "1. carregar /": {
+          "requisicoes": 1,
+          "preflights": 1
+        }
+      }
+    },
+    {
+      "padrao": "GET /public/company",
+      "requisicoes": 1,
+      "preflights": 1,
+      "porEtapa": {
+        "1. carregar /": {
+          "requisicoes": 1,
+          "preflights": 1
+        }
+      }
+    },
+    {
+      "padrao": "GET /conversations/queue",
+      "requisicoes": 1,
+      "preflights": 1,
+      "porEtapa": {
+        "1. carregar /": {
+          "requisicoes": 1,
+          "preflights": 1
+        }
+      }
+    },
+    {
+      "padrao": "GET /conversations/mine",
+      "requisicoes": 1,
+      "preflights": 1,
+      "porEtapa": {
+        "1. carregar /": {
+          "requisicoes": 1,
+          "preflights": 1
+        }
+      }
+    },
+    {
+      "padrao": "GET /agents",
+      "requisicoes": 1,
+      "preflights": 1,
+      "porEtapa": {
+        "1. carregar /": {
+          "requisicoes": 1,
+          "preflights": 1
+        }
+      }
+    },
+    {
+      "padrao": "GET /quick-replies",
+      "requisicoes": 1,
+      "preflights": 1,
+      "porEtapa": {
+        "2. abrir conversa A": {
+          "requisicoes": 1,
+          "preflights": 1
+        }
+      }
+    },
+    {
+      "padrao": "GET /conversations/:id/messages [B]",
+      "requisicoes": 1,
+      "preflights": 1,
+      "porEtapa": {
+        "3. abrir conversa B (aba Espera)": {
+          "requisicoes": 1,
+          "preflights": 1
+        }
+      }
+    },
+    {
+      "padrao": "GET /media/:id (img)",
+      "requisicoes": 1,
+      "preflights": 0,
+      "porEtapa": {
+        "2. abrir conversa A": {
+          "requisicoes": 1,
+          "preflights": 0
+        }
+      }
+    }
+  ],
+  "urlsRepetidas": [
+    {
+      "url": "GET /api/conversations/5e39f712-314d-4c1a-8916-0a3e4a10f866/messages?limit=51",
+      "vezes": 2
+    },
+    {
+      "url": "GET /api/conversations/5e39f712-314d-4c1a-8916-0a3e4a10f866/ai-suggestion",
+      "vezes": 2
+    },
+    {
+      "url": "GET /api/sgp/clientes?cpf=12345678909",
+      "vezes": 3
+    }
+  ],
+  "preflightsRepetidosMesmaUrl": [],
+  "naoAtendidos": [],
+  "logCompleto": [
+    {
+      "t": 226,
+      "tipo": "socket",
+      "method": "GET",
+      "url": "http://localhost:3000/socket.io/?EIO=4&transport=polling&t=t4oji945"
+    },
+    {
+      "t": 227,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/auth/media-token",
+      "status": 204
+    },
+    {
+      "t": 230,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/public/company",
+      "status": 204
+    },
+    {
+      "t": 257,
+      "tipo": "api",
+      "method": "POST",
+      "url": "http://localhost:3000/api/auth/media-token",
+      "status": 200
+    },
+    {
+      "t": 259,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/public/company",
+      "status": 200
+    },
+    {
+      "t": 298,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/conversations/queue",
+      "status": 204
+    },
+    {
+      "t": 302,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/conversations/mine",
+      "status": 204
+    },
+    {
+      "t": 303,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/conversations/queue",
+      "status": 200
+    },
+    {
+      "t": 306,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/conversations/mine",
+      "status": 200
+    },
+    {
+      "t": 337,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/agents",
+      "status": 204
+    },
+    {
+      "t": 341,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/agents",
+      "status": 200
+    },
+    {
+      "t": 347,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/contacts/f1b1051a-67dc-431f-8ffa-1a20fae5f048/avatar?mediaToken=…&v=avatars%2Fmaria.jpg",
+      "status": 200
+    },
+    {
+      "t": 349,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/contacts/b2d9f505-f3de-4a28-8c48-6790df617c5b/avatar?mediaToken=…&v=avatars%2Fjoao.jpg",
+      "status": 200
+    },
+    {
+      "t": 349,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/contacts/87c17878-b8e1-424c-8e0b-edf71466618f/avatar?mediaToken=…&v=avatars%2Fluana.jpg",
+      "status": 200
+    },
+    {
+      "t": 1612,
+      "tipo": "socket",
+      "method": "GET",
+      "url": "http://localhost:3000/socket.io/?EIO=4&transport=polling&t=t4pmyhqi"
+    },
+    {
+      "t": 1947,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/conversations/5e39f712-314d-4c1a-8916-0a3e4a10f866/messages?limit=51",
+      "status": 204
+    },
+    {
+      "t": 1948,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/quick-replies",
+      "status": 204
+    },
+    {
+      "t": 1949,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/conversations/5e39f712-314d-4c1a-8916-0a3e4a10f866/ai-suggestion",
+      "status": 204
+    },
+    {
+      "t": 1952,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/conversations/5e39f712-314d-4c1a-8916-0a3e4a10f866/messages?limit=51",
+      "status": 200
+    },
+    {
+      "t": 1954,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/quick-replies",
+      "status": 200
+    },
+    {
+      "t": 1955,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/conversations/5e39f712-314d-4c1a-8916-0a3e4a10f866/ai-suggestion",
+      "status": 200
+    },
+    {
+      "t": 1956,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/sgp/clientes?cpf=12345678909",
+      "status": 204
+    },
+    {
+      "t": 1958,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/sgp/clientes?cpf=12345678909",
+      "status": 200
+    },
+    {
+      "t": 1979,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/media/3e9f098b-5144-4a1f-801b-ff06f205fbe5?mediaToken=…",
+      "status": 200
+    },
+    {
+      "t": 3052,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/contacts/38650a73-0876-486d-8590-ad0efcf940e1/avatar?mediaToken=…&v=avatars%2Ffrancisca.jpg",
+      "status": 200
+    },
+    {
+      "t": 3052,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/contacts/c5f3bd3b-7112-46e0-84bb-b9a1ffbac258/avatar?mediaToken=…&v=avatars%2Fantonio.jpg",
+      "status": 200
+    },
+    {
+      "t": 3052,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/contacts/a9907807-268a-461d-8eed-64272a658c44/avatar?mediaToken=…&v=avatars%2Fpedro.jpg",
+      "status": 200
+    },
+    {
+      "t": 3053,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/contacts/27b15ca8-436c-4cad-88e2-f4c622502337/avatar?mediaToken=…&v=avatars%2Fthais.jpg",
+      "status": 200
+    },
+    {
+      "t": 3053,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/contacts/27f3d273-5b61-4e0b-8303-6a859959f3a6/avatar?mediaToken=…&v=avatars%2Fmanoel.jpg",
+      "status": 200
+    },
+    {
+      "t": 3390,
+      "tipo": "preflight",
+      "method": "OPTIONS",
+      "url": "http://localhost:3000/api/conversations/6a41a1aa-05e0-4f04-878a-169a66ad15f1/messages?limit=51",
+      "status": 204
+    },
+    {
+      "t": 3391,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/conversations/6a41a1aa-05e0-4f04-878a-169a66ad15f1/messages?limit=51",
+      "status": 200
+    },
+    {
+      "t": 4600,
+      "tipo": "socket",
+      "method": "GET",
+      "url": "http://localhost:3000/socket.io/?EIO=4&transport=polling&t=t4rxxs8q"
+    },
+    {
+      "t": 4835,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/conversations/5e39f712-314d-4c1a-8916-0a3e4a10f866/messages?limit=51",
+      "status": 200
+    },
+    {
+      "t": 4836,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/conversations/5e39f712-314d-4c1a-8916-0a3e4a10f866/ai-suggestion",
+      "status": 200
+    },
+    {
+      "t": 4839,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/sgp/clientes?cpf=12345678909",
+      "status": 200
+    },
+    {
+      "t": 6440,
+      "tipo": "api",
+      "method": "GET",
+      "url": "http://localhost:3000/api/sgp/clientes?cpf=12345678909",
+      "status": 200
+    },
+    {
+      "t": 7397,
+      "tipo": "socket",
+      "method": "GET",
+      "url": "http://localhost:3000/socket.io/?EIO=4&transport=polling&t=t4u3n7kx"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "descricao": "Prints da tela de Atendimento. Estados: 0 lista sem conversa; 1 conversa A aberta sem painel (PRINCIPAL); 2 conversa A com o painel do SGP aberto automaticamente (contato tem CPF); 3 mesma conversa rolada ate a transferencia; 4 painel Dados do cliente; 5 painel Consultar SGP reaberto; 6 aba Espera; 7 aba Automacao.",
+  "prints": {
+    "atendente-1366": [
+      "m1-m5/atendente-1366-0-lista.png",
+      "m1-m5/atendente-1366-1-conversa.png",
+      "m1-m5/atendente-1366-2-conversa-sgp-automatico.png",
+      "m1-m5/atendente-1366-3-conversa-transferencia.png",
+      "m1-m5/atendente-1366-4-dados-do-cliente.png",
+      "m1-m5/atendente-1366-5-sgp.png",
+      "m1-m5/atendente-1366-6-aba-espera.png",
+      "m1-m5/atendente-1366-7-aba-automacao.png"
+    ],
+    "atendente-1920": [
+      "m1-m5/atendente-1920-0-lista.png",
+      "m1-m5/atendente-1920-1-conversa.png",
+      "m1-m5/atendente-1920-2-conversa-sgp-automatico.png",
+      "m1-m5/atendente-1920-3-conversa-transferencia.png",
+      "m1-m5/atendente-1920-4-dados-do-cliente.png",
+      "m1-m5/atendente-1920-5-sgp.png",
+      "m1-m5/atendente-1920-6-aba-espera.png",
+      "m1-m5/atendente-1920-7-aba-automacao.png"
+    ],
+    "admin-1366": [
+      "m1-m5/admin-1366-0-lista.png",
+      "m1-m5/admin-1366-1-conversa.png",
+      "m1-m5/admin-1366-2-conversa-sgp-automatico.png",
+      "m1-m5/admin-1366-3-conversa-transferencia.png",
+      "m1-m5/admin-1366-4-dados-do-cliente.png",
+      "m1-m5/admin-1366-5-sgp.png",
+      "m1-m5/admin-1366-6-aba-espera.png",
+      "m1-m5/admin-1366-7-aba-automacao.png"
+    ]
+  },
+  "m6": [
+    "m6/m6-appshell-1500ms.png",
+    "m6/m6-dashboardpage-1500ms.png"
+  ],
+  "opcional": [
+    "opcional/admin-1366-supervisao.png",
+    "opcional/admin-1366-relatorios.png",
+    "opcional/admin-1366-configuracoes-canais.png"
+  ],
+  "suplementar": [
+    "suplementar/atendente-1366-socket-emulado-0-lista-nao-lidas.png",
+    "suplementar/atendente-1366-socket-emulado-1-conversa.png",
+    "suplementar/atendente-1366-socket-emulado-2-aba-espera.png"
+  ]
+}

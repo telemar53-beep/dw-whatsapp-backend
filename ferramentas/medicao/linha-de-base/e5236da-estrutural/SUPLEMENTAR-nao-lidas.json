@@ -1,0 +1,156 @@
+{
+  "aviso": "Medição suplementar com socket.io EMULADO (fora da regra de bloqueio). Não substitui M1–M5.",
+  "eventos": [
+    "message:new → Ana",
+    "message:new → Raimundo Nonato Ferreira",
+    "message:new → Carlos",
+    "message:new → Irene"
+  ],
+  "naoLidasEmAndamento": [
+    "Ana",
+    "Raimundo Nonato Ferreira"
+  ],
+  "naoLidasNaEspera": [
+    "Carlos",
+    "Irene"
+  ],
+  "resumo": [
+    {
+      "estado": "socket-emulado-0-lista-nao-lidas",
+      "print": "suplementar/atendente-1366-socket-emulado-0-lista-nao-lidas.png",
+      "familias": 4,
+      "quais": [
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "indicadorReconectando": false,
+      "M4": {
+        "itens": 6,
+        "pecas": {
+          "n": 6,
+          "min": 6,
+          "mediana": 7,
+          "max": 10
+        },
+        "elementos": {
+          "n": 6,
+          "min": 12,
+          "mediana": 14,
+          "max": 18
+        },
+        "tipos": {
+          "ficha (cidade/setor)": 11,
+          "nome": 6,
+          "hora": 6,
+          "prévia": 6,
+          "responsável": 6,
+          "foto (img)": 3,
+          "iniciais do avatar": 3,
+          "texto IA": 2,
+          "tique de status (svg)": 2,
+          "alerta ⚠ (confiança baixa)": 1
+        }
+      }
+    },
+    {
+      "estado": "socket-emulado-1-conversa",
+      "print": "suplementar/atendente-1366-socket-emulado-1-conversa.png",
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "indicadorReconectando": false,
+      "M4": {
+        "itens": 6,
+        "pecas": {
+          "n": 6,
+          "min": 6,
+          "mediana": 7,
+          "max": 10
+        },
+        "elementos": {
+          "n": 6,
+          "min": 12,
+          "mediana": 14,
+          "max": 18
+        },
+        "tipos": {
+          "ficha (cidade/setor)": 11,
+          "nome": 6,
+          "hora": 6,
+          "prévia": 6,
+          "responsável": 6,
+          "foto (img)": 3,
+          "iniciais do avatar": 3,
+          "texto IA": 2,
+          "tique de status (svg)": 2,
+          "alerta ⚠ (confiança baixa)": 1
+        }
+      }
+    },
+    {
+      "estado": "socket-emulado-2-aba-espera",
+      "print": "suplementar/atendente-1366-socket-emulado-2-aba-espera.png",
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "indicadorReconectando": false,
+      "M4": {
+        "itens": 14,
+        "pecas": {
+          "n": 14,
+          "min": 5,
+          "mediana": 9,
+          "max": 12
+        },
+        "elementos": {
+          "n": 14,
+          "min": 12,
+          "mediana": 16,
+          "max": 22
+        },
+        "tipos": {
+          "ficha (cidade/setor)": 25,
+          "texto IA": 19,
+          "nome": 14,
+          "hora": 14,
+          "prévia": 14,
+          "ícone finalizar (svg)": 14,
+          "iniciais do avatar": 9,
+          "foto (img)": 5,
+          "tique de status (svg)": 4
+        }
+      }
+    }
+  ],
+  "socketLog": [
+    {
+      "handshake": true
+    },
+    {
+      "saiu": [
+        "40{\"sid\":\"socket-emulado\"}"
+      ]
+    },
+    {
+      "saiu": [
+        "42[\"message:new\",{\"conversation\":{\"id\":\"0671cc07-658f-41bf-8",
+        "42[\"message:new\",{\"conversation\":{\"id\":\"c324a36d-8858-4428-8",
+        "42[\"message:new\",{\"conversation\":{\"id\":\"8c332af3-497a-4de6-8",
+        "42[\"message:new\",{\"conversation\":{\"id\":\"004b7611-4775-4fcc-8"
+      ]
+    }
+  ],
+  "naoAtendidos": []
+}

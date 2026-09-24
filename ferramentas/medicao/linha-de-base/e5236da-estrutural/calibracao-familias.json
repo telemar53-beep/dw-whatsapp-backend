@@ -1,0 +1,240 @@
+{
+  "chat-orange #f28c45": {
+    "L": 0.7371,
+    "C": 0.15,
+    "H": 52.8,
+    "cromatico": true,
+    "familia": "laranja-cobre"
+  },
+  "chat-copper #f29a58": {
+    "L": 0.763,
+    "C": 0.1335,
+    "H": 55.9,
+    "cromatico": true,
+    "familia": "laranja-cobre"
+  },
+  "accent-soft/focus #e5a16d": {
+    "L": 0.7635,
+    "C": 0.1057,
+    "H": 57.8,
+    "cromatico": true,
+    "familia": "laranja-cobre"
+  },
+  "accent-strong #dd7835": {
+    "L": 0.6752,
+    "C": 0.1484,
+    "H": 50.9,
+    "cromatico": true,
+    "familia": "laranja-cobre"
+  },
+  "edge-out #d99055": {
+    "L": 0.7152,
+    "C": 0.1163,
+    "H": 58.4,
+    "cromatico": true,
+    "familia": "laranja-cobre"
+  },
+  "estado espera #e0a83c": {
+    "L": 0.7655,
+    "C": 0.1369,
+    "H": 80.1,
+    "cromatico": true,
+    "familia": "ambar-amarelo"
+  },
+  "warn-text #f0b65f": {
+    "L": 0.8127,
+    "C": 0.124,
+    "H": 75.5,
+    "cromatico": true,
+    "familia": "ambar-amarelo"
+  },
+  "link #ffb078": {
+    "L": 0.8212,
+    "C": 0.1173,
+    "H": 55.6,
+    "cromatico": true,
+    "familia": "laranja-cobre"
+  },
+  "estado automacao #9b7ae8": {
+    "L": 0.6589,
+    "C": 0.1604,
+    "H": 295.5,
+    "cromatico": true,
+    "familia": "roxo-lilas"
+  },
+  "edge-ai #b9a1d7": {
+    "L": 0.7486,
+    "C": 0.0805,
+    "H": 304.8,
+    "cromatico": true,
+    "familia": "roxo-lilas"
+  },
+  "ink-ai #c4b2dc": {
+    "L": 0.7925,
+    "C": 0.0617,
+    "H": 304.5,
+    "cromatico": true,
+    "familia": "roxo-lilas"
+  },
+  "ai-chip #cbb9e6": {
+    "L": 0.8155,
+    "C": 0.0652,
+    "H": 303.2,
+    "cromatico": true,
+    "familia": "roxo-lilas"
+  },
+  "online #33d9a6": {
+    "L": 0.791,
+    "C": 0.1509,
+    "H": 166.9,
+    "cromatico": true,
+    "familia": "verde-agua"
+  },
+  "presence #65c596": {
+    "L": 0.7518,
+    "C": 0.115,
+    "H": 160.5,
+    "cromatico": true,
+    "familia": "verde-agua"
+  },
+  "estado encerrado #5fb89b": {
+    "L": 0.7189,
+    "C": 0.0968,
+    "H": 170,
+    "cromatico": true,
+    "familia": "verde-agua"
+  },
+  "pix #2fc8b6": {
+    "L": 0.7524,
+    "C": 0.1246,
+    "H": 183,
+    "cromatico": true,
+    "familia": "verde-agua"
+  },
+  "teal #0d9488": {
+    "L": 0.6002,
+    "C": 0.1038,
+    "H": 184.7,
+    "cromatico": true,
+    "familia": "verde-agua"
+  },
+  "sgp-blue #7ab0ff": {
+    "L": 0.7521,
+    "C": 0.1282,
+    "H": 257.8,
+    "cromatico": true,
+    "familia": "azul"
+  },
+  "edge-in #7f95a3": {
+    "L": 0.6574,
+    "C": 0.0326,
+    "H": 235.9,
+    "cromatico": false,
+    "familia": "acromatico"
+  },
+  "glow #8296a4": {
+    "L": 0.6621,
+    "C": 0.0309,
+    "H": 238.5,
+    "cromatico": false,
+    "familia": "acromatico"
+  },
+  "ink-muted #a9bcc8": {
+    "L": 0.7845,
+    "C": 0.027,
+    "H": 235.5,
+    "cromatico": false,
+    "familia": "acromatico"
+  },
+  "chip #c2d0d9": {
+    "L": 0.8497,
+    "C": 0.0197,
+    "H": 235.8,
+    "cromatico": false,
+    "familia": "acromatico"
+  },
+  "sgp-red #ff8d82": {
+    "L": 0.7644,
+    "C": 0.1398,
+    "H": 26.6,
+    "cromatico": true,
+    "familia": "vermelho-rosa"
+  },
+  "error-text #ff9d93": {
+    "L": 0.7936,
+    "C": 0.1188,
+    "H": 26.3,
+    "cromatico": true,
+    "familia": "vermelho-rosa"
+  },
+  "red-600 oklch": {
+    "L": 0.577,
+    "C": 0.245,
+    "H": 27.3,
+    "cromatico": true,
+    "familia": "vermelho-rosa"
+  },
+  "google red #ea4335": {
+    "L": 0.6257,
+    "C": 0.2058,
+    "H": 29.1,
+    "cromatico": true,
+    "familia": "vermelho-rosa"
+  },
+  "avatar roxo #7c5cff": {
+    "L": 0.599,
+    "C": 0.2299,
+    "H": 286.2,
+    "cromatico": true,
+    "familia": "roxo-lilas"
+  },
+  "avatar azul #2f7cf6": {
+    "L": 0.6071,
+    "C": 0.1979,
+    "H": 259.6,
+    "cromatico": true,
+    "familia": "azul"
+  },
+  "avatar rosa #e0459b": {
+    "L": 0.6353,
+    "C": 0.2069,
+    "H": 350.5,
+    "cromatico": true,
+    "familia": "vermelho-rosa"
+  },
+  "avatar verde #1f9d5a": {
+    "L": 0.6146,
+    "C": 0.1457,
+    "H": 153.9,
+    "cromatico": true,
+    "familia": "verde-agua"
+  },
+  "avatar laranja #d97a1f": {
+    "L": 0.6717,
+    "C": 0.1511,
+    "H": 57.6,
+    "cromatico": true,
+    "familia": "laranja-cobre"
+  },
+  "avatar ciano #0ea5b7": {
+    "L": 0.6615,
+    "C": 0.112,
+    "H": 208.7,
+    "cromatico": true,
+    "familia": "azul"
+  },
+  "canvas #20272d": {
+    "L": 0.2685,
+    "C": 0.015,
+    "H": 244.2,
+    "cromatico": false,
+    "familia": "acromatico"
+  },
+  "text #f4f6f7": {
+    "L": 0.9719,
+    "C": 0.0025,
+    "H": 228.8,
+    "cromatico": false,
+    "familia": "acromatico"
+  }
+}

@@ -1,0 +1,1897 @@
+{
+  "seletor": "[role=tabpanel] li (todo item do painel da aba ativa; a linha clicável é o [role=button] dentro dele)",
+  "criterio": "peças = nós de texto não vazios e visíveis + <svg> + <img>; linhas visuais = faixas distintas de texto (retângulos de Range agrupados por altura, tolerância 5 px)",
+  "porLista": {
+    "atendente-1366 · Atendimento (Andamento)": {
+      "itens": 6,
+      "elementosDOM": {
+        "n": 6,
+        "min": 12,
+        "mediana": 14.5,
+        "max": 18
+      },
+      "nosDOMcomTexto": {
+        "n": 6,
+        "min": 18,
+        "mediana": 23,
+        "max": 25
+      },
+      "pecasVisiveis": {
+        "n": 6,
+        "min": 6,
+        "mediana": 8,
+        "max": 10
+      },
+      "alturaPx": {
+        "n": 6,
+        "min": 68,
+        "mediana": 68,
+        "max": 68
+      },
+      "linhasVisuais": {
+        "n": 6,
+        "min": 3,
+        "mediana": 3,
+        "max": 3
+      },
+      "tiposDePeca": {
+        "ficha (cidade/setor)": 11,
+        "nome": 6,
+        "hora": 6,
+        "prévia": 6,
+        "responsável": 6,
+        "tique de status (svg)": 4,
+        "foto (img)": 3,
+        "iniciais do avatar": 3,
+        "texto IA": 2,
+        "alerta ⚠ (confiança baixa)": 1
+      },
+      "porItem": [
+        {
+          "nome": "Maria José da Conceição Silva Nascimento",
+          "estado": "atendimento",
+          "elementos": 14,
+          "nosTexto": 8,
+          "nosTotal": 22,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "foto (img)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Ana",
+          "estado": "atendimento",
+          "elementos": 18,
+          "nosTexto": 7,
+          "nosTotal": 25,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "tique de status (svg)",
+            "tique de status (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "João Pedro Ribeiro dos Santos Filho",
+          "estado": "atendimento",
+          "elementos": 13,
+          "nosTexto": 6,
+          "nosTotal": 19,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "foto (img)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Raimundo Nonato Ferreira",
+          "estado": "atendimento",
+          "elementos": 15,
+          "nosTexto": 10,
+          "nosTotal": 25,
+          "pecas": 10,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "alerta ⚠ (confiança baixa)",
+            "responsável"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "5598988776655",
+          "estado": "atendimento",
+          "elementos": 12,
+          "nosTexto": 6,
+          "nosTotal": 18,
+          "pecas": 6,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "responsável"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Luana Beatriz",
+          "estado": "atendimento",
+          "elementos": 18,
+          "nosTexto": 6,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "foto (img)",
+            "tique de status (svg)",
+            "tique de status (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        }
+      ]
+    },
+    "atendente-1366 · Espera": {
+      "itens": 14,
+      "elementosDOM": {
+        "n": 14,
+        "min": 12,
+        "mediana": 16,
+        "max": 22
+      },
+      "nosDOMcomTexto": {
+        "n": 14,
+        "min": 16,
+        "mediana": 23.5,
+        "max": 31
+      },
+      "pecasVisiveis": {
+        "n": 14,
+        "min": 5,
+        "mediana": 9,
+        "max": 12
+      },
+      "alturaPx": {
+        "n": 14,
+        "min": 68,
+        "mediana": 68,
+        "max": 68
+      },
+      "linhasVisuais": {
+        "n": 14,
+        "min": 3,
+        "mediana": 3,
+        "max": 3
+      },
+      "tiposDePeca": {
+        "ficha (cidade/setor)": 25,
+        "texto IA": 19,
+        "nome": 14,
+        "hora": 14,
+        "prévia": 14,
+        "ícone finalizar (svg)": 14,
+        "iniciais do avatar": 9,
+        "foto (img)": 5,
+        "tique de status (svg)": 4
+      },
+      "porItem": [
+        {
+          "nome": "Francisca das Chagas Pereira Lima",
+          "estado": "espera",
+          "elementos": 21,
+          "nosTexto": 7,
+          "nosTotal": 28,
+          "pecas": 11,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "foto (img)",
+            "tique de status (svg)",
+            "tique de status (svg)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Carlos",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Antônio Carlos de Oliveira Brandão Júnio",
+          "estado": "espera",
+          "elementos": 15,
+          "nosTexto": 5,
+          "nosTotal": 20,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Josefa",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Pedro Henrique Sousa Costa",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 7,
+          "nosTotal": 23,
+          "pecas": 9,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Rosângela Maria Pinheiro",
+          "estado": "espera",
+          "elementos": 15,
+          "nosTexto": 6,
+          "nosTotal": 21,
+          "pecas": 7,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "5598991234411",
+          "estado": "espera",
+          "elementos": 12,
+          "nosTexto": 4,
+          "nosTotal": 16,
+          "pecas": 5,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Valdemar Araújo",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Thaís Fernandes",
+          "estado": "espera",
+          "elementos": 15,
+          "nosTexto": 5,
+          "nosTotal": 20,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Sebastião Ribeiro da Silva",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Kelly",
+          "estado": "espera",
+          "elementos": 22,
+          "nosTexto": 9,
+          "nosTotal": 31,
+          "pecas": 12,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "texto IA",
+            "tique de status (svg)",
+            "tique de status (svg)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Manoel Messias dos Santos Moraes",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 7,
+          "nosTotal": 23,
+          "pecas": 9,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Irene",
+          "estado": "espera",
+          "elementos": 14,
+          "nosTexto": 5,
+          "nosTotal": 19,
+          "pecas": 6,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Gabriel Lucas Nascimento",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        }
+      ]
+    },
+    "atendente-1366 · Automação": {
+      "itens": 2,
+      "elementosDOM": {
+        "n": 2,
+        "min": 14,
+        "mediana": 14.5,
+        "max": 15
+      },
+      "nosDOMcomTexto": {
+        "n": 2,
+        "min": 19,
+        "mediana": 20,
+        "max": 21
+      },
+      "pecasVisiveis": {
+        "n": 2,
+        "min": 6,
+        "mediana": 6.5,
+        "max": 7
+      },
+      "alturaPx": {
+        "n": 2,
+        "min": 68,
+        "mediana": 68,
+        "max": 68
+      },
+      "linhasVisuais": {
+        "n": 2,
+        "min": 3,
+        "mediana": 3,
+        "max": 3
+      },
+      "tiposDePeca": {
+        "iniciais do avatar": 2,
+        "nome": 2,
+        "hora": 2,
+        "prévia": 2,
+        "texto IA": 2,
+        "ícone finalizar (svg)": 2,
+        "ficha (cidade/setor)": 1
+      },
+      "porItem": [
+        {
+          "nome": "Edivaldo Costa",
+          "estado": "automacao",
+          "elementos": 15,
+          "nosTexto": 6,
+          "nosTotal": 21,
+          "pecas": 7,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "5598982001133",
+          "estado": "automacao",
+          "elementos": 14,
+          "nosTexto": 5,
+          "nosTotal": 19,
+          "pecas": 6,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        }
+      ]
+    },
+    "atendente-1920 · Atendimento (Andamento)": {
+      "itens": 6,
+      "elementosDOM": {
+        "n": 6,
+        "min": 12,
+        "mediana": 14.5,
+        "max": 18
+      },
+      "nosDOMcomTexto": {
+        "n": 6,
+        "min": 18,
+        "mediana": 23,
+        "max": 25
+      },
+      "pecasVisiveis": {
+        "n": 6,
+        "min": 6,
+        "mediana": 8,
+        "max": 10
+      },
+      "alturaPx": {
+        "n": 6,
+        "min": 68,
+        "mediana": 68,
+        "max": 68
+      },
+      "linhasVisuais": {
+        "n": 6,
+        "min": 3,
+        "mediana": 3,
+        "max": 3
+      },
+      "tiposDePeca": {
+        "ficha (cidade/setor)": 11,
+        "nome": 6,
+        "hora": 6,
+        "prévia": 6,
+        "responsável": 6,
+        "tique de status (svg)": 4,
+        "foto (img)": 3,
+        "iniciais do avatar": 3,
+        "texto IA": 2,
+        "alerta ⚠ (confiança baixa)": 1
+      },
+      "porItem": [
+        {
+          "nome": "Maria José da Conceição Silva Nascimento",
+          "estado": "atendimento",
+          "elementos": 14,
+          "nosTexto": 8,
+          "nosTotal": 22,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "foto (img)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Ana",
+          "estado": "atendimento",
+          "elementos": 18,
+          "nosTexto": 7,
+          "nosTotal": 25,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "tique de status (svg)",
+            "tique de status (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "João Pedro Ribeiro dos Santos Filho",
+          "estado": "atendimento",
+          "elementos": 13,
+          "nosTexto": 6,
+          "nosTotal": 19,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "foto (img)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Raimundo Nonato Ferreira",
+          "estado": "atendimento",
+          "elementos": 15,
+          "nosTexto": 10,
+          "nosTotal": 25,
+          "pecas": 10,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "alerta ⚠ (confiança baixa)",
+            "responsável"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "5598988776655",
+          "estado": "atendimento",
+          "elementos": 12,
+          "nosTexto": 6,
+          "nosTotal": 18,
+          "pecas": 6,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "responsável"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Luana Beatriz",
+          "estado": "atendimento",
+          "elementos": 18,
+          "nosTexto": 6,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "foto (img)",
+            "tique de status (svg)",
+            "tique de status (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        }
+      ]
+    },
+    "atendente-1920 · Espera": {
+      "itens": 14,
+      "elementosDOM": {
+        "n": 14,
+        "min": 12,
+        "mediana": 16,
+        "max": 22
+      },
+      "nosDOMcomTexto": {
+        "n": 14,
+        "min": 16,
+        "mediana": 23.5,
+        "max": 31
+      },
+      "pecasVisiveis": {
+        "n": 14,
+        "min": 5,
+        "mediana": 9,
+        "max": 12
+      },
+      "alturaPx": {
+        "n": 14,
+        "min": 68,
+        "mediana": 68,
+        "max": 68
+      },
+      "linhasVisuais": {
+        "n": 14,
+        "min": 3,
+        "mediana": 3,
+        "max": 3
+      },
+      "tiposDePeca": {
+        "ficha (cidade/setor)": 25,
+        "texto IA": 19,
+        "nome": 14,
+        "hora": 14,
+        "prévia": 14,
+        "ícone finalizar (svg)": 14,
+        "iniciais do avatar": 9,
+        "foto (img)": 5,
+        "tique de status (svg)": 4
+      },
+      "porItem": [
+        {
+          "nome": "Francisca das Chagas Pereira Lima",
+          "estado": "espera",
+          "elementos": 21,
+          "nosTexto": 7,
+          "nosTotal": 28,
+          "pecas": 11,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "foto (img)",
+            "tique de status (svg)",
+            "tique de status (svg)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Carlos",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Antônio Carlos de Oliveira Brandão Júnio",
+          "estado": "espera",
+          "elementos": 15,
+          "nosTexto": 5,
+          "nosTotal": 20,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Josefa",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Pedro Henrique Sousa Costa",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 7,
+          "nosTotal": 23,
+          "pecas": 9,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Rosângela Maria Pinheiro",
+          "estado": "espera",
+          "elementos": 15,
+          "nosTexto": 6,
+          "nosTotal": 21,
+          "pecas": 7,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "5598991234411",
+          "estado": "espera",
+          "elementos": 12,
+          "nosTexto": 4,
+          "nosTotal": 16,
+          "pecas": 5,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Valdemar Araújo",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Thaís Fernandes",
+          "estado": "espera",
+          "elementos": 15,
+          "nosTexto": 5,
+          "nosTotal": 20,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Sebastião Ribeiro da Silva",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Kelly",
+          "estado": "espera",
+          "elementos": 22,
+          "nosTexto": 9,
+          "nosTotal": 31,
+          "pecas": 12,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "texto IA",
+            "tique de status (svg)",
+            "tique de status (svg)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Manoel Messias dos Santos Moraes",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 7,
+          "nosTotal": 23,
+          "pecas": 9,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Irene",
+          "estado": "espera",
+          "elementos": 14,
+          "nosTexto": 5,
+          "nosTotal": 19,
+          "pecas": 6,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Gabriel Lucas Nascimento",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        }
+      ]
+    },
+    "atendente-1920 · Automação": {
+      "itens": 2,
+      "elementosDOM": {
+        "n": 2,
+        "min": 14,
+        "mediana": 14.5,
+        "max": 15
+      },
+      "nosDOMcomTexto": {
+        "n": 2,
+        "min": 19,
+        "mediana": 20,
+        "max": 21
+      },
+      "pecasVisiveis": {
+        "n": 2,
+        "min": 6,
+        "mediana": 6.5,
+        "max": 7
+      },
+      "alturaPx": {
+        "n": 2,
+        "min": 68,
+        "mediana": 68,
+        "max": 68
+      },
+      "linhasVisuais": {
+        "n": 2,
+        "min": 3,
+        "mediana": 3,
+        "max": 3
+      },
+      "tiposDePeca": {
+        "iniciais do avatar": 2,
+        "nome": 2,
+        "hora": 2,
+        "prévia": 2,
+        "texto IA": 2,
+        "ícone finalizar (svg)": 2,
+        "ficha (cidade/setor)": 1
+      },
+      "porItem": [
+        {
+          "nome": "Edivaldo Costa",
+          "estado": "automacao",
+          "elementos": 15,
+          "nosTexto": 6,
+          "nosTotal": 21,
+          "pecas": 7,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "5598982001133",
+          "estado": "automacao",
+          "elementos": 14,
+          "nosTexto": 5,
+          "nosTotal": 19,
+          "pecas": 6,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        }
+      ]
+    },
+    "admin-1366 · Atendimento (Andamento)": {
+      "itens": 6,
+      "elementosDOM": {
+        "n": 6,
+        "min": 12,
+        "mediana": 14.5,
+        "max": 18
+      },
+      "nosDOMcomTexto": {
+        "n": 6,
+        "min": 18,
+        "mediana": 23,
+        "max": 25
+      },
+      "pecasVisiveis": {
+        "n": 6,
+        "min": 6,
+        "mediana": 8,
+        "max": 10
+      },
+      "alturaPx": {
+        "n": 6,
+        "min": 68,
+        "mediana": 68,
+        "max": 68
+      },
+      "linhasVisuais": {
+        "n": 6,
+        "min": 3,
+        "mediana": 3,
+        "max": 3
+      },
+      "tiposDePeca": {
+        "ficha (cidade/setor)": 11,
+        "nome": 6,
+        "hora": 6,
+        "prévia": 6,
+        "responsável": 6,
+        "tique de status (svg)": 4,
+        "foto (img)": 3,
+        "iniciais do avatar": 3,
+        "texto IA": 2,
+        "alerta ⚠ (confiança baixa)": 1
+      },
+      "porItem": [
+        {
+          "nome": "Maria José da Conceição Silva Nascimento",
+          "estado": "atendimento",
+          "elementos": 14,
+          "nosTexto": 8,
+          "nosTotal": 22,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "foto (img)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Ana",
+          "estado": "atendimento",
+          "elementos": 18,
+          "nosTexto": 7,
+          "nosTotal": 25,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "tique de status (svg)",
+            "tique de status (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "João Pedro Ribeiro dos Santos Filho",
+          "estado": "atendimento",
+          "elementos": 13,
+          "nosTexto": 6,
+          "nosTotal": 19,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "foto (img)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Raimundo Nonato Ferreira",
+          "estado": "atendimento",
+          "elementos": 15,
+          "nosTexto": 10,
+          "nosTotal": 25,
+          "pecas": 10,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "alerta ⚠ (confiança baixa)",
+            "responsável"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "5598988776655",
+          "estado": "atendimento",
+          "elementos": 12,
+          "nosTexto": 6,
+          "nosTotal": 18,
+          "pecas": 6,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "responsável"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Luana Beatriz",
+          "estado": "atendimento",
+          "elementos": 18,
+          "nosTexto": 6,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "responsável",
+            "foto (img)",
+            "tique de status (svg)",
+            "tique de status (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        }
+      ]
+    },
+    "admin-1366 · Espera": {
+      "itens": 14,
+      "elementosDOM": {
+        "n": 14,
+        "min": 12,
+        "mediana": 16,
+        "max": 22
+      },
+      "nosDOMcomTexto": {
+        "n": 14,
+        "min": 16,
+        "mediana": 23.5,
+        "max": 31
+      },
+      "pecasVisiveis": {
+        "n": 14,
+        "min": 5,
+        "mediana": 9,
+        "max": 12
+      },
+      "alturaPx": {
+        "n": 14,
+        "min": 68,
+        "mediana": 68,
+        "max": 68
+      },
+      "linhasVisuais": {
+        "n": 14,
+        "min": 3,
+        "mediana": 3,
+        "max": 3
+      },
+      "tiposDePeca": {
+        "ficha (cidade/setor)": 25,
+        "texto IA": 19,
+        "nome": 14,
+        "hora": 14,
+        "prévia": 14,
+        "ícone finalizar (svg)": 14,
+        "iniciais do avatar": 9,
+        "foto (img)": 5,
+        "tique de status (svg)": 4
+      },
+      "porItem": [
+        {
+          "nome": "Francisca das Chagas Pereira Lima",
+          "estado": "espera",
+          "elementos": 21,
+          "nosTexto": 7,
+          "nosTotal": 28,
+          "pecas": 11,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "foto (img)",
+            "tique de status (svg)",
+            "tique de status (svg)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Carlos",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Antônio Carlos de Oliveira Brandão Júnio",
+          "estado": "espera",
+          "elementos": 15,
+          "nosTexto": 5,
+          "nosTotal": 20,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Josefa",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Pedro Henrique Sousa Costa",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 7,
+          "nosTotal": 23,
+          "pecas": 9,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Rosângela Maria Pinheiro",
+          "estado": "espera",
+          "elementos": 15,
+          "nosTexto": 6,
+          "nosTotal": 21,
+          "pecas": 7,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "5598991234411",
+          "estado": "espera",
+          "elementos": 12,
+          "nosTexto": 4,
+          "nosTotal": 16,
+          "pecas": 5,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Valdemar Araújo",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Thaís Fernandes",
+          "estado": "espera",
+          "elementos": 15,
+          "nosTexto": 5,
+          "nosTotal": 20,
+          "pecas": 7,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Sebastião Ribeiro da Silva",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Kelly",
+          "estado": "espera",
+          "elementos": 22,
+          "nosTexto": 9,
+          "nosTotal": 31,
+          "pecas": 12,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "texto IA",
+            "tique de status (svg)",
+            "tique de status (svg)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Manoel Messias dos Santos Moraes",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 7,
+          "nosTotal": 23,
+          "pecas": 9,
+          "tipos": [
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "foto (img)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Irene",
+          "estado": "espera",
+          "elementos": 14,
+          "nosTexto": 5,
+          "nosTotal": 19,
+          "pecas": 6,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "Gabriel Lucas Nascimento",
+          "estado": "espera",
+          "elementos": 16,
+          "nosTexto": 8,
+          "nosTotal": 24,
+          "pecas": 9,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        }
+      ]
+    },
+    "admin-1366 · Automação": {
+      "itens": 2,
+      "elementosDOM": {
+        "n": 2,
+        "min": 14,
+        "mediana": 14.5,
+        "max": 15
+      },
+      "nosDOMcomTexto": {
+        "n": 2,
+        "min": 19,
+        "mediana": 20,
+        "max": 21
+      },
+      "pecasVisiveis": {
+        "n": 2,
+        "min": 6,
+        "mediana": 6.5,
+        "max": 7
+      },
+      "alturaPx": {
+        "n": 2,
+        "min": 68,
+        "mediana": 68,
+        "max": 68
+      },
+      "linhasVisuais": {
+        "n": 2,
+        "min": 3,
+        "mediana": 3,
+        "max": 3
+      },
+      "tiposDePeca": {
+        "iniciais do avatar": 2,
+        "nome": 2,
+        "hora": 2,
+        "prévia": 2,
+        "texto IA": 2,
+        "ícone finalizar (svg)": 2,
+        "ficha (cidade/setor)": 1
+      },
+      "porItem": [
+        {
+          "nome": "Edivaldo Costa",
+          "estado": "automacao",
+          "elementos": 15,
+          "nosTexto": 6,
+          "nosTotal": 21,
+          "pecas": 7,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "ficha (cidade/setor)",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        },
+        {
+          "nome": "5598982001133",
+          "estado": "automacao",
+          "elementos": 14,
+          "nosTexto": 5,
+          "nosTotal": 19,
+          "pecas": 6,
+          "tipos": [
+            "iniciais do avatar",
+            "nome",
+            "hora",
+            "prévia",
+            "texto IA",
+            "ícone finalizar (svg)"
+          ],
+          "altura": 68,
+          "alturaLinha": 68,
+          "linhasVisuais": 3
+        }
+      ]
+    }
+  },
+  "suplementarNaoLidas": [
+    {
+      "estado": "socket-emulado-0-lista-nao-lidas",
+      "itens": 6,
+      "pecas": {
+        "n": 6,
+        "min": 6,
+        "mediana": 7,
+        "max": 10
+      },
+      "elementos": {
+        "n": 6,
+        "min": 12,
+        "mediana": 14,
+        "max": 18
+      },
+      "tipos": {
+        "ficha (cidade/setor)": 11,
+        "nome": 6,
+        "hora": 6,
+        "prévia": 6,
+        "responsável": 6,
+        "foto (img)": 3,
+        "iniciais do avatar": 3,
+        "texto IA": 2,
+        "tique de status (svg)": 2,
+        "alerta ⚠ (confiança baixa)": 1
+      }
+    },
+    {
+      "estado": "socket-emulado-1-conversa",
+      "itens": 6,
+      "pecas": {
+        "n": 6,
+        "min": 6,
+        "mediana": 7,
+        "max": 10
+      },
+      "elementos": {
+        "n": 6,
+        "min": 12,
+        "mediana": 14,
+        "max": 18
+      },
+      "tipos": {
+        "ficha (cidade/setor)": 11,
+        "nome": 6,
+        "hora": 6,
+        "prévia": 6,
+        "responsável": 6,
+        "foto (img)": 3,
+        "iniciais do avatar": 3,
+        "texto IA": 2,
+        "tique de status (svg)": 2,
+        "alerta ⚠ (confiança baixa)": 1
+      }
+    },
+    {
+      "estado": "socket-emulado-2-aba-espera",
+      "itens": 14,
+      "pecas": {
+        "n": 14,
+        "min": 5,
+        "mediana": 9,
+        "max": 12
+      },
+      "elementos": {
+        "n": 14,
+        "min": 12,
+        "mediana": 16,
+        "max": 22
+      },
+      "tipos": {
+        "ficha (cidade/setor)": 25,
+        "texto IA": 19,
+        "nome": 14,
+        "hora": 14,
+        "prévia": 14,
+        "ícone finalizar (svg)": 14,
+        "iniciais do avatar": 9,
+        "foto (img)": 5,
+        "tique de status (svg)": 4
+      }
+    }
+  ]
+}

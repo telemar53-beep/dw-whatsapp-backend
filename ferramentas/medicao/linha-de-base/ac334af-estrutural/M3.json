@@ -1,0 +1,1012 @@
+{
+  "criterio": "color (só elementos com texto próprio), background-color, border-*-color (lados com largura > 0), fill/stroke de formas SVG, inclusive ::before/::after; OKLCH; cromático se C > 0.04 (alfa ignorado na classificação e reportado); \"efetivas\" = cor composta sobre o fundo real embaixo; \"estendido\" = + paradas de gradiente e cores de box-shadow. Famílias por matiz OKLCH: vermelho/rosa 345–45°, laranja/cobre 45–72°, âmbar/amarelo 72–115°, verde/verde-água 115–200°, azul 200–268°, roxo/lilás 268–345° (calibração em calibracao-familias.json).",
+  "principal": {
+    "estado": "atendente-1366-1-conversa",
+    "familias": 5,
+    "quais": [
+      "vermelho-rosa",
+      "laranja-cobre",
+      "ambar-amarelo",
+      "verde-agua",
+      "roxo-lilas"
+    ],
+    "familiasEfetivas": 5,
+    "familiasComArtefato": 5,
+    "familiasEstendido": 5,
+    "detalhe": {
+      "amostras": 293,
+      "cromaticas": 42,
+      "acromaticas": 251,
+      "limiarCroma": 0.04,
+      "familiasVisiveis": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasVisiveisEfetivas": 5,
+      "quaisEfetivas": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familias": {
+        "vermelho-rosa": {
+          "nome": "vermelho/rosa",
+          "amostras": 7,
+          "elementosDistintos": 2,
+          "valoresDistintos": 3,
+          "valores": [
+            {
+              "valor": "oklab(0.793617 0.106522 0.0527184 / 0.4)",
+              "hex": "#ff9d93",
+              "alpha": 0.4,
+              "oklch": {
+                "L": 0.7936,
+                "C": 0.1189,
+                "H": 26.3
+              },
+              "n": 4,
+              "props": [
+                "border-top-color",
+                "border-right-color",
+                "border-bottom-color",
+                "border-left-color"
+              ]
+            },
+            {
+              "valor": "rgb(255, 157, 147)",
+              "hex": "#ff9d93",
+              "alpha": 1,
+              "oklch": {
+                "L": 0.7936,
+                "C": 0.1188,
+                "H": 26.3
+              },
+              "n": 2,
+              "props": [
+                "color",
+                "fill"
+              ]
+            },
+            {
+              "valor": "rgba(234, 67, 53, 0.18)",
+              "hex": "#ea4335",
+              "alpha": 0.18,
+              "oklch": {
+                "L": 0.6257,
+                "C": 0.2058,
+                "H": 29.1
+              },
+              "n": 1,
+              "props": [
+                "background-color"
+              ]
+            }
+          ],
+          "exemplos": [
+            {
+              "elemento": "button.flex.h-8.shrink-0…[aria-label=\"Encerrar atendimento\"] @chat-workspace-header-actions",
+              "cores": [
+                "color: #ff9d93",
+                "background-color: #ea4335 α0.18",
+                "border-top-color: #ff9d93 α0.40",
+                "border-right-color: #ff9d93 α0.40",
+                "border-bottom-color: #ff9d93 α0.40",
+                "border-left-color: #ff9d93 α0.40"
+              ]
+            },
+            {
+              "elemento": "path @chat-workspace-header-actions",
+              "cores": [
+                "fill: #ff9d93"
+              ]
+            }
+          ]
+        },
+        "laranja-cobre": {
+          "nome": "laranja/cobre",
+          "amostras": 20,
+          "elementosDistintos": 8,
+          "valoresDistintos": 7,
+          "valores": [
+            {
+              "valor": "rgb(242, 140, 69)",
+              "hex": "#f28c45",
+              "alpha": 1,
+              "oklch": {
+                "L": 0.7371,
+                "C": 0.15,
+                "H": 52.8
+              },
+              "n": 11,
+              "props": [
+                "background-color",
+                "border-top-color",
+                "border-right-color",
+                "border-bottom-color",
+                "border-left-color"
+              ]
+            },
+            {
+              "valor": "rgba(217, 148, 91, 0.17)",
+              "hex": "#d9945b",
+              "alpha": 0.17,
+              "oklch": {
+                "L": 0.7234,
+                "C": 0.1111,
+                "H": 59.3
+              },
+              "n": 4,
+              "props": [
+                "border-top-color",
+                "border-right-color",
+                "border-bottom-color",
+                "border-left-color"
+              ]
+            },
+            {
+              "valor": "oklab(0.763011 0.0748115 0.110589 / 0.1)",
+              "hex": "#f29a58",
+              "alpha": 0.1,
+              "oklch": {
+                "L": 0.763,
+                "C": 0.1335,
+                "H": 55.9
+              },
+              "n": 1,
+              "props": [
+                "background-color"
+              ]
+            },
+            {
+              "valor": "rgba(242, 140, 69, 0.11)",
+              "hex": "#f28c45",
+              "alpha": 0.11,
+              "oklch": {
+                "L": 0.7371,
+                "C": 0.15,
+                "H": 52.8
+              },
+              "n": 1,
+              "props": [
+                "background-color"
+              ]
+            },
+            {
+              "valor": "rgb(231, 167, 118)",
+              "hex": "#e7a776",
+              "alpha": 1,
+              "oklch": {
+                "L": 0.7783,
+                "C": 0.0994,
+                "H": 58.1
+              },
+              "n": 1,
+              "props": [
+                "fill"
+              ]
+            },
+            {
+              "valor": "rgb(229, 161, 109)",
+              "hex": "#e5a16d",
+              "alpha": 1,
+              "oklch": {
+                "L": 0.7635,
+                "C": 0.1057,
+                "H": 57.8
+              },
+              "n": 1,
+              "props": [
+                "background-color"
+              ]
+            },
+            {
+              "valor": "rgb(217, 144, 85)",
+              "hex": "#d99055",
+              "alpha": 1,
+              "oklch": {
+                "L": 0.7152,
+                "C": 0.1163,
+                "H": 58.4
+              },
+              "n": 1,
+              "props": [
+                "border-right-color"
+              ]
+            }
+          ],
+          "exemplos": [
+            {
+              "elemento": "div.pointer-events-none.absolute.left-[38%]… @chat-theme",
+              "cores": [
+                "background-color: #f29a58 α0.10"
+              ]
+            },
+            {
+              "elemento": "a.worknav-item.active[aria-label=\"Atendimento\"] @worknav-item",
+              "cores": [
+                "background-color: #f28c45 α0.11",
+                "border-top-color: #d9945b α0.17",
+                "border-right-color: #d9945b α0.17",
+                "border-bottom-color: #d9945b α0.17",
+                "border-left-color: #d9945b α0.17"
+              ]
+            },
+            {
+              "elemento": "path @worknav-item",
+              "cores": [
+                "fill: #e7a776"
+              ]
+            },
+            {
+              "elemento": "button.chat-new-conversation.flex.h-9…[aria-label=\"Nova conversa\"] @chat-new-conversation",
+              "cores": [
+                "background-color: #f28c45",
+                "border-top-color: #f28c45",
+                "border-right-color: #f28c45",
+                "border-bottom-color: #f28c45",
+                "border-left-color: #f28c45"
+              ]
+            },
+            {
+              "elemento": "button#tab-inProgress.relative.flex.min-w-0…[role=tab] @chat-inbox-tabs",
+              "cores": [
+                "background-color: #f28c45"
+              ]
+            },
+            {
+              "elemento": "div.chat-conversation-row.is-selected[role=button]::after @chat-conversation-row",
+              "cores": [
+                "background-color: #e5a16d"
+              ]
+            },
+            {
+              "elemento": "div.chat-conversation-row[role=button]::after @chat-conversation-row",
+              "cores": [
+                "background-color: #f28c45"
+              ]
+            },
+            {
+              "elemento": "div.chat-workspace-bubble.is-outbound.group… @chat-workspace-bubble",
+              "cores": [
+                "border-right-color: #d99055"
+              ]
+            }
+          ]
+        },
+        "ambar-amarelo": {
+          "nome": "âmbar/amarelo",
+          "amostras": 2,
+          "elementosDistintos": 1,
+          "valoresDistintos": 2,
+          "valores": [
+            {
+              "valor": "rgb(240, 182, 95)",
+              "hex": "#f0b65f",
+              "alpha": 1,
+              "oklch": {
+                "L": 0.8127,
+                "C": 0.124,
+                "H": 75.5
+              },
+              "n": 1,
+              "props": [
+                "color"
+              ]
+            },
+            {
+              "valor": "rgba(224, 168, 60, 0.16)",
+              "hex": "#e0a83c",
+              "alpha": 0.16,
+              "oklch": {
+                "L": 0.7655,
+                "C": 0.1369,
+                "H": 80.1
+              },
+              "n": 1,
+              "props": [
+                "background-color"
+              ]
+            }
+          ],
+          "exemplos": [
+            {
+              "elemento": "span.chat-conversation-alerta[aria-label=\"Triagem com confiança baixa\"] @chat-conversation-alerta",
+              "cores": [
+                "color: #f0b65f",
+                "background-color: #e0a83c α0.16"
+              ]
+            }
+          ]
+        },
+        "verde-agua": {
+          "nome": "verde/verde-água",
+          "amostras": 4,
+          "elementosDistintos": 3,
+          "valoresDistintos": 1,
+          "valores": [
+            {
+              "valor": "rgb(51, 217, 166)",
+              "hex": "#33d9a6",
+              "alpha": 1,
+              "oklch": {
+                "L": 0.791,
+                "C": 0.1509,
+                "H": 166.9
+              },
+              "n": 4,
+              "props": [
+                "stroke",
+                "color",
+                "background-color"
+              ]
+            }
+          ],
+          "exemplos": [
+            {
+              "elemento": "path @chat-conversation-preview",
+              "cores": [
+                "stroke: #33d9a6"
+              ]
+            },
+            {
+              "elemento": "span.rounded-full.border.border-white/10… @chat-workspace-list",
+              "cores": [
+                "color: #33d9a6"
+              ]
+            },
+            {
+              "elemento": "span.h-1.5.w-1.5.rounded-full… @chat-workspace-header-identity",
+              "cores": [
+                "background-color: #33d9a6"
+              ]
+            }
+          ]
+        },
+        "azul": {
+          "nome": "azul",
+          "amostras": 0,
+          "elementosDistintos": 0,
+          "valoresDistintos": 0,
+          "valores": [],
+          "exemplos": []
+        },
+        "roxo-lilas": {
+          "nome": "roxo/lilás",
+          "amostras": 9,
+          "elementosDistintos": 5,
+          "valoresDistintos": 3,
+          "valores": [
+            {
+              "valor": "rgb(196, 178, 220)",
+              "hex": "#c4b2dc",
+              "alpha": 1,
+              "oklch": {
+                "L": 0.7925,
+                "C": 0.0617,
+                "H": 304.5
+              },
+              "n": 5,
+              "props": [
+                "color",
+                "stroke"
+              ]
+            },
+            {
+              "valor": "rgba(185, 161, 215, 0.2)",
+              "hex": "#b9a1d7",
+              "alpha": 0.2,
+              "oklch": {
+                "L": 0.7486,
+                "C": 0.0805,
+                "H": 304.8
+              },
+              "n": 3,
+              "props": [
+                "border-top-color",
+                "border-bottom-color",
+                "border-left-color"
+              ]
+            },
+            {
+              "valor": "rgb(185, 161, 215)",
+              "hex": "#b9a1d7",
+              "alpha": 1,
+              "oklch": {
+                "L": 0.7486,
+                "C": 0.0805,
+                "H": 304.8
+              },
+              "n": 1,
+              "props": [
+                "border-right-color"
+              ]
+            }
+          ],
+          "exemplos": [
+            {
+              "elemento": "span.chat-conversation-ai @chat-conversation-ai",
+              "cores": [
+                "color: #c4b2dc"
+              ]
+            },
+            {
+              "elemento": "div.chat-workspace-bubble.is-outbound.is-ai… @chat-workspace-bubble",
+              "cores": [
+                "border-top-color: #b9a1d7 α0.20",
+                "border-right-color: #b9a1d7",
+                "border-bottom-color: #b9a1d7 α0.20",
+                "border-left-color: #b9a1d7 α0.20"
+              ]
+            },
+            {
+              "elemento": "span.chat-message-author.is-ai @chat-message-author",
+              "cores": [
+                "color: #c4b2dc"
+              ]
+            },
+            {
+              "elemento": "span.mr-1.rounded.px-1… @chat-workspace-bubble",
+              "cores": [
+                "color: #c4b2dc"
+              ]
+            },
+            {
+              "elemento": "path @chat-workspace-bubble",
+              "cores": [
+                "stroke: #c4b2dc"
+              ]
+            }
+          ]
+        }
+      },
+      "efetivas": {
+        "vermelho-rosa": {
+          "nome": "vermelho/rosa",
+          "amostras": 6,
+          "elementosDistintos": 2,
+          "exemplos": [
+            {
+              "elemento": "button.flex.h-8.shrink-0…[aria-label=\"Encerrar atendimento\"] @chat-workspace-header-actions",
+              "cores": [
+                "color: #ff9d93 (efetiva)",
+                "border-top-color: #915d5b (efetiva)",
+                "border-right-color: #915d5b (efetiva)",
+                "border-bottom-color: #915d5b (efetiva)",
+                "border-left-color: #915d5b (efetiva)"
+              ]
+            },
+            {
+              "elemento": "path @chat-workspace-header-actions",
+              "cores": [
+                "fill: #ff9d93 (efetiva)"
+              ]
+            }
+          ]
+        },
+        "laranja-cobre": {
+          "nome": "laranja/cobre",
+          "amostras": 14,
+          "elementosDistintos": 6,
+          "exemplos": [
+            {
+              "elemento": "path @worknav-item",
+              "cores": [
+                "fill: #e7a776 (efetiva)"
+              ]
+            },
+            {
+              "elemento": "button.chat-new-conversation.flex.h-9…[aria-label=\"Nova conversa\"] @chat-new-conversation",
+              "cores": [
+                "background-color: #f28c45 (efetiva)",
+                "border-top-color: #f28c45 (efetiva)",
+                "border-right-color: #f28c45 (efetiva)",
+                "border-bottom-color: #f28c45 (efetiva)",
+                "border-left-color: #f28c45 (efetiva)"
+              ]
+            },
+            {
+              "elemento": "button#tab-inProgress.relative.flex.min-w-0…[role=tab] @chat-inbox-tabs",
+              "cores": [
+                "background-color: #f28c45 (efetiva)"
+              ]
+            },
+            {
+              "elemento": "div.chat-conversation-row.is-selected[role=button]::after @chat-conversation-row",
+              "cores": [
+                "background-color: #e5a16d (efetiva)"
+              ]
+            },
+            {
+              "elemento": "div.chat-conversation-row[role=button]::after @chat-conversation-row",
+              "cores": [
+                "background-color: #f28c45 (efetiva)"
+              ]
+            },
+            {
+              "elemento": "div.chat-workspace-bubble.is-outbound.group… @chat-workspace-bubble",
+              "cores": [
+                "border-right-color: #d99055 (efetiva)"
+              ]
+            }
+          ]
+        },
+        "ambar-amarelo": {
+          "nome": "âmbar/amarelo",
+          "amostras": 1,
+          "elementosDistintos": 1,
+          "exemplos": [
+            {
+              "elemento": "span.chat-conversation-alerta[aria-label=\"Triagem com confiança baixa\"] @chat-conversation-alerta",
+              "cores": [
+                "color: #f0b65f (efetiva)"
+              ]
+            }
+          ]
+        },
+        "verde-agua": {
+          "nome": "verde/verde-água",
+          "amostras": 4,
+          "elementosDistintos": 3,
+          "exemplos": [
+            {
+              "elemento": "path @chat-conversation-preview",
+              "cores": [
+                "stroke: #33d9a6 (efetiva)"
+              ]
+            },
+            {
+              "elemento": "span.rounded-full.border.border-white/10… @chat-workspace-list",
+              "cores": [
+                "color: #33d9a6 (efetiva)"
+              ]
+            },
+            {
+              "elemento": "span.h-1.5.w-1.5.rounded-full… @chat-workspace-header-identity",
+              "cores": [
+                "background-color: #33d9a6 (efetiva)"
+              ]
+            }
+          ]
+        },
+        "azul": {
+          "nome": "azul",
+          "amostras": 0,
+          "elementosDistintos": 0,
+          "exemplos": []
+        },
+        "roxo-lilas": {
+          "nome": "roxo/lilás",
+          "amostras": 6,
+          "elementosDistintos": 5,
+          "exemplos": [
+            {
+              "elemento": "span.chat-conversation-ai @chat-conversation-ai",
+              "cores": [
+                "color: #c4b2dc (efetiva)"
+              ]
+            },
+            {
+              "elemento": "div.chat-workspace-bubble.is-outbound.is-ai… @chat-workspace-bubble",
+              "cores": [
+                "border-right-color: #b9a1d7 (efetiva)"
+              ]
+            },
+            {
+              "elemento": "span.chat-message-author.is-ai @chat-message-author",
+              "cores": [
+                "color: #c4b2dc (efetiva)"
+              ]
+            },
+            {
+              "elemento": "span.mr-1.rounded.px-1… @chat-workspace-bubble",
+              "cores": [
+                "color: #c4b2dc (efetiva)"
+              ]
+            },
+            {
+              "elemento": "path @chat-workspace-bubble",
+              "cores": [
+                "stroke: #c4b2dc (efetiva)"
+              ]
+            }
+          ]
+        }
+      },
+      "formatosNaoLidos": []
+    },
+    "imagens": [
+      {
+        "sel": "img.worknav-logo",
+        "src": "/assets/dw-mark-CaSzyCn3.png",
+        "caixa": {
+          "x": 24,
+          "y": 25,
+          "w": 40,
+          "h": 40,
+          "op": 1
+        },
+        "familias": {
+          "ambar-amarelo": 0.085,
+          "laranja-cobre": 0.033,
+          "vermelho-rosa": 0.037
+        }
+      },
+      {
+        "sel": "img.shrink-0.rounded-full.object-cover…",
+        "src": "000/api/contacts/f1b1051a-67dc-431f-8ffa-1a20fae5f048/avatar",
+        "caixa": {
+          "x": 107,
+          "y": 159,
+          "w": 36,
+          "h": 36,
+          "op": 1
+        },
+        "familias": {}
+      },
+      {
+        "sel": "img.shrink-0.rounded-full.object-cover…",
+        "src": "000/api/contacts/b2d9f505-f3de-4a28-8c48-6790df617c5b/avatar",
+        "caixa": {
+          "x": 107,
+          "y": 295,
+          "w": 36,
+          "h": 36,
+          "op": 1
+        },
+        "familias": {}
+      },
+      {
+        "sel": "img.shrink-0.rounded-full.object-cover…",
+        "src": "000/api/contacts/87c17878-b8e1-424c-8e0b-edf71466618f/avatar",
+        "caixa": {
+          "x": 107,
+          "y": 499,
+          "w": 36,
+          "h": 36,
+          "op": 1
+        },
+        "familias": {}
+      },
+      {
+        "sel": "img.shrink-0.rounded-full.object-cover…",
+        "src": "000/api/contacts/f1b1051a-67dc-431f-8ffa-1a20fae5f048/avatar",
+        "caixa": {
+          "x": 440,
+          "y": 36,
+          "w": 40,
+          "h": 40,
+          "op": 1
+        },
+        "familias": {}
+      },
+      {
+        "sel": "img.max-w-full.rounded-[6px].object-contain…",
+        "src": "ocalhost:3000/api/media/3e9f098b-5144-4a1f-801b-ff06f205fbe5",
+        "caixa": {
+          "x": 446,
+          "y": 234,
+          "w": 320,
+          "h": 214,
+          "op": 1
+        },
+        "familias": {
+          "laranja-cobre": 0.149
+        }
+      }
+    ]
+  },
+  "comparativo": {
+    "atendente-1366-0-lista": {
+      "familias": 4,
+      "quais": [
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 4,
+      "familiasComArtefato": 4,
+      "familiasEstendido": 5
+    },
+    "atendente-1366-1-conversa": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1366-2-conversa-sgp-automatico": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1366-3-conversa-transferencia": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1366-4-dados-do-cliente": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1366-5-sgp": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1366-6-aba-espera": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1366-7-aba-automacao": {
+      "familias": 4,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 4,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 4
+    },
+    "atendente-1920-0-lista": {
+      "familias": 4,
+      "quais": [
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 4,
+      "familiasComArtefato": 4,
+      "familiasEstendido": 5
+    },
+    "atendente-1920-1-conversa": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1920-2-conversa-sgp-automatico": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1920-3-conversa-transferencia": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1920-4-dados-do-cliente": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1920-5-sgp": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1920-6-aba-espera": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "atendente-1920-7-aba-automacao": {
+      "familias": 4,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 4,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 4
+    },
+    "admin-1366-0-lista": {
+      "familias": 4,
+      "quais": [
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 4,
+      "familiasComArtefato": 4,
+      "familiasEstendido": 5
+    },
+    "admin-1366-1-conversa": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "admin-1366-2-conversa-sgp-automatico": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "admin-1366-3-conversa-transferencia": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "admin-1366-4-dados-do-cliente": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "admin-1366-5-sgp": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "admin-1366-6-aba-espera": {
+      "familias": 5,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "ambar-amarelo",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 5,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 5
+    },
+    "admin-1366-7-aba-automacao": {
+      "familias": 4,
+      "quais": [
+        "vermelho-rosa",
+        "laranja-cobre",
+        "verde-agua",
+        "roxo-lilas"
+      ],
+      "familiasEfetivas": 4,
+      "familiasComArtefato": 5,
+      "familiasEstendido": 4
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "supervisao": {
+    "elementos": 950,
+    "bgDistintos": 29,
+    "bgImageDistintos": 3,
+    "backdrop": 0,
+    "sombrasDistintas": 4,
+    "raiosDistintos": 11,
+    "bordasDistintas": 6,
+    "familias": 4,
+    "quais": [
+      "laranja-cobre",
+      "ambar-amarelo",
+      "verde-agua",
+      "roxo-lilas"
+    ],
+    "camadasMax": 5,
+    "camadasMediana": 3,
+    "naoAtendidos": []
+  },
+  "relatorios": {
+    "elementos": 364,
+    "bgDistintos": 36,
+    "bgImageDistintos": 7,
+    "backdrop": 0,
+    "sombrasDistintas": 20,
+    "raiosDistintos": 11,
+    "bordasDistintas": 13,
+    "familias": 4,
+    "quais": [
+      "laranja-cobre",
+      "verde-agua",
+      "azul",
+      "roxo-lilas"
+    ],
+    "camadasMax": 3,
+    "camadasMediana": 2,
+    "naoAtendidos": []
+  },
+  "configuracoes-canais": {
+    "elementos": 521,
+    "bgDistintos": 19,
+    "bgImageDistintos": 2,
+    "backdrop": 0,
+    "sombrasDistintas": 2,
+    "raiosDistintos": 7,
+    "bordasDistintas": 10,
+    "familias": 4,
+    "quais": [
+      "laranja-cobre",
+      "verde-agua",
+      "azul",
+      "roxo-lilas"
+    ],
+    "camadasMax": 4,
+    "camadasMediana": 3,
+    "naoAtendidos": []
+  }
+}

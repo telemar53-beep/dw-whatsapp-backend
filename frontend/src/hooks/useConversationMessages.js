@@ -17,6 +17,15 @@ import { getMessages, sendMessage as apiSendMessage } from '../services/api';
  */
 const POR_PAGINA = 50;
 
+/**
+ * Quanto o "Carregar mensagens anteriores" espera antes de desistir. Sem teto,
+ * um pedido que nunca responde deixava o botão em "Carregando…" até reabrir a
+ * conversa. 20 s é o mesmo teto que a E4 vai dar a todo GET, acima do corte de
+ * 15 s do SGP no backend. A resposta que chegar depois é ignorada; o botão
+ * volta e a pessoa pode pedir de novo.
+ */
+const TEMPO_MAXIMO_ANTERIORES_MS = 20000;
+
 export function useConversationMessages(conversationId) {
   const { token } = useAuth();
   const socket = useSocket();
@@ -62,8 +71,9 @@ export function useConversationMessages(conversationId) {
         // Mesclar, e não substituir: o que chegou pelo socket (ou foi enviado)
         // com a carga no ar entrou na lista vazia da abertura. Se a consulta
         // rodou antes de essa mensagem ser gravada, substituir a apagava da
-        // tela até reabrir a conversa. Ela é mais nova que o histórico: vai
-        // depois dele.
+        // tela até reabrir a conversa. Ela chegou depois de a consulta rodar:
+        // vai depois do histórico, como qualquer mensagem do socket (a ordem é
+        // a de chegada, não a de created_at, que o F5 refaz).
         setMessages((naTela) => {
           const trouxe = new Set(historico.map((m) => m.id));
           return [...historico, ...naTela.filter((m) => !trouxe.has(m.id))];
@@ -97,7 +107,11 @@ export function useConversationMessages(conversationId) {
     if (!conversationId || !token || !cursor) return Promise.resolve();
     const abertura = aberturaRef.current;
     setCarregandoAnteriores(true);
-    return getMessages(conversationId, token, { limit: POR_PAGINA + 1, before: cursor })
+    let relogio;
+    const esgotou = new Promise((_, desistir) => {
+      relogio = setTimeout(() => desistir(new Error('tempo esgotado')), TEMPO_MAXIMO_ANTERIORES_MS);
+    });
+    return Promise.race([getMessages(conversationId, token, { limit: POR_PAGINA + 1, before: cursor }), esgotou])
       .then((lista) => {
         // Trocou de conversa, ou esta foi reaberta, no meio do pedido: o trecho
         // pertence a uma lista que não está mais na tela.
@@ -118,6 +132,7 @@ export function useConversationMessages(conversationId) {
         // continua lendo-se normalmente, e o botão segue disponível.
       })
       .finally(() => {
+        clearTimeout(relogio);
         if (aberturaRef.current === abertura) setCarregandoAnteriores(false);
       });
   }, [conversationId, token, messages]);

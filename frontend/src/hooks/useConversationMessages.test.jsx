@@ -399,6 +399,41 @@ describe('carregar mensagens anteriores', () => {
     expect(result.current.carregandoAnteriores).toBe(false);
   });
 
+  // Sem teto, um pedido que nunca responde deixava o botão em "Carregando…"
+  // até reabrir a conversa (e, desde a E1.1, a linha do tempo sem a ancoragem
+  // nativa do navegador pelo mesmo tempo).
+  test('pedido de anteriores que não responde desiste em 20 s, e a resposta tardia é ignorada', async () => {
+    const pendente = adiado();
+    api.getMessages.mockResolvedValueOnce(lote('a', 51)).mockReturnValueOnce(pendente.promise);
+    const { result } = renderHook(() => useConversationMessages('conv-1'));
+    await waitFor(() => expect(result.current.messages).toHaveLength(50));
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        result.current.carregarAnteriores();
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(19999);
+      });
+      expect(result.current.carregandoAnteriores).toBe(true);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(result.current.carregandoAnteriores).toBe(false);
+      expect(result.current.temAnteriores).toBe(true); // o botão volta para pedir de novo
+
+      await act(async () => {
+        pendente.resolve(lote('o', 51));
+      });
+      expect(result.current.messages).toHaveLength(50);
+      expect(result.current.messages[0].id).toBe('a2');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('trocar de conversa com o pedido pendente não deixa a nova em "Carregando…"', async () => {
     const anterioresDeA = adiado();
     api.getMessages

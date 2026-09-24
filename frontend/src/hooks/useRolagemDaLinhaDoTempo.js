@@ -2,6 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 const LINHA = '[data-mensagem-id]';
 
+// Sem caixa (display:none por um quadro, na troca de layout da mesa), toda
+// medida sai zerada e todo evento de rolagem é do navegador, não de alguém.
+function temCaixa(linhaDoTempo) {
+  return !linhaDoTempo.getClientRects || linhaDoTempo.getClientRects().length > 0;
+}
+
 // A primeira mensagem que aparece na tela, e a que distância do topo do
 // contêiner ela está.
 function primeiraVisivel(linhaDoTempo) {
@@ -42,8 +48,11 @@ function reporAncora(linhaDoTempo, ancora) {
  *
  * DEPOIS de ancorar, a âncora continua SEGURA enquanto o conteúdo acima dela
  * cresce (foto e vídeo do trecho novo não reservam altura e carregam depois),
- * até o usuário rolar ou tocar. O Safari não tem ancoragem nativa: sem isto, a
- * leitura escorregava a cada foto (medido: 2568 px).
+ * até o usuário assumir: rolar, girar a roda, tocar, clicar ou teclar na linha
+ * do tempo. O Safari não tem ancoragem nativa: sem isto, a leitura escorregava
+ * a cada foto (medido: 2568 px). Toda escrita de scrollTop do próprio hook gera
+ * um evento `scroll` no quadro seguinte; ele é reconhecido pelo scrollTop que o
+ * hook acabou de pôr, e só rolagem diferente dessa conta como do usuário.
  *
  * Do clique até o usuário assumir, a ancoragem NATIVA do Chrome fica desligada
  * na linha do tempo (overflow-anchor: none), e volta depois. Medido no Chrome
@@ -87,7 +96,7 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
       if (typeof ResizeObserver === 'undefined') return;
       // Chega depois do layout e antes da pintura: a correção não pisca.
       segura.observador = new ResizeObserver(() => {
-        if (seguraRef.current !== segura) return;
+        if (seguraRef.current !== segura || !temCaixa(linhaDoTempo)) return;
         reporAncora(linhaDoTempo, ancora);
         segura.scrollTop = linhaDoTempo.scrollTop;
       });
@@ -106,7 +115,7 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
     const linhaDoTempo = linhaDoTempoRef.current;
     pedidoRef.current = {
       conversationId,
-      ancora: linhaDoTempo && linhaDoTempo.querySelectorAll ? primeiraVisivel(linhaDoTempo) : null,
+      ancora: linhaDoTempo && linhaDoTempo.querySelectorAll && temCaixa(linhaDoTempo) ? primeiraVisivel(linhaDoTempo) : null,
     };
     acertarAncoragemNativa();
   }, [linhaDoTempoRef, conversationId, soltar, acertarAncoragemNativa]);
@@ -115,22 +124,22 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
     const linhaDoTempo = linhaDoTempoRef.current;
     if (!linhaDoTempo || !linhaDoTempo.addEventListener) return undefined;
     const aoRolar = () => {
+      if (!temCaixa(linhaDoTempo)) return;
       // Rolagem que não foi a nossa correção = o usuário assumiu.
       const segura = seguraRef.current;
       if (segura && Math.abs(linhaDoTempo.scrollTop - segura.scrollTop) > 1) soltar();
       const pedido = pedidoRef.current;
       if (pedido) pedido.ancora = primeiraVisivel(linhaDoTempo);
     };
-    // Tocar ou girar a roda também é assumir — e, no iOS, corrigir scrollTop
-    // durante a inércia do dedo corta o gesto.
+    // Roda, toque, clique e tecla também são assumir — e, no iOS, corrigir
+    // scrollTop durante a inércia do dedo corta o gesto.
     const aoMexer = () => soltar();
+    const MEXER = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
     linhaDoTempo.addEventListener('scroll', aoRolar, { passive: true });
-    linhaDoTempo.addEventListener('wheel', aoMexer, { passive: true });
-    linhaDoTempo.addEventListener('touchstart', aoMexer, { passive: true });
+    MEXER.forEach((tipo) => linhaDoTempo.addEventListener(tipo, aoMexer, { passive: true }));
     return () => {
       linhaDoTempo.removeEventListener('scroll', aoRolar);
-      linhaDoTempo.removeEventListener('wheel', aoMexer);
-      linhaDoTempo.removeEventListener('touchstart', aoMexer);
+      MEXER.forEach((tipo) => linhaDoTempo.removeEventListener(tipo, aoMexer));
       soltar();
     };
   }, [linhaDoTempoRef, soltar]);
@@ -145,6 +154,12 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
       soltar();
       const fim = fimRef.current;
       if (fim && fim.scrollIntoView) fim.scrollIntoView({ block: 'end' });
+      // Com um pedido no ar, a posição de leitura agora é o fim: o evento de
+      // rolagem que diria isso só chega no quadro seguinte, e o trecho pode
+      // chegar antes dele.
+      if (pedidoRef.current && linhaDoTempo && linhaDoTempo.querySelectorAll && temCaixa(linhaDoTempo)) {
+        pedidoRef.current.ancora = primeiraVisivel(linhaDoTempo);
+      }
     };
 
     if (!mesmaConversa) {
@@ -156,14 +171,18 @@ export function useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef, messages, co
       const pedido = pedidoRef.current;
       if (pedido && pedido.conversationId === conversationId) {
         pedidoRef.current = null;
-        if (linhaDoTempo && pedido.ancora && reporAncora(linhaDoTempo, pedido.ancora)) segurar(linhaDoTempo, pedido.ancora);
+        if (linhaDoTempo && pedido.ancora) {
+          // Sem caixa agora, a correção fica para o ResizeObserver, que avisa
+          // quando as linhas voltam a ter tamanho.
+          if (!temCaixa(linhaDoTempo) || reporAncora(linhaDoTempo, pedido.ancora)) segurar(linhaDoTempo, pedido.ancora);
+        }
       } else {
         irAoFim();
       }
     }
 
-    // Pedido que terminou sem trazer nada (falhou, ou o lote já estava todo na
-    // tela): não fica pendurado medindo a cada rolagem.
+    // Pedido que terminou sem trazer nada (falhou, esgotou o tempo ou o lote já
+    // estava todo na tela): não fica pendurado medindo a cada rolagem.
     if (!carregandoAnteriores) pedidoRef.current = null;
     acertarAncoragemNativa();
     anteriorRef.current = { conversationId, primeiro, ultimo };

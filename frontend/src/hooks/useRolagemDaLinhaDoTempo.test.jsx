@@ -10,6 +10,7 @@ import { useRolagemDaLinhaDoTempo } from './useRolagemDaLinhaDoTempo';
 // ancoragem nativa do Chrome.
 const TOPO_DA_LISTA = 40; // aviso de registro e botão de anteriores, acima da 1ª mensagem
 const ALTURA = 60;
+const ALTURA_DA_TELA = 500;
 
 // O jsdom também não tem ResizeObserver. Este guarda quem está observando e
 // deixa o teste dizer quando algo mudou de tamanho.
@@ -39,22 +40,35 @@ afterEach(() => {
 });
 
 function cenario() {
-  const ouvintes = { scroll: new Set(), wheel: new Set(), touchstart: new Set() };
+  const ouvintes = { scroll: new Set(), wheel: new Set(), touchstart: new Set(), pointerdown: new Set(), keydown: new Set() };
   const alturas = {};
   let ids = [];
+  let scrollTop = 0;
+  let ecoPendente = false;
+  let semCaixa = false;
   const linhaDoTempo = {
-    scrollTop: 0,
     style: {},
     linhas: [], // [{ id, topo, altura }] no sistema de coordenadas do conteúdo
-    getBoundingClientRect: () => ({ top: 0, bottom: 500 }),
+    getClientRects: () => (semCaixa ? [] : [{}]),
+    // Sem caixa, o navegador mede tudo como zero.
+    getBoundingClientRect: () => (semCaixa ? { top: 0, bottom: 0 } : { top: 0, bottom: ALTURA_DA_TELA }),
     querySelectorAll: vi.fn(() => linhaDoTempo.linhas.map(elemento)),
     addEventListener: (tipo, fn) => ouvintes[tipo].add(fn),
     removeEventListener: (tipo, fn) => ouvintes[tipo].delete(fn),
   };
+  // Como no navegador: toda escrita de scrollTop gera um `scroll` depois (aqui,
+  // quando o teste chama `ecoar`).
+  Object.defineProperty(linhaDoTempo, 'scrollTop', {
+    get: () => scrollTop,
+    set: (valor) => {
+      scrollTop = valor;
+      ecoPendente = true;
+    },
+  });
   function elemento(linha) {
     return {
       getAttribute: () => linha.id,
-      getBoundingClientRect: () => ({ top: linha.topo - linhaDoTempo.scrollTop, bottom: linha.topo + linha.altura - linhaDoTempo.scrollTop }),
+      getBoundingClientRect: () => (semCaixa ? { top: 0, bottom: 0 } : { top: linha.topo - scrollTop, bottom: linha.topo + linha.altura - scrollTop }),
     };
   }
   // O que o navegador faz ao desenhar a lista: uma linha embaixo da outra.
@@ -67,7 +81,14 @@ function cenario() {
       return linha;
     });
   }
-  const fim = { scrollIntoView: vi.fn() };
+  const disparar = (tipo) => ouvintes[tipo].forEach((fn) => fn());
+  // O fim de verdade: a última linha encostada embaixo da tela.
+  const fim = {
+    scrollIntoView: vi.fn(() => {
+      const ultima = linhaDoTempo.linhas[linhaDoTempo.linhas.length - 1];
+      linhaDoTempo.scrollTop = ultima ? Math.max(0, ultima.topo + ultima.altura - ALTURA_DA_TELA) : 0;
+    }),
+  };
   return {
     linhaDoTempo,
     fim,
@@ -81,17 +102,30 @@ function cenario() {
       desenhar(ids);
       ObservadorFalso.ativos.forEach((o) => o.aoMudar([]));
     },
-    // Rolagem do usuário: muda o scrollTop e dispara o evento.
+    // Rolagem do usuário: muda o scrollTop e dispara o evento na hora.
     rolar(para) {
-      linhaDoTempo.scrollTop = para;
-      ouvintes.scroll.forEach((fn) => fn());
+      scrollTop = para;
+      ecoPendente = false;
+      disparar('scroll');
     },
-    tocar: () => ouvintes.touchstart.forEach((fn) => fn()),
-    naTela: (id) => linhaDoTempo.linhas.find((l) => l.id === id).topo - linhaDoTempo.scrollTop,
+    // O `scroll` que o navegador dispara depois de uma escrita do próprio hook.
+    ecoar() {
+      if (!ecoPendente) return;
+      ecoPendente = false;
+      disparar('scroll');
+    },
+    esconder: (sim) => { semCaixa = sim; },
+    disparar,
+    naTela: (id) => linhaDoTempo.linhas.find((l) => l.id === id).topo - scrollTop,
+    visivel: (id) => {
+      const topo = linhaDoTempo.linhas.find((l) => l.id === id).topo - scrollTop;
+      return topo >= 0 && topo + ALTURA <= ALTURA_DA_TELA;
+    },
   };
 }
 
 const msgs = (...ids) => ids.map((id) => ({ id, content: `texto ${id}` }));
+const serie = (de, ate) => Array.from({ length: ate - de + 1 }, (_, i) => `m${de + i}`);
 
 function montar(c, { messages, conversationId }) {
   c.desenhar(messages.map((m) => m.id));
@@ -99,6 +133,7 @@ function montar(c, { messages, conversationId }) {
     (props) => useRolagemDaLinhaDoTempo({ linhaDoTempoRef: c.linhaDoTempoRef, fimRef: c.fimRef, ...props }),
     { initialProps: { messages, conversationId, carregandoAnteriores: false } }
   );
+  c.ecoar();
   let atual = { messages, conversationId, carregandoAnteriores: false };
   const mostrar = (mudanca) => {
     atual = { ...atual, ...mudanca };
@@ -168,14 +203,15 @@ describe('useRolagemDaLinhaDoTempo', () => {
   });
 
   // O que a primeira versão desta correção errou no Chrome real: guardava a
-  // altura do conteúdo no último desenho e somava a diferença. Uma foto que
-  // termina de carregar depois disso cresce sem mudar a lista, e a conta errava
-  // exatamente a altura da foto (214 px).
-  test('foto que terminou de carregar ANTES do clique não desloca a âncora', () => {
+  // medida no último desenho. Uma foto que termina de carregar depois disso, e
+  // a rolagem do usuário, deixam essa medida velha; a âncora vale a do clique.
+  test('a âncora é medida no clique, e não no último desenho', () => {
     const c = cenario();
-    const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
-    c.crescer('m4', 214);
+    const t = montar(c, { messages: msgs('m2', 'm3', 'm4'), conversationId: 'A' });
     c.rolar(0);
+    // Depois do último desenho: a foto de m2 carregou e o atendente rolou até m3.
+    c.crescer('m2', 214);
+    c.rolar(TOPO_DA_LISTA + ALTURA + 214);
     const m3Antes = c.naTela('m3');
 
     t.clicarEmAnteriores();
@@ -201,6 +237,27 @@ describe('useRolagemDaLinhaDoTempo', () => {
     expect(c.naTela('m3')).toBe(m3Antes);
   });
 
+  // O navegador SEMPRE dispara `scroll` depois de uma escrita programática de
+  // scrollTop. Se o hook tomasse o eco da própria correção pelo usuário, soltaria
+  // a âncora no primeiro quadro — e o Safari voltaria a escorregar.
+  test('o eco da própria correção não solta a âncora', () => {
+    const c = cenario();
+    const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
+    c.rolar(0);
+    const m3Antes = c.naTela('m3');
+    t.clicarEmAnteriores();
+    t.chegaram(msgs('m1', 'm2', 'm3', 'm4'));
+    c.ecoar(); // eco do ajuste feito no desenho
+
+    c.crescer('m1', 214);
+    c.ecoar(); // eco da correção do ResizeObserver
+    c.crescer('m2', 150);
+    c.ecoar();
+
+    expect(c.naTela('m3')).toBe(m3Antes);
+    expect(c.linhaDoTempo.style.overflowAnchor).toBe('none');
+  });
+
   test('depois que o usuário rola, a âncora é solta', () => {
     const c = cenario();
     const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
@@ -215,18 +272,72 @@ describe('useRolagemDaLinhaDoTempo', () => {
     expect(c.linhaDoTempo.scrollTop).toBe(scrollTopDoUsuario);
   });
 
-  test('tocar na tela também solta a âncora', () => {
+  test.each(['wheel', 'touchstart', 'pointerdown', 'keydown'])('%s na linha do tempo também solta a âncora', (tipo) => {
     const c = cenario();
     const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
     c.rolar(0);
     t.clicarEmAnteriores();
     t.chegaram(msgs('m1', 'm2', 'm3', 'm4'));
 
-    c.tocar();
+    c.disparar(tipo);
     const scrollTop = c.linhaDoTempo.scrollTop;
     c.crescer('m1', 214);
 
     expect(c.linhaDoTempo.scrollTop).toBe(scrollTop);
+    expect(c.linhaDoTempo.style.overflowAnchor).toBe('');
+  });
+
+  // Medido no Chrome real pela 2ª revisão: na troca de layout da mesa (janela
+  // estreitada com o painel aberto) a linha do tempo fica sem caixa por um
+  // quadro, o scrollTop lido vira 0 e o navegador dispara `scroll`.
+  test('rolagem de quando a linha do tempo está sem caixa não solta a âncora', () => {
+    const c = cenario();
+    const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
+    c.rolar(0);
+    const m3Antes = c.naTela('m3');
+    t.clicarEmAnteriores();
+    t.chegaram(msgs('m1', 'm2', 'm3', 'm4'));
+    c.ecoar();
+    const scrollTopAntes = c.linhaDoTempo.scrollTop;
+
+    c.esconder(true);
+    c.rolar(0); // o navegador zera ao esconder
+    c.esconder(false);
+    c.rolar(scrollTopAntes); // e restaura ao mostrar
+    c.crescer('m1', 214);
+
+    expect(c.naTela('m3')).toBe(m3Antes);
+  });
+
+  test('sem caixa com o pedido no ar, a medida do clique não é apagada', () => {
+    const c = cenario();
+    const t = montar(c, { messages: msgs('m3', 'm4'), conversationId: 'A' });
+    c.rolar(0);
+    const m3Antes = c.naTela('m3');
+    t.clicarEmAnteriores();
+
+    c.esconder(true);
+    c.rolar(0);
+    c.esconder(false);
+    t.chegaram(msgs('m1', 'm2', 'm3', 'm4'));
+
+    expect(c.naTela('m3')).toBe(m3Antes);
+  });
+
+  // 2ª revisão: com o pedido no ar, uma mensagem nova leva ao fim; o evento que
+  // diria "agora a leitura é o fim" só chega no quadro seguinte. Se o trecho
+  // chegasse antes dele, a âncora do clique puxaria a tela de volta ao topo e a
+  // mensagem nova ficaria fora da tela.
+  test('mensagem nova com o pedido no ar: o trecho que chega depois não tira a mensagem nova da tela', () => {
+    const c = cenario();
+    const t = montar(c, { messages: msgs(...serie(3, 20)), conversationId: 'A' });
+    c.rolar(0);
+    t.clicarEmAnteriores();
+
+    t.mostrar({ messages: msgs(...serie(3, 21)) }); // m21 chegou pelo socket
+    t.chegaram(msgs(...serie(1, 21))); // o trecho chega antes do eco
+
+    expect(c.visivel('m21')).toBe(true);
   });
 
   test('mensagem nova no fim com a âncora segura vai ao fim e solta a âncora', () => {

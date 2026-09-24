@@ -141,6 +141,11 @@ describe('carregar mensagens anteriores pela tela', () => {
       }
       return { top: 0, bottom: 0, height: 0 };
     });
+    // O jsdom devolve lista vazia em getClientRects (não há layout); o hook lê
+    // isso como "linha do tempo sem caixa" e não mede nada.
+    const caixas = vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function caixa() {
+      return this === linhaDoTempo ? [{ top: 0, bottom: 500 }] : [];
+    });
     try {
       linhaDoTempo.scrollTop = 0;
       const naTela = (texto) => screen.getByText(texto).closest('[data-mensagem-id]').getBoundingClientRect().top;
@@ -152,6 +157,7 @@ describe('carregar mensagens anteriores pela tela', () => {
       expect(naTela('nova 2')).toBe(antes);
     } finally {
       medidas.mockRestore();
+      caixas.mockRestore();
     }
   });
 });

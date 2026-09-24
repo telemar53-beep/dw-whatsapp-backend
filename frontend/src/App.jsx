@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { useTituloDaAba } from './hooks/useTituloDaAba';
 import { SocketProvider } from './contexts/SocketContext';
 import { AgentsProvider } from './contexts/AgentsContext';
+import { CompanyProvider } from './contexts/CompanyContext';
 import { MediaTokenProvider } from './contexts/MediaTokenContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import RotaLazy from './components/RotaLazy';
@@ -102,6 +103,11 @@ function TituloDaAba() {
 function App() {
   return (
     <BrowserRouter>
+      {/* Fora do AuthProvider porque a rota e publica: nao depende de token, e
+          e a primeira coisa de que a tela de entrada precisa. Uma copia so
+          para a sessao — antes, o TituloDaAba e a LoginPage buscavam cada um
+          o seu, e eram duas requisicoes com dois preflights no login. */}
+      <CompanyProvider>
       <AuthProvider>
         {/* Dentro do AuthProvider porque precisa do JWT da sessão para pedir o
             token de mídia; fora do SocketProvider porque não depende dele — a
@@ -209,6 +215,7 @@ function App() {
         </SocketProvider>
         </MediaTokenProvider>
       </AuthProvider>
+      </CompanyProvider>
     </BrowserRouter>
   );
 }

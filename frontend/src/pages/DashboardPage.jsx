@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
@@ -68,12 +68,16 @@ function DashboardPage() {
   const emRail = layout.lista === 'rail' && !listaAberta;
   const listaOcupaTudo = layout.lista === 'oculta' || listaAberta;
 
-  function selectConversation(conversationId) {
+  // useCallback aqui não é enfeite: é o que faz o React.memo do
+  // ConversationListItem valer. Recriada a cada render, esta função é uma prop
+  // nova para os 40 itens da lista, e o memo compararia sem nunca encontrar
+  // igualdade. Os três setters são estáveis e clearUnread já vem de useCallback.
+  const selectConversation = useCallback((conversationId) => {
     clearUnread(conversationId);
     setSelectedId(conversationId);
     // Escolher um atendimento devolve o espaço para a conversa.
     setListaAberta(false);
-  }
+  }, [clearUnread]);
 
   // A conversa transferida cai em "Meus atendimentos", então abrir pelo aviso
   // também troca de aba — senão o atendente clica e não vê nada acontecer.
@@ -83,16 +87,19 @@ function DashboardPage() {
     dismissTransferNotice();
   }
 
-  function quickCloseConversation(conversationId) {
+  const quickCloseConversation = useCallback((conversationId) => {
     closeConversation(conversationId, null, token).catch(() => {});
-  }
+  }, [token]);
 
   const [transferringId, setTransferringId] = useState(null);
   const [startingConversation, setStartingConversation] = useState(false);
   const [pendingConversation, setPendingConversation] = useState(null);
 
-  const waitingConversations = queue.filter((c) => c.triageState !== 'pending');
-  const automationConversations = queue.filter((c) => c.triageState === 'pending');
+  // Sem o useMemo, os dois filtros devolvem arrays NOVOS a cada render do
+  // Dashboard — e uma lista nova é prop nova, o que derrubaria o memo dos itens
+  // antes mesmo de ele comparar item por item.
+  const waitingConversations = useMemo(() => queue.filter((c) => c.triageState !== 'pending'), [queue]);
+  const automationConversations = useMemo(() => queue.filter((c) => c.triageState === 'pending'), [queue]);
 
   const tabCounts = {
     inProgress: myConversations.length,

@@ -1,50 +1,74 @@
+import { lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { useTituloDaAba } from './hooks/useTituloDaAba';
 import { SocketProvider } from './contexts/SocketContext';
 import { MediaTokenProvider } from './contexts/MediaTokenContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import AppShell from './components/AppShell';
+import RotaLazy from './components/RotaLazy';
 import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import ReportsPage from './pages/ReportsPage';
-import SupervisionPage from './pages/SupervisionPage';
-import CampaignsPage from './pages/CampaignsPage';
-import CampaignDetailPage from './pages/CampaignDetailPage';
-import SettingsLayout from './pages/settings/SettingsLayout';
-import SettingsIndex from './pages/settings/SettingsIndex';
-import ChannelsListPage from './pages/settings/channels/ChannelsListPage';
-import ChannelDetailPage from './pages/settings/channels/ChannelDetailPage';
-import ChannelConnectionTab from './pages/settings/channels/ChannelConnectionTab';
-import ChannelBehaviorTab from './pages/settings/channels/ChannelBehaviorTab';
-import TeamLayout from './pages/settings/team/TeamLayout';
-import UsersPage from './pages/settings/team/UsersPage';
-import SectorsPage from './pages/settings/team/SectorsPage';
-import RolesPage from './pages/settings/team/RolesPage';
-import RegistersLayout from './pages/settings/registers/RegistersLayout';
-import ReasonsPage from './pages/settings/registers/ReasonsPage';
-import CitiesPage from './pages/settings/registers/CitiesPage';
-import PlansPage from './pages/settings/registers/PlansPage';
-import CompanyPage from './pages/settings/CompanyPage';
-import MessagesLayout from './pages/settings/messages/MessagesLayout';
-import WelcomePage from './pages/settings/messages/WelcomePage';
-import CityNoticesPage from './pages/settings/messages/CityNoticesPage';
-import QuickRepliesPage from './pages/settings/messages/QuickRepliesPage';
-import TemplatesPage from './pages/settings/messages/TemplatesPage';
-import AssignmentPage from './pages/settings/rules/AssignmentPage';
-import BusinessHoursPage from './pages/settings/rules/BusinessHoursPage';
-import IntegrationsLayout from './pages/settings/integrations/IntegrationsLayout';
-import SgpIntegrationLayout from './pages/settings/integrations/SgpIntegrationLayout';
-import SgpQueryPage from './pages/settings/integrations/SgpQueryPage';
-import SgpChannelPage from './pages/settings/integrations/SgpChannelPage';
-import OpenAiPage from './pages/settings/integrations/OpenAiPage';
-import MenuTriagePage from './pages/settings/automation/MenuTriagePage';
-import AiTriagePage from './pages/settings/automation/AiTriagePage';
-import IdentificationPage from './pages/settings/automation/IdentificationPage';
-import TranscriptionPage from './pages/settings/automation/TranscriptionPage';
-import NightModePage from './pages/settings/automation/NightModePage';
-import AiToolsPage from './pages/settings/automation/AiToolsPage';
 import { LEGACY_REDIRECTS } from './navigation/navItems';
+
+// LoginPage fica ESTÁTICA de propósito, e é a única. Ela é a primeira tela de
+// quem chega, e torná-la sob demanda acrescentaria uma ida à rede justamente
+// antes do login — trocaria bytes por espera no pior momento. Ela é pequena:
+// react, react-router, o contexto de autenticação e dois utilitários.
+//
+// Todo o resto é área autenticada e sai do carregamento inicial. Quem abre o
+// sistema não baixa mais a mesa de atendimento, Configurações, Relatórios,
+// Supervisão nem Campanhas para ver um formulário de e-mail e senha.
+const AppShell = lazy(() => import('./components/AppShell'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const SupervisionPage = lazy(() => import('./pages/SupervisionPage'));
+const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
+const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
+const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout'));
+const SettingsIndex = lazy(() => import('./pages/settings/SettingsIndex'));
+const ChannelsListPage = lazy(() => import('./pages/settings/channels/ChannelsListPage'));
+const ChannelDetailPage = lazy(() => import('./pages/settings/channels/ChannelDetailPage'));
+const ChannelConnectionTab = lazy(() => import('./pages/settings/channels/ChannelConnectionTab'));
+const ChannelBehaviorTab = lazy(() => import('./pages/settings/channels/ChannelBehaviorTab'));
+const TeamLayout = lazy(() => import('./pages/settings/team/TeamLayout'));
+const UsersPage = lazy(() => import('./pages/settings/team/UsersPage'));
+const SectorsPage = lazy(() => import('./pages/settings/team/SectorsPage'));
+const RolesPage = lazy(() => import('./pages/settings/team/RolesPage'));
+const RegistersLayout = lazy(() => import('./pages/settings/registers/RegistersLayout'));
+const ReasonsPage = lazy(() => import('./pages/settings/registers/ReasonsPage'));
+const CitiesPage = lazy(() => import('./pages/settings/registers/CitiesPage'));
+const PlansPage = lazy(() => import('./pages/settings/registers/PlansPage'));
+const CompanyPage = lazy(() => import('./pages/settings/CompanyPage'));
+const MessagesLayout = lazy(() => import('./pages/settings/messages/MessagesLayout'));
+const WelcomePage = lazy(() => import('./pages/settings/messages/WelcomePage'));
+const CityNoticesPage = lazy(() => import('./pages/settings/messages/CityNoticesPage'));
+const QuickRepliesPage = lazy(() => import('./pages/settings/messages/QuickRepliesPage'));
+const TemplatesPage = lazy(() => import('./pages/settings/messages/TemplatesPage'));
+const AssignmentPage = lazy(() => import('./pages/settings/rules/AssignmentPage'));
+const BusinessHoursPage = lazy(() => import('./pages/settings/rules/BusinessHoursPage'));
+const IntegrationsLayout = lazy(() => import('./pages/settings/integrations/IntegrationsLayout'));
+const SgpIntegrationLayout = lazy(() => import('./pages/settings/integrations/SgpIntegrationLayout'));
+const SgpQueryPage = lazy(() => import('./pages/settings/integrations/SgpQueryPage'));
+const SgpChannelPage = lazy(() => import('./pages/settings/integrations/SgpChannelPage'));
+const OpenAiPage = lazy(() => import('./pages/settings/integrations/OpenAiPage'));
+const MenuTriagePage = lazy(() => import('./pages/settings/automation/MenuTriagePage'));
+const AiTriagePage = lazy(() => import('./pages/settings/automation/AiTriagePage'));
+const IdentificationPage = lazy(() => import('./pages/settings/automation/IdentificationPage'));
+const TranscriptionPage = lazy(() => import('./pages/settings/automation/TranscriptionPage'));
+const NightModePage = lazy(() => import('./pages/settings/automation/NightModePage'));
+const AiToolsPage = lazy(() => import('./pages/settings/automation/AiToolsPage'));
+
+// Cada elemento de rota entra embrulhado, e não um Suspense só lá em cima: o
+// Suspense que vale é o MAIS PRÓXIMO, então o esqueleto aparece no lugar do
+// conteúdo e o que está em volta — menu lateral, abas de Configurações —
+// continua na tela durante a troca. Um Suspense único na raiz apagaria a
+// navegação inteira a cada clique.
+function lazyEl(Componente) {
+  return (
+    <RotaLazy>
+      <Componente />
+    </RotaLazy>
+  );
+}
 
 // Rota antiga → nova, trocando :params e mantendo ?query.
 function LegacyRedirect({ to }) {
@@ -54,10 +78,15 @@ function LegacyRedirect({ to }) {
   return <Navigate to={`${target}${location.search}`} replace />;
 }
 
+// O ProtectedRoute continua ESTÁTICO e por FORA do RotaLazy de propósito: a
+// checagem de permissão acontece antes de o trecho ser pedido, então quem não
+// pode ver a área também não baixa o código dela.
 function Shell({ dense = false }) {
   return (
     <ProtectedRoute level="auth">
-      <AppShell dense={dense} />
+      <RotaLazy>
+        <AppShell dense={dense} />
+      </RotaLazy>
     </ProtectedRoute>
   );
 }
@@ -83,12 +112,12 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
 
             <Route element={<Shell />}>
-              <Route path="/" element={<DashboardPage />} />
+              <Route path="/" element={lazyEl(DashboardPage)} />
               <Route
                 path="/campanhas"
                 element={
                   <ProtectedRoute level="admin" areaLabel="Campanhas">
-                    <CampaignsPage />
+                    {lazyEl(CampaignsPage)}
                   </ProtectedRoute>
                 }
               />
@@ -96,19 +125,19 @@ function App() {
                 path="/campanhas/:id"
                 element={
                   <ProtectedRoute level="admin" areaLabel="Campanhas">
-                    <CampaignDetailPage />
+                    {lazyEl(CampaignDetailPage)}
                   </ProtectedRoute>
                 }
               />
             </Route>
 
             <Route element={<Shell dense />}>
-              <Route path="/relatorios" element={<ReportsPage />} />
+              <Route path="/relatorios" element={lazyEl(ReportsPage)} />
               <Route
                 path="/supervisao"
                 element={
                   <ProtectedRoute level="admin" areaLabel="Supervisão">
-                    <SupervisionPage />
+                    {lazyEl(SupervisionPage)}
                   </ProtectedRoute>
                 }
               />
@@ -116,53 +145,53 @@ function App() {
                 path="/configuracoes"
                 element={
                   <ProtectedRoute level="admin" areaLabel="Configurações">
-                    <SettingsLayout />
+                    {lazyEl(SettingsLayout)}
                   </ProtectedRoute>
                 }
               >
-                <Route index element={<SettingsIndex />} />
-                <Route path="canais" element={<ChannelsListPage />} />
-                <Route path="canais/:id" element={<ChannelDetailPage />}>
+                <Route index element={lazyEl(SettingsIndex)} />
+                <Route path="canais" element={lazyEl(ChannelsListPage)} />
+                <Route path="canais/:id" element={lazyEl(ChannelDetailPage)}>
                   <Route index element={<Navigate to="conexao" replace />} />
-                  <Route path="conexao" element={<ChannelConnectionTab />} />
-                  <Route path="atendimento" element={<ChannelBehaviorTab />} />
+                  <Route path="conexao" element={lazyEl(ChannelConnectionTab)} />
+                  <Route path="atendimento" element={lazyEl(ChannelBehaviorTab)} />
                 </Route>
-                <Route path="equipe" element={<TeamLayout />}>
+                <Route path="equipe" element={lazyEl(TeamLayout)}>
                   <Route index element={<Navigate to="usuarios" replace />} />
-                  <Route path="usuarios" element={<UsersPage />} />
-                  <Route path="setores" element={<SectorsPage />} />
-                  <Route path="perfis" element={<RolesPage />} />
+                  <Route path="usuarios" element={lazyEl(UsersPage)} />
+                  <Route path="setores" element={lazyEl(SectorsPage)} />
+                  <Route path="perfis" element={lazyEl(RolesPage)} />
                 </Route>
-                <Route path="cadastros" element={<RegistersLayout />}>
+                <Route path="cadastros" element={lazyEl(RegistersLayout)}>
                   <Route index element={<Navigate to="motivos" replace />} />
-                  <Route path="motivos" element={<ReasonsPage />} />
-                  <Route path="cidades" element={<CitiesPage />} />
-                  <Route path="planos" element={<PlansPage />} />
+                  <Route path="motivos" element={lazyEl(ReasonsPage)} />
+                  <Route path="cidades" element={lazyEl(CitiesPage)} />
+                  <Route path="planos" element={lazyEl(PlansPage)} />
                 </Route>
-                <Route path="empresa" element={<CompanyPage />} />
-                <Route path="mensagens" element={<MessagesLayout />}>
+                <Route path="empresa" element={lazyEl(CompanyPage)} />
+                <Route path="mensagens" element={lazyEl(MessagesLayout)}>
                   <Route index element={<Navigate to="boas-vindas" replace />} />
-                  <Route path="boas-vindas" element={<WelcomePage />} />
-                  <Route path="abertura-encerramento" element={<AssignmentPage />} />
-                  <Route path="avisos-cidade" element={<CityNoticesPage />} />
-                  <Route path="respostas-rapidas" element={<QuickRepliesPage />} />
-                  <Route path="templates" element={<TemplatesPage />} />
+                  <Route path="boas-vindas" element={lazyEl(WelcomePage)} />
+                  <Route path="abertura-encerramento" element={lazyEl(AssignmentPage)} />
+                  <Route path="avisos-cidade" element={lazyEl(CityNoticesPage)} />
+                  <Route path="respostas-rapidas" element={lazyEl(QuickRepliesPage)} />
+                  <Route path="templates" element={lazyEl(TemplatesPage)} />
                 </Route>
-                <Route path="regras/horario" element={<BusinessHoursPage />} />
-                <Route path="automacao/triagem-menu" element={<MenuTriagePage />} />
-                <Route path="automacao/ia" element={<AiTriagePage />} />
-                <Route path="automacao/identificacao" element={<IdentificationPage />} />
-                <Route path="automacao/transcricao" element={<TranscriptionPage />} />
-                <Route path="automacao/noturno" element={<NightModePage />} />
-                <Route path="automacao/ferramentas" element={<AiToolsPage />} />
-                <Route path="integracoes" element={<IntegrationsLayout />}>
+                <Route path="regras/horario" element={lazyEl(BusinessHoursPage)} />
+                <Route path="automacao/triagem-menu" element={lazyEl(MenuTriagePage)} />
+                <Route path="automacao/ia" element={lazyEl(AiTriagePage)} />
+                <Route path="automacao/identificacao" element={lazyEl(IdentificationPage)} />
+                <Route path="automacao/transcricao" element={lazyEl(TranscriptionPage)} />
+                <Route path="automacao/noturno" element={lazyEl(NightModePage)} />
+                <Route path="automacao/ferramentas" element={lazyEl(AiToolsPage)} />
+                <Route path="integracoes" element={lazyEl(IntegrationsLayout)}>
                   <Route index element={<Navigate to="sgp/consultas" replace />} />
-                  <Route path="sgp" element={<SgpIntegrationLayout />}>
+                  <Route path="sgp" element={lazyEl(SgpIntegrationLayout)}>
                     <Route index element={<Navigate to="consultas" replace />} />
-                    <Route path="consultas" element={<SgpQueryPage />} />
-                    <Route path="envios" element={<SgpChannelPage />} />
+                    <Route path="consultas" element={lazyEl(SgpQueryPage)} />
+                    <Route path="envios" element={lazyEl(SgpChannelPage)} />
                   </Route>
-                  <Route path="openai" element={<OpenAiPage />} />
+                  <Route path="openai" element={lazyEl(OpenAiPage)} />
                 </Route>
               </Route>
             </Route>

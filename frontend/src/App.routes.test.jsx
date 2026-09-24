@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import * as api from './services/api';
 import { io } from 'socket.io-client';
@@ -93,7 +93,11 @@ describe('rotas', () => {
     render(<App />);
     const navs = await screen.findAllByRole('navigation', { name: /navegação principal/i });
     expect(navs.length).toBeGreaterThan(0);
-    expect(window.location.pathname).toBe('/configuracoes/canais');
+    // Espera a URL, que é o que este teste afirma. Antes ele sincronizava pela
+    // nav do AppShell e só então olhava o caminho — mas quem redireciona para
+    // /canais é o SettingsLayout, que hoje chega num chunk separado: a nav já
+    // existe enquanto ele ainda está a caminho.
+    await waitFor(() => expect(window.location.pathname).toBe('/configuracoes/canais'));
   });
 
   test('atendente em /supervisao vê acesso negado dentro do shell', async () => {

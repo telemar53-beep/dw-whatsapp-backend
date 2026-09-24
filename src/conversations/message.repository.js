@@ -175,21 +175,58 @@ async function recordMessageSent(messageId, whatsappMessageId) {
   return toMessage(result.rows[0]);
 }
 
-async function listMessagesByConversation(conversationId) {
-  const result = await getPool().query(
-    `SELECT m.id, m.conversation_id, m.direction, m.content, m.whatsapp_message_id, m.status,
+/**
+ * Histórico da conversa, em ordem cronológica (mais antiga primeiro).
+ *
+ * ADITIVO: sem opções, é exatamente a consulta de antes — todas as mensagens,
+ * ordem crescente. Quem já chamava assim não vê diferença.
+ *
+ * Com `limit`, devolve as mensagens MAIS NOVAS, e não as mais antigas. É o que
+ * o atendente precisa ao abrir a conversa; um `LIMIT` sobre a ordem crescente
+ * traria o começo do histórico, que é o oposto do útil. Por isso a consulta
+ * ordena DESC, corta, e a lista é invertida aqui — mesma técnica que
+ * `listRecentMessagesByConversation` já usa.
+ *
+ * `before` é o cursor para buscar o trecho anterior: o id de uma mensagem já
+ * conhecida. A comparação é pelo par `(created_at, id)`, e não só pela data:
+ * duas mensagens gravadas no mesmo instante — que acontece com o par
+ * "mensagem do cliente + resposta automática" — fariam um cursor por data
+ * pular ou repetir uma delas.
+ */
+async function listMessagesByConversation(conversationId, { limit, before } = {}) {
+  const colunas = `m.id, m.conversation_id, m.direction, m.content, m.whatsapp_message_id, m.status,
             m.message_type, m.media_path, m.media_mime_type, m.media_filename,
             m.location_latitude, m.location_longitude, m.replied_to_message_id, m.sent_by, m.created_at,
             m.transcription, m.transcription_status, m.transcription_detail,
             m.transcription_model, m.transcription_ms, m.audio_duration_seconds, m.metadata,
-            rm.content AS replied_to_content, rm.direction AS replied_to_direction
+            rm.content AS replied_to_content, rm.direction AS replied_to_direction`;
+
+  if (!limit) {
+    const result = await getPool().query(
+      `SELECT ${colunas}
+       FROM messages m
+       LEFT JOIN messages rm ON rm.id = m.replied_to_message_id
+       WHERE m.conversation_id = $1
+       ORDER BY m.created_at ASC`,
+      [conversationId]
+    );
+    return result.rows.map(toMessageWithReplyPreview);
+  }
+
+  const result = await getPool().query(
+    `SELECT ${colunas}
      FROM messages m
      LEFT JOIN messages rm ON rm.id = m.replied_to_message_id
      WHERE m.conversation_id = $1
-     ORDER BY m.created_at ASC`,
-    [conversationId]
+       AND (
+         $2::uuid IS NULL
+         OR (m.created_at, m.id) < (SELECT c.created_at, c.id FROM messages c WHERE c.id = $2)
+       )
+     ORDER BY m.created_at DESC, m.id DESC
+     LIMIT $3`,
+    [conversationId, before || null, limit]
   );
-  return result.rows.map(toMessageWithReplyPreview);
+  return result.rows.map(toMessageWithReplyPreview).reverse();
 }
 
 /**

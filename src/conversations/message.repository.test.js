@@ -349,6 +349,64 @@ describe('message repository', () => {
     expect(message.repliedToMessageId).toBeNull();
   });
 
+  // Paginacao aditiva: sem opcoes a consulta e a de antes. Com `limit`, traz as
+  // MAIS NOVAS; com `before`, o trecho anterior a uma mensagem conhecida.
+  describe('listMessagesByConversation paginado', () => {
+    async function criarSequencia(n) {
+      const criadas = [];
+      for (let i = 0; i < n; i += 1) {
+        // sentAt crescente: sem isso todas nascem no mesmo instante e a ordem
+        // passa a depender so do desempate por id.
+        criadas.push(await createMessage({
+          conversationId, direction: 'inbound', status: 'received', content: `msg ${i}`,
+          sentAt: new Date(Date.UTC(2026, 0, 1, 0, i)),
+        }));
+      }
+      return criadas;
+    }
+
+    test('sem opcoes, devolve tudo em ordem crescente, como antes', async () => {
+      await criarSequencia(5);
+      const todas = await listMessagesByConversation(conversationId);
+      expect(todas.map((m) => m.content)).toEqual(['msg 0', 'msg 1', 'msg 2', 'msg 3', 'msg 4']);
+    });
+
+    // O ponto da paginacao: quem abre a conversa quer o fim do historico, nao
+    // o comeco. Um LIMIT sobre a ordem crescente traria 'msg 0'.
+    test('com limit, devolve as MAIS NOVAS, ainda em ordem crescente', async () => {
+      await criarSequencia(5);
+      const pagina = await listMessagesByConversation(conversationId, { limit: 2 });
+      expect(pagina.map((m) => m.content)).toEqual(['msg 3', 'msg 4']);
+    });
+
+    test('before traz o trecho anterior, sem repetir o cursor', async () => {
+      const criadas = await criarSequencia(5);
+      const pagina = await listMessagesByConversation(conversationId, { limit: 2, before: criadas[3].id });
+      expect(pagina.map((m) => m.content)).toEqual(['msg 1', 'msg 2']);
+    });
+
+    test('no comeco do historico, before devolve menos que o limite', async () => {
+      const criadas = await criarSequencia(3);
+      const pagina = await listMessagesByConversation(conversationId, { limit: 10, before: criadas[1].id });
+      expect(pagina.map((m) => m.content)).toEqual(['msg 0']);
+    });
+
+    // Duas mensagens no MESMO instante acontecem de verdade: mensagem do
+    // cliente e resposta automatica. Um cursor so por data pularia ou
+    // repetiria uma delas; o par (created_at, id) nao.
+    test('empate de horario nao pula nem repete mensagem', async () => {
+      const instante = new Date(Date.UTC(2026, 0, 1, 12, 0));
+      const a = await createMessage({ conversationId, direction: 'inbound', status: 'received', content: 'A', sentAt: instante });
+      const b = await createMessage({ conversationId, direction: 'outbound', status: 'sent', content: 'B', sentAt: instante });
+      const primeiras = await listMessagesByConversation(conversationId, { limit: 1 });
+      expect(primeiras).toHaveLength(1);
+      const anteriores = await listMessagesByConversation(conversationId, { limit: 5, before: primeiras[0].id });
+      const vistas = [...anteriores, ...primeiras].map((m) => m.content);
+      expect(vistas).toHaveLength(2);
+      expect(new Set(vistas)).toEqual(new Set([a.content, b.content]));
+    });
+  });
+
   describe('listMessagesByConversation reply previews', () => {
     test('includes a repliedToPreview for a message that replies to another', async () => {
       const original = await createMessage({

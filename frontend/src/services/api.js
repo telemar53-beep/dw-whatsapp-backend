@@ -55,8 +55,14 @@ export function getMyConversations(token) {
   return apiFetch('/api/conversations/mine', { token });
 }
 
-export function getMessages(conversationId, token) {
-  return apiFetch(`/api/conversations/${conversationId}/messages`, { token });
+// `limit` e `before` são opcionais: sem eles a rota devolve o histórico inteiro,
+// exatamente como antes. Quem chamava com dois argumentos continua valendo.
+export function getMessages(conversationId, token, { limit, before } = {}) {
+  const params = new URLSearchParams();
+  if (limit) params.set('limit', String(limit));
+  if (before) params.set('before', before);
+  const query = params.toString();
+  return apiFetch(`/api/conversations/${conversationId}/messages${query ? `?${query}` : ''}`, { token });
 }
 
 export function getConversationHistory(contactId, token) {

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import ContactAvatar from './ContactAvatar';
 import MessageStatusTicks from './MessageStatusTicks';
 import { IconCheckCircle } from './icons/WaIcons';
@@ -294,4 +295,13 @@ function ConversationListItem({ conversation, onSelect, onQuickClose, unread, se
   );
 }
 
-export default ConversationListItem;
+// Cada mensagem que chega refazia a lista INTEIRA: medido em 40 de 40 itens
+// re-renderizando, inclusive quando nada mudava. Com 10 atendentes na mesma
+// fila, cada uma recebe os eventos de todas.
+//
+// O memo só vale se o pai colaborar: `conversation` precisa manter a
+// referência de quem não mudou, e `onSelect`/`onQuickClose` precisam vir de
+// useCallback. Sem isso o memo compara, não encontra igualdade e re-renderiza
+// do mesmo jeito — custando a comparação a mais. É por isso que este commit
+// mexe no DashboardPage junto: memo sozinho aqui não teria efeito nenhum.
+export default memo(ConversationListItem);

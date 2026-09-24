@@ -395,7 +395,13 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
 
   // Fim da conversa na abertura e em mensagem nova; posição de leitura segura
   // quando o "Carregar mensagens anteriores" põe mensagens por cima.
-  const { memorizarPosicao } = useRolagemDaLinhaDoTempo({ linhaDoTempoRef, fimRef: bottomRef, messages, conversationId: conversation.id });
+  const { memorizarPosicao } = useRolagemDaLinhaDoTempo({
+    linhaDoTempoRef,
+    fimRef: bottomRef,
+    messages,
+    conversationId: conversation.id,
+    carregandoAnteriores,
+  });
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
   const isAdmin = (agent.role === 'admin' || agent.role === 'manager') && conversation.status !== 'closed';

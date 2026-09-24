@@ -65,7 +65,10 @@ describe('trocar a senha com a senha atual errada (PRF-12)', () => {
 
     await trocarSenha();
 
-    expect(await screen.findByText('sem sessão')).toBeInTheDocument();
+    // A frase aparece com ou sem logout: esperar por ela (e não por "sem
+    // sessão") faz uma regressão falhar na asserção, não por tempo esgotado.
+    expect(await screen.findByText('Sua sessão expirou. Entre de novo.')).toBeInTheDocument();
+    expect(screen.getByTestId('sessao')).toHaveTextContent('sem sessão');
     expect(localStorage.getItem('dw_token')).toBeNull();
   });
 });

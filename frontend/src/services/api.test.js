@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   apiFetch,
   ApiError,
@@ -145,6 +145,12 @@ describe('getQueue', () => {
 });
 
 describe('apiFetch 401 handling', () => {
+  // Um teste que falha antes da última linha deixaria o handler registrado para
+  // os seguintes.
+  afterEach(() => {
+    setUnauthorizedHandler(null);
+  });
+
   test('calls the registered unauthorized handler on a 401 response', async () => {
     const handler = vi.fn();
     setUnauthorizedHandler(handler);
@@ -204,6 +210,20 @@ describe('apiFetch 401 handling', () => {
 
     expect(handler).toHaveBeenCalledTimes(1);
     setUnauthorizedHandler(null);
+  });
+
+  // Decisão fixada: na troca de senha, 401 com uma frase que não é de sessão
+  // conta como credencial recusada — não desloga. Se o backend ganhar uma frase
+  // de sessão nova, a próxima chamada de qualquer tela desloga; o contrário
+  // (tratar a desconhecida como sessão) traria o PRF-12 de volta.
+  test('troca de senha com 401 de frase desconhecida não desloga', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401('{"error":"Alguma recusa nova"}'));
+
+    await expect(changePassword('atual', 'nova12345', 'tok-123')).rejects.toMatchObject({ status: 401 });
+
+    expect(handler).not.toHaveBeenCalled();
   });
 
   test('fora da troca de senha, todo 401 continua deslogando — inclusive com frase de credencial', async () => {

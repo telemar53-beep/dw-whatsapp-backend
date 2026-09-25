@@ -606,6 +606,25 @@ describe('sendTemplateMessage', () => {
     expect(result).toEqual({ whatsappMessageId: 'wamid.TPL1' });
   });
 
+  // Fase 1A (25/09/2026): a resposta de envio da Meta traz contacts[].wa_id — o número como
+  // o WhatsApp conhece o cliente. No DDD 98 ele vem sem o 9 mesmo quando mandamos com o 9.
+  test('Fase 1A: devolve o wa_id que a Meta informa, sem mudar nada no pedido enviado', async () => {
+    axios.post.mockResolvedValue({ data: { contacts: [{ input: '5598985120338', wa_id: '559885120338' }], messages: [{ id: 'wamid.TPL9' }] } });
+    const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };
+
+    const result = await sendTemplateMessage(channel, '5598985120338', { name: 'dw_fatura_mensal', language: 'pt_BR', variables: ['Ana'] });
+
+    expect(result).toEqual({ whatsappMessageId: 'wamid.TPL9', waId: '559885120338' });
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v20.0/1234567890/messages',
+      {
+        messaging_product: 'whatsapp', to: '5598985120338', type: 'template',
+        template: { name: 'dw_fatura_mensal', language: { code: 'pt_BR' }, components: [{ type: 'body', parameters: [{ type: 'text', text: 'Ana' }] }] },
+      },
+      { headers: { Authorization: 'Bearer token-abc' } }
+    );
+  });
+
   test('sends an empty components array for a template with zero variables', async () => {
     axios.post.mockResolvedValue({ data: { messages: [{ id: 'wamid.TPL2' }] } });
     const channel = { config: { phoneNumberId: '1234567890', accessToken: 'token-abc' } };

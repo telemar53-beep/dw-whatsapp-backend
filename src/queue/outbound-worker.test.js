@@ -6,6 +6,7 @@ jest.mock('./outbound-queue');
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/conversation.repository');
 jest.mock('../conversations/message.repository');
+jest.mock('../conversations/contact.repository');
 jest.mock('../whatsapp-adapters/meta-cloud.adapter');
 jest.mock('../whatsapp-adapters/baileys.manager');
 jest.mock('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -26,7 +27,8 @@ jest.mock('../payments/pix-emv', () => {
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
-const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFailed } = require('../conversations/message.repository');
+const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFailed, recordMessageWaId } = require('../conversations/message.repository');
+const { renameFreshDispatchContactToWaId } = require('../conversations/contact.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -566,6 +568,69 @@ describe('startOutboundWorker', () => {
     );
     expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();
     expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.TPL1');
+  });
+
+  // Fase 1A (25/09/2026): a Meta devolve o wa_id do cliente no envio de template. No DDD 98 ele
+  // vem sem o 9 mesmo quando o disparo manda com o 9 — e é com ele que a resposta chega.
+  describe('Fase 1A — wa_id devolvido pela Meta', () => {
+    const CANAL_META = { id: 'channel-1', type: 'meta_cloud', config: {} };
+    const JOB_TEMPLATE = {
+      messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1', content: null,
+      templateName: 'dw_fatura_mensal', templateLanguage: 'pt_BR', templateVariables: ['Ana'],
+    };
+
+    beforeEach(() => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactId: 'contact-1', contactPhoneNumber: '5598985120338' });
+      findChannelById.mockResolvedValue(CANAL_META);
+      recordMessageSent.mockResolvedValue({ id: 'msg-1' });
+    });
+
+    test('wa_id diferente do número do contato: grava o wa_id na mensagem e tenta a troca segura do número', async () => {
+      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T1', waId: '559885120338' });
+      renameFreshDispatchContactToWaId.mockResolvedValue(true);
+
+      await handler(JOB_TEMPLATE);
+
+      // O pedido à Meta é o de sempre, com o número que o SGP mandou.
+      expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledWith(CANAL_META, '5598985120338', { name: 'dw_fatura_mensal', language: 'pt_BR', variables: ['Ana'] });
+      expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.T1');
+      expect(recordMessageWaId).toHaveBeenCalledWith('msg-1', '559885120338');
+      expect(renameFreshDispatchContactToWaId).toHaveBeenCalledWith('contact-1', '559885120338', 'msg-1');
+      expect(markMessageFailed).not.toHaveBeenCalled();
+    });
+
+    test('wa_id igual ao número do contato: nada a registrar nem a trocar', async () => {
+      getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactId: 'contact-1', contactPhoneNumber: '559885120338' });
+      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T2', waId: '559885120338' });
+
+      await handler(JOB_TEMPLATE);
+
+      expect(recordMessageWaId).not.toHaveBeenCalled();
+      expect(renameFreshDispatchContactToWaId).not.toHaveBeenCalled();
+    });
+
+    test('sem wa_id na resposta: comportamento de antes', async () => {
+      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T3' });
+
+      await handler(JOB_TEMPLATE);
+
+      expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.T3');
+      expect(recordMessageWaId).not.toHaveBeenCalled();
+      expect(renameFreshDispatchContactToWaId).not.toHaveBeenCalled();
+    });
+
+    test('falha ao registrar ou trocar o número nunca vira falha de envio: a mensagem já saiu', async () => {
+      metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T4', waId: '559885120338' });
+      recordMessageWaId.mockRejectedValueOnce(new Error('banco fora'));
+      const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(handler(JOB_TEMPLATE)).resolves.toBeUndefined();
+
+      expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.T4');
+      expect(markMessageFailed).not.toHaveBeenCalled();
+      expect(spy.mock.calls.flat().join(' ')).not.toContain('559885120338');
+      spy.mockRestore();
+    });
   });
 
   test('passes headerType/headerLink through to sendTemplateMessage when present', async () => {

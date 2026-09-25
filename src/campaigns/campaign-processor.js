@@ -1,6 +1,7 @@
 const { findChannelById } = require('../channels/channel.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findOpenConversation, createConversation } = require('../conversations/conversation.repository');
+const { resolverContatoDoDisparo } = require('../conversations/dispatch-contact');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const { updateCampaignRecipientStatus, incrementCampaignCounter } = require('./campaign.repository');
@@ -25,7 +26,12 @@ async function processCampaignRecipient({ recipientId, campaignId, channelId, ph
       }
     }
 
-    const contact = await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, displayName || null);
+    // Fase 1A (25/09/2026): pela Meta o número vai como veio da lista, e a resposta chega com o
+    // wa_id (no DDD 98, sem o 9). Mesma regra do disparo do SGP para as duas caírem no mesmo
+    // contato. No Baileys, resolveWhatsAppJid acima já perguntou ao WhatsApp pelas duas formas.
+    const contact = channel.type === 'baileys'
+      ? await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, displayName || null)
+      : await resolverContatoDoDisparo(canonicalPhoneNumber, displayName || null);
 
     const existing = await findOpenConversation(contact.id, channel.id);
     if (existing) {

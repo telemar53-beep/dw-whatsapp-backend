@@ -1,5 +1,6 @@
 jest.mock('../channels/channel.repository');
 jest.mock('../conversations/contact.repository');
+jest.mock('../conversations/dispatch-contact');
 jest.mock('../conversations/conversation.repository');
 jest.mock('../queue/outbound-queue');
 jest.mock('../whatsapp-adapters/baileys.manager');
@@ -7,6 +8,7 @@ jest.mock('./campaign.repository');
 
 const { findChannelById } = require('../channels/channel.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
+const { resolverContatoDoDisparo } = require('../conversations/dispatch-contact');
 const { findOpenConversation, createConversation } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
@@ -25,7 +27,12 @@ const BASE_JOB = {
   templateVariables: null,
 };
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  // O resolvedor do nono dígito tem testes próprios (dispatch-contact.test.js). Aqui ele
+  // delega ao findOrCreate, para os testes de sempre continuarem descrevendo o mesmo fluxo.
+  resolverContatoDoDisparo.mockImplementation((telefone, nome) => findOrCreateContactByPhoneNumber(telefone, nome));
+});
 
 describe('processCampaignRecipient', () => {
   test('marks failed when the channel does not exist', async () => {
@@ -47,6 +54,8 @@ describe('processCampaignRecipient', () => {
 
     await processCampaignRecipient(BASE_JOB);
 
+    // O Baileys já pergunta ao WhatsApp pelas duas formas (resolveWhatsAppJid).
+    expect(resolverContatoDoDisparo).not.toHaveBeenCalled();
     expect(createConversation).toHaveBeenCalledWith('contact-1', 'channel-1', null, 'silent');
     expect(enqueueOutboundMessage).toHaveBeenCalledWith({
       conversationId: 'conversation-1',
@@ -117,6 +126,23 @@ describe('processCampaignRecipient', () => {
       templateLanguage: 'pt_BR',
       templateVariables: ['Joao', '10/09'],
     });
+  });
+
+  // Fase 1A (25/09/2026): campanha pela Meta é disparo de template como o do SGP, e sofria a
+  // mesma divisão de contato pelo nono dígito. Mínimo necessário: o mesmo resolvedor.
+  test('Fase 1A: pela Meta, o contato sai do resolvedor do nono dígito', async () => {
+    findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud' });
+    resolverContatoDoDisparo.mockResolvedValue({ id: 'contato-real-sem-9' });
+    findOpenConversation.mockResolvedValue(null);
+    createConversation.mockResolvedValue({ id: 'conversation-1' });
+    enqueueOutboundMessage.mockResolvedValue({ id: 'message-1' });
+
+    await processCampaignRecipient({ ...BASE_JOB, phoneNumber: '5598985120338', templateName: 'fatura_vencendo', templateLanguage: 'pt_BR', templateVariables: ['Joao'] });
+
+    expect(resolverContatoDoDisparo).toHaveBeenCalledWith('5598985120338', 'Joao');
+    expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
+    expect(findOpenConversation).toHaveBeenCalledWith('contato-real-sem-9', 'channel-1');
+    expect(createConversation).toHaveBeenCalledWith('contato-real-sem-9', 'channel-1', null, 'silent');
   });
 
   test('marks failed when enqueueOutboundMessage throws', async () => {

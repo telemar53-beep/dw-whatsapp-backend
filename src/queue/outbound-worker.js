@@ -1,7 +1,8 @@
 const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-queue');
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
-const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFailed } = require('../conversations/message.repository');
+const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFailed, recordMessageWaId } = require('../conversations/message.repository');
+const { renameFreshDispatchContactToWaId } = require('../conversations/contact.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -18,6 +19,21 @@ const ADAPTERS_BY_CHANNEL_TYPE = {
   baileys: baileysManager,
   '360dialog': threeSixtyDialogAdapter,
 };
+
+// Fase 1A (25/09/2026): no envio de template a Meta devolve o wa_id do cliente, que no DDD 98
+// vem sem o 9 mesmo quando o disparo manda com o 9 — e é com ele que a resposta chega. Aqui ele
+// fica registrado na mensagem e, só se o contato acabou de nascer deste disparo (regra inteira
+// em renameFreshDispatchContactToWaId), o contato passa a usar esse número. A mensagem JÁ SAIU:
+// nada disto pode virar falha de envio, então nenhum erro escapa daqui.
+async function registrarWaIdDaMeta({ messageId, conversation, waId }) {
+  try {
+    await recordMessageWaId(messageId, waId);
+    const trocou = await renameFreshDispatchContactToWaId(conversation.contactId, waId, messageId);
+    if (trocou) console.log(`Contact ${conversation.contactId} now uses the WhatsApp id returned by Meta (message ${messageId})`);
+  } catch (err) {
+    console.error(`Failed to record the WhatsApp id returned for message ${messageId}: ${mensagemSegura(err)}`);
+  }
+}
 
 const AUDIO_DELIVERY_CHECK_DELAY_MS = 5000;
 const PIX_DELIVERY_CHECK_DELAY_MS = 60000;
@@ -237,7 +253,7 @@ function startOutboundWorker() {
         }
       }
 
-      const { whatsappMessageId, viaCartao, motivoTexto } = templateName
+      const { whatsappMessageId, viaCartao, motivoTexto, waId } = templateName
         ? await adapter.sendTemplateMessage(channel, conversation.contactPhoneNumber, {
             name: templateName,
             language: templateLanguage,
@@ -274,6 +290,9 @@ function startOutboundWorker() {
       }
       const message = await recordMessageSent(messageId, whatsappMessageId);
       avisarTela(conversation, conversationId, message);
+      if (waId && waId !== conversation.contactPhoneNumber) {
+        await registrarWaIdDaMeta({ messageId, conversation, waId });
+      }
       if (channel.type === 'baileys' && messageType === 'audio' && whatsappMessageId) {
         scheduleAudioDeliveryCheck({ channel, whatsappMessageId, conversation, mediaPath, mediaMimeType, mediaFilename, isVoiceNote });
       }

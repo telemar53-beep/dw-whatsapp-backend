@@ -13,7 +13,10 @@ const {
   setContactSgpLink,
   setContactCityIfEmpty,
   setContactLocalityIfEmpty,
+  findContactsWithOwnHistoryByPhoneNumbers,
+  renameFreshDispatchContactToWaId,
 } = require('./contact.repository');
+const { createMessage } = require('./message.repository');
 
 describe('contact repository', () => {
   beforeEach(async () => {
@@ -445,5 +448,149 @@ describe('contato com localidade', () => {
     });
 
     expect(atualizado.localityId).toBe(povoadoId);
+  });
+});
+
+// Fase 1A (25/09/2026): disparo da Meta e resposta do mesmo celular caíam em dois
+// contatos por causa do nono dígito. "Histórico próprio" é a definição aprovada pelo
+// proprietário: entrada real, vínculo com o SGP, nota interna, ou conversa que não seja
+// só disparo silencioso. Contato que só tem conversa silent de disparo é fantasma.
+describe('Fase 1A — contato do disparo e nono dígito', () => {
+  let canal;
+  let seq = 0;
+
+  beforeEach(async () => {
+    await getPool().query('TRUNCATE channels, contacts, cities CASCADE');
+    seq += 1;
+    canal = await createChannel({ type: 'meta_cloud', name: `Meta ${seq}`, phoneNumber: `+55119988${String(seq).padStart(5, '0')}`, config: {} });
+  });
+
+  afterAll(async () => {
+    await closePool();
+  });
+
+  async function disparo(contatoId, conversa) {
+    const conv = conversa || await createConversation(contatoId, canal.id, null, 'silent');
+    const msg = await createMessage({ conversationId: conv.id, direction: 'outbound', content: null, status: 'sent', messageType: 'text' });
+    return { conv, msg };
+  }
+
+  async function entrada(conversaId) {
+    return createMessage({ conversationId: conversaId, direction: 'inbound', content: 'oi', status: 'received', messageType: 'text' });
+  }
+
+  describe('findContactsWithOwnHistoryByPhoneNumbers', () => {
+    test('nenhuma forma cadastrada devolve lista vazia', async () => {
+      expect(await findContactsWithOwnHistoryByPhoneNumbers(['5598985120338', '559885120338'])).toEqual([]);
+    });
+
+    test('contato fantasma (só conversa silent com disparo) NÃO tem histórico próprio', async () => {
+      const fantasma = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      await disparo(fantasma.id);
+      const [r] = await findContactsWithOwnHistoryByPhoneNumbers(['5598985120338']);
+      expect(r.contact.id).toBe(fantasma.id);
+      expect(r.contact.phoneNumber).toBe('5598985120338');
+      expect(r.temHistoricoProprio).toBe(false);
+    });
+
+    test('mensagem de entrada é histórico próprio', async () => {
+      const c = await findOrCreateContactByPhoneNumber('559885120338', null);
+      const conv = await createConversation(c.id, canal.id);
+      await entrada(conv.id);
+      const [r] = await findContactsWithOwnHistoryByPhoneNumbers(['559885120338']);
+      expect(r.temHistoricoProprio).toBe(true);
+    });
+
+    test('vínculo com o SGP é histórico próprio', async () => {
+      const c = await findOrCreateContactByPhoneNumber('559885120338', null);
+      await setContactSgpLink(c.id, { sgpClientId: 1, sgpContractId: null, sgpDocument: '52998224725', sgpFirstName: 'Ana' });
+      const [r] = await findContactsWithOwnHistoryByPhoneNumbers(['559885120338']);
+      expect(r.temHistoricoProprio).toBe(true);
+    });
+
+    test('nota interna é histórico próprio', async () => {
+      const c = await findOrCreateContactByPhoneNumber('559885120338', null);
+      await updateContact(c.id, { internalNote: 'cliente antigo' });
+      const [r] = await findContactsWithOwnHistoryByPhoneNumbers(['559885120338']);
+      expect(r.temHistoricoProprio).toBe(true);
+    });
+
+    test('conversa que não é disparo silencioso é histórico próprio, mesmo sem mensagem de entrada', async () => {
+      const c = await findOrCreateContactByPhoneNumber('559885120338', null);
+      await createConversation(c.id, canal.id, null, 'closed');
+      const [r] = await findContactsWithOwnHistoryByPhoneNumbers(['559885120338']);
+      expect(r.temHistoricoProprio).toBe(true);
+    });
+
+    test('devolve só as formas pedidas, cada uma com a sua marcação', async () => {
+      const fantasma = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      await disparo(fantasma.id);
+      const real = await findOrCreateContactByPhoneNumber('559885120338', null);
+      await entrada((await createConversation(real.id, canal.id)).id);
+      await findOrCreateContactByPhoneNumber('5511912345678', null);
+      const r = await findContactsWithOwnHistoryByPhoneNumbers(['5598985120338', '559885120338']);
+      const porNumero = Object.fromEntries(r.map((x) => [x.contact.phoneNumber, x.temHistoricoProprio]));
+      expect(porNumero).toEqual({ '5598985120338': false, '559885120338': true });
+    });
+  });
+
+  describe('renameFreshDispatchContactToWaId', () => {
+    test('contato recém-criado pelo disparo (única mensagem é este disparo) passa a usar o wa_id', async () => {
+      const c = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      const { msg } = await disparo(c.id);
+      expect(await renameFreshDispatchContactToWaId(c.id, '559885120338', msg.id)).toBe(true);
+      expect((await findContactById(c.id)).phoneNumber).toBe('559885120338');
+    });
+
+    test('com mensagem de entrada não renomeia', async () => {
+      const c = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      const { conv, msg } = await disparo(c.id);
+      await entrada(conv.id);
+      expect(await renameFreshDispatchContactToWaId(c.id, '559885120338', msg.id)).toBe(false);
+      expect((await findContactById(c.id)).phoneNumber).toBe('5598985120338');
+    });
+
+    test('outro contato já com o wa_id: não renomeia e não lança', async () => {
+      const c = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      const { msg } = await disparo(c.id);
+      await findOrCreateContactByPhoneNumber('559885120338', null);
+      expect(await renameFreshDispatchContactToWaId(c.id, '559885120338', msg.id)).toBe(false);
+      expect((await findContactById(c.id)).phoneNumber).toBe('5598985120338');
+    });
+
+    test('contato fantasma ANTIGO (disparo anterior na conversa) não renomeia: só o criado agora', async () => {
+      const c = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      const { conv } = await disparo(c.id);
+      const { msg: novo } = await disparo(c.id, conv);
+      expect(await renameFreshDispatchContactToWaId(c.id, '559885120338', novo.id)).toBe(false);
+      expect((await findContactById(c.id)).phoneNumber).toBe('5598985120338');
+    });
+
+    test('conversa que não é silent (ex.: Iniciar conversa) não renomeia', async () => {
+      const c = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      const conv = await createConversation(c.id, canal.id);
+      const { msg } = await disparo(c.id, conv);
+      expect(await renameFreshDispatchContactToWaId(c.id, '559885120338', msg.id)).toBe(false);
+    });
+
+    test('vínculo com o SGP ou nota interna não renomeiam', async () => {
+      const a = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      const { msg: ma } = await disparo(a.id);
+      await setContactSgpLink(a.id, { sgpClientId: 1, sgpContractId: null, sgpDocument: '52998224725', sgpFirstName: 'Ana' });
+      expect(await renameFreshDispatchContactToWaId(a.id, '559885120338', ma.id)).toBe(false);
+
+      const b = await findOrCreateContactByPhoneNumber('5598985120339', null);
+      const { msg: mb } = await disparo(b.id);
+      await updateContact(b.id, { internalNote: 'nota' });
+      expect(await renameFreshDispatchContactToWaId(b.id, '559885120339', mb.id)).toBe(false);
+    });
+
+    test('mensagem que não é deste contato não autoriza renomear', async () => {
+      const c = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      await disparo(c.id);
+      const outro = await findOrCreateContactByPhoneNumber('5598985129999', null);
+      const { msg: alheia } = await disparo(outro.id);
+      expect(await renameFreshDispatchContactToWaId(c.id, '559885120338', alheia.id)).toBe(false);
+    });
   });
 });

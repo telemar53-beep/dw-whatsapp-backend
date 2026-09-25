@@ -2,6 +2,7 @@ const sgpClient = require('../integrations/sgp-client');
 const { setContactSgpLink } = require('../conversations/contact.repository');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { mensagemSegura } = require('./safe-error-log');
+const { brazilianNumberVariants } = require('../conversations/phone-variants');
 
 /**
  * Quem é o cliente, ANTES de o modelo falar. Ordem: memória (contato já
@@ -20,14 +21,20 @@ function primeiroNome(nome) {
   return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
 }
 
-/** '5598985120338' → ['98985120338', '9885120338']: sem o 55, e sem o 9º dígito. */
+/**
+ * '5598985120338' → ['98985120338', '9885120338'] e '559885120338' → ['9885120338', '98985120338']:
+ * sem o 55, a forma recebida primeiro e depois a outra forma do nono dígito.
+ *
+ * Fase 1A (25/09/2026): antes, o número de 8 dígitos não ganhava a forma com o 9. É a forma do
+ * wa_id da Meta fora dos DDDs 11-19/21/22/24/27/28, e o SGP da DW guarda o celular com o 9 — a
+ * busca não achava ninguém e a IA pedia CPF. A regra é a mesma do disparo
+ * (brazilianNumberVariants): fixo, que começa com 2 a 5, nunca ganha variante de celular.
+ */
 function variantesTelefone(numero) {
   let d = String(numero || '').replace(/\D/g, '');
   if (d.startsWith('55') && d.length >= 12) d = d.slice(2);
   if (d.length < 10 || d.length > 11) return [];
-  const variantes = [d];
-  if (d.length === 11 && d[2] === '9') variantes.push(d.slice(0, 2) + d.slice(3));
-  return variantes;
+  return brazilianNumberVariants(`55${d}`).map((forma) => forma.slice(2));
 }
 
 function vazio() {
@@ -106,21 +113,32 @@ async function resolverIdentidade({ contact, ignorarTelefone = false }) {
     // nome) — buscar de novo pelo MESMO telefone cumprimentaria a mesma
     // pessoa errada outra vez. A memória (acima) continua valendo.
     if (ignorarTelefone) return vazio();
+    // As duas formas do nono dígito são consultadas SEMPRE, e não só até a primeira achar
+    // alguém: se levarem a cadastros diferentes no SGP, não dá para saber quem está falando.
+    const achados = [];
     for (const telefone of variantesTelefone(contact.phoneNumber)) {
       const rec = await sgpClient.findClientRecord({ telefone });
       if (rec.total === 0) continue;
       if (!rec.cliente) return vazio();          // vários: não adivinha
-      const identidade = await porCpf(rec.cliente.cpfcnpj, 'phone');
-      await setContactSgpLink(contact.id, {
-        sgpClientId: rec.cliente.id,
-        sgpContractId: identidade.contracts.length === 1 ? identidade.contracts[0].id : null,
-        sgpDocument: rec.cliente.cpfcnpj,
-        sgpFirstName: identidade.primeiroNome,
-      });
-      await preencherCidadeSemDerrubar(contact, identidade);
-      return identidade;
+      achados.push(rec.cliente);
     }
-    return vazio();
+    if (achados.length === 0) return vazio();
+    if (new Set(achados.map((c) => String(c.id))).size > 1) {
+      // Cadastros diferentes nas duas formas do mesmo celular: não adivinha. Nenhum dado do
+      // cliente vai ao log, só o fato.
+      console.error(`Identity by phone skipped for contact ${contact.id}: the two ninth-digit forms match different SGP clients`);
+      return vazio();
+    }
+    const [cliente] = achados;
+    const identidade = await porCpf(cliente.cpfcnpj, 'phone');
+    await setContactSgpLink(contact.id, {
+      sgpClientId: cliente.id,
+      sgpContractId: identidade.contracts.length === 1 ? identidade.contracts[0].id : null,
+      sgpDocument: cliente.cpfcnpj,
+      sgpFirstName: identidade.primeiroNome,
+    });
+    await preencherCidadeSemDerrubar(contact, identidade);
+    return identidade;
   } catch (err) {
     if (contact.sgpDocument) {
       console.error(`Identity resolved from memory only (SGP unavailable) for contact ${contact.id}: ${mensagemSegura(err)}`);

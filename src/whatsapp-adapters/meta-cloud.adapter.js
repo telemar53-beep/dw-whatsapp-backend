@@ -236,7 +236,11 @@ async function sendTemplateMessage(channel, toPhoneNumber, { name, language, var
     { messaging_product: 'whatsapp', to: toPhoneNumber, type: 'template', template: { name, language: { code: language }, components } },
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
-  return { whatsappMessageId: response.data.messages[0].id };
+  // Fase 1A (25/09/2026): contacts[].wa_id é o número como o WhatsApp conhece o cliente —
+  // no DDD 98 ele vem sem o 9 mesmo quando o disparo manda com o 9. O worker de saída usa
+  // isto para o disparo e a resposta caírem no mesmo contato. Só entra quando vem.
+  const waId = response.data.contacts && response.data.contacts[0] && response.data.contacts[0].wa_id;
+  return { whatsappMessageId: response.data.messages[0].id, ...(waId ? { waId: String(waId) } : {}) };
 }
 
 const MESSAGE_STATUS_VALUES = new Set(['sent', 'delivered', 'read', 'failed']);

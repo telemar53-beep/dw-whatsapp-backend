@@ -173,7 +173,66 @@ async function setContactSgpLink(contactId, { sgpClientId, sgpContractId, sgpDoc
   return toContact(result.rows[0]);
 }
 
+// "Histórico próprio" (definição aprovada pelo proprietário, Fase 1A, 25/09/2026): mensagem
+// de entrada, vínculo com o SGP, nota interna, ou conversa que não seja só disparo silencioso.
+// Um contato cujas únicas conversas são `silent` de disparo, sem entrada, não tem histórico
+// próprio: é o contato fantasma que o nono dígito criou.
+const TEM_HISTORICO_PROPRIO = `(
+  ct.sgp_document IS NOT NULL
+  OR coalesce(ct.internal_note, '') <> ''
+  OR EXISTS (SELECT 1 FROM conversations c JOIN messages m ON m.conversation_id = c.id
+             WHERE c.contact_id = ct.id AND m.direction = 'inbound')
+  OR EXISTS (SELECT 1 FROM conversations c WHERE c.contact_id = ct.id AND c.status <> 'silent')
+)`;
+
+/**
+ * As formas pedidas do número que já existem como contato, cada uma com a marcação de
+ * histórico próprio. Alimenta a escolha do contato do disparo (dispatch-contact.js).
+ */
+async function findContactsWithOwnHistoryByPhoneNumbers(phoneNumbers) {
+  const result = await getPool().query(
+    `SELECT ct.id, ct.phone_number, ct.display_name, ct.avatar_path, ct.avatar_checked_at, ct.city_id, ct.locality_id,
+            ct.internal_note, ct.created_at, ct.sgp_client_id, ct.sgp_contract_id, ct.sgp_document, ct.sgp_first_name,
+            ${TEM_HISTORICO_PROPRIO} AS tem_historico_proprio
+     FROM contacts ct WHERE ct.phone_number = ANY($1::text[])`,
+    [phoneNumbers]
+  );
+  return result.rows.map((row) => ({ contact: toContact(row), temHistoricoProprio: row.tem_historico_proprio }));
+}
+
+/**
+ * Troca o número do contato pelo wa_id que a Meta devolveu no envio, SÓ quando o contato
+ * acabou de ser criado por este disparo: sem histórico próprio, com uma única mensagem na
+ * vida (a deste disparo, `messageId`) e nenhum outro contato já com o wa_id.
+ *
+ * Tudo numa instrução só, para a checagem e a troca não se separarem: se uma resposta do
+ * cliente chegar no meio, ou outro contato ganhar o número, o UPDATE simplesmente não casa.
+ * A unicidade de phone_number é a última trava (23505 vira "não renomeou").
+ * Devolve true se renomeou.
+ */
+async function renameFreshDispatchContactToWaId(contactId, waId, messageId) {
+  try {
+    const result = await getPool().query(
+      `UPDATE contacts ct SET phone_number = $2
+       WHERE ct.id = $1
+         AND NOT ${TEM_HISTORICO_PROPRIO}
+         AND (SELECT count(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.contact_id = ct.id) = 1
+         AND EXISTS (SELECT 1 FROM messages m JOIN conversations c ON c.id = m.conversation_id
+                     WHERE m.id = $3 AND c.contact_id = ct.id)
+         AND NOT EXISTS (SELECT 1 FROM contacts o WHERE o.phone_number = $2)
+       RETURNING ct.id`,
+      [contactId, waId, messageId]
+    );
+    return result.rowCount === 1;
+  } catch (err) {
+    if (err.code === '23505') return false;
+    throw err;
+  }
+}
+
 module.exports = {
+  findContactsWithOwnHistoryByPhoneNumbers,
+  renameFreshDispatchContactToWaId,
   findOrCreateContactByPhoneNumber,
   setContactAvatarPath,
   claimContactAvatarRefresh,

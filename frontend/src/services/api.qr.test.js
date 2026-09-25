@@ -1,25 +1,23 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fetchChannelQrImage } from './api';
 
-// O endpoint devolve um documento HTML. Este arquivo trava o contrato da
-// leitura: o que a tela aceita, o que ela recusa, e como ela recusa.
-const HTML_REAL = `<!DOCTYPE html>
-<html>
-<head>
-<title>QR - Berg</title>
-<style>
-  html, body { margin: 0; height: 100%; }
-  body { display: flex; align-items: center; justify-content: center; }
-  img { max-width: 100%; max-height: 100%; }
-</style>
-</head>
-<body>
-<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="QR code - Berg" />
-</body>
-</html>`;
+// Desde 83a208a a tela pede JSON (Accept: application/json) e lê o campo
+// `image`. Este arquivo trava o contrato da leitura: o que a tela aceita, o
+// que ela recusa, e como ela recusa.
+const RESPOSTA_REAL = JSON.stringify({
+  image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  channelId: 'ch1',
+  channelName: 'Berg',
+});
 
 function responde({ status = 200, corpo = '' } = {}) {
-  return Promise.resolve({ ok: status >= 200 && status < 300, status, text: () => Promise.resolve(corpo) });
+  return Promise.resolve({
+    ok: status >= 200 && status < 300,
+    status,
+    text: () => Promise.resolve(corpo),
+    // Como o Response de verdade: corpo que não é JSON rejeita.
+    json: () => Promise.resolve().then(() => JSON.parse(corpo)),
+  });
 }
 
 beforeEach(() => {
@@ -30,15 +28,15 @@ afterEach(() => {
 });
 
 describe('fetchChannelQrImage', () => {
-  test('extrai a imagem do HTML que o endpoint devolve hoje', async () => {
-    global.fetch.mockReturnValue(responde({ corpo: HTML_REAL }));
+  test('extrai a imagem do campo image da resposta JSON', async () => {
+    global.fetch.mockReturnValue(responde({ corpo: RESPOSTA_REAL }));
     const src = await fetchChannelQrImage('ch1', 'tok');
     expect(src.startsWith('data:image/png;base64,')).toBe(true);
   });
 
   // O token vai no header. A URL não pode carregar credencial nenhuma.
   test('autentica pelo header e não põe token na URL', async () => {
-    global.fetch.mockReturnValue(responde({ corpo: HTML_REAL }));
+    global.fetch.mockReturnValue(responde({ corpo: RESPOSTA_REAL }));
     await fetchChannelQrImage('ch1', 'tok');
 
     const [url, opcoes] = global.fetch.mock.calls[0];
@@ -69,26 +67,29 @@ describe('fetchChannelQrImage', () => {
     await expect(fetchChannelQrImage('ch1', 'tok')).rejects.toMatchObject({ motivo: 'erro' });
   });
 
-  // Se o backend mudar o template, a leitura precisa falhar ALTO — é essa
+  // Se o backend mudar o formato, a leitura precisa falhar ALTO — é essa
   // falha que impede a tela de voltar ao iframe com token na URL.
-  test('HTML sem imagem vira motivo "formatoInesperado"', async () => {
-    global.fetch.mockReturnValue(responde({ corpo: '<html><body><p>sem imagem</p></body></html>' }));
+  test('resposta sem o campo image vira motivo "formatoInesperado"', async () => {
+    global.fetch.mockReturnValue(responde({ corpo: JSON.stringify({ channelId: 'ch1' }) }));
     await expect(fetchChannelQrImage('ch1', 'tok')).rejects.toMatchObject({ motivo: 'formatoInesperado' });
   });
 
   test('src que não é data:image é recusado', async () => {
     for (const src of ['https://exemplo.com/qr.png', 'javascript:alert(1)', 'data:text/html;base64,PHNjcmlwdD4=']) {
-      global.fetch.mockReturnValue(responde({ corpo: `<html><body><img src="${src}" /></body></html>` }));
+      global.fetch.mockReturnValue(responde({ corpo: JSON.stringify({ image: src }) }));
       await expect(fetchChannelQrImage('ch1', 'tok')).rejects.toMatchObject({ motivo: 'formatoInesperado' });
     }
   });
 
-  // O HTML é lido com DOMParser, que não executa script nem carrega recurso.
-  test('script no HTML não é executado ao ler a resposta', async () => {
+  // A resposta é lida como JSON: um <script> dentro dela é só texto.
+  test('script dentro da resposta não é executado ao ler a resposta', async () => {
     const espiao = vi.fn();
     vi.stubGlobal('__qrEspiao', espiao);
     global.fetch.mockReturnValue(responde({
-      corpo: '<html><body><script>window.__qrEspiao && window.__qrEspiao()</script><img src="data:image/png;base64,iVBORw0KGgo=" /></body></html>',
+      corpo: JSON.stringify({
+        image: 'data:image/png;base64,iVBORw0KGgo=',
+        channelName: '<script>window.__qrEspiao && window.__qrEspiao()</script>',
+      }),
     }));
 
     await fetchChannelQrImage('ch1', 'tok');

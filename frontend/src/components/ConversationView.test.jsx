@@ -257,7 +257,7 @@ describe('ConversationView', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
-    expect(screen.getByText('Motivo do contato')).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText('Troca de senha'));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i }));
 
@@ -830,10 +830,10 @@ describe('SGP lookup panel', () => {
     const CONVERSATION_B = { id: 'c2', status: 'waiting', assignedAgentId: null };
     const { rerender } = render(<ConversationView conversation={CONVERSATION_A} onTransferClick={vi.fn()} onBack={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
-    expect(screen.getByText('Motivo do contato')).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
 
     rerender(<ConversationView conversation={CONVERSATION_B} onTransferClick={vi.fn()} onBack={vi.fn()} />);
-    expect(screen.queryByText('Motivo do contato')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'Motivo do contato' })).not.toBeInTheDocument();
   });
 });
 

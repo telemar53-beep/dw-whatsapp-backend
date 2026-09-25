@@ -282,7 +282,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const [editingContact, setEditingContact] = useState(false);
   const [contactOverride, setContactOverride] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
-  const { avisar, alertDialog } = useAlert();
+  const { avisar, alertDialog, dispensar: dispensarAviso } = useAlert();
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
   const [customerPanelOpen, setCustomerPanelOpen] = useState(false);
   const [customerPanelDismissed, setCustomerPanelDismissed] = useState(false);
@@ -379,6 +379,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     setCustomerPanelDismissed(false);
     setClosingReason(false);
     setEditedSuggestion(null);
+    dispensarAviso();
     // ConversationView e MessageInput NÃO remontam ao trocar de conversa: sem
     // esta linha o relógio do cliente anterior continuaria valendo para o
     // próximo, e a janela dele seria julgada por um instante que não é o dele.

@@ -397,6 +397,16 @@ describe('ConversationView', () => {
     alertSpy.mockRestore();
   });
 
+  // N9 / CLASSE-01: o componente não remonta na troca; o aviso de A aparecia sobre B.
+  test('o aviso de uma conversa fecha quando se troca de conversa', async () => {
+    api.claimConversation.mockRejectedValue({ body: { error: 'Conversation is already assigned' } });
+    const { rerender } = render(<ConversationView conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /assumir/i }));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    rerender(<ConversationView conversation={{ id: 'c2', status: 'waiting', assignedAgentId: null }} onTransferClick={vi.fn()} />);
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  });
+
   test('does not render the message input when the conversation is assigned to another agent or unassigned', () => {
     const { rerender } = render(
       <ConversationView

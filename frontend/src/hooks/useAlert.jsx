@@ -21,5 +21,9 @@ export function useAlert() {
     />
   );
 
-  return { avisar, alertDialog };
+  // Quem troca de contexto sem remontar (a ConversationView) fecha o aviso
+  // pendente — senão o "não foi possível" de A aparecia sobre B (N9, CLASSE-01).
+  const dispensar = useCallback(() => setAviso(null), []);
+
+  return { avisar, alertDialog, dispensar };
 }

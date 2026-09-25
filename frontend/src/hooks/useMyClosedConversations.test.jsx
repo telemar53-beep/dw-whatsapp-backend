@@ -67,4 +67,22 @@ describe('useMyClosedConversations', () => {
     const { result } = renderHook(() => useMyClosedConversations());
     await waitFor(() => expect(result.current.status).toBe('forbidden'));
   });
+
+  test('"Carregar mais" que falha avisa e não apaga a lista; a nova tentativa limpa o aviso (CVM-ENC-11)', async () => {
+    api.getMyClosedConversations.mockResolvedValue({ items: [{ id: 'c1' }], hasMore: true });
+    const { result } = renderHook(() => useMyClosedConversations());
+    await waitFor(() => expect(result.current.items).toEqual([{ id: 'c1' }]));
+    expect(result.current.erroAoCarregarMais).toBe(false);
+
+    api.getMyClosedConversations.mockRejectedValue({ status: 500, body: {} });
+    await act(() => result.current.loadMore());
+    expect(result.current.erroAoCarregarMais).toBe(true);
+    expect(result.current.items).toEqual([{ id: 'c1' }]);
+    expect(result.current.loading).toBe(false);
+
+    api.getMyClosedConversations.mockResolvedValue({ items: [{ id: 'c2' }], hasMore: false });
+    await act(() => result.current.loadMore());
+    expect(result.current.erroAoCarregarMais).toBe(false);
+    expect(result.current.items).toEqual([{ id: 'c1' }, { id: 'c2' }]);
+  });
 });

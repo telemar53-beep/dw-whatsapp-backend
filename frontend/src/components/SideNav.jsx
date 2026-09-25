@@ -1,15 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { NavLink, useMatch } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useCompanyName } from '../hooks/useCompanyName';
 import { useNavCollapsed } from '../hooks/useNavCollapsed';
 import { NAV_ITEMS, hasLevel } from '../navigation/navItems';
-import ClosedConversationsModal from './ClosedConversationsModal';
 import AgentAvatar from './AgentAvatar';
 import { IconBellOn, IconBellOff, IconUser, IconLogout, IconCheckCircle, IconChevronDown, IconWarning } from './icons/WaIcons';
 import { primeiroFocavel, prenderTabEm } from './ui/Dialog';
 import { useSocketConnection } from '../contexts/SocketContext';
+
+// Sob demanda: importado direto, o popup trazia a ConversationView (e o modal
+// de conversa) para dentro da casca, carregada em toda tela.
+const ClosedConversationsModal = lazy(() => import('./ClosedConversationsModal'));
 import './side-nav.css';
 import { marcaDaInstalacao } from '../branding';
 
@@ -169,7 +172,11 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
         </div>
       </div>
     </nav>
-    {closedOpen && <ClosedConversationsModal onClose={() => setClosedOpen(false)} />}
+    {closedOpen && (
+      <Suspense fallback={null}>
+        <ClosedConversationsModal onClose={() => setClosedOpen(false)} />
+      </Suspense>
+    )}
   </>;
 }
 export default SideNav;

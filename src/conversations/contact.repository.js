@@ -1,4 +1,5 @@
 const { getPool } = require('../db/pool');
+const { brazilianNumberVariants } = require('./phone-variants');
 
 function toContact(row) {
   return {
@@ -201,27 +202,37 @@ async function findContactsWithOwnHistoryByPhoneNumbers(phoneNumbers) {
 }
 
 /**
- * Troca o número do contato pelo wa_id que a Meta devolveu no envio, SÓ quando o contato
- * acabou de ser criado por este disparo: sem histórico próprio, com uma única mensagem na
- * vida (a deste disparo, `messageId`) e nenhum outro contato já com o wa_id.
+ * Troca o número do contato pelo wa_id que a Meta devolveu no envio (regra revista pelo
+ * proprietário em 25/09/2026, antes do merge da Fase 1A). Só troca quando:
+ *  1. o contato NÃO tem histórico próprio (é um fantasma de disparo — vários disparos antigos
+ *     em conversa silent não impedem);
+ *  2. nenhum outro contato já tem o wa_id;
+ *  3. o wa_id e o número atual são as formas com e sem o nono dígito do mesmo celular;
+ *  4. não é fixo (a variante de celular nunca existe para fixo — brazilianNumberVariants).
+ * Além disso, o número no banco tem de ser ainda o `currentPhone` validado aqui, e a mensagem
+ * que trouxe o wa_id tem de ser deste contato.
  *
- * Tudo numa instrução só, para a checagem e a troca não se separarem: se uma resposta do
- * cliente chegar no meio, ou outro contato ganhar o número, o UPDATE simplesmente não casa.
- * A unicidade de phone_number é a última trava (23505 vira "não renomeou").
+ * Não é união de contatos: conversas e mensagens continuam no mesmo contact_id; só o
+ * phone_number muda. Tudo numa instrução só, para a checagem e a troca não se separarem: se
+ * uma resposta chegar no meio ou outro contato ganhar o número, o UPDATE não casa. A
+ * unicidade de phone_number é a última trava (23505 vira "não renomeou").
  * Devolve true se renomeou.
  */
-async function renameFreshDispatchContactToWaId(contactId, waId, messageId) {
+async function renameGhostContactToWaId(contactId, currentPhone, waId, messageId) {
+  const atual = String(currentPhone || '');
+  const alvo = String(waId || '');
+  if (!alvo || alvo === atual || !brazilianNumberVariants(atual).includes(alvo)) return false;
   try {
     const result = await getPool().query(
-      `UPDATE contacts ct SET phone_number = $2
+      `UPDATE contacts ct SET phone_number = $3
        WHERE ct.id = $1
+         AND ct.phone_number = $2
          AND NOT ${TEM_HISTORICO_PROPRIO}
-         AND (SELECT count(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.contact_id = ct.id) = 1
          AND EXISTS (SELECT 1 FROM messages m JOIN conversations c ON c.id = m.conversation_id
-                     WHERE m.id = $3 AND c.contact_id = ct.id)
-         AND NOT EXISTS (SELECT 1 FROM contacts o WHERE o.phone_number = $2)
+                     WHERE m.id = $4 AND c.contact_id = ct.id)
+         AND NOT EXISTS (SELECT 1 FROM contacts o WHERE o.phone_number = $3)
        RETURNING ct.id`,
-      [contactId, waId, messageId]
+      [contactId, atual, alvo, messageId]
     );
     return result.rowCount === 1;
   } catch (err) {
@@ -232,7 +243,7 @@ async function renameFreshDispatchContactToWaId(contactId, waId, messageId) {
 
 module.exports = {
   findContactsWithOwnHistoryByPhoneNumbers,
-  renameFreshDispatchContactToWaId,
+  renameGhostContactToWaId,
   findOrCreateContactByPhoneNumber,
   setContactAvatarPath,
   claimContactAvatarRefresh,

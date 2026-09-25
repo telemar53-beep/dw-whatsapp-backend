@@ -28,7 +28,7 @@ const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-que
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFailed, recordMessageWaId } = require('../conversations/message.repository');
-const { renameFreshDispatchContactToWaId } = require('../conversations/contact.repository');
+const { renameGhostContactToWaId } = require('../conversations/contact.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -585,9 +585,9 @@ describe('startOutboundWorker', () => {
       recordMessageSent.mockResolvedValue({ id: 'msg-1' });
     });
 
-    test('wa_id diferente do número do contato: grava o wa_id na mensagem e tenta a troca segura do número', async () => {
+    test('wa_id diferente do número do contato: grava o wa_id na mensagem e tenta a troca segura do número (regra revista: fantasma sem histórico próprio)', async () => {
       metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.T1', waId: '559885120338' });
-      renameFreshDispatchContactToWaId.mockResolvedValue(true);
+      renameGhostContactToWaId.mockResolvedValue(true);
 
       await handler(JOB_TEMPLATE);
 
@@ -595,7 +595,8 @@ describe('startOutboundWorker', () => {
       expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledWith(CANAL_META, '5598985120338', { name: 'dw_fatura_mensal', language: 'pt_BR', variables: ['Ana'] });
       expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.T1');
       expect(recordMessageWaId).toHaveBeenCalledWith('msg-1', '559885120338');
-      expect(renameFreshDispatchContactToWaId).toHaveBeenCalledWith('contact-1', '559885120338', 'msg-1');
+      // O número atual vai junto: a troca só vale se o banco ainda tiver exatamente esse número.
+      expect(renameGhostContactToWaId).toHaveBeenCalledWith('contact-1', '5598985120338', '559885120338', 'msg-1');
       expect(markMessageFailed).not.toHaveBeenCalled();
     });
 
@@ -606,7 +607,7 @@ describe('startOutboundWorker', () => {
       await handler(JOB_TEMPLATE);
 
       expect(recordMessageWaId).not.toHaveBeenCalled();
-      expect(renameFreshDispatchContactToWaId).not.toHaveBeenCalled();
+      expect(renameGhostContactToWaId).not.toHaveBeenCalled();
     });
 
     test('sem wa_id na resposta: comportamento de antes', async () => {
@@ -616,7 +617,7 @@ describe('startOutboundWorker', () => {
 
       expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.T3');
       expect(recordMessageWaId).not.toHaveBeenCalled();
-      expect(renameFreshDispatchContactToWaId).not.toHaveBeenCalled();
+      expect(renameGhostContactToWaId).not.toHaveBeenCalled();
     });
 
     test('falha ao registrar ou trocar o número nunca vira falha de envio: a mensagem já saiu', async () => {

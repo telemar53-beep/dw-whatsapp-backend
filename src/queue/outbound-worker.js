@@ -2,7 +2,7 @@ const { processOutboundQueue, enqueueOutboundMessage } = require('./outbound-que
 const { findChannelById } = require('../channels/channel.repository');
 const { getConversationWithContact } = require('../conversations/conversation.repository');
 const { findMessageById, recordMessageSent, markPixFallbackSent, markMessageFailed, recordMessageWaId } = require('../conversations/message.repository');
-const { renameFreshDispatchContactToWaId } = require('../conversations/contact.repository');
+const { renameGhostContactToWaId } = require('../conversations/contact.repository');
 const metaCloudAdapter = require('../whatsapp-adapters/meta-cloud.adapter');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const threeSixtyDialogAdapter = require('../whatsapp-adapters/three-sixty-dialog.adapter');
@@ -22,13 +22,13 @@ const ADAPTERS_BY_CHANNEL_TYPE = {
 
 // Fase 1A (25/09/2026): no envio de template a Meta devolve o wa_id do cliente, que no DDD 98
 // vem sem o 9 mesmo quando o disparo manda com o 9 — e é com ele que a resposta chega. Aqui ele
-// fica registrado na mensagem e, só se o contato acabou de nascer deste disparo (regra inteira
-// em renameFreshDispatchContactToWaId), o contato passa a usar esse número. A mensagem JÁ SAIU:
-// nada disto pode virar falha de envio, então nenhum erro escapa daqui.
+// fica registrado na mensagem e, se o contato é um fantasma de disparo (sem histórico próprio;
+// regra inteira em renameGhostContactToWaId), o contato passa a usar esse número. A mensagem JÁ
+// SAIU: nada disto pode virar falha de envio, então nenhum erro escapa daqui.
 async function registrarWaIdDaMeta({ messageId, conversation, waId }) {
   try {
     await recordMessageWaId(messageId, waId);
-    const trocou = await renameFreshDispatchContactToWaId(conversation.contactId, waId, messageId);
+    const trocou = await renameGhostContactToWaId(conversation.contactId, conversation.contactPhoneNumber, waId, messageId);
     if (trocou) console.log(`Contact ${conversation.contactId} now uses the WhatsApp id returned by Meta (message ${messageId})`);
   } catch (err) {
     console.error(`Failed to record the WhatsApp id returned for message ${messageId}: ${mensagemSegura(err)}`);

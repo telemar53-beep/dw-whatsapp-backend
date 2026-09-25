@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationInfoPanel from './ConversationInfoPanel';
 import { useAuth } from '../contexts/AuthContext';
@@ -109,6 +109,27 @@ describe('ConversationInfoPanel', () => {
       await user.selectOptions(select, 's-2');
 
       expect(api.setConversationSector).toHaveBeenCalledWith('conv-1', 's-2', 'tok-123');
+    });
+
+    // CVM-INF-08/09/10: antes, `.catch(() => {})` — sem retorno nenhum.
+    test('trocar o setor: "Salvando…", e a linha Setor mostra o novo', async () => {
+      let terminar;
+      api.setConversationSector = vi.fn().mockReturnValue(new Promise((r) => { terminar = r; }));
+      render(<ConversationInfoPanel conversation={{ ...CONVERSATION, sectorId: 's-1', sectorName: 'Financeiro' }} />);
+      await userEvent.selectOptions(screen.getByLabelText('Alterar setor'), 's-2');
+      expect(screen.getByText('Salvando…')).toBeInTheDocument();
+      expect(screen.getByLabelText('Alterar setor')).toBeDisabled();
+      terminar({});
+      await waitFor(() => expect(screen.queryByText('Salvando…')).not.toBeInTheDocument());
+      expect(screen.getByText(SECTORS.find((x) => x.id === 's-2').name, { selector: 'dd, p, span' })).toBeInTheDocument();
+    });
+
+    test('falha ao trocar o setor volta ao anterior e mostra o erro', async () => {
+      api.setConversationSector = vi.fn().mockRejectedValue({ status: 500, body: {} });
+      render(<ConversationInfoPanel conversation={{ ...CONVERSATION, sectorId: 's-1', sectorName: 'Financeiro' }} />);
+      await userEvent.selectOptions(screen.getByLabelText('Alterar setor'), 's-2');
+      expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível alterar o setor');
+      expect(screen.getByLabelText('Alterar setor')).toHaveValue('s-1');
     });
 
     test('shows a sector select for an admin even when the conversation is assigned to someone else', () => {

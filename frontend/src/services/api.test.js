@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   apiFetch,
   ApiError,
@@ -145,6 +145,12 @@ describe('getQueue', () => {
 });
 
 describe('apiFetch 401 handling', () => {
+  // Um teste que falha antes da última linha deixaria o handler registrado para
+  // os seguintes.
+  afterEach(() => {
+    setUnauthorizedHandler(null);
+  });
+
   test('calls the registered unauthorized handler on a 401 response', async () => {
     const handler = vi.fn();
     setUnauthorizedHandler(handler);
@@ -160,6 +166,91 @@ describe('apiFetch 401 handling', () => {
     setUnauthorizedHandler(null);
     global.fetch.mockResolvedValue({ ok: false, status: 401, text: () => Promise.resolve('{}') });
     await expect(apiFetch('/api/conversations/queue')).rejects.toMatchObject({ status: 401 });
+  });
+
+  // PRF-12: errar a senha atual na troca de senha DESLOGAVA. O backend responde
+  // 401 "Current password is incorrect" (src/auth/auth.routes.js:38), e todo 401
+  // era tratado como sessão expirada. Só 401 de SESSÃO desloga nessa chamada.
+  const resposta401 = (corpo) => ({ ok: false, status: 401, text: () => Promise.resolve(corpo) });
+
+  test('troca de senha com a senha atual errada NÃO desloga', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401('{"error":"Current password is incorrect"}'));
+
+    await expect(changePassword('errada', 'nova12345', 'tok-123')).rejects.toMatchObject({
+      status: 401,
+      body: { error: 'Current password is incorrect' },
+    });
+
+    expect(handler).not.toHaveBeenCalled();
+    setUnauthorizedHandler(null);
+  });
+
+  test.each(['Invalid or expired token', 'Missing authorization token'])(
+    'troca de senha com a sessão inválida ("%s") continua deslogando',
+    async (frase) => {
+      const handler = vi.fn();
+      setUnauthorizedHandler(handler);
+      global.fetch.mockResolvedValue(resposta401(JSON.stringify({ error: frase })));
+
+      await expect(changePassword('atual', 'nova12345', 'tok-velho')).rejects.toMatchObject({ status: 401 });
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      setUnauthorizedHandler(null);
+    }
+  );
+
+  test('troca de senha com 401 sem corpo desloga (na dúvida, é sessão)', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401(''));
+
+    await expect(changePassword('atual', 'nova12345', 'tok-123')).rejects.toMatchObject({ status: 401 });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    setUnauthorizedHandler(null);
+  });
+
+  // Decisão fixada: na troca de senha, 401 com uma frase que não é de sessão
+  // conta como credencial recusada — não desloga. Se o backend ganhar uma frase
+  // de sessão nova, a próxima chamada de qualquer tela desloga; o contrário
+  // (tratar a desconhecida como sessão) traria o PRF-12 de volta.
+  test('troca de senha com 401 de frase desconhecida não desloga', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401('{"error":"Alguma recusa nova"}'));
+
+    await expect(changePassword('atual', 'nova12345', 'tok-123')).rejects.toMatchObject({ status: 401 });
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  test('fora da troca de senha, todo 401 continua deslogando — inclusive com frase de credencial', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401('{"error":"Current password is incorrect"}'));
+
+    await expect(apiFetch('/api/conversations/queue', { token: 'tok-123' })).rejects.toMatchObject({ status: 401 });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    setUnauthorizedHandler(null);
+  });
+
+  // A mesma porta pelo login: o /login não tem guarda, e errar a senha ali com
+  // uma sessão aberta (401 "Invalid credentials", src/auth/auth.routes.js:19)
+  // apagava a sessão.
+  test('login com e-mail ou senha errados NÃO desloga a sessão aberta', async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    global.fetch.mockResolvedValue(resposta401('{"error":"Invalid credentials"}'));
+
+    await expect(login('a@dw.com', 'errada')).rejects.toMatchObject({
+      status: 401,
+      body: { error: 'Invalid credentials' },
+    });
+
+    expect(handler).not.toHaveBeenCalled();
   });
 });
 

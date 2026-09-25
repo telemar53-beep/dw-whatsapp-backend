@@ -10,6 +10,9 @@ const { saveAvatarImage, saveInboundMedia, deleteMediaFile, extensionForMimeType
 const { broadcast } = require('../realtime/socket-server');
 const { formatarData, formatarValor } = require('../payments/payment-card');
 const { getCompanyConfig } = require('../company/company-config.repository');
+// A regra do nono dígito mora num módulo puro (a rota de disparo da Meta e a
+// identificação da IA também a usam); continua exportada daqui para quem já a importava.
+const { brazilianNumberVariants } = require('../conversations/phone-variants');
 
 function loadBaileysLib() {
   return require('@whiskeysockets/baileys');
@@ -700,25 +703,6 @@ async function verifyMediaDelivery(channel, whatsappMessageId, toPhoneNumber, { 
 function getQrForChannel(channelId) {
   const entry = connections.get(channelId);
   return entry ? entry.qr : null;
-}
-
-// Brazilian mobiles gained a ninth digit, but plenty of WhatsApp accounts are still
-// registered under the old 8-digit form (or vice versa). Given the digits the attendant
-// typed, return the candidate forms to ask WhatsApp about, typed form first.
-// [6-9] is safe here: Brazilian landlines start with 2-5, so an 8-digit landline never
-// matches the "add a 9" branch and is left untouched.
-function brazilianNumberVariants(digits) {
-  const withNine = digits.match(/^55(\d{2})9(\d{8})$/);
-  if (withNine) {
-    const [, ddd, rest8] = withNine;
-    return [digits, `55${ddd}${rest8}`];
-  }
-  const withoutNine = digits.match(/^55(\d{2})([6-9]\d{7})$/);
-  if (withoutNine) {
-    const [, ddd, rest8] = withoutNine;
-    return [digits, `55${ddd}9${rest8}`];
-  }
-  return [digits];
 }
 
 async function resolveWhatsAppJid(channel, phoneNumber) {

@@ -2,6 +2,7 @@ jest.mock('../integrations/sgp-integration.repository');
 jest.mock('../channels/channel.repository');
 jest.mock('../templates/template.repository');
 jest.mock('../conversations/contact.repository');
+jest.mock('../conversations/dispatch-contact');
 jest.mock('../conversations/conversation.repository');
 jest.mock('../queue/outbound-queue');
 jest.mock('../whatsapp-adapters/baileys.manager');
@@ -16,6 +17,7 @@ const {
 const { findChannelById } = require('../channels/channel.repository');
 const { findTemplateByNameAndWaba } = require('../templates/template.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
+const { resolverContatoDoDisparo } = require('../conversations/dispatch-contact');
 const { findOpenConversation, createConversation, getConversationWithContact } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent } = require('../realtime/socket-server');
@@ -38,6 +40,7 @@ describe('GET /api/integrations/sgp/messages', () => {
     findSgpDispatchByReferenceId.mockResolvedValue(null);
     findChannelById.mockResolvedValue(CHANNEL);
     findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'contact-1' });
+    resolverContatoDoDisparo.mockResolvedValue({ id: 'contact-1' });
     findOpenConversation.mockResolvedValue(null);
     createConversation.mockResolvedValue({ id: 'conv-1', status: 'silent' });
     enqueueOutboundMessage.mockResolvedValue({ id: 'msg-1' });
@@ -152,6 +155,9 @@ describe('GET /api/integrations/sgp/messages', () => {
 
       expect(baileysManager.resolveWhatsAppJid).toHaveBeenCalledWith(CHANNEL, '5598999990000');
       expect(findOrCreateContactByPhoneNumber).toHaveBeenCalledWith('5598999990000', null);
+      // Fase 1A: o Baileys já pergunta ao WhatsApp pelas duas formas do nono dígito
+      // (resolveWhatsAppJid); a escolha de contato do disparo da Meta não entra aqui.
+      expect(resolverContatoDoDisparo).not.toHaveBeenCalled();
       expect(createConversation).toHaveBeenCalledWith('contact-1', 'channel-1', null, 'silent');
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ conversationId: 'conv-1', messageId: 'msg-1' });
@@ -249,6 +255,29 @@ describe('GET /api/integrations/sgp/messages', () => {
         headerType: null, headerLink: null,
       });
       expect(res.status).toBe(200);
+    });
+
+    // Fase 1A (25/09/2026): o SGP manda o celular com o 9 e a Meta devolve a resposta com o
+    // wa_id sem o 9 (DDD 98). O contato do disparo sai do resolvedor que considera as duas
+    // formas e o histórico próprio — e o que vai para a Meta continua idêntico.
+    test('Fase 1A: o contato do disparo sai do resolvedor do nono dígito, com o número do SGP', async () => {
+      resolverContatoDoDisparo.mockResolvedValue({ id: 'contato-real-sem-9', phoneNumber: '559899990000' });
+
+      const res = await request(buildApp())
+        .get('/api/integrations/sgp/messages')
+        .query({ phoneNumber: '5598999990000', content: 'variables=João|150,00||template=aviso_cobranca', token: 'the-key' });
+
+      expect(res.status).toBe(200);
+      expect(resolverContatoDoDisparo).toHaveBeenCalledWith('5598999990000');
+      expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
+      expect(findOpenConversation).toHaveBeenCalledWith('contato-real-sem-9', 'channel-2');
+      expect(createConversation).toHaveBeenCalledWith('contato-real-sem-9', 'channel-2', null, 'silent');
+      // O pacote enfileirado para a Meta é o mesmo de antes da Fase 1A, campo por campo.
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith({
+        conversationId: 'conv-1', channelId: 'channel-2', content: null,
+        templateName: 'aviso_cobranca', templateLanguage: 'pt_BR', templateVariables: ['João', '150,00'],
+        headerType: null, headerLink: null,
+      });
     });
 
     test('sends a template message with a header when the payload includes one and it matches the template', async () => {

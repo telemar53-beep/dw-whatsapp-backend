@@ -473,7 +473,22 @@ async function markPixFallbackSent(messageId, motivo) {
   return result.rowCount > 0;
 }
 
+/**
+ * Fase 1A (25/09/2026): registra na própria mensagem o wa_id que a Meta devolveu no envio —
+ * o número como o WhatsApp conhece o cliente (no DDD 98, sem o 9). Mescla, igual a
+ * markMessageFailed: nunca apaga o que a metadata já tinha.
+ */
+async function recordMessageWaId(messageId, waId) {
+  await getPool().query(
+    `UPDATE messages
+        SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('waId', $2::text)
+      WHERE id = $1`,
+    [messageId, waId]
+  );
+}
+
 module.exports = {
+  recordMessageWaId,
   createMessage,
   updateMessageStatus,
   updateMessageMedia,

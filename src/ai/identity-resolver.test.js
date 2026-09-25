@@ -15,8 +15,19 @@ describe('variantesTelefone', () => {
   test('tira o 55 e oferece a variante sem o nono dígito', () => {
     expect(variantesTelefone('5598985120338')).toEqual(['98985120338', '9885120338']);
   });
-  test('número sem 55 e sem nono dígito fica como está', () => {
-    expect(variantesTelefone('9885120338')).toEqual(['9885120338']);
+  // Reescrito na Fase 1A (25/09/2026): antes, o número de 8 dígitos ficava como
+  // estava. É exatamente a forma do wa_id da Meta fora dos DDDs 11-19/21/22/24/
+  // 27/28, e o SGP da DW guarda o celular COM o 9 — a busca por telefone não
+  // achava ninguém e a IA pedia CPF (B14 da Fase 0).
+  test('celular de 8 dígitos (forma antiga do wa_id) também tenta a forma com o 9', () => {
+    expect(variantesTelefone('9885120338')).toEqual(['9885120338', '98985120338']);
+  });
+  test('wa_id sem o 9, com 55, também tenta a forma com o 9', () => {
+    expect(variantesTelefone('559885120338')).toEqual(['9885120338', '98985120338']);
+  });
+  test('fixo (8 dígitos começando com 2 a 5) nunca ganha variante de celular', () => {
+    expect(variantesTelefone('559832345678')).toEqual(['9832345678']);
+    expect(variantesTelefone('9853456789')).toEqual(['9853456789']);
   });
   test('lixo vira lista vazia', () => {
     expect(variantesTelefone('')).toEqual([]);
@@ -135,6 +146,58 @@ describe('resolverIdentidade', () => {
     const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '5598985120338', sgpDocument: null } });
     expect(r.origem).toBe('phone');
     expect(sgpClient.findClientRecord).toHaveBeenNthCalledWith(2, { telefone: '9885120338' });
+  });
+
+  test('telefone: wa_id sem o 9 acha o cliente cadastrado com o 9 no SGP', async () => {
+    sgpClient.findClientRecord
+      .mockResolvedValueOnce({ total: 0, cliente: null })
+      .mockResolvedValueOnce({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725' } });
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '559885120338', sgpDocument: null } });
+    expect(r).toMatchObject({ nivel: 'forte', origem: 'phone', primeiroNome: 'João' });
+    expect(sgpClient.findClientRecord).toHaveBeenNthCalledWith(1, { telefone: '9885120338' });
+    expect(sgpClient.findClientRecord).toHaveBeenNthCalledWith(2, { telefone: '98985120338' });
+    expect(setContactSgpLink).toHaveBeenCalledWith('ct-1', expect.objectContaining({ sgpClientId: 16957 }));
+  });
+
+  test('telefone: as duas formas achando clientes DIFERENTES não identifica ninguém', async () => {
+    sgpClient.findClientRecord
+      .mockResolvedValueOnce({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725' } })
+      .mockResolvedValueOnce({ total: 1, cliente: { id: 20001, cpfcnpj: '11144477735' } });
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '559885120338', sgpDocument: null } });
+    expect(r).toMatchObject({ nivel: 'none', origem: 'none', primeiroNome: null, contracts: [] });
+    expect(sgpClient.lookupClientByCpf).not.toHaveBeenCalled();
+    expect(setContactSgpLink).not.toHaveBeenCalled();
+    // Registra o fato sem dado do cliente: nem CPF, nem telefone.
+    const log = spy.mock.calls.flat().join(' ');
+    expect(log).toContain('different SGP clients');
+    expect(log).not.toMatch(/52998224725|11144477735|9885120338/);
+    spy.mockRestore();
+  });
+
+  test('telefone: as duas formas achando o MESMO cliente identifica normalmente', async () => {
+    sgpClient.findClientRecord.mockResolvedValue({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725' } });
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: CLIENT, contracts: CONTRACTS });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '559885120338', sgpDocument: null } });
+    expect(r).toMatchObject({ nivel: 'forte', origem: 'phone' });
+    expect(sgpClient.lookupClientByCpf).toHaveBeenCalledTimes(1);
+  });
+
+  test('telefone: uma forma com vários cadastros não identifica, mesmo que a outra ache um só', async () => {
+    sgpClient.findClientRecord
+      .mockResolvedValueOnce({ total: 1, cliente: { id: 16957, cpfcnpj: '52998224725' } })
+      .mockResolvedValueOnce({ total: 2, cliente: null });
+    const r = await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '559885120338', sgpDocument: null } });
+    expect(r).toMatchObject({ nivel: 'none', origem: 'none' });
+    expect(setContactSgpLink).not.toHaveBeenCalled();
+  });
+
+  test('telefone: fixo consulta só a própria forma', async () => {
+    sgpClient.findClientRecord.mockResolvedValue({ total: 0, cliente: null });
+    await resolverIdentidade({ contact: { id: 'ct-1', phoneNumber: '559832345678', sgpDocument: null } });
+    expect(sgpClient.findClientRecord).toHaveBeenCalledTimes(1);
+    expect(sgpClient.findClientRecord).toHaveBeenCalledWith({ telefone: '9832345678' });
   });
 
   test('telefone: vários resultados não identificam', async () => {

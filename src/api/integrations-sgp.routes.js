@@ -4,6 +4,7 @@ const { parseSgpTemplatePayload, SgpTemplatePayloadError } = require('../integra
 const { findChannelById } = require('../channels/channel.repository');
 const { findTemplateByNameAndWaba } = require('../templates/template.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
+const { resolverContatoDoDisparo } = require('../conversations/dispatch-contact');
 const { findOpenConversation, createConversation, getConversationWithContact } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent } = require('../realtime/socket-server');
@@ -127,7 +128,13 @@ router.get('/messages', sgpLimiter, requireSgpApiKey, async (req, res) => {
     outboundPayload = { content };
   }
 
-  const contact = await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, null);
+  // Fase 1A (25/09/2026): no modo template (Meta) o número vem do SGP com o 9, e a resposta
+  // do cliente chega com o wa_id, que no DDD 98 vem sem o 9. O resolvedor considera as duas
+  // formas e o histórico próprio para o disparo cair no mesmo contato da resposta. No modo
+  // freetext (Baileys) isso já acontece em resolveWhatsAppJid, que pergunta ao WhatsApp.
+  const contact = req.sgpMode === 'template'
+    ? await resolverContatoDoDisparo(canonicalPhoneNumber)
+    : await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, null);
 
   let conversation = await findOpenConversation(contact.id, channel.id);
   if (!conversation) {

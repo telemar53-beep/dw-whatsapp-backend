@@ -23,6 +23,7 @@ const {
   updateMessageMedia,
   listExpiredMedia,
   clearMessageMedia,
+  recordMessageWaId,
 } = require('./message.repository');
 
 describe('message repository', () => {
@@ -447,6 +448,23 @@ describe('message repository', () => {
       const message = messages.find((m) => m.content === 'Mensagem solta');
 
       expect(message.repliedToPreview).toBeNull();
+    });
+  });
+
+  // Fase 1A (25/09/2026): o wa_id que a Meta devolve no envio fica registrado na própria
+  // mensagem do disparo, sem apagar o que já estava na metadata.
+  describe('recordMessageWaId', () => {
+    test('grava o wa_id na metadata de uma mensagem sem metadata', async () => {
+      const msg = await createMessage({ conversationId, direction: 'outbound', content: null, status: 'sent', messageType: 'text' });
+      await recordMessageWaId(msg.id, '559885120338');
+      expect((await findMessageById(msg.id)).metadata).toEqual({ waId: '559885120338' });
+    });
+
+    test('mescla com o que já existe na metadata, sem apagar', async () => {
+      const msg = await createMessage({ conversationId, direction: 'outbound', content: null, status: 'sent', messageType: 'text', metadata: { faturaId: '77' } });
+      await markMessageFailed(msg.id, '(131047) janela fechada');
+      await recordMessageWaId(msg.id, '559885120338');
+      expect((await findMessageById(msg.id)).metadata).toEqual({ faturaId: '77', motivoFalha: '(131047) janela fechada', waId: '559885120338' });
     });
   });
 

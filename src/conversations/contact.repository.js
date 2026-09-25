@@ -1,4 +1,5 @@
 const { getPool } = require('../db/pool');
+const { brazilianNumberVariants } = require('./phone-variants');
 
 function toContact(row) {
   return {
@@ -173,7 +174,76 @@ async function setContactSgpLink(contactId, { sgpClientId, sgpContractId, sgpDoc
   return toContact(result.rows[0]);
 }
 
+// "Histórico próprio" (definição aprovada pelo proprietário, Fase 1A, 25/09/2026): mensagem
+// de entrada, vínculo com o SGP, nota interna, ou conversa que não seja só disparo silencioso.
+// Um contato cujas únicas conversas são `silent` de disparo, sem entrada, não tem histórico
+// próprio: é o contato fantasma que o nono dígito criou.
+const TEM_HISTORICO_PROPRIO = `(
+  ct.sgp_document IS NOT NULL
+  OR coalesce(ct.internal_note, '') <> ''
+  OR EXISTS (SELECT 1 FROM conversations c JOIN messages m ON m.conversation_id = c.id
+             WHERE c.contact_id = ct.id AND m.direction = 'inbound')
+  OR EXISTS (SELECT 1 FROM conversations c WHERE c.contact_id = ct.id AND c.status <> 'silent')
+)`;
+
+/**
+ * As formas pedidas do número que já existem como contato, cada uma com a marcação de
+ * histórico próprio. Alimenta a escolha do contato do disparo (dispatch-contact.js).
+ */
+async function findContactsWithOwnHistoryByPhoneNumbers(phoneNumbers) {
+  const result = await getPool().query(
+    `SELECT ct.id, ct.phone_number, ct.display_name, ct.avatar_path, ct.avatar_checked_at, ct.city_id, ct.locality_id,
+            ct.internal_note, ct.created_at, ct.sgp_client_id, ct.sgp_contract_id, ct.sgp_document, ct.sgp_first_name,
+            ${TEM_HISTORICO_PROPRIO} AS tem_historico_proprio
+     FROM contacts ct WHERE ct.phone_number = ANY($1::text[])`,
+    [phoneNumbers]
+  );
+  return result.rows.map((row) => ({ contact: toContact(row), temHistoricoProprio: row.tem_historico_proprio }));
+}
+
+/**
+ * Troca o número do contato pelo wa_id que a Meta devolveu no envio (regra revista pelo
+ * proprietário em 25/09/2026, antes do merge da Fase 1A). Só troca quando:
+ *  1. o contato NÃO tem histórico próprio (é um fantasma de disparo — vários disparos antigos
+ *     em conversa silent não impedem);
+ *  2. nenhum outro contato já tem o wa_id;
+ *  3. o wa_id e o número atual são as formas com e sem o nono dígito do mesmo celular;
+ *  4. não é fixo (a variante de celular nunca existe para fixo — brazilianNumberVariants).
+ * Além disso, o número no banco tem de ser ainda o `currentPhone` validado aqui, e a mensagem
+ * que trouxe o wa_id tem de ser deste contato.
+ *
+ * Não é união de contatos: conversas e mensagens continuam no mesmo contact_id; só o
+ * phone_number muda. Tudo numa instrução só, para a checagem e a troca não se separarem: se
+ * uma resposta chegar no meio ou outro contato ganhar o número, o UPDATE não casa. A
+ * unicidade de phone_number é a última trava (23505 vira "não renomeou").
+ * Devolve true se renomeou.
+ */
+async function renameGhostContactToWaId(contactId, currentPhone, waId, messageId) {
+  const atual = String(currentPhone || '');
+  const alvo = String(waId || '');
+  if (!alvo || alvo === atual || !brazilianNumberVariants(atual).includes(alvo)) return false;
+  try {
+    const result = await getPool().query(
+      `UPDATE contacts ct SET phone_number = $3
+       WHERE ct.id = $1
+         AND ct.phone_number = $2
+         AND NOT ${TEM_HISTORICO_PROPRIO}
+         AND EXISTS (SELECT 1 FROM messages m JOIN conversations c ON c.id = m.conversation_id
+                     WHERE m.id = $4 AND c.contact_id = ct.id)
+         AND NOT EXISTS (SELECT 1 FROM contacts o WHERE o.phone_number = $3)
+       RETURNING ct.id`,
+      [contactId, atual, alvo, messageId]
+    );
+    return result.rowCount === 1;
+  } catch (err) {
+    if (err.code === '23505') return false;
+    throw err;
+  }
+}
+
 module.exports = {
+  findContactsWithOwnHistoryByPhoneNumbers,
+  renameGhostContactToWaId,
   findOrCreateContactByPhoneNumber,
   setContactAvatarPath,
   claimContactAvatarRefresh,

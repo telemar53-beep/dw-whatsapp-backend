@@ -238,3 +238,38 @@ describe('TeamPanel', () => {
     expect(refresh).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('Nossa equipe: carregando, erro e busca vazia', () => {
+  test('erro: a barra diz, o popup não afirma "0 integrantes" e oferece "Tentar de novo" (ATD-EQP-04, ATD-EQM-07)', async () => {
+    const refresh = vi.fn();
+    useAgents.mockReturnValue({ agents: [], status: 'error', refresh });
+    usePresence.mockReturnValue(new Set());
+    render(<TeamPanel />);
+    expect(screen.getByText('Não foi possível carregar')).toBeInTheDocument();
+    await openPanel();
+    expect(screen.getByText('Não foi possível carregar a equipe.')).toBeInTheDocument();
+    expect(screen.queryByText(/0 integrantes/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  test('carregando: "Carregando a equipe…", sem contagem (ATD-EQM-01)', async () => {
+    useAgents.mockReturnValue({ agents: [], status: 'loading', refresh: vi.fn() });
+    usePresence.mockReturnValue(new Set());
+    render(<TeamPanel />);
+    await openPanel();
+    expect(screen.getByText('Carregando a equipe…')).toBeInTheDocument();
+    expect(screen.queryByText(/0 integrantes/)).not.toBeInTheDocument();
+  });
+
+  test('busca sem resultado diz o termo e oferece "Limpar busca" (ATD-EQM-09)', async () => {
+    agentsReady([{ id: 'a1', name: 'Ana Lima', activeConversations: 0 }]);
+    usePresence.mockReturnValue(new Set());
+    render(<TeamPanel />);
+    await openPanel();
+    await userEvent.type(screen.getByRole('searchbox'), 'zzz');
+    expect(screen.getByText('Ninguém encontrado para "zzz".')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Limpar busca' }));
+    expect(screen.getByText('Ana Lima')).toBeInTheDocument();
+  });
+});

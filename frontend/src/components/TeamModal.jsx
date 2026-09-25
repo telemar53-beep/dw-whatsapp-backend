@@ -72,7 +72,7 @@ function Section({ tone, title, count, summary, children }) {
   );
 }
 
-function TeamModal({ agents, onlineIds, status, onClose }) {
+function TeamModal({ agents, onlineIds, status, onClose, onRetry }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
 
@@ -109,7 +109,11 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
       onClose={onClose}
       closeOnBackdrop
       title="Nossa equipe"
-      description={`${plural(counts.all, 'integrante na equipe', 'integrantes na equipe')} · ${counts.online} online agora`}
+      // Carregando ou com erro, "0 integrantes · 0 online" era uma afirmação
+      // falsa (ATD-EQM-01/07): só a lista pronta tem contagem.
+      description={status === 'ready'
+        ? `${plural(counts.all, 'integrante na equipe', 'integrantes na equipe')} · ${counts.online} online agora`
+        : status === 'loading' ? 'Carregando a equipe…' : 'Não foi possível carregar a equipe.'}
       icon={<IconTeam size={18} />}
       tone="ok"
       size="max-w-[620px]"
@@ -158,7 +162,7 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
                     active ? 'bg-chat-orange text-on-accent' : 'bg-white/[0.12] text-wa-text'
                   }`}
                 >
-                  {counts[item.key]}
+                  {status === 'ready' ? counts[item.key] : null}
                 </span>
               </button>
             );
@@ -168,9 +172,15 @@ function TeamModal({ agents, onlineIds, status, onClose }) {
       </div>
 
       <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-3 sm:px-6">
-        <AsyncState status={status} isEmpty={agents.length === 0} emptyMessage="Nenhum atendente cadastrado.">
+        <AsyncState status={status} isEmpty={agents.length === 0} emptyMessage="Nenhum atendente cadastrado." onRetry={onRetry}>
           {agents.length > 0 && visible.length === 0 ? (
-            <p className="px-2 py-5 text-center text-[13px] text-wa-muted">Nenhum integrante encontrado com esse filtro.</p>
+            // Busca e filtro vazios tinham a mesma frase e nenhuma saída (ATD-EQM-09).
+            <div className="flex flex-col items-center gap-2 px-2 py-5 text-center text-[13px] text-wa-muted">
+              <p>{query ? `Ninguém encontrado para "${search.trim()}"${filter !== 'all' ? ' neste filtro' : ''}.` : 'Ninguém neste filtro.'}</p>
+              <button type="button" onClick={() => { setSearch(''); setFilter('all'); }} className="text-[13px] font-medium text-wa-text underline-offset-4 hover:underline">
+                {query && filter !== 'all' ? 'Limpar busca e filtro' : query ? 'Limpar busca' : 'Ver todos'}
+              </button>
+            </div>
           ) : (
             <div className="dialog-team-grupos">
               {showBusy && !(esconderVazios && busy.length === 0) && (

@@ -58,7 +58,10 @@ function TeamPanel() {
           <IconTeam size={20} />
         </span>
         <span className="text-[15px] font-medium text-chat-text">Equipe</span>
-        {onlineCount > 0 && (
+        {/* Carregando e erro eram invisíveis na barra (ATD-EQP-03/04). */}
+        {status === 'loading' && agents.length === 0 && <span className="text-[12px] text-wa-muted">Carregando…</span>}
+        {status === 'error' && <span className="text-[12px] text-wa-error-text">Não foi possível carregar</span>}
+        {status !== 'error' && onlineCount > 0 && (
           <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-[2px] text-[12px] font-medium text-chat-online">
             {onlineCount} online
           </span>
@@ -70,7 +73,7 @@ function TeamPanel() {
       {open &&
         createPortal(
           <div className="chat-theme">
-            <TeamModal agents={sorted} onlineIds={onlineIds} status={status} onClose={() => setOpen(false)} />
+            <TeamModal agents={sorted} onlineIds={onlineIds} status={status} onClose={() => setOpen(false)} onRetry={refresh} />
           </div>,
           document.body
         )}

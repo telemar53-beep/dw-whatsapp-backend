@@ -76,6 +76,29 @@ describe('ClosedConversationsModal', () => {
     expect(loadMore).toHaveBeenCalled();
   });
 
+  // CVM-ENC-11: antes o erro do "Carregar mais" voltava calado.
+  test('"Carregar mais" que falhou diz o erro, vira "Tentar de novo" e mantém a lista', async () => {
+    const loadMore = vi.fn();
+    useMyClosedConversations.mockReturnValue({
+      items: [CLOSED_CONVERSATION], hasMore: true, loading: false, status: 'ready',
+      loadMore, refresh: vi.fn(), erroAoCarregarMais: true,
+    });
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível carregar mais atendimentos.');
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(loadMore).toHaveBeenCalledTimes(1);
+  });
+
+  test('erro da 1ª carga oferece "Tentar de novo"', async () => {
+    const refresh = vi.fn();
+    useMyClosedConversations.mockReturnValue({
+      items: [], hasMore: false, loading: false, status: 'error', loadMore: vi.fn(), refresh, erroAoCarregarMais: false,
+    });
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   test('em carregamento não mostra "Nenhum atendimento encerrado"', () => {
     useMyClosedConversations.mockReturnValue({
       items: [],

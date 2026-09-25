@@ -5,7 +5,7 @@ import ConversationModal from './ConversationModal';
 import WaDialog from './WaDialog';
 
 function ClosedConversationsModal({ onClose }) {
-  const { items, hasMore, loading, status, loadMore } = useMyClosedConversations();
+  const { items, hasMore, loading, status, loadMore, refresh, erroAoCarregarMais } = useMyClosedConversations();
   const [selectedConversation, setSelectedConversation] = useState(null);
 
   return (
@@ -20,6 +20,8 @@ function ClosedConversationsModal({ onClose }) {
             hasMore={hasMore}
             loading={loading}
             onLoadMore={loadMore}
+            onRetry={refresh}
+            erroAoCarregarMais={erroAoCarregarMais}
           />
         </div>
       </WaDialog>

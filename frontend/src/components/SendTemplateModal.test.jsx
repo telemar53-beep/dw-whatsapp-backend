@@ -35,7 +35,7 @@ describe('SendTemplateModal', () => {
   // max-height por dentro: dois eixos disputando. Agora ha um so, no corpo.
   test('titulo e acoes ficam fora do unico eixo de rolagem', async () => {
     montar();
-    await screen.findByRole('button', { name: /aviso_tecnico/ });
+    await screen.findByRole('radio', { name: /aviso_tecnico/ });
 
     const painel = screen.getByRole('dialog');
     const corpo = painel.querySelector('.dw-dialog-body');
@@ -55,7 +55,7 @@ describe('SendTemplateModal', () => {
   test('envia o template escolhido', async () => {
     const onSent = vi.fn();
     montar({ onSent });
-    await userEvent.click(await screen.findByRole('button', { name: /aviso_tecnico/ }));
+    await userEvent.click(await screen.findByRole('radio', { name: /aviso_tecnico/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Enviar' }));
 
     await waitFor(() => expect(api.sendConversationTemplate).toHaveBeenCalledWith('conv-1', 'tpl-1', [], 'tok-123'));
@@ -65,7 +65,7 @@ describe('SendTemplateModal', () => {
   // Template não dá para corrigir depois: o que sai chega assim ao cliente.
   test('a prévia troca as variáveis pelo que foi digitado', async () => {
     montar();
-    await userEvent.click(await screen.findByRole('button', { name: /confirmar_visita/ }));
+    await userEvent.click(await screen.findByRole('radio', { name: /confirmar_visita/ }));
     await userEvent.type(screen.getByLabelText('Variável 1'), 'Maria');
     await userEvent.type(screen.getByLabelText('Variável 2'), 'terça');
 
@@ -74,7 +74,7 @@ describe('SendTemplateModal', () => {
 
   test('não deixa enviar com variável em branco', async () => {
     montar();
-    await userEvent.click(await screen.findByRole('button', { name: /confirmar_visita/ }));
+    await userEvent.click(await screen.findByRole('radio', { name: /confirmar_visita/ }));
 
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled();
   });
@@ -82,7 +82,7 @@ describe('SendTemplateModal', () => {
   test('mostra o erro devolvido pela API', async () => {
     api.sendConversationTemplate.mockRejectedValue({ body: { error: 'Template não aprovado' } });
     montar();
-    await userEvent.click(await screen.findByRole('button', { name: /aviso_tecnico/ }));
+    await userEvent.click(await screen.findByRole('radio', { name: /aviso_tecnico/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Enviar' }));
 
     expect(await screen.findByText('Template não aprovado')).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe('SendTemplateModal', () => {
   // decide se dá para continuar a conversa ou se a mensagem morre ali.
   test('a prévia mostra os botões que o cliente vai receber', async () => {
     montar();
-    await userEvent.click(await screen.findByRole('button', { name: /agendar_botao/ }));
+    await userEvent.click(await screen.findByRole('radio', { name: /agendar_botao/ }));
 
     const previa = within(screen.getByRole('group', { name: /prévia/i }));
     expect(previa.getByText('Sim, pode agendar')).toBeInTheDocument();
@@ -108,8 +108,29 @@ describe('SendTemplateModal', () => {
 
   test('explica que a resposta do botão reabre a conversa', async () => {
     montar();
-    await userEvent.click(await screen.findByRole('button', { name: /agendar_botao/ }));
+    await userEvent.click(await screen.findByRole('radio', { name: /agendar_botao/ }));
 
     expect(screen.getByText(/reabre/i)).toBeInTheDocument();
+  });
+
+  test('a escolha é um grupo de rádio e as setas movem a escolha (A5-3)', async () => {
+    montar();
+    const primeiro = await screen.findByRole('radio', { name: /aviso_tecnico/ });
+    expect(screen.getByRole('radiogroup', { name: 'Template' })).toBeInTheDocument();
+    await userEvent.click(primeiro);
+    expect(primeiro).toHaveAttribute('aria-checked', 'true');
+    await userEvent.keyboard('{ArrowDown}');
+    const segundo = screen.getByRole('radio', { name: /confirmar_visita/ });
+    expect(segundo).toHaveAttribute('aria-checked', 'true');
+    expect(segundo).toHaveFocus();
+    expect(primeiro).toHaveAttribute('aria-checked', 'false');
+  });
+
+  test('falha ao carregar os templates oferece "Tentar de novo" (A5-6)', async () => {
+    api.listTemplatesForChannel.mockRejectedValueOnce({ status: 500, body: {} });
+    montar();
+    await userEvent.click(await screen.findByRole('button', { name: 'Tentar de novo' }));
+    expect(await screen.findByRole('radio', { name: /aviso_tecnico/ })).toBeInTheDocument();
+    expect(api.listTemplatesForChannel).toHaveBeenCalledTimes(2);
   });
 });

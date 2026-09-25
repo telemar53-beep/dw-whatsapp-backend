@@ -1,15 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { NavLink, useMatch } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useCompanyName } from '../hooks/useCompanyName';
 import { useNavCollapsed } from '../hooks/useNavCollapsed';
 import { NAV_ITEMS, hasLevel } from '../navigation/navItems';
-import ClosedConversationsModal from './ClosedConversationsModal';
 import AgentAvatar from './AgentAvatar';
 import { IconBellOn, IconBellOff, IconUser, IconLogout, IconCheckCircle, IconChevronDown, IconWarning } from './icons/WaIcons';
 import { primeiroFocavel, prenderTabEm } from './ui/Dialog';
 import { useSocketConnection } from '../contexts/SocketContext';
+
+// Sob demanda: importado direto, o popup trazia a ConversationView (e o modal
+// de conversa) para dentro da casca, carregada em toda tela.
+const ClosedConversationsModal = lazy(() => import('./ClosedConversationsModal'));
 import './side-nav.css';
 import { marcaDaInstalacao } from '../branding';
 
@@ -143,7 +146,9 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
             não cobrir tabela nem ação nas páginas densas. A faixa da casca é
             só o alerta momentâneo. */}
         {connectionState === 'reconnecting' && (
-          <div className="worknav-connection" role="status" tabIndex={0} aria-label="Reconectando. As mensagens novas podem demorar a aparecer.">
+          // Sem role="status": o anúncio é da região viva da casca (C7-3).
+          <div className="worknav-connection" tabIndex={0}>
+            <span className="sr-only">Reconectando. As mensagens novas podem demorar a aparecer.</span>
             <IconWarning size={17} />
             <span className="worknav-label">Reconectando…</span>
             <span className="worknav-connection-tip" aria-hidden="true">Reconectando… As mensagens novas podem demorar a aparecer.</span>
@@ -169,7 +174,11 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
         </div>
       </div>
     </nav>
-    {closedOpen && <ClosedConversationsModal onClose={() => setClosedOpen(false)} />}
+    {closedOpen && (
+      <Suspense fallback={null}>
+        <ClosedConversationsModal onClose={() => setClosedOpen(false)} />
+      </Suspense>
+    )}
   </>;
 }
 export default SideNav;

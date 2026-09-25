@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getMyProfile, updateMyProfile, uploadMyAvatar, deleteMyAvatar, changePassword } from '../services/api';
 import AgentAvatar from './AgentAvatar';
 import WaDialog, { waInputClass, waLabelClass, waPrimaryButtonClass, waGhostButtonClass, waErrorClass, WaError, WaSuccess } from './WaDialog';
 import { descreverErro } from '../utils/errorMessages';
+import { useConfirm } from '../hooks/useConfirm';
 
 function ProfileModal({ onClose, onProfileUpdated }) {
   const { token, updateAgent } = useAuth();
+  const { confirm, confirmDialog } = useConfirm();
   const [profile, setProfile] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [name, setName] = useState('');
@@ -14,7 +16,9 @@ function ProfileModal({ onClose, onProfileUpdated }) {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState(null);
   const [profileSuccess, setProfileSuccess] = useState(false);
-  const [avatarBusy, setAvatarBusy] = useState(false);
+  // 'enviando' | 'removendo' | null: o envio da foto era invisível (PRF-04).
+  const [avatarAcao, setAvatarAcao] = useState(null);
+  const avatarBusy = avatarAcao !== null;
   const [avatarError, setAvatarError] = useState(null);
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -24,7 +28,10 @@ function ProfileModal({ onClose, onProfileUpdated }) {
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [submittingPassword, setSubmittingPassword] = useState(false);
 
-  useEffect(() => {
+  // A mensagem do servidor fica ("Sessão expirada" diz ao atendente o que
+  // fazer) e o erro ganha "Tentar de novo" — decisão do proprietário, 24/09.
+  const carregar = useCallback(() => {
+    setLoadError(null);
     getMyProfile(token)
       .then((data) => {
         setProfile(data);
@@ -36,13 +43,24 @@ function ProfileModal({ onClose, onProfileUpdated }) {
       });
   }, [token]);
 
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
   async function handleSaveProfile(event) {
     event.preventDefault();
     setProfileError(null);
     setProfileSuccess(false);
+    // Nome só com espaços passava pelo `required` e voltava com o nome técnico
+    // do campo (PRF-06/08).
+    const nomeLimpo = name.trim();
+    if (!nomeLimpo) {
+      setProfileError('Informe o nome.');
+      return;
+    }
     setSavingProfile(true);
     try {
-      const updated = await updateMyProfile({ name, phone }, token);
+      const updated = await updateMyProfile({ name: nomeLimpo, phone }, token);
       setProfile(updated);
       updateAgent({ name: updated.name });
       setProfileSuccess(true);
@@ -59,7 +77,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
     event.target.value = '';
     if (!file) return;
     setAvatarError(null);
-    setAvatarBusy(true);
+    setAvatarAcao('enviando');
     try {
       const result = await uploadMyAvatar(file, token);
       setProfile((prev) => ({ ...prev, avatarPath: result.avatarPath }));
@@ -68,13 +86,13 @@ function ProfileModal({ onClose, onProfileUpdated }) {
     } catch (err) {
       setAvatarError(descreverErro(err, 'Falha ao enviar foto'));
     } finally {
-      setAvatarBusy(false);
+      setAvatarAcao(null);
     }
   }
 
   async function handleRemoveAvatar() {
     setAvatarError(null);
-    setAvatarBusy(true);
+    setAvatarAcao('removendo');
     try {
       await deleteMyAvatar(token);
       setProfile((prev) => ({ ...prev, avatarPath: null }));
@@ -83,7 +101,7 @@ function ProfileModal({ onClose, onProfileUpdated }) {
     } catch (err) {
       setAvatarError(descreverErro(err, 'Falha ao remover foto'));
     } finally {
-      setAvatarBusy(false);
+      setAvatarAcao(null);
     }
   }
 
@@ -109,13 +127,29 @@ function ProfileModal({ onClose, onProfileUpdated }) {
     }
   }
 
+  // Fechar com edição perdia tudo sem perguntar (PRF-17).
+  const editado = Boolean(profile) && (name !== profile.name || phone !== (profile.phone || ''));
+  const senhaPreenchida = Boolean(currentPassword || newPassword || confirmPassword);
+  async function fechar() {
+    if (editado || senhaPreenchida) {
+      const ok = await confirm('Descartar alterações? O que você digitou será perdido.', { danger: true, confirmLabel: 'Descartar', cancelLabel: 'Continuar editando' });
+      if (!ok) return;
+    }
+    onClose();
+  }
+
   if (!profile) {
     return (
       <WaDialog variant="profile" title="Meu perfil" onClose={onClose} size="max-w-md">
         <div className="px-6 py-4">
           <p role={loadError ? 'alert' : 'status'} className="text-[14.5px] text-wa-muted">{loadError || 'Carregando…'}</p>
         </div>
-        <div className="flex shrink-0 justify-end px-4 py-3">
+        <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
+          {loadError && (
+            <button type="button" onClick={carregar} className={waGhostButtonClass}>
+              Tentar de novo
+            </button>
+          )}
           <button type="button" onClick={onClose} className={waGhostButtonClass}>
             Fechar
           </button>
@@ -125,7 +159,8 @@ function ProfileModal({ onClose, onProfileUpdated }) {
   }
 
   return (
-    <WaDialog variant="profile" title="Meu perfil" onClose={onClose} size="max-w-4xl">
+    <>
+    <WaDialog variant="profile" title="Meu perfil" onClose={fechar} size="max-w-4xl">
       <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-3 sm:px-6">
         <div className="flex flex-wrap items-center gap-4 rounded-[16px] border border-wa-border bg-wa-panel-header px-4 py-4 sm:px-5">
           <AgentAvatar agentId={profile.id} avatarPath={profile.avatarPath} name={profile.name} size={68} />
@@ -135,12 +170,12 @@ function ProfileModal({ onClose, onProfileUpdated }) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className={`${waGhostButtonClass} cursor-pointer border border-wa-border bg-wa-panel text-wa-text`}>
-              Alterar foto
+              {avatarAcao === 'enviando' ? 'Enviando foto…' : 'Alterar foto'}
               <input type="file" aria-label="Alterar foto" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarChange} disabled={avatarBusy} className="sr-only" />
             </label>
             {profile.avatarPath && (
               <button type="button" onClick={handleRemoveAvatar} disabled={avatarBusy} className="px-2 text-[13px] text-wa-error-text hover:underline">
-                Remover foto
+                {avatarAcao === 'removendo' ? 'Removendo…' : 'Remover foto'}
               </button>
             )}
           </div>
@@ -154,11 +189,11 @@ function ProfileModal({ onClose, onProfileUpdated }) {
             <form id="profile-info-form" onSubmit={handleSaveProfile} className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-[1.15fr_0.9fr_1.15fr]">
               <div>
                 <label htmlFor="profile-name" className={waLabelClass}>Nome completo</label>
-                <input id="profile-name" type="text" value={name} onChange={(e) => setName(e.target.value)} className={waInputClass} required />
+                <input id="profile-name" type="text" value={name} onChange={(e) => { setName(e.target.value); setProfileSuccess(false); }} className={waInputClass} required />
               </div>
               <div>
                 <label htmlFor="profile-phone" className={waLabelClass}>Telefone</label>
-                <input id="profile-phone" type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className={waInputClass} />
+                <input id="profile-phone" type="text" value={phone} onChange={(e) => { setPhone(e.target.value); setProfileSuccess(false); }} className={waInputClass} />
               </div>
               <div className="sm:col-span-2 lg:col-span-1">
                 <span className={waLabelClass}>E-mail</span>
@@ -177,30 +212,32 @@ function ProfileModal({ onClose, onProfileUpdated }) {
             <form onSubmit={handleChangePassword} className="grid gap-3 border-t border-wa-border px-4 pb-4 pt-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <label htmlFor="current-password" className={waLabelClass}>Senha atual</label>
-                <input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className={waInputClass} required />
+                <input id="current-password" type="password" value={currentPassword} onChange={(e) => { setCurrentPassword(e.target.value); setPasswordSuccess(false); }} className={waInputClass} required />
               </div>
               <div>
                 <label htmlFor="new-password" className={waLabelClass}>Nova senha</label>
-                <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={waInputClass} required />
+                <input id="new-password" type="password" value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setPasswordSuccess(false); }} className={waInputClass} required />
               </div>
               <div>
                 <label htmlFor="confirm-password" className={waLabelClass}>Confirmar nova senha</label>
-                <input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={waInputClass} required />
+                <input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setPasswordSuccess(false); }} className={waInputClass} required />
               </div>
               {passwordError && <WaError className="sm:col-span-2 lg:col-span-3">{passwordError}</WaError>}
               {passwordSuccess && <WaSuccess className="sm:col-span-2 lg:col-span-3">Senha alterada com sucesso.</WaSuccess>}
               <div className="flex justify-end pt-1 sm:col-span-2 lg:col-span-3">
-                <button type="submit" disabled={submittingPassword} className={waGhostButtonClass}>Trocar senha</button>
+                <button type="submit" disabled={submittingPassword} className={waGhostButtonClass}>{submittingPassword ? 'Trocando…' : 'Trocar senha'}</button>
               </div>
             </form>
           </details>
         </div>
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2 border-t border-wa-border bg-wa-panel-header px-5 py-3 sm:px-6">
-        <button type="button" onClick={onClose} className={waGhostButtonClass}>Cancelar</button>
-        <button type="submit" form="profile-info-form" disabled={savingProfile} className={waPrimaryButtonClass}>Salvar alterações</button>
+        <button type="button" onClick={fechar} className={waGhostButtonClass}>Cancelar</button>
+        <button type="submit" form="profile-info-form" disabled={savingProfile} className={waPrimaryButtonClass}>{savingProfile ? 'Salvando…' : 'Salvar alterações'}</button>
       </div>
     </WaDialog>
+    {confirmDialog}
+    </>
   );
 }
 

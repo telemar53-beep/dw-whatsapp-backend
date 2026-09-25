@@ -10,6 +10,8 @@ export function useMyClosedConversations() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('loading');
+  // Antes o erro do "Carregar mais" voltava calado (CVM-ENC-11).
+  const [erroAoCarregarMais, setErroAoCarregarMais] = useState(false);
 
   const refresh = useCallback(() => {
     if (!token) return Promise.resolve();
@@ -31,6 +33,7 @@ export function useMyClosedConversations() {
   const loadMore = useCallback(() => {
     if (!token) return Promise.resolve();
     setLoading(true);
+    setErroAoCarregarMais(false);
     return getMyClosedConversations({ offset: items.length, limit: PAGE_SIZE }, token)
       .then((data) => {
         setItems((prev) => [...prev, ...data.items]);
@@ -39,6 +42,7 @@ export function useMyClosedConversations() {
       })
       .catch(() => {
         setLoading(false);
+        setErroAoCarregarMais(true);
       });
   }, [token, items.length]);
 
@@ -49,5 +53,5 @@ export function useMyClosedConversations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  return { items, hasMore, loading, status, loadMore, refresh };
+  return { items, hasMore, loading, status, loadMore, refresh, erroAoCarregarMais };
 }

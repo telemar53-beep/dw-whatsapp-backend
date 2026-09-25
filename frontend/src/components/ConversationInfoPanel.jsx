@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ContactAvatar from './ContactAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import { useSectors } from '../hooks/useSectors';
 import { setConversationSector } from '../services/api';
 import { nomeDoLocal } from '../utils/place';
+import { descreverErro } from '../utils/errorMessages';
 
 const IDENTIFIED_BY_LABELS = {
   memory: 'memória',
@@ -41,9 +42,20 @@ function ConversationInfoPanel({ conversation }) {
   const { token, agent } = useAuth();
   const { sectors } = useSectors();
   const [sectorId, setSectorId] = useState(conversation.sectorId || '');
+  // Troca de setor com retorno (CVM-INF-08/09/10): antes, `.catch(() => {})` —
+  // sem "Salvando…", erro mudo, o select ficava no valor não salvo e a linha
+  // "Setor" continuava velha.
+  const [salvandoSetor, setSalvandoSetor] = useState(false);
+  const [erroSetor, setErroSetor] = useState(null);
+  const [nomeDoSetorSalvo, setNomeDoSetorSalvo] = useState(null);
+  const conversaAtual = useRef(conversation.id);
+  conversaAtual.current = conversation.id;
 
   useEffect(() => {
     setSectorId(conversation.sectorId || '');
+    setNomeDoSetorSalvo(null);
+    setErroSetor(null);
+    setSalvandoSetor(false);
   }, [conversation.id, conversation.sectorId]);
 
   const displayName = conversation.contactDisplayName || conversation.contactPhoneNumber || 'Conversa';
@@ -54,10 +66,25 @@ function ConversationInfoPanel({ conversation }) {
 
   const canEditSector = Boolean(agent) && (agent.role === 'admin' || agent.role === 'manager' || conversation.assignedAgentId === agent.id);
 
-  function handleSectorChange(event) {
+  async function handleSectorChange(event) {
     const value = event.target.value || null;
+    const anterior = sectorId;
+    const conversaDoPedido = conversation.id;
     setSectorId(value || '');
-    setConversationSector(conversation.id, value, token).catch(() => {});
+    setErroSetor(null);
+    setSalvandoSetor(true);
+    try {
+      await setConversationSector(conversaDoPedido, value, token);
+      // Resposta que chega depois da troca de conversa não vale para a nova.
+      if (conversaDoPedido !== conversaAtual.current) return;
+      setNomeDoSetorSalvo(value ? sectors.find((s) => s.id === value)?.name || null : '');
+    } catch (err) {
+      if (conversaDoPedido !== conversaAtual.current) return;
+      setSectorId(anterior);
+      setErroSetor(descreverErro(err, 'Não foi possível alterar o setor. Tente de novo.'));
+    } finally {
+      if (conversaDoPedido === conversaAtual.current) setSalvandoSetor(false);
+    }
   }
 
   const aiSectorName = conversation.aiTriageCompletedAt
@@ -98,7 +125,7 @@ function ConversationInfoPanel({ conversation }) {
 
       <div className="flex flex-col gap-4">
         <InfoRow label="Cidade" value={nomeDoLocal(conversation.contactLocalityName, conversation.contactCityName) || 'Não informada'} />
-        <InfoRow label="Setor" value={conversation.sectorName || 'Não definido'} />
+        <InfoRow label="Setor" value={(nomeDoSetorSalvo !== null ? nomeDoSetorSalvo : conversation.sectorName) || 'Não definido'} />
         {canEditSector && (
           <label className="-mt-2.5 flex flex-col gap-1">
             <span className="sr-only">Alterar setor</span>
@@ -106,6 +133,7 @@ function ConversationInfoPanel({ conversation }) {
               aria-label="Alterar setor"
               value={sectorId}
               onChange={handleSectorChange}
+              disabled={salvandoSetor}
               className="rounded-lg border border-wa-border bg-wa-panel px-2 py-1.5 text-[13px] text-wa-text"
             >
               <option value="">Selecione um setor</option>
@@ -115,6 +143,8 @@ function ConversationInfoPanel({ conversation }) {
                 </option>
               ))}
             </select>
+            {salvandoSetor && <span className="text-[12px] text-wa-muted">Salvando…</span>}
+            {erroSetor && <span role="alert" className="text-[12px] text-wa-error-text">{erroSetor}</span>}
           </label>
         )}
         <InfoRow label="Atendente" value={conversation.assignedAgentName || 'Não atribuído'} />

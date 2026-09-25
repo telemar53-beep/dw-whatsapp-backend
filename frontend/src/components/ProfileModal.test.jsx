@@ -116,4 +116,63 @@ describe('ProfileModal', () => {
     await userEvent.click(fecharButton);
     expect(onClose).toHaveBeenCalled();
   });
+
+  test('Tentar de novo recarrega o perfil depois da falha, sem perder a mensagem do servidor', async () => {
+    api.getMyProfile.mockRejectedValueOnce({ body: { error: 'Sessão expirada' } });
+    render(<ProfileModal onClose={vi.fn()} />);
+    expect(await screen.findByText('Sessão expirada')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(await screen.findByDisplayValue('Ana')).toBeInTheDocument();
+    expect(api.getMyProfile).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Meu perfil: estados e comportamento', () => {
+  test('salvar diz "Salvando…" enquanto espera; o sucesso some na próxima edição (PRF-07, PRF-09)', async () => {
+    let terminar;
+    api.updateMyProfile.mockReturnValue(new Promise((r) => { terminar = r; }));
+    render(<ProfileModal onClose={vi.fn()} />);
+    await screen.findByDisplayValue('Ana');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    expect(screen.getByRole('button', { name: 'Salvando…' })).toBeDisabled();
+    terminar({ id: 'agent-1', name: 'Ana', email: 'ana@dw.com', phone: '11999998888', avatarPath: null, role: 'agent' });
+    expect(await screen.findByText('Perfil atualizado.')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/telefone/i), '1');
+    expect(screen.queryByText('Perfil atualizado.')).not.toBeInTheDocument();
+  });
+
+  test('nome só com espaços: "Informe o nome." e nada é enviado (PRF-06/08)', async () => {
+    render(<ProfileModal onClose={vi.fn()} />);
+    await screen.findByDisplayValue('Ana');
+    await userEvent.clear(screen.getByLabelText(/nome completo/i));
+    await userEvent.type(screen.getByLabelText(/nome completo/i), '   ');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    expect(await screen.findByText('Informe o nome.')).toBeInTheDocument();
+    expect(api.updateMyProfile).not.toHaveBeenCalled();
+  });
+
+  test('enviar a foto mostra "Enviando foto…" (PRF-04)', async () => {
+    let terminar;
+    api.uploadMyAvatar.mockReturnValue(new Promise((r) => { terminar = r; }));
+    render(<ProfileModal onClose={vi.fn()} />);
+    await screen.findByDisplayValue('Ana');
+    await userEvent.upload(screen.getByLabelText('Alterar foto'), new File(['x'], 'f.png', { type: 'image/png' }));
+    expect(screen.getByText('Enviando foto…')).toBeInTheDocument();
+    terminar({ avatarPath: 'b.jpg' });
+    await waitFor(() => expect(screen.queryByText('Enviando foto…')).not.toBeInTheDocument());
+  });
+
+  test('fechar com edição pergunta antes; sem edição fecha direto (PRF-17)', async () => {
+    const onClose = vi.fn();
+    render(<ProfileModal onClose={onClose} />);
+    await screen.findByDisplayValue('Ana');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '1');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Continuar editando' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/telefone/i)).toHaveValue('119999988881');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Descartar' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

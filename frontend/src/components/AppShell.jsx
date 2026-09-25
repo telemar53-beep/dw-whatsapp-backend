@@ -69,9 +69,14 @@ function AppShell({ dense = false }) {
           deixam ~23px de folga e ainda cobrem uma linha extra digitada.
           `pointer-events-none` garante que nada abaixo deixe de ser clicável
           mesmo se a faixa passar por perto. */}
+      {/* Até três role="status" juntos na tela (C7-3): o anúncio vai para uma
+          região viva sem papel, sempre montada; o balão visual fica mudo. */}
+      <p aria-live="polite" data-aviso-conexao="" className="sr-only">
+        {avisoConexao === 'caiu' ? 'Reconectando… as mensagens novas podem demorar a aparecer.' : avisoConexao ? 'Conexão restabelecida.' : ''}
+      </p>
       {avisoConexao && (
         <div
-          role="status"
+          aria-hidden="true"
           className="pointer-events-none absolute bottom-24 right-5 z-[var(--z-toast)] flex max-w-[min(92vw,26rem)] justify-end"
         >
           {avisoConexao === 'caiu' ? (

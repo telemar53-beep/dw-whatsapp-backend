@@ -22,6 +22,10 @@ function StartConversationModal({ onClose, onCreated }) {
   const [ddi, setDdi] = useState('55');
   const [phone, setPhone] = useState('');
   const [phoneError, setPhoneError] = useState(null);
+  // Um padrão só de validação (A1-10): antes o telefone usava erro na tela e
+  // as variáveis e a mensagem, o balão nativo do navegador (`required`).
+  const [variaveisErro, setVariaveisErro] = useState(null);
+  const [conteudoErro, setConteudoErro] = useState(null);
   const [content, setContent] = useState('');
   const [templates, setTemplates] = useState([]);
   const [templateId, setTemplateId] = useState('');
@@ -94,10 +98,22 @@ function StartConversationModal({ onClose, onCreated }) {
     event.preventDefault();
     setError(null);
     setPhoneError(null);
+    setVariaveisErro(null);
+    setConteudoErro(null);
+    let invalido = false;
     if (phoneDigits.length < 8) {
       setPhoneError('Informe o telefone com DDD.');
-      return;
+      invalido = true;
     }
+    if (isOfficialChannel && templateVariableValues.some((v) => !String(v).trim())) {
+      setVariaveisErro('Preencha todas as variáveis do template.');
+      invalido = true;
+    }
+    if (!isOfficialChannel && !content.trim()) {
+      setConteudoErro('Escreva a mensagem inicial.');
+      invalido = true;
+    }
+    if (invalido) return;
     const phoneNumber = `${ddi}${phoneDigits}`;
     setSubmitting(true);
     try {
@@ -114,7 +130,7 @@ function StartConversationModal({ onClose, onCreated }) {
 
   return (
     <WaDialog variant="start-conversation" title="Iniciar conversa" onClose={onClose} size="max-w-3xl">
-      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-1 flex-col">
         <div className="wa-scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-3 sm:px-6">
           <div className="grid gap-4 border-b border-wa-border pb-5 sm:grid-cols-[minmax(180px,0.8fr)_minmax(0,1.6fr)]">
             <div>
@@ -159,6 +175,7 @@ function StartConversationModal({ onClose, onCreated }) {
                   <label htmlFor="start-conversation-phone" className={waLabelClass}>Telefone</label>
                   <input
                     id="start-conversation-phone"
+                    data-autofocus=""
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="98 98500-4187"
@@ -233,11 +250,12 @@ function StartConversationModal({ onClose, onCreated }) {
                   {templateVariableValues.map((value, index) => (
                     <div key={index}>
                       <label htmlFor={`start-conversation-variable-${index}`} className={waLabelClass}>Variável {index + 1}</label>
-                      <input id={`start-conversation-variable-${index}`} value={value} onChange={(e) => handleVariableChange(index, e.target.value)} className={waInputClass} required />
+                      <input id={`start-conversation-variable-${index}`} value={value} onChange={(e) => handleVariableChange(index, e.target.value)} className={waInputClass} aria-invalid={variaveisErro && !String(value).trim() ? 'true' : 'false'} aria-describedby={variaveisErro ? 'start-conversation-variables-error' : undefined} />
                     </div>
                   ))}
                 </div>
               )}
+              {variaveisErro && <WaError id="start-conversation-variables-error" className="mt-2">{variaveisErro}</WaError>}
             </>
           ) : (
             <div>
@@ -249,8 +267,10 @@ function StartConversationModal({ onClose, onCreated }) {
                 onChange={(e) => setContent(e.target.value)}
                 rows={3}
                 className={`${waInputClass} resize-y`}
-                required
+                aria-invalid={conteudoErro ? 'true' : 'false'}
+                aria-describedby={conteudoErro ? 'start-conversation-message-error' : undefined}
               />
+              {conteudoErro && <WaError id="start-conversation-message-error" className="mt-2">{conteudoErro}</WaError>}
             </div>
           )}
           </section>

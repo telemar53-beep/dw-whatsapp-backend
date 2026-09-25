@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { listTemplatesForChannel, sendConversationTemplate } from '../services/api';
 import { substituirVariaveis } from '../utils/templatePreview';
@@ -21,8 +21,9 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
+  const carregar = useCallback(() => {
     if (!channelId) return;
+    setStatus('loading');
     listTemplatesForChannel(channelId, token, 'atendimento')
       .then((data) => {
         setTemplates(data);
@@ -30,6 +31,22 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
       })
       .catch(() => setStatus('error'));
   }, [channelId, token]);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  // Escolha de um entre N é grupo de rádio (antes: botões com aria-pressed).
+  // As setas movem a escolha, como o padrão pede.
+  function aoTeclarNaLista(evento) {
+    const passo = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[evento.key];
+    if (!passo || templates.length === 0) return;
+    evento.preventDefault();
+    const atual = selected ? templates.findIndex((t) => t.id === selected.id) : -1;
+    const proximo = templates[(atual + passo + templates.length) % templates.length];
+    escolher(proximo);
+    evento.currentTarget.querySelector(`[data-template-id="${proximo.id}"]`)?.focus();
+  }
 
   function escolher(template) {
     setSelected(template);
@@ -65,7 +82,12 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
       <DialogBody className="dialog-send-template">
 
         {status === 'loading' && <p role="status" className="mt-4 text-[13.5px] text-chat-muted">Carregando templates…</p>}
-        {status === 'error' && <p role="alert" className="mt-4 text-[13.5px] text-wa-error-text">Não foi possível carregar os templates.</p>}
+        {status === 'error' && (
+          <p role="alert" className="mt-4 text-[13.5px] text-wa-error-text">
+            Não foi possível carregar os templates.{' '}
+            <button type="button" onClick={carregar} className="font-medium text-chat-text underline underline-offset-2">Tentar de novo</button>
+          </p>
+        )}
         {status === 'ready' && templates.length === 0 && (
           <p className="mt-4 text-[13.5px] text-chat-muted">
             Nenhum template de atendimento aprovado neste canal. Cadastre um em Configurações → Templates.
@@ -73,13 +95,16 @@ function SendTemplateModal({ conversationId, channelId, onClose, onSent }) {
         )}
 
         {status === 'ready' && templates.length > 0 && (
-          <ul className="mt-4 space-y-2">
+          <ul role="radiogroup" aria-label="Template" onKeyDown={aoTeclarNaLista} className="mt-4 space-y-2">
             {templates.map((t) => (
-              <li key={t.id}>
+              <li key={t.id} role="none">
                 <button
                   type="button"
+                  role="radio"
+                  data-template-id={t.id}
                   onClick={() => escolher(t)}
-                  aria-pressed={Boolean(selected && selected.id === t.id)}
+                  aria-checked={Boolean(selected && selected.id === t.id)}
+                  tabIndex={selected ? (selected.id === t.id ? 0 : -1) : (t.id === templates[0].id ? 0 : -1)}
                   className={`w-full rounded-[12px] border px-3 py-2 text-left transition ${
                     selected && selected.id === t.id
                       ? 'border-chat-orange/60 bg-chat-orange/10'

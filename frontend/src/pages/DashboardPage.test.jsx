@@ -603,7 +603,8 @@ describe('aviso de transferência recebida', () => {
     });
     renderDashboard();
 
-    const aviso = screen.getByRole('status');
+    // O aviso fala por uma região viva sem role="status" (C5-6).
+    const aviso = screen.getByRole('button', { name: /Abrir o atendimento de Carlos/ });
     expect(aviso).toHaveTextContent('Maria Souza');
     expect(aviso).toHaveTextContent('Carlos');
   });

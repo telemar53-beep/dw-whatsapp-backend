@@ -1,14 +1,14 @@
 import ConversationListItem from './ConversationListItem';
 import { AsyncState } from './ui';
 
-function ClosedConversationsList({ conversations, status, onSelect, selectedId, hasMore, loading, onLoadMore }) {
+function ClosedConversationsList({ conversations, status, onSelect, selectedId, hasMore, loading, onLoadMore, onRetry, erroAoCarregarMais = false }) {
   function handleSelect(id) {
     const conversation = conversations.find((c) => c.id === id);
     if (conversation) onSelect(conversation);
   }
 
   return (
-    <AsyncState status={status} isEmpty={conversations.length === 0} emptyMessage="Nenhum atendimento encerrado ainda.">
+    <AsyncState status={status} isEmpty={conversations.length === 0} emptyMessage="Nenhum atendimento encerrado ainda." onRetry={onRetry}>
       <div>
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>li]:overflow-clip [&>li]:rounded-[18px] [&>li]:border [&>li]:border-white/[0.07] [&>li]:bg-white/[0.08]">
           {conversations.map((conversation) => (
@@ -21,6 +21,9 @@ function ClosedConversationsList({ conversations, status, onSelect, selectedId, 
             />
           ))}
         </ul>
+        {erroAoCarregarMais && (
+          <p role="alert" className="mt-3 text-[13.5px] text-wa-error-text">Não foi possível carregar mais atendimentos.</p>
+        )}
         {hasMore && (
           <button
             type="button"
@@ -28,7 +31,7 @@ function ClosedConversationsList({ conversations, status, onSelect, selectedId, 
             disabled={loading}
             className="mt-3 w-full rounded-[16px] border border-white/[0.10] bg-white/[0.06] px-4 py-3 text-[14px] font-medium text-chat-text transition hover:bg-white/[0.10] disabled:opacity-50"
           >
-            {loading ? 'Carregando…' : 'Carregar mais'}
+            {loading ? 'Carregando…' : erroAoCarregarMais ? 'Tentar de novo' : 'Carregar mais'}
           </button>
         )}
       </div>

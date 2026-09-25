@@ -522,6 +522,87 @@ describe('Fase 1A — contato do disparo e nono dígito', () => {
       expect(r.temHistoricoProprio).toBe(true);
     });
 
+    // Revisão da Fase 1A (25/09/2026, os 6 pares ambíguos de produção): para ESCOLHER entre as
+    // duas formas vale só evidência forte de identidade — entrada real, vínculo SGP (documento,
+    // cliente ou contrato) ou nota interna. Conversa não-silent sem entrada continua sendo
+    // histórico (e trava a renomeação), mas não é evidência de identidade.
+    describe('temEvidenciaForte', () => {
+      const evidencia = async (numero) => (await findContactsWithOwnHistoryByPhoneNumbers([numero]))[0];
+
+      test('fantasma só com disparo silent: sem evidência forte', async () => {
+        const c = await findOrCreateContactByPhoneNumber('5598985120338', null);
+        await disparo(c.id);
+        expect((await evidencia('5598985120338')).temEvidenciaForte).toBe(false);
+      });
+
+      test('mensagem de entrada é evidência forte', async () => {
+        const c = await findOrCreateContactByPhoneNumber('559885120338', null);
+        await entrada((await createConversation(c.id, canal.id)).id);
+        expect((await evidencia('559885120338')).temEvidenciaForte).toBe(true);
+      });
+
+      test('documento, cliente ou contrato do SGP, cada um sozinho, é evidência forte', async () => {
+        const doc = await findOrCreateContactByPhoneNumber('559885120331', null);
+        await getPool().query('UPDATE contacts SET sgp_document = $2 WHERE id = $1', [doc.id, '52998224725']);
+        const cli = await findOrCreateContactByPhoneNumber('559885120332', null);
+        await getPool().query('UPDATE contacts SET sgp_client_id = 7 WHERE id = $1', [cli.id]);
+        const ctr = await findOrCreateContactByPhoneNumber('559885120333', null);
+        await getPool().query('UPDATE contacts SET sgp_contract_id = 9 WHERE id = $1', [ctr.id]);
+        expect((await evidencia('559885120331')).temEvidenciaForte).toBe(true);
+        expect((await evidencia('559885120332')).temEvidenciaForte).toBe(true);
+        expect((await evidencia('559885120333')).temEvidenciaForte).toBe(true);
+      });
+
+      test('nota interna é evidência forte', async () => {
+        const c = await findOrCreateContactByPhoneNumber('559885120338', null);
+        await updateContact(c.id, { internalNote: 'cliente antigo' });
+        expect((await evidencia('559885120338')).temEvidenciaForte).toBe(true);
+      });
+
+      test('conversa encerrada só com saída (atendente, sem entrada) é histórico próprio, mas NÃO é evidência forte', async () => {
+        const c = await findOrCreateContactByPhoneNumber('5598985120338', null);
+        const conv = await createConversation(c.id, canal.id, null, 'closed');
+        await createMessage({ conversationId: conv.id, direction: 'outbound', content: 'teste', status: 'read', messageType: 'text' });
+        const r = await evidencia('5598985120338');
+        expect(r.temHistoricoProprio).toBe(true);
+        expect(r.temEvidenciaForte).toBe(false);
+      });
+    });
+
+    // Preferência de ROTEAMENTO (não é identidade): conversa operacionalmente aberta — waiting ou
+    // assigned — no MESMO canal do disparo. Silent (invisível) e closed não contam.
+    describe('temConversaAbertaNoCanal', () => {
+      const aberta = async (numero, canalId) => (await findContactsWithOwnHistoryByPhoneNumbers([numero], canalId))[0].temConversaAbertaNoCanal;
+
+      test('waiting ou assigned no canal do disparo: verdadeiro', async () => {
+        const w = await findOrCreateContactByPhoneNumber('559885120331', null);
+        await createConversation(w.id, canal.id, null, 'waiting');
+        const a = await findOrCreateContactByPhoneNumber('559885120332', null);
+        await createConversation(a.id, canal.id, 'completed', 'assigned');
+        expect(await aberta('559885120331', canal.id)).toBe(true);
+        expect(await aberta('559885120332', canal.id)).toBe(true);
+      });
+
+      test('silent, closed ou aberta em OUTRO canal: falso', async () => {
+        const s = await findOrCreateContactByPhoneNumber('559885120333', null);
+        await disparo(s.id);
+        const f = await findOrCreateContactByPhoneNumber('559885120334', null);
+        await createConversation(f.id, canal.id, null, 'closed');
+        const outroCanal = await createChannel({ type: 'meta_cloud', name: 'Outro', phoneNumber: '+5511977700001', config: {} });
+        const o = await findOrCreateContactByPhoneNumber('559885120335', null);
+        await createConversation(o.id, outroCanal.id, null, 'waiting');
+        expect(await aberta('559885120333', canal.id)).toBe(false);
+        expect(await aberta('559885120334', canal.id)).toBe(false);
+        expect(await aberta('559885120335', canal.id)).toBe(false);
+      });
+
+      test('sem canal informado: falso (a preferência fica desligada)', async () => {
+        const w = await findOrCreateContactByPhoneNumber('559885120336', null);
+        await createConversation(w.id, canal.id, null, 'waiting');
+        expect(await aberta('559885120336', undefined)).toBe(false);
+      });
+    });
+
     test('devolve só as formas pedidas, cada uma com a sua marcação', async () => {
       const fantasma = await findOrCreateContactByPhoneNumber('5598985120338', null);
       await disparo(fantasma.id);
@@ -578,6 +659,22 @@ describe('Fase 1A — contato do disparo e nono dígito', () => {
       const conv = await createConversation(c.id, canal.id);
       const { msg } = await disparo(c.id, conv);
       expect(await renameGhostContactToWaId(c.id, '5598985120338', '559885120338', msg.id)).toBe(false);
+    });
+
+    // CASO 7 da revisão (25/09/2026): a renomeação continua pela régua de HISTÓRICO, não pela de
+    // evidência forte. O contato com 9 do teste do proprietário — duas conversas encerradas de
+    // atendente só com saída, mais a silent de disparo — não tem evidência forte, e mesmo assim
+    // não pode ser renomeado sozinho.
+    test('CASO 7 — sem evidência forte, mas com conversa de atendente: continua NÃO renomeando', async () => {
+      const c = await findOrCreateContactByPhoneNumber('5598985120338', null);
+      for (let i = 0; i < 2; i += 1) {
+        const antiga = await createConversation(c.id, canal.id, 'completed', 'closed');
+        await createMessage({ conversationId: antiga.id, direction: 'outbound', content: 'teste da atendente', status: 'read', messageType: 'text' });
+      }
+      const { msg } = await disparo(c.id);
+      expect((await findContactsWithOwnHistoryByPhoneNumbers(['5598985120338']))[0].temEvidenciaForte).toBe(false);
+      expect(await renameGhostContactToWaId(c.id, '5598985120338', '559885120338', msg.id)).toBe(false);
+      expect((await findContactById(c.id)).phoneNumber).toBe('5598985120338');
     });
 
     test('vínculo com o SGP ou nota interna não renomeiam', async () => {

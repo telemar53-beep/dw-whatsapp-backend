@@ -32,7 +32,7 @@ async function processCampaignRecipient({ recipientId, campaignId, channelId, ph
     // contato. No Baileys, resolveWhatsAppJid acima já perguntou ao WhatsApp pelas duas formas.
     const contact = channel.type === 'baileys'
       ? await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, displayName || null)
-      : await resolverContatoDoDisparo(canonicalPhoneNumber, displayName || null);
+      : await resolverContatoDoDisparo(canonicalPhoneNumber, displayName || null, channel.id);
 
     const existing = await findOpenConversation(contact.id, channel.id);
     if (existing) {

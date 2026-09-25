@@ -40,7 +40,9 @@ describe('estado persistente da conexão no menu', () => {
     useSocketConnection.mockReturnValue('reconnecting');
     renderNav();
 
-    const indicador = screen.getByRole('status', { name: /reconectando\. as mensagens novas podem demorar a aparecer\./i });
+    // Sem role="status" (C7-3): a frase inteira vai como texto para leitor de tela.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    const indicador = screen.getByText('Reconectando. As mensagens novas podem demorar a aparecer.').closest('.worknav-connection');
     expect(indicador).toBeInTheDocument();
     // Alcançável pelo teclado, para a dica do modo recolhido.
     expect(indicador).toHaveAttribute('tabindex', '0');
@@ -51,10 +53,10 @@ describe('estado persistente da conexão no menu', () => {
   test('o indicador desaparece assim que a conexão volta', () => {
     useSocketConnection.mockReturnValue('reconnecting');
     const { rerender } = renderNav();
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByText('Reconectando. As mensagens novas podem demorar a aparecer.')).toBeInTheDocument();
 
     useSocketConnection.mockReturnValue('connected');
     rerender(<MemoryRouter><SideNav onProfileClick={vi.fn()} /></MemoryRouter>);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reconectando. As mensagens novas podem demorar a aparecer.')).not.toBeInTheDocument();
   });
 });

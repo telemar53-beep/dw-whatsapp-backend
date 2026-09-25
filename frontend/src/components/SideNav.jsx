@@ -146,7 +146,9 @@ function SideNav({ onProfileClick, mobileOpen = false, onMobileClose = () => {} 
             não cobrir tabela nem ação nas páginas densas. A faixa da casca é
             só o alerta momentâneo. */}
         {connectionState === 'reconnecting' && (
-          <div className="worknav-connection" role="status" tabIndex={0} aria-label="Reconectando. As mensagens novas podem demorar a aparecer.">
+          // Sem role="status": o anúncio é da região viva da casca (C7-3).
+          <div className="worknav-connection" tabIndex={0}>
+            <span className="sr-only">Reconectando. As mensagens novas podem demorar a aparecer.</span>
             <IconWarning size={17} />
             <span className="worknav-label">Reconectando…</span>
             <span className="worknav-connection-tip" aria-hidden="true">Reconectando… As mensagens novas podem demorar a aparecer.</span>

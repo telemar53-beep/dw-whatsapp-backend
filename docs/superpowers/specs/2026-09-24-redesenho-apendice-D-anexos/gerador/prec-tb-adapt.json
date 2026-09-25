@@ -1,0 +1,506 @@
+{
+ "busca": {
+  "prec": 0,
+  "juntar": false,
+  "bytes": 52,
+  "max": 0
+ },
+ "adicionar": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 18,
+  "max": 29
+ },
+ "chevron-baixo": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 14,
+  "max": 0
+ },
+ "chevron-direita": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 14,
+  "max": 0
+ },
+ "voltar": {
+  "prec": 0,
+  "juntar": false,
+  "bytes": 36,
+  "max": 0
+ },
+ "seta-direita": {
+  "prec": 0,
+  "juntar": false,
+  "bytes": 37,
+  "max": 0
+ },
+ "historico": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 43,
+  "max": 17
+ },
+ "transferir": {
+  "prec": 0,
+  "juntar": false,
+  "bytes": 55,
+  "max": 0
+ },
+ "encerrar": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 50,
+  "max": 5
+ },
+ "assumir": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 70,
+  "max": 4
+ },
+ "check": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 16,
+  "max": 0
+ },
+ "lido-entregue": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 33,
+  "max": 22
+ },
+ "fechar": {
+  "prec": 0,
+  "juntar": false,
+  "bytes": 27,
+  "max": 0
+ },
+ "anexo": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 86,
+  "max": 0
+ },
+ "emoji": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 72,
+  "max": 5
+ },
+ "resposta-rapida": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 23,
+  "max": 32
+ },
+ "microfone": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 99,
+  "max": 23
+ },
+ "enviar": {
+  "prec": 2,
+  "juntar": true,
+  "bytes": 128,
+  "max": 54
+ },
+ "lixeira": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 105,
+  "max": 56
+ },
+ "parar": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 71,
+  "max": 2
+ },
+ "play": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 15,
+  "max": 28
+ },
+ "pause": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 63,
+  "max": 60
+ },
+ "download": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 64,
+  "max": 42
+ },
+ "local": {
+  "prec": 2,
+  "juntar": true,
+  "bytes": 103,
+  "max": 8
+ },
+ "cadeado": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 128,
+  "max": 40
+ },
+ "sino": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 108,
+  "max": 41
+ },
+ "sino-mudo": {
+  "prec": 1,
+  "juntar": false,
+  "bytes": 129,
+  "max": 19
+ },
+ "relatorio": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 103,
+  "max": 64
+ },
+ "configuracoes": {
+  "prec": 2,
+  "juntar": true,
+  "bytes": 463,
+  "max": 30
+ },
+ "sair": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 96,
+  "max": 60
+ },
+ "equipe": {
+  "prec": 2,
+  "juntar": true,
+  "bytes": 125,
+  "max": 5
+ },
+ "supervisao": {
+  "prec": 0,
+  "juntar": false,
+  "bytes": 113,
+  "max": 60
+ },
+ "alerta": {
+  "prec": 3,
+  "juntar": true,
+  "bytes": 149,
+  "max": 10
+ },
+ "falha": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 48,
+  "max": 29
+ },
+ "atendimento": {
+  "prec": 2,
+  "juntar": true,
+  "bytes": 128,
+  "max": 63
+ },
+ "cliente": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 74,
+  "max": 4
+ },
+ "campanha": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 152,
+  "max": 62
+ },
+ "canal": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 83,
+  "max": 8
+ },
+ "ia": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 186,
+  "max": 0
+ },
+ "ia-cerebro": {
+  "prec": 1,
+  "juntar": false,
+  "bytes": 244,
+  "max": 0
+ },
+ "regras": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 79,
+  "max": 5
+ },
+ "integracoes": {
+  "prec": 3,
+  "juntar": false,
+  "bytes": 112,
+  "max": 2
+ },
+ "tag": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 161,
+  "max": 61
+ },
+ "empresa": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 91,
+  "max": 37
+ },
+ "adicionar-usuario": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 72,
+  "max": 27
+ },
+ "mais-h": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 99,
+  "max": 2
+ },
+ "mais-v": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 101,
+  "max": 0
+ },
+ "atualizar": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 73,
+  "max": 2
+ },
+ "info": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 54,
+  "max": 5
+ },
+ "template": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 106,
+  "max": 59
+ },
+ "relogio": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 48,
+  "max": 21
+ },
+ "servidor": {
+  "prec": 1,
+  "juntar": false,
+  "bytes": 161,
+  "max": 3
+ },
+ "editar": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 55,
+  "max": 53
+ },
+ "codigo-barras": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 131,
+  "max": 50
+ },
+ "qr": {
+  "prec": 1,
+  "juntar": false,
+  "bytes": 305,
+  "max": 3
+ },
+ "pdf": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 142,
+  "max": 59
+ },
+ "link": {
+  "prec": 2,
+  "juntar": true,
+  "bytes": 112,
+  "max": 9
+ },
+ "documento-cpf": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 125,
+  "max": 4
+ },
+ "carregando": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 21,
+  "max": 0
+ },
+ "calendario": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 105,
+  "max": 57
+ },
+ "responder": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 40,
+  "max": 54
+ },
+ "setores": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 46,
+  "max": 6
+ },
+ "caixa-entrada": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 90,
+  "max": 41
+ },
+ "triagem": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 131,
+  "max": 47
+ },
+ "noturno": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 120,
+  "max": 63
+ },
+ "exibir": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 72,
+  "max": 5
+ },
+ "foto": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 128,
+  "max": 64
+ },
+ "video": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 126,
+  "max": 63
+ },
+ "figurinha": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 56,
+  "max": 58
+ },
+ "arquivo": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 86,
+  "max": 59
+ },
+ "cancelamento": {
+  "prec": 0,
+  "juntar": false,
+  "bytes": 60,
+  "max": 0
+ },
+ "financeiro": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 94,
+  "max": 61
+ },
+ "instalacao": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 71,
+  "max": 11
+ },
+ "reativacao": {
+  "prec": 2,
+  "juntar": true,
+  "bytes": 34,
+  "max": 16
+ },
+ "robo": {
+  "prec": 1,
+  "juntar": false,
+  "bytes": 155,
+  "max": 2
+ },
+ "sem-resposta": {
+  "prec": 3,
+  "juntar": false,
+  "bytes": 193,
+  "max": 0
+ },
+ "suporte": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 185,
+  "max": 56
+ },
+ "senha": {
+  "prec": 2,
+  "juntar": true,
+  "bytes": 256,
+  "max": 61
+ },
+ "encerrados": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 114,
+  "max": 28
+ },
+ "carga": {
+  "prec": 0,
+  "juntar": true,
+  "bytes": 98,
+  "max": 32
+ },
+ "zoom-mais": {
+  "prec": 0,
+  "juntar": false,
+  "bytes": 72,
+  "max": 0
+ },
+ "zoom-menos": {
+  "prec": 0,
+  "juntar": false,
+  "bytes": 62,
+  "max": 0
+ },
+ "pix:simpleicons": {
+  "prec": 2,
+  "juntar": true,
+  "bytes": 576,
+  "max": 33
+ },
+ "pix:atual": {
+  "prec": 1,
+  "juntar": true,
+  "bytes": 82,
+  "max": 11
+ }
+}

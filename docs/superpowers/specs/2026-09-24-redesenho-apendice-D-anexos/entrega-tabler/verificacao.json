@@ -1,0 +1,590 @@
+[
+ {
+  "id": "IconesEntrada.js:IconLock:cadeado",
+  "max": 40,
+  "n64": 0,
+  "n32": 4,
+  "tinta": 75224
+ },
+ {
+  "id": "IconesTrabalho.js:IconArchive:encerrados",
+  "max": 28,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 88070
+ },
+ {
+  "id": "IconesTrabalho.js:IconArrowLeft:voltar",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 34232
+ },
+ {
+  "id": "IconesTrabalho.js:IconArrowRight:seta-direita",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 34231
+ },
+ {
+  "id": "IconesTrabalho.js:IconAttach:anexo",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 84086
+ },
+ {
+  "id": "IconesTrabalho.js:IconBarcode:codigo-barras",
+  "max": 50,
+  "n64": 0,
+  "n32": 2,
+  "tinta": 52853
+ },
+ {
+  "id": "IconesTrabalho.js:IconBellOff:sino-mudo",
+  "max": 19,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 83864
+ },
+ {
+  "id": "IconesTrabalho.js:IconBellOn:sino",
+  "max": 41,
+  "n64": 0,
+  "n32": 2,
+  "tinta": 65059
+ },
+ {
+  "id": "IconesTrabalho.js:IconCancel:cancelamento",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 73007
+ },
+ {
+  "id": "IconesTrabalho.js:IconChart:relatorio",
+  "max": 64,
+  "n64": 0,
+  "n32": 85,
+  "tinta": 87864
+ },
+ {
+  "id": "IconesTrabalho.js:IconChatSlash:sem-resposta",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 85452
+ },
+ {
+  "id": "IconesTrabalho.js:IconChats:atendimento",
+  "max": 63,
+  "n64": 0,
+  "n32": 26,
+  "tinta": 61666
+ },
+ {
+  "id": "IconesTrabalho.js:IconCheck:check",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 25179
+ },
+ {
+  "id": "IconesTrabalho.js:IconCheckCircle:encerrar",
+  "max": 5,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 70700
+ },
+ {
+  "id": "IconesTrabalho.js:IconChecks:lido-entregue",
+  "max": 22,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 44318
+ },
+ {
+  "id": "IconesTrabalho.js:IconChevronDown:chevron-baixo",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 20011
+ },
+ {
+  "id": "IconesTrabalho.js:IconChevronRight:chevron-direita",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 19899
+ },
+ {
+  "id": "IconesTrabalho.js:IconClaim:assumir",
+  "max": 4,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 52908
+ },
+ {
+  "id": "IconesTrabalho.js:IconClock:relogio",
+  "max": 21,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 71438
+ },
+ {
+  "id": "IconesTrabalho.js:IconClose:fechar",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 38361
+ },
+ {
+  "id": "IconesTrabalho.js:IconDocument:arquivo",
+  "max": 59,
+  "n64": 0,
+  "n32": 6,
+  "tinta": 71054
+ },
+ {
+  "id": "IconesTrabalho.js:IconDownload:download",
+  "max": 42,
+  "n64": 0,
+  "n32": 2,
+  "tinta": 55226
+ },
+ {
+  "id": "IconesTrabalho.js:IconEmoji:emoji",
+  "max": 5,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 70450
+ },
+ {
+  "id": "IconesTrabalho.js:IconHeadset:suporte",
+  "max": 56,
+  "n64": 0,
+  "n32": 4,
+  "tinta": 81133
+ },
+ {
+  "id": "IconesTrabalho.js:IconHistory:historico",
+  "max": 17,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 78771
+ },
+ {
+  "id": "IconesTrabalho.js:IconIdCard:documento-cpf",
+  "max": 4,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 104000
+ },
+ {
+  "id": "IconesTrabalho.js:IconImage:foto",
+  "max": 64,
+  "n64": 0,
+  "n32": 9,
+  "tinta": 101511
+ },
+ {
+  "id": "IconesTrabalho.js:IconInfo:info",
+  "max": 5,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 69069
+ },
+ {
+  "id": "IconesTrabalho.js:IconInvoiceLink:link",
+  "max": 9,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 50030
+ },
+ {
+  "id": "IconesTrabalho.js:IconKey:senha",
+  "max": 61,
+  "n64": 0,
+  "n32": 22,
+  "tinta": 65895
+ },
+ {
+  "id": "IconesTrabalho.js:IconLock:cadeado",
+  "max": 40,
+  "n64": 0,
+  "n32": 4,
+  "tinta": 75224
+ },
+ {
+  "id": "IconesTrabalho.js:IconLogout:sair",
+  "max": 60,
+  "n64": 0,
+  "n32": 4,
+  "tinta": 70811
+ },
+ {
+  "id": "IconesTrabalho.js:IconMegaphone:campanha",
+  "max": 62,
+  "n64": 0,
+  "n32": 19,
+  "tinta": 81976
+ },
+ {
+  "id": "IconesTrabalho.js:IconMic:microfone",
+  "max": 23,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 70491
+ },
+ {
+  "id": "IconesTrabalho.js:IconMoney:financeiro",
+  "max": 61,
+  "n64": 0,
+  "n32": 18,
+  "tinta": 94108
+ },
+ {
+  "id": "IconesTrabalho.js:IconNewChat:adicionar",
+  "max": 29,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 31477
+ },
+ {
+  "id": "IconesTrabalho.js:IconPause:pause",
+  "max": 60,
+  "n64": 0,
+  "n32": 15,
+  "tinta": 73317
+ },
+ {
+  "id": "IconesTrabalho.js:IconPdfFile:pdf",
+  "max": 59,
+  "n64": 0,
+  "n32": 6,
+  "tinta": 84508
+ },
+ {
+  "id": "IconesTrabalho.js:IconPin:local",
+  "max": 8,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 78138
+ },
+ {
+  "id": "IconesTrabalho.js:IconPix:pix",
+  "max": 33,
+  "n64": 0,
+  "n32": 1,
+  "tinta": 170848
+ },
+ {
+  "id": "IconesTrabalho.js:IconPlay:play",
+  "max": 28,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 48610
+ },
+ {
+  "id": "IconesTrabalho.js:IconPower:reativacao",
+  "max": 16,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 53418
+ },
+ {
+  "id": "IconesTrabalho.js:IconQrCode:qr",
+  "max": 3,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 100163
+ },
+ {
+  "id": "IconesTrabalho.js:IconQuickReply:resposta-rapida",
+  "max": 32,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 54530
+ },
+ {
+  "id": "IconesTrabalho.js:IconRefresh:atualizar",
+  "max": 2,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 66317
+ },
+ {
+  "id": "IconesTrabalho.js:IconRobot:robo",
+  "max": 2,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 78839
+ },
+ {
+  "id": "IconesTrabalho.js:IconSearch:busca",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 56487
+ },
+ {
+  "id": "IconesTrabalho.js:IconSend:enviar",
+  "max": 54,
+  "n64": 0,
+  "n32": 8,
+  "tinta": 69232
+ },
+ {
+  "id": "IconesTrabalho.js:IconSettings:configuracoes",
+  "max": 30,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 88070
+ },
+ {
+  "id": "IconesTrabalho.js:IconSignal:carga",
+  "max": 32,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 81190
+ },
+ {
+  "id": "IconesTrabalho.js:IconSpinner:carregando",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 46330
+ },
+ {
+  "id": "IconesTrabalho.js:IconSticker:figurinha",
+  "max": 58,
+  "n64": 0,
+  "n32": 11,
+  "tinta": 64999
+ },
+ {
+  "id": "IconesTrabalho.js:IconStop:parar",
+  "max": 2,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 57625
+ },
+ {
+  "id": "IconesTrabalho.js:IconSupervision:supervisao",
+  "max": 60,
+  "n64": 0,
+  "n32": 8,
+  "tinta": 93506
+ },
+ {
+  "id": "IconesTrabalho.js:IconTag:tag",
+  "max": 61,
+  "n64": 0,
+  "n32": 10,
+  "tinta": 66304
+ },
+ {
+  "id": "IconesTrabalho.js:IconTeam:equipe",
+  "max": 5,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 73835
+ },
+ {
+  "id": "IconesTrabalho.js:IconTransfer:transferir",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 59197
+ },
+ {
+  "id": "IconesTrabalho.js:IconTrash:lixeira",
+  "max": 56,
+  "n64": 0,
+  "n32": 4,
+  "tinta": 87166
+ },
+ {
+  "id": "IconesTrabalho.js:IconUser:cliente",
+  "max": 4,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 50941
+ },
+ {
+  "id": "IconesTrabalho.js:IconVideo:video",
+  "max": 63,
+  "n64": 0,
+  "n32": 12,
+  "tinta": 69189
+ },
+ {
+  "id": "IconesTrabalho.js:IconWarning:alerta",
+  "max": 10,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 73138
+ },
+ {
+  "id": "IconesTrabalho.js:IconWarningCircle:falha",
+  "max": 29,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 67277
+ },
+ {
+  "id": "IconesTrabalho.js:IconWrench:instalacao",
+  "max": 11,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 75737
+ },
+ {
+  "id": "IconesTrabalho.js:IconZoomIn:zoom-mais",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 70585
+ },
+ {
+  "id": "IconesTrabalho.js:IconZoomOut:zoom-menos",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 64647
+ },
+ {
+  "id": "IconesConfig.js:IconBrain:ia-cerebro",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 100078
+ },
+ {
+  "id": "IconesConfig.js:IconBuilding:empresa",
+  "max": 37,
+  "n64": 0,
+  "n32": 2,
+  "tinta": 87707
+ },
+ {
+  "id": "IconesConfig.js:IconCalendar:calendario",
+  "max": 57,
+  "n64": 0,
+  "n32": 5,
+  "tinta": 94865
+ },
+ {
+  "id": "IconesConfig.js:IconChannel:canal",
+  "max": 8,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 65326
+ },
+ {
+  "id": "IconesConfig.js:IconEdit:editar",
+  "max": 53,
+  "n64": 0,
+  "n32": 4,
+  "tinta": 55687
+ },
+ {
+  "id": "IconesConfig.js:IconEye:exibir",
+  "max": 5,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 62414
+ },
+ {
+  "id": "IconesConfig.js:IconFileText:template",
+  "max": 59,
+  "n64": 0,
+  "n32": 6,
+  "tinta": 90052
+ },
+ {
+  "id": "IconesConfig.js:IconInbox:caixa-entrada",
+  "max": 41,
+  "n64": 0,
+  "n32": 2,
+  "tinta": 84621
+ },
+ {
+  "id": "IconesConfig.js:IconMoon:noturno",
+  "max": 63,
+  "n64": 0,
+  "n32": 6,
+  "tinta": 78236
+ },
+ {
+  "id": "IconesConfig.js:IconMore:mais-h",
+  "max": 2,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 19605
+ },
+ {
+  "id": "IconesConfig.js:IconMoreVertical:mais-v",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 19576
+ },
+ {
+  "id": "IconesConfig.js:IconPlug:integracoes",
+  "max": 2,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 55218
+ },
+ {
+  "id": "IconesConfig.js:IconReply:responder",
+  "max": 54,
+  "n64": 0,
+  "n32": 4,
+  "tinta": 39204
+ },
+ {
+  "id": "IconesConfig.js:IconRules:regras",
+  "max": 5,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 57786
+ },
+ {
+  "id": "IconesConfig.js:IconServer:servidor",
+  "max": 3,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 92507
+ },
+ {
+  "id": "IconesConfig.js:IconSpark:ia",
+  "max": 0,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 53709
+ },
+ {
+  "id": "IconesConfig.js:IconStack:setores",
+  "max": 6,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 83534
+ },
+ {
+  "id": "IconesConfig.js:IconTree:triagem",
+  "max": 47,
+  "n64": 0,
+  "n32": 2,
+  "tinta": 59764
+ },
+ {
+  "id": "IconesConfig.js:IconUserPlus:adicionar-usuario",
+  "max": 27,
+  "n64": 0,
+  "n32": 0,
+  "tinta": 56064
+ }
+]

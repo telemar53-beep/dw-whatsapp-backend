@@ -53,8 +53,8 @@ da conta). "Resolve" = ids do Apêndice A que deixam de ser defeito.
 | Overlay | Largura | Mudanças estruturais principais | Resolve | S/C |
 |---|---|---|---|---|
 | **Iniciar conversa** | 768 → 576 | uma coluna; ordem Telefone → Canal → conteúdo, foco no Telefone; canal único vira texto; estado dos canais dito uma vez (sai o 2º `role="status"`); sai a faixa "exige template" (dita até 3×); template pela escolha compartilhada, com o texto à vista; conteúdo só depois de saber o tipo do canal; validação em linha; ajuda do "9" só em Baileys | ATD-INI-02, -03, -10, -13, -14, -19, -21, -23, -26, -27, -29; ATD-MESA-16 | 10/3 |
-| **Transferir** | 760 → 480 | linha de 9 elementos e 5 cores → 4 elementos em 2 linhas; presença por forma (cheio/vazado), carga pelo número; sai a descrição; barra de 36 px; a escolha sobrevive à busca; nota diz o que falta e avisa escolhido offline; esqueleto com a forma da linha | ATD-TRF-03, -16, -17, -19, -20, -22, -25 | 10/3 |
-| **Encerrar (motivo)** | 820 → 640 | cartão com ladrilho → linha-rádio; legenda visível "Motivo do contato"; 2 colunas por `@container`; **"Sugerido pela IA"** na linha do motivo sugerido; vermelho sai da abertura e vai para o botão que encerra | ATD-ENC-03, -05, -09, -13, -14, -17 | 8/3 |
+| **Transferir** | 760 → 480 | linha de 9 elementos e 5 cores → 4 elementos em 2 linhas; presença por forma (cheio/vazado), carga como **número + "Carga alta" a partir de 10** (decisão 7; saem "Disponível", "Em atendimento" e "Movimentado"); sai a descrição; barra de 36 px; a escolha sobrevive à busca; nota diz o que falta e avisa escolhido offline; esqueleto com a forma da linha | ATD-TRF-03, -16, -17, -19, -20, -22, -25 | 10/3 |
+| **Encerrar (motivo)** | 820 → 640 | cartão com ladrilho → linha-rádio; legenda visível "Motivo do contato"; **só 2 legendas de motivo** (Financeiro, Suporte técnico — decisão 8); 2 colunas por `@container`; **"Sugerido pela IA"** na linha do motivo sugerido; vermelho sai da abertura e vai para o botão que encerra | ATD-ENC-03, -05, -09, -13, -14, -17 | 8/3 |
 | **"Finalizar sem motivo"** | 480 | título, nome do cliente e consequência ("entra no Relatório como Sem motivo" — conferido no backend; **não** promete mensagem ao cliente); fica aberto até a resposta e mostra o erro; **um diálogo por lista**, não um por item | ATD-ITEM-24, -25 | 4/1 |
 | **Enviar template** | 864 → 576 | uma coluna (acaba a metade vazia); texto do template uma vez (na prévia, como bolha de saída); descrição conforme o aviso que abriu (fechada × recusada); nota diz o que falta | CV-TPL-01, -02, -03, -09, -15 | 6/3 |
 | **Atendimentos anteriores** | 640 | lista: linha de 2 linhas (motivo · data / hora · quem · canal), sai "Finalizado" (constante: só vêm encerrados) e a data repetida; detalhe: "←" no cabeçalho, sai a migalha e o resumo (repetia título e descrição), **a mesma bolha da conversa** em modo leitura; sem rodapé (consulta) | CV-HIS-* (ver anexo B) | 7/5 |
@@ -62,13 +62,13 @@ da conta). "Resolve" = ids do Apêndice A que deixam de ser defeito.
 | **Visualizador de imagem** | tela cheia | uma barra no topo que reserva espaço (autor · data · zoom · Ajustar · **Girar** · Baixar · Fechar); a imagem nunca coberta a 100%; legenda embaixo; "Baixar" salva por `blob:` e a aba nunca sai do app | MSG-IMG-12, -15, N10 | 6/4 |
 | **Alerta** | 480 | 3 faixas → 2; título diz o que falhou e com quem ("Não foi possível assumir o atendimento de Maria") | PRM-ALR-*, N9 | 3/2 |
 | **Emojis** | popover | sem cabeçalho visível; âncora no gatilho; altura pelo espaço; insere no cursor; Enter/Espaço mantêm o foco na grade (o Enter seguinte não envia a mensagem) | N6, N7 | 3/0 |
-| **Respostas rápidas** | popover 340 | sem cabeçalho visível; âncora e altura; estados como itens do menu (o menu nunca fica sem item focável; sai o 2º `role="status"`); busca por letra (padrão WAI-ARIA, o papel `menu` fica) | MSG-RR-03, N7, N8 | 3/2 |
+| **Respostas rápidas** | popover 340 | sem cabeçalho visível; âncora e altura; **campo vazio → preenche, com texto → insere no cursor** (decisão 9); estados como itens do menu (o menu nunca fica sem item focável; sai o 2º `role="status"`); busca por letra (padrão WAI-ARIA, o papel `menu` fica) | MSG-RR-03, N7, N8 | 3/2 |
 | **Nossa equipe** | modal → **painel na coluna da lista** | a coluna troca o conteúdo por "← Nossa equipe"; a conversa continua à vista (P6); saem as 4 fichas de filtro (as três seções já são as partições, com a contagem no cabeçalho); linha de 2 linhas com presença por forma; barra "● 5 online" com vaga fixa | ATD-EQM-*, ATD-EQP-* (anexo C) | 14/6 |
 | **Conversa em modal + painel de informações** | — | o × vira o último botão do cabeçalho ("Fechar conversa"); **sai o painel de informações**: o modal usa o painel Cliente da própria conversa, que recebe o que só ele tinha — **"Alterar setor"** (única tela que troca o setor; mesma regra de quem pode), "Encerrado em", confiança da IA em %; estado no vocabulário único (hoje "Em atendimento" e "Em andamento" na mesma tela); rodapé "Atendimento encerrado em … · somente leitura" no lugar do compositor vazio | CVM-MOD-*, CVM-INF-*, CVM-MOD-10 | parte de 17/2 |
-| **Encerrados** | popup 520–1500 | lista de uma coluna com **data** de encerramento (hoje só HH:mm numa lista que atravessa dias); sai a ficha do próprio atendente; "Carregar mais" com erro e "Tentar de novo"; **forma — vista da coluna da lista ou diálogo mestre-detalhe — é decisão do proprietário (E.4)** | CVM-ENC-11, -14 e família | parte de 17/2 |
+| **Encerrados** | popup 520–1500 → **diálogo mestre-detalhe** (decisão 10) | um diálogo só: lista à esquerda com **data** de encerramento (hoje só HH:mm numa lista que atravessa dias), a conversa encerrada à direita em modo leitura, com o painel Cliente — sai o modal empilhado sobre o popup; em largura estreita, lista → detalhe com "←" (como o Histórico); sai a ficha do próprio atendente; "Carregar mais" com erro e "Tentar de novo"; o diálogo é `lazy` no menu (spec 7(b)) | CVM-ENC-11, -14 e família | parte de 17/2 |
 | **Meu perfil** | ~520, uma coluna | duas vistas no mesmo envelope: "Meu perfil" (foto, nome, telefone, e-mail só leitura, "Trocar senha ›") e "Trocar senha" — cada uma com **uma** ação principal (hoje "Salvar alterações" não salva a senha preenchida e nada avisa); erro de senha no campo; "Descartar alterações?" ao fechar com edição | PRF-12 (com a correção do 401), PRF-17 e família | 15/3 |
 | **Menu da conta** | popover | gatilho só o avatar; cabeçalho com nome e papel; "Meu perfil" · divisória · "Sair" (sem confirmação, como hoje) | CAS do menu | 3/2 |
-| **Aviso de transferência** | toast 9 s | gatilho pela chave `transferredBy` (resolve a transferência sem nome, ATD-AVT-07); sai o prazo de 9 s; **forma — marca na lista ou aviso fixo na coluna da lista — é decisão do proprietário (E.4)**; nunca sobre o compositor | ATD-AVT-05, -07 | 7/2 |
+| **Aviso de transferência** | toast 9 s → **marca na lista** (decisão 11) | gatilho pela chave `transferredBy` (resolve a transferência sem nome, ATD-AVT-07); sai o toast e o prazo de 9 s: a conversa transferida entra na lista com a marca de não lida e "Transferido por Fulano" na linha 2 até ser aberta, e a frase vai para a região viva da casca; nunca sobre o compositor | ATD-AVT-05, -07 | 7/2 |
 | **Faixa do canal** | faixa | uma linha: um canal → "Canal Loja desconectado · Conectar"; dois ou mais → "2 canais sem conexão · Ver canais"; falha ao buscar → "Não foi possível conferir os canais · Tentar de novo" (hoje parece "tudo conectado"); rebusca na volta do socket e da aba | CAS-BAN-05 e família | 5/2 |
 | **Avisos de conexão** | trilho / faixa | um indicador só: no desktop na base do trilho, persistente enquanto reconecta, "Conectado" por 3 s; no celular faixa de 1 linha (hoje some em 3 s); uma região viva na casca (hoje até 3 `role="status"` juntos) | CAS de conexão | 6/1 |
 
@@ -86,21 +86,22 @@ da conta). "Resolve" = ids do Apêndice A que deixam de ser defeito.
 | Confirmação de sucesso na mesa vazia depois de transferir, encerrar ou finalizar ("Atendimento de Maria transferido para Pedro.") | Hoje a conversa só some; cobre também o admin que transfere a própria conversa e continua vendo-a (ATD-TRF-27) |
 | Mantidos como hoje: "Sair" sem confirmação; a regra de quem troca o setor; a faixa do canal sem busca periódica (só na volta do socket e da aba) | Sem motivo registrado para mudar |
 
-## E.4 Decisões do proprietário que este apêndice acrescenta (seção 14.1 do spec)
+## E.4 Decisões do proprietário (24/09/2026 — seção 14.1 do spec)
 
-| # | Decisão | Recomendação | Sem resposta |
+| # | Pergunta | Decidido | Razão do proprietário |
 |---|---|---|---|
-| 7 | **Níveis de carga no Transferir** (os limites 1/5/10 são escolha de produto): linha com "N atendimentos" e "Carga alta" a partir de 10, saindo os rótulos "Disponível", "Em atendimento" (colide com o estado da conversa) e "Movimentado" | recomendado | mantém os 4 níveis como texto neutro, renomeando "Em atendimento" |
-| 8 | **Legendas do catálogo de motivos:** manter só as que acrescentam (Financeiro, Suporte técnico); 7 de 9 repetem o nome com outras palavras | recomendado | mantém as 9, em tinta neutra |
-| 9 | **Resposta rápida sobre texto já digitado:** hoje substitui o rascunho (e um teste trava isso); proposta: campo vazio → preenche, com texto → insere no cursor | recomendado | mantém substituir |
-| 10 | **Encerrados:** (A) vista da coluna da lista, a conversa encerrada abre na área da conversa, sem modal empilhado — o ganho da E3(b) passa a vir da estrutura; (B) um diálogo mestre-detalhe; (C) mínimo, mantém popup + modal | (A) | (C): mantém a forma de 11/09 (popup pelo ícone do menu), com as mudanças de conteúdo da E.2 |
-| 11 | **Aviso de transferência:** (A) vira marca de não lida na lista, com "Transferido por Fulano" na linha e o texto na região viva; (B) aviso fixo, sem prazo, no topo da coluna da lista | (A) | (B) |
+| 7 | Níveis de carga no Transferir | **número + "Carga alta"** a partir de 10; saem "Disponível", "Em atendimento" (colidia com o estado da conversa) e "Movimentado" | quatro rótulos são quatro coisas para decorar; número é direto |
+| 8 | Legendas do catálogo de motivos | **só as 2 que acrescentam** (Financeiro, Suporte técnico); as outras 7 repetiam o nome | legenda que repete o título é ruído |
+| 9 | Resposta rápida sobre texto já digitado | **insere no cursor** (campo vazio: preenche); o teste que travava "substitui" muda junto | apagar o que a pessoa escreveu é destruir trabalho sem confirmação |
+| 10 | Forma do Encerrados | **(B) diálogo mestre-detalhe** — não a (A), que eu tinha recomendado | a vista na coluna competiria com a fila ativa, que é o trabalho principal; e o popup de hoje é o que carrega a `ConversationView` pela barra lateral |
+| 11 | Forma do aviso de transferência | **(A) marca na lista** | aviso fixo na coluna ocupa espaço permanente por um evento pontual |
 
 ## E.5 Conta estrutural × cosmético (critério de reprovação)
 
 Base contada uma vez: **8 S / 5 C**. Itens: grupo A **38 S / 13 C**; grupo B **28 S / 13 C**; grupo C
-**67 S / 18 C**. **Total: 141 S × 49 C — 74% estrutural.** Com as alternativas das decisões 10 e 11
-a conta de C cai, mas S continua dominando em todos os itens. Os defeitos de comportamento que a E2
+**67 S / 18 C**. **Total: 141 S × 49 C — 74% estrutural.** As decisões 7 a 11 (E.4) trocam a forma de itens já contados
+(o Encerrados deixa de empilhar modal; o aviso deixa de ser toast) e não mudam a conta: S continua
+dominando em todos os itens. A recontagem com o desenho final entra no registro da E2 (spec 12.3). Os defeitos de comportamento que a E2
 resolve na tela (famílias C.4.2 a C.4.4 e membros da CLASSE-01, dezenas nos três grupos) ficam fora
 da conta — são a parte que o atendente mais sente, e não podem inflar o número estrutural.
 
@@ -138,4 +139,4 @@ e o portal redundante do `TeamPanel` — estão nas mudanças da E.2. A lista or
 | Spec, seção 8 | "`ConversationHistoryModal` busca o histórico inteiro; paginar exige backend (protegido)" | a rota de mensagens já aceita `limit` e `before` (adição compatível, ADR-010): paginar o **detalhe** é só frontend (E4); a **lista** tem `LIMIT 50` fixo no backend (registrado) |
 | Spec, seção 6.3 | Histórico, SGP e Cliente "alternância com `aria-expanded`" | SGP e Cliente alternam painel (`aria-expanded`); Histórico abre diálogo (`aria-haspopup="dialog"`) |
 | Spec, seção 6.6 | "ícone de cabeçalho neutro" | sem ícone de cabeçalho (E.1-1) |
-| Spec, seção 7(b) | `ClosedConversationsModal` passa a `lazy` no `SideNav` | vale se a decisão 10 ficar em (B) ou (C); com (A) o menu deixa de importar o modal e o ganho vem da estrutura |
+| Spec, seção 7(b) | `ClosedConversationsModal` passa a `lazy` no `SideNav` | vale: a decisão 10 ficou em (B), diálogo mestre-detalhe; o `lazy` entra na E2 junto com o diálogo novo |

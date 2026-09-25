@@ -50,7 +50,18 @@ continua fazendo-se; **nada** = só decoração, sem informação (o motivo est�
 | Título de 32 px em Sora light da mesa vazia | Ícone da conversa + "Selecione um atendimento na lista" + a nota de registro | dado |
 | (destino novo) | O painel **Cliente** passa a reunir identidade, estado, telefone, canal, protocolo, localidade/cidade, setor, atendente, nota interna e a triagem por IA (motivo, resumo, confiança baixa, resolvido pela IA) | dado |
 
-## B.5 Conferência
+## B.5 Overlays — o que sai pelas decisões do proprietário (24/09, spec 14.1)
+
+| Sai | Vai para | Tipo |
+|---|---|---|
+| Rótulos de carga do Transferir ("Disponível", "Em atendimento", "Movimentado") | O número de atendimentos na linha de cada atendente + "Carga alta" a partir de 10 (decisão 7) | dado |
+| 7 das 9 legendas do catálogo de motivos | Nada: repetiam o nome do motivo com outras palavras; ficam as de Financeiro e Suporte técnico (decisão 8) | nada |
+| Substituição do rascunho ao escolher uma resposta rápida | A resposta entra no cursor; com o campo vazio, preenche como hoje. Quem quiser substituir apaga antes (decisão 9) | ação |
+| Popup do Encerrados + conversa encerrada num modal empilhado por cima | Um diálogo mestre-detalhe: a lista à esquerda, a conversa encerrada à direita, com o painel Cliente; no estreito, lista → detalhe com "←" (decisão 10) | dado + ação |
+| Toast de 9 s "Fulano transferiu o atendimento de Cliente para você." (`TransferNotice.jsx`), com "Clique para abrir" e o × | Marca de não lida na linha da conversa + "Transferido por Fulano" na linha 2 até ela ser aberta (abrir = clicar na linha, como qualquer conversa); a frase inteira vai para a região viva da casca; o sino continua (decisão 11) | dado + ação |
+| Ícone preenchido como marca do item ativo do menu (previsto na versão Phosphor do spec, nunca publicado) | Barra de 3 px + fundo selecionado + `aria-current="page"` (decisão 3) | dado |
+
+## B.6 Conferência
 
 No fim da E2, o registro de mudanças (`2026-09-24-redesenho-registro-E2.md`) marca, para cada
 linha das tabelas acima, onde o item foi encontrado na tela nova — com print — e o teste de

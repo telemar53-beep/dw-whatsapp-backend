@@ -3,10 +3,12 @@
 **Data:** 24/09/2026 · **Estado:** plano aprovado pelo proprietário em 24/09/2026; este spec aguarda revisão.
 **Base:** `main` em `e5236da` (= produção, já com a E1). **Escopo:** frontend — visual, estrutura de tela e desempenho.
 **Planos de implementação:** `docs/superpowers/plans/2026-09-24-redesenho-e0-prova-e-guardas.md`
-(pronto). O da E2 (`...-e2-mesa-de-atendimento.md`) é escrito **depois da revisão deste spec**: ele
-depende das decisões da seção 14.1, algumas das quais mudam telas inteiras (Encerrados, aviso de
-transferência), e escrever código de tarefa antes delas seria escrever duas vezes. A E1 já foi
-publicada (ver seção 10). As etapas E3 a E7 ganham plano próprio depois do checkpoint da E2 (seção 11).
+(pronto) e o da E2, escrito com as decisões da seção 14.1: plano mestre
+`docs/superpowers/plans/2026-09-24-redesenho-e2-mesa-de-atendimento.md` e seis subplanos
+(`...-e2-1-fundacao.md`, `...-e2-2-base-de-dialogo.md`, `...-e2-3-moldura-menu-lista.md`,
+`...-e2-4-conversa-e-paineis.md`, `...-e2-5-overlays.md`, `...-e2-6-fechamento-e-previa.md`),
+aguardando a revisão do proprietário. A E1 e a E1.1 já foram publicadas (ver seção 10). As etapas E3
+a E7 ganham plano próprio depois do checkpoint da E2 (seção 11).
 
 ---
 
@@ -110,7 +112,7 @@ branca se o pacote principal não baixa — estão no Apêndice C.3, com dono.
 | P5 | **Um vocabulário de estado** (Em atendimento, Em espera, Em automação, Encerrado), definido num módulo e usado em toda tela. | Hoje são 4 mapeamentos diferentes para o mesmo estado. |
 | P6 | **Informação sob demanda, em painel, nunca por cima da conversa.** | Invariante homologado; é também o que o WhatsApp faz com os dados do contato. |
 | P7 | **Desempenho é critério de aceite de toda etapa.** | Safari rebaixa tudo; a lentidão das máquinas i3 era JavaScript e rede, não pintura (Etapa 5). |
-| P8 | **Estado e ação têm forma, não só cor.** Ativo × inativo por peso de ícone (preenchido × contorno); presença por ponto cheio × vazado; lido × entregue por cor **e** rótulo acessível. | Regra de acessibilidade do projeto ("estado nunca só por cor"), hoje violada nos tiques. |
+| P8 | **Estado e ação têm forma, não só cor.** Ativo × inativo por **barra de 3 px + fundo selecionado** (o ícone é sempre contorno — decisão 3, seção 14.1); presença por ponto cheio × vazado; lido × entregue por cor **e** rótulo acessível. | Regra de acessibilidade do projeto ("estado nunca só por cor"), hoje violada nos tiques. |
 | P9 | **Toda interação responde.** Hover, pressionado (hoje não existe em lugar nenhum), foco e seleção têm estado visível e coerente. | "Sem vida" é, em parte, controle que não reage ao toque. |
 
 ### 5.2 Cor — três funções
@@ -213,14 +215,14 @@ elas, medido) e de **alinhamento** — o filete de 3 px que existia só porque a
   carrega 47 dos 48 ícones sem usar nenhum, por três importações (`App.jsx` e `ProtectedRoute.jsx`
   via `navItems.js`; `AccessDeniedPage.jsx` via `WaIcons`). Separar essas três dá **−4,7 KB gzip no
   login** (medido duas vezes, por caminhos independentes) — com qualquer família.
-- **Uma família profissional, vendorizada** como SVG inline, **Phosphor 2.1.1** (recomendada; o ponto
-  de decisão do proprietário está no Apêndice D.3), só com os ícones usados, em **três módulos gerados
-  por camada** — `IconesEntrada.js` (cadeado), `IconesTrabalho.js` (casca + mesa),
-  `IconesConfig.js` (lazy) —, com o arquivo de licença ao lado — mesma disciplina das fontes.
-  **Sem dependência npm em runtime.** Números, tensão qualidade × bytes e mapeamento completo:
-  Apêndice D (`2026-09-24-redesenho-apendice-D-iconografia.md`).
-- **Tamanhos:** 16 (inline em texto), 20 (botões e cabeçalhos), 24 (menu). **Peso regular** para
-  estado normal e **preenchido** para ativo/selecionado (P8).
+- **Uma família profissional, vendorizada** como SVG inline, **Tabler 3.48.0, só contorno** (decisão
+  3 do proprietário, seção 14.1), só com os ícones usados, em **três módulos gerados por camada** —
+  `IconesEntrada.js` (cadeado), `IconesTrabalho.js` (casca + mesa), `IconesConfig.js` (lazy) —, com
+  o arquivo de licença ao lado — mesma disciplina das fontes. **Sem dependência npm em runtime.**
+  Números e mapeamento completo: Apêndice D (`2026-09-24-redesenho-apendice-D-iconografia.md`).
+- **Tamanhos:** 16 (inline em texto), 20 (botões e cabeçalhos), 24 (menu). **Nenhum ícone
+  preenchido:** ativo e selecionado se marcam por barra de 3 px + fundo `--color-selecionado`
+  (P8); botão de painel aberto, por fundo selecionado + `aria-expanded`.
 - **Emoji como ícone sai** (prévia da lista hoje usa "📷 Foto", "🎤 Áudio"…): vira ícone da família
   + texto. Glifos soltos (`✕`, `⚠`, `×`, `←`) viram ícones.
 - Marcas de terceiros (WhatsApp `#25D366`, Meta, 360dialog) **não mudam** — SVG inline, nunca
@@ -268,7 +270,8 @@ selecionado/painel ≥ 1,2:1; hover/painel ≥ 1,08:1; linha/painel ≥ 1,3:1.
   **Ordem:** topo — marca (símbolo 32 px), Atendimento, Encerrados (só atendente), Supervisão,
   Campanhas, Relatórios; base — Configurações, Som da fila, indicador "Reconectando…" (quando
   houver), Conta (avatar → Meu perfil, Sair).
-  **Ativo:** ícone preenchido na cor do acento + barra de 3 px à esquerda (forma + cor, P8).
+  **Ativo:** barra de 3 px do acento à esquerda + fundo `--color-selecionado` + ícone (contorno) na
+  cor do acento, com `aria-current="page"` (forma + cor, P8; decisão 3).
 - O preferido `useNavCollapsed` deixa de existir para o desktop; `useWorkspaceLayout` continua medindo
   a largura real (o menu passa a ter largura fixa, o que só simplifica).
 
@@ -319,7 +322,7 @@ selecionado/painel ≥ 1,2:1; hover/painel ≥ 1,08:1; linha/painel ≥ 1,3:1.
   setor · telefone · protocolo · localidade. **Ações à direita:** Assumir (primário, acento — só sem
   responsável), Transferir (secundário, ícone + rótulo), Encerrar (secundário neutro), divisória,
   e os botões de ícone **Histórico, SGP, Cliente** (SGP e Cliente alternam painel com `aria-expanded`
-  e ficam com ícone preenchido quando abertos; Histórico abre diálogo, com `aria-haspopup="dialog"`). **A barra de contexto sai** (o setor aparecia nela pela terceira vez). *Estrutural.*
+  e ficam com fundo `--color-selecionado` quando abertos; Histórico abre diálogo, com `aria-haspopup="dialog"`). **A barra de contexto sai** (o setor aparecia nela pela terceira vez). *Estrutural.*
 - **Linha do tempo:** fundo `--color-fundo` liso (sai o gradiente). Nota "Este atendimento fica
   registrado…" vira texto de 12 px sem pílula. Separador de dia: pílula pequena neutra.
   "Carregar mensagens anteriores": botão secundário pequeno. Carregando/erro: mantêm texto e papel
@@ -381,8 +384,9 @@ herdam a pele nova da base na E2 e ganham a reestruturação própria na etapa d
   (o `index.css` repete via token) e o fallback do `Shell` desenhado como **esqueleto com a forma da
   mesa** (trilho + lista + conversa) em tokens — contraste ≥ 1,5:1 sobre o fundo real.
 - **(b)** `ClosedConversationsModal` passa a `lazy` no `SideNav`: a camada da casca cai de 164,6 KB
-  para ~25,7 KB (medido em build simulado). Se a decisão 10 (14.1) escolher Encerrados como vista
-  da coluna da lista, o menu deixa de importar o modal e o mesmo ganho vem da estrutura. `DashboardPage` continua importando `ConversationView`
+  para ~25,7 KB (medido em build simulado). A decisão 10 (14.1) manteve Encerrados como **diálogo**
+  (mestre-detalhe), então o `lazy` é o caminho — e a E2 já o faz, porque reescreve o diálogo; a E3
+  confere o ganho no harness. `DashboardPage` continua importando `ConversationView`
   estaticamente — a primeira conversa abre sem espera.
 - **(c)** Plugin de build pequeno injeta no `index.html` um script inline (ES5, `try/catch`) que, **só
   com sessão salva**, adiciona `<link rel="modulepreload">` para os trechos da casca e da rota atual
@@ -421,7 +425,7 @@ homologadas; `@container` nos diálogos e no cabeçalho; `aria-live` ≠ `role="
 | Etapa | Entrega | Publica sozinha | Resolve |
 |---|---|---|---|
 | **E1** Correções urgentes — **PUBLICADA** (`e5236da`, 24/09/2026) | Cinco ocorrências da classe "resposta em trânsito voltando com outra conversa na tela": corrida do SGP, mesmo contato em dois canais, "carregar anteriores" que nunca funcionou, bolha na conversa errada, compositor trancado. Registro em Obsidian `Bugs` (CLASSE-01, BUG-006) | publicada | parte de (e) |
-| **E1.1** Rolagem ao carregar anteriores — branch `fix/e1-1-rolagem-ao-carregar-anteriores` (`588dbbd`), **aguardando autorização de publicação** | O clique em "carregar anteriores" jogava a linha do tempo para o fim; agora a mensagem do topo fica no lugar (âncora por elemento, segura enquanto fotos carregam, com e sem ancoragem nativa); a carga inicial não apaga mais a mensagem que chegou pelo socket; o pedido de anteriores desiste em 20 s. Duas revisões independentes, tudo provado no Chrome real (Apêndice C.2) | sozinha | parte de (e) |
+| **E1.1** Rolagem ao carregar anteriores — **PUBLICADA** (merge `fee5cc2`, 24/09/2026) | O clique em "carregar anteriores" jogava a linha do tempo para o fim; agora a mensagem do topo fica no lugar (âncora por elemento, segura enquanto fotos carregam, com e sem ancoragem nativa); a carga inicial não apaga mais a mensagem que chegou pelo socket; o pedido de anteriores desiste em 20 s. Duas revisões independentes, tudo provado no Chrome real (Apêndice C.2) | sozinha | parte de (e) |
 | **E0** Prova e guardas — plano `docs/superpowers/plans/2026-09-24-redesenho-e0-prova-e-guardas.md` | Harness e verificador do inventário versionados em `ferramentas/` (branch `ferramentas/medicao-e-inventario`, pronta); testes que protegem os cinco ganhos; testes de conteúdo da variante `compact`; as 5 falhas antigas corrigidas (asserções); inventário remapeado para a base nova; linha de base com tempo registrada | sim (sem mudança de runtime) | — |
 | **E2** Mesa de atendimento | Seção 6 inteira (com a base de diálogo e os 18 overlays do Apêndice E), tokens, ícones (Apêndice D), Inter única, `MessageBubble` com memo, CSS da conversa com o componente, `qrcode` sob demanda, chip do próprio nome, aviso de transferência | sim — **checkpoint** | — |
 | **E3** Casca e carregamento | Seção 7 | sim | (a) (b) (c) |
@@ -438,12 +442,13 @@ carregamento; a antiga E5 (diálogos) deixa de existir como etapa separada — a
 
 ## 11. Checkpoint da E2
 Ao fim da E2 a mesa é entregue **funcionando, com dados reais**, antes de qualquer outra etapa
-visual. Mecanismo recomendado: uma **prévia publicada** — site estático separado no Render construído
-da branch da E2, com `VITE_API_BASE_URL` apontando para a API de produção e a origem da prévia
-acrescentada a `FRONTEND_ORIGIN` (a variável já aceita lista — só configuração, código do backend
-intocado). O proprietário entra com a conta dele e usa a mesa de verdade. Alternativa: publicar em
-produção com ponto de rollback pronto. **A escolha é do proprietário** e precisa de autorização para
-mexer na configuração do Render. Se a direção não for a esperada, corrige-se a E2 antes de seguir.
+visual. **Mecanismo decidido (decisão 2, seção 14.1): prévia publicada** — site estático separado no
+Render construído da branch da E2, com `VITE_API_BASE_URL` apontando para a API de produção e a origem
+da prévia acrescentada a `FRONTEND_ORIGIN` (a variável já aceita lista — só configuração, código do
+backend intocado). O proprietário entra com a conta dele e usa a mesa de verdade; a produção dos 10
+atendentes não muda. Criar o site e mexer na variável do backend são passos no painel do Render que o
+proprietário autoriza na hora (o plano da E2 traz o roteiro). Se a direção não for a esperada,
+corrige-se a E2 antes de seguir.
 
 ## 12. Medição, orçamentos e prova
 
@@ -514,25 +519,25 @@ harness (elementos por item, linhas do cabeçalho, controles por barra) sustenta
 - **Fora de escopo:** ligar o `brandColor` do backend (preparação é aceite); a lista de atendimentos
   anteriores além de 50 (`LIMIT 50` no backend; o detalhe pagina na E4, só frontend); dívida R7 do `Button` (as áreas mudam cor, não tamanho, sem mexer no contrato).
 
-### 14.1 Decisões que dependem do proprietário
+### 14.1 Decisões do proprietário (24/09/2026)
 
-| # | Decisão | Onde | Sem resposta |
+| # | Decisão | Razão (do proprietário) | Onde vale |
 |---|---|---|---|
-| 1 | Publicar a E1.1 | seção 10; Apêndice C.2 | não publica |
-| 2 | Checkpoint da E2: prévia separada no Render (com `FRONTEND_ORIGIN` ampliada — configuração, código do backend intocado) **ou** produção com ponto de rollback | seção 11 | a E2 para no checkpoint até a escolha |
-| 3 | Item ativo do menu com **ícone preenchido** (Phosphor, +2,8 KB em "/") ou **só barra + fundo** (Tabler, −2,8 KB e mais legível a 16 px) | Apêndice D.3 | segue com a Phosphor |
-| 4 | Pode sair cobrança do SGP (Pix, QR, código, PDF) a partir de um atendimento **encerrado**? Se não, a E2 deixa o painel só-leitura em conversa encerrada; a guarda no backend é área protegida e precisaria de autorização | Apêndice C.3 (CV-SGP-33) | nada some (restrição 3): o envio continua e a E2 acrescenta no painel o aviso "Atendimento encerrado — a cobrança vai direto ao cliente" |
-| 5 | "Senha atual errada desloga" (PRF-12) corrigido **já**, como correção isolada no modelo da E1, ou dentro da E4 | Apêndice C.3 | fica na E4 |
-| 6 | Menu em **trilho único de 64 px** em qualquer rota, sem o modo expandido de 196 px nem os títulos de grupo (os rótulos vão para a dica e o nome acessível) — mudança de hábito que merece o seu ok explícito | seção 6.1; Apêndice B.1 | segue como no spec |
-| 7 | Níveis de carga no Transferir: "N atendimentos" + "Carga alta" a partir de 10, saindo "Disponível", "Em atendimento" e "Movimentado" | Apêndice E.4 | 4 níveis em texto neutro, "Em atendimento" renomeado |
-| 8 | Legendas do catálogo de motivos só onde acrescentam (2 de 9) | Apêndice E.4 | mantém as 9 |
-| 9 | Resposta rápida sobre texto digitado: preenche se vazio, insere no cursor se não (hoje substitui) | Apêndice E.4 | mantém substituir |
-| 10 | Encerrados: vista da coluna da lista (A), diálogo mestre-detalhe (B) ou popup como hoje (C) | Apêndice E.4; seção 7(b) | (C) |
-| 11 | Aviso de transferência: marca na lista (A) ou aviso fixo na coluna da lista (B) | Apêndice E.4 | (B) |
+| 1 | **E1.1 publicada** (merge `fee5cc2`) | — | seção 10; Apêndice C.2 |
+| 2 | Checkpoint da E2 numa **prévia separada no Render** (site estático próprio, `VITE_API_BASE_URL` da API de produção, a origem da prévia acrescentada a `FRONTEND_ORIGIN` — configuração, código do backend intocado) | 10 atendentes trabalhando e a E2 reescreve a mesa inteira: olhar sem arriscar a operação. Rollback é rede de segurança, não plano | seção 11 |
+| 3 | Ícones **Tabler**; item ativo do menu por **barra + fundo**, sem ícone preenchido | o Safari rebaixa tudo a cada carga; 2,8 KB no caminho crítico não se pagam com ícone preenchido, e barra e fundo comunicam o ativo igualmente bem | Apêndice D; seção 6.1 |
+| 4 | Cobrança do SGP a partir de atendimento encerrado: **o envio continua**, com o aviso "Atendimento encerrado — a cobrança vai direto ao cliente" no painel | bloquear criaria um caminho novo de falha num fluxo financeiro que hoje funciona | Apêndice C.3 (CV-SGP-33); E2 |
+| 5 | "Senha atual errada desloga" (PRF-12) corrigido **já, isolado**, no modelo da E1 | atinge qualquer atendente hoje; esperar a E4 é semanas | Apêndice C.3; branch própria |
+| 6 | Menu em **trilho único de 64 px**, sem modo expandido | uma forma só é mais fácil de acertar que duas; o modo expandido era parte da desorganização | seção 6.1; Apêndice B.1 |
+| 7 | Transferir: carga como **número + "Carga alta"** a partir de 10 | quatro rótulos são quatro coisas para decorar; número é direto | Apêndice E.2 |
+| 8 | Catálogo de motivos: **só as 2 legendas** que acrescentam (Financeiro, Suporte técnico) | legenda que repete o título é ruído | Apêndice E.2 |
+| 9 | Resposta rápida sobre texto digitado: **insere no cursor** (campo vazio: preenche) | apagar o que a pessoa escreveu é destruir trabalho sem confirmação | Apêndice E.2 |
+| 10 | Encerrados: **diálogo mestre-detalhe** (lista à esquerda, conversa à direita, um diálogo só) | a vista na coluna competiria com a fila ativa, que é o trabalho principal; e o popup de hoje é o que carrega a `ConversationView` pela barra lateral | Apêndice E.2; seção 7(b) |
+| 11 | Aviso de transferência: **marca na lista** (não lida + "Transferido por Fulano" na linha, texto na região viva) | aviso fixo na coluna ocupa espaço permanente por um evento pontual | Apêndice E.2 |
 
 ## Apêndices
 - **A** — Inventário completo de telas e estados, com etapa dona — `2026-09-24-redesenho-apendice-A-inventario.md` (pronto: 1.708 estados, 0 falhas, 0 linhas sem conferência; amostra independente: 0 erro em 58 linhas).
 - **B** — Para onde vai o que sai da vista principal — `2026-09-24-redesenho-apendice-B-destinos.md` (pronto para a E2; cada etapa acrescenta a sua tabela antes de implementar).
 - **C** — Achados da auditoria e etapa dona — `2026-09-24-redesenho-apendice-C-achados.md` (pronto; listas geradas do inventário verificado).
-- **D** — Iconografia: família escolhida e mapeamento — `2026-09-24-redesenho-apendice-D-iconografia.md` (pronto, conferido).
+- **D** — Iconografia: família (Tabler, decisão 3) e mapeamento — `2026-09-24-redesenho-apendice-D-iconografia.md`.
 - **E** — Overlays da mesa: mudanças estruturais por item — `2026-09-24-redesenho-apendice-E-overlays.md` (pronto: base única, 18 overlays, 141 S × 49 C; detalhe nos anexos `2026-09-24-redesenho-apendice-E-anexos/`).

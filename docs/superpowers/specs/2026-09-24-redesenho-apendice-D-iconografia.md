@@ -1,62 +1,37 @@
 # Apêndice D — Iconografia: família, arquitetura e mapeamento
 
 > Parte do spec `2026-09-24-redesenho-simplicidade-design.md` (seção 5.6). Base medida: `e5236da`.
-> Fonte: auditoria de iconografia de 24/09/2026 (relatório e pranchas no pacote de trabalho da E2),
-> **conferida de forma independente** antes de entrar aqui — ver D.7.
+> **Família decidida pelo proprietário em 24/09/2026 (decisão 3, seção 14.1): Tabler 3.48.0, só
+> contorno, com o item ativo marcado por barra de 3 px + fundo.** A entrega (módulos, licença,
+> mapeamento e pranchas) foi feita por subagente e **conferida de forma independente** — ver D.8.
 
-## D.1 Decisão recomendada, em uma frase
+## D.1 A decisão, em uma frase
 
-**Corrigir primeiro a arquitetura dos ícones (vale para qualquer família) e vendorizar a Phosphor 2.1.1,
-peso regular, em três módulos por camada.** O único ponto que ainda depende do proprietário está em D.3.
+**Corrigir a arquitetura dos ícones (vale para qualquer família) e vendorizar a Tabler 3.48.0, contorno
+de traço 2, em três módulos por camada, sem nenhum ícone preenchido.** Razão do proprietário: o Safari
+rebaixa tudo a cada carga, e 2,8 KB no caminho crítico não se pagam com ícone preenchido — barra e
+fundo comunicam o ativo igualmente bem.
 
-## D.2 A tensão qualidade × bytes, com os números reais
-
-A estimativa anterior ("~5 KB a mais que a Lucide") estava errada: misturava conjuntos diferentes
-(8 preenchidos numa família, 5 noutra, nenhum na terceira) e não separava camadas. Medido em build
-real, migração completa, arquitetura corrigida, em relação a hoje:
+## D.2 Os números (build real, migração completa, arquitetura corrigida, contra hoje)
 
 | Variante | Login (gzip) | "/" (gzip) |
 |---|---|---|
-| Só a arquitetura, ícones atuais | **−4.694 B** | +492 B |
-| **Phosphor, precisão por ícone** | **−4.595 B** | **+2.364 B** |
-| Tabler | −4.617 B | −457 B |
-| Lucide | −4.635 B | −1.186 B |
-| Heroicons | −4.604 B | +1.790 B |
+| Só a arquitetura, ícones atuais | −4.694 B | +492 B |
+| **Tabler, entrega final (contorno, Pix da Simple Icons)** | **−4.506 B** | **−879 B** |
+| Phosphor, entrega com preenchidos (não escolhida) | −4.576 B | +2.429 B |
 
-- **No login a família não pesa nada** — todas ficam em −4,6 KB, porque o ganho vem da arquitetura.
-- **Em "/"** a Phosphor custa **+2,8 KB sobre a Tabler** e **+3,5 KB sobre a Lucide** (≈14–18 ms por
-  carga a 1,6 Mbit/s). Não são 5 KB.
-- **Trocar de família sem corrigir a arquitetura piora o login** (Phosphor: +2.745 B), porque hoje o
-  módulo inteiro de ícones está no chunk de entrada.
+- **No login a família quase não pesa** — o ganho vem da arquitetura (D.4).
+- **Em "/" a Tabler final economiza 3,3 KB contra a Phosphor** com preenchidos e fica 879 B abaixo de
+  hoje: trocar todos os ícones do produto **reduz** o que a mesa baixa.
+- Traço 2 na grade 24: a 16 px dá ~1,33 px, mais legível que o de 1 px da Phosphor; nos usos de
+  12–13 px fica ~1,1 px e continua legível (prancha `tamanho-de-uso-zoom4x.png`).
 
-**Phosphor × Lucide — a diferença justifica, e não por gosto:** a Lucide não tem nenhum ícone
-preenchido (não cumpre P8 no menu), não tem Pix nem PDF, e é o visual padrão de Feather/shadcn — o
-"genérico" de que o proprietário se queixa. A comparação real é com a Tabler.
+## D.3 O estado ativo sem preenchido
 
-**Phosphor × Tabler — margem estreita, e é honesto dizer onde a Tabler ganha:**
-
-| | Phosphor 2.1.1 | Tabler 3.48.0 |
-|---|---|---|
-| Bytes em "/" | +2,8 KB | referência |
-| Legibilidade a 16 px | traço de 1 px — **mais fina**; detalhes pequenos somem (o check de "assumir", as lentes do binóculo) | traço de 1,33 px — **mais legível** |
-| Preenchido nos 5 itens do menu | 5/5 | 3/5 — sem megafone preenchido (Campanhas); barras sem preenchido (Relatórios; `chart-pie` teria, mudando a metáfora) |
-| Cobertura dos 83 significados | 83/83 | 49/83 com preenchido; sem Pix |
-| Pix | `pix-logo` | não tem — ficaria o SVG próprio de hoje |
-| Identidade | a mais distinta das quatro | "admin template" |
-
-Compensação da legibilidade da Phosphor: 18–20 px no menu e nos cabeçalhos (onde já estão); 16 px só
-para ícone ao lado de texto.
-
-## D.3 O ponto que é do proprietário
-
-P8 diz "ativo × inativo por peso de ícone (preenchido × contorno)". No menu, porém, **a barra de 3 px
-do acento já dá a forma** que a acessibilidade exige; o preenchido é reforço visual, não requisito.
-
-- **Mantém o preenchido no item ativo** → Phosphor (+2,8 KB em "/"). **É a recomendação.**
-- **Aceita ativo só por barra + fundo** → a Tabler passa a ser a escolha racional: 2,8 KB a menos por
-  carga e traço mais legível a 16 px, ao preço de um Pix próprio e de um visual mais comum.
-
-Sem resposta, a E2 segue com a Phosphor.
+P8 exige forma além de cor. No menu a forma é a **barra de 3 px do acento** + o fundo
+`--color-selecionado` + `aria-current="page"`; o ícone continua contorno, na cor do acento. Nos
+botões que alternam painel (SGP, Cliente) a forma é o fundo selecionado + `aria-expanded`. **Não
+existe `*Fill` em nenhum módulo.**
 
 ## D.4 Arquitetura (entra na E2, independe da família)
 
@@ -68,26 +43,56 @@ Hoje o chunk de entrada — baixado no login e na tela "Sem acesso" — carrega 
 3. `AccessDeniedPage.jsx` importa `IconLock` de `WaIcons`.
 
 Correção: `hasLevel`, `SETTINGS_BASE` e `LEGACY_REDIRECTS` vão para `navigation/rotas.js` (sem ícone);
-o cadeado da "Sem acesso" vem de um módulo só dele; os ícones de grupo em `navItems` viram booleano
-(o desenho real já vem de `SettingsVisuals`). **Resultado medido: login −4,7 KB gzip, "/" +0,5 KB.**
+o cadeado da "Sem acesso" vem de `IconesEntrada.js`; os ícones de grupo em `navItems` viram booleano
+(o desenho real já vem de `SettingsVisuals`). **Medido: login −4,7 KB gzip.**
 
-Módulos da família (gerados a partir do pacote, nunca editados à mão):
+Módulos (gerados a partir do pacote, **nunca editados à mão**; o cabeçalho de cada um diz como
+regenerar):
 
-| Módulo | Conteúdo | gzip isolado | Onde carrega |
+| Módulo | Conteúdo | gzip (minificado, no build) | Onde carrega |
 |---|---|---|---|
-| `IconesEntrada.js` | cadeado | 368 B | entrada (Sem acesso) |
-| `IconesTrabalho.js` | 62 contornos + 5 preenchidos do menu + spinner | 6.869 B (6.543 B no build) | casca + mesa ("/") |
-| `IconesConfig.js` | 19 ícones só de Configurações | 2.426 B (1.622 B no build) | lazy, com Configurações |
+| `IconesEntrada.js` | cadeado | dentro da entrada | entrada (Sem acesso) |
+| `IconesTrabalho.js` | 65 ícones da casca e da mesa (reexporta o cadeado) + spinner | ~3,3 KB | casca + mesa ("/") |
+| `IconesConfig.js` | 18 ícones só de Configurações | ~0,85 KB | lazy, com Configurações |
+
+**Ajuste de 24/09, depois da entrega:** o `IconSpark` (ícone da IA) saiu de `IconesConfig` para `IconesTrabalho` — a E2 o usa em quatro pontos da mesa (linha da Automação, sugestão da IA, bolha "Assistente IA", "Sugerido pela IA"), e importá-lo de Configurações puxaria esse módulo inteiro para "/". As duas fábricas de caminho são idênticas: a linha mudou de arquivo sem mudar um byte do desenho; a verificação de pixels foi repetida (84 exports, 0 falhas) e os hashes de `SHA256SUMS` são os novos. Os pesos da tabela acima eram de antes do ajuste (≈60 B passam de um módulo ao outro).
 
 Precisão dos caminhos ajustada por ícone: a menor que não muda nenhum pixel acima de 64/255 a
-16/20/24 px (−0,99 KB contra precisão fixa). Os 89 exports foram renderizados e comparados pixel a
-pixel com o SVG do pacote: 0 falhas.
+16/20/24 px (82 ícones: 32 com 0 casas, 39 com 1, 8 com 2, 3 com 3; 16 com traços em caminhos
+separados). Os 84 exports foram renderizados pelo próprio módulo e comparados pixel a pixel com o SVG
+do pacote: **0 falhas**.
 
-**Cuidados:** os preenchidos de `x`, `plus`, `checks` e `caret` são quadrado cheio ou triângulo —
-**nunca** usar como estado ativo; preenchido existe só nos 5 do menu. O traço da Phosphor é fixo
-(1,5 na grade 24): a convenção de traço 1,75 do `WaIcons` deixa de valer.
+**Onde os módulos moram:** `frontend/src/components/icons/` (`IconesEntrada.js`, `IconesTrabalho.js`,
+`IconesConfig.js`, `LICENSE-Tabler.txt`); a marca Pix em `frontend/src/assets/brands/pix.svg`, com uma
+linha no README de marcas, igual ao WhatsApp. `WaIcons.jsx` e `SgpIcons.jsx` deixam de desenhar: na
+E2 viram reexportações finas dos módulos (os 100+ pontos de import não mudam de uma vez) e somem na
+E7, quando o último import for trocado.
 
-## D.5 Defeitos do conjunto atual que a troca resolve
+## D.5 Lacunas e onde a Tabler fica pior que hoje
+
+- **Pix — a única lacuna dos 83 significados.** O `IconPix` de hoje é um desenho próprio em
+  `SgpIcons.jsx`, sem procedência: 4 quadrados girados, que **imitam** o símbolo do Pix. Opções
+  medidas (acréscimo no módulo de trabalho): manter a imitação +48 B; `currency-real` da Tabler +55 B
+  (diz "dinheiro", não Pix); `pix-logo` da Phosphor +139 B (traço 1,5 e segunda licença); **marca Pix
+  da Simple Icons 16.0.0, +233 B, forma oficial, CC0** (conferida contra o pacote do npm, sha512
+  igual). **Escolhida a Simple Icons:** é a política das outras marcas de terceiros (forma oficial,
+  preenchida, como WhatsApp e Meta) e custa 185 B a mais que a imitação. *Não verificado:* se o
+  manual da marca Pix do Banco Central aceita a versão monocromática em `currentColor`; se exigir a
+  cor oficial, é `fill="#32BCAD"` nesse ícone (isento da regra do acento, como toda marca).
+- **Código de barras (pior que hoje):** o `barcode` da Tabler é um quadro de leitura; a 16 px, no
+  painel SGP, lê como "escanear". `file-barcode`, `receipt` e `file-invoice` não são melhores. Fica o
+  `barcode` porque continua distinto de PDF e QR na mesma fileira, e o rótulo "Boleto" vai ao lado.
+- **Robô (leve):** a 16 px fica mais carregado; a 20–22 px, onde é usado, está bom.
+- **Entregue/lido (leve):** `checks` é mais largo que os tiques de hoje; `aria-label` e cor (spec 6.3)
+  seguem distinguindo.
+- **Trocas dentro da Tabler, por legibilidade na prancha:** Atendimento `messages` → `message-circle`
+  (os dois balões se fundem a 16 px); Supervisão `binoculars` → `device-desktop-analytics` (some a
+  19 px); Carga `antenna-bars-5` → `gauge` (quase some a 13 px); Enviar `send` → `send-2` (horizontal,
+  como hoje). Os exports `IconSupervision` e `IconSignal` mantêm o nome.
+- **Contorno em geral:** a interface fica mais leve que com os preenchidos de hoje — consequência da
+  decisão, mais visível no botão Enviar (que continua no acento, spec 6.3).
+
+## D.6 Defeitos do conjunto atual que a troca resolve
 
 - Seis espessuras de traço convivendo (1,75 a 2,1), mais preenchidos.
 - Um significado com vários desenhos: "fechar" com 5 formas (2 SVGs, `✕` ×2, `×`); "abrir" com 6;
@@ -96,22 +101,23 @@ pixel com o SVG do pacote: 0 falhas.
   tem 5 significados; `IconHistory` é quase igual a `IconClock`.
 - Desenhos com defeito: `IconMegaphone` (Campanhas) é o ícone de volume; `IconTransfer` com pontas
   invadindo a haste; `IconSettings` 1 unidade fora do centro; `IconClaim` (Assumir) é um "✓" solto;
-  `IconPdfFile` com `#fff` fixo, ilegível a 16 px.
+  `IconPdfFile` com `#fff` fixo, ilegível a 16 px; **`IconLogout` desenha a seta entrando na porta**
+  (é o ícone de "entrar").
 - Emoji na prévia da lista (📷 🎤 🎥 📄 😀 📍 💠): o desenho muda por sistema e ignora o tema.
 - Glifos como ícone: `⚠` ×2, `×`, `✕` ×2, `!`, `−`/`+` do zoom, `⌄`, `›` ×2, `←` ×2.
 - **Licença:** `IconClose` é cópia literal do "close" do Material Icons (Apache-2.0), e Refresh, Edit,
   Search, ArrowLeft, Send e Mic derivam dele — o repositório não tem a licença nem NOTICE. A troca
   elimina a pendência.
 
-## D.6 Licença
+## D.7 Licença
 
-Phosphor Icons é MIT, © 2023 Phosphor Icons: manter o aviso e a permissão junto de toda cópia; não
+Tabler Icons é MIT, © 2020-2026 Paweł Kuna: manter o aviso e a permissão junto de toda cópia; não
 exige atribuição na interface; permite uso comercial e white-label. Arquivo
-`frontend/src/components/icons/LICENSE-Phosphor.txt` (mesmo padrão de `OFL-Inter.txt`) e comentário
-`/** @license Phosphor Icons 2.1.1 — MIT — (c) 2023 Phosphor Icons */` nos módulos gerados (o build
-preserva `@license`; ~80 B).
+`frontend/src/components/icons/LICENSE-Tabler.txt` (mesmo padrão de `OFL-Inter.txt`) e o comentário
+`/** @license Tabler Icons 3.48.0 | MIT | … */` nos três módulos (conferido: sobrevive à minificação).
+A marca Pix da Simple Icons é CC0 (sem obrigação) e é registrada no README de marcas.
 
-## D.7 O que foi conferido de forma independente (e como)
+## D.8 O que foi conferido de forma independente (e como)
 
 Regra do projeto desde 24/09: saída de subagente não entra em documento sem conferência.
 
@@ -120,133 +126,135 @@ Regra do projeto desde 24/09: saída de subagente não entra em documento sem co
 | Ícones no chunk de entrada | busca dos caminhos SVG de 6 ícones no `index-*.js` do build `e5236da` | 6/6 presentes |
 | Três importações causam isso | leitura de `App.jsx`, `ProtectedRoute.jsx`, `AccessDeniedPage.jsx`, `navItems.js` | confirmado |
 | Arquitetura dá −4,7 KB no login | build próprio numa cópia do `e5236da` só com as três mudanças | 87.534 → 82.862 B = **−4.672 B** (relatório: −4.694) |
-| Tamanho dos módulos | minificação própria (esbuild) + gzip-9 | 382 / 6.936 / 2.467 B (relatório, com terser: 368 / 6.869 / 2.426) |
-| `IconClose` = Material "close" | comparação do caminho com o do Material | idêntico |
-| Cobertura das famílias | listagem dos pacotes | Phosphor com `megaphone`, `chart-bar`, `pix-logo`, `file-pdf`, `binoculars` em regular e fill; Tabler sem `speakerphone` e sem `chart-bar` preenchidos, e sem Pix; Lucide sem nenhum preenchido e sem Pix |
-| Legibilidade a 16 px | leitura própria da folha de 16 px ampliada | Phosphor visivelmente mais fina que Tabler e Lucide |
+| 0 falhas de pixel nos 84 exports | rodei de novo o `verif-tabler.mjs` (SSR de cada export a partir dos arquivos entregues × SVG do pacote, 16/20/24 px) | 84 verificados, 0 acima de 64/255; maior desvio 64 (IconChart) |
+| Login −4.506 B e "/" −879 B | conta sobre os resultados do mesmo pipeline (linha de base `v-atual5`: login 87.534, "/" 158.284; Tabler final: 83.028 e 157.405) | confirmado |
+| Mapeamento coerente com os módulos | exports dos três módulos × coluna "Export" da tabela D.9 | todos presentes |
+| Folha final e tamanhos de uso | leitura própria de `folha-final-2x.png` e `tamanho-de-uso-zoom4x.png` | traço único, nenhum preenchido fora do Pix; as trocas da D.5 se justificam na prancha |
 
-Não reproduzido por mim: a medição por família em "/" (D.2) e a comparação de pixels dos 89 exports.
+Não reproduzido por mim: o build de cada família (usei os resultados do pipeline) e o sha512 do pacote
+da Simple Icons.
 
-## D.8 Mapeamento completo (atual → Phosphor)
+## D.9 Mapeamento completo (atual → Tabler)
 
 "Módulo" diz em qual dos três módulos o ícone entra. "—" = fica como está (marcas de terceiros,
-ilustração de vazio, miniatura de documento, marca do login).
+ilustração de vazio, miniatura de documento, marca do login). Contorno = `icons/outline/<nome>.svg`
+do pacote `@tabler/icons` 3.48.0, traço 2.
 
-| Atual | Significado | Contorno | Preenchido | Export | Módulo |
-|---|---|---|---|---|---|
-| WaIcons.IconSearch | busca | `magnifying-glass` |  | IconSearch | Trabalho |
-| WaIcons.IconNewChat | adicionar | `plus` |  | IconNewChat | Trabalho |
-| WaIcons.IconChevronDown | chevron-baixo | `caret-down` |  | IconChevronDown | Trabalho |
-| WaIcons.IconArrowLeft | voltar | `arrow-left` |  | IconArrowLeft | Trabalho |
-| WaIcons.IconHistory | historico | `clock-counter-clockwise` |  | IconHistory | Trabalho |
-| WaIcons.IconTransfer | transferir | `arrows-left-right` |  | IconTransfer | Trabalho |
-| WaIcons.IconCheckCircle | encerrar (ConversationListItem, ConversationView, ChannelsTable) | `check-circle` |  | IconCheckCircle | Trabalho |
-| WaIcons.IconCheckCircle | encerrados (SideNav) | `archive` |  | IconArchive | Trabalho |
-| WaIcons.IconClaim | assumir | `user-check` |  | IconClaim | Trabalho |
-| WaIcons.IconClose | fechar | `x` |  | IconClose | Trabalho |
-| WaIcons.IconAttach | anexo | `paperclip` |  | IconAttach | Trabalho |
-| WaIcons.IconEmoji | emoji | `smiley` |  | IconEmoji | Trabalho |
-| WaIcons.IconQuickReply | resposta-rapida | `lightning` |  | IconQuickReply | Trabalho |
-| WaIcons.IconMic | microfone | `microphone` |  | IconMic | Trabalho |
-| WaIcons.IconSend | enviar | `paper-plane-right` |  | IconSend | Trabalho |
-| WaIcons.IconTrash | lixeira | `trash` |  | IconTrash | Trabalho |
-| WaIcons.IconStop | parar | `stop` |  | IconStop | Trabalho |
-| WaIcons.IconPlay | play | `play` |  | IconPlay | Trabalho |
-| WaIcons.IconPause | pause | `pause` |  | IconPause | Trabalho |
-| WaIcons.IconDownload | download | `download-simple` |  | IconDownload | Trabalho |
-| WaIcons.IconPin | local | `map-pin` |  | IconPin | Trabalho |
-| WaIcons.IconLock | cadeado | `lock-simple` |  | IconLock | Entrada |
-| WaIcons.IconBellOn | sino | `bell` |  | IconBellOn | Trabalho |
-| WaIcons.IconBellOff | sino-mudo | `bell-slash` |  | IconBellOff | Trabalho |
-| WaIcons.IconChart | relatorio | `chart-bar` | `chart-bar-fill` | IconChart / IconChartFill | Trabalho |
-| WaIcons.IconSettings | configuracoes | `gear-six` | `gear-six-fill` | IconSettings / IconSettingsFill | Trabalho |
-| WaIcons.IconLogout | sair | `sign-out` |  | IconLogout | Trabalho |
-| WaIcons.IconTeam | equipe (TeamModal, TeamPanel, navItems) | `users` |  | IconTeam | Trabalho |
-| WaIcons.IconTeam | supervisao (navItems) | `binoculars` | `binoculars-fill` | IconSupervision / IconSupervisionFill | Trabalho |
-| WaIcons.IconWarning | alerta | `warning` |  | IconWarning | Trabalho |
-| WaIcons.IconEmptyChat | — (fica como está) | — | — | — | — |
-| WaIcons.IconChats | atendimento | `chats-circle` | `chats-circle-fill` | IconChats / IconChatsFill | Trabalho |
-| WaIcons.IconUser | cliente | `user` |  | IconUser | Trabalho |
-| WaIcons.IconMegaphone | campanha | `megaphone` | `megaphone-fill` | IconMegaphone / IconMegaphoneFill | Trabalho |
-| WaIcons.IconChannel | canal | `device-mobile` |  | IconChannel | Config |
-| WaIcons.IconSpark | ia | `sparkle` |  | IconSpark | Config |
-| WaIcons.IconRules | regras | `list-checks` |  | IconRules | Config |
-| WaIcons.IconPlug | integracoes | `plugs` |  | IconPlug | Config |
-| WaIcons.IconTags | tag | `tag` |  | IconTag | Trabalho |
-| WaIcons.IconBuilding | empresa | `buildings` |  | IconBuilding | Config |
-| WaIcons.IconUserPlus | adicionar-usuario | `user-plus` |  | IconUserPlus | Config |
-| WaIcons.IconMore | mais-v (TemplatesAdminTab) | `dots-three-vertical` |  | IconMoreVertical | Config |
-| WaIcons.IconMore | mais-h (DataTable, ChannelsTable) | `dots-three` |  | IconMore | Config |
-| WaIcons.IconRefresh | atualizar | `arrow-clockwise` |  | IconRefresh | Trabalho |
-| WaIcons.IconInfo | info | `info` |  | IconInfo | Trabalho |
-| WaIcons.IconFile | template (TemplatesAdminTab, SettingsVisuals) | `file-text` |  | IconFileText | Config |
-| WaIcons.IconFile | arquivo (SgpQueryPage) | `file` |  | IconDocument | Trabalho |
-| WaIcons.IconClock | relogio | `clock` |  | IconClock | Trabalho |
-| WaIcons.IconServer | servidor | `hard-drives` |  | IconServer | Config |
-| WaIcons.IconBrain | ia-cerebro | `brain` |  | IconBrain | Config |
-| WaIcons.IconEdit | editar | `pencil-simple` |  | IconEdit | Config |
-| SgpIcons.IconPix | pix | `pix-logo` |  | IconPix | Trabalho |
-| SgpIcons.IconBarcode | codigo-barras | `barcode` |  | IconBarcode | Trabalho |
-| SgpIcons.IconQrCode | qr | `qr-code` |  | IconQrCode | Trabalho |
-| SgpIcons.IconPdfFile | pdf | `file-pdf` |  | IconPdfFile | Trabalho |
-| SgpIcons.IconInvoiceLink | link | `link` |  | IconInvoiceLink | Trabalho |
-| SgpIcons.IconIdCard | documento-cpf | `identification-card` |  | IconIdCard | Trabalho |
-| SgpIcons.IconClose | fechar | `x` |  | IconClose | Trabalho |
-| SgpIcons.IconSpinner | carregando | `circle-notch` |  | IconSpinnerGlyph | Trabalho |
-| SgpIcons.IconCheck | check | `check` |  | IconCheck | Trabalho |
-| SettingsVisuals.BranchIcon | triagem (SettingsVisuals) | `tree-structure` |  | IconTree | Config |
-| SettingsVisuals.BranchIcon | setores (SettingsVisuals) | `stack` |  | IconStack | Config |
-| SettingsVisuals.MoonIcon | noturno | `moon-stars` |  | IconMoon | Config |
-| SettingsVisuals.PlaceIcon | local | `map-pin` |  | IconPin | Trabalho |
-| Reports.IconConversationCheck | encerrar | `check-circle` |  | IconCheckCircle | Trabalho |
-| Reports.IconClock | relogio | `clock` |  | IconClock | Trabalho |
-| Reports.IconReply | responder | `arrow-bend-up-left` |  | IconReply | Config |
-| Reports.IconUsers | equipe | `users` |  | IconTeam | Trabalho |
-| Reports.IconLayers | setores | `stack` |  | IconStack | Config |
-| Reports.IconInbox | caixa-entrada | `tray` |  | IconInbox | Config |
-| Reports.IconAlert | alerta | `warning` |  | IconWarning | Trabalho |
-| Reports.IconDownload | download | `download-simple` |  | IconDownload | Trabalho |
-| Reports.IconTag | tag | `tag` |  | IconTag | Trabalho |
-| Reports.IconCalendar | calendario | `calendar-blank` |  | IconCalendar | Config |
-| Reports.IconChevron | chevron-baixo | `caret-down` |  | IconChevronDown | Trabalho |
-| TransferModal.IconArrowRight | seta-direita | `arrow-right` |  | IconArrowRight | Trabalho |
-| TransferModal.IconBars | carga | `cell-signal-high` |  | IconSignal | Trabalho |
-| ChannelVisuals.QrStatusIcon | qr | `qr-code` |  | IconQrCode | Trabalho |
-| ChannelVisuals.VisibilityIcon | exibir | `eye` |  | IconEye | Config |
-| ChannelVisuals.MarcaWhatsApp | — (fica como está) | — | — | — | — |
-| ChannelVisuals.MarcaMeta | — (fica como está) | — | — | — | — |
-| Campaigns.atualizar | atualizar | `arrow-clockwise` |  | IconRefresh | Trabalho |
-| Campaigns.nova | adicionar | `plus` |  | IconNewChat | Trabalho |
-| Supervision.chevron | chevron-baixo | `caret-down` |  | IconChevronDown | Trabalho |
-| Ticks.Tick (enviado) | check | `check` |  | IconCheck | Trabalho |
-| Ticks.Tick x2 (entregue/lido) | lido-entregue | `checks` |  | IconChecks | Trabalho |
-| Login.SignalMark | — (fica como está) | — | — | — | — |
-| closeReason.cancel | cancelamento | `x-circle` |  | IconCancel | Trabalho |
-| closeReason.dollar | financeiro | `money` |  | IconMoney | Trabalho |
-| closeReason.wrench | instalacao | `wrench` |  | IconWrench | Trabalho |
-| closeReason.pin | local | `map-pin` |  | IconPin | Trabalho |
-| closeReason.refresh | reativacao | `power` |  | IconPower | Trabalho |
-| closeReason.robot | robo | `robot` |  | IconRobot | Trabalho |
-| closeReason.bellOff | sem-resposta | `chat-circle-slash` |  | IconChatSlash | Trabalho |
-| closeReason.headset | suporte | `headset` |  | IconHeadset | Trabalho |
-| closeReason.key | senha | `key` |  | IconKey | Trabalho |
-| closeReason.tag | tag | `tag` |  | IconTag | Trabalho |
-| closeReason.header | atendimento | `chats-circle` | `chats-circle-fill` | IconChats / IconChatsFill | Trabalho |
-| closeReason.checkCircle | encerrar | `check-circle` |  | IconCheckCircle | Trabalho |
-| MessageAttachment.miniaturaDoc | — (fica como está) | — | — | — | — |
-| emoji 📷 | foto | `image` |  | IconImage | Trabalho |
-| emoji 🎤 | microfone | `microphone` |  | IconMic | Trabalho |
-| emoji 🎥 | video | `video-camera` |  | IconVideo | Trabalho |
-| emoji 📄 | arquivo | `file` |  | IconDocument | Trabalho |
-| emoji 😀 | figurinha | `sticker` |  | IconSticker | Trabalho |
-| emoji 📍 | local | `map-pin` |  | IconPin | Trabalho |
-| emoji 💠 | pix | `pix-logo` |  | IconPix | Trabalho |
-| glifo ⚠ | alerta | `warning` |  | IconWarning | Trabalho |
-| glifo × | fechar | `x` |  | IconClose | Trabalho |
-| glifo ✕ | fechar | `x` |  | IconClose | Trabalho |
-| glifo ! | falha | `warning-circle` |  | IconWarningCircle | Trabalho |
-| glifo − | zoom-menos | `magnifying-glass-minus` |  | IconZoomOut | Trabalho |
-| glifo + | zoom-mais | `magnifying-glass-plus` |  | IconZoomIn | Trabalho |
-| glifo ⌄ | chevron-baixo | `caret-down` |  | IconChevronDown | Trabalho |
-| glifo › | chevron-direita | `caret-right` |  | IconChevronRight | Trabalho |
-| glifo ← | voltar | `arrow-left` |  | IconArrowLeft | Trabalho |
+| Atual | Significado | Contorno Tabler | Export | Módulo |
+|---|---|---|---|---|
+| IconSearch | busca | `search` | IconSearch | Trabalho |
+| IconNewChat | adicionar | `plus` | IconNewChat | Trabalho |
+| IconChevronDown | chevron-baixo | `chevron-down` | IconChevronDown | Trabalho |
+| IconArrowLeft | voltar | `arrow-left` | IconArrowLeft | Trabalho |
+| IconHistory | historico | `history` | IconHistory | Trabalho |
+| IconTransfer | transferir | `arrows-left-right` | IconTransfer | Trabalho |
+| IconCheckCircle (ConversationListItem.jsx, ConversationView.jsx, ChannelsTable.jsx) | encerrar | `circle-check` | IconCheckCircle | Trabalho |
+| IconCheckCircle (SideNav.jsx) | encerrados | `archive` | IconArchive | Trabalho |
+| IconClaim | assumir | `user-check` | IconClaim | Trabalho |
+| IconClose | fechar | `x` | IconClose | Trabalho |
+| IconAttach | anexo | `paperclip` | IconAttach | Trabalho |
+| IconEmoji | emoji | `mood-smile` | IconEmoji | Trabalho |
+| IconQuickReply | resposta-rapida | `bolt` | IconQuickReply | Trabalho |
+| IconMic | microfone | `microphone` | IconMic | Trabalho |
+| IconSend | enviar | `send-2` (trocado) | IconSend | Trabalho |
+| IconTrash | lixeira | `trash` | IconTrash | Trabalho |
+| IconStop | parar | `player-stop` | IconStop | Trabalho |
+| IconPlay | play | `player-play` | IconPlay | Trabalho |
+| IconPause | pause | `player-pause` | IconPause | Trabalho |
+| IconDownload | download | `download` | IconDownload | Trabalho |
+| IconPin | local | `map-pin` | IconPin | Trabalho |
+| IconLock | cadeado | `lock` | IconLock | Entrada (reexportado em Trabalho) |
+| IconBellOn | sino | `bell` | IconBellOn | Trabalho |
+| IconBellOff | sino-mudo | `bell-off` | IconBellOff | Trabalho |
+| IconChart | relatorio | `chart-bar` | IconChart | Trabalho |
+| IconSettings | configuracoes | `settings` | IconSettings | Trabalho |
+| IconLogout | sair | `logout` | IconLogout | Trabalho |
+| IconTeam (TeamModal.jsx, TeamPanel.jsx, navItems.js) | equipe | `users` | IconTeam | Trabalho |
+| IconTeam (navItems.js) | supervisao | `device-desktop-analytics` (trocado) | IconSupervision | Trabalho |
+| IconWarning | alerta | `alert-triangle` | IconWarning | Trabalho |
+| IconEmptyChat | — | — (fica como está) | — | — |
+| IconChats | atendimento | `message-circle` (trocado) | IconChats | Trabalho |
+| IconUser | cliente | `user` | IconUser | Trabalho |
+| IconMegaphone | campanha | `speakerphone` | IconMegaphone | Trabalho |
+| IconChannel | canal | `device-mobile` | IconChannel | Config |
+| IconSpark | ia | `sparkles` | IconSpark | Trabalho |
+| IconRules | regras | `list-check` | IconRules | Config |
+| IconPlug | integracoes | `plug` | IconPlug | Config |
+| IconTags | tag | `tag` | IconTag | Trabalho |
+| IconBuilding | empresa | `building` | IconBuilding | Config |
+| IconUserPlus | adicionar-usuario | `user-plus` | IconUserPlus | Config |
+| IconMore (TemplatesAdminTab.jsx) | mais-v | `dots-vertical` | IconMoreVertical | Config |
+| IconMore (DataTable.jsx, ChannelsTable.jsx) | mais-h | `dots` | IconMore | Config |
+| IconRefresh | atualizar | `refresh` | IconRefresh | Trabalho |
+| IconInfo | info | `info-circle` | IconInfo | Trabalho |
+| IconFile (TemplatesAdminTab.jsx, SettingsVisuals.jsx) | template | `file-text` | IconFileText | Config |
+| IconFile (SgpQueryPage.jsx) | arquivo | `file` | IconDocument | Trabalho |
+| IconClock | relogio | `clock` | IconClock | Trabalho |
+| IconServer | servidor | `server` | IconServer | Config |
+| IconBrain | ia-cerebro | `brain` | IconBrain | Config |
+| IconEdit | editar | `pencil` | IconEdit | Config |
+| Sgp.IconPix | pix | — (a Tabler não tem) → marca Pix da Simple Icons 16.0.0, `icons/pix.svg`, CC0, preenchida | IconPix | Trabalho |
+| Sgp.IconBarcode | codigo-barras | `barcode` | IconBarcode | Trabalho |
+| Sgp.IconQrCode | qr | `qrcode` | IconQrCode | Trabalho |
+| Sgp.IconPdfFile | pdf | `file-type-pdf` | IconPdfFile | Trabalho |
+| Sgp.IconInvoiceLink | link | `link` | IconInvoiceLink | Trabalho |
+| Sgp.IconIdCard | documento-cpf | `id` | IconIdCard | Trabalho |
+| Sgp.IconClose | fechar | `x` | IconClose | Trabalho |
+| Sgp.IconSpinner | carregando | `loader-2` | IconSpinner | Trabalho |
+| Sgp.IconCheck | check | `check` | IconCheck | Trabalho |
+| SettingsVisuals.BranchIcon (SettingsVisuals.jsx) | triagem | `hierarchy` | IconTree | Config |
+| SettingsVisuals.MoonIcon | noturno | `moon-stars` | IconMoon | Config |
+| SettingsVisuals.BranchIcon (SettingsVisuals.jsx) | setores | `stack-2` | IconStack | Config |
+| SettingsVisuals.PlaceIcon | local | `map-pin` | IconPin | Trabalho |
+| Reports.IconConversationCheck | encerrar | `circle-check` | IconCheckCircle | Trabalho |
+| Reports.IconClock | relogio | `clock` | IconClock | Trabalho |
+| Reports.IconReply | responder | `arrow-back-up` | IconReply | Config |
+| Reports.IconUsers | equipe | `users` | IconTeam | Trabalho |
+| Reports.IconLayers | setores | `stack-2` | IconStack | Config |
+| Reports.IconInbox | caixa-entrada | `inbox` | IconInbox | Config |
+| Reports.IconAlert | alerta | `alert-triangle` | IconWarning | Trabalho |
+| Reports.IconDownload | download | `download` | IconDownload | Trabalho |
+| Reports.IconTag | tag | `tag` | IconTag | Trabalho |
+| Reports.IconCalendar | calendario | `calendar` | IconCalendar | Config |
+| Reports.IconChevron | chevron-baixo | `chevron-down` | IconChevronDown | Trabalho |
+| TransferModal.IconArrowRight | seta-direita | `arrow-right` | IconArrowRight | Trabalho |
+| TransferModal.IconBars | carga | `gauge` (trocado) | IconSignal | Trabalho |
+| ChannelVisuals.QrStatusIcon | qr | `qrcode` | IconQrCode | Trabalho |
+| ChannelVisuals.VisibilityIcon | exibir | `eye` | IconEye | Config |
+| ChannelVisuals.MarcaWhatsApp | — | — (fica como está) | — | — |
+| ChannelVisuals.MarcaMeta | — | — (fica como está) | — | — |
+| Campaigns.atualizar | atualizar | `refresh` | IconRefresh | Trabalho |
+| Campaigns.nova | adicionar | `plus` | IconNewChat | Trabalho |
+| Supervision.chevron | chevron-baixo | `chevron-down` | IconChevronDown | Trabalho |
+| Ticks.Tick (enviado) | check | `check` | IconCheck | Trabalho |
+| Ticks.Tick x2 (entregue/lido) | lido-entregue | `checks` | IconChecks | Trabalho |
+| Login.SignalMark | — | — (fica como está) | — | — |
+| closeReason.cancel | cancelamento | `circle-x` | IconCancel | Trabalho |
+| closeReason.dollar | financeiro | `cash` | IconMoney | Trabalho |
+| closeReason.wrench | instalacao | `tool` | IconWrench | Trabalho |
+| closeReason.pin | local | `map-pin` | IconPin | Trabalho |
+| closeReason.refresh | reativacao | `power` | IconPower | Trabalho |
+| closeReason.robot | robo | `robot` | IconRobot | Trabalho |
+| closeReason.bellOff | sem-resposta | `message-circle-off` | IconChatSlash | Trabalho |
+| closeReason.headset | suporte | `headset` | IconHeadset | Trabalho |
+| closeReason.key | senha | `key` | IconKey | Trabalho |
+| closeReason.tag | tag | `tag` | IconTag | Trabalho |
+| closeReason.header | atendimento | `message-circle` (trocado) | IconChats | Trabalho |
+| closeReason.checkCircle | encerrar | `circle-check` | IconCheckCircle | Trabalho |
+| MessageAttachment.miniaturaDoc | — | — (fica como está) | — | — |
+| emoji 📷 | foto | `photo` | IconImage | Trabalho |
+| emoji 🎤 | microfone | `microphone` | IconMic | Trabalho |
+| emoji 🎥 | video | `video` | IconVideo | Trabalho |
+| emoji 📄 | arquivo | `file` | IconDocument | Trabalho |
+| emoji 😀 | figurinha | `sticker` | IconSticker | Trabalho |
+| emoji 📍 | local | `map-pin` | IconPin | Trabalho |
+| emoji 💠 | pix | — (a Tabler não tem) → marca Pix da Simple Icons 16.0.0, `icons/pix.svg`, CC0, preenchida | IconPix | Trabalho |
+| glifo ⚠ | alerta | `alert-triangle` | IconWarning | Trabalho |
+| glifo × | fechar | `x` | IconClose | Trabalho |
+| glifo ✕ | fechar | `x` | IconClose | Trabalho |
+| glifo ! | falha | `alert-circle` | IconWarningCircle | Trabalho |
+| glifo − | zoom-menos | `zoom-out` | IconZoomOut | Trabalho |
+| glifo + | zoom-mais | `zoom-in` | IconZoomIn | Trabalho |
+| glifo ⌄ | chevron-baixo | `chevron-down` | IconChevronDown | Trabalho |
+| glifo › | chevron-direita | `chevron-right` | IconChevronRight | Trabalho |
+| glifo ← | voltar | `arrow-left` | IconArrowLeft | Trabalho |

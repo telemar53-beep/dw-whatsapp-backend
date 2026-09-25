@@ -280,7 +280,7 @@ describe('GET /api/integrations/sgp/messages', () => {
         .query({ phoneNumber: '5598999990000', content: 'variables=João|150,00||template=aviso_cobranca', token: 'the-key' });
 
       expect(res.status).toBe(200);
-      expect(resolverContatoDoDisparo).toHaveBeenCalledWith('5598999990000');
+      expect(resolverContatoDoDisparo).toHaveBeenCalledWith('5598999990000', null, 'channel-2');
       expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
       expect(findOpenConversation).toHaveBeenCalledWith('contato-real-sem-9', 'channel-2');
       expect(createConversation).toHaveBeenCalledWith('contato-real-sem-9', 'channel-2', null, 'silent');

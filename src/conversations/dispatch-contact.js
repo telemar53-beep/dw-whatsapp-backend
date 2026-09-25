@@ -9,7 +9,8 @@ const { brazilianNumberVariants } = require('./phone-variants');
 // Regra aprovada: considerar as duas formas; se só uma existe, usar essa; se as duas
 // existem e só uma tem evidência forte de identidade, usar essa; se as duas têm, NÃO unir e
 // NÃO escolher — registrar a ambiguidade e manter o comportamento de hoje; se nenhuma tem,
-// também manter o número do SGP (não adivinhar por conversa de saída).
+// também manter o número do SGP (não adivinhar por conversa de saída) — salvo a preferência
+// de roteamento: exatamente uma com conversa ABERTA no canal do disparo recebe o disparo.
 //
 // Revisão (25/09/2026): a régua da escolha era "histórico próprio", e ele conta qualquer
 // conversa não-silent. Os 6 pares ambíguos de produção eram todos o mesmo caso: o lado com 9
@@ -29,6 +30,15 @@ function escolherContatoDoDisparo({ existentes }) {
   const comEvidencia = existentes.filter((e) => e.temEvidenciaForte);
   if (comEvidencia.length === 1) return { acao: 'reusar', contatoId: comEvidencia[0].contact.id, motivo: 'so_uma_forma_com_evidencia_forte' };
   if (comEvidencia.length > 1) return { acao: 'digitado', ambiguo: true, motivo: 'duas_formas_com_evidencia_forte' };
+
+  // Nenhuma com evidência forte: preferência de ROTEAMENTO, não de identidade. Se exatamente
+  // uma tem conversa aberta (waiting/assigned) no canal deste disparo, ele vai para ela — não
+  // divide uma conversa que a atendente já tem aberta. Aberta nas duas, ou em nenhuma: o número
+  // do SGP, sem adivinhar.
+  const comConversaAberta = existentes.filter((e) => e.temConversaAbertaNoCanal);
+  if (comConversaAberta.length === 1) {
+    return { acao: 'reusar', contatoId: comConversaAberta[0].contact.id, motivo: 'nenhuma_evidencia_forte_so_uma_com_conversa_aberta_no_canal' };
+  }
   return { acao: 'digitado', ambiguo: false, motivo: 'nenhuma_forma_com_evidencia_forte' };
 }
 
@@ -37,11 +47,12 @@ const mascarar = (numero) => `${String(numero).slice(0, 4)}…${String(numero).s
 /**
  * O contato que recebe um disparo de template pela Meta (rota do SGP e campanha).
  * Número fixo ou estrangeiro não tem variante: segue direto para o caminho de sempre.
+ * `channelId` é o canal do disparo: dele sai a preferência de conversa aberta.
  */
-async function resolverContatoDoDisparo(telefone, displayName = null) {
+async function resolverContatoDoDisparo(telefone, displayName = null, channelId = null) {
   const formas = brazilianNumberVariants(telefone);
   if (formas.length > 1) {
-    const existentes = await findContactsWithOwnHistoryByPhoneNumbers(formas);
+    const existentes = await findContactsWithOwnHistoryByPhoneNumbers(formas, channelId);
     const escolha = escolherContatoDoDisparo({ digitado: telefone, existentes });
     if (escolha.acao === 'reusar') return existentes.find((e) => e.contact.id === escolha.contatoId).contact;
     if (escolha.ambiguo) {

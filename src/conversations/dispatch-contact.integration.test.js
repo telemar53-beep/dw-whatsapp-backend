@@ -32,7 +32,7 @@ describe('Fase 1A — disparo e resposta do mesmo celular na mesma conversa', ()
 
   // O que a rota do SGP faz com o contato escolhido (integrations-sgp.routes.js).
   async function disparar(telefoneDoSgp) {
-    const contato = await resolverContatoDoDisparo(telefoneDoSgp);
+    const contato = await resolverContatoDoDisparo(telefoneDoSgp, null, canal.id);
     let conversa = await findOpenConversation(contato.id, canal.id);
     if (!conversa) conversa = await createConversation(contato.id, canal.id, null, 'silent');
     const mensagem = await createMessage({ conversationId: conversa.id, direction: 'outbound', content: null, status: 'sent', messageType: 'text' });
@@ -326,5 +326,93 @@ describe('Fase 1A — disparo e resposta do mesmo celular na mesma conversa', ()
     expect(contato.id).toBe(c9.id);
     expect(await renameGhostContactToWaId(c9.id, COM9, SEM9, mensagem.id)).toBe(false);
     expect((await getPool().query('SELECT phone_number FROM contacts WHERE id = $1', [c9.id])).rows[0].phone_number).toBe(COM9);
+  });
+
+  // ---- Ajuste antes do merge (25/09/2026): preferência de ROTEAMENTO por conversa aberta ----
+  // Sem evidência forte em nenhum lado, se EXATAMENTE um tem conversa aberta (waiting/assigned)
+  // no canal do disparo, o disparo vai para ele, para não dividir uma conversa já aberta. Não é
+  // identidade: silent e closed não contam, e aberta em outro canal não puxa o disparo.
+
+  // Conversa que a atendente abriu e assumiu, com mensagem de saída, ainda ABERTA.
+  async function atendimentoAberto(contatoId, canalId, agente) {
+    const conv = await createConversation(contatoId, canalId);
+    await claimConversation(conv.id, agente.id);
+    await createMessage({ conversationId: conv.id, direction: 'outbound', content: 'teste da atendente', status: 'read', messageType: 'text', sentBy: 'human' });
+    return conv;
+  }
+
+  async function fantasmaSilent(telefone) {
+    const f = await findOrCreateContactByPhoneNumber(telefone, null);
+    const silent = await createConversation(f.id, canal.id, null, 'silent');
+    await createMessage({ conversationId: silent.id, direction: 'outbound', content: null, status: 'read', messageType: 'text' });
+    return { f, silent };
+  }
+
+  test('PREF A — só o sem 9 com conversa aberta no canal (o com 9 só com silent de disparo): escolhe o sem 9, na conversa aberta', async () => {
+    const agente = await atendente();
+    const { f: c9, silent } = await fantasmaSilent(COM9);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    const aberta = await atendimentoAberto(s9.id, canal.id, agente);
+    const antesC9 = await retrato(c9.id);
+
+    const { contato, conversa } = await disparar(COM9);
+
+    expect(contato.id).toBe(s9.id);
+    expect(conversa.id).toBe(aberta.id);
+    expect(await retrato(c9.id)).toEqual(antesC9); // com 9 e a silent dele intactos
+    expect((await getPool().query('SELECT status FROM conversations WHERE id = $1', [silent.id])).rows[0].status).toBe('silent');
+    expect((await responder(SEM9)).id).toBe(aberta.id);
+  });
+
+  test('PREF B — só o com 9 com conversa aberta no canal: escolhe o com 9, mesmo com o SGP mandando sem 9', async () => {
+    const agente = await atendente();
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    const aberta = await atendimentoAberto(c9.id, canal.id, agente);
+    await fantasmaSilent(SEM9);
+
+    const { contato, conversa } = await disparar(SEM9);
+
+    expect(contato.id).toBe(c9.id);
+    expect(conversa.id).toBe(aberta.id);
+  });
+
+  test('PREF C — conversa só ENCERRADA num lado não é preferência: fica o número do SGP', async () => {
+    const agente = await atendente();
+    const { f: c9 } = await fantasmaSilent(COM9);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await atendimentoSoDeSaida(s9.id, canal.id, agente);
+
+    expect((await disparar(COM9)).contato.id).toBe(c9.id);
+  });
+
+  test('PREF D — conversa aberta nos dois lados: conservador, fica o número do SGP (nos dois sentidos)', async () => {
+    const agente = await atendente();
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await atendimentoAberto(c9.id, canal.id, agente);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await atendimentoAberto(s9.id, canal.id, agente);
+
+    expect((await resolverContatoDoDisparo(COM9, null, canal.id)).id).toBe(c9.id);
+    expect((await resolverContatoDoDisparo(SEM9, null, canal.id)).id).toBe(s9.id);
+  });
+
+  test('PREF E — conversa aberta só em OUTRO canal não puxa o disparo deste canal', async () => {
+    const agente = await atendente();
+    const outroCanal = await createChannel({ type: '360dialog', name: '360 outro', phoneNumber: '+5511990006666', config: {} });
+    const { f: c9 } = await fantasmaSilent(COM9);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await atendimentoAberto(s9.id, outroCanal.id, agente);
+
+    expect((await disparar(COM9)).contato.id).toBe(c9.id);
+  });
+
+  test('PREF — conversa aberta não é identidade: o lado com entrada ganha do lado com conversa aberta', async () => {
+    const agente = await atendente();
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await atendimentoAberto(c9.id, canal.id, agente);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await comEntradas(s9.id, canal.id, 1);
+
+    expect((await disparar(COM9)).contato.id).toBe(s9.id);
   });
 });

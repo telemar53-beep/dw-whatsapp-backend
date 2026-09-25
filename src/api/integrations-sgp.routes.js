@@ -156,7 +156,7 @@ router.get('/messages', sgpLimiter, requireSgpApiKey, async (req, res) => {
   // formas e o histórico próprio para o disparo cair no mesmo contato da resposta. No modo
   // freetext (Baileys) isso já acontece em resolveWhatsAppJid, que pergunta ao WhatsApp.
   const contact = req.sgpMode === 'template'
-    ? await resolverContatoDoDisparo(canonicalPhoneNumber)
+    ? await resolverContatoDoDisparo(canonicalPhoneNumber, null, channel.id)
     : await findOrCreateContactByPhoneNumber(canonicalPhoneNumber, null);
 
   let conversation = await findOpenConversation(contact.id, channel.id);

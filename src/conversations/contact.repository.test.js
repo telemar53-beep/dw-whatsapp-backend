@@ -569,6 +569,40 @@ describe('Fase 1A — contato do disparo e nono dígito', () => {
       });
     });
 
+    // Preferência de ROTEAMENTO (não é identidade): conversa operacionalmente aberta — waiting ou
+    // assigned — no MESMO canal do disparo. Silent (invisível) e closed não contam.
+    describe('temConversaAbertaNoCanal', () => {
+      const aberta = async (numero, canalId) => (await findContactsWithOwnHistoryByPhoneNumbers([numero], canalId))[0].temConversaAbertaNoCanal;
+
+      test('waiting ou assigned no canal do disparo: verdadeiro', async () => {
+        const w = await findOrCreateContactByPhoneNumber('559885120331', null);
+        await createConversation(w.id, canal.id, null, 'waiting');
+        const a = await findOrCreateContactByPhoneNumber('559885120332', null);
+        await createConversation(a.id, canal.id, 'completed', 'assigned');
+        expect(await aberta('559885120331', canal.id)).toBe(true);
+        expect(await aberta('559885120332', canal.id)).toBe(true);
+      });
+
+      test('silent, closed ou aberta em OUTRO canal: falso', async () => {
+        const s = await findOrCreateContactByPhoneNumber('559885120333', null);
+        await disparo(s.id);
+        const f = await findOrCreateContactByPhoneNumber('559885120334', null);
+        await createConversation(f.id, canal.id, null, 'closed');
+        const outroCanal = await createChannel({ type: 'meta_cloud', name: 'Outro', phoneNumber: '+5511977700001', config: {} });
+        const o = await findOrCreateContactByPhoneNumber('559885120335', null);
+        await createConversation(o.id, outroCanal.id, null, 'waiting');
+        expect(await aberta('559885120333', canal.id)).toBe(false);
+        expect(await aberta('559885120334', canal.id)).toBe(false);
+        expect(await aberta('559885120335', canal.id)).toBe(false);
+      });
+
+      test('sem canal informado: falso (a preferência fica desligada)', async () => {
+        const w = await findOrCreateContactByPhoneNumber('559885120336', null);
+        await createConversation(w.id, canal.id, null, 'waiting');
+        expect(await aberta('559885120336', undefined)).toBe(false);
+      });
+    });
+
     test('devolve só as formas pedidas, cada uma com a sua marcação', async () => {
       const fantasma = await findOrCreateContactByPhoneNumber('5598985120338', null);
       await disparo(fantasma.id);

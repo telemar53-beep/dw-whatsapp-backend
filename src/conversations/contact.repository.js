@@ -204,23 +204,32 @@ const TEM_EVIDENCIA_IDENTIDADE_FORTE = `(
 )`;
 
 /**
- * As formas pedidas do número que já existem como contato, cada uma com as duas marcações:
- * histórico próprio (a régua da renomeação) e evidência forte de identidade (a régua da
- * escolha). Alimenta a escolha do contato do disparo (dispatch-contact.js).
+ * As formas pedidas do número que já existem como contato, cada uma com as marcações:
+ * histórico próprio (a régua da renomeação), evidência forte de identidade (a régua da
+ * escolha) e conversa aberta no canal do disparo (só preferência de roteamento, quando nenhuma
+ * forma tem evidência forte). Alimenta a escolha do contato do disparo (dispatch-contact.js).
+ *
+ * "Aberta" aqui é a conversa operacional — waiting ou assigned — no MESMO canal. Silent
+ * (disparo que ninguém respondeu, invisível) e closed não contam; sem canal, a marca é falsa.
  */
-async function findContactsWithOwnHistoryByPhoneNumbers(phoneNumbers) {
+async function findContactsWithOwnHistoryByPhoneNumbers(phoneNumbers, channelId = null) {
   const result = await getPool().query(
     `SELECT ct.id, ct.phone_number, ct.display_name, ct.avatar_path, ct.avatar_checked_at, ct.city_id, ct.locality_id,
             ct.internal_note, ct.created_at, ct.sgp_client_id, ct.sgp_contract_id, ct.sgp_document, ct.sgp_first_name,
             ${TEM_HISTORICO_PROPRIO} AS tem_historico_proprio,
-            ${TEM_EVIDENCIA_IDENTIDADE_FORTE} AS tem_evidencia_forte
+            ${TEM_EVIDENCIA_IDENTIDADE_FORTE} AS tem_evidencia_forte,
+            ($2::uuid IS NOT NULL AND EXISTS (
+               SELECT 1 FROM conversations c
+               WHERE c.contact_id = ct.id AND c.channel_id = $2::uuid AND c.status IN ('waiting', 'assigned')
+            )) AS tem_conversa_aberta_no_canal
      FROM contacts ct WHERE ct.phone_number = ANY($1::text[])`,
-    [phoneNumbers]
+    [phoneNumbers, channelId || null]
   );
   return result.rows.map((row) => ({
     contact: toContact(row),
     temHistoricoProprio: row.tem_historico_proprio,
     temEvidenciaForte: row.tem_evidencia_forte,
+    temConversaAbertaNoCanal: row.tem_conversa_aberta_no_canal,
   }));
 }
 

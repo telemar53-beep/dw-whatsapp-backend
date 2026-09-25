@@ -13,8 +13,44 @@ describe('escolherContatoDoDisparo (regra pura)', () => {
   // identidade (entrada real, vínculo SGP, nota interna). Conversa não-silent sem entrada é
   // histórico (temHistoricoProprio), mas não decide a escolha. Nos 6 pares ambíguos de
   // produção, o lado com 9 só tinha conversas de atendente com saída, sem nenhuma entrada.
-  const forma = (id, phoneNumber, temEvidenciaForte, temHistoricoProprio = temEvidenciaForte) => ({
-    contact: contato(id, phoneNumber), temEvidenciaForte, temHistoricoProprio,
+  const forma = (id, phoneNumber, temEvidenciaForte, temHistoricoProprio = temEvidenciaForte, temConversaAbertaNoCanal = false) => ({
+    contact: contato(id, phoneNumber), temEvidenciaForte, temHistoricoProprio, temConversaAbertaNoCanal,
+  });
+
+  // Preferência de ROTEAMENTO (ajuste antes do merge, 25/09/2026): sem evidência forte em
+  // nenhum lado, se EXATAMENTE um tem conversa aberta (waiting/assigned) no canal do disparo,
+  // o disparo vai para ele — para não dividir uma conversa que já está aberta. Não é identidade:
+  // evidência forte sempre vem antes.
+  describe('preferência de roteamento: conversa aberta no canal do disparo', () => {
+    test('A — nenhum com evidência forte, só o sem 9 com conversa aberta no canal: escolhe o sem 9', () => {
+      const existentes = [forma('fantasma', COM9, false), forma('s9', SEM9, false, true, true)];
+      expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
+        .toEqual({ acao: 'reusar', contatoId: 's9', motivo: 'nenhuma_evidencia_forte_so_uma_com_conversa_aberta_no_canal' });
+    });
+
+    test('B — nenhum com evidência forte, só o com 9 com conversa aberta no canal: escolhe o com 9 (mesmo com o SGP mandando sem 9)', () => {
+      const existentes = [forma('c9', COM9, false, true, true), forma('s9', SEM9, false)];
+      expect(escolherContatoDoDisparo({ digitado: SEM9, existentes }))
+        .toEqual({ acao: 'reusar', contatoId: 'c9', motivo: 'nenhuma_evidencia_forte_so_uma_com_conversa_aberta_no_canal' });
+    });
+
+    test('D — nenhum com evidência forte, conversa aberta nos dois: conservador, número do SGP', () => {
+      const existentes = [forma('c9', COM9, false, true, true), forma('s9', SEM9, false, true, true)];
+      expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
+        .toEqual({ acao: 'digitado', ambiguo: false, motivo: 'nenhuma_forma_com_evidencia_forte' });
+    });
+
+    test('evidência forte vem antes: o lado com entrada ganha do lado com conversa aberta', () => {
+      const existentes = [forma('c9', COM9, false, true, true), forma('s9', SEM9, true, true, false)];
+      expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
+        .toEqual({ acao: 'reusar', contatoId: 's9', motivo: 'so_uma_forma_com_evidencia_forte' });
+    });
+
+    test('as duas com evidência forte continuam ambíguas, mesmo com conversa aberta num lado', () => {
+      const existentes = [forma('c9', COM9, true, true, true), forma('s9', SEM9, true, true, false)];
+      expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
+        .toEqual({ acao: 'digitado', ambiguo: true, motivo: 'duas_formas_com_evidencia_forte' });
+    });
   });
 
   test('nenhuma forma existe: usa o número que o SGP mandou (cria)', () => {
@@ -82,8 +118,9 @@ describe('resolverContatoDoDisparo', () => {
       { contact: contato('fantasma', COM9), temHistoricoProprio: false, temEvidenciaForte: false },
       { contact: real, temHistoricoProprio: true, temEvidenciaForte: true },
     ]);
-    const r = await resolverContatoDoDisparo(COM9);
-    expect(findContactsWithOwnHistoryByPhoneNumbers).toHaveBeenCalledWith([COM9, SEM9]);
+    const r = await resolverContatoDoDisparo(COM9, null, 'canal-1');
+    // O canal do disparo vai junto: é dele que sai a preferência de conversa aberta.
+    expect(findContactsWithOwnHistoryByPhoneNumbers).toHaveBeenCalledWith([COM9, SEM9], 'canal-1');
     expect(findOrCreateContactByPhoneNumber).not.toHaveBeenCalled();
     expect(r).toEqual(real);
   });

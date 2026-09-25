@@ -10,6 +10,7 @@ import MessageInput from './MessageInput';
 import MessageAttachment from './MessageAttachment';
 import MessageStatusTicks from './MessageStatusTicks';
 import { descreverFalha } from '../utils/failureReasons';
+import { rotuloDoAutor } from '../utils/messageAuthor';
 import ConversationHistoryModal from './ConversationHistoryModal';
 import CloseReasonModal from './CloseReasonModal';
 import ContactAvatar from './ContactAvatar';
@@ -811,7 +812,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
               >
                 {workspace && outbound && !isSticker && row.firstOfGroup && (
                   <span className={`chat-message-author ${message.sentBy === 'ai' ? 'is-ai' : ''}`}>
-                    {message.sentBy === 'ai' ? 'Assistente IA' : 'Atendente'}
+                    {rotuloDoAutor(message)}
                   </span>
                 )}
                 {message.repliedToPreview && (

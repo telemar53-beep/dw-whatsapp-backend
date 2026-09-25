@@ -634,6 +634,33 @@ describe('startOutboundWorker', () => {
     });
   });
 
+  // Fase 1B (25/09/2026): o job do disparo por template passa a trazer o texto montado (para o
+  // registro da atendente) e a metadata de origem. O pedido à Meta tem de continuar IDÊNTICO e o
+  // texto montado nunca pode virar envio de texto no lugar do template.
+  test('Fase 1B: template com content montado e metadata envia à Meta exatamente o mesmo pedido', async () => {
+    const canal = { id: 'channel-1', type: 'meta_cloud', config: {} };
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactId: 'contact-1', contactPhoneNumber: '559885120338' });
+    findChannelById.mockResolvedValue(canal);
+    metaCloudAdapter.sendTemplateMessage.mockResolvedValue({ whatsappMessageId: 'wamid.1B' });
+
+    await handler({
+      messageId: 'msg-1', conversationId: 'conv-1', channelId: 'channel-1',
+      content: 'Olá, Maria! Sua fatura da DW Telecom está disponível. Valor: R$ 100,00',
+      messageType: 'text',
+      metadata: { origem: 'sgp', modo: 'template', template: 'dw_fatura_mensal', tipo: 'desconhecido' },
+      templateName: 'dw_fatura_mensal', templateLanguage: 'pt_BR', templateVariables: ['Maria', 'R$ 100,00', '30/09/2026', 'https://b/x'],
+      headerType: null, headerLink: null,
+    });
+
+    expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledTimes(1);
+    expect(metaCloudAdapter.sendTemplateMessage).toHaveBeenCalledWith(canal, '559885120338', {
+      name: 'dw_fatura_mensal', language: 'pt_BR', variables: ['Maria', 'R$ 100,00', '30/09/2026', 'https://b/x'], headerType: null, headerLink: null,
+    });
+    expect(metaCloudAdapter.sendTextMessage).not.toHaveBeenCalled();
+    expect(metaCloudAdapter.sendMediaMessage).not.toHaveBeenCalled();
+    expect(recordMessageSent).toHaveBeenCalledWith('msg-1', 'wamid.1B');
+  });
+
   test('passes headerType/headerLink through to sendTemplateMessage when present', async () => {
     getConversationWithContact.mockResolvedValue({ id: 'conv-1', contactPhoneNumber: '5511999998888' });
     findChannelById.mockResolvedValue({ id: 'channel-1', type: 'meta_cloud', config: {} });

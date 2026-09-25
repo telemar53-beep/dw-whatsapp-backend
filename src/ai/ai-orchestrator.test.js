@@ -1569,3 +1569,108 @@ describe('ai-orchestrator — o perfil vai declarado no contexto', () => {
     });
   });
 });
+
+// Fase 1B (25/09/2026): disparo automático como fato. O texto montado do disparo (nome, valor,
+// link) fica no registro para a atendente, mas NUNCA entra cru no que vai à IA — nos DOIS perfis.
+describe('Fase 1B — disparo automático no histórico da IA', () => {
+  const { findMessageById } = require('../conversations/message.repository');
+  const CORPO = 'Olá, {{1}}! Sua fatura da DW Telecom está disponível.\n\nValor: {{2}}\nVencimento: {{3}}\nBoleto: {{4}}';
+  const MONTADO = 'Olá, Maria! Sua fatura da DW Telecom está disponível.\n\nValor: R$ 100,00\nVencimento: 30/09/2026\nBoleto: https://boleto.exemplo/abc123';
+  const disparo = (id, template, extra = {}) => ({
+    id, direction: 'outbound', sentBy: 'human', messageType: 'text', content: MONTADO, createdAt: new Date(Date.now() - 2 * 60000),
+    metadata: { origem: 'sgp', gatewayId: 'gw', modo: 'template', template, textoModelo: CORPO, tipo: 'desconhecido', ...extra },
+  });
+  const resposta = (repliedToMessageId = null) => ({
+    id: 'in-1', direction: 'inbound', messageType: 'text', content: 'não sei do que é, não estou atrasado, pago dia 30', repliedToMessageId, createdAt: new Date(),
+  });
+  const IDENT_NONE = { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
+  const TRIAGEM_1B = { threshold: 0.8, maxQuestions: 2, attempts: 0, forcarConclusao: false };
+  const PROIBIDOS = ['Maria', 'R$ 100,00', '100,00', 'https://', 'boleto.exemplo'];
+
+  beforeEach(() => {
+    createChatCompletion.mockReset();
+    createChatCompletion.mockResolvedValue({ message: { content: 'Essa mensagem foi um aviso automático da sua fatura.' }, usage: {} });
+    findMessageById.mockResolvedValue(null);
+  });
+
+  async function pedido(perfil, historico) {
+    listRecentMessagesByConversation.mockResolvedValue(historico);
+    const base = { conversation: CONVERSATION, contact: CONTACT };
+    await runAiTurn(perfil === 'triagem'
+      ? { ...base, perfil: 'triagem', identidade: IDENT_NONE, triagem: TRIAGEM_1B, origemMensagem: 'texto' }
+      : base);
+    return createChatCompletion.mock.calls[0][0];
+  }
+
+  test.each(['triagem', 'assistente'])('E. privacidade (%s): nem nome, nem valor, nem link chegam à IA', async (perfil) => {
+    const req = await pedido(perfil, [disparo('d-1', 'dw_fatura_mensal'), resposta()]);
+    const tudo = JSON.stringify(req.messages);
+    for (const proibido of PROIBIDOS) expect(tudo).not.toContain(proibido);
+    // O disparo aparece como resumo seguro, com o texto do MODELO.
+    expect(tudo).toContain('mensagem automática do SGP enviada ao cliente');
+    expect(tudo).toContain('{{1}}');
+  });
+
+  // Campanha: a tela e o banco guardam o texto real; ao modelo vai só o rótulo controlado.
+  const CAMPANHA_RENDERIZADA = 'Olá Maria! Sua fatura de R$ 99,90 está disponível: https://boleto.exemplo/campanha/abc123';
+  const PROIBIDOS_CAMPANHA = ['Maria', 'R$ 99,90', '99,90', 'https://', 'boleto.exemplo'];
+  const campanha = (id, template) => ({
+    id, direction: 'outbound', sentBy: 'human', messageType: 'text', content: CAMPANHA_RENDERIZADA, createdAt: new Date(Date.now() - 2 * 60000),
+    metadata: { origem: 'campanha', campanhaId: 'c-1', ...(template ? { template } : {}) },
+  });
+
+  test.each([
+    ['triagem', 'promo'], ['assistente', 'promo'], ['triagem', null], ['assistente', null],
+  ])('E. privacidade da campanha (%s, template %s): nem nome, nem valor, nem link chegam à IA', async (perfil, template) => {
+    const req = await pedido(perfil, [campanha('c-msg', template), resposta()]);
+    const tudo = JSON.stringify(req.messages);
+    for (const proibido of PROIBIDOS_CAMPANHA) expect(tudo).not.toContain(proibido);
+    expect(tudo).toContain('mensagem automática de campanha enviada ao cliente');
+    expect(tudo).toContain('conteúdo omitido');
+  });
+
+  test.each(['triagem', 'assistente'])('F. contexto (%s): o fato do disparo entra no prompt do sistema', async (perfil) => {
+    const req = await pedido(perfil, [disparo('d-1', 'dw_fatura_mensal'), resposta()]);
+    const sistema = req.messages[0].content;
+    expect(sistema).toMatch(/MENSAGEM AUTOMÁTICA RECENTE/);
+    expect(sistema).toContain('dw_fatura_mensal');
+    expect(sistema).toMatch(/não presuma a finalidade/);
+    expect(sistema).toMatch(/Se ele mudou de assunto, siga o assunto novo/);
+  });
+
+  test('F. o disparo citado pelo cliente tem prioridade sobre o último', async () => {
+    const req = await pedido('triagem', [disparo('d-a', 'tpl_citado'), disparo('d-b', 'tpl_ultimo'), resposta('d-a')]);
+    const sistema = req.messages[0].content;
+    expect(sistema).toContain('tpl_citado');
+    expect(sistema).not.toContain('tpl_ultimo');
+    expect(sistema).toContain('citando');
+  });
+
+  test('F. citação a um disparo fora das 20 mensagens carregadas: busca a citada', async () => {
+    findMessageById.mockResolvedValue(disparo('d-velho', 'tpl_velho'));
+    const req = await pedido('triagem', [disparo('d-b', 'tpl_ultimo'), resposta('d-velho')]);
+    expect(findMessageById).toHaveBeenCalledWith('d-velho');
+    expect(req.messages[0].content).toContain('tpl_velho');
+  });
+
+  test('F. sem citação: o último disparo automático', async () => {
+    const req = await pedido('triagem', [disparo('d-a', 'tpl_antigo'), disparo('d-b', 'tpl_ultimo'), resposta()]);
+    expect(req.messages[0].content).toContain('tpl_ultimo');
+  });
+
+  test.each(['triagem', 'assistente'])('F. sem disparo (%s): nenhum fato é criado', async (perfil) => {
+    const req = await pedido(perfil, [resposta()]);
+    expect(req.messages[0].content).not.toMatch(/MENSAGEM AUTOMÁTICA RECENTE/);
+  });
+
+  test('F. tipo desconhecido não vira cobrança vencida', async () => {
+    const req = await pedido('triagem', [disparo('d-1', 'dw_fatura_mensal'), resposta()]);
+    expect(req.messages[0].content).not.toMatch(/cobrança vencida|está em atraso/i);
+  });
+
+  test('mensagem que NÃO é automática continua indo ao modelo como sempre', async () => {
+    const humana = { id: 'h-1', direction: 'outbound', sentBy: 'human', messageType: 'text', content: 'Olá, sou a Ana, do atendimento.', metadata: null };
+    const req = await pedido('triagem', [humana, resposta()]);
+    expect(JSON.stringify(req.messages)).toContain('Olá, sou a Ana, do atendimento.');
+  });
+});

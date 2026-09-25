@@ -4,7 +4,9 @@ const { toOpenAiTools } = require('./tool-registry');
 const { montarContexto } = require('./prompt/montar');
 const { getAiConfig, listToolPermissions } = require('./ai-config.repository');
 const { recordAiInteraction } = require('./ai-interaction.repository');
-const { listRecentMessagesByConversation } = require('../conversations/message.repository');
+const { listRecentMessagesByConversation, findMessageById } = require('../conversations/message.repository');
+const { resumoParaModelo, encontrarDisparoRelacionado, fatoDoDisparo } = require('../conversations/automatic-message');
+const { linhasDoDisparoRecente } = require('./prompt/fluxos/disparo-recente');
 const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
@@ -129,6 +131,11 @@ function papelDaMensagem(message) {
 // 'document', outbound) não pode virar "cliente enviou um documento" no
 // histórico.
 function conteudoParaModelo(m, perfil) {
+  // Fase 1B (25/09/2026): mensagem automática (disparo do SGP, campanha) é reconhecida pela
+  // metadata e vai ao modelo como RESUMO SEGURO — o texto montado do disparo tem nome, valor
+  // e link do cliente e nunca entra cru no prompt. Vale para os dois perfis.
+  const resumo = resumoParaModelo(m);
+  if (resumo) return resumo;
   if (m.messageType === 'text') return m.content || null;
   if (m.messageType === 'audio' && m.transcriptionStatus === 'completed') return m.transcription || null;
   // O content de uma mensagem 'pix' é o copia e cola: uma parede de caracteres
@@ -146,7 +153,7 @@ function conteudoParaModelo(m, perfil) {
   return null;
 }
 
-async function montarContextoSistema(config, contact, contracts, habilitadas = []) {
+async function montarContextoSistema(config, contact, contracts, habilitadas = [], disparoRecente = null) {
   const [motivos, setores] = await Promise.all([listActiveReasons(), listSectors()]);
   const linhas = [config.systemPrompt, '', 'Motivos de atendimento disponíveis (use o id exato):'];
   for (const m of motivos) linhas.push(`- ${m.id} = ${m.name}`);
@@ -188,6 +195,8 @@ async function montarContextoSistema(config, contact, contracts, habilitadas = [
       'Desbloqueio em confiança (desbloqueio_confianca): só para contrato com status "suspenso", e só quando o cliente pedir. Nunca prometa prazo por conta própria — informe os dias que a ferramenta devolver, e que a fatura continua devida. Se ela devolver prazoDesconhecido, diga que o prazo será confirmado pelo atendente. Se devolver indeterminado, diga que não foi possível confirmar a liberação e encaminhe para um atendente. Se ela recusar, transmita o motivo com educação.'
     );
   }
+  // Fase 1B: o mesmo fato do disparo recente que a triagem recebe (só campos seguros).
+  if (disparoRecente) linhas.push(...linhasDoDisparoRecente(disparoRecente, new Date()));
   linhas.push(
     '',
     'Formatação: a resposta vai para o WhatsApp. Negrito com *um asterisco*, itálico com _sublinhado_.',
@@ -214,6 +223,26 @@ async function carregarContratos(contact) {
     console.error(`Failed to preload SGP contracts for contact ${contact.id}: ${mensagemSegura(err)}`);
     return [];
   }
+}
+
+/**
+ * Fase 1B: o disparo automático a que a mensagem mais recente do cliente se relaciona — o
+ * que ele citou, senão o último do histórico — reduzido ao fato seguro. A citada pode ter
+ * ficado fora das mensagens carregadas: aí ela é buscada pelo id. Nunca derruba o turno.
+ */
+async function localizarDisparoRecente(historico) {
+  const lista = Array.isArray(historico) ? historico : [];
+  const ultimaEntrada = [...lista].reverse().find((m) => m && m.direction === 'inbound');
+  const idCitado = ultimaEntrada && ultimaEntrada.repliedToMessageId;
+  let citada = null;
+  if (idCitado && !lista.some((m) => m && m.id === idCitado)) {
+    try {
+      citada = await findMessageById(idCitado);
+    } catch (err) {
+      console.error(`Failed to load the quoted message for the AI context: ${mensagemSegura(err)}`);
+    }
+  }
+  return fatoDoDisparo(encontrarDisparoRelacionado(lista, citada));
 }
 
 const FERRAMENTAS_TRIAGEM = [
@@ -265,6 +294,15 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   let contexto;
   let systemContent;
 
+  // listRecentMessagesByConversation (não listMessagesByConversation): esta
+  // pega as 20 mensagens mais NOVAS, já em ordem cronológica. A outra função
+  // ordena por created_at ASC sem paginação — um LIMIT ali devolveria as
+  // mensagens mais antigas da conversa, e a IA nunca veria o que o cliente
+  // acabou de escrever.
+  // Fase 1B: carregado ANTES de montar o prompt, porque o fato do disparo recente sai dele.
+  const historico = await listRecentMessagesByConversation(conversation.id, HISTORICO_MAX);
+  const disparoRecente = await localizarDisparoRecente(historico);
+
   if (perfil === 'triagem') {
     tools = toOpenAiTools(ferramentasDaTriagem(triagem, config));
     // Guarda defensiva: um identidade null/undefined não pode derrubar o turno
@@ -298,6 +336,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       contratos: (identidadeEfetiva.contracts || []).map(normalizeContract),
       triagem: triagem || { noturno: { ativo: false }, forcarConclusao: false },
       avisoCidade,
+      disparoRecente,
       empresa: empresa.name,
       ferramentas: ferramentasDaTriagem(triagem, config),
       setores,
@@ -316,15 +355,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // turno, e a partir dali o discriminador antigo passaria a ler "triagem"
     // — as ferramentas seguintes escapariam do gate de aprovação humana.
     contexto = { perfil: 'assistente', conversationId: conversation.id, contact, contracts, sgpCache: {} };
-    systemContent = await montarContextoSistema(config, contact, contracts, habilitadas);
+    systemContent = await montarContextoSistema(config, contact, contracts, habilitadas, disparoRecente);
   }
 
-  // listRecentMessagesByConversation (não listMessagesByConversation): esta
-  // pega as 20 mensagens mais NOVAS, já em ordem cronológica. A outra função
-  // ordena por created_at ASC sem paginação — um LIMIT ali devolveria as
-  // mensagens mais antigas da conversa, e a IA nunca veria o que o cliente
-  // acabou de escrever.
-  const historico = await listRecentMessagesByConversation(conversation.id, HISTORICO_MAX);
   const messages = [
     { role: 'system', content: systemContent },
     ...historico

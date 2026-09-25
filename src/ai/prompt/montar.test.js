@@ -111,6 +111,9 @@ test('todo módulo declara nome, entra e linhas', () => {
 // varredura já passe a cobrir o conteúdo dele também.
 const ESTADOS_PARA_VARREDURA = [
   estadoBase(),
+  // Fase 1B: disparo automático recente (SGP com tipo e vencimento; e campanha).
+  estadoBase({ disparoRecente: { origem: 'sgp', modo: 'template', template: '[template]', tipo: 'fatura_disponivel', vencimento: '30/09/2026', enviadoEm: new Date('2026-09-17T13:00:00.000Z'), citado: true } }),
+  estadoBase({ disparoRecente: { origem: 'campanha', template: '[template]', enviadoEm: new Date('2026-09-16T13:00:00.000Z'), citado: false } }),
   estadoBase({
     identidade: { nivel: 'forte', origem: 'phone', primeiroNome: '[nome]', contracts: [{ id: 1 }], contestado: false },
     contratos: [{ id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço]', status: 'ativo' }],
@@ -502,4 +505,13 @@ describe('fontes comerciais na composicao final', () => {
     expect(t).toMatch(/ALCANCE DO WI-FI/);
     expect(t).toMatch(/prazo, política, equipamento fornecido/);
   });
+});
+
+// Fase 1B (25/09/2026): o fato do disparo recente só entra quando existe.
+test('disparo automático recente entra no prompt montado só quando existe', () => {
+  expect(montarContexto(estadoBase())).not.toMatch(/MENSAGEM AUTOMÁTICA RECENTE/);
+  const disparoRecente = { origem: 'sgp', modo: 'template', template: 'dw_fatura_mensal', tipo: 'desconhecido', enviadoEm: new Date('2026-09-17T13:50:00.000Z'), citado: false };
+  const texto = montarContexto(estadoBase({ disparoRecente }));
+  expect(texto).toMatch(/MENSAGEM AUTOMÁTICA RECENTE/);
+  expect(texto).toContain('dw_fatura_mensal');
 });

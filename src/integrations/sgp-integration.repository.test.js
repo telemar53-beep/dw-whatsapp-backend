@@ -105,11 +105,13 @@ describe('sgp integration repository', () => {
     expect(await verifySgpApiKey(rotated.apiKey)).toEqual({ status: 'disabled' });
   });
 
-  test('verifySgpApiKey reports ok with channelId/mode/defaultTemplateId for the correct key', async () => {
+  // Fase 1B (25/09/2026): o id do gateway passa a vir junto (aditivo) — ele entra na metadata
+  // do disparo para saber, depois, por qual gateway do SGP a mensagem saiu.
+  test('verifySgpApiKey reports ok with integrationId/channelId/mode/defaultTemplateId for the correct key', async () => {
     const created = await createSgpIntegration({ description: 'Baileys', channelId, mode: 'freetext', defaultTemplateId: null, enabled: true });
     const rotated = await rotateSgpApiKey(created.id);
 
-    expect(await verifySgpApiKey(rotated.apiKey)).toEqual({ status: 'ok', channelId, mode: 'freetext', defaultTemplateId: null });
+    expect(await verifySgpApiKey(rotated.apiKey)).toEqual({ status: 'ok', integrationId: created.id, channelId, mode: 'freetext', defaultTemplateId: null });
   });
 
   test('verifySgpApiKey distinguishes between two different registered integrations by key', async () => {
@@ -118,8 +120,8 @@ describe('sgp integration repository', () => {
     const second = await createSgpIntegration({ description: 'Oficial', channelId: otherChannelId, mode: 'template', defaultTemplateId: null, enabled: true });
     const secondKey = (await rotateSgpApiKey(second.id)).apiKey;
 
-    expect(await verifySgpApiKey(firstKey)).toEqual({ status: 'ok', channelId, mode: 'freetext', defaultTemplateId: null });
-    expect(await verifySgpApiKey(secondKey)).toEqual({ status: 'ok', channelId: otherChannelId, mode: 'template', defaultTemplateId: null });
+    expect(await verifySgpApiKey(firstKey)).toEqual({ status: 'ok', integrationId: first.id, channelId, mode: 'freetext', defaultTemplateId: null });
+    expect(await verifySgpApiKey(secondKey)).toEqual({ status: 'ok', integrationId: second.id, channelId: otherChannelId, mode: 'template', defaultTemplateId: null });
   });
 
   test('findSgpDispatchByReferenceId returns null when not found', async () => {

@@ -1,10 +1,12 @@
 const express = require('express');
 const { verifySgpApiKey, findSgpDispatchByReferenceId, createSgpDispatch } = require('../integrations/sgp-integration.repository');
-const { parseSgpTemplatePayload, SgpTemplatePayloadError } = require('../integrations/sgp-template-payload-parser');
+const { parseSgpTemplatePayload, SgpTemplatePayloadError, extrairCamposDoDisparo } = require('../integrations/sgp-template-payload-parser');
 const { findChannelById } = require('../channels/channel.repository');
 const { findTemplateByNameAndWaba } = require('../templates/template.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { resolverContatoDoDisparo } = require('../conversations/dispatch-contact');
+const { metadataDoDisparoSgp } = require('../conversations/automatic-message');
+const { substituteVariables } = require('../templates/template-validator');
 const { findOpenConversation, createConversation, getConversationWithContact } = require('../conversations/conversation.repository');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const { emitToAgent } = require('../realtime/socket-server');
@@ -29,6 +31,7 @@ async function requireSgpApiKey(req, res, next) {
   if (verification.status === 'invalid') {
     return res.status(401).json({ error: 'Invalid API key' });
   }
+  req.sgpIntegrationId = verification.integrationId;
   req.sgpChannelId = verification.channelId;
   req.sgpMode = verification.mode;
   next();
@@ -105,13 +108,25 @@ router.get('/messages', sgpLimiter, requireSgpApiKey, async (req, res) => {
       return res.status(400).json({ error: `Template "${template.name}" header type mismatch` });
     }
 
+    // Fase 1B (25/09/2026): o registro da mensagem passa a guardar o que o cliente recebeu
+    // (o corpo aprovado com as variáveis — a mesma montagem da campanha e do envio da
+    // atendente) e a metadata de origem. O que vai para a Meta NÃO muda: o worker de saída
+    // envia pelo template (nome, idioma, variáveis, cabeçalho) e ignora `content` quando há
+    // templateName. Sem corpo cadastrado, o registro fica sem texto, como antes.
     outboundPayload = {
-      content: null,
+      content: template.bodyText ? substituteVariables(template.bodyText, payload.variables) : null,
       templateName: template.name,
       templateLanguage: template.language,
       templateVariables: payload.variables,
       headerType: payload.headerType,
       headerLink: payload.headerLink,
+      metadata: metadataDoDisparoSgp({
+        integrationId: req.sgpIntegrationId,
+        modo: 'template',
+        template,
+        campos: extrairCamposDoDisparo(content),
+        referenceId: hasReferenceId ? referenceId : undefined,
+      }),
     };
   } else {
     if (channel.status !== 'connected') {
@@ -125,7 +140,15 @@ router.get('/messages', sgpLimiter, requireSgpApiKey, async (req, res) => {
     if (!canonicalPhoneNumber) {
       return res.status(400).json({ error: 'This phone number is not on WhatsApp' });
     }
-    outboundPayload = { content };
+    // Texto livre (Baileys): o conteúdo vai cru para o cliente, então nada é extraído dele.
+    outboundPayload = {
+      content,
+      metadata: metadataDoDisparoSgp({
+        integrationId: req.sgpIntegrationId,
+        modo: 'freetext',
+        referenceId: hasReferenceId ? referenceId : undefined,
+      }),
+    };
   }
 
   // Fase 1A (25/09/2026): no modo template (Meta) o número vem do SGP com o 9, e a resposta

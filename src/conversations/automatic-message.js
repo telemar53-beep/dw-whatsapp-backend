@@ -55,15 +55,15 @@ const umaLinha = (texto) => String(texto || '').replace(/\s*\n+\s*/g, ' / ').tri
  * texto do MODELO, com os {{n}} — nunca o texto montado, que tem nome, valor e link.
  * SGP, texto livre: o conteúdo é omitido — num texto livre não há como separar nome, valor e
  * link do resto.
- * Campanha: o texto da campanha é o mesmo para todos os destinatários (as variáveis são da
- * campanha, não de cada cliente), então vai rotulado como automático.
+ * Campanha: só o rótulo e o template, conteúdo omitido. O texto renderizado nunca vai ao
+ * modelo — a proteção não depende de a campanha de hoje não ter dado do cliente.
  */
 function resumoParaModelo(message) {
   if (!ehMensagemAutomatica(message)) return null;
   const m = message.metadata;
   if (m.origem === 'campanha') {
-    const template = m.template ? ` — template: ${m.template}` : '';
-    return `[mensagem automática de campanha enviada ao cliente${template}: "${umaLinha(message.content)}"]`;
+    const template = m.template ? `template: ${m.template}; ` : '';
+    return `[mensagem automática de campanha enviada ao cliente — ${template}conteúdo omitido]`;
   }
   const partes = [];
   if (m.modo === 'template') {

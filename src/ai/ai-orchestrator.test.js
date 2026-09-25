@@ -1611,6 +1611,24 @@ describe('Fase 1B — disparo automático no histórico da IA', () => {
     expect(tudo).toContain('{{1}}');
   });
 
+  // Campanha: a tela e o banco guardam o texto real; ao modelo vai só o rótulo controlado.
+  const CAMPANHA_RENDERIZADA = 'Olá Maria! Sua fatura de R$ 99,90 está disponível: https://boleto.exemplo/campanha/abc123';
+  const PROIBIDOS_CAMPANHA = ['Maria', 'R$ 99,90', '99,90', 'https://', 'boleto.exemplo'];
+  const campanha = (id, template) => ({
+    id, direction: 'outbound', sentBy: 'human', messageType: 'text', content: CAMPANHA_RENDERIZADA, createdAt: new Date(Date.now() - 2 * 60000),
+    metadata: { origem: 'campanha', campanhaId: 'c-1', ...(template ? { template } : {}) },
+  });
+
+  test.each([
+    ['triagem', 'promo'], ['assistente', 'promo'], ['triagem', null], ['assistente', null],
+  ])('E. privacidade da campanha (%s, template %s): nem nome, nem valor, nem link chegam à IA', async (perfil, template) => {
+    const req = await pedido(perfil, [campanha('c-msg', template), resposta()]);
+    const tudo = JSON.stringify(req.messages);
+    for (const proibido of PROIBIDOS_CAMPANHA) expect(tudo).not.toContain(proibido);
+    expect(tudo).toContain('mensagem automática de campanha enviada ao cliente');
+    expect(tudo).toContain('conteúdo omitido');
+  });
+
   test.each(['triagem', 'assistente'])('F. contexto (%s): o fato do disparo entra no prompt do sistema', async (perfil) => {
     const req = await pedido(perfil, [disparo('d-1', 'dw_fatura_mensal'), resposta()]);
     const sistema = req.messages[0].content;

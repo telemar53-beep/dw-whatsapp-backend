@@ -75,9 +75,21 @@ describe('resumoParaModelo — o texto montado NUNCA vai cru à IA', () => {
     for (const proibido of ['Maria', '100,00', 'https://']) expect(r).not.toContain(proibido);
   });
 
-  test('campanha: rotulada como automática, com o texto da campanha (o mesmo para todos os destinatários)', () => {
-    const r = resumoParaModelo({ direction: 'outbound', content: 'Promoção de setembro na DW', metadata: { origem: 'campanha', campanhaId: 'c-1', template: 'promo' } });
-    expect(r).toBe('[mensagem automática de campanha enviada ao cliente — template: promo: "Promoção de setembro na DW"]');
+  // Campanha: o texto renderizado nunca vai ao modelo, mesmo sendo hoje o mesmo para todos os
+  // destinatários — a proteção não pode depender de a campanha não ter dado do cliente.
+  const CAMPANHA_RENDERIZADA = 'Olá Maria! Sua fatura de R$ 99,90 está disponível: https://boleto.exemplo/campanha/abc123';
+  const PROIBIDOS_CAMPANHA = ['Maria', 'R$ 99,90', '99,90', 'https://', 'boleto.exemplo', 'fatura'];
+
+  test('campanha com template: rotulada como automática, conteúdo omitido (nem nome, nem valor, nem link)', () => {
+    const r = resumoParaModelo({ direction: 'outbound', content: CAMPANHA_RENDERIZADA, metadata: { origem: 'campanha', campanhaId: 'c-1', template: 'promo' } });
+    expect(r).toBe('[mensagem automática de campanha enviada ao cliente — template: promo; conteúdo omitido]');
+    for (const proibido of PROIBIDOS_CAMPANHA) expect(r).not.toContain(proibido);
+  });
+
+  test('campanha sem template (texto): rotulada como automática, conteúdo omitido', () => {
+    const r = resumoParaModelo({ direction: 'outbound', content: CAMPANHA_RENDERIZADA, metadata: { origem: 'campanha', campanhaId: 'c-2' } });
+    expect(r).toBe('[mensagem automática de campanha enviada ao cliente — conteúdo omitido]');
+    for (const proibido of PROIBIDOS_CAMPANHA) expect(r).not.toContain(proibido);
   });
 
   test('mensagem que não é automática: null (quem chama segue a regra de sempre)', () => {

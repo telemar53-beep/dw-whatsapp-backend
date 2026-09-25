@@ -261,4 +261,23 @@ describe('StartConversationModal — o que acontece depois do template', () => {
     expect(await screen.findByText(/um toque/i)).toBeInTheDocument();
     expect(screen.queryByText(/só continua depois que o cliente responder/i)).not.toBeInTheDocument();
   });
+
+  test('o foco começa no Telefone (A1-2)', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    await screen.findByText('Berg');
+    await waitFor(() => expect(screen.getByLabelText(/telefone/i)).toHaveFocus());
+  });
+
+  test('mensagem vazia: erro na tela junto do campo, como o do telefone, e nada é enviado (A1-10)', async () => {
+    api.listChannelsForAgent.mockResolvedValue([{ id: 'ch-1', type: 'baileys', name: 'Berg', status: 'connected' }]);
+    render(<StartConversationModal onClose={vi.fn()} onCreated={vi.fn()} />);
+    await screen.findByText('Berg');
+    await userEvent.type(screen.getByLabelText(/telefone/i), '98999990000');
+    await userEvent.click(screen.getByRole('button', { name: /iniciar/i }));
+    expect(await screen.findByText('Escreva a mensagem inicial.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/mensagem/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/mensagem/i)).not.toBeRequired();
+    expect(api.startConversation).not.toHaveBeenCalled();
+  });
 });

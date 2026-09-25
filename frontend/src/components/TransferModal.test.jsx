@@ -141,6 +141,25 @@ describe('TransferModal', () => {
     expect(screen.getByText('José')).toBeInTheDocument();
     expect(screen.queryByText('Ana')).not.toBeInTheDocument();
   });
+  test('a escolha sobrevive à busca: o botão continua valendo e a nota diz quem está escolhido (A2-7)', async () => {
+    api.transferConversation.mockResolvedValue({});
+    useAgents.mockReturnValue({
+      agents: [
+        { id: 'agent-1', name: 'Eu', email: 'me@dw.com' },
+        { id: 'agent-2', name: 'José', email: 'j@dw.com' },
+        { id: 'agent-3', name: 'Ana', email: 'a@dw.com' },
+      ],
+      status: 'ready',
+    });
+    render(<TransferModal conversationId="c1" onClose={vi.fn()} />);
+    await userEvent.click(screen.getByRole('radio', { name: /Ana/ }));
+    await userEvent.type(screen.getByRole('searchbox', { name: /buscar atendente/i }), 'jose');
+    expect(screen.getByText('Escolhido: Ana (fora da busca).')).toBeInTheDocument();
+    const botao = screen.getByRole('button', { name: /^Transferir para/ });
+    expect(botao).toBeEnabled();
+    await userEvent.click(botao);
+    await waitFor(() => expect(api.transferConversation).toHaveBeenCalledWith('c1', 'agent-3', 'tok-123'));
+  });
 });
 
 describe('loadLevel', () => {

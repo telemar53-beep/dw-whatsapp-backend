@@ -163,7 +163,10 @@ function TransferModal({ conversationId, onClose }) {
   const agrupar = sort !== 'name';
   const disponiveis = agrupar ? agents.filter(isOnline) : agents;
   const offline = agrupar ? agents.filter((a) => !isOnline(a)) : [];
-  const escolhidoAgora = agents.find((a) => a.id === escolhido) || null;
+  // A escolha vale sobre a lista INTEIRA: antes ela sumia com a busca e o
+  // botão desabilitava sem dizer por quê (A2-7).
+  const escolhidoAgora = allAgents.find((a) => a.id === escolhido && a.id !== agent.id) || null;
+  const escolhidoForaDaBusca = Boolean(escolhidoAgora) && !agents.some((a) => a.id === escolhidoAgora.id);
 
   async function handleSelect(toAgentId) {
     setError(null);
@@ -256,7 +259,11 @@ function TransferModal({ conversationId, onClose }) {
       </div>
 
       <div className="dw-dialog-footer">
-        <span className="dw-dialog-nota">A transferência será registrada no histórico da conversa.</span>
+        <span className="dw-dialog-nota">
+          {escolhidoForaDaBusca
+            ? `Escolhido: ${escolhidoAgora.name || escolhidoAgora.email} (fora da busca).`
+            : 'A transferência será registrada no histórico da conversa.'}
+        </span>
         <span className="dw-dialog-acoes">
           <button
             type="button"

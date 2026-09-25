@@ -9,48 +9,69 @@ const contato = (id, phoneNumber) => ({ id, phoneNumber });
 beforeEach(() => jest.clearAllMocks());
 
 describe('escolherContatoDoDisparo (regra pura)', () => {
+  // Revisão da Fase 1A (25/09/2026): a escolha entre as duas formas usa EVIDÊNCIA FORTE de
+  // identidade (entrada real, vínculo SGP, nota interna). Conversa não-silent sem entrada é
+  // histórico (temHistoricoProprio), mas não decide a escolha. Nos 6 pares ambíguos de
+  // produção, o lado com 9 só tinha conversas de atendente com saída, sem nenhuma entrada.
+  const forma = (id, phoneNumber, temEvidenciaForte, temHistoricoProprio = temEvidenciaForte) => ({
+    contact: contato(id, phoneNumber), temEvidenciaForte, temHistoricoProprio,
+  });
+
   test('nenhuma forma existe: usa o número que o SGP mandou (cria)', () => {
     expect(escolherContatoDoDisparo({ digitado: COM9, existentes: [] }))
       .toEqual({ acao: 'digitado', ambiguo: false, motivo: 'nenhuma_forma_existe' });
   });
 
   test('SGP manda com 9 e só existe o contato sem 9 (com entrada): reutiliza o sem 9', () => {
-    const real = contato('real', SEM9);
-    expect(escolherContatoDoDisparo({ digitado: COM9, existentes: [{ contact: real, temHistoricoProprio: true }] }))
+    expect(escolherContatoDoDisparo({ digitado: COM9, existentes: [forma('real', SEM9, true)] }))
       .toEqual({ acao: 'reusar', contatoId: 'real', motivo: 'unica_forma_existente' });
   });
 
   test('só existe o contato com 9 (válido): mantém', () => {
-    const c9 = contato('c9', COM9);
-    expect(escolherContatoDoDisparo({ digitado: COM9, existentes: [{ contact: c9, temHistoricoProprio: true }] }))
+    expect(escolherContatoDoDisparo({ digitado: COM9, existentes: [forma('c9', COM9, true)] }))
       .toEqual({ acao: 'reusar', contatoId: 'c9', motivo: 'unica_forma_existente' });
   });
 
   test('fantasma com 9 + contato real sem 9: reutiliza o real', () => {
-    const existentes = [
-      { contact: contato('fantasma', COM9), temHistoricoProprio: false },
-      { contact: contato('real', SEM9), temHistoricoProprio: true },
-    ];
+    const existentes = [forma('fantasma', COM9, false), forma('real', SEM9, true)];
     expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
-      .toEqual({ acao: 'reusar', contatoId: 'real', motivo: 'so_uma_forma_com_historico' });
+      .toEqual({ acao: 'reusar', contatoId: 'real', motivo: 'so_uma_forma_com_evidencia_forte' });
   });
 
-  test('as duas formas com histórico próprio: não une, não escolhe; fica o comportamento de hoje e marca ambiguidade', () => {
-    const existentes = [
-      { contact: contato('a', COM9), temHistoricoProprio: true },
-      { contact: contato('b', SEM9), temHistoricoProprio: true },
-    ];
+  test('CASO real (par do teste de 25/09): com 9 só com conversa de atendente (histórico, sem evidência forte) + sem 9 com entrada: escolhe o sem 9', () => {
+    const existentes = [forma('c9', COM9, false, true), forma('real', SEM9, true, true)];
     expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
-      .toEqual({ acao: 'digitado', ambiguo: true, motivo: 'duas_formas_com_historico' });
+      .toEqual({ acao: 'reusar', contatoId: 'real', motivo: 'so_uma_forma_com_evidencia_forte' });
+  });
+
+  test('espelho: com 9 com entrada + sem 9 só com saída: escolhe o com 9, mesmo que o SGP mande sem 9', () => {
+    const existentes = [forma('c9', COM9, true, true), forma('s9', SEM9, false, true)];
+    expect(escolherContatoDoDisparo({ digitado: SEM9, existentes }))
+      .toEqual({ acao: 'reusar', contatoId: 'c9', motivo: 'so_uma_forma_com_evidencia_forte' });
+  });
+
+  test('as duas formas com evidência forte: não une, não escolhe; fica o número do SGP e marca ambiguidade', () => {
+    const existentes = [forma('a', COM9, true), forma('b', SEM9, true)];
+    expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
+      .toEqual({ acao: 'digitado', ambiguo: true, motivo: 'duas_formas_com_evidencia_forte' });
+  });
+
+  test('nenhuma com evidência forte, as duas só com saída: conservador — número do SGP, sem inventar identidade', () => {
+    const existentes = [forma('a', COM9, false, true), forma('b', SEM9, false, true)];
+    expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
+      .toEqual({ acao: 'digitado', ambiguo: false, motivo: 'nenhuma_forma_com_evidencia_forte' });
+  });
+
+  test('nenhuma com evidência forte e só uma com conversa de saída: NÃO escolhe por ela (conservador)', () => {
+    const existentes = [forma('a', COM9, false, false), forma('b', SEM9, false, true)];
+    expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
+      .toEqual({ acao: 'digitado', ambiguo: false, motivo: 'nenhuma_forma_com_evidencia_forte' });
   });
 
   test('as duas formas sem histórico (dois fantasmas): comportamento de hoje, sem ambiguidade', () => {
-    const existentes = [
-      { contact: contato('f1', COM9), temHistoricoProprio: false },
-      { contact: contato('f2', SEM9), temHistoricoProprio: false },
-    ];
+    const existentes = [forma('f1', COM9, false), forma('f2', SEM9, false)];
     expect(escolherContatoDoDisparo({ digitado: COM9, existentes }))
-      .toEqual({ acao: 'digitado', ambiguo: false, motivo: 'duas_formas_sem_historico' });
+      .toEqual({ acao: 'digitado', ambiguo: false, motivo: 'nenhuma_forma_com_evidencia_forte' });
   });
 });
 
@@ -58,8 +79,8 @@ describe('resolverContatoDoDisparo', () => {
   test('reutiliza o contato real sem 9 e não cria nada', async () => {
     const real = contato('real', SEM9);
     findContactsWithOwnHistoryByPhoneNumbers.mockResolvedValue([
-      { contact: contato('fantasma', COM9), temHistoricoProprio: false },
-      { contact: real, temHistoricoProprio: true },
+      { contact: contato('fantasma', COM9), temHistoricoProprio: false, temEvidenciaForte: false },
+      { contact: real, temHistoricoProprio: true, temEvidenciaForte: true },
     ]);
     const r = await resolverContatoDoDisparo(COM9);
     expect(findContactsWithOwnHistoryByPhoneNumbers).toHaveBeenCalledWith([COM9, SEM9]);
@@ -77,8 +98,8 @@ describe('resolverContatoDoDisparo', () => {
 
   test('ambiguidade: usa o número do SGP (como hoje) e registra o fato sem o número inteiro', async () => {
     findContactsWithOwnHistoryByPhoneNumbers.mockResolvedValue([
-      { contact: contato('a', COM9), temHistoricoProprio: true },
-      { contact: contato('b', SEM9), temHistoricoProprio: true },
+      { contact: contato('a', COM9), temHistoricoProprio: true, temEvidenciaForte: true },
+      { contact: contato('b', SEM9), temHistoricoProprio: true, temEvidenciaForte: true },
     ]);
     findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'a', phoneNumber: COM9, wasCreated: false });
     const spy = jest.spyOn(console, 'warn').mockImplementation(() => {});

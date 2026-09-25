@@ -6,7 +6,9 @@ const { getPool, closePool } = require('../db/pool');
 const { createChannel } = require('../channels/channel.repository');
 const { findOrCreateContactByPhoneNumber } = require('./contact.repository');
 const { renameGhostContactToWaId, setContactSgpLink } = require('./contact.repository');
-const { createConversation, findOpenConversation } = require('./conversation.repository');
+const { createConversation, findOpenConversation, claimConversation, closeConversation } = require('./conversation.repository');
+const { createAgent } = require('../agents/agent.repository');
+const { updateContact } = require('./contact.repository');
 const { createMessage } = require('./message.repository');
 const { resolverContatoDoDisparo } = require('./dispatch-contact');
 
@@ -20,6 +22,9 @@ describe('Fase 1A — disparo e resposta do mesmo celular na mesma conversa', ()
     await getPool().query('TRUNCATE channels, contacts, cities CASCADE');
     canal = await createChannel({ type: 'meta_cloud', name: 'Meta Fase 1A', phoneNumber: '+5511990001111', config: {} });
   });
+
+  // Um teste que falha antes do mockRestore não pode deixar o espião de console.warn para o seguinte.
+  afterEach(() => jest.restoreAllMocks());
 
   afterAll(async () => {
     await closePool();
@@ -169,5 +174,157 @@ describe('Fase 1A — disparo e resposta do mesmo celular na mesma conversa', ()
     expect(rows).toEqual([{ id: b.id, phone_number: SEM9 }, { id: a.id, phone_number: COM9 }]);
     expect(await conversasDoContato(b.id)).toBe(conversasB);
     expect(await contar('SELECT count(*)::int AS n FROM conversations WHERE id = $1 AND contact_id = $2', [silent.id, a.id])).toBe(1);
+  });
+
+  // ---- Revisão da Fase 1A (25/09/2026): os 6 pares ambíguos de produção ----
+  // Nos 6, o lado com 9 tinha 0 entrada, sem SGP e sem nota: só conversas antigas de atendente
+  // com saída. A escolha entre as formas passa a usar EVIDÊNCIA FORTE (entrada, vínculo SGP,
+  // nota). Nada existente é movido nem apagado; a renomeação continua pela régua de histórico.
+
+  let agenteSeq = 0;
+  async function atendente() {
+    agenteSeq += 1;
+    return createAgent({ name: 'Atendente', email: `atendente-1a-${Date.now()}-${agenteSeq}@teste.local`, password: 'segredo123', role: 'agent' });
+  }
+
+  // Conversa antiga que a atendente abriu, assumiu, mandou mensagem e encerrou, sem resposta.
+  async function atendimentoSoDeSaida(contatoId, canalId, agente) {
+    const conv = await createConversation(contatoId, canalId);
+    await claimConversation(conv.id, agente.id);
+    await createMessage({ conversationId: conv.id, direction: 'outbound', content: 'teste da atendente', status: 'read', messageType: 'text', sentBy: 'human' });
+    await closeConversation(conv.id, agente.id, null);
+    return conv;
+  }
+
+  async function comEntradas(contatoId, canalId, n, status = 'closed') {
+    const conv = await createConversation(contatoId, canalId, null, status);
+    for (let i = 0; i < n; i += 1) {
+      await createMessage({ conversationId: conv.id, direction: 'inbound', content: 'oi', status: 'received', messageType: 'text' });
+    }
+    return conv;
+  }
+
+  const retrato = async (contatoId) => (await getPool().query(
+    `SELECT c.id, c.status, c.contact_id, (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id) AS msgs
+       FROM conversations c WHERE c.contact_id = $1 ORDER BY c.id`, [contatoId])).rows;
+
+  test('CASO 1 — o par do teste de hoje: novo disparo com 9 vai para o contato sem 9; o com 9 e as conversas dele ficam intactos', async () => {
+    const agente = await atendente();
+    const canal360 = await createChannel({ type: '360dialog', name: '360 antigo', phoneNumber: '+5511990004444', config: {} });
+
+    // COM 9: duas conversas antigas de atendente no 360dialog (closed, só saída) + silent de disparo na Meta.
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await atendimentoSoDeSaida(c9.id, canal360.id, agente);
+    await atendimentoSoDeSaida(c9.id, canal360.id, agente);
+    const silentAntiga = await createConversation(c9.id, canal.id, null, 'silent');
+    await createMessage({ conversationId: silentAntiga.id, direction: 'outbound', content: null, status: 'read', messageType: 'text' });
+
+    // SEM 9: muitas entradas, vínculo SGP, conversa aberta na Meta.
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, 'Real');
+    await setContactSgpLink(s9.id, { sgpClientId: 1, sgpContractId: 2, sgpDocument: '52998224725', sgpFirstName: 'Real' });
+    await comEntradas(s9.id, canal360.id, 20);
+    const abertaMeta = await comEntradas(s9.id, canal.id, 3, 'waiting');
+
+    const antesC9 = await retrato(c9.id);
+    const antesS9 = await retrato(s9.id);
+    const spy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { contato, conversa } = await disparar(COM9);
+
+    expect(contato.id).toBe(s9.id);
+    expect(conversa.id).toBe(abertaMeta.id); // entra na conversa aberta do contato real
+    expect(spy).not.toHaveBeenCalled(); // não é mais ambíguo
+    spy.mockRestore();
+    // O com 9 fica exatamente como estava: número, conversas, status e mensagens.
+    expect((await getPool().query('SELECT phone_number FROM contacts WHERE id = $1', [c9.id])).rows[0].phone_number).toBe(COM9);
+    expect(await retrato(c9.id)).toEqual(antesC9);
+    // O sem 9 ganhou só a mensagem do disparo, na conversa aberta.
+    const depoisS9 = await retrato(s9.id);
+    expect(depoisS9.map((c) => c.id)).toEqual(antesS9.map((c) => c.id));
+    expect(depoisS9.find((c) => c.id === abertaMeta.id).msgs).toBe(antesS9.find((c) => c.id === abertaMeta.id).msgs + 1);
+    // Nenhum contato criado nem apagado; a resposta pelo wa_id cai na conversa do disparo.
+    expect(await contar('SELECT count(*)::int AS n FROM contacts', [])).toBe(2);
+    expect((await responder(SEM9)).id).toBe(conversa.id);
+  });
+
+  test('CASO 2 — com 9 só com saída de atendente, sem 9 com entrada: escolhe o sem 9', async () => {
+    const agente = await atendente();
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await atendimentoSoDeSaida(c9.id, canal.id, agente);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await comEntradas(s9.id, canal.id, 1);
+
+    expect((await disparar(COM9)).contato.id).toBe(s9.id);
+  });
+
+  test('CASO 3 — com 9 com entrada, sem 9 só com saída: escolhe o com 9 (também quando o SGP manda sem 9)', async () => {
+    const agente = await atendente();
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await comEntradas(c9.id, canal.id, 1);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await atendimentoSoDeSaida(s9.id, canal.id, agente);
+
+    expect((await resolverContatoDoDisparo(COM9)).id).toBe(c9.id);
+    expect((await resolverContatoDoDisparo(SEM9)).id).toBe(c9.id);
+  });
+
+  test('CASO 4 — as duas com entrada: continua ambíguo, não escolhe (fica o número do SGP) e registra', async () => {
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await comEntradas(c9.id, canal.id, 1);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await comEntradas(s9.id, canal.id, 1);
+    const spy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect((await resolverContatoDoDisparo(COM9)).id).toBe(c9.id);
+    expect((await resolverContatoDoDisparo(SEM9)).id).toBe(s9.id);
+    expect(spy).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+  });
+
+  test('CASO 5 — um só com vínculo SGP, o outro só com saída: escolhe o do vínculo', async () => {
+    const agente = await atendente();
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await atendimentoSoDeSaida(c9.id, canal.id, agente);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await setContactSgpLink(s9.id, { sgpClientId: 1, sgpContractId: null, sgpDocument: '52998224725', sgpFirstName: 'Ana' });
+
+    expect((await resolverContatoDoDisparo(COM9)).id).toBe(s9.id);
+  });
+
+  test('CASO 5b — nota interna também decide', async () => {
+    const agente = await atendente();
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await atendimentoSoDeSaida(c9.id, canal.id, agente);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await updateContact(s9.id, { internalNote: 'cliente da rua 2' });
+
+    expect((await resolverContatoDoDisparo(COM9)).id).toBe(s9.id);
+  });
+
+  test('CASO 6 — as duas só com saída (sem entrada, SGP ou nota): conservador, fica o número do SGP e nada se move', async () => {
+    const agente = await atendente();
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await atendimentoSoDeSaida(c9.id, canal.id, agente);
+    const s9 = await findOrCreateContactByPhoneNumber(SEM9, null);
+    await atendimentoSoDeSaida(s9.id, canal.id, agente);
+    const antes = [await retrato(c9.id), await retrato(s9.id)];
+
+    expect((await resolverContatoDoDisparo(COM9)).id).toBe(c9.id);
+    expect((await resolverContatoDoDisparo(SEM9)).id).toBe(s9.id);
+    expect([await retrato(c9.id), await retrato(s9.id)]).toEqual(antes);
+  });
+
+  test('CASO 7 — renomeação intacta: o com 9 do caso real, sozinho, não passa ao wa_id (tem histórico, mesmo sem evidência forte)', async () => {
+    const agente = await atendente();
+    const canal360 = await createChannel({ type: '360dialog', name: '360 antigo', phoneNumber: '+5511990005555', config: {} });
+    const c9 = await findOrCreateContactByPhoneNumber(COM9, null);
+    await atendimentoSoDeSaida(c9.id, canal360.id, agente);
+    await atendimentoSoDeSaida(c9.id, canal360.id, agente);
+
+    // Só a forma com 9 existe: o disparo vai para ela, e a Meta devolve o wa_id sem 9.
+    const { contato, mensagem } = await disparar(COM9);
+    expect(contato.id).toBe(c9.id);
+    expect(await renameGhostContactToWaId(c9.id, COM9, SEM9, mensagem.id)).toBe(false);
+    expect((await getPool().query('SELECT phone_number FROM contacts WHERE id = $1', [c9.id])).rows[0].phone_number).toBe(COM9);
   });
 });

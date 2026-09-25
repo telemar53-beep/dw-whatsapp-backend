@@ -178,6 +178,8 @@ async function setContactSgpLink(contactId, { sgpClientId, sgpContractId, sgpDoc
 // de entrada, vínculo com o SGP, nota interna, ou conversa que não seja só disparo silencioso.
 // Um contato cujas únicas conversas são `silent` de disparo, sem entrada, não tem histórico
 // próprio: é o contato fantasma que o nono dígito criou.
+// É a régua da RENOMEAÇÃO (renameGhostContactToWaId). A escolha entre as formas com e sem o 9
+// usa outra, mais estrita: TEM_EVIDENCIA_IDENTIDADE_FORTE, logo abaixo.
 const TEM_HISTORICO_PROPRIO = `(
   ct.sgp_document IS NOT NULL
   OR coalesce(ct.internal_note, '') <> ''
@@ -186,19 +188,40 @@ const TEM_HISTORICO_PROPRIO = `(
   OR EXISTS (SELECT 1 FROM conversations c WHERE c.contact_id = ct.id AND c.status <> 'silent')
 )`;
 
+// "Evidência forte de identidade" (revisão da Fase 1A, 25/09/2026, a partir dos 6 pares ambíguos
+// de produção): é o que decide ENTRE as formas com e sem o 9 quando as duas existem. Entrada
+// real do cliente, vínculo com o SGP (documento, cliente ou contrato) ou nota interna. Conversa
+// não-silent SEM entrada (ex.: atendente abriu, mandou e encerrou sem resposta) é histórico —
+// continua preservada e continua travando a renomeação (TEM_HISTORICO_PROPRIO) —, mas não diz
+// quem é o cliente: nos 6 pares, era só isso que prendia o disparo no contato com 9.
+const TEM_EVIDENCIA_IDENTIDADE_FORTE = `(
+  ct.sgp_document IS NOT NULL
+  OR ct.sgp_client_id IS NOT NULL
+  OR ct.sgp_contract_id IS NOT NULL
+  OR coalesce(ct.internal_note, '') <> ''
+  OR EXISTS (SELECT 1 FROM conversations c JOIN messages m ON m.conversation_id = c.id
+             WHERE c.contact_id = ct.id AND m.direction = 'inbound')
+)`;
+
 /**
- * As formas pedidas do número que já existem como contato, cada uma com a marcação de
- * histórico próprio. Alimenta a escolha do contato do disparo (dispatch-contact.js).
+ * As formas pedidas do número que já existem como contato, cada uma com as duas marcações:
+ * histórico próprio (a régua da renomeação) e evidência forte de identidade (a régua da
+ * escolha). Alimenta a escolha do contato do disparo (dispatch-contact.js).
  */
 async function findContactsWithOwnHistoryByPhoneNumbers(phoneNumbers) {
   const result = await getPool().query(
     `SELECT ct.id, ct.phone_number, ct.display_name, ct.avatar_path, ct.avatar_checked_at, ct.city_id, ct.locality_id,
             ct.internal_note, ct.created_at, ct.sgp_client_id, ct.sgp_contract_id, ct.sgp_document, ct.sgp_first_name,
-            ${TEM_HISTORICO_PROPRIO} AS tem_historico_proprio
+            ${TEM_HISTORICO_PROPRIO} AS tem_historico_proprio,
+            ${TEM_EVIDENCIA_IDENTIDADE_FORTE} AS tem_evidencia_forte
      FROM contacts ct WHERE ct.phone_number = ANY($1::text[])`,
     [phoneNumbers]
   );
-  return result.rows.map((row) => ({ contact: toContact(row), temHistoricoProprio: row.tem_historico_proprio }));
+  return result.rows.map((row) => ({
+    contact: toContact(row),
+    temHistoricoProprio: row.tem_historico_proprio,
+    temEvidenciaForte: row.tem_evidencia_forte,
+  }));
 }
 
 /**

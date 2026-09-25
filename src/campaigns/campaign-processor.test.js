@@ -64,6 +64,8 @@ describe('processCampaignRecipient', () => {
       templateName: undefined,
       templateLanguage: undefined,
       templateVariables: undefined,
+      // Fase 1B: só a origem; a regra de conversa da campanha não muda.
+      metadata: { origem: 'campanha', campanhaId: 'campaign-1' },
     });
     expect(updateCampaignRecipientStatus).toHaveBeenCalledWith('recipient-1', expect.objectContaining({ status: 'sent', contactId: 'contact-1', conversationId: 'conversation-1' }));
     expect(incrementCampaignCounter).toHaveBeenCalledWith('campaign-1', 'sent');
@@ -125,6 +127,8 @@ describe('processCampaignRecipient', () => {
       templateName: 'fatura_vencendo',
       templateLanguage: 'pt_BR',
       templateVariables: ['Joao', '10/09'],
+      // Fase 1B: só a origem; a regra de conversa da campanha não muda.
+      metadata: { origem: 'campanha', campanhaId: 'campaign-1', template: 'fatura_vencendo' },
     });
   });
 

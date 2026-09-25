@@ -63,7 +63,7 @@ async function rotateSgpApiKey(id) {
 
 async function verifySgpApiKey(candidateKey) {
   const result = await getPool().query(
-    `SELECT channel_id, mode, default_template_id, enabled, api_key_hash
+    `SELECT id, channel_id, mode, default_template_id, enabled, api_key_hash
      FROM platform_integrations WHERE platform = 'sgp'`
   );
   if (result.rowCount === 0) return { status: 'not_configured' };
@@ -72,7 +72,8 @@ async function verifySgpApiKey(candidateKey) {
     const matches = await bcrypt.compare(candidateKey, row.api_key_hash);
     if (matches) {
       if (!row.enabled) return { status: 'disabled' };
-      return { status: 'ok', channelId: row.channel_id, mode: row.mode, defaultTemplateId: row.default_template_id };
+      // integrationId (Fase 1B, aditivo): vai para a metadata do disparo, para saber por qual gateway saiu.
+      return { status: 'ok', integrationId: row.id, channelId: row.channel_id, mode: row.mode, defaultTemplateId: row.default_template_id };
     }
   }
   return { status: 'invalid' };

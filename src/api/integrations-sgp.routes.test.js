@@ -33,6 +33,9 @@ function buildApp() {
 
 const CHANNEL = { id: 'channel-1', type: 'baileys', status: 'connected' };
 const VALID_QUERY = { phoneNumber: '5598999990000', content: 'Seu boleto vence em 10/09', token: 'the-key' };
+// Fase 1B: todo disparo do SGP ganha metadata de origem. No texto livre o conteúdo segue cru
+// para o cliente, então nada é extraído dele: tipo desconhecido.
+const METADATA_FREETEXT = { origem: 'sgp', gatewayId: 'gw-baileys', modo: 'freetext', tipo: 'desconhecido' };
 
 describe('GET /api/integrations/sgp/messages', () => {
   beforeEach(() => {
@@ -77,7 +80,7 @@ describe('GET /api/integrations/sgp/messages', () => {
 
   describe('with a valid token', () => {
     beforeEach(() => {
-      verifySgpApiKey.mockResolvedValue({ status: 'ok', channelId: 'channel-1', mode: 'freetext' });
+      verifySgpApiKey.mockResolvedValue({ status: 'ok', integrationId: 'gw-baileys', channelId: 'channel-1', mode: 'freetext' });
     });
 
     test('returns 400 when phoneNumber is missing', async () => {
@@ -104,6 +107,7 @@ describe('GET /api/integrations/sgp/messages', () => {
         conversationId: 'conv-1',
         channelId: 'channel-1',
         content: 'Seu boleto vence em 10/09',
+        metadata: METADATA_FREETEXT,
       });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ conversationId: 'conv-1', messageId: 'msg-1' });
@@ -173,6 +177,7 @@ describe('GET /api/integrations/sgp/messages', () => {
         conversationId: 'conv-existing',
         channelId: 'channel-1',
         content: 'Seu boleto vence em 10/09',
+        metadata: METADATA_FREETEXT,
       });
       expect(res.status).toBe(200);
     });
@@ -189,6 +194,7 @@ describe('GET /api/integrations/sgp/messages', () => {
         conversationId: 'conv-race',
         channelId: 'channel-1',
         content: 'Seu boleto vence em 10/09',
+        metadata: METADATA_FREETEXT,
       });
       expect(res.status).toBe(200);
     });
@@ -234,10 +240,15 @@ describe('GET /api/integrations/sgp/messages', () => {
     const TEMPLATE_CHANNEL = { id: 'channel-2', type: 'meta_cloud', status: 'disconnected', config: { phoneNumberId: '999', accessToken: 'tok', wabaId: 'waba-1' } };
     // status e purpose sao NOT NULL na tabela: uma fixture sem eles nao existe em
     // producao, e era so por isso que o caminho passava sem conferir aprovacao.
-    const TEMPLATE = { id: 'tpl-1', name: 'aviso_cobranca', language: 'pt_BR', variableCount: 2, headerType: null, status: 'APPROVED', purpose: 'disparo' };
+    const TEMPLATE = { id: 'tpl-1', name: 'aviso_cobranca', language: 'pt_BR', variableCount: 2, headerType: null, status: 'APPROVED', purpose: 'disparo', bodyText: 'Olá, {{1}}! Valor: {{2}}' };
+    // Fase 1B: o que a Meta recebe continua IDÊNTICO; o que muda é só o registro da mensagem —
+    // o texto montado para a atendente e a metadata de origem.
+    const metadataTemplate = (extra = {}) => ({
+      origem: 'sgp', gatewayId: 'gw-meta', modo: 'template', template: 'aviso_cobranca', textoModelo: 'Olá, {{1}}! Valor: {{2}}', tipo: 'desconhecido', ...extra,
+    });
 
     beforeEach(() => {
-      verifySgpApiKey.mockResolvedValue({ status: 'ok', channelId: 'channel-2', mode: 'template', defaultTemplateId: null });
+      verifySgpApiKey.mockResolvedValue({ status: 'ok', integrationId: 'gw-meta', channelId: 'channel-2', mode: 'template', defaultTemplateId: null });
       findChannelById.mockResolvedValue(TEMPLATE_CHANNEL);
       findTemplateByNameAndWaba.mockResolvedValue(TEMPLATE);
     });
@@ -250,9 +261,10 @@ describe('GET /api/integrations/sgp/messages', () => {
       expect(baileysManager.resolveWhatsAppJid).not.toHaveBeenCalled();
       expect(findTemplateByNameAndWaba).toHaveBeenCalledWith('aviso_cobranca', 'waba-1');
       expect(enqueueOutboundMessage).toHaveBeenCalledWith({
-        conversationId: 'conv-1', channelId: 'channel-2', content: null,
+        conversationId: 'conv-1', channelId: 'channel-2', content: 'Olá, João! Valor: 150,00',
         templateName: 'aviso_cobranca', templateLanguage: 'pt_BR', templateVariables: ['João', '150,00'],
         headerType: null, headerLink: null,
+        metadata: metadataTemplate(),
       });
       expect(res.status).toBe(200);
     });
@@ -274,9 +286,74 @@ describe('GET /api/integrations/sgp/messages', () => {
       expect(createConversation).toHaveBeenCalledWith('contato-real-sem-9', 'channel-2', null, 'silent');
       // O pacote enfileirado para a Meta é o mesmo de antes da Fase 1A, campo por campo.
       expect(enqueueOutboundMessage).toHaveBeenCalledWith({
-        conversationId: 'conv-1', channelId: 'channel-2', content: null,
+        conversationId: 'conv-1', channelId: 'channel-2', content: 'Olá, João! Valor: 150,00',
         templateName: 'aviso_cobranca', templateLanguage: 'pt_BR', templateVariables: ['João', '150,00'],
         headerType: null, headerLink: null,
+        metadata: metadataTemplate(),
+      });
+    });
+
+    describe('Fase 1B — disparo automático como fato', () => {
+      // O template real de hoje, com o texto aprovado na Meta.
+      const DW_FATURA = {
+        id: 'tpl-dw', name: 'dw_fatura_mensal', language: 'pt_BR', variableCount: 4, headerType: null, status: 'APPROVED', purpose: 'disparo',
+        bodyText: 'Olá, {{1}}! Sua fatura da DW Telecom está disponível.\n\nValor: {{2}}\nVencimento: {{3}}\nBoleto: {{4}}\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 445 4546.',
+      };
+      const VARIAVEIS = ['Maria', 'R$ 100,00', '30/09/2026', 'https://boleto.exemplo/abc'];
+      const ANTIGO = `variables=${VARIAVEIS.join('|')}||template=dw_fatura_mensal`;
+      // O que a Meta recebe, campo a campo — o mesmo de antes da Fase 1B.
+      const CAMPOS_DA_META = { templateName: 'dw_fatura_mensal', templateLanguage: 'pt_BR', templateVariables: VARIAVEIS, headerType: null, headerLink: null };
+
+      beforeEach(() => findTemplateByNameAndWaba.mockResolvedValue(DW_FATURA));
+      const disparar = (content, extra = {}) => request(buildApp()).get('/api/integrations/sgp/messages').query({ phoneNumber: '5598999990000', content, token: 'the-key', ...extra });
+      const enfileirado = () => enqueueOutboundMessage.mock.calls[0][0];
+
+      test('A. formato antigo: aceito; os campos da Meta idênticos; o texto montado vai para o registro', async () => {
+        const res = await disparar(ANTIGO);
+        expect(res.status).toBe(200);
+        const job = enfileirado();
+        expect(job).toMatchObject(CAMPOS_DA_META);
+        expect(job.content).toBe('Olá, Maria! Sua fatura da DW Telecom está disponível.\n\nValor: R$ 100,00\nVencimento: 30/09/2026\nBoleto: https://boleto.exemplo/abc\n\nQualquer dúvida sobre o pagamento, fale com a nossa central de atendimento pelo 0800 445 4546.');
+        expect(job.metadata).toEqual({ origem: 'sgp', gatewayId: 'gw-meta', modo: 'template', template: 'dw_fatura_mensal', textoModelo: DW_FATURA.bodyText, tipo: 'desconhecido' });
+      });
+
+      test('B. campos novos válidos entram na metadata; os campos da Meta continuam idênticos', async () => {
+        const res = await disparar(`${ANTIGO}||tipo=fatura_disponivel||vencimento=30/09/2026||fatura=123||contrato=456`);
+        expect(res.status).toBe(200);
+        expect(enfileirado()).toMatchObject(CAMPOS_DA_META);
+        expect(enfileirado().metadata).toMatchObject({ tipo: 'fatura_disponivel', vencimento: '30/09/2026', faturaId: '123', contratoId: '456' });
+      });
+
+      test('C. campos novos inválidos são descartados um a um e o disparo sai do mesmo jeito', async () => {
+        const res = await disparar(`${ANTIGO}||tipo=cobranca_vencida||vencimento=31/02/2026||fatura=abc||contrato={contrato}||cor=azul`);
+        expect(res.status).toBe(200);
+        expect(enfileirado()).toMatchObject(CAMPOS_DA_META);
+        const { metadata } = enfileirado();
+        expect(metadata.tipo).toBe('desconhecido');
+        for (const k of ['vencimento', 'faturaId', 'contratoId', 'cor']) expect(metadata).not.toHaveProperty(k);
+      });
+
+      test('a metadata nunca leva valor, link nem nome do cliente', async () => {
+        await disparar(`${ANTIGO}||tipo=fatura_disponivel||vencimento=30/09/2026`);
+        const texto = JSON.stringify(enfileirado().metadata);
+        for (const proibido of ['Maria', 'R$ 100,00', 'https://boleto.exemplo']) expect(texto).not.toContain(proibido);
+      });
+
+      test('referenceId do SGP entra na metadata', async () => {
+        await disparar(ANTIGO, { referenceId: 'ref-77' });
+        expect(enfileirado().metadata.referenciaSgp).toBe('ref-77');
+      });
+
+      test('template sem corpo cadastrado: registro sem texto, como antes — o envio não depende disso', async () => {
+        findTemplateByNameAndWaba.mockResolvedValue({ ...DW_FATURA, bodyText: null });
+        const res = await disparar(ANTIGO);
+        expect(res.status).toBe(200);
+        expect(enfileirado()).toMatchObject({ ...CAMPOS_DA_META, content: null });
+      });
+
+      test('H. o disparo continua criando conversa silent, sem triagem (a 1B sozinha não liga nada)', async () => {
+        await disparar(ANTIGO);
+        expect(createConversation).toHaveBeenCalledWith('contact-1', 'channel-2', null, 'silent');
       });
     });
 
@@ -288,9 +365,10 @@ describe('GET /api/integrations/sgp/messages', () => {
         .query({ phoneNumber: '5598999990000', content: 'variables=João||header_link=https://boleto.link/x.pdf||header_type=document||template=aviso_com_anexo', token: 'the-key' });
 
       expect(enqueueOutboundMessage).toHaveBeenCalledWith({
-        conversationId: 'conv-1', channelId: 'channel-2', content: null,
+        conversationId: 'conv-1', channelId: 'channel-2', content: 'Olá, João! Valor: {{2}}',
         templateName: 'aviso_com_anexo', templateLanguage: 'pt_BR', templateVariables: ['João'],
         headerType: 'document', headerLink: 'https://boleto.link/x.pdf',
+        metadata: metadataTemplate({ template: 'aviso_com_anexo' }),
       });
       expect(res.status).toBe(200);
     });

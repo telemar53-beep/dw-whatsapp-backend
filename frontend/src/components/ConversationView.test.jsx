@@ -1565,3 +1565,44 @@ describe('carregamento do histórico da conversa', () => {
     expect(screen.queryByText(/carregando mensagens/i)).not.toBeInTheDocument();
   });
 });
+
+// Fase 1B (25/09/2026): mensagem automática não é "Atendente". O disparo do SGP em template
+// passa a ter o texto que o cliente recebeu (montado no backend), e a citação dele deixa de
+// virar "Mídia".
+describe('ConversationView — Fase 1B, mensagens automáticas', () => {
+  const MONTADO = 'Olá, Maria! Sua fatura da DW Telecom está disponível.';
+  const renderizar = (messages) => {
+    useConversationMessages.mockReturnValue({ messages, sendMessage: vi.fn() });
+    render(
+      <ConversationView
+        conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Maria' }}
+        onTransferClick={vi.fn()}
+        workspace
+      />
+    );
+  };
+
+  test('disparo do SGP: rótulo "Automática · SGP" e a bolha com o texto enviado', () => {
+    renderizar([{ id: 'd1', direction: 'outbound', sentBy: 'human', status: 'delivered', content: MONTADO, metadata: { origem: 'sgp', modo: 'template', template: 'dw_fatura_mensal' } }]);
+    expect(screen.getByText('Automática · SGP')).toBeInTheDocument();
+    expect(screen.queryByText('Atendente')).not.toBeInTheDocument();
+    expect(screen.getByText(MONTADO)).toBeInTheDocument();
+  });
+
+  test('campanha: rótulo "Campanha"', () => {
+    renderizar([{ id: 'c1m', direction: 'outbound', sentBy: 'human', status: 'delivered', content: 'Promoção de setembro', metadata: { origem: 'campanha', campanhaId: 'x' } }]);
+    expect(screen.getByText('Campanha')).toBeInTheDocument();
+    expect(screen.queryByText('Atendente')).not.toBeInTheDocument();
+  });
+
+  test('mensagem humana continua "Atendente"', () => {
+    renderizar([{ id: 'h1', direction: 'outbound', sentBy: 'human', status: 'delivered', content: 'Olá!', metadata: null }]);
+    expect(screen.getByText('Atendente')).toBeInTheDocument();
+  });
+
+  test('resposta citando o disparo mostra o texto do disparo, não "Mídia"', () => {
+    renderizar([{ id: 'r1', direction: 'inbound', content: 'não estou atrasado', repliedToPreview: { content: MONTADO, direction: 'outbound' } }]);
+    expect(screen.getByText(MONTADO)).toBeInTheDocument();
+    expect(screen.queryByText('Mídia')).not.toBeInTheDocument();
+  });
+});

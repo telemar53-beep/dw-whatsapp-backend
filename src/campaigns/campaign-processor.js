@@ -2,6 +2,7 @@ const { findChannelById } = require('../channels/channel.repository');
 const { findOrCreateContactByPhoneNumber } = require('../conversations/contact.repository');
 const { findOpenConversation, createConversation } = require('../conversations/conversation.repository');
 const { resolverContatoDoDisparo } = require('../conversations/dispatch-contact');
+const { metadataDaCampanha } = require('../conversations/automatic-message');
 const { enqueueOutboundMessage } = require('../queue/outbound-queue');
 const baileysManager = require('../whatsapp-adapters/baileys.manager');
 const { updateCampaignRecipientStatus, incrementCampaignCounter } = require('./campaign.repository');
@@ -48,6 +49,8 @@ async function processCampaignRecipient({ recipientId, campaignId, channelId, ph
         templateName: templateName || undefined,
         templateLanguage: templateLanguage || undefined,
         templateVariables: templateVariables || undefined,
+        // Fase 1B (25/09/2026): a mensagem da campanha se identifica como automática pela origem.
+        metadata: metadataDaCampanha({ campaignId, templateName }),
       });
     } catch (err) {
       return markRecipient(recipientId, campaignId, 'failed', { errorMessage: err.message, contactId: contact.id, conversationId: conversation.id });

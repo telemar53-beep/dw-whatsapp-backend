@@ -7,6 +7,7 @@ const MODULOS = [
   require('./fluxos/identificacao'),
   require('./fluxos/sgp-indisponivel'),
   require('./fluxos/aviso-cidade'),
+  require('./fluxos/disparo-recente'),
   require('./fluxos/multiplos-contratos'),
   require('./fluxos/noturno'),
   require('./fluxos/suporte-geral'),

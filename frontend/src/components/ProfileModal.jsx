@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getMyProfile, updateMyProfile, uploadMyAvatar, deleteMyAvatar, changePassword } from '../services/api';
 import AgentAvatar from './AgentAvatar';
@@ -24,7 +24,10 @@ function ProfileModal({ onClose, onProfileUpdated }) {
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [submittingPassword, setSubmittingPassword] = useState(false);
 
-  useEffect(() => {
+  // A mensagem do servidor fica ("Sessão expirada" diz ao atendente o que
+  // fazer) e o erro ganha "Tentar de novo" — decisão do proprietário, 24/09.
+  const carregar = useCallback(() => {
+    setLoadError(null);
     getMyProfile(token)
       .then((data) => {
         setProfile(data);
@@ -35,6 +38,10 @@ function ProfileModal({ onClose, onProfileUpdated }) {
         setLoadError(descreverErro(err, 'Falha ao carregar perfil'));
       });
   }, [token]);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
 
   async function handleSaveProfile(event) {
     event.preventDefault();
@@ -115,7 +122,12 @@ function ProfileModal({ onClose, onProfileUpdated }) {
         <div className="px-6 py-4">
           <p role={loadError ? 'alert' : 'status'} className="text-[14.5px] text-wa-muted">{loadError || 'Carregando…'}</p>
         </div>
-        <div className="flex shrink-0 justify-end px-4 py-3">
+        <div className="flex shrink-0 justify-end gap-2 px-4 py-3">
+          {loadError && (
+            <button type="button" onClick={carregar} className={waGhostButtonClass}>
+              Tentar de novo
+            </button>
+          )}
           <button type="button" onClick={onClose} className={waGhostButtonClass}>
             Fechar
           </button>

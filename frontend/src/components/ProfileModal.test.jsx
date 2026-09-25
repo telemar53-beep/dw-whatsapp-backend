@@ -116,4 +116,13 @@ describe('ProfileModal', () => {
     await userEvent.click(fecharButton);
     expect(onClose).toHaveBeenCalled();
   });
+
+  test('Tentar de novo recarrega o perfil depois da falha, sem perder a mensagem do servidor', async () => {
+    api.getMyProfile.mockRejectedValueOnce({ body: { error: 'Sessão expirada' } });
+    render(<ProfileModal onClose={vi.fn()} />);
+    expect(await screen.findByText('Sessão expirada')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
+    expect(await screen.findByDisplayValue('Ana')).toBeInTheDocument();
+    expect(api.getMyProfile).toHaveBeenCalledTimes(2);
+  });
 });

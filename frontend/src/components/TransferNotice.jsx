@@ -15,12 +15,19 @@ function TransferNotice({ notice, onOpen, onDismiss }) {
     return () => clearTimeout(timer);
   }, [conversationId, onDismiss]);
 
-  if (!notice) return null;
+  const frase = notice
+    ? `${notice.byName ? `${notice.byName} transferiu` : 'Foi transferido'} o atendimento de ${notice.contactName} para você.`
+    : '';
+
+  // A região viva fica sempre montada: nascendo junto com o texto, o leitor de
+  // tela podia não anunciar. E sem role="status" — a mesa já tem o seu.
+  const regiaoViva = <p aria-live="polite" className="sr-only">{frase}</p>;
+  if (!notice) return regiaoViva;
 
   return (
+    <>
+    {regiaoViva}
     <div
-      role="status"
-      aria-live="polite"
       className="dialog-transfer-notice pointer-events-none fixed bottom-5 left-1/2 z-[var(--z-toast)] w-[min(92vw,26rem)] -translate-x-1/2"
     >
       <div className="pointer-events-auto flex items-start gap-3 rounded-[14px] border border-white/10 bg-chat-panel px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
@@ -34,7 +41,7 @@ function TransferNotice({ notice, onOpen, onDismiss }) {
           className="min-w-0 flex-1 text-left"
         >
           <p className="text-[14px] leading-[20px] text-chat-text">
-            <strong className="font-semibold">{notice.byName}</strong> transferiu o atendimento de{' '}
+            {notice.byName ? <><strong className="font-semibold">{notice.byName}</strong> transferiu</> : 'Foi transferido'} o atendimento de{' '}
             <strong className="font-semibold">{notice.contactName}</strong> para você.
           </p>
           <p className="mt-0.5 text-[12.5px] text-chat-muted">Clique para abrir</p>
@@ -49,6 +56,7 @@ function TransferNotice({ notice, onOpen, onDismiss }) {
         </button>
       </div>
     </div>
+    </>
   );
 }
 

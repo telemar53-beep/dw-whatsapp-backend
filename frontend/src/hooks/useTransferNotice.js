@@ -16,12 +16,17 @@ export function useTransferNotice() {
   useEffect(() => {
     if (!socket) return undefined;
 
-    function onAssigned({ conversation, transferredBy } = {}) {
-      if (!transferredBy || !conversation) return;
+    function onAssigned(payload = {}) {
+      const { conversation } = payload;
+      // Transferência é a PRESENÇA da chave: a rota de transferência sempre a
+      // manda, às vezes com `null` (quem transferiu sem nome) — e esse caso não
+      // avisava (ATD-AVT-07). Pegar da fila não manda a chave.
+      if (!conversation || !Object.prototype.hasOwnProperty.call(payload, 'transferredBy')) return;
+      const { transferredBy } = payload;
       setNotice({
         conversationId: conversation.id,
         contactName: conversation.contactDisplayName || conversation.contactPhoneNumber,
-        byName: transferredBy.name,
+        byName: transferredBy?.name || null,
       });
       // Silenciar é sobre barulho, não sobre esconder informação: o aviso na
       // tela aparece de qualquer jeito.

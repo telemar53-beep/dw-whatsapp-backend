@@ -12,13 +12,17 @@ beforeEach(() => {
 describe('TransferNotice', () => {
   test('não mostra nada quando não há aviso', () => {
     const { container } = render(<TransferNotice notice={null} onOpen={vi.fn()} onDismiss={vi.fn()} />);
-    expect(container).toBeEmptyDOMElement();
+    // Só a região viva vazia, sempre montada para o leitor de tela.
+    expect(container.textContent).toBe('');
+    expect(container.querySelector('[aria-live="polite"]')).toBeInTheDocument();
   });
 
   test('diz quem transferiu e de qual cliente é o atendimento', () => {
     render(<TransferNotice notice={NOTICE} onOpen={vi.fn()} onDismiss={vi.fn()} />);
 
-    const aviso = screen.getByRole('status');
+    // A frase vai para uma região viva sem role="status" (a mesa já tem o seu).
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    const aviso = document.querySelector('[aria-live="polite"]');
     expect(aviso).toHaveTextContent('Maria Souza');
     expect(aviso).toHaveTextContent('Carlos');
   });
@@ -80,5 +84,10 @@ describe('TransferNotice some sozinho', () => {
     act(() => vi.advanceTimersByTime(5000));
 
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  test('transferência sem nome de quem transferiu ainda avisa (ATD-AVT-07)', () => {
+    render(<TransferNotice notice={{ ...NOTICE, byName: null }} onOpen={vi.fn()} onDismiss={vi.fn()} />);
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent('Foi transferido o atendimento de Carlos para você.');
   });
 });

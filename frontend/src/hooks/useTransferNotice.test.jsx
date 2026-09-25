@@ -102,6 +102,12 @@ describe('useTransferNotice', () => {
     expect(FakeAudioContext.instances.length).toBe(0);
   });
 
+  test('transferencia com transferredBy null ainda avisa, sem nome (ATD-AVT-07)', () => {
+    const { result } = renderHook(() => useTransferNotice());
+    act(() => fakeSocket.trigger('conversation:assigned', { conversation: { id: 'conv-3', contactDisplayName: 'Maria' }, transferredBy: null }));
+    expect(result.current.notice).toEqual({ conversationId: 'conv-3', contactName: 'Maria', byName: null });
+  });
+
   test('usa o telefone quando o contato nao tem nome salvo', () => {
     const { result } = renderHook(() => useTransferNotice());
 

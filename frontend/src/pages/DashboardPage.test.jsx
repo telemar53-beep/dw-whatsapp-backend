@@ -84,7 +84,7 @@ describe('DashboardPage', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
-    // O painel da lista sempre tem o título "Atendimento"; o que não pode aparecer é o da tela vazia.
+    // A aba "Atendimento" existe sempre na lista; o que não pode aparecer é o título da tela vazia.
     const emptyState = within(screen.getByRole('main'));
     expect(emptyState.queryByText('Atendimento')).not.toBeInTheDocument();
     expect(emptyState.queryByText('Net Fibra · Atendimento')).not.toBeInTheDocument();
@@ -504,14 +504,13 @@ describe('DashboardPage', () => {
     expect(container.firstChild.className).toContain('h-dvh');
   });
 
-  test('renders the team panel, closed by default, and opens it on click', async () => {
+  // "Equipe" saiu do rodapé da lista e foi para o trilho da mesa:
+  // SideNav.mesa.test.jsx > 'Equipe abre o popup "Nossa equipe"…'.
+  test('a lista não tem mais a barra "Equipe" no rodapé', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });
     useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
     renderDashboard();
-    expect(screen.getByText('Equipe')).toBeInTheDocument();
-    expect(screen.queryByText(/nenhum atendente cadastrado/i)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /^equipe/i }));
-    expect(screen.getByText(/nenhum atendente cadastrado/i)).toBeInTheDocument();
+    expect(within(screen.getByRole('complementary', { name: 'Atendimentos' })).queryByRole('button', { name: /^equipe/i })).not.toBeInTheDocument();
   });
 
   test('em carregamento não mostra "Nenhum atendimento em andamento"', () => {
@@ -583,8 +582,129 @@ describe('DashboardPage', () => {
 
 // Maria transfere para João: ele precisa perceber. O aviso aparece na tela de
 // Atendimento e leva direto para a conversa recebida.
+// Painel da lista na mesa (fatia 1 do novo atendimento): cabeçalho
+// "Conversas" com a ação de nova conversa em ícone, busca integrada e os
+// ícones da família DW nos elementos novos. As três abas continuam.
+describe('painel de conversas da mesa', () => {
+  const NA_ESPERA = { id: 'c-esp', contactDisplayName: 'Joana', contactPhoneNumber: '5598911112222', status: 'waiting', createdAt: '2026-09-24T13:05:00.000Z' };
+
+  function lista() {
+    return screen.getByRole('complementary', { name: 'Atendimentos' });
+  }
+  // Moldura da família DW (components/icones/Icone.jsx).
+  function eDaFamiliaDw(svg) {
+    return svg.getAttribute('viewBox') === '0 0 24 24' && svg.getAttribute('stroke-width') === '1.75' && svg.getAttribute('fill') === 'none';
+  }
+
+  beforeEach(() => {
+    useQueue.mockReturnValue({ queue: [NA_ESPERA], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [{ id: 'c-minha', contactDisplayName: 'Maria', status: 'assigned', assignedAgentId: 'agent-1' }], status: 'ready' });
+  });
+
+  test('o título do painel é "Conversas"', () => {
+    renderDashboard();
+    expect(within(lista()).getByRole('heading', { level: 1, name: 'Conversas' })).toBeInTheDocument();
+  });
+
+  test('"Nova conversa" é um botão de ícone DW; o rótulo só na dica', () => {
+    renderDashboard();
+    const nova = within(lista()).getByRole('button', { name: 'Nova conversa' });
+    // O único texto dentro do botão é a dica, fora da árvore de acessibilidade
+    // (o nome vem do aria-label) e escondida até o ponteiro ou o foco.
+    expect(within(nova).getByText('Nova conversa')).toHaveAttribute('aria-hidden', 'true');
+    expect([...nova.children].filter((filho) => filho.getAttribute('aria-hidden') !== 'true')).toHaveLength(0);
+    expect(eDaFamiliaDw(nova.querySelector('svg'))).toBe(true);
+  });
+
+  test('a busca fica no painel, com a lupa da família DW', () => {
+    renderDashboard();
+    const busca = within(lista()).getByRole('searchbox', { name: 'Buscar conversa' });
+    expect(eDaFamiliaDw(busca.closest('label').querySelector('svg'))).toBe(true);
+  });
+
+  test('as três abas continuam: Atendimento, Espera e Automação, sem "Todas"', () => {
+    renderDashboard();
+    const abas = within(lista()).getAllByRole('tab').map((aba) => aba.textContent.replace(/\d+/g, '').trim());
+    expect(abas).toEqual(['Atendimento', 'Espera', 'Automação']);
+  });
+
+  test('"Finalizar sem motivo" na Espera usa o ícone DW de encerrar', async () => {
+    renderDashboard();
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+    const finalizar = within(lista()).getByRole('button', { name: 'Finalizar sem motivo' });
+    expect(eDaFamiliaDw(finalizar.querySelector('svg'))).toBe(true);
+  });
+
+  // A casca reserva os encaixes; é a mesa que desenha o trilho e o ícone do
+  // botão "Abrir menu" neles (AppShell.jsx).
+  test('desenha o trilho e o ícone do menu nos encaixes que a casca oferece', () => {
+    const encaixeDoTrilho = document.body.appendChild(document.createElement('div'));
+    const encaixeDoIcone = document.body.appendChild(document.createElement('span'));
+    try {
+      renderInShell(<DashboardPage />, { context: { encaixeDoTrilho, encaixeDoIcone, mobileNavOpen: false } });
+      const trilho = within(encaixeDoTrilho).getByRole('navigation', { name: 'Navegação principal' });
+      expect(trilho).toHaveAttribute('data-variante', 'mesa');
+      expect(within(trilho).getByRole('link', { name: 'Atendimento' })).toHaveAttribute('aria-current', 'page');
+      expect(eDaFamiliaDw(encaixeDoIcone.querySelector('svg'))).toBe(true);
+    } finally {
+      encaixeDoTrilho.remove();
+      encaixeDoIcone.remove();
+    }
+  });
+
+  test('sem encaixe (fora da casca), a mesa não desenha trilho', () => {
+    renderDashboard();
+    expect(screen.queryByRole('navigation', { name: 'Navegação principal' })).not.toBeInTheDocument();
+  });
+
+  // Contagem é o tamanho de cada fila (não "não lidas"). Três dígitos têm de
+  // aparecer inteiros; o que o jsdom não mede (caber em 332 px) é conferido no
+  // navegador, com as capturas desta etapa.
+  test.each([
+    [9, 99, 999],
+    [999, 9, 99],
+    [99, 999, 9],
+  ])('as abas mostram as contagens inteiras: Atendimento %i, Espera %i, Automação %i', (minhas, espera, automacao) => {
+    const conversa = (id, extra = {}) => ({ id, contactDisplayName: `Cliente ${id}`, status: 'waiting', ...extra });
+    useMyConversations.mockReturnValue({ conversations: Array.from({ length: minhas }, (_, i) => conversa(`m${i}`, { status: 'assigned', assignedAgentId: 'agent-1' })), status: 'ready' });
+    useQueue.mockReturnValue({
+      queue: [
+        ...Array.from({ length: espera }, (_, i) => conversa(`e${i}`)),
+        ...Array.from({ length: automacao }, (_, i) => conversa(`a${i}`, { triageState: 'pending' })),
+      ],
+      status: 'ready',
+    });
+    renderDashboard();
+    const [atendimento, naEspera, naAutomacao] = within(lista()).getAllByRole('tab');
+    expect(atendimento).toHaveTextContent(`Atendimento${minhas}`);
+    expect(naEspera).toHaveTextContent(`Espera${espera}`);
+    expect(naAutomacao).toHaveTextContent(`Automação${automacao}`);
+  });
+
+  test('no modo lista estreita, expandir e "Voltar à conversa" usam o ícone DW', async () => {
+    larguraDaJanela(600);
+    renderDashboard();
+    await userEvent.click(within(lista()).getAllByRole('button', { name: 'Maria' })[0]);
+    const expandir = screen.getByRole('button', { name: /ver lista de atendimentos/i });
+    expect(eDaFamiliaDw(expandir.querySelector('svg'))).toBe(true);
+    await userEvent.click(expandir);
+    expect(eDaFamiliaDw(screen.getByRole('button', { name: /voltar à conversa/i }).querySelector('svg'))).toBe(true);
+  });
+
+  test('buscar filtra a lista e escolher abre a conversa', async () => {
+    renderDashboard();
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar conversa' }), 'maria');
+    expect(within(lista()).queryByRole('button', { name: /^Joana/ })).not.toBeInTheDocument();
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Buscar conversa' }));
+    await userEvent.click(within(lista()).getByRole('button', { name: /^Joana/ }));
+    expect(within(lista()).getByRole('button', { name: /^Joana/ })).toHaveAttribute('aria-current', 'true');
+    expect(within(screen.getByRole('main')).getAllByText('Joana').length).toBeGreaterThan(0);
+  });
+});
+
 describe('aviso de transferência recebida', () => {
-  const TRANSFERIDA = { id: 'conv-t', contactPhoneNumber: '5511999998888', contactDisplayName: 'Carlos', assignedAgentId: 'agent-1', status: 'assigned' };
+  const TRANSFERIDA ={ id: 'conv-t', contactPhoneNumber: '5511999998888', contactDisplayName: 'Carlos', assignedAgentId: 'agent-1', status: 'assigned' };
 
   test('não mostra nada quando ninguém transferiu', () => {
     useQueue.mockReturnValue({ queue: [], status: 'ready' });

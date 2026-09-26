@@ -25,6 +25,8 @@ import { useTransferNotice } from '../hooks/useTransferNotice';
 // Legenda:
 //   [FICA]  o redesenho precisa manter esta asserção passando como está.
 //   [MUDA]  o redesenho muda isto DE PROPÓSITO; o comentário diz para quê.
+//   [MUDOU] um [MUDA] já aplicado, na linha de duas linhas da mesa (fatia 1
+//           do novo atendimento).
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -155,23 +157,28 @@ describe('linha compacta — aba Atendimento (meus atendimentos)', () => {
     expect(linha).toHaveAccessibleName(/Financeiro/);
   });
 
-  // [MUDA] Hoje são chips visíveis. No redesenho saem da vista nesta aba: esta
-  // asserção é a que sai (ou vira "não aparece como texto visível"), e a de
-  // cima, do nome acessível, é a que segura a informação.
-  test('[MUDA] hoje localidade · município e setor aparecem como texto na linha', () => {
+  // [MUDOU] Eram chips visíveis. Na linha de duas linhas da mesa saem da vista
+  // nesta aba; o teste de cima, do nome acessível, é o que segura a
+  // informação. `sr-only` é o utilitário que esconde da vista e mantém para o
+  // leitor de tela — é ele que diferencia "saiu da vista" de "sumiu".
+  test('[MUDOU] localidade · município e setor saem da vista nesta aba', () => {
     renderInShell(<DashboardPage />);
     const linha = linhaDe('Raimunda Nonata');
 
-    expect(within(linha).getByText('Barão de Tromaí · Cândido Mendes')).toBeInTheDocument();
-    expect(within(linha).getByText('Financeiro')).toBeInTheDocument();
+    for (const texto of ['Cândido Mendes', 'Financeiro']) {
+      const comOTexto = [...linha.querySelectorAll('*')].filter((el) => el.children.length === 0 && el.textContent.includes(texto));
+      expect(comOTexto.length).toBeGreaterThan(0);
+      comOTexto.forEach((el) => expect(el.closest('.sr-only'), texto).not.toBeNull());
+    }
   });
 
-  // [MUDA] Nesta aba todas as conversas são do próprio atendente: o chip com o
-  // nome dele não informa nada. No redesenho vira
-  // `expect(within(linha).queryByText('Ana Souza')).not.toBeInTheDocument()`.
-  test('[MUDA] hoje o nome do próprio responsável aparece como chip', () => {
+  // [MUDOU] Nesta aba todas as conversas são do próprio atendente: o chip com o
+  // nome dele não informava nada.
+  test('[MUDOU] o nome do próprio responsável não aparece na linha', () => {
     renderInShell(<DashboardPage />);
-    expect(within(linhaDe('Raimunda Nonata')).getByText('Ana Souza')).toBeInTheDocument();
+    const linha = linhaDe('Raimunda Nonata');
+    expect(within(linha).queryByText(/Ana Souza/)).not.toBeInTheDocument();
+    expect(linha).not.toHaveAccessibleName(/Ana Souza/);
   });
 
   test('[FICA] estado da IA: "IA · motivo" e o ⚠ de confiança baixa com nome acessível', () => {
@@ -234,12 +241,11 @@ describe('linha compacta — aba Espera', () => {
     expect(linha).not.toHaveAccessibleName(/Finalizar/);
   });
 
-  // [MUDA] No redesenho a 2ª linha da Espera COMEÇA pela localidade. Hoje a
-  // prévia vem antes dela na leitura. Vira:
-  // `expect(linha).toHaveAccessibleName(/Barão de Tromaí.*Minha internet caiu de novo/)`.
-  test('[MUDA] hoje a prévia é lida antes da localidade', async () => {
+  // [MUDOU] A 2ª linha da Espera COMEÇA pela localidade: é por ela que o
+  // atendente reconhece o atendimento na fila. Antes a prévia vinha primeiro.
+  test('[MUDOU] a localidade é lida antes da prévia', async () => {
     const linha = await abrirEspera();
-    expect(linha).toHaveAccessibleName(/Minha internet caiu de novo.*Barão de Tromaí/);
+    expect(linha).toHaveAccessibleName(/Barão de Tromaí.*Minha internet caiu de novo/);
   });
 });
 

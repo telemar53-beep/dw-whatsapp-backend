@@ -27,14 +27,15 @@ beforeEach(() => {
 });
 
 describe('TeamPanel', () => {
-  test('começa fechado: só o cabeçalho "Equipe" aparece', () => {
+  // No trilho, o "1 online" que a barra mostrava vai para o nome do botão.
+  test('começa fechado: só o botão "Equipe", com quantos estão online', () => {
     agentsReady([{ id: 'a1', name: 'Ana', avatarPath: null }]);
     usePresence.mockReturnValue(new Set(['a1']));
     render(<TeamPanel />);
 
     expect(screen.getByRole('button', { name: /^equipe/i })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
-    expect(screen.getByText('1 online')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^equipe/i })).toHaveAccessibleName('Equipe: 1 online');
   });
 
   test('clicar em "Equipe" abre o painel e busca a lista de novo', async () => {
@@ -240,12 +241,12 @@ describe('TeamPanel', () => {
 });
 
 describe('Nossa equipe: carregando, erro e busca vazia', () => {
-  test('erro: a barra diz, o popup não afirma "0 integrantes" e oferece "Tentar de novo" (ATD-EQP-04, ATD-EQM-07)', async () => {
+  test('erro: o botão diz, o popup não afirma "0 integrantes" e oferece "Tentar de novo" (ATD-EQP-04, ATD-EQM-07)', async () => {
     const refresh = vi.fn();
     useAgents.mockReturnValue({ agents: [], status: 'error', refresh });
     usePresence.mockReturnValue(new Set());
     render(<TeamPanel />);
-    expect(screen.getByText('Não foi possível carregar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^equipe/i })).toHaveAccessibleName('Equipe: não foi possível carregar');
     await openPanel();
     expect(screen.getByText('Não foi possível carregar a equipe.')).toBeInTheDocument();
     expect(screen.queryByText(/0 integrantes/)).not.toBeInTheDocument();
@@ -257,6 +258,7 @@ describe('Nossa equipe: carregando, erro e busca vazia', () => {
     useAgents.mockReturnValue({ agents: [], status: 'loading', refresh: vi.fn() });
     usePresence.mockReturnValue(new Set());
     render(<TeamPanel />);
+    expect(screen.getByRole('button', { name: /^equipe/i })).toHaveAccessibleName('Equipe: carregando');
     await openPanel();
     expect(screen.getByText('Carregando a equipe…')).toBeInTheDocument();
     expect(screen.queryByText(/0 integrantes/)).not.toBeInTheDocument();

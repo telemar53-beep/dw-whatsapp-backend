@@ -1,9 +1,21 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useMatch } from 'react-router-dom';
 import { useSocketConnection } from '../contexts/SocketContext';
 import SideNav from './SideNav';
 import ProfileModal from './ProfileModal';
 import { IconChats } from './icons/WaIcons';
+
+// Na mesa, a casca não desenha o menu: reserva um encaixe, e a página da mesa
+// (que já vem sob demanda) desenha ali o trilho dela, por portal. Assim o
+// trilho, os ícones DW, o botão "Equipe" e o CSS da mesa viajam com a página,
+// e a casca — carregada em toda página — não importa nada disso.
+// Até a página chegar, o encaixe já tem a largura e o fundo do trilho no
+// desktop (no celular o trilho é gaveta e não ocupa espaço): nada pula.
+const FUNDO_DO_TRILHO = { background: '#1f1b4b' };
+// O ícone do botão "Abrir menu" também vem da página, por portal — e evento de
+// portal sobe pela árvore React de quem o desenhou, não pelo botão. Sem isto,
+// um toque que caísse no ícone não abria o menu. Assim o toque cai no botão.
+const ICONE_SEM_TOQUE = { pointerEvents: 'none' };
 
 // Casca de todas as páginas autenticadas. `dense` = telas com muito conteúdo
 // (Configurações, Supervisão, Relatórios): os brilhos do fundo ficam mais fracos.
@@ -18,6 +30,11 @@ function AppShell({ dense = false }) {
   const [conversationOpen, setConversationOpen] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
   const connectionState = useSocketConnection();
+  // O Atendimento é a única página com o trilho da mesa, sem os brilhos do
+  // fundo e sem o respiro em volta: trilho e lista encostam na borda da tela.
+  const naMesa = Boolean(useMatch({ path: '/', end: true }));
+  const [encaixeDoTrilho, setEncaixeDoTrilho] = useState(null);
+  const [encaixeDoIcone, setEncaixeDoIcone] = useState(null);
   // A faixa e so o alerta momentaneo; quem sustenta o estado e o indicador do
   // menu lateral, que nao cobre tabela nem acao nenhuma.
   const [avisoConexao, setAvisoConexao] = useState(null);
@@ -92,10 +109,14 @@ function AppShell({ dense = false }) {
           )}
         </div>
       )}
-      <div aria-hidden="true" className={`pointer-events-none absolute left-[38%] -top-[10%] h-[38rem] w-[42rem] rounded-full ${glow[0]} blur-[150px]`} />
-      <div aria-hidden="true" className={`pointer-events-none absolute -right-[6%] bottom-[-15%] h-[30rem] w-[32rem] rounded-full ${glow[1]} blur-[150px]`} />
-      <div className="relative z-10 flex min-h-0 min-w-0 flex-1 gap-3 p-0 md:p-3">
-        <SideNav onProfileClick={openProfile} mobileOpen={mobileNavOpen} onMobileClose={closeMobileNav} />
+      {!naMesa && <>
+        <div aria-hidden="true" className={`pointer-events-none absolute left-[38%] -top-[10%] h-[38rem] w-[42rem] rounded-full ${glow[0]} blur-[150px]`} />
+        <div aria-hidden="true" className={`pointer-events-none absolute -right-[6%] bottom-[-15%] h-[30rem] w-[32rem] rounded-full ${glow[1]} blur-[150px]`} />
+      </>}
+      <div className={`relative z-10 flex min-h-0 min-w-0 flex-1 ${naMesa ? '' : 'gap-3 p-0 md:p-3'}`}>
+        {naMesa
+          ? <div ref={setEncaixeDoTrilho} data-encaixe="trilho" className="flex shrink-0 md:w-16" style={FUNDO_DO_TRILHO} />
+          : <SideNav onProfileClick={openProfile} mobileOpen={mobileNavOpen} onMobileClose={closeMobileNav} />}
         {/* `inert` no conteúdo enquanto a gaveta está aberta: é o que impede o
             Tab de sair da gaveta e passear pela página atrás dela — a mesma
             técnica que a pilha de diálogos usa no nível de baixo. */}
@@ -110,9 +131,11 @@ function AppShell({ dense = false }) {
             data-testid="open-mobile-nav"
             className={`m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.10] text-chat-text transition hover:bg-white/[0.16] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring ${conversationOpen ? 'hidden' : 'md:hidden'}`}
           >
-            <IconChats size={22} />
+            {/* Na mesa, o ícone vem da página, pelo mesmo caminho do trilho. O
+                botão tem tamanho fixo: o ícone chegar depois não mexe em nada. */}
+            {naMesa ? <span ref={setEncaixeDoIcone} className="flex" style={ICONE_SEM_TOQUE} /> : <IconChats size={22} />}
           </button>
-          <Outlet context={{ openProfile, closeMobileNav, profileVersion, setConversationOpen }} />
+          <Outlet context={{ openProfile, closeMobileNav, profileVersion, setConversationOpen, mobileNavOpen, encaixeDoTrilho, encaixeDoIcone }} />
         </div>
       </div>
       {profileOpen && (

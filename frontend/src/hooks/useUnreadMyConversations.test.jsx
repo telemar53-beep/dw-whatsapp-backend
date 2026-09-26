@@ -34,20 +34,24 @@ class FakeGain {
   }
 }
 
+// Conta osciladores, não contextos: o AudioContext agora é um só por aba e
+// passa de um teste para o outro dentro do arquivo. Um toque = dois
+// osciladores (880 e 1320 Hz).
 class FakeAudioContext {
   constructor() {
-    FakeAudioContext.instances.push(this);
     this.currentTime = 0;
     this.destination = {};
   }
   createOscillator() {
-    return new FakeOscillator();
+    const oscilador = new FakeOscillator();
+    FakeAudioContext.osciladores.push(oscilador);
+    return oscilador;
   }
   createGain() {
     return new FakeGain();
   }
 }
-FakeAudioContext.instances = [];
+FakeAudioContext.osciladores = [];
 
 const MY_CONVERSATIONS = [{ id: 'c1' }, { id: 'c2' }];
 
@@ -56,7 +60,7 @@ let fakeSocket;
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
-  FakeAudioContext.instances = [];
+  FakeAudioContext.osciladores = [];
   window.AudioContext = FakeAudioContext;
   fakeSocket = createFakeSocket();
   useSocket.mockReturnValue(fakeSocket);
@@ -81,7 +85,7 @@ describe('useUnreadMyConversations', () => {
     act(() => {
       fakeSocket.trigger('message:new', { conversation: { id: 'c1' }, message: { direction: 'inbound' } });
     });
-    expect(FakeAudioContext.instances).toHaveLength(1);
+    expect(FakeAudioContext.osciladores).toHaveLength(2);
   });
 
   test('does not play a sound when muted', () => {
@@ -90,7 +94,7 @@ describe('useUnreadMyConversations', () => {
     act(() => {
       fakeSocket.trigger('message:new', { conversation: { id: 'c1' }, message: { direction: 'inbound' } });
     });
-    expect(FakeAudioContext.instances).toHaveLength(0);
+    expect(FakeAudioContext.osciladores).toHaveLength(0);
   });
 
   test('ignores an outbound message (the agent sending, not the customer replying)', () => {
@@ -166,7 +170,7 @@ describe('sinal de mensagem nova em Espera e Automação', () => {
 
     expect(result.current.unreadIds.has('fila-1')).toBe(true);
     // O som da fila é do useQueueNotificationSound; aqui seria som dobrado.
-    expect(FakeAudioContext.instances).toHaveLength(0);
+    expect(FakeAudioContext.osciladores).toHaveLength(0);
   });
 
   test('message:new numa conversa observada também acende', () => {

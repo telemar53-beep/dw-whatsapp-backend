@@ -34,27 +34,31 @@ class FakeGain {
   }
 }
 
+// Conta osciladores, não contextos: o AudioContext agora é um só por aba e
+// passa de um teste para o outro dentro do arquivo. Um toque = dois
+// osciladores (880 e 1320 Hz).
 class FakeAudioContext {
   constructor() {
-    FakeAudioContext.instances.push(this);
     this.currentTime = 0;
     this.destination = {};
   }
   createOscillator() {
-    return new FakeOscillator();
+    const oscilador = new FakeOscillator();
+    FakeAudioContext.osciladores.push(oscilador);
+    return oscilador;
   }
   createGain() {
     return new FakeGain();
   }
 }
-FakeAudioContext.instances = [];
+FakeAudioContext.osciladores = [];
 
 let fakeSocket;
 
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
-  FakeAudioContext.instances = [];
+  FakeAudioContext.osciladores = [];
   window.AudioContext = FakeAudioContext;
   fakeSocket = createFakeSocket();
   useSocket.mockReturnValue(fakeSocket);
@@ -63,7 +67,7 @@ beforeEach(() => {
 describe('useQueueNotificationSound', () => {
   test('does not play a sound on mount', () => {
     renderHook(() => useQueueNotificationSound());
-    expect(FakeAudioContext.instances).toHaveLength(0);
+    expect(FakeAudioContext.osciladores).toHaveLength(0);
   });
 
   test('plays a sound when a new conversation arrives in the queue', () => {
@@ -71,7 +75,7 @@ describe('useQueueNotificationSound', () => {
     act(() => {
       fakeSocket.trigger('queue:new', { conversation: { id: 'c1' } });
     });
-    expect(FakeAudioContext.instances).toHaveLength(1);
+    expect(FakeAudioContext.osciladores).toHaveLength(2);
   });
 
   test('starts unmuted by default', () => {
@@ -107,7 +111,7 @@ describe('useQueueNotificationSound', () => {
     act(() => {
       fakeSocket.trigger('queue:new', { conversation: { id: 'c1' } });
     });
-    expect(FakeAudioContext.instances).toHaveLength(0);
+    expect(FakeAudioContext.osciladores).toHaveLength(0);
   });
 
   test('stops playing sounds after being muted mid-session', () => {
@@ -115,7 +119,7 @@ describe('useQueueNotificationSound', () => {
     act(() => {
       fakeSocket.trigger('queue:new', { conversation: { id: 'c1' } });
     });
-    expect(FakeAudioContext.instances).toHaveLength(1);
+    expect(FakeAudioContext.osciladores).toHaveLength(2);
 
     act(() => {
       result.current.toggleMuted();
@@ -123,7 +127,7 @@ describe('useQueueNotificationSound', () => {
     act(() => {
       fakeSocket.trigger('queue:new', { conversation: { id: 'c2' } });
     });
-    expect(FakeAudioContext.instances).toHaveLength(1);
+    expect(FakeAudioContext.osciladores).toHaveLength(2);
   });
 
   test('does nothing when there is no socket connection yet', () => {

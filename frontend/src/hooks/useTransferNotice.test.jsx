@@ -34,20 +34,24 @@ class FakeGain {
   }
 }
 
+// Conta osciladores, não contextos: o AudioContext agora é um só por aba e
+// passa de um teste para o outro dentro do arquivo. Um toque = dois
+// osciladores (880 e 1320 Hz).
 class FakeAudioContext {
   constructor() {
-    FakeAudioContext.instances.push(this);
     this.currentTime = 0;
     this.destination = {};
   }
   createOscillator() {
-    return new FakeOscillator();
+    const oscilador = new FakeOscillator();
+    FakeAudioContext.osciladores.push(oscilador);
+    return oscilador;
   }
   createGain() {
     return new FakeGain();
   }
 }
-FakeAudioContext.instances = [];
+FakeAudioContext.osciladores = [];
 
 const TRANSFERIDA = {
   conversation: { id: 'conv-1', contactDisplayName: 'Carlos', contactPhoneNumber: '+5511999998888' },
@@ -59,7 +63,7 @@ let fakeSocket;
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
-  FakeAudioContext.instances = [];
+  FakeAudioContext.osciladores = [];
   window.AudioContext = FakeAudioContext;
   fakeSocket = createFakeSocket();
   useSocket.mockReturnValue(fakeSocket);
@@ -88,7 +92,7 @@ describe('useTransferNotice', () => {
 
     act(() => fakeSocket.trigger('conversation:assigned', TRANSFERIDA));
 
-    expect(FakeAudioContext.instances.length).toBe(1);
+    expect(FakeAudioContext.osciladores.length).toBe(2);
   });
 
   // O mesmo evento chega quando o proprio atendente pega uma conversa da fila.
@@ -99,7 +103,7 @@ describe('useTransferNotice', () => {
     act(() => fakeSocket.trigger('conversation:assigned', { conversation: { id: 'conv-9' } }));
 
     expect(result.current.notice).toBeNull();
-    expect(FakeAudioContext.instances.length).toBe(0);
+    expect(FakeAudioContext.osciladores.length).toBe(0);
   });
 
   test('transferencia com transferredBy null ainda avisa, sem nome (ATD-AVT-07)', () => {
@@ -129,7 +133,7 @@ describe('useTransferNotice', () => {
 
     act(() => fakeSocket.trigger('conversation:assigned', TRANSFERIDA));
 
-    expect(FakeAudioContext.instances.length).toBe(0);
+    expect(FakeAudioContext.osciladores.length).toBe(0);
     expect(result.current.notice).not.toBeNull();
   });
 

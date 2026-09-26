@@ -240,5 +240,6 @@ describe('família de ícones DW', () => {
     expect(FONTES['./desenhos.js']).not.toMatch(/^\s*import\s/m);
     expect(FONTES['./desenhosSgp.js']).not.toMatch(/^\s*import\s/m);
     expect(FONTES['./desenhoRespostasRapidas.js']).not.toMatch(/^\s*import\s/m);
+    expect(FONTES['./desenhosDaConversa.js']).not.toMatch(/^\s*import\s/m);
   });
 });

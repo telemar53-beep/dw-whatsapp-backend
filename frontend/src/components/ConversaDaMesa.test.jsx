@@ -129,7 +129,7 @@ describe('cabeçalho da mesa', () => {
     const dados = screen.getByRole('button', { name: 'Dados do cliente' });
     await userEvent.click(dados);
     expect(dados).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).toHaveClass('is-open');
+    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).toHaveClass('conv-painel-slot', 'is-cliente');
   });
 
   test('voltar para a lista chama quem abriu', async () => {

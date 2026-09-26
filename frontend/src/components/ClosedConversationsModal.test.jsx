@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ClosedConversationsModal from './ClosedConversationsModal';
@@ -185,7 +185,7 @@ describe('Encerrados: reabrir não traz a nota antiga', () => {
     render(<ClosedConversationsModal onClose={vi.fn()} />);
     await userEvent.click(await screen.findByText('Ana Encerrada'));
     await userEvent.click(screen.getByRole('button', { name: /^Editar cliente:/ }));
-    const edicao = screen.getByRole('dialog', { name: 'Editar cliente' });
+    const edicao = await screen.findByRole('dialog', { name: 'Editar cliente' });
     const nota = within(edicao).getByLabelText('Nota interna');
     await userEvent.clear(nota);
     await userEvent.type(nota, 'Nota nova');
@@ -199,6 +199,38 @@ describe('Encerrados: reabrir não traz a nota antiga', () => {
     const conversa = screen.getByRole('dialog', { name: 'Conversa' });
     expect(within(within(conversa).getByRole('complementary')).getByText('Nota nova')).toBeInTheDocument();
     await userEvent.click(within(conversa).getByRole('button', { name: /^Editar cliente:/ }));
-    expect(within(screen.getByRole('dialog', { name: 'Editar cliente' })).getByLabelText('Nota interna')).toHaveValue('Nota nova');
+    expect(within(await screen.findByRole('dialog', { name: 'Editar cliente' })).getByLabelText('Nota interna')).toHaveValue('Nota nova');
+  });
+});
+
+// Encerrados no celular: a conversa é só de leitura, mas os dados do cliente
+// continuam acessíveis — pelo cabeçalho do popup, no lugar da conversa.
+describe('Encerrados: Dados do cliente no celular', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test('o cabeçalho dá acesso ao painel, que substitui a conversa com um único voltar', async () => {
+    vi.stubGlobal('innerWidth', 390);
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(aoMedir) { this.aoMedir = aoMedir; }
+      observe() { this.aoMedir([{ contentRect: { width: 390 } }]); }
+      disconnect() {}
+    });
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    await userEvent.click(screen.getByText('Ana Encerrada'));
+    const conversa = screen.getByRole('dialog', { name: 'Conversa' });
+    expect(within(conversa).queryByRole('complementary', { name: 'Dados do cliente' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(conversa).getByRole('button', { name: 'Dados do cliente' }));
+    const painel = within(conversa).getByRole('complementary', { name: 'Dados do cliente' });
+    expect(painel).toHaveClass('dados-cliente');
+    expect(within(painel).getByText('Encerrado')).toBeInTheDocument();
+    expect(within(conversa).getAllByRole('button', { name: 'Voltar à conversa' })).toHaveLength(1);
+    expect(within(conversa).queryByPlaceholderText(/mensagem/i)).not.toBeInTheDocument();
+    // Um controle só: o "×" do popup some enquanto o painel ocupa a tela…
+    expect(within(conversa).queryByRole('button', { name: 'Fechar conversa' })).not.toBeInTheDocument();
+
+    // …e volta com a conversa.
+    await userEvent.click(within(conversa).getByRole('button', { name: 'Voltar à conversa' }));
+    expect(within(conversa).getByRole('button', { name: 'Fechar conversa' })).toBeInTheDocument();
   });
 });

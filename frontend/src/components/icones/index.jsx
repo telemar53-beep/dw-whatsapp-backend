@@ -22,9 +22,7 @@ export function IconeInformacoes(props) { return <Icone desenho={desenhos.inform
 export function IconeConsultarSgp(props) { return <Icone desenho={desenhos.consultarSgp} {...props} />; }
 export function IconeTransferir(props) { return <Icone desenho={desenhos.transferir} {...props} />; }
 export function IconeEncerrar(props) { return <Icone desenho={desenhos.encerrar} {...props} />; }
-export function IconeHistorico(props) { return <Icone desenho={desenhos.historico} {...props} />; }
-export function IconeDadosCliente(props) { return <Icone desenho={desenhos.dadosCliente} {...props} />; }
-export function IconeRecolher(props) { return <Icone desenho={desenhos.recolher} {...props} />; }
+export { IconeHistorico, IconeDadosCliente, IconeRecolher } from './conversa';
 export function IconeAssumir(props) { return <Icone desenho={desenhos.assumir} {...props} />; }
 
 // Compositor

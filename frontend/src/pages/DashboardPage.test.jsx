@@ -845,12 +845,16 @@ describe('edição do contato na mesa: a lista guarda o que foi salvo', () => {
   const painel = () => screen.getByRole('complementary', { name: 'Dados do cliente' });
   const rendersDaConversa = () => useQuickReplies.mock.calls.length;
 
+  // Abre a conversa e o painel "Dados do cliente" (que só existe aberto).
   async function abrir(nome) {
     await userEvent.click(await within(lista()).findByRole('button', { name: new RegExp(`^${nome}`) }));
     await screen.findByRole('button', { name: new RegExp(`^Editar cliente: ${nome}`) });
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
   }
   async function editar(nome, campos) {
     await userEvent.click(screen.getByRole('button', { name: new RegExp(`^Editar cliente: ${nome}`) }));
+    // O modal de edição chega sob demanda.
+    await screen.findByRole('dialog', { name: 'Editar cliente' });
     for (const [rotulo, texto] of campos) {
       const campo = within(edicao()).getByLabelText(rotulo);
       await userEvent.clear(campo);
@@ -874,7 +878,7 @@ describe('edição do contato na mesa: a lista guarda o que foi salvo', () => {
     await abrir('Contato A');
     expect(within(painel()).getByText('Nota nova')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /^Editar cliente: Contato A/ }));
-    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota nova');
+    expect(within(await screen.findByRole('dialog', { name: 'Editar cliente' })).getByLabelText('Nota interna')).toHaveValue('Nota nova');
   });
 
   test('salvar na mesa troca o nome na linha da lista', async () => {

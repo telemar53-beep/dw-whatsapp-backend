@@ -52,7 +52,7 @@ beforeEach(() => {
 });
 
 describe('ConversationView', () => {
-  test('mostra apenas os dados disponíveis do cliente no painel contextual', () => {
+  test('mostra apenas os dados disponíveis do cliente no painel contextual', async () => {
     render(
       <ConversationView
         conversation={{ id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactDisplayName: 'Ana', contactCityName: 'São Paulo', sectorName: 'Financeiro', protocolNumber: '123' }}
@@ -60,8 +60,11 @@ describe('ConversationView', () => {
         workspace
       />
     );
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
     const panel = screen.getByRole('complementary', { name: 'Dados do cliente' });
     expect(within(panel).getByText('São Paulo')).toBeInTheDocument();
+    // Setor e protocolo já estão na faixa da conversa: ficam recolhidos.
+    await userEvent.click(within(panel).getByRole('button', { name: 'Dados do atendimento' }));
     expect(within(panel).getByText('Financeiro')).toBeInTheDocument();
     expect(within(panel).getByText('123')).toBeInTheDocument();
     expect(within(panel).queryByText('CPF')).not.toBeInTheDocument();
@@ -70,10 +73,12 @@ describe('ConversationView', () => {
   // O botão "Dados do cliente" é da mesa: vem na faixa da variante (ConversaDaMesa).
   test('permite fechar e reabrir os dados do cliente sem alterar a conversa', async () => {
     render(<ConversationView conversation={{ id: 'c1', status: 'waiting', contactDisplayName: 'Ana' }} onTransferClick={vi.fn()} workspace variante={VARIANTE_DA_MESA} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Fechar dados do cliente' }));
-    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).toHaveClass('is-dismissed');
     await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
-    expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).not.toHaveClass('is-dismissed');
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar dados do cliente' }));
+    expect(screen.queryByRole('complementary', { name: 'Dados do cliente' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+    expect(screen.getByRole('complementary', { name: 'Dados do cliente' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Editar cliente: Ana/ })).toBeInTheDocument();
   });
 
   // O nome do provedor e configuracao: o sistema roda em mais de uma empresa.
@@ -541,7 +546,8 @@ describe('ConversationView', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /editar cliente/i }));
 
-    expect(screen.getByText('Editar cliente')).toBeInTheDocument();
+    // O modal chega sob demanda (guardas/dadosClienteSobDemanda.test.jsx).
+    expect(await screen.findByText('Editar cliente')).toBeInTheDocument();
   });
 
   test('saving in the edit-contact modal updates the header immediately', async () => {
@@ -1651,11 +1657,18 @@ describe('edição do contato: o que foi salvo vale para esta conversa', () => {
     usePlaces.mockReturnValue({ places: LUGARES, status: 'ready', refresh: vi.fn() });
   });
 
-  const mostrar = () =>
+  // O painel "Dados do cliente" só existe aberto: cada teste o abre logo.
+  const mostrar = () => {
     render(<ConversationView conversation={CONVERSA} onTransferClick={vi.fn()} workspace variante={VARIANTE_DA_MESA} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+  };
   const painel = () => screen.getByRole('complementary', { name: 'Dados do cliente' });
   const edicao = () => screen.getByRole('dialog', { name: 'Editar cliente' });
-  const abrirEdicao = () => userEvent.click(screen.getByRole('button', { name: /^Editar cliente:/ }));
+  // O modal de edição chega sob demanda.
+  const abrirEdicao = async () => {
+    await userEvent.click(screen.getByRole('button', { name: /^Editar cliente:/ }));
+    await screen.findByRole('dialog', { name: 'Editar cliente' });
+  };
   const edicaoFechou = () => waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
 
   async function escrever(rotulo, texto) {

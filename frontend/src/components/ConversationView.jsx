@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, lazy, Suspense } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useRolagemDaLinhaDoTempo } from '../hooks/useRolagemDaLinhaDoTempo';
@@ -11,10 +11,10 @@ import MessageAttachment from './MessageAttachment';
 import MessageStatusTicks from './MessageStatusTicks';
 import { descreverFalha } from '../utils/failureReasons';
 import { rotuloDoAutor } from '../utils/messageAuthor';
-import ConversationHistoryModal from './ConversationHistoryModal';
 import CloseReasonModal from './CloseReasonModal';
 import ContactAvatar from './ContactAvatar';
-import EditContactModal from './EditContactModal';
+import PainelDadosCliente from './PainelDadosCliente';
+import { IconeDadosCliente } from './icones/conversa';
 import { PAINEL, CONVERSA_MINIMA } from '../hooks/useWorkspaceLayout';
 import AiSuggestionCard from './AiSuggestionCard';
 import SendTemplateModal from './SendTemplateModal';
@@ -151,9 +151,26 @@ import './conversa-painel.css';
 // O painel do SGP (e a biblioteca de QR que ele usa) só chega quando o
 // atendente pede: a conversa comum não baixa nem avalia nada dele.
 const SgpLookupPanel = lazy(() => import('./SgpLookupPanel'));
+// Editar cliente e Atendimentos anteriores abrem pouco: cada um chega quando a
+// ação dele é pedida, e só ele (guardas/dadosClienteSobDemanda.test.jsx).
+const EditContactModal = lazy(() => import('./EditContactModal'));
+const ConversationHistoryModal = lazy(() => import('./ConversationHistoryModal'));
 
+// Enquanto o código do modal chega: nada que mude o lugar das coisas; só o
+// aviso para quem usa leitor de tela.
+// Margem do popup em volta da conversa (o p-4/sm:p-8 do diálogo), para o
+// palpite da largura antes da primeira medida.
+const MOLDURA_DO_POPUP = 64;
+
+const ABRINDO = <p role="status" className="sr-only">Abrindo…</p>;
+
+// O estado da conversa, um nome só em toda a conversa (cabeçalho e painel
+// "Dados do cliente"). `silent` é a conversa silenciada — um disparo (campanha
+// ou SGP) que o cliente ainda não respondeu, fora de qualquer fila —, e não a
+// da espera.
 function conversationStatus(conversation) {
   if (conversation.status === 'closed') return { tipo: 'encerrado', label: 'Encerrado', dot: 'bg-chat-faint' };
+  if (conversation.status === 'silent') return { tipo: 'silenciada', label: 'Silenciada', dot: 'bg-chat-faint' };
   if (conversation.assignedAgentId) return { tipo: 'atendimento', label: 'Em atendimento', dot: 'bg-chat-online' };
   if (conversation.triageState === 'pending') return { tipo: 'automacao', label: 'Em automação', dot: 'bg-chat-orange' };
   return { tipo: 'espera', label: 'Em espera', dot: 'bg-chat-orange' };
@@ -201,57 +218,6 @@ function HeaderIconButton({ label, onClick, children, expanded, controls, botaoR
   );
 }
 
-// Resumo da própria conversa. O SGP permanece na consulta já existente e
-// substitui este painel enquanto estiver aberto; nenhum dado é presumido.
-function CustomerPanel({ conversation, displayName, cityName, onClose }) {
-  const rows = [
-    ['Telefone', conversation.contactPhoneNumber],
-    ['Cidade', cityName],
-    ['Setor', conversation.sectorName],
-    ['Atendente', conversation.assignedAgentName],
-    ['Protocolo', conversation.protocolNumber],
-  ].filter(([, value]) => Boolean(value));
-
-  return (
-    <aside className="chat-workspace-customer-panel chat-scroll" aria-label="Dados do cliente">
-      <div className="chat-workspace-panel-heading">
-        <span>Dados do cliente</span>
-        <button type="button" onClick={onClose} aria-label="Fechar dados do cliente">×</button>
-      </div>
-      <div className="chat-workspace-panel-body">
-        <div className="chat-workspace-customer-identity">
-          <ContactAvatar contactId={conversation.contactId} avatarPath={conversation.contactAvatarPath} displayName={displayName} phoneNumber={conversation.contactPhoneNumber} size={52} dark />
-          <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-semibold text-chat-text">{displayName || conversation.contactPhoneNumber || 'Conversa'}</h2>
-            <p className="mt-1 text-[12px] text-chat-muted">{conversation.status === 'closed' ? 'Encerrado' : conversation.assignedAgentId ? 'Em atendimento' : conversation.triageState === 'pending' ? 'Em automação' : 'Em espera'}</p>
-          </div>
-        </div>
-        {conversation.contactInternalNote && (
-          <section className="chat-workspace-panel-section">
-            <h3>Nota interna</h3>
-            <p className="whitespace-pre-wrap break-words">{conversation.contactInternalNote}</p>
-          </section>
-        )}
-        {rows.length > 0 && (
-          <section className="chat-workspace-panel-section">
-            <h3>Atendimento</h3>
-            <dl>{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-          </section>
-        )}
-        {conversation.aiTriageCompletedAt && (
-          <section className="chat-workspace-panel-section">
-            <h3>Triagem por IA</h3>
-            {conversation.aiTriageReasonName && <p>Motivo: {conversation.aiTriageReasonName}</p>}
-            {conversation.aiTriageSummary && <p className="mt-2 whitespace-pre-wrap break-words">{conversation.aiTriageSummary}</p>}
-            {conversation.aiTriageLowConfidence && <p className="mt-2 text-wa-warn-text">Confiança baixa</p>}
-            {conversation.aiTriageResolvedByAi && <p className="mt-2 text-chat-online">Resolvido pela IA</p>}
-          </section>
-        )}
-      </div>
-    </aside>
-  );
-}
-
 // `variante`: o cabeçalho, a faixa de contexto e os ícones da mesa, passados
 // pela página (components/ConversaDaMesa.jsx). Sem ela, a conversa é a do
 // modal da Supervisão e dos Encerrados. Vem de fora para que nada disso viaje
@@ -259,7 +225,13 @@ function CustomerPanel({ conversation, displayName, cityName, onClose }) {
 // `onContatoSalvo`: quem monta a conversa ao lado de outro painel (o modal da
 // Supervisão e dos Encerrados) recebe o que o "Editar cliente" salvou, já
 // preso à conversa de onde saiu (utils/contatoSalvo.js).
-function ConversationView({ conversation, onTransferClick, onBack, painelModo = 'coluna', onPainelAbertoChange, workspace = false, variante, onContatoSalvo }) {
+// `popup`: a conversa aberta no popup da Supervisão e dos Encerrados. Lá os
+// dados do cliente ficam à vista quando há espaço, e a troca de setor existe
+// (como antes, no painel ao lado).
+// `onPainelNoLugarChange`: avisa quem monta (o popup) quando um painel — Dados
+// do cliente ou SGP — ocupa o lugar da conversa; o popup então esconde o
+// fechar dele, e o voltar do painel é o único controle na tela.
+function ConversationView({ conversation, onTransferClick, onBack, painelModo = 'coluna', onPainelAbertoChange, workspace = false, variante, onContatoSalvo, popup = false, onPainelNoLugarChange }) {
   const Cabecalho = variante && variante.Cabecalho;
   const icones = variante && variante.icones;
   const IconeInfo = (icones && icones.Info) || IconInfo;
@@ -305,8 +277,10 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const [replyingTo, setReplyingTo] = useState(null);
   const { avisar, alertDialog, dispensar: dispensarAviso } = useAlert();
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
-  const [customerPanelOpen, setCustomerPanelOpen] = useState(false);
-  const [customerPanelDismissed, setCustomerPanelDismissed] = useState(false);
+  // "Dados do cliente" aberto pelo botão. No popup da Supervisão e dos
+  // Encerrados, com espaço, o painel fica à vista mesmo sem o clique
+  // (`dadosPorPadrao`, abaixo).
+  const [dadosAbertos, setDadosAbertos] = useState(false);
   // O espaço é medido AQUI, no próprio componente, e não herdado da viewport.
   // Dentro do ConversationModal as duas divergem: a janela pode ter 1400px e o
   // diálogo 700px. Era essa divergência que deixava o painel do SGP em
@@ -330,30 +304,64 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     return () => observador.disconnect();
   }, []);
 
-  const painelAberto = sgpPanelOpen || (workspace && customerPanelOpen && !customerPanelDismissed);
   // `painelModo` continua valendo quando quem monta já decidiu (a mesa, pelo
   // `useWorkspaceLayout`). Fora dela — o modal — a decisão sai da medida: se a
   // conversa não mantém seu piso com o painel ao lado, o painel substitui.
   const cabeAoLado = larguraReal === 0 || larguraReal >= PAINEL + CONVERSA_MINIMA;
+  // No popup, antes da primeira medida, o palpite é a janela menos a moldura
+  // do popup: sem ele, o celular mostraria o painel ao lado por um instante.
+  const cabeNoPopup = larguraReal === 0
+    ? typeof window === 'undefined' || window.innerWidth >= PAINEL + CONVERSA_MINIMA + MOLDURA_DO_POPUP
+    : cabeAoLado;
+  // Supervisão e Encerrados, com espaço: os dados do cliente ficam à vista o
+  // tempo todo, sem fechar; o SGP, quando aberto, ocupa o lugar deles.
+  const dadosPorPadrao = popup && cabeNoPopup;
+  const dadosVisiveis = !sgpPanelOpen && (dadosAbertos || dadosPorPadrao);
+  const painelAberto = sgpPanelOpen || dadosVisiveis;
+  // Só o que o atendente abriu ele fecha (Escape, voltar, fechar).
+  const painelFechavel = sgpPanelOpen || dadosAbertos;
   const modoEfetivo = painelModo === 'alternado' || !cabeAoLado ? 'alternado' : 'coluna';
   const painelAlternado = modoEfetivo === 'alternado' && painelAberto;
 
+  // O foco volta ao botão que abriu o painel DEPOIS do render que o fecha. No
+  // celular, até esse render, o botão está na conversa ainda escondida, e o
+  // foco cairia no corpo da página.
+  const focoPendenteRef = useRef(null);
+  useEffect(() => {
+    const alvo = focoPendenteRef.current;
+    if (!alvo) return;
+    focoPendenteRef.current = null;
+    if (alvo.current) alvo.current.focus();
+  }, [sgpPanelOpen, dadosVisiveis]);
+
   function fecharPaineisEDevolverFoco() {
     setSgpPanelOpen(false);
-    setCustomerPanelOpen(false);
-    setCustomerPanelDismissed(true);
-    const gatilho = ultimoGatilhoRef.current;
-    if (gatilho && gatilho.current) gatilho.current.focus();
+    setDadosAbertos(false);
+    focoPendenteRef.current = ultimoGatilhoRef.current;
   }
+
+  // Antes da pintura: o fechar do popup some no mesmo quadro em que o painel
+  // toma o lugar da conversa, sem um instante com os dois controles.
+  const painelAlternadoRef = useRef(painelAlternado);
+  painelAlternadoRef.current = painelAlternado;
+  useLayoutEffect(() => {
+    if (onPainelNoLugarChange) onPainelNoLugarChange(painelAlternado);
+  }, [painelAlternado, onPainelNoLugarChange]);
 
   // ESC fecha o painel e volta para a conversa. Nao entra na pilha de dialogos
   // de proposito: o painel nao e modal, e um dialogo aberto por cima dele tem
   // de continuar sendo o dono do ESC.
   useEffect(() => {
-    if (!painelAberto) return undefined;
+    if (!painelFechavel) return undefined;
     function aoTeclar(evento) {
-      if (evento.key !== 'Escape') return;
-      if (document.querySelector('[data-dialog]')) return;
+      if (evento.key !== 'Escape' || evento.defaultPrevented) return;
+      const dialogos = [...document.querySelectorAll('[data-dialog]')];
+      // Um diálogo aberto por cima da conversa (Editar cliente, Histórico…).
+      if (dialogos.some((dialogo) => !dialogo.contains(raizRef.current))) return;
+      // Dentro do popup, o ESC é do popup — a não ser com o painel no lugar da
+      // conversa: aí ele volta primeiro para a conversa (o popup, nesse
+      // estado, não fecha com ESC).
+      if (dialogos.length > 0 && !painelAlternadoRef.current) return;
       evento.stopPropagation();
       fecharPaineisEDevolverFoco();
     }
@@ -362,7 +370,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     // fecharPaineisEDevolverFoco só usa setters e refs: a versão do render em
     // que o painel abriu serve até ele fechar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [painelAberto]);
+  }, [painelFechavel]);
 
   // Ao substituir a conversa, o foco precisa entrar no painel — senao ele fica
   // atras, num botao que a pessoa nao ve mais.
@@ -376,24 +384,29 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
 
   function fecharSgp() {
     setSgpPanelOpen(false);
-    if (gatilhoSgpRef.current) gatilhoSgpRef.current.focus();
+    focoPendenteRef.current = gatilhoSgpRef;
   }
 
+  function fecharDados() {
+    setDadosAbertos(false);
+    focoPendenteRef.current = gatilhoClienteRef;
+  }
+
+  // Um painel por vez: abrir o SGP fecha os dados do cliente, e vice-versa.
   function alternarSgp() {
     ultimoGatilhoRef.current = gatilhoSgpRef;
+    setDadosAbertos(false);
     setSgpPanelOpen((prev) => !prev);
   }
 
   function alternarCliente() {
     ultimoGatilhoRef.current = gatilhoClienteRef;
-    if (customerPanelOpen && !customerPanelDismissed) { setCustomerPanelOpen(false); setCustomerPanelDismissed(true); return; }
-    setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false);
-  }
-
-  function fecharPaineis() {
+    if (dadosAbertos && !sgpPanelOpen) {
+      fecharDados();
+      return;
+    }
     setSgpPanelOpen(false);
-    setCustomerPanelOpen(false);
-    setCustomerPanelDismissed(true);
+    setDadosAbertos(true);
   }
   const [closingReason, setClosingReason] = useState(false);
   // A sugestão que o atendente escolheu editar: { id, content } enquanto o texto
@@ -417,8 +430,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     // O SGP abre só pelo botão "Consultar SGP" — e cada abertura consulta de
     // novo. Trocar de conversa fecha o painel: nada da anterior fica na tela.
     setSgpPanelOpen(false);
-    setCustomerPanelOpen(false);
-    setCustomerPanelDismissed(false);
+    setDadosAbertos(false);
     setClosingReason(false);
     setEditedSuggestion(null);
     dispensarAviso();
@@ -630,7 +642,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           onEncerrar={() => setClosingReason(true)}
           onHistorico={() => setShowingHistory(true)}
           sgp={{ aberto: sgpPanelOpen, ref: gatilhoSgpRef, alternar: alternarSgp }}
-          cliente={{ aberto: customerPanelOpen && !customerPanelDismissed, ref: gatilhoClienteRef, alternar: alternarCliente }}
+          cliente={{ aberto: dadosVisiveis, ref: gatilhoClienteRef, alternar: alternarCliente }}
         />
       ) : (
       <div className="chat-workspace-header @container z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/[0.07] px-2 py-2.5 md:px-5">
@@ -700,6 +712,13 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} controls="conv-painel-sgp" botaoRef={gatilhoSgpRef} onClick={alternarSgp}>
             <IconSearch size={20} />
           </HeaderIconButton>
+          {/* Sem espaço ao lado (celular), os dados do cliente abrem daqui, no
+              lugar da conversa. Com espaço, no popup, eles já estão à vista. */}
+          {!dadosPorPadrao && (
+            <HeaderIconButton label="Dados do cliente" expanded={dadosVisiveis} controls="conv-painel-cliente" botaoRef={gatilhoClienteRef} onClick={alternarCliente}>
+              <IconeDadosCliente tamanho={20} />
+            </HeaderIconButton>
+          )}
           </div>
           <span aria-hidden="true" className="h-6 w-px bg-white/[0.12]" />
           {isUnassigned && (
@@ -1013,9 +1032,12 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
         />
       )}
       {showingHistory && (
-        <ConversationHistoryModal contactId={conversation.contactId} onClose={() => setShowingHistory(false)} />
+        <Suspense fallback={ABRINDO}>
+          <ConversationHistoryModal contactId={conversation.contactId} onClose={() => setShowingHistory(false)} />
+        </Suspense>
       )}
       {editingContact && (
+        <Suspense fallback={ABRINDO}>
         <EditContactModal
           // Reabrir depois de salvar parte do que foi salvo, nota inclusive:
           // com a nota da lista, salvar de novo devolvia a antiga ao servidor.
@@ -1032,6 +1054,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
             if (conversaNaTelaRef.current === salvo.conversationId) setContactOverride(salvo);
           }}
         />
+        </Suspense>
       )}
       {closingReason && (
         <CloseReasonModal
@@ -1041,12 +1064,6 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
         />
       )}
       </div>
-      {painelAlternado && !sgpPanelOpen && (
-        <button ref={voltarRef} type="button" onClick={fecharPaineisEDevolverFoco} className="chat-painel-voltar">
-          <IconArrowLeft size={16} />
-          Voltar à conversa
-        </button>
-      )}
       {alertDialog}
       {sgpPanelOpen ? (
         <div className="conv-painel-slot is-sgp" id="conv-painel-sgp">
@@ -1068,9 +1085,22 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           />
         </Suspense>
         </div>
-      ) : workspace ? (
-        <div id="conv-painel-cliente" className={`conv-painel-slot chat-workspace-customer ${customerPanelOpen ? 'is-open' : ''} ${customerPanelDismissed ? 'is-dismissed' : ''}`}>
-          <CustomerPanel conversation={conversaDoContato} displayName={displayName} cityName={cityName} onClose={() => { setCustomerPanelOpen(false); setCustomerPanelDismissed(true); }} />
+      ) : dadosVisiveis ? (
+        // Fechado, o painel não existe: nada escondido no DOM. Ao lado da
+        // conversa, 300 px (o mesmo encaixe do SGP); sem espaço, no lugar dela,
+        // só com o voltar. Na mesa ele fecha; no popup com espaço, fica.
+        <div className="conv-painel-slot is-cliente" id="conv-painel-cliente">
+          <PainelDadosCliente
+            key={conversation.id}
+            conversation={conversaDoContato}
+            estado={status}
+            emTela={painelAlternado}
+            onFechar={painelAlternado ? fecharPaineisEDevolverFoco : dadosPorPadrao ? undefined : fecharDados}
+            voltarRef={voltarRef}
+            onEditar={() => setEditingContact(true)}
+            onHistorico={() => setShowingHistory(true)}
+            trocaDeSetor={popup}
+          />
         </div>
       ) : null}
     </div>

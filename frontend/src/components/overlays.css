@@ -176,16 +176,6 @@
 [data-dialog=help] {max-width:600px}
 [data-dialog=help] > div:nth-child(2) {font-size:13px;line-height:20px}
 /* Context drawers retain the existing resize/non-overlap behavior. */
-.dialog-conversation-info {padding:18px 16px}
-.dialog-conversation-info > div:first-child {display:grid;grid-template-columns:44px minmax(0,1fr);gap:3px 10px;text-align:left;align-items:center}
-.dialog-conversation-info > div:first-child > div {grid-row:1/4;box-shadow:none}
-.dialog-conversation-info > div:first-child > div > * {width:44px!important;height:44px!important;font-size:16px!important}
-.dialog-conversation-info > div:first-child h2,.dialog-conversation-info > div:first-child p,.dialog-conversation-info > div:first-child > span {margin:0}
-.dialog-conversation-info > div:first-child > span {justify-self:start;padding:2px 7px;font-size:10px}
-.dialog-conversation-info > .border-t {margin:14px 0}
-.dialog-conversation-info > div.flex-col {gap:12px}
-.dialog-conversation-info > div.flex-col > div.flex-col {display:grid;grid-template-columns:80px minmax(0,1fr);gap:8px;align-items:baseline}
-.dialog-conversation-info > div.flex-col > div.flex-col > span:last-child {font-size:12px;overflow-wrap:anywhere}
 /* Context menus: compact command lists with clear focus/destructive action. */
 .dialog-context-menu {border-radius:8px;background:var(--color-ui-surface-overlay);border-color:#64778466;padding:5px;box-shadow:0 10px 28px #0005}
 .dialog-context-menu button {font-size:12px;padding:7px 10px;border-radius:4px;line-height:18px}
@@ -213,8 +203,6 @@
 .dialog-sector-assignment > p.text-wa-error-text {grid-column:1/-1}
 [data-dialog=templates] .dw-dialog-heading {display:flex;align-items:center;gap:10px}
 [data-dialog=templates] .dw-dialog-heading:before {content:'';display:block;flex:none;width:22px;height:22px;background:#8bbaff;mask:url('../assets/brands/meta.svg') center/contain no-repeat}
-.chat-workspace-customer-panel .chat-workspace-panel-heading button {width:28px;height:28px;display:grid;place-items:center;border-radius:6px}
-.chat-workspace-customer-panel .chat-workspace-panel-heading button:focus-visible {outline: 2px solid var(--color-focus-ring);outline-offset:2px}
 /* A conversa aberta por cima de outro dialogo. Era h-[85vh] fixo: numa tela
    alta sobrava vazio e numa baixa nao cabia, e uma conversa de duas mensagens
    ocupava o mesmo tanto que uma de duzentas. Agora cresce com o conteudo, com

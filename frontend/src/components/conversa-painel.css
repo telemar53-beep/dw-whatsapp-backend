@@ -7,18 +7,18 @@
    A decisão vem da regra de larguras (useWorkspaceLayout) na mesa, e da medida
    da própria conversa no modal. */
 .conv-raiz > .conv-painel-slot {
-  flex: 0 0 268px;
-  width: 268px;
+  flex: 0 0 300px;
+  width: 300px;
   min-height: 0;
   height: 100%;
   overflow: hidden;
   border-left: 1px solid var(--workspace-line);
   background: var(--chat-surface-panel);
 }
-/* O SGP tem 300px e é claro em qualquer tela (mesa, Supervisão, Encerrados). */
-.conv-raiz > .conv-painel-slot.is-sgp {
-  flex-basis: 300px;
-  width: 300px;
+/* SGP e Dados do cliente: 300 px (a regra acima) e claros em qualquer tela
+   (mesa, Supervisão, Encerrados). A mesma largura para os dois: alternar um
+   com o outro não faz a conversa pular. */
+.conv-raiz > .conv-painel-slot:is(.is-sgp, .is-cliente) {
   border-left-color: #e3e6ec;
   background: #ffffff;
 }

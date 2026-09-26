@@ -362,10 +362,13 @@ describe('edição do contato: a resposta volta para a conversa de onde saiu', (
   const naMesa = (conversa) => <ConversationView conversation={conversa} onTransferClick={vi.fn()} onBack={vi.fn()} workspace />;
   const painel = () => screen.getByRole('complementary', { name: 'Dados do cliente' });
   const edicao = () => screen.getByRole('dialog', { name: 'Editar cliente' });
+  // O modal de edição chega sob demanda.
   async function abrirEdicao(nome) {
     await userEvent.click(screen.getByRole('button', { name: `Editar cliente: ${nome}` }));
-    return edicao();
+    return screen.findByRole('dialog', { name: 'Editar cliente' });
   }
+  // O painel só existe aberto, e trocar de conversa o fecha.
+  const abrirPainel = () => userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
   async function escrever(dialogo, rotulo, texto) {
     const campo = within(dialogo).getByLabelText(rotulo);
     await userEvent.clear(campo);
@@ -393,6 +396,7 @@ describe('edição do contato: a resposta volta para a conversa de onde saiu', (
 
     rerender(naMesa(B));
     await screen.findByText('Mensagem de conv-B');
+    await abrirPainel();
     // A edição de B já está aberta quando a resposta de A chega.
     const dialogoB = await abrirEdicao('Contato B');
 
@@ -416,6 +420,7 @@ describe('edição do contato: a resposta volta para a conversa de onde saiu', (
     await screen.findByText('Mensagem de conv-A');
     rerender(naMesa(B));
     await screen.findByText('Mensagem de conv-B');
+    await abrirPainel();
 
     const dialogoB = await abrirEdicao('Contato B');
     await escrever(dialogoB, 'Nome', 'Contato B editado');
@@ -426,6 +431,7 @@ describe('edição do contato: a resposta volta para a conversa de onde saiu', (
 
     rerender(naMesa(A));
     await screen.findByText('Mensagem de conv-A');
+    await abrirPainel();
 
     expect(screen.getByRole('button', { name: 'Editar cliente: Contato A' })).toBeInTheDocument();
     expect(within(painel()).getByText('Contato A')).toBeInTheDocument();

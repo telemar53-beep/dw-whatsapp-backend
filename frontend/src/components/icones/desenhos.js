@@ -17,8 +17,8 @@
 // conversa encerrada; a ligação que sai da origem e segue até outro ponto é a
 // transferência.
 //
-// Este arquivo não importa nada além do desenho de Respostas rápidas, que só
-// reexporta: a prancha de revisão o lê direto no Node.
+// Este arquivo não importa nada além dos desenhos que só reexporta (Respostas
+// rápidas e os três da conversa): a prancha de revisão o lê direto no Node.
 
 // Moldura de conversa: largura de 4 a 20, canto de raio 3, interrompida entre
 // x = 8 e x = 11 na borda de baixo. Quem usa acrescenta a cauda a partir de
@@ -129,23 +129,9 @@ export const encerrar = [
   ['rect', { x: 9.5, y: 7.5, width: 5, height: 5, rx: 1.25 }],
 ];
 
-// Relógio aberto à esquerda; a ponta da abertura volta no tempo.
-export const historico = [
-  ['path', { d: 'M4.27 14.07 A8 8 0 1 0 6.34 6.34' }],
-  ['path', { d: 'M6.34 3.09 V6.34 H9.59' }],
-  ['path', { d: 'M12 8 V12 L14.5 14.5' }],
-];
-
-// Ficha de identificação: o retrato apoiado na borda de baixo.
-export const dadosCliente = [
-  ['rect', { x: 3.5, y: 5, width: 17, height: 14, rx: 2.5 }],
-  ['circle', { cx: 9, cy: 10.5, r: 2.25 }],
-  ['path', { d: 'M5.5 19 A3.5 3.5 0 0 1 12.5 19' }],
-  ['path', { d: 'M14.5 10 H17.5 M14.5 13.5 H16.5' }],
-];
-
-// Um desenho só: girar o elemento inteiro faz a volta (recolher ↔ expandir).
-export const recolher = [['path', { d: 'M6.5 9.25 L12 14.75 L17.5 9.25' }]];
+// Histórico, Dados do cliente e Recolher moram em desenhosDaConversa.js: a
+// conversa os usa em qualquer tela e o trecho dela leva só os três.
+export { historico, dadosCliente, recolher } from './desenhosDaConversa.js';
 
 // O atendente ocupa a abertura da conversa: a moldura se abre para o lado dele.
 export const assumir = [

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationModal from './ConversationModal';
@@ -106,6 +106,8 @@ describe('edição do contato dentro do modal', () => {
   const edicao = () => screen.getByRole('dialog', { name: 'Editar cliente' });
   async function salvarNomeENota(nome, nota) {
     await userEvent.click(screen.getByRole('button', { name: /^Editar cliente:/ }));
+    // O modal de edição chega sob demanda.
+    await screen.findByRole('dialog', { name: 'Editar cliente' });
     for (const [rotulo, texto] of [['Nome', nome], ['Nota interna', nota]]) {
       const campo = within(edicao()).getByLabelText(rotulo);
       await userEvent.clear(campo);
@@ -142,6 +144,7 @@ describe('edição do contato dentro do modal', () => {
 
     expect(screen.queryByPlaceholderText(/digite uma mensagem/i)).not.toBeInTheDocument();
     expect(within(painel).getByText('Encerrado')).toBeInTheDocument();
+    await userEvent.click(within(painel).getByRole('button', { name: 'Dados do atendimento' }));
     expect(within(painel).getByText('Encerrado em')).toBeInTheDocument();
 
     await salvarNomeENota('Contato Renomeado', 'Nota nova');
@@ -159,11 +162,123 @@ describe('edição do contato dentro do modal', () => {
     ['responsável pela conversa', { id: 'agent-1', role: 'agent' }, true],
     ['gerente', { id: 'gerente-1', role: 'manager' }, true],
     ['admin', { id: 'admin-1', role: 'admin' }, true],
-  ])('permissões inalteradas: %s', (_quem, agent, trocaSetor) => {
+  ])('permissões inalteradas: %s', async (_quem, agent, trocaSetor) => {
     useAuth.mockReturnValue({ token: 'tok-123', agent });
     mostrar(EM_ATENDIMENTO);
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do atendimento' }));
     expect(screen.getByRole('button', { name: /^Editar cliente:/ })).toBeInTheDocument();
     if (trocaSetor) expect(screen.getByLabelText('Alterar setor')).toBeInTheDocument();
     else expect(screen.queryByLabelText('Alterar setor')).not.toBeInTheDocument();
+  });
+});
+
+// Largura de celular: o jsdom não mede nada, então a conversa recebe a medida
+// por um ResizeObserver de mentira, e a janela, a mesma largura.
+function telaDeCelular(largura = 390) {
+  vi.stubGlobal('innerWidth', largura);
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(aoMedir) { this.aoMedir = aoMedir; }
+    observe() { this.aoMedir([{ contentRect: { width: largura } }]); }
+    disconnect() {}
+  });
+}
+
+// O popup da Supervisão e dos Encerrados usa o mesmo painel da mesa, dentro da
+// conversa: no desktop, à vista o tempo todo; no celular, pelo cabeçalho, no
+// lugar da conversa.
+describe('Dados do cliente no popup', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const CONVERSA = { id: 'c1', contactId: 'contato-1', contactDisplayName: 'Contato Um', contactInternalNote: 'Nota do contato', assignedAgentId: 'agent-1', status: 'assigned' };
+  const mostrar = () => render(<ConversationModal conversation={CONVERSA} onClose={vi.fn()} onTransferClick={vi.fn()} />);
+
+  test('desktop: o mesmo painel da mesa, à vista, e nenhum painel antigo com layout próprio', () => {
+    mostrar();
+    const paineis = screen.getAllByRole('complementary');
+    expect(paineis).toHaveLength(1);
+    expect(paineis[0]).toHaveAccessibleName('Dados do cliente');
+    expect(paineis[0]).toHaveClass('dados-cliente');
+    expect(document.querySelector('.dialog-conversation-info')).toBeNull();
+    // Acesso contínuo: nem fechar nem voltar.
+    expect(within(paineis[0]).queryByRole('button', { name: /Fechar dados do cliente|Voltar à conversa/ })).not.toBeInTheDocument();
+    // O fechar do popup continua como sempre no desktop.
+    expect(screen.getByRole('button', { name: 'Fechar conversa' })).toBeInTheDocument();
+  });
+
+  test('celular: o cabeçalho dá acesso, o painel substitui a conversa e um único voltar devolve o foco', async () => {
+    telaDeCelular();
+    mostrar();
+    expect(screen.queryByRole('complementary', { name: 'Dados do cliente' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+    expect(screen.getByRole('complementary', { name: 'Dados do cliente' })).toBeInTheDocument();
+    expect(document.querySelector('.conv-raiz')).toHaveClass('is-painel-alternado');
+    const voltar = screen.getAllByRole('button', { name: 'Voltar à conversa' });
+    expect(voltar).toHaveLength(1);
+
+    await userEvent.click(voltar[0]);
+    expect(screen.queryByRole('complementary', { name: 'Dados do cliente' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Dados do cliente' })).toHaveFocus());
+  });
+});
+
+// Celular: quando um painel ocupa o lugar da conversa no popup, o único
+// controle é o voltar do painel — o "×" do popup some e só volta com a
+// conversa. O Escape segue a mesma ordem: primeiro volta do painel, depois
+// fecha o popup.
+describe('popup no celular: um controle só com o painel no lugar da conversa', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const CONVERSA = { id: 'c1', contactId: 'contato-1', contactDisplayName: 'Contato Um', assignedAgentId: 'agent-1', status: 'assigned' };
+
+  test('Dados do cliente: só o voltar; ao voltar, o "×" reaparece e fecha o popup', async () => {
+    telaDeCelular();
+    const onClose = vi.fn();
+    render(<ConversationModal conversation={CONVERSA} onClose={onClose} onTransferClick={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Fechar conversa' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+    expect(screen.getAllByRole('button', { name: 'Voltar à conversa' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Fechar conversa' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar à conversa' }));
+    expect(screen.queryByRole('complementary', { name: 'Dados do cliente' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Fechar conversa' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('Escape: com o painel no lugar da conversa, volta à conversa; depois, fecha o popup', async () => {
+    telaDeCelular();
+    const onClose = vi.fn();
+    render(<ConversationModal conversation={CONVERSA} onClose={onClose} onTransferClick={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('complementary', { name: 'Dados do cliente' })).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Dados do cliente' })).toHaveFocus());
+
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('SGP no lugar da conversa: também só o voltar do painel', async () => {
+    telaDeCelular();
+    render(<ConversationModal conversation={CONVERSA} onClose={vi.fn()} onTransferClick={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Consultar SGP' }));
+    expect(await screen.findByRole('region', { name: 'Consulta SGP' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Voltar à conversa' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Fechar conversa' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar à conversa' }));
+    expect(screen.getByRole('button', { name: 'Fechar conversa' })).toBeInTheDocument();
+  });
+
+  test('desktop: com o SGP aberto ao lado, o "×" continua e o Escape fecha o popup, como antes', async () => {
+    const onClose = vi.fn();
+    render(<ConversationModal conversation={CONVERSA} onClose={onClose} onTransferClick={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Consultar SGP' }));
+    expect(await screen.findByRole('region', { name: 'Consulta SGP' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fechar conversa' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

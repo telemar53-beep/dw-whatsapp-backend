@@ -141,6 +141,8 @@ describe('SupervisionPage', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getAllByText('Carlos').length).toBeGreaterThan(0);
+    // O responsável fica em "Dados do atendimento", recolhido no painel.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Dados do atendimento' }));
     expect(within(dialog).getByText('Ana')).toBeInTheDocument();
   });
 
@@ -822,7 +824,7 @@ describe('edição do contato na Supervisão: reabrir traz o que foi salvo', () 
     renderPage();
     await userEvent.click(await screen.findByText('Carlos'));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Editar cliente:/ }));
-    const edicao = screen.getByRole('dialog', { name: 'Editar cliente' });
+    const edicao = await screen.findByRole('dialog', { name: 'Editar cliente' });
     const nota = within(edicao).getByLabelText('Nota interna');
     await userEvent.clear(nota);
     await userEvent.type(nota, 'Nota nova');
@@ -836,6 +838,6 @@ describe('edição do contato na Supervisão: reabrir traz o que foi salvo', () 
     const conversa = screen.getByRole('dialog');
     expect(within(within(conversa).getByRole('complementary')).getByText('Nota nova')).toBeInTheDocument();
     await userEvent.click(within(conversa).getByRole('button', { name: /^Editar cliente:/ }));
-    expect(within(screen.getByRole('dialog', { name: 'Editar cliente' })).getByLabelText('Nota interna')).toHaveValue('Nota nova');
+    expect(within(await screen.findByRole('dialog', { name: 'Editar cliente' })).getByLabelText('Nota interna')).toHaveValue('Nota nova');
   });
 });

@@ -36,10 +36,11 @@ function imports(relativo) {
   const dinamicos = [...fonte.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]);
   return [...estaticos, ...dinamicos];
 }
-// A única exceção é o módulo de um ícone só, Respostas rápidas: o compositor o
-// usa em qualquer tela. O índice da família (e qualquer outro ícone) continua
-// proibido fora da mesa.
-const DA_MESA = /TrilhoDaMesa|\/icones(?!\/IconeRespostasRapidas$)|TeamPanel|trilho-mesa\.css|LinhaDaMesa|mesa\.css|ConversaDaMesa|conversa-mesa\.css/;
+// As exceções são os módulos que a conversa usa em qualquer tela: Respostas
+// rápidas (o compositor) e os três de icones/conversa.jsx (o painel "Dados do
+// cliente" e o acesso a ele no popup). O índice da família continua proibido
+// fora da mesa.
+const DA_MESA = /TrilhoDaMesa|\/icones(?!\/(IconeRespostasRapidas|conversa)$)|TeamPanel|trilho-mesa\.css|LinhaDaMesa|mesa\.css|ConversaDaMesa|conversa-mesa\.css/;
 
 const avaliados = vi.hoisted(() => new Set());
 

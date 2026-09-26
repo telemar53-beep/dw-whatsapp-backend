@@ -148,10 +148,10 @@ import { descreverErro } from '../utils/errorMessages';
 import { nomeDoLocal } from '../utils/place';
 
 function conversationStatus(conversation) {
-  if (conversation.status === 'closed') return { label: 'Encerrado', dot: 'bg-chat-faint' };
-  if (conversation.assignedAgentId) return { label: 'Em atendimento', dot: 'bg-chat-online' };
-  if (conversation.triageState === 'pending') return { label: 'Em automação', dot: 'bg-chat-orange' };
-  return { label: 'Em espera', dot: 'bg-chat-orange' };
+  if (conversation.status === 'closed') return { tipo: 'encerrado', label: 'Encerrado', dot: 'bg-chat-faint' };
+  if (conversation.assignedAgentId) return { tipo: 'atendimento', label: 'Em atendimento', dot: 'bg-chat-online' };
+  if (conversation.triageState === 'pending') return { tipo: 'automacao', label: 'Em automação', dot: 'bg-chat-orange' };
+  return { tipo: 'espera', label: 'Em espera', dot: 'bg-chat-orange' };
 }
 
 const ACTION =
@@ -247,7 +247,15 @@ function CustomerPanel({ conversation, displayName, cityName, onClose }) {
   );
 }
 
-function ConversationView({ conversation, onTransferClick, onBack, painelModo = 'coluna', onPainelAbertoChange, workspace = false }) {
+// `variante`: o cabeçalho, a faixa de contexto e os ícones da mesa, passados
+// pela página (components/ConversaDaMesa.jsx). Sem ela, a conversa é a do
+// modal da Supervisão e dos Encerrados. Vem de fora para que nada disso viaje
+// no trecho que essas páginas também baixam.
+function ConversationView({ conversation, onTransferClick, onBack, painelModo = 'coluna', onPainelAbertoChange, workspace = false, variante }) {
+  const Cabecalho = variante && variante.Cabecalho;
+  const icones = variante && variante.icones;
+  const IconeInfo = (icones && icones.Info) || IconInfo;
+  const IconeResponder = (icones && icones.Responder) || IconChevronDown;
   const { token, agent } = useAuth();
   // `status` já é o estado do atendimento neste componente; o do carregamento
   // das mensagens entra com nome próprio.
@@ -350,6 +358,17 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   useEffect(() => {
     if (onPainelAbertoChange) onPainelAbertoChange(painelAberto);
   }, [painelAberto, onPainelAbertoChange]);
+
+  function alternarSgp() {
+    ultimoGatilhoRef.current = gatilhoSgpRef;
+    setSgpPanelOpen((prev) => !prev);
+  }
+
+  function alternarCliente() {
+    ultimoGatilhoRef.current = gatilhoClienteRef;
+    if (customerPanelOpen && !customerPanelDismissed) { setCustomerPanelOpen(false); setCustomerPanelDismissed(true); return; }
+    setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false);
+  }
 
   function fecharPaineis() {
     setSgpPanelOpen(false);
@@ -561,6 +580,30 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   return (
     <div ref={raizRef} className={`conv-raiz ${workspace ? 'chat-workspace-conversation' : ''} ${painelAlternado ? 'is-painel-alternado' : ''} flex h-full`}>
       <div className="flex h-full min-w-0 flex-1 flex-col bg-transparent font-wa">
+      {Cabecalho ? (
+        <Cabecalho
+          conversation={conversation}
+          displayName={displayName}
+          nameLabel={nameLabel}
+          headerLabel={headerLabel}
+          phoneLine={phoneLine}
+          telefone={phoneLine ? formatPhone(phoneLine) : null}
+          cityName={cityName}
+          status={status}
+          canal={channelLine(conversation)}
+          podeAssumir={isUnassigned}
+          podeAgir={isMine || isUnassigned || isAdmin}
+          encerrarDiscreto={isUnassigned}
+          onVoltar={onBack}
+          onEditarContato={() => setEditingContact(true)}
+          onAssumir={handleClaim}
+          onTransferir={() => onTransferClick(conversation.id)}
+          onEncerrar={() => setClosingReason(true)}
+          onHistorico={() => setShowingHistory(true)}
+          sgp={{ aberto: sgpPanelOpen, ref: gatilhoSgpRef, alternar: alternarSgp }}
+          cliente={{ aberto: customerPanelOpen && !customerPanelDismissed, ref: gatilhoClienteRef, alternar: alternarCliente }}
+        />
+      ) : (
       <div className="chat-workspace-header @container z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/[0.07] px-2 py-2.5 md:px-5">
         {/* A base é 240px, não 0. Com `flex-1` puro (base 0%) o item nunca
             chega a transbordar a linha, então o `flex-wrap` do cabeçalho jamais
@@ -573,7 +616,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
         <div className="chat-workspace-header-identity flex min-w-[240px] flex-[1_1_240px] items-center gap-1.5">
         <button
           onClick={onBack}
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] text-chat-icon hover:bg-white/10 ${workspace ? 'lg:hidden' : 'md:hidden'}`}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] text-chat-icon hover:bg-white/10 md:hidden"
           aria-label="Voltar para a lista"
         >
           <IconArrowLeft size={22} />
@@ -621,21 +664,15 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
         </button>
         </div>
         <div className="chat-workspace-header-actions flex shrink-0 items-center gap-2">
-          {!workspace && <>          <div className="flex items-center gap-0.5 rounded-[10px] border border-white/[0.09] bg-black/[0.10] p-0.5">
+          <div className="flex items-center gap-0.5 rounded-[10px] border border-white/[0.09] bg-black/[0.10] p-0.5">
           <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
             <IconHistory size={20} />
           </HeaderIconButton>
-          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} controls="conv-painel-sgp" botaoRef={gatilhoSgpRef}
-            onClick={() => { ultimoGatilhoRef.current = gatilhoSgpRef; setSgpPanelOpen((prev) => !prev); }}>
+          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} controls="conv-painel-sgp" botaoRef={gatilhoSgpRef} onClick={alternarSgp}>
             <IconSearch size={20} />
           </HeaderIconButton>
-          {/* Este grupo é do modal (`!workspace`). Havia aqui um
-              `{workspace && ...}` para "Dados do cliente" que nunca podia
-              renderizar, por estar dentro de `{!workspace && ...}` — o botão
-              de verdade vive na barra de contexto, abaixo. */}
           </div>
           <span aria-hidden="true" className="h-6 w-px bg-white/[0.12]" />
-</>}
           {isUnassigned && (
             <button onClick={handleClaim} className={ACTION_PRIMARY}>
               <IconClaim size={18} />
@@ -668,33 +705,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           )}
         </div>
       </div>
-
-      {workspace && <div className="chat-workspace-context">
-        <span className="chat-workspace-context-label">{conversation.sectorName || secondLine || status.label}</span>
-        <div className="chat-workspace-context-actions">
-          <div className="flex items-center gap-0.5 rounded-[10px] border border-white/[0.09] bg-black/[0.10] p-0.5">
-          <HeaderIconButton label="Ver atendimentos anteriores" onClick={() => setShowingHistory(true)}>
-            <IconHistory size={20} />
-          </HeaderIconButton>
-          <HeaderIconButton label="Consultar SGP" expanded={sgpPanelOpen} controls="conv-painel-sgp" botaoRef={gatilhoSgpRef}
-            onClick={() => { ultimoGatilhoRef.current = gatilhoSgpRef; setSgpPanelOpen((prev) => !prev); }}>
-            <IconSearch size={20} />
-            <span className="chat-context-label">SGP</span>
-          </HeaderIconButton>
-          {workspace && (
-            <HeaderIconButton label="Dados do cliente" expanded={customerPanelOpen && !customerPanelDismissed} controls="conv-painel-cliente" botaoRef={gatilhoClienteRef}
-              onClick={() => {
-                ultimoGatilhoRef.current = gatilhoClienteRef;
-                if (customerPanelOpen && !customerPanelDismissed) { setCustomerPanelOpen(false); setCustomerPanelDismissed(true); return; }
-                setSgpPanelOpen(false); setCustomerPanelOpen(true); setCustomerPanelDismissed(false);
-              }}>
-              <IconInfo size={20} />
-              <span className="chat-context-label">Cliente</span>
-            </HeaderIconButton>
-          )}
-          </div>
-        </div>
-      </div>}
+      )}
 
       <p role="status" aria-live="polite" className="sr-only">{avisoDeMensagem}</p>
       <div ref={linhaDoTempoRef} className="chat-workspace-timeline chat-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 md:px-8">
@@ -742,7 +753,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
                 carregarAnteriores();
               }}
               disabled={carregandoAnteriores}
-              className="rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-[12.5px] text-chat-muted transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              className="chat-carregar-anteriores rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-1.5 text-[12.5px] text-chat-muted transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             >
               {carregandoAnteriores ? 'Carregando…' : 'Carregar mensagens anteriores'}
             </button>
@@ -799,7 +810,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
             <div
               key={row.key}
               data-mensagem-id={message.id}
-              className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${row.firstOfGroup ? 'mt-3' : 'mt-[6px]'}`}
+              className={`flex ${outbound ? 'justify-end' : 'justify-start'} ${row.firstOfGroup ? 'chat-grupo-inicio mt-3' : 'mt-[6px]'}`}
             >
               <div
                 className={`chat-workspace-bubble ${outbound ? 'is-outbound' : 'is-inbound'} ${isSticker ? 'is-sticker' : ''} ${outbound && message.sentBy === 'ai' ? 'is-ai' : ''} group relative max-w-[85%] md:max-w-[65%] ${
@@ -816,7 +827,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
                   </span>
                 )}
                 {message.repliedToPreview && (
-                  <div className="mb-1 flex overflow-hidden rounded-[10px] bg-black/20">
+                  <div className="chat-citacao mb-1 flex overflow-hidden rounded-[10px] bg-black/20">
                     <span className="w-[4px] shrink-0 bg-chat-copper" />
                     <span className="min-w-0 flex-1 px-2 py-1">
                       <span className="block truncate text-[12.5px] font-medium leading-[18px] text-chat-copper">
@@ -831,7 +842,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
 
                 <MessageAttachment
                   message={message}
-                  dark
+                  dark={!workspace}
                   onAnalyzeReceipt={isMine ? analisarComprovanteDaMensagem : undefined}
                   avatar={
                     !outbound ? (
@@ -882,7 +893,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
                     title="Responder"
                     className="absolute right-0 top-0 flex h-[22px] w-[26px] items-center justify-end rounded-tr-[18px] bg-[linear-gradient(to_left,rgba(255,255,255,0.14)_50%,rgba(255,255,255,0))] pr-[3px] text-chat-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
                   >
-                    <IconChevronDown size={19} />
+                    <IconeResponder size={19} />
                   </button>
                 )}
               </div>
@@ -904,9 +915,9 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
               por alguns minutos, e impedir um envio que passaria seria pior do
               que deixar tentar. */}
           {janelaFechada && (
-            <p className="mx-3 mb-1 flex items-start gap-2 rounded-[12px] border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] leading-[18px] text-chat-muted md:mx-5">
+            <p className="chat-aviso mx-3 mb-1 flex items-start gap-2 rounded-[12px] border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] leading-[18px] text-chat-muted md:mx-5">
               <span aria-hidden="true" className="shrink-0 text-chat-copper">
-                <IconInfo size={16} />
+                <IconeInfo size={16} />
               </span>
               <span>
                 <strong className="font-semibold text-chat-text">Janela de 24h fechada.</strong> O WhatsApp só entrega
@@ -927,9 +938,9 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
               O caminho do template aparece quando o canal já recusou por janela
               de 24 h: aí a dúvida acabou, e a recusa é dele, não nossa. */}
           {janelaIndeterminada && (
-            <p className="mx-3 mb-1 flex items-start gap-2 rounded-[12px] border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] leading-[18px] text-chat-muted md:mx-5">
+            <p className="chat-aviso mx-3 mb-1 flex items-start gap-2 rounded-[12px] border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] leading-[18px] text-chat-muted md:mx-5">
               <span aria-hidden="true" className="shrink-0 text-chat-copper">
-                <IconInfo size={16} />
+                <IconeInfo size={16} />
               </span>
               <span>
                 <strong className="font-semibold text-chat-text">Não foi possível conferir a janela de 24h.</strong> A
@@ -960,6 +971,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
             onCancelReply={() => setReplyingTo(null)}
             draftContent={editedSuggestion ? editedSuggestion.content : undefined}
             draftKey={editedSuggestion ? editedSuggestion.id : undefined}
+            icones={icones}
           />
         </>
       )}

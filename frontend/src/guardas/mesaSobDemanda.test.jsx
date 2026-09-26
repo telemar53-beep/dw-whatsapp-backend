@@ -36,7 +36,7 @@ function imports(relativo) {
   const dinamicos = [...fonte.matchAll(/import\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]);
   return [...estaticos, ...dinamicos];
 }
-const DA_MESA = /TrilhoDaMesa|\/icones|TeamPanel|trilho-mesa\.css|LinhaDaMesa|mesa\.css/;
+const DA_MESA = /TrilhoDaMesa|\/icones|TeamPanel|trilho-mesa\.css|LinhaDaMesa|mesa\.css|ConversaDaMesa|conversa-mesa\.css/;
 
 const avaliados = vi.hoisted(() => new Set());
 
@@ -73,15 +73,18 @@ beforeEach(() => {
 });
 
 describe('a mesa não viaja com a casca', () => {
-  test.each(['components/AppShell.jsx', 'components/SideNav.jsx', 'components/ConversationListItem.jsx'])(
+  // A conversa e o compositor também: são compartilhados com o modal da
+  // Supervisão e dos Encerrados, e o cabeçalho e os ícones da mesa chegam pela
+  // variante que a página passa (ConversaDaMesa.jsx).
+  test.each(['components/AppShell.jsx', 'components/SideNav.jsx', 'components/ConversationListItem.jsx', 'components/ConversationView.jsx', 'components/MessageInput.jsx'])(
     '%s não importa nada que seja só da mesa',
     (arquivo) => {
       expect(imports(arquivo).filter((origem) => DA_MESA.test(origem))).toEqual([]);
     }
   );
 
-  test('quem importa o trilho é a página da mesa', () => {
-    expect(imports('pages/DashboardPage.jsx')).toContain('../components/TrilhoDaMesa');
+  test('quem importa o trilho e a conversa da mesa é a página da mesa', () => {
+    expect(imports('pages/DashboardPage.jsx')).toEqual(expect.arrayContaining(['../components/TrilhoDaMesa', '../components/ConversaDaMesa']));
   });
 
   // Importar o SideNav no trilho tiraria o menu do trecho da casca e criaria

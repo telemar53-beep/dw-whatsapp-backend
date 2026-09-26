@@ -17,9 +17,11 @@ import ConversationView from '../components/ConversationView';
 import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
 import StartConversationModal from '../components/StartConversationModal';
-import TrilhoDaMesa, { IconeDoMenu } from '../components/TrilhoDaMesa';
+import TrilhoDaMesa, { IconeDoMenu, iniciais } from '../components/TrilhoDaMesa';
+import { VARIANTE_DA_MESA } from '../components/ConversaDaMesa';
+import { marcaDaInstalacao } from '../branding';
 import { Tabs } from '../components/ui/Tabs';
-import { IconLock, IconEmptyChat } from '../components/icons/WaIcons';
+import { IconLock } from '../components/icons/WaIcons';
 import { IconeNovaConversa, IconeBuscar, IconeRecolher } from '../components/icones';
 import './dashboard.css';
 import './mesa.css';
@@ -168,7 +170,7 @@ function DashboardPage() {
 
   return (
     <div className="chat-workspace flex min-h-0 flex-1 flex-col">
-      <div data-testid="channel-banner-wrapper" className={`relative ${selectedConversation ? 'hidden lg:block' : ''}`}>
+      <div data-testid="channel-banner-wrapper" className={`mesa-aviso-canal relative ${selectedConversation ? 'hidden lg:block' : ''}`}>
         <ChannelStatusBanner />
       </div>
 
@@ -296,7 +298,7 @@ function DashboardPage() {
         </aside>
 
         <main
-          className={`chat-workspace-main ${
+          className={`chat-workspace-main mesa-conversa ${
             listaOcupaTudo && !selectedConversation ? 'hidden' : listaOcupaTudo && listaAberta ? 'hidden' : 'block'
           } min-w-0 flex-1 overflow-clip`}
         >
@@ -308,19 +310,24 @@ function DashboardPage() {
               onTransferClick={setTransferringId}
               onBack={voltarParaLista}
               workspace
+              variante={VARIANTE_DA_MESA}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <span className="text-white/10">
-                <IconEmptyChat width={320} height={190} />
-              </span>
-              <p className="mt-6 font-display text-[32px] font-light leading-tight text-chat-text/90">
+            // Sem conversa: a marca desta instalação (a mesma do trilho, já em
+            // cache), uma orientação e o registro. Sem ilustração. A marca vai
+            // sobre o índigo do trilho: ela é desenhada para fundo escuro, e
+            // logotipo não se recolore.
+            <div className="mesa-vazia">
+              {marcaDaInstalacao.compacta
+                ? <span className="mesa-vazia-selo" aria-hidden="true" style={{ backgroundImage: `url("${marcaDaInstalacao.compacta}")` }} />
+                : <span className="mesa-vazia-monograma" aria-hidden="true">{companyNameStatus === 'loading' ? '' : iniciais(companyName)}</span>}
+              <p className="mesa-vazia-titulo">
                 {companyNameStatus === 'loading' ? '' : companyName ? `${companyName} · Atendimento` : 'Atendimento'}
               </p>
-              <p className="mt-3 max-w-[38ch] text-[14px] leading-[20px] text-chat-muted">
+              <p className="mesa-vazia-texto">
                 Selecione uma conversa na lista ao lado para ler o histórico e responder ao cliente.
               </p>
-              <p className="mt-10 flex items-center gap-1.5 text-[13px] text-chat-faint">
+              <p className="mesa-vazia-registro">
                 <IconLock size={13} />
                 Todo atendimento fica registrado no sistema.
               </p>

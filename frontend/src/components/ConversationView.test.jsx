@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationView from './ConversationView';
+import { VARIANTE_DA_MESA } from './ConversaDaMesa';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
@@ -66,8 +67,9 @@ describe('ConversationView', () => {
     expect(within(panel).queryByText('CPF')).not.toBeInTheDocument();
   });
 
+  // O botão "Dados do cliente" é da mesa: vem na faixa da variante (ConversaDaMesa).
   test('permite fechar e reabrir os dados do cliente sem alterar a conversa', async () => {
-    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', contactDisplayName: 'Ana' }} onTransferClick={vi.fn()} workspace />);
+    render(<ConversationView conversation={{ id: 'c1', status: 'waiting', contactDisplayName: 'Ana' }} onTransferClick={vi.fn()} workspace variante={VARIANTE_DA_MESA} />);
     await userEvent.click(screen.getByRole('button', { name: 'Fechar dados do cliente' }));
     expect(screen.getByRole('complementary', { name: 'Dados do cliente' }).parentElement).toHaveClass('is-dismissed');
     await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));

@@ -48,6 +48,10 @@ const EMOJIS = [
   '🕐', '📅', '🚀', '🛠️', '🔧', '📡', '🌐', '🏠',
 ];
 
+// Os ícones de sempre. A mesa passa os dela (`icones`, da VARIANTE_DA_MESA),
+// no mesmo formato: um componente que recebe `size`.
+const ICONES_PADRAO = { Anexar: IconAttach, Respostas: IconQuickReply, Emoji: IconEmoji, Microfone: IconMic, Enviar: IconSend };
+
 function pickSupportedAudioMimeType() {
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return undefined;
   return AUDIO_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate));
@@ -81,7 +85,8 @@ function ComposerButton({ label, onClick, disabled, active, children, haspopup, 
   );
 }
 
-function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesStatus = 'ready', replyingTo = null, onCancelReply, draftContent, draftKey }) {
+function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesStatus = 'ready', replyingTo = null, onCancelReply, draftContent, draftKey, icones }) {
+  const I = icones || ICONES_PADRAO;
   const [content, setContent] = useState('');
   const [file, setFile] = useState(null);
   // A microphone recording is a voice note; a file picked from disk is an attachment.
@@ -424,7 +429,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               />
             ) : (
               <span className="shrink-0 text-chat-copper">
-                <IconAttach size={17} />
+                <I.Anexar size={17} />
               </span>
             )}
             Anexo: {file.name === 'gravacao.webm' ? `gravação de áudio (${recordingSeconds}s)` : file.name}{' '}
@@ -481,7 +486,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                   <label>: assim o controle é focável e responde a Enter e
                   Espaço como qualquer botão do compositor. */}
               <ComposerButton label="Anexar arquivo" onClick={() => fileInputRef.current?.click()}>
-                <IconAttach size={24} />
+                <I.Anexar size={24} />
               </ComposerButton>
               <ComposerButton
                 label="Respostas rápidas"
@@ -494,7 +499,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                   setShowingEmojis(false);
                 }}
               >
-                <IconQuickReply size={24} />
+                <I.Respostas size={24} />
               </ComposerButton>
               <ComposerButton
                 label="Emojis"
@@ -507,7 +512,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                   setShowingQuickReplies(false);
                 }}
               >
-                <IconEmoji size={24} />
+                <I.Emoji size={24} />
               </ComposerButton>
 
               <textarea
@@ -601,7 +606,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 title="Enviar"
                 className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full bg-chat-orange text-chat-orange-ink transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring disabled:opacity-50"
               >
-                <IconSend size={24} />
+                <I.Enviar size={24} />
               </button>
             ) : (
               <button
@@ -611,7 +616,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 title="Gravar áudio"
                 className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.08] text-chat-icon transition-colors hover:bg-white/[0.13] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
               >
-                <IconMic size={24} />
+                <I.Microfone size={24} />
               </button>
             )}
           </>

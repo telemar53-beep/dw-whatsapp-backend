@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { IconEmoji, IconAttach, IconQuickReply, IconMic, IconSend, IconTrash, IconStop } from './icons/WaIcons';
+import { IconEmoji, IconAttach, IconMic, IconSend, IconTrash, IconStop } from './icons/WaIcons';
+import { IconeRespostasRapidas } from './icones/IconeRespostasRapidas';
 import { AsyncState } from './ui';
 import RecordingPreview from './RecordingPreview';
 import { descreverErro } from '../utils/errorMessages';
@@ -48,9 +49,16 @@ const EMOJIS = [
   '🕐', '📅', '🚀', '🛠️', '🔧', '📡', '🌐', '🏠',
 ];
 
+// Respostas rápidas é o desenho DW aprovado em qualquer tela, com ou sem o
+// mapa da mesa. Só este ícone vem da família (módulo próprio, não o índice):
+// o trecho da conversa, que a Supervisão também baixa, leva só ele.
+function IconeRespostasPadrao({ size }) {
+  return <IconeRespostasRapidas tamanho={size} />;
+}
+
 // Os ícones de sempre. A mesa passa os dela (`icones`, da VARIANTE_DA_MESA),
 // no mesmo formato: um componente que recebe `size`.
-const ICONES_PADRAO = { Anexar: IconAttach, Respostas: IconQuickReply, Emoji: IconEmoji, Microfone: IconMic, Enviar: IconSend };
+const ICONES_PADRAO = { Anexar: IconAttach, Respostas: IconeRespostasPadrao, Emoji: IconEmoji, Microfone: IconMic, Enviar: IconSend };
 
 function pickSupportedAudioMimeType() {
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return undefined;
@@ -501,6 +509,20 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
               >
                 <I.Respostas size={24} />
               </ComposerButton>
+              <textarea
+                ref={textInputRef}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onKeyDown={handleComposerKeyDown}
+                onPaste={handlePaste}
+                placeholder="Digite uma mensagem…"
+                rows={1}
+                style={{ minHeight: COMPOSER_MIN_HEIGHT, maxHeight: tetoDoCampo }}
+                className="min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
+              />
+
+              {/* Ordem do compositor: anexo e respostas rápidas antes do campo,
+                  emoji depois dele, e o microfone/enviar por último. */}
               <ComposerButton
                 label="Emojis"
                 active={showingEmojis}
@@ -515,18 +537,6 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                 <I.Emoji size={24} />
               </ComposerButton>
 
-              <textarea
-                ref={textInputRef}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                onKeyDown={handleComposerKeyDown}
-                onPaste={handlePaste}
-                placeholder="Digite uma mensagem…"
-                rows={1}
-                style={{ minHeight: COMPOSER_MIN_HEIGHT, maxHeight: tetoDoCampo }}
-                className="min-w-0 flex-1 resize-none overflow-y-auto rounded-[24px] border border-white/[0.10] bg-white/[0.03] px-[18px] py-[13px] text-[15px] leading-[21px] text-chat-text outline-none placeholder:text-chat-faint focus:border-white/25"
-              />
-
               {/* Popover, NAO modal: nome acessivel, foco inicial no primeiro
                   emoji, setas navegando a grade, ESC devolvendo o foco ao
                   gatilho — e Tab saindo normalmente. Sem trap. */}
@@ -536,7 +546,7 @@ function MessageInput({ conversationId, onSend, quickReplies = [], quickRepliesS
                   role="dialog"
                   aria-label="Emojis"
                   onKeyDown={navegarNaGrade}
-                  className="dialog-emoji-picker animate-wa-pop absolute bottom-full left-0 z-[var(--z-popover)] mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-ui-surface-overlay/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+                  className="dialog-emoji-picker animate-wa-pop absolute bottom-full right-0 z-[var(--z-popover)] mb-2 w-[19rem] max-w-[92vw] rounded-2xl border border-white/10 bg-ui-surface-overlay/95 p-2 shadow-[0_20px_50px_-25px_rgba(0,0,0,0.6)] backdrop-blur-xl"
                 >
                   <p className="dialog-popover-heading" aria-hidden="true">Emojis</p>
                   <div className="grid grid-cols-8 gap-1">

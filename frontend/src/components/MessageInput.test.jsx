@@ -2,6 +2,8 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MessageInput from './MessageInput';
+import { IconeRespostasRapidas } from './icones/IconeRespostasRapidas';
+import { IconQuickReply } from './icons/WaIcons';
 
 class FakeMediaRecorder {
   constructor(stream, options) {
@@ -129,6 +131,53 @@ describe('MessageInput', () => {
 
     expect(screen.getByPlaceholderText(/digite uma mensagem/i)).toHaveValue('Olá! Como posso ajudar?');
     expect(screen.queryByText('Encerramento')).not.toBeInTheDocument();
+  });
+
+  // Ordem do compositor: [anexo] [respostas rápidas] [campo] [emoji] [microfone].
+  test('respostas rápidas é um ícone colado ao anexo, com dica e nome; o emoji vem depois do campo', () => {
+    render(<MessageInput onSend={vi.fn()} quickReplies={[]} />);
+    const anexo = screen.getByRole('button', { name: 'Anexar arquivo' });
+    const respostas = screen.getByRole('button', { name: 'Respostas rápidas' });
+    const campo = screen.getByPlaceholderText(/digite uma mensagem/i);
+    const emoji = screen.getByRole('button', { name: 'Emojis' });
+    const microfone = screen.getByRole('button', { name: 'Gravar áudio' });
+
+    expect(anexo.nextElementSibling).toBe(respostas);
+    expect(respostas).toHaveAttribute('title', 'Respostas rápidas');
+    expect(respostas.textContent).toBe('');
+    const antes = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(antes(respostas, campo)).toBe(true);
+    expect(antes(campo, emoji)).toBe(true);
+    expect(antes(emoji, microfone)).toBe(true);
+  });
+
+  // Fora da mesa (Supervisão, Encerrados) o compositor vem sem o mapa de
+  // ícones: o de Respostas rápidas tem de ser o desenho DW aprovado mesmo assim.
+  test('sem ícones personalizados, Respostas rápidas usa o desenho DW aprovado, não o antigo', () => {
+    const tracos = (svg) => [...svg.querySelectorAll('path')].map((traco) => traco.getAttribute('d'));
+    const aprovado = tracos(render(<IconeRespostasRapidas />).container.querySelector('svg'));
+    const antigo = tracos(render(<IconQuickReply />).container.querySelector('svg'));
+
+    const { container } = render(<MessageInput onSend={vi.fn()} quickReplies={[]} />);
+    const botoes = [...container.querySelectorAll('button[aria-label="Respostas rápidas"]')];
+    expect(botoes).toHaveLength(1);
+    const desenho = botoes[0].querySelector('svg');
+
+    expect(aprovado.length).toBeGreaterThan(0);
+    expect(tracos(desenho)).toEqual(aprovado);
+    expect(tracos(desenho)).not.toEqual(antigo);
+    expect(desenho.getAttribute('stroke')).toBe('currentColor');
+  });
+
+  test('as respostas rápidas não ficam desenhadas enquanto o seletor está fechado', async () => {
+    const quickReplies = [{ id: 'qr-1', title: 'Boas-vindas', content: 'Olá! Como posso ajudar?' }];
+    render(<MessageInput onSend={vi.fn()} quickReplies={quickReplies} />);
+    expect(screen.queryByRole('menu', { name: 'Respostas rápidas' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Boas-vindas')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Respostas rápidas' }));
+    expect(screen.getByRole('menu', { name: 'Respostas rápidas' })).toBeInTheDocument();
+    expect(screen.getByText('Boas-vindas')).toBeInTheDocument();
   });
 
   test('shows a message when there are no quick replies registered', async () => {

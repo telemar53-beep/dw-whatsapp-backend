@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import * as Icones from './index';
+import * as IconesSgp from './sgp';
 import * as IconesAntigos from '../icons/WaIcons';
 import * as IconesAntigosSgp from '../icons/SgpIcons';
 
@@ -51,6 +52,9 @@ const DO_SGP = ['IconeCodigoPix', 'IconeQrPix', 'IconeCodigoBarras', 'IconeLinkF
 const COM_MARCA_PIX = ['IconeCodigoPix', 'IconeQrPix'];
 const CHEIO = { fill: 'currentColor', stroke: 'none' };
 
+// A família inteira: o índice (mesa e demais telas) e o módulo do painel SGP.
+const FAMILIA = { ...Icones, ...IconesSgp };
+
 // Só geometria nos traços. Cor, espessura, terminação e preenchimento são da
 // moldura, iguais para a família inteira; qualquer atributo fora desta lista
 // é um ícone saindo da família.
@@ -69,13 +73,22 @@ function desenhar(Componente, props = {}) {
 }
 
 describe('família de ícones DW', () => {
-  test('exporta exatamente os 33 ícones da família', () => {
-    const exportados = Object.keys(Icones).filter((nome) => nome.startsWith('Icone') && nome !== 'Icone');
-    expect(exportados.sort()).toEqual([...NOMES].sort());
+  test('exporta exatamente os 33 ícones da família: 28 no índice e os 5 do painel SGP no módulo dele', () => {
+    const doIndice = Object.keys(Icones).filter((nome) => nome.startsWith('Icone') && nome !== 'Icone');
+    const doSgp = Object.keys(IconesSgp).filter((nome) => nome.startsWith('Icone'));
+    expect(doIndice.sort()).toEqual(NOMES.filter((nome) => !DO_SGP.includes(nome)).sort());
+    expect(doSgp.sort()).toEqual([...DO_SGP].sort());
+  });
+
+  // O painel do SGP chega sob demanda; a mesa importa o índice em toda
+  // conversa. Se o índice levasse o módulo do SGP, a marca Pix viajaria junto.
+  test('o índice da família não leva os desenhos do painel SGP', () => {
+    expect(FONTES['./index.jsx']).not.toMatch(/desenhosSgp|['"]\.\/sgp['"]/);
+    expect(FONTES['./desenhos.js']).not.toMatch(/codigoPix|qrPix|codigoBarras|linkFatura|pdfFatura/);
   });
 
   test.each(NOMES)('%s: moldura única da família', (nome) => {
-    const svg = desenhar(Icones[nome]);
+    const svg = desenhar(FAMILIA[nome]);
     expect(svg.getAttribute('viewBox')).toBe('0 0 24 24');
     expect(svg.getAttribute('fill')).toBe('none');
     expect(svg.getAttribute('stroke')).toBe('currentColor');
@@ -85,7 +98,7 @@ describe('família de ícones DW', () => {
   });
 
   test.each(NOMES)('%s: traços só com geometria, sem cor fixa', (nome) => {
-    const svg = desenhar(Icones[nome]);
+    const svg = desenhar(FAMILIA[nome]);
     const tracos = [...svg.children];
     expect(tracos.length).toBeGreaterThan(0);
     tracos.forEach((traco) => {
@@ -102,7 +115,7 @@ describe('família de ícones DW', () => {
   });
 
   test.each(NOMES)('%s: coordenadas absolutas dentro da grade de 24', (nome) => {
-    const svg = desenhar(Icones[nome]);
+    const svg = desenhar(FAMILIA[nome]);
     [...svg.children].forEach((traco) => {
       [...traco.attributes].forEach(({ name, value }) => {
         // Comando em minúscula é relativo: difícil de revisar a olho e de
@@ -118,7 +131,7 @@ describe('família de ícones DW', () => {
 
   test('só a marca Pix é preenchida, e na cor do texto', () => {
     NOMES.forEach((nome) => {
-      const cheios = [...desenhar(Icones[nome]).children].filter((traco) => traco.hasAttribute('fill'));
+      const cheios = [...desenhar(FAMILIA[nome]).children].filter((traco) => traco.hasAttribute('fill'));
       if (COM_MARCA_PIX.includes(nome)) expect(cheios.length, nome).toBeGreaterThan(0);
       else expect(cheios, nome).toEqual([]);
       cheios.forEach((traco) => {
@@ -134,7 +147,7 @@ describe('família de ícones DW', () => {
   test('nenhum ícone repete o desenho inteiro de outro', () => {
     const vistos = new Map();
     NOMES.forEach((nome) => {
-      const desenho = desenhar(Icones[nome]).innerHTML;
+      const desenho = desenhar(FAMILIA[nome]).innerHTML;
       expect(vistos.get(desenho), `${nome} repete ${vistos.get(desenho)}`).toBeUndefined();
       vistos.set(desenho, nome);
     });
@@ -143,17 +156,17 @@ describe('família de ícones DW', () => {
   test('os ícones do painel SGP não reaproveitam traço de outro ícone', () => {
     const deOutros = new Set();
     NOMES.filter((nome) => !DO_SGP.includes(nome)).forEach((nome) => {
-      [...desenhar(Icones[nome]).children].forEach((traco) => deOutros.add(traco.outerHTML));
+      [...desenhar(FAMILIA[nome]).children].forEach((traco) => deOutros.add(traco.outerHTML));
     });
     DO_SGP.forEach((nome) => {
-      [...desenhar(Icones[nome]).children].forEach((traco) => {
+      [...desenhar(FAMILIA[nome]).children].forEach((traco) => {
         expect(deOutros.has(traco.outerHTML), nome).toBe(false);
       });
     });
   });
 
   test.each(DO_SGP)('%s: com título, vira imagem com nome acessível', (nome) => {
-    const Componente = Icones[nome];
+    const Componente = FAMILIA[nome];
     render(<Componente titulo="Ação do painel" />);
     const imagem = screen.getByRole('img', { name: 'Ação do painel' });
     expect(imagem.getAttribute('viewBox')).toBe('0 0 24 24');
@@ -208,7 +221,7 @@ describe('família de ícones DW', () => {
     });
     expect(antigos.size).toBeGreaterThan(30);
     NOMES.forEach((nome) => {
-      desenhar(Icones[nome]).querySelectorAll('path').forEach((traco) => {
+      desenhar(FAMILIA[nome]).querySelectorAll('path').forEach((traco) => {
         expect(antigos.has(traco.getAttribute('d')), nome).toBe(false);
       });
     });
@@ -225,5 +238,7 @@ describe('família de ícones DW', () => {
     });
     // Os desenhos são dados puros: a prancha os lê direto no Node, sem React.
     expect(FONTES['./desenhos.js']).not.toMatch(/^\s*import\s/m);
+    expect(FONTES['./desenhosSgp.js']).not.toMatch(/^\s*import\s/m);
+    expect(FONTES['./desenhoRespostasRapidas.js']).not.toMatch(/^\s*import\s/m);
   });
 });

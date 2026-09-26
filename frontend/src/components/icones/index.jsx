@@ -29,7 +29,7 @@ export function IconeAssumir(props) { return <Icone desenho={desenhos.assumir} {
 
 // Compositor
 export function IconeAnexar(props) { return <Icone desenho={desenhos.anexar} {...props} />; }
-export function IconeRespostasRapidas(props) { return <Icone desenho={desenhos.respostasRapidas} {...props} />; }
+export { IconeRespostasRapidas } from './IconeRespostasRapidas';
 export function IconeEmoji(props) { return <Icone desenho={desenhos.emoji} {...props} />; }
 export function IconeMicrofone(props) { return <Icone desenho={desenhos.microfone} {...props} />; }
 export function IconeEnviar(props) { return <Icone desenho={desenhos.enviar} {...props} />; }
@@ -40,10 +40,3 @@ export function IconeSomDesativado(props) { return <Icone desenho={desenhos.somD
 export function IconeEncerrados(props) { return <Icone desenho={desenhos.encerrados} {...props} />; }
 export function IconeSair(props) { return <Icone desenho={desenhos.sair} {...props} />; }
 export function IconeMenu(props) { return <Icone desenho={desenhos.menu} {...props} />; }
-
-// Painel SGP
-export function IconeCodigoPix(props) { return <Icone desenho={desenhos.codigoPix} {...props} />; }
-export function IconeQrPix(props) { return <Icone desenho={desenhos.qrPix} {...props} />; }
-export function IconeCodigoBarras(props) { return <Icone desenho={desenhos.codigoBarras} {...props} />; }
-export function IconeLinkFatura(props) { return <Icone desenho={desenhos.linkFatura} {...props} />; }
-export function IconePdfFatura(props) { return <Icone desenho={desenhos.pdfFatura} {...props} />; }

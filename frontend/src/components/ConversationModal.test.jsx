@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ConversationModal from './ConversationModal';
 import { useConversationMessages } from '../hooks/useConversationMessages';
@@ -40,6 +40,19 @@ describe('ConversationModal', () => {
 
     await userEvent.click(fechar);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // Supervisão e Encerrados abrem a conversa neste modal, fora da mesa: o
+  // painel do SGP funciona aqui também, com o encaixe e o CSS dele.
+  test('o painel do SGP abre dentro do modal, fora da mesa', async () => {
+    const conversation = { id: 'c1', contactDisplayName: 'Carlos', assignedAgentId: 'agent-1', status: 'assigned' };
+    render(<ConversationModal conversation={conversation} onClose={vi.fn()} onTransferClick={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Consultar SGP' }));
+    const painel = await screen.findByRole('region', { name: 'Consulta SGP' });
+    expect(within(screen.getByRole('dialog')).getByRole('region', { name: 'Consulta SGP' })).toBe(painel);
+    expect(within(painel).getByLabelText('CPF ou CNPJ do cliente')).toBeInTheDocument();
+    expect(painel.closest('#conv-painel-sgp')).toHaveClass('conv-painel-slot', 'is-sgp');
   });
 
   test('closing via the conversation view\'s back button calls onClose', async () => {

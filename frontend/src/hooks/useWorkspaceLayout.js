@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 export const CONVERSA_MINIMA = 420;
 export const LISTA_EXPANDIDA = 332;
 export const LISTA_RAIL = 72;
-export const PAINEL = 268;
+// O maior dos painéis: o do SGP tem 300px; o de dados do cliente, 268.
+export const PAINEL = 300;
 
 // Uma regra só: a conversa tem piso, e o que sobra decide o resto numa ordem
 // de sacrifício fixa — primeiro a lista encolhe para rail, depois o painel

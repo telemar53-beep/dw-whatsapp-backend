@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useRolagemDaLinhaDoTempo } from '../hooks/useRolagemDaLinhaDoTempo';
@@ -15,7 +15,6 @@ import ConversationHistoryModal from './ConversationHistoryModal';
 import CloseReasonModal from './CloseReasonModal';
 import ContactAvatar from './ContactAvatar';
 import EditContactModal from './EditContactModal';
-import SgpLookupPanel from './SgpLookupPanel';
 import { PAINEL, CONVERSA_MINIMA } from '../hooks/useWorkspaceLayout';
 import AiSuggestionCard from './AiSuggestionCard';
 import SendTemplateModal from './SendTemplateModal';
@@ -146,6 +145,11 @@ function channelLine(conversation) {
 import { formatPhone } from '../utils/phone';
 import { descreverErro } from '../utils/errorMessages';
 import { nomeDoLocal } from '../utils/place';
+import './conversa-painel.css';
+
+// O painel do SGP (e a biblioteca de QR que ele usa) só chega quando o
+// atendente pede: a conversa comum não baixa nem avalia nada dele.
+const SgpLookupPanel = lazy(() => import('./SgpLookupPanel'));
 
 function conversationStatus(conversation) {
   if (conversation.status === 'closed') return { tipo: 'encerrado', label: 'Encerrado', dot: 'bg-chat-faint' };
@@ -347,7 +351,10 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     }
     document.addEventListener('keydown', aoTeclar);
     return () => document.removeEventListener('keydown', aoTeclar);
-  });
+    // fecharPaineisEDevolverFoco só usa setters e refs: a versão do render em
+    // que o painel abriu serve até ele fechar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [painelAberto]);
 
   // Ao substituir a conversa, o foco precisa entrar no painel — senao ele fica
   // atras, num botao que a pessoa nao ve mais.
@@ -358,6 +365,11 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   useEffect(() => {
     if (onPainelAbertoChange) onPainelAbertoChange(painelAberto);
   }, [painelAberto, onPainelAbertoChange]);
+
+  function fecharSgp() {
+    setSgpPanelOpen(false);
+    if (gatilhoSgpRef.current) gatilhoSgpRef.current.focus();
+  }
 
   function alternarSgp() {
     ultimoGatilhoRef.current = gatilhoSgpRef;
@@ -394,7 +406,9 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     setContactOverride(null);
     setEditingContact(false);
     setReplyingTo(null);
-    setSgpPanelOpen(Boolean(conversation.contactSgpDocument));
+    // O SGP abre só pelo botão "Consultar SGP" — e cada abertura consulta de
+    // novo. Trocar de conversa fecha o painel: nada da anterior fica na tela.
+    setSgpPanelOpen(false);
     setCustomerPanelOpen(false);
     setCustomerPanelDismissed(false);
     setClosingReason(false);
@@ -425,6 +439,14 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   });
 
   const isUnassigned = conversation.status !== 'closed' && !conversation.assignedAgentId;
+  // Envio pelo painel do SGP: as rotas aceitam só quem é o responsável pela
+  // conversa (não olham o status). A tela reflete essa regra — não cria outra.
+  const podeEnviarSgp = Boolean(conversation.assignedAgentId) && conversation.assignedAgentId === agent.id;
+  const motivoSemEnvioSgp = podeEnviarSgp
+    ? null
+    : conversation.assignedAgentId
+      ? 'Só o responsável pelo atendimento pode enviar ao cliente.'
+      : 'Assuma o atendimento para enviar ao cliente.';
   const isAdmin = (agent.role === 'admin' || agent.role === 'manager') && conversation.status !== 'closed';
   const displayName = contactOverride ? contactOverride.displayName : conversation.contactDisplayName;
   // "Barão de Tromaí · Cândido Mendes" com localidade; só o município sem ela.
@@ -1008,7 +1030,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
         />
       )}
       </div>
-      {painelAlternado && (
+      {painelAlternado && !sgpPanelOpen && (
         <button ref={voltarRef} type="button" onClick={fecharPaineisEDevolverFoco} className="chat-painel-voltar">
           <IconArrowLeft size={16} />
           Voltar à conversa
@@ -1016,19 +1038,24 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
       )}
       {alertDialog}
       {sgpPanelOpen ? (
-        <div className="conv-painel-slot" id="conv-painel-sgp">
+        <div className="conv-painel-slot is-sgp" id="conv-painel-sgp">
         {/* Um painel por conversa: sem a key ele só recebia um initialCpf novo
             e carregava para B o cliente, a fatura e o "enviado" de A. */}
-        <SgpLookupPanel
-          key={conversation.id}
-          onSendMessage={(content) => sendMessage(content)}
-          onSendPdf={handleSendSgpPdf}
-          onSendPix={handleSendSgpPix}
-          onSendPixQr={handleSendSgpPixQr}
-          onSendBarcode={handleSendSgpBarcode}
-          onClose={() => setSgpPanelOpen(false)}
-          initialCpf={conversation.contactSgpDocument || ''}
-        />
+        <Suspense fallback={<p role="status" className="sgp-carregando">Abrindo a verificação SGP…</p>}>
+          <SgpLookupPanel
+            key={conversation.id}
+            onSendMessage={(content) => sendMessage(content)}
+            onSendPdf={handleSendSgpPdf}
+            onSendPix={handleSendSgpPix}
+            onSendPixQr={handleSendSgpPixQr}
+            onSendBarcode={handleSendSgpBarcode}
+            onClose={painelAlternado ? fecharPaineisEDevolverFoco : fecharSgp}
+            emTela={painelAlternado}
+            initialCpf={conversation.contactSgpDocument || ''}
+            podeEnviar={podeEnviarSgp}
+            motivoSemEnvio={motivoSemEnvioSgp}
+          />
+        </Suspense>
         </div>
       ) : workspace ? (
         <div id="conv-painel-cliente" className={`conv-painel-slot chat-workspace-customer ${customerPanelOpen ? 'is-open' : ''} ${customerPanelDismissed ? 'is-dismissed' : ''}`}>

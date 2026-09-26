@@ -53,6 +53,12 @@ function mostrar(conversa) {
   return <ConversationView conversation={conversa} onTransferClick={vi.fn()} onBack={vi.fn()} />;
 }
 
+// O painel do SGP abre só pelo botão (e chega sob demanda).
+async function abrirSgp() {
+  await userEvent.click(screen.getByLabelText('Consultar SGP'));
+  await screen.findByRole('region', { name: 'Consulta SGP' });
+}
+
 async function responderConsulta(cpf) {
   await waitFor(() => expect(consultas[cpf]).toBeDefined());
   await act(async () => {
@@ -212,9 +218,11 @@ describe('mensagem do socket durante a carga inicial', () => {
 describe('trocar de conversa com a consulta do SGP no caminho', () => {
   test('a consulta atrasada do cliente de A não aparece com a conversa de B aberta', async () => {
     const { rerender } = render(mostrar(CONVERSA_A));
+    await abrirSgp();
     await waitFor(() => expect(consultas[CPF_A]).toBeDefined());
 
     rerender(mostrar(CONVERSA_B));
+    await abrirSgp();
     await responderConsulta(CPF_B);
     expect(await screen.findByText('Bruno Lima')).toBeInTheDocument();
 
@@ -231,16 +239,18 @@ describe('trocar de conversa com a consulta do SGP no caminho', () => {
   test('nenhum envio de Pix sai com o contrato de A para a conversa de B', async () => {
     api.sendSgpPix.mockResolvedValue([]);
     const { rerender } = render(mostrar(CONVERSA_A));
+    await abrirSgp();
     await waitFor(() => expect(consultas[CPF_A]).toBeDefined());
     rerender(mostrar(CONVERSA_B));
+    await abrirSgp();
     await responderConsulta(CPF_B);
     await act(async () => {
       consultas[CPF_A].resolve(CLIENTE[CPF_A]);
     });
 
     // O atendente, com B aberta, usa o que o painel mostra.
-    await userEvent.click(await screen.findByRole('button', { name: 'Consultar fatura em aberto' }));
-    await userEvent.click(await screen.findByRole('button', { name: /cód pix/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Consultar 2ª via' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Código Pix' }));
 
     await waitFor(() => expect(api.sendSgpPix).toHaveBeenCalledTimes(1));
     expect(api.sendSgpPix).toHaveBeenCalledWith(
@@ -259,15 +269,16 @@ describe('trocar de conversa com a consulta do SGP no caminho', () => {
     api.sendSgpPix.mockResolvedValue([]);
     const MESMO_CONTATO_EM_B = { ...CONVERSA_B, contactSgpDocument: CPF_A };
     const { rerender } = render(mostrar(CONVERSA_A));
+    await abrirSgp();
     await responderConsulta(CPF_A);
-    await userEvent.click(await screen.findByRole('button', { name: 'Consultar fatura em aberto' }));
-    await userEvent.click(await screen.findByRole('button', { name: /cód pix/i }));
-    expect(await screen.findByText('Cód Pix enviado para o cliente')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Consultar 2ª via' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Código Pix' }));
+    expect(await screen.findByText('Código Pix enviado para o cliente')).toBeInTheDocument();
 
     rerender(mostrar(MESMO_CONTATO_EM_B));
 
     // Nada foi enviado em B: o painel não pode dizer que foi.
-    expect(screen.queryByText('Cód Pix enviado para o cliente')).not.toBeInTheDocument();
+    expect(screen.queryByText('Código Pix enviado para o cliente')).not.toBeInTheDocument();
     expect(api.sendSgpPix).toHaveBeenCalledTimes(1);
     expect(api.sendSgpPix).toHaveBeenCalledWith(1001, 'conv-A', expect.anything(), 'tok-123');
   });
@@ -297,9 +308,10 @@ describe('envio que termina com outra conversa aberta', () => {
     const envioPix = adiado();
     api.sendSgpPix.mockReturnValueOnce(envioPix.promise);
     const { rerender } = render(mostrar(CONVERSA_A));
+    await abrirSgp();
     await responderConsulta(CPF_A);
-    await userEvent.click(await screen.findByRole('button', { name: 'Consultar fatura em aberto' }));
-    await userEvent.click(await screen.findByRole('button', { name: /cód pix/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Consultar 2ª via' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Código Pix' }));
     await waitFor(() => expect(api.sendSgpPix).toHaveBeenCalledTimes(1));
 
     rerender(mostrar(B_SEM_SGP));

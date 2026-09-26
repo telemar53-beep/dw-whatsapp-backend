@@ -15,9 +15,16 @@ export function useSgpLookup() {
   // mandavam o contrato dele para a conversa aberta. A segunda via pertence à
   // busca em que foi pedida, pelo mesmo motivo.
   const buscaAtualRef = useRef(0);
+  // Pedido igual ao que ainda está no caminho não sai de novo: dois cliques em
+  // "Buscar" com o mesmo documento, ou em "Consultar 2ª via" no mesmo contrato,
+  // viravam duas chamadas ao SGP — e a 2ª via pode gerar Pix lá.
+  const emAndamentoRef = useRef({ documento: null, contratos: new Set() });
 
   const search = useCallback(
     (cpf) => {
+      const emAndamento = emAndamentoRef.current;
+      if (emAndamento.documento === cpf) return undefined;
+      emAndamento.documento = cpf;
       buscaAtualRef.current += 1;
       const busca = buscaAtualRef.current;
       setLoading(true);
@@ -39,6 +46,9 @@ export function useSgpLookup() {
           setError(notFound ? 'not_found' : 'error');
           setErrorMessage(notFound ? null : err.message);
           setLoading(false);
+        })
+        .finally(() => {
+          if (emAndamento.documento === cpf) emAndamento.documento = null;
         });
     },
     [token]
@@ -46,6 +56,9 @@ export function useSgpLookup() {
 
   const fetchDuplicate = useCallback(
     (contratoId) => {
+      const emAndamento = emAndamentoRef.current;
+      if (emAndamento.contratos.has(contratoId)) return undefined;
+      emAndamento.contratos.add(contratoId);
       const busca = buscaAtualRef.current;
       setDuplicateState((prev) => ({ ...prev, [contratoId]: { loading: true, error: null } }));
       return generateSgpDuplicateInvoice(contratoId, token)
@@ -56,6 +69,9 @@ export function useSgpLookup() {
         .catch((err) => {
           if (buscaAtualRef.current !== busca) return;
           setDuplicateState((prev) => ({ ...prev, [contratoId]: { loading: false, error: 'error', errorMessage: err.message } }));
+        })
+        .finally(() => {
+          emAndamento.contratos.delete(contratoId);
         });
     },
     [token]

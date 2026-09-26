@@ -721,120 +721,133 @@ describe('ConversationView', () => {
 });
 
 describe('SGP lookup panel', () => {
-  test('the panel is hidden until the "Consultar SGP" button is clicked', () => {
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
-    // The header button's accessible name is "Consultar SGP" via aria-label, but the button
-    // has no visible text content, so this only matches the panel's own <h2> once it renders.
-    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
+  // Dados fictícios. O painel é carregado sob demanda: depois do clique, a
+  // espera é pelo findBy.
+  const VINCULADO = '00011122233';
+  const MINHA = { id: 'c1', status: 'assigned', assignedAgentId: 'agent-1', contactSgpDocument: VINCULADO };
+  const COM_FATURA = {
+    client: { id: 1, name: 'Cliente Exemplo', document: '000.111.222-33' },
+    contracts: [{ id: 555, status: 'Ativo', plan: 'Plano Teste' }],
+    loading: false,
+    error: null,
+    search: vi.fn(),
+    fetchDuplicate: vi.fn(),
+    duplicateState: {
+      555: {
+        loading: false,
+        error: null,
+        hasOpenInvoice: true,
+        duplicates: [{ id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '0000', pixCode: 'PIX-999', boletoLink: 'https://exemplo.test/999' }],
+      },
+    },
+  };
+  const mostrar = (conversation, props = {}) => (
+    <ConversationView conversation={conversation} onTransferClick={vi.fn()} onBack={vi.fn()} {...props} />
+  );
+
+  test('o painel não abre sozinho, nem com documento vinculado, e nenhuma consulta sai', () => {
+    const search = vi.fn();
+    useSgpLookup.mockReturnValue({ ...COM_FATURA, client: null, contracts: [], search });
+    render(mostrar(MINHA));
+    expect(screen.queryByRole('region', { name: 'Consulta SGP' })).not.toBeInTheDocument();
+    expect(document.querySelector('#conv-painel-sgp')).toBeNull();
+    expect(search).not.toHaveBeenCalled();
   });
 
-  test('clicking "Consultar SGP" shows the panel, clicking again hides it', async () => {
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
+  test('clicar em "Consultar SGP" abre o painel e consulta o documento vinculado; de novo, fecha', async () => {
+    const search = vi.fn();
+    useSgpLookup.mockReturnValue({ ...COM_FATURA, client: null, contracts: [], search });
+    render(mostrar(MINHA));
 
     await userEvent.click(screen.getByLabelText('Consultar SGP'));
-    expect(screen.getByText('Consultar SGP')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Consulta SGP' })).toBeInTheDocument();
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledWith(VINCULADO);
 
     await userEvent.click(screen.getByLabelText('Consultar SGP'));
-    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Consulta SGP' })).not.toBeInTheDocument();
+  });
+
+  test('sem documento vinculado, abre sem consulta e pede o documento', async () => {
+    const search = vi.fn();
+    useSgpLookup.mockReturnValue({ ...COM_FATURA, client: null, contracts: [], search });
+    render(mostrar({ ...MINHA, contactSgpDocument: null }));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    expect(await screen.findByLabelText('CPF ou CNPJ do cliente')).toBeInTheDocument();
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  test('fechar e reabrir consulta de novo: nada do SGP fica guardado', async () => {
+    const search = vi.fn();
+    useSgpLookup.mockReturnValue({ ...COM_FATURA, client: null, contracts: [], search });
+    render(mostrar(MINHA));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await screen.findByRole('region', { name: 'Consulta SGP' });
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await screen.findByRole('region', { name: 'Consulta SGP' });
+    expect(search).toHaveBeenCalledTimes(2);
   });
 
   test('the panel closes when the conversation changes', async () => {
     const CONVERSATION_A = { id: 'c1', status: 'waiting', assignedAgentId: null };
     const CONVERSATION_B = { id: 'c2', status: 'waiting', assignedAgentId: null };
-    const { rerender } = render(<ConversationView conversation={CONVERSATION_A} onTransferClick={vi.fn()} onBack={vi.fn()} />);
+    const { rerender } = render(mostrar(CONVERSATION_A));
     await userEvent.click(screen.getByLabelText('Consultar SGP'));
-    expect(screen.getByText('Consultar SGP')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Consulta SGP' })).toBeInTheDocument();
 
-    rerender(<ConversationView conversation={CONVERSATION_B} onTransferClick={vi.fn()} onBack={vi.fn()} />);
-    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
+    rerender(mostrar(CONVERSATION_B));
+    expect(screen.queryByRole('region', { name: 'Consulta SGP' })).not.toBeInTheDocument();
   });
 
-  test('abre o painel do SGP sozinho quando o contato tem CPF vinculado', () => {
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null, contactSgpDocument: '11122233344' }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText('Consultar SGP')).toBeInTheDocument();
-    expect(screen.getByLabelText(/cpf do cliente/i)).toHaveValue('11122233344');
-  });
-
-  test('não abre o painel do SGP quando o contato não tem CPF vinculado', () => {
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null, contactSgpDocument: null }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
-
-    expect(screen.queryByText('Consultar SGP')).not.toBeInTheDocument();
-  });
-
-  test('clicking "Cód Pix" no painel do SGP chama sendSgpPix e adiciona as duas mensagens na conversa', async () => {
+  test('na conversa do responsável, "Código Pix" chama sendSgpPix e põe as duas mensagens na conversa', async () => {
     const appendMessage = vi.fn();
-    useConversationMessages.mockReturnValue({
-      messages: [],
-      sendMessage: vi.fn(),
-      appendMessage,
-    });
-    useSgpLookup.mockReturnValue({
-      client: { id: 1, name: 'Cliente Exemplo', document: '036.668.113-37' },
-      contracts: [{ id: 555, status: 'Ativo', plan: '1GB' }],
-      loading: false,
-      error: null,
-      search: vi.fn(),
-      fetchDuplicate: vi.fn(),
-      duplicateState: {
-        555: {
-          loading: false,
-          error: null,
-          hasOpenInvoice: true,
-          duplicates: [
-            { id: '999', dueDate: '2026-09-20', value: 89.9, barCode: '836...', pixCode: '000201...', boletoLink: 'https://x' },
-          ],
-        },
-      },
-    });
+    useConversationMessages.mockReturnValue({ messages: [], sendMessage: vi.fn(), appendMessage });
+    useSgpLookup.mockReturnValue(COM_FATURA);
     const messagesReturned = [{ id: 'msg1' }, { id: 'msg2' }];
     api.sendSgpPix.mockResolvedValue(messagesReturned);
 
-    render(
-      <ConversationView
-        conversation={{ id: 'c1', status: 'waiting', assignedAgentId: null, contactSgpDocument: '11122233344' }}
-        onTransferClick={vi.fn()}
-        onBack={vi.fn()}
-      />
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: /cód pix/i }));
+    render(mostrar(MINHA));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Código Pix' }));
 
     // faturaId acompanha o envio para virar o "Nº da cobrança" no cartão nativo de Pix.
     await waitFor(() =>
       expect(api.sendSgpPix).toHaveBeenCalledWith(
         555,
         'c1',
-        { pixCode: '000201...', value: 89.9, dueDate: '2026-09-20', faturaId: '999' },
+        { pixCode: 'PIX-999', value: 89.9, dueDate: '2026-09-20', faturaId: '999' },
         'tok-123'
       )
     );
     expect(appendMessage).toHaveBeenCalledWith(messagesReturned[0]);
     expect(appendMessage).toHaveBeenCalledWith(messagesReturned[1]);
+  });
+
+  // A regra é a das rotas do SGP (só o responsável envia): a tela não oferece
+  // o que o servidor recusaria, e diz por quê.
+  test.each([
+    ['sem responsável', { status: 'waiting', assignedAgentId: null }, 'Assuma o atendimento para enviar ao cliente.'],
+    ['com outro atendente', { status: 'assigned', assignedAgentId: 'agent-9' }, 'Só o responsável pelo atendimento pode enviar ao cliente.'],
+  ])('%s, o envio fica desabilitado e o motivo à vista', async (_nome, dono, motivo) => {
+    useSgpLookup.mockReturnValue(COM_FATURA);
+    render(mostrar({ ...MINHA, ...dono }));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    expect(await screen.findByRole('button', { name: 'Código Pix' })).toBeDisabled();
+    expect(screen.getByText(motivo)).toBeInTheDocument();
+  });
+
+  test('no lugar da conversa (celular), um só controle de voltar, e ele devolve a conversa', async () => {
+    useSgpLookup.mockReturnValue(COM_FATURA);
+    render(mostrar(MINHA, { painelModo: 'alternado' }));
+    await userEvent.click(screen.getByLabelText('Consultar SGP'));
+    await screen.findByRole('region', { name: 'Consulta SGP' });
+
+    expect(screen.getAllByRole('button', { name: /voltar à conversa/i })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Fechar consulta SGP' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /voltar à conversa/i }));
+    expect(screen.queryByRole('region', { name: 'Consulta SGP' })).not.toBeInTheDocument();
   });
 
   test('the close-reason popup closes when the conversation changes', async () => {

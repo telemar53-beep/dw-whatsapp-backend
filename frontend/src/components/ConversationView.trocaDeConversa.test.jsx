@@ -351,3 +351,89 @@ describe('envio que termina com outra conversa aberta', () => {
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
   });
 });
+
+// "Editar cliente" com o salvamento ainda no caminho quando a conversa troca.
+// A resposta pertence à conversa (e ao contato) de onde saiu: nunca pode
+// renomear o cliente seguinte, nem fechar a edição que estiver aberta nele.
+describe('edição do contato: a resposta volta para a conversa de onde saiu', () => {
+  const A = { ...A_SEM_SGP, contactId: 'contato-A', contactInternalNote: 'Nota de A' };
+  const B = { ...B_SEM_SGP, contactId: 'contato-B', contactInternalNote: 'Nota de B' };
+
+  const naMesa = (conversa) => <ConversationView conversation={conversa} onTransferClick={vi.fn()} onBack={vi.fn()} workspace />;
+  const painel = () => screen.getByRole('complementary', { name: 'Dados do cliente' });
+  const edicao = () => screen.getByRole('dialog', { name: 'Editar cliente' });
+  async function abrirEdicao(nome) {
+    await userEvent.click(screen.getByRole('button', { name: `Editar cliente: ${nome}` }));
+    return edicao();
+  }
+  async function escrever(dialogo, rotulo, texto) {
+    const campo = within(dialogo).getByLabelText(rotulo);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, texto);
+  }
+
+  beforeEach(() => {
+    // clearAllMocks não esvazia a fila de mockResolvedValueOnce: a resposta
+    // que um teste não consumiu iria para o seguinte.
+    api.updateContact.mockReset();
+    api.listCities.mockResolvedValue([]);
+  });
+
+  test('salvar em A, trocar para B e só então A responder não muda nada em B', async () => {
+    const salvarA = adiado();
+    api.updateContact.mockReturnValueOnce(salvarA.promise);
+    const { rerender } = render(naMesa(A));
+    await screen.findByText('Mensagem de conv-A');
+
+    const dialogoA = await abrirEdicao('Contato A');
+    await escrever(dialogoA, 'Nome', 'Contato A editado');
+    await escrever(dialogoA, 'Nota interna', 'Nota de A editada');
+    await userEvent.click(within(dialogoA).getByRole('button', { name: 'Salvar' }));
+    expect(api.updateContact).toHaveBeenCalledWith('contato-A', expect.objectContaining({ displayName: 'Contato A editado' }), 'tok-123');
+
+    rerender(naMesa(B));
+    await screen.findByText('Mensagem de conv-B');
+    // A edição de B já está aberta quando a resposta de A chega.
+    const dialogoB = await abrirEdicao('Contato B');
+
+    await act(async () => {
+      salvarA.resolve({ id: 'contato-A', displayName: 'Contato A editado', cityId: null, localityId: null, internalNote: 'Nota de A editada' });
+    });
+
+    expect(screen.getByRole('dialog', { name: 'Editar cliente' })).toBe(dialogoB);
+    expect(within(dialogoB).getByLabelText('Nome')).toHaveValue('Contato B');
+    expect(within(dialogoB).getByLabelText('Nota interna')).toHaveValue('Nota de B');
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato B' })).toBeInTheDocument();
+    expect(within(painel()).getByText('Contato B')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota de B')).toBeInTheDocument();
+    expect(screen.queryByText('Contato A editado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nota de A editada')).not.toBeInTheDocument();
+  });
+
+  test('voltar para A depois de salvar em B não traz nada de B', async () => {
+    api.updateContact.mockResolvedValueOnce({ id: 'contato-B', displayName: 'Contato B editado', cityId: null, localityId: null, internalNote: 'Nota de B editada' });
+    const { rerender } = render(naMesa(A));
+    await screen.findByText('Mensagem de conv-A');
+    rerender(naMesa(B));
+    await screen.findByText('Mensagem de conv-B');
+
+    const dialogoB = await abrirEdicao('Contato B');
+    await escrever(dialogoB, 'Nome', 'Contato B editado');
+    await escrever(dialogoB, 'Nota interna', 'Nota de B editada');
+    await userEvent.click(within(dialogoB).getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
+    expect(within(painel()).getByText('Nota de B editada')).toBeInTheDocument();
+
+    rerender(naMesa(A));
+    await screen.findByText('Mensagem de conv-A');
+
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato A' })).toBeInTheDocument();
+    expect(within(painel()).getByText('Contato A')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota de A')).toBeInTheDocument();
+    expect(screen.queryByText('Contato B editado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nota de B editada')).not.toBeInTheDocument();
+    const dialogoA = await abrirEdicao('Contato A');
+    expect(within(dialogoA).getByLabelText('Nome')).toHaveValue('Contato A');
+    expect(within(dialogoA).getByLabelText('Nota interna')).toHaveValue('Nota de A');
+  });
+});

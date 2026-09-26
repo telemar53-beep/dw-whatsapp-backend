@@ -5,7 +5,7 @@ import ConversationModal from './ConversationModal';
 import WaDialog from './WaDialog';
 
 function ClosedConversationsModal({ onClose }) {
-  const { items, hasMore, loading, status, loadMore, refresh, erroAoCarregarMais } = useMyClosedConversations();
+  const { items, hasMore, loading, status, loadMore, refresh, erroAoCarregarMais, aplicarContatoSalvo } = useMyClosedConversations();
   const [selectedConversation, setSelectedConversation] = useState(null);
 
   return (
@@ -30,6 +30,9 @@ function ClosedConversationsModal({ onClose }) {
           conversation={selectedConversation}
           onClose={() => setSelectedConversation(null)}
           onTransferClick={() => {}}
+          // O item escolhido é uma cópia do clique: o que foi salvo vai para a
+          // lista, e reabrir o atendimento parte dela.
+          onContatoSalvo={aplicarContatoSalvo}
         />
       )}
     </>

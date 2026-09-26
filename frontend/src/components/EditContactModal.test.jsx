@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import EditContactModal from './EditContactModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -78,7 +78,7 @@ describe('EditContactModal', () => {
     await waitFor(() =>
       expect(api.updateContact).toHaveBeenCalledWith(
         'contact-1',
-        { displayName: 'Carlos Editado', cityId: 'city-2', localityId: null, internalNote: 'Cliente VIP' },
+        { displayName: 'Carlos Editado', cityId: 'city-2', internalNote: 'Cliente VIP' },
         'tok-123'
       )
     );
@@ -98,6 +98,7 @@ describe('EditContactModal', () => {
     const onClose = vi.fn();
     render(<EditContactModal conversation={CONVERSATION} onClose={onClose} onSaved={vi.fn()} />);
 
+    await userEvent.type(screen.getByLabelText(/nome/i), ' Silva');
     await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
 
     expect(await screen.findByText('Falha ao salvar')).toBeInTheDocument();
@@ -193,7 +194,7 @@ describe('EditContactModal — municipio e localidade', () => {
 
     await waitFor(() => expect(api.updateContact).toHaveBeenCalledWith(
       'c1',
-      { displayName: 'Ana', cityId: 'm2', localityId: null, internalNote: null },
+      { cityId: 'm2', localityId: null },
       'tok-123'
     ));
   });
@@ -212,5 +213,124 @@ describe('EditContactModal — municipio e localidade', () => {
       cityId: 'm1', cityName: 'Candido Mendes',
       localityId: 'p1', localityName: 'Barao de Tromai',
     })));
+  });
+});
+
+// O modal pode fechar com o salvamento no caminho ("Cancelar", Esc ou a troca
+// de conversa). A resposta que chega depois continua valendo para o contato de
+// onde saiu — por isso o onSaved —, mas não fecha de novo: o onClose fecharia a
+// edição que estiver aberta agora, talvez a de outro cliente.
+describe('EditContactModal — resposta depois de fechar', () => {
+  test('entrega o valor salvo, mas não chama onClose de novo', async () => {
+    let responder;
+    api.updateContact.mockReturnValue(new Promise((resolve) => { responder = resolve; }));
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    const { unmount } = render(<EditContactModal conversation={CONVERSATION} onClose={onClose} onSaved={onSaved} />);
+
+    await userEvent.type(screen.getByLabelText(/nome/i), ' Silva');
+    await userEvent.click(screen.getByRole('button', { name: /salvar/i }));
+    await waitFor(() => expect(api.updateContact).toHaveBeenCalled());
+    unmount();
+    await act(async () => {
+      responder({ id: 'contact-1', displayName: 'Carlos', cityId: 'city-1', localityId: null, internalNote: null });
+    });
+
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// A conversa da lista pode estar desatualizada (outra edição, outra aba). Só vai
+// ao servidor o que mudou em relação ao que o modal recebeu ao abrir: reenviar
+// um campo intocado — a nota, sobretudo — devolvia ao servidor um valor que
+// outra edição já tinha trocado. A rota aplica só as chaves que chegam.
+describe('EditContactModal — só vai ao servidor o que mudou', () => {
+  // Os quatro campos preenchidos: qualquer um reenviado sem mudar aparece no payload.
+  const COMPLETO = {
+    id: 'conv-1',
+    contactId: 'contact-1',
+    contactDisplayName: 'Carlos',
+    contactCityId: 'city-1',
+    contactLocalityId: 'loc-1',
+    contactInternalNote: 'Nota atual',
+  };
+
+  beforeEach(() => {
+    usePlaces.mockReturnValue({
+      places: [
+        { id: 'city-1', name: 'Bahia', kind: 'city', parentId: null },
+        { id: 'city-2', name: 'São Luís', kind: 'city', parentId: null },
+        { id: 'loc-1', name: 'Localidade Um', kind: 'locality', parentId: 'city-1' },
+        { id: 'loc-2', name: 'Localidade Dois', kind: 'locality', parentId: 'city-2' },
+      ],
+      status: 'ready',
+      refresh: vi.fn(),
+    });
+    api.updateContact.mockReset();
+    api.updateContact.mockResolvedValue({ id: 'contact-1', displayName: 'Carlos', cityId: 'city-1', localityId: 'loc-1', internalNote: 'Nota atual' });
+  });
+
+  const abrir = (props = {}) => render(<EditContactModal conversation={COMPLETO} onClose={vi.fn()} onSaved={vi.fn()} {...props} />);
+  const salvar = () => userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+  async function escrever(rotulo, texto) {
+    const campo = screen.getByLabelText(rotulo);
+    await userEvent.clear(campo);
+    if (texto) await userEvent.type(campo, texto);
+  }
+  const enviado = () => api.updateContact.mock.calls[0][1];
+
+  test('editar só o nome envia só o nome', async () => {
+    abrir();
+    await escrever('Nome', 'Carlos Editado');
+    await salvar();
+    await waitFor(() => expect(api.updateContact).toHaveBeenCalledTimes(1));
+    expect(enviado()).toEqual({ displayName: 'Carlos Editado' });
+  });
+
+  test('editar só a localização envia município e localidade, e não a nota', async () => {
+    abrir();
+    await userEvent.selectOptions(screen.getByLabelText('Município'), 'city-2');
+    await userEvent.selectOptions(screen.getByLabelText('Localidade'), 'loc-2');
+    await salvar();
+    await waitFor(() => expect(api.updateContact).toHaveBeenCalledTimes(1));
+    expect(enviado()).toEqual({ cityId: 'city-2', localityId: 'loc-2' });
+  });
+
+  test('editar a nota envia só a nota', async () => {
+    abrir();
+    await escrever('Nota interna', 'Nota nova');
+    await salvar();
+    await waitFor(() => expect(api.updateContact).toHaveBeenCalledTimes(1));
+    expect(enviado()).toEqual({ internalNote: 'Nota nova' });
+  });
+
+  test('limpar a nota de propósito envia a limpeza', async () => {
+    abrir();
+    await escrever('Nota interna', '');
+    await salvar();
+    await waitFor(() => expect(api.updateContact).toHaveBeenCalledTimes(1));
+    expect(enviado()).toEqual({ internalNote: null });
+  });
+
+  test('limpar o município de propósito envia município e localidade vazios', async () => {
+    abrir();
+    await userEvent.selectOptions(screen.getByLabelText('Município'), '');
+    await salvar();
+    await waitFor(() => expect(api.updateContact).toHaveBeenCalledTimes(1));
+    expect(enviado()).toEqual({ cityId: null, localityId: null });
+  });
+
+  test('sem nada alterado — nem depois de mexer e desfazer —, salvar fecha sem PATCH', async () => {
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    abrir({ onClose, onSaved });
+    await escrever('Nome', 'Outro nome');
+    await escrever('Nome', 'Carlos');
+    await salvar();
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(api.updateContact).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });

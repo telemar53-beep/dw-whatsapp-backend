@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { getDashboardConversations } from '../services/api';
 import { applyContactAvatarUpdate } from '../utils/contactAvatar';
+import { aplicarContatoSalvo } from '../utils/contatoSalvo';
 
 function upsert(list, conversation) {
   const index = list.findIndex((c) => c.id === conversation.id);
@@ -80,5 +81,14 @@ export function useAttendanceDashboard() {
     };
   }, [socket]);
 
-  return { inProgress, waiting, inAutomation, closedTodayCount, loading, status, refresh };
+  // "Editar cliente" salvou num popup da Supervisão, e a rota não emite
+  // evento: as três colunas guardam o que voltou do servidor, só nas conversas
+  // daquele contato — reabrir o popup não traz o contato antigo.
+  const aplicarContatoSalvoNoPainel = useCallback((salvo) => {
+    setInProgress((prev) => aplicarContatoSalvo(prev, salvo));
+    setWaiting((prev) => aplicarContatoSalvo(prev, salvo));
+    setInAutomation((prev) => aplicarContatoSalvo(prev, salvo));
+  }, []);
+
+  return { inProgress, waiting, inAutomation, closedTodayCount, loading, status, refresh, aplicarContatoSalvo: aplicarContatoSalvoNoPainel };
 }

@@ -1,5 +1,5 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, test, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { render, screen, within, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { renderInShell } from '../test-utils/renderInShell';
@@ -12,13 +12,19 @@ import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useQueueNotificationSound } from '../hooks/useQueueNotificationSound';
 import { useUnreadMyConversations } from '../hooks/useUnreadMyConversations';
-import { closeConversation } from '../services/api';
+import { closeConversation, getQueue, getMyConversations, updateContact, listCities } from '../services/api';
 import { useCompanyName } from '../hooks/useCompanyName';
 import { useTransferNotice } from '../hooks/useTransferNotice';
 
 vi.mock('../services/api', async (importOriginal) => ({
   ...(await importOriginal()),
   closeConversation: vi.fn(),
+  // Só usados quando um teste roda os hooks de lista de verdade (edição do
+  // contato); os outros simulam os hooks e nunca chegam aqui.
+  getQueue: vi.fn(),
+  getMyConversations: vi.fn(),
+  updateContact: vi.fn(),
+  listCities: vi.fn(() => new Promise(() => {})),
 }));
 vi.mock('../contexts/AuthContext');
 vi.mock('../hooks/useQueue');
@@ -805,5 +811,103 @@ describe('fronteira da conversa aberta', () => {
 
     expect(rendersDaConversa()).toBeGreaterThan(antes);
     expect(screen.getByRole('button', { name: 'Editar cliente: Carlos Pereira' })).toBeInTheDocument();
+  });
+});
+
+// "Editar cliente" na mesa, com os hooks de lista DE VERDADE (só a API é
+// simulada). A rota de edição não emite evento: sem a página levar o que foi
+// salvo até as listas, voltar à lista e reabrir a conversa trazia de volta a
+// nota antiga — e salvar de novo a devolvia ao servidor.
+describe('edição do contato na mesa: a lista guarda o que foi salvo', () => {
+  let filaReal;
+  let meusReais;
+  beforeAll(async () => {
+    filaReal = await vi.importActual('../hooks/useQueue');
+    meusReais = await vi.importActual('../hooks/useMyConversations');
+  });
+
+  const A = { id: 'conv-A', contactId: 'contato-A', contactDisplayName: 'Contato A', contactInternalNote: 'Nota antiga', status: 'assigned', assignedAgentId: 'agent-1' };
+  const B = { id: 'conv-B', contactId: 'contato-B', contactDisplayName: 'Contato B', contactInternalNote: 'Nota de B', status: 'assigned', assignedAgentId: 'agent-1' };
+
+  beforeEach(() => {
+    useQueue.mockImplementation(filaReal.useQueue);
+    useMyConversations.mockImplementation(meusReais.useMyConversations);
+    getQueue.mockResolvedValue([]);
+    getMyConversations.mockResolvedValue([A, B]);
+    listCities.mockResolvedValue([]);
+    // clearAllMocks não esvazia a fila de mockReturnValueOnce.
+    updateContact.mockReset();
+  });
+
+  const lista = () => screen.getByRole('complementary', { name: 'Atendimentos' });
+  const linha = (nome) => within(lista()).getByRole('button', { name: new RegExp(`^${nome}`) });
+  const edicao = () => screen.getByRole('dialog', { name: 'Editar cliente' });
+  const painel = () => screen.getByRole('complementary', { name: 'Dados do cliente' });
+  const rendersDaConversa = () => useQuickReplies.mock.calls.length;
+
+  async function abrir(nome) {
+    await userEvent.click(await within(lista()).findByRole('button', { name: new RegExp(`^${nome}`) }));
+    await screen.findByRole('button', { name: new RegExp(`^Editar cliente: ${nome}`) });
+  }
+  async function editar(nome, campos) {
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(`^Editar cliente: ${nome}`) }));
+    for (const [rotulo, texto] of campos) {
+      const campo = within(edicao()).getByLabelText(rotulo);
+      await userEvent.clear(campo);
+      await userEvent.type(campo, texto);
+    }
+    await userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar' }));
+  }
+  const edicaoFechou = () => waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
+
+  test('salvar, voltar à lista e reabrir: a conversa volta com a nota nova', async () => {
+    updateContact.mockResolvedValue({ id: 'contato-A', displayName: 'Contato A', cityId: null, localityId: null, internalNote: 'Nota nova' });
+    renderDashboard();
+    await abrir('Contato A');
+    await editar('Contato A', [['Nota interna', 'Nota nova']]);
+    await edicaoFechou();
+
+    // Voltar à lista desmonta a conversa: o que ela guardava some junto.
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar para a lista' }));
+    expect(screen.queryByRole('button', { name: /^Editar cliente:/ })).not.toBeInTheDocument();
+
+    await abrir('Contato A');
+    expect(within(painel()).getByText('Nota nova')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Editar cliente: Contato A/ }));
+    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota nova');
+  });
+
+  test('salvar na mesa troca o nome na linha da lista', async () => {
+    updateContact.mockResolvedValue({ id: 'contato-A', displayName: 'Contato A editado', cityId: null, localityId: null, internalNote: 'Nota antiga' });
+    renderDashboard();
+    await abrir('Contato A');
+    await editar('Contato A', [['Nome', 'Contato A editado']]);
+    await edicaoFechou();
+
+    expect(linha('Contato A editado')).toBeInTheDocument();
+    expect(linha('Contato B')).toBeInTheDocument();
+  });
+
+  test('resposta atrasada de A com B aberta: a linha de A muda, e B não muda nem redesenha', async () => {
+    let responderA;
+    updateContact.mockReturnValueOnce(new Promise((resolve) => { responderA = resolve; }));
+    renderDashboard();
+    await abrir('Contato A');
+    await editar('Contato A', [['Nome', 'Contato A editado']]);
+    // Esc com o "Salvar" ainda no caminho, e a conversa troca para B.
+    await userEvent.keyboard('{Escape}');
+    await edicaoFechou();
+    await abrir('Contato B');
+    const antes = rendersDaConversa();
+
+    await act(async () => {
+      responderA({ id: 'contato-A', displayName: 'Contato A editado', cityId: null, localityId: null, internalNote: 'Nota de A editada' });
+    });
+
+    expect(linha('Contato A editado')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato B' })).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota de B')).toBeInTheDocument();
+    expect(within(painel()).queryByText('Nota de A editada')).not.toBeInTheDocument();
+    expect(rendersDaConversa()).toBe(antes);
   });
 });

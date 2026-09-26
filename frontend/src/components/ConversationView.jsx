@@ -145,6 +145,7 @@ function channelLine(conversation) {
 import { formatPhone } from '../utils/phone';
 import { descreverErro } from '../utils/errorMessages';
 import { nomeDoLocal } from '../utils/place';
+import { contatoSalvoDe, comContatoSalvo } from '../utils/contatoSalvo';
 import './conversa-painel.css';
 
 // O painel do SGP (e a biblioteca de QR que ele usa) só chega quando o
@@ -255,7 +256,10 @@ function CustomerPanel({ conversation, displayName, cityName, onClose }) {
 // pela página (components/ConversaDaMesa.jsx). Sem ela, a conversa é a do
 // modal da Supervisão e dos Encerrados. Vem de fora para que nada disso viaje
 // no trecho que essas páginas também baixam.
-function ConversationView({ conversation, onTransferClick, onBack, painelModo = 'coluna', onPainelAbertoChange, workspace = false, variante }) {
+// `onContatoSalvo`: quem monta a conversa ao lado de outro painel (o modal da
+// Supervisão e dos Encerrados) recebe o que o "Editar cliente" salvou, já
+// preso à conversa de onde saiu (utils/contatoSalvo.js).
+function ConversationView({ conversation, onTransferClick, onBack, painelModo = 'coluna', onPainelAbertoChange, workspace = false, variante, onContatoSalvo }) {
   const Cabecalho = variante && variante.Cabecalho;
   const icones = variante && variante.icones;
   const IconeInfo = (icones && icones.Info) || IconInfo;
@@ -294,6 +298,10 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
   const [showingHistory, setShowingHistory] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const [contactOverride, setContactOverride] = useState(null);
+  // A conversa que está na tela AGORA: a resposta de um "Salvar" que saiu de
+  // outra conversa não toca no estado desta (ver o onSaved abaixo).
+  const conversaNaTelaRef = useRef(conversation.id);
+  conversaNaTelaRef.current = conversation.id;
   const [replyingTo, setReplyingTo] = useState(null);
   const { avisar, alertDialog, dispensar: dispensarAviso } = useAlert();
   const [sgpPanelOpen, setSgpPanelOpen] = useState(false);
@@ -448,13 +456,12 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
       ? 'Só o responsável pelo atendimento pode enviar ao cliente.'
       : 'Assuma o atendimento para enviar ao cliente.';
   const isAdmin = (agent.role === 'admin' || agent.role === 'manager') && conversation.status !== 'closed';
-  const displayName = contactOverride ? contactOverride.displayName : conversation.contactDisplayName;
+  // A conversa com o que o "Editar cliente" salvou nela — e só nela: a resposta
+  // de outra conversa não bate o vínculo e é ignorada aqui.
+  const conversaDoContato = comContatoSalvo(conversation, contactOverride);
+  const displayName = conversaDoContato.contactDisplayName;
   // "Barão de Tromaí · Cândido Mendes" com localidade; só o município sem ela.
-  // O override vem do modal de edição e já traz os dois nomes.
-  const cityName = nomeDoLocal(
-    contactOverride ? contactOverride.localityName : conversation.contactLocalityName,
-    contactOverride ? contactOverride.cityName : conversation.contactCityName
-  );
+  const cityName = nomeDoLocal(conversaDoContato.contactLocalityName, conversaDoContato.contactCityName);
   const nameLabel = displayName || conversation.contactPhoneNumber || 'Conversa';
   const headerLabel = cityName ? `${nameLabel} - ${cityName}` : nameLabel;
 
@@ -1010,16 +1017,20 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
       )}
       {editingContact && (
         <EditContactModal
-          conversation={{
-            ...conversation,
-            contactDisplayName: contactOverride ? contactOverride.displayName : conversation.contactDisplayName,
-            contactCityId: contactOverride ? contactOverride.cityId : conversation.contactCityId,
-            // Sem esta linha, reabrir o modal depois de editar mostraria a
-            // localidade antiga: a cidade vinha do override e ela não.
-            contactLocalityId: contactOverride ? contactOverride.localityId : conversation.contactLocalityId,
-          }}
+          // Reabrir depois de salvar parte do que foi salvo, nota inclusive:
+          // com a nota da lista, salvar de novo devolvia a antiga ao servidor.
+          conversation={conversaDoContato}
           onClose={() => setEditingContact(false)}
-          onSaved={(updated) => setContactOverride(updated)}
+          // `conversation` aqui é a do render em que a edição foi salva: a
+          // resposta que chegar depois de uma troca continua presa a ela.
+          onSaved={(updated) => {
+            const salvo = contatoSalvoDe(conversation, updated);
+            // A lista (de quem montou a conversa) guarda o valor de qualquer
+            // jeito; o estado desta só muda se a conversa ainda é a da tela —
+            // senão a conversa aberta de outro contato redesenharia (A2).
+            if (onContatoSalvo) onContatoSalvo(salvo);
+            if (conversaNaTelaRef.current === salvo.conversationId) setContactOverride(salvo);
+          }}
         />
       )}
       {closingReason && (
@@ -1059,7 +1070,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
         </div>
       ) : workspace ? (
         <div id="conv-painel-cliente" className={`conv-painel-slot chat-workspace-customer ${customerPanelOpen ? 'is-open' : ''} ${customerPanelDismissed ? 'is-dismissed' : ''}`}>
-          <CustomerPanel conversation={conversation} displayName={displayName} cityName={cityName} onClose={() => { setCustomerPanelOpen(false); setCustomerPanelDismissed(true); }} />
+          <CustomerPanel conversation={conversaDoContato} displayName={displayName} cityName={cityName} onClose={() => { setCustomerPanelOpen(false); setCustomerPanelDismissed(true); }} />
         </div>
       ) : null}
     </div>

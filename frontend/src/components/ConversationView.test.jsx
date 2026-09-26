@@ -1621,3 +1621,134 @@ describe('ConversationView — Fase 1B, mensagens automáticas', () => {
     expect(screen.queryByText('Mídia')).not.toBeInTheDocument();
   });
 });
+
+// "Editar cliente" salva nome, município, localidade e nota. A lista não fica
+// sabendo (a rota não emite evento), então o que voltou do servidor é o valor
+// efetivo desta conversa: no cabeçalho, no painel e ao reabrir a edição. Antes
+// a nota ficava de fora — o painel mostrava a antiga, reabrir carregava a
+// antiga, e salvar de novo a devolvia ao servidor.
+describe('edição do contato: o que foi salvo vale para esta conversa', () => {
+  const LUGARES = [
+    { id: 'mun-1', name: 'Município Um', kind: 'city', parentId: null },
+    { id: 'mun-2', name: 'Município Dois', kind: 'city', parentId: null },
+    { id: 'loc-2', name: 'Localidade Dois', kind: 'locality', parentId: 'mun-2' },
+  ];
+  const CONVERSA = {
+    id: 'conv-1',
+    contactId: 'contato-1',
+    status: 'assigned',
+    assignedAgentId: 'agent-1',
+    contactDisplayName: 'Contato Um',
+    contactCityId: 'mun-1',
+    contactCityName: 'Município Um',
+    contactInternalNote: 'Nota antiga',
+  };
+
+  beforeEach(() => {
+    // clearAllMocks não esvazia a fila de mockResolvedValueOnce: a resposta
+    // que um teste não consumiu iria para o seguinte.
+    api.updateContact.mockReset();
+    usePlaces.mockReturnValue({ places: LUGARES, status: 'ready', refresh: vi.fn() });
+  });
+
+  const mostrar = () =>
+    render(<ConversationView conversation={CONVERSA} onTransferClick={vi.fn()} workspace variante={VARIANTE_DA_MESA} />);
+  const painel = () => screen.getByRole('complementary', { name: 'Dados do cliente' });
+  const edicao = () => screen.getByRole('dialog', { name: 'Editar cliente' });
+  const abrirEdicao = () => userEvent.click(screen.getByRole('button', { name: /^Editar cliente:/ }));
+  const edicaoFechou = () => waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
+
+  async function escrever(rotulo, texto) {
+    const campo = within(edicao()).getByLabelText(rotulo);
+    await userEvent.clear(campo);
+    await userEvent.type(campo, texto);
+  }
+  const salvar = () => userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar' }));
+
+  test('salvar uma nota nova troca a nota do painel na hora', async () => {
+    api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Contato Um', cityId: 'mun-1', localityId: null, internalNote: 'Nota nova' });
+    mostrar();
+
+    await abrirEdicao();
+    await escrever('Nota interna', 'Nota nova');
+    await salvar();
+    await edicaoFechou();
+
+    expect(within(painel()).getByText('Nota nova')).toBeInTheDocument();
+    expect(within(painel()).queryByText('Nota antiga')).not.toBeInTheDocument();
+  });
+
+  test('reabrir a edição traz a nota salva, e salvar de novo não devolve a antiga', async () => {
+    api.updateContact
+      .mockResolvedValueOnce({ id: 'contato-1', displayName: 'Contato Um', cityId: 'mun-1', localityId: null, internalNote: 'Nota nova' })
+      .mockResolvedValueOnce({ id: 'contato-1', displayName: 'Contato Renomeado', cityId: 'mun-1', localityId: null, internalNote: 'Nota nova' });
+    mostrar();
+    await abrirEdicao();
+    await escrever('Nota interna', 'Nota nova');
+    await salvar();
+    await edicaoFechou();
+
+    await abrirEdicao();
+    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota nova');
+    await escrever('Nome', 'Contato Renomeado');
+    await salvar();
+
+    await waitFor(() => expect(api.updateContact).toHaveBeenCalledTimes(2));
+    // Só o nome mudou nesta segunda vez: a nota nem vai (PATCH parcial).
+    expect(api.updateContact).toHaveBeenLastCalledWith('contato-1', { displayName: 'Contato Renomeado' }, 'tok-123');
+  });
+
+  test('salvar nome, município e localidade troca os valores efetivos da conversa', async () => {
+    api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Contato Editado', cityId: 'mun-2', localityId: 'loc-2', internalNote: 'Nota antiga' });
+    mostrar();
+    await abrirEdicao();
+    await escrever('Nome', 'Contato Editado');
+    await userEvent.selectOptions(within(edicao()).getByLabelText('Município'), 'mun-2');
+    await userEvent.selectOptions(within(edicao()).getByLabelText('Localidade'), 'loc-2');
+    await salvar();
+    await edicaoFechou();
+
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato Editado - Localidade Dois · Município Dois' })).toBeInTheDocument();
+    expect(within(painel()).getByText('Contato Editado')).toBeInTheDocument();
+    expect(within(painel()).getByText('Localidade Dois · Município Dois')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota antiga')).toBeInTheDocument();
+
+    await abrirEdicao();
+    expect(within(edicao()).getByLabelText('Nome')).toHaveValue('Contato Editado');
+    expect(within(edicao()).getByLabelText('Município')).toHaveValue('mun-2');
+    expect(within(edicao()).getByLabelText('Localidade')).toHaveValue('loc-2');
+    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota antiga');
+  });
+
+  test('falha ao salvar: a edição continua aberta com o que foi digitado, e nada muda na conversa', async () => {
+    api.updateContact.mockRejectedValue(new Error('rede fora'));
+    mostrar();
+    await abrirEdicao();
+    await escrever('Nome', 'Nome que não salvou');
+    await escrever('Nota interna', 'Nota que não salvou');
+    await salvar();
+
+    expect(await within(edicao()).findByRole('alert')).toBeInTheDocument();
+    expect(within(edicao()).getByLabelText('Nome')).toHaveValue('Nome que não salvou');
+    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota que não salvou');
+    expect(within(painel()).getByText('Contato Um')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota antiga')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar cliente: Contato Um - Município Um' })).toBeInTheDocument();
+  });
+
+  test('cancelar não muda nada, e reabrir volta aos valores de antes', async () => {
+    mostrar();
+    await abrirEdicao();
+    await escrever('Nome', 'Nome descartado');
+    await escrever('Nota interna', 'Nota descartada');
+    await userEvent.click(within(edicao()).getByRole('button', { name: 'Cancelar' }));
+    await edicaoFechou();
+
+    expect(api.updateContact).not.toHaveBeenCalled();
+    expect(within(painel()).getByText('Contato Um')).toBeInTheDocument();
+    expect(within(painel()).getByText('Nota antiga')).toBeInTheDocument();
+    await abrirEdicao();
+    expect(within(edicao()).getByLabelText('Nome')).toHaveValue('Contato Um');
+    expect(within(edicao()).getByLabelText('Nota interna')).toHaveValue('Nota antiga');
+  });
+});

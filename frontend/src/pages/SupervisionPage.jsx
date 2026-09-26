@@ -18,6 +18,7 @@ import ConversationModal from '../components/ConversationModal';
 import TransferModal from '../components/TransferModal';
 import { PageHeader, Tabs } from '../components/ui';
 import { descreverErro } from '../utils/errorMessages';
+import { aplicarContatoSalvo } from '../utils/contatoSalvo';
 import { shortenAgentNames, agentInitial } from '../utils/agentDisplayName';
 import { nomeDoLocal } from '../utils/place';
 
@@ -176,7 +177,7 @@ function SupervisionPage() {
   // O hook já expunha `status` e `refresh`; a página ignorava os dois e, com a
   // API fora do ar, as três colunas diziam "nenhum atendimento" — operação
   // parada e backend caído ficavam idênticos na tela.
-  const { inProgress, waiting, inAutomation, closedTodayCount, status: dashboardStatus, refresh: refreshDashboard } = useAttendanceDashboard();
+  const { inProgress, waiting, inAutomation, closedTodayCount, status: dashboardStatus, refresh: refreshDashboard, aplicarContatoSalvo: aplicarNoPainel } = useAttendanceDashboard();
   // Esconder os dados é a exceção, não a regra: só quando se sabe que está
   // carregando ou que falhou. Assim um status ausente mostra a operação em vez
   // de uma tela vazia — o erro que esta correção existe para acabar.
@@ -432,6 +433,20 @@ function SupervisionPage() {
     setPhoneSearchResult(null);
     setPhoneQuery('');
     setPhoneError(null);
+  }
+
+  // "Editar cliente" salvou no popup, e a rota não emite evento. O popup sai
+  // de uma destas quatro fontes (abaixo); todas guardam o que voltou do
+  // servidor, só nas conversas daquele contato — reabrir não traz o antigo.
+  function aoSalvarContato(salvo) {
+    aplicarNoPainel(salvo);
+    setClosedItems((anteriores) => aplicarContatoSalvo(anteriores, salvo));
+    setFoundConversation((anterior) => (anterior ? aplicarContatoSalvo([anterior], salvo)[0] : anterior));
+    setPhoneSearchResult((anterior) => {
+      if (!anterior) return anterior;
+      const conversations = aplicarContatoSalvo(anterior.conversations, salvo);
+      return conversations === anterior.conversations ? anterior : { ...anterior, conversations };
+    });
   }
 
   const selectedConversation =
@@ -694,6 +709,7 @@ function SupervisionPage() {
           conversation={withAgentName(selectedConversation)}
           onClose={() => setSelectedConversationId(null)}
           onTransferClick={setTransferringId}
+          onContatoSalvo={aoSalvarContato}
         />
       )}
       {transferringId && <TransferModal conversationId={transferringId} onClose={() => setTransferringId(null)} />}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getMyClosedConversations } from '../services/api';
+import { aplicarContatoSalvo } from '../utils/contatoSalvo';
 
 const PAGE_SIZE = 20;
 
@@ -53,5 +54,12 @@ export function useMyClosedConversations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  return { items, hasMore, loading, status, loadMore, refresh, erroAoCarregarMais };
+  // "Editar cliente" salvou num atendimento encerrado, e a rota não emite
+  // evento: a lista guarda o que voltou do servidor, só nas conversas daquele
+  // contato — reabrir o atendimento não traz a nota antiga.
+  const aplicarContatoSalvoNaLista = useCallback((salvo) => {
+    setItems((prev) => aplicarContatoSalvo(prev, salvo));
+  }, []);
+
+  return { items, hasMore, loading, status, loadMore, refresh, erroAoCarregarMais, aplicarContatoSalvo: aplicarContatoSalvoNaLista };
 }

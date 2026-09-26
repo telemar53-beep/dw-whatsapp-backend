@@ -20,6 +20,7 @@ import StartConversationModal from '../components/StartConversationModal';
 import TrilhoDaMesa, { IconeDoMenu, iniciais } from '../components/TrilhoDaMesa';
 import { VARIANTE_DA_MESA } from '../components/ConversaDaMesa';
 import { marcaDaInstalacao } from '../branding';
+import { aplicarContatoSalvo } from '../utils/contatoSalvo';
 import { Tabs } from '../components/ui/Tabs';
 import { IconLock } from '../components/icons/WaIcons';
 import { IconeNovaConversa, IconeBuscar, IconeRecolher } from '../components/icones';
@@ -63,8 +64,8 @@ function DashboardPage() {
   const navigate = useNavigate();
   const { token } = useAuth();
   const { setConversationOpen, openProfile, closeMobileNav, profileVersion, mobileNavOpen, encaixeDoTrilho, encaixeDoIcone } = useOutletContext();
-  const { queue, status: queueStatus } = useQueue();
-  const { conversations: myConversations, status: myConversationsStatus } = useMyConversations();
+  const { queue, status: queueStatus, aplicarContatoSalvo: aplicarNaFila } = useQueue();
+  const { conversations: myConversations, status: myConversationsStatus, aplicarContatoSalvo: aplicarNosMeus } = useMyConversations();
   const { name: companyName, status: companyNameStatus } = useCompanyName();
   const [activeTab, setActiveTab] = useState('inProgress');
   const [selectedId, setSelectedId] = useState(null);
@@ -116,6 +117,16 @@ function DashboardPage() {
   const [transferringId, setTransferringId] = useState(null);
   const [startingConversation, setStartingConversation] = useState(false);
   const [pendingConversation, setPendingConversation] = useState(null);
+
+  // "Editar cliente" salvou, e a rota não emite evento. Sem isto, voltar à
+  // lista e reabrir a conversa trazia o contato antigo — e a nota antiga ia de
+  // novo para a edição. Só as conversas daquele contato mudam; as outras
+  // mantêm a referência. Estável: a conversa aberta é memo.
+  const aoSalvarContato = useCallback((salvo) => {
+    aplicarNaFila(salvo);
+    aplicarNosMeus(salvo);
+    setPendingConversation((anterior) => (anterior ? aplicarContatoSalvo([anterior], salvo)[0] : anterior));
+  }, [aplicarNaFila, aplicarNosMeus]);
 
   // Sem o useMemo, os dois filtros devolvem arrays NOVOS a cada render do
   // Dashboard — e uma lista nova é prop nova, o que derrubaria o memo dos itens
@@ -309,6 +320,7 @@ function DashboardPage() {
               onPainelAbertoChange={setPainelAberto}
               onTransferClick={setTransferringId}
               onBack={voltarParaLista}
+              onContatoSalvo={aoSalvarContato}
               workspace
               variante={VARIANTE_DA_MESA}
             />

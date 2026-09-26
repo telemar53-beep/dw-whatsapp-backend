@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlaces } from '../hooks/useCities';
 import { updateContact } from '../services/api';
@@ -8,12 +8,34 @@ import { descreverErro } from '../utils/errorMessages';
 function EditContactModal({ conversation, onClose, onSaved }) {
   const { token } = useAuth();
   const { places, status: citiesStatus } = usePlaces();
-  const [displayName, setDisplayName] = useState(conversation.contactDisplayName || '');
-  const [cityId, setCityId] = useState(conversation.contactCityId || '');
-  const [localityId, setLocalityId] = useState(conversation.contactLocalityId || '');
-  const [internalNote, setInternalNote] = useState(conversation.contactInternalNote || '');
+  // Fotografia do que o modal recebeu ao abrir. Só vai ao servidor o campo que
+  // mudou em relação a ela: a conversa pode ter vindo de uma lista
+  // desatualizada, e reenviar um campo intocado — a nota, sobretudo — devolvia
+  // ao servidor um valor que outra edição já tinha trocado. A rota aplica só
+  // as chaves que chegam (ADR-011).
+  const [inicial] = useState(() => ({
+    displayName: conversation.contactDisplayName || '',
+    cityId: conversation.contactCityId || '',
+    localityId: conversation.contactLocalityId || '',
+    internalNote: conversation.contactInternalNote || '',
+  }));
+  const [displayName, setDisplayName] = useState(inicial.displayName);
+  const [cityId, setCityId] = useState(inicial.cityId);
+  const [localityId, setLocalityId] = useState(inicial.localityId);
+  const [internalNote, setInternalNote] = useState(inicial.internalNote);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // O modal pode fechar com o "Salvar" no caminho ("Cancelar", Esc, troca de
+  // conversa). A resposta que chega depois ainda vai para o onSaved — ela é do
+  // contato de onde saiu —, mas não fecha de novo: o onClose fecharia a edição
+  // que estiver aberta agora, talvez a de outro cliente.
+  const aberto = useRef(true);
+  useEffect(() => {
+    aberto.current = true;
+    return () => {
+      aberto.current = false;
+    };
+  }, []);
 
   // Município é o que NÃO é localidade: o registro legado ainda não
   // classificado continua aparecendo aqui, que é como os contatos dele foram
@@ -33,19 +55,22 @@ function EditContactModal({ conversation, onClose, onSaved }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    // Campo vazio continua virando null, como sempre: limpar de propósito
+    // também é mudança.
+    const alterado = {};
+    if (displayName !== inicial.displayName) alterado.displayName = displayName;
+    if (cityId !== inicial.cityId) alterado.cityId = cityId || null;
+    if (localityId !== inicial.localityId) alterado.localityId = localityId || null;
+    if (internalNote !== inicial.internalNote) alterado.internalNote = internalNote || null;
+    // Nada mudou: não há o que salvar, e uma chamada vazia não diz nada.
+    if (Object.keys(alterado).length === 0) {
+      onClose();
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
-      const updated = await updateContact(
-        conversation.contactId,
-        {
-          displayName,
-          cityId: cityId || null,
-          localityId: localityId || null,
-          internalNote: internalNote || null,
-        },
-        token
-      );
+      const updated = await updateContact(conversation.contactId, alterado, token);
       // A resposta é minimizada de propósito e traz só os ids; o nome sai da
       // lista que esta tela já tem em mãos.
       const nomeDe = (id) => (id ? places.find((p) => p.id === id)?.name || null : null);
@@ -57,11 +82,11 @@ function EditContactModal({ conversation, onClose, onSaved }) {
         localityName: nomeDe(updated.localityId),
         internalNote: updated.internalNote,
       });
-      onClose();
+      if (aberto.current) onClose();
     } catch (err) {
-      setError(descreverErro(err, 'Falha ao salvar'));
+      if (aberto.current) setError(descreverErro(err, 'Falha ao salvar'));
     } finally {
-      setSubmitting(false);
+      if (aberto.current) setSubmitting(false);
     }
   }
 

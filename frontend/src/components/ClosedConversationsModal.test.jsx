@@ -1,16 +1,26 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, test, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ClosedConversationsModal from './ClosedConversationsModal';
 import { useMyClosedConversations } from '../hooks/useMyClosedConversations';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useAuth } from '../contexts/AuthContext';
+import * as api from '../services/api';
 
 vi.mock('../hooks/useMyClosedConversations');
 vi.mock('../hooks/useConversationMessages');
 vi.mock('../hooks/useQuickReplies');
 vi.mock('../contexts/AuthContext');
+// Só o que a edição do contato e o painel ao lado chamam; as listas ficam
+// pendentes por padrão, como a chamada real ficava no jsdom.
+vi.mock('../services/api', async (importOriginal) => ({
+  ...(await importOriginal()),
+  getMyClosedConversations: vi.fn(),
+  updateContact: vi.fn(),
+  listCities: vi.fn(() => new Promise(() => {})),
+  listSectors: vi.fn(() => new Promise(() => {})),
+}));
 
 const CLOSED_CONVERSATION = {
   id: 'c-old',
@@ -142,5 +152,53 @@ describe('empilhamento da conversa aberta a partir de Encerrados', () => {
     expect(fundoDeEncerrados).toHaveAttribute('inert');
     expect(fundoDaConversa).not.toHaveAttribute('inert');
 
+  });
+});
+
+// O popup guarda o item da lista no clique. Com o hook DE VERDADE: depois de
+// salvar, fechar e reabrir o mesmo atendimento não pode trazer a nota antiga.
+describe('Encerrados: reabrir não traz a nota antiga', () => {
+  let encerradosReais;
+  beforeAll(async () => {
+    encerradosReais = await vi.importActual('../hooks/useMyClosedConversations');
+  });
+
+  const ENCERRADA = {
+    id: 'c-old',
+    contactId: 'contato-1',
+    contactDisplayName: 'Ana Encerrada',
+    contactInternalNote: 'Nota antiga',
+    status: 'closed',
+    closedAt: '2026-09-20T15:00:00.000Z',
+    assignedAgentId: 'agent-1',
+  };
+
+  beforeEach(() => {
+    useMyClosedConversations.mockImplementation(encerradosReais.useMyClosedConversations);
+    api.getMyClosedConversations.mockResolvedValue({ items: [ENCERRADA], hasMore: false });
+    api.listCities.mockResolvedValue([]);
+    api.updateContact.mockReset();
+    api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Ana Encerrada', cityId: null, localityId: null, internalNote: 'Nota nova' });
+  });
+
+  test('salvar, fechar a conversa e reabrir mostra e carrega a nota nova', async () => {
+    render(<ClosedConversationsModal onClose={vi.fn()} />);
+    await userEvent.click(await screen.findByText('Ana Encerrada'));
+    await userEvent.click(screen.getByRole('button', { name: /^Editar cliente:/ }));
+    const edicao = screen.getByRole('dialog', { name: 'Editar cliente' });
+    const nota = within(edicao).getByLabelText('Nota interna');
+    await userEvent.clear(nota);
+    await userEvent.type(nota, 'Nota nova');
+    await userEvent.click(within(edicao).getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
+    expect(screen.queryByRole('dialog', { name: 'Conversa' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('Ana Encerrada'));
+    const conversa = screen.getByRole('dialog', { name: 'Conversa' });
+    expect(within(within(conversa).getByRole('complementary')).getByText('Nota nova')).toBeInTheDocument();
+    await userEvent.click(within(conversa).getByRole('button', { name: /^Editar cliente:/ }));
+    expect(within(screen.getByRole('dialog', { name: 'Editar cliente' })).getByLabelText('Nota interna')).toHaveValue('Nota nova');
   });
 });

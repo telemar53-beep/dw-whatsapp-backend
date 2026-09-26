@@ -151,3 +151,32 @@ describe('useQueue', () => {
     expect(result.current.queue).toEqual([{ id: 'c1' }]);
   });
 });
+
+// Espera e Automação: a mesma regra de "Meus atendimentos" (ver
+// useMyConversations.test.jsx) — o contato salvo chega às conversas dele, e as
+// outras continuam sendo o mesmo objeto.
+describe('useQueue — contato salvo na edição', () => {
+  test('atualiza as conversas do contato e mantém as outras com a mesma referência', async () => {
+    const A = { id: 'q1', contactId: 'contato-A', contactDisplayName: 'Contato A', contactInternalNote: 'Nota antiga' };
+    const B = { id: 'q2', contactId: 'contato-B', contactDisplayName: 'Contato B', contactInternalNote: 'Nota de B' };
+    api.getQueue.mockResolvedValue([A, B]);
+    const { result } = renderHook(() => useQueue());
+    await waitFor(() => expect(result.current.queue).toHaveLength(2));
+
+    act(() =>
+      result.current.aplicarContatoSalvo({
+        conversationId: 'q1',
+        contactId: 'contato-A',
+        displayName: 'Contato A editado',
+        cityId: null,
+        cityName: null,
+        localityId: null,
+        localityName: null,
+        internalNote: 'Nota nova',
+      })
+    );
+
+    expect(result.current.queue[0]).toMatchObject({ contactDisplayName: 'Contato A editado', contactInternalNote: 'Nota nova' });
+    expect(result.current.queue[1]).toBe(B);
+  });
+});

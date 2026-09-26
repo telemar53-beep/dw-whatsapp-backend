@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderInShell } from '../test-utils/renderInShell';
@@ -18,6 +18,7 @@ import {
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useQuickReplies } from '../hooks/useQuickReplies';
 import { useAiSuggestion } from '../hooks/useAiSuggestion';
+import * as api from '../services/api';
 
 vi.mock('../hooks/useAttendanceDashboard');
 vi.mock('../hooks/useChannels');
@@ -786,5 +787,55 @@ describe('filtros e rotulos de coluna', () => {
 
     expect(await screen.findByText(/1 atendimento\(s\) de Ana/i)).toBeInTheDocument();
     expect(screen.queryByText(rotulo)).not.toBeInTheDocument();
+  });
+});
+
+// A conversa do popup sai das listas da própria página (o painel ao vivo, os
+// encerrados de hoje, as buscas). Com o hook do painel DE VERDADE: o que o
+// "Editar cliente" salvou tem de estar lá quando o popup for reaberto.
+describe('edição do contato na Supervisão: reabrir traz o que foi salvo', () => {
+  let painelReal;
+  beforeAll(async () => {
+    painelReal = await vi.importActual('../hooks/useAttendanceDashboard');
+  });
+
+  const CARLOS = {
+    id: 'c1',
+    contactId: 'contato-1',
+    contactDisplayName: 'Carlos',
+    contactInternalNote: 'Nota antiga',
+    channelId: 'chan-1',
+    assignedAgentId: 'agent-1',
+    sectorId: 'sector-1',
+    status: 'assigned',
+  };
+
+  beforeEach(() => {
+    useAttendanceDashboard.mockImplementation(painelReal.useAttendanceDashboard);
+    api.getDashboardConversations.mockResolvedValue({ inProgress: [CARLOS], waiting: [], inAutomation: [], closedTodayCount: 0 });
+    api.listCities.mockResolvedValue([]);
+    api.updateContact.mockReset();
+    api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Carlos', cityId: null, localityId: null, internalNote: 'Nota nova' });
+  });
+
+  test('Supervisão reaberta usa os dados novos', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByText('Carlos'));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Editar cliente:/ }));
+    const edicao = screen.getByRole('dialog', { name: 'Editar cliente' });
+    const nota = within(edicao).getByLabelText('Nota interna');
+    await userEvent.clear(nota);
+    await userEvent.type(nota, 'Nota nova');
+    await userEvent.click(within(edicao).getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await userEvent.click(await screen.findByText('Carlos'));
+    const conversa = screen.getByRole('dialog');
+    expect(within(within(conversa).getByRole('complementary')).getByText('Nota nova')).toBeInTheDocument();
+    await userEvent.click(within(conversa).getByRole('button', { name: /^Editar cliente:/ }));
+    expect(within(screen.getByRole('dialog', { name: 'Editar cliente' })).getByLabelText('Nota interna')).toHaveValue('Nota nova');
   });
 });

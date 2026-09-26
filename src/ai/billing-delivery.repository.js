@@ -112,4 +112,19 @@ async function findDelivery({ conversationId, tool, contractId, invoiceId, messa
   return paraRegistro(resultado.rows[0]);
 }
 
-module.exports = { claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery };
+/**
+ * A última cobrança que de fato saiu nesta conversa (enfileirada): é ELA que a conferência do
+ * pagamento relê no SGP, pelo mesmo invoice_id (regra financeira 0/1/2+, 25/09/2026).
+ */
+async function findLatestEnqueuedDelivery(conversationId) {
+  const resultado = await getPool().query(
+    `SELECT ${COLUNAS} FROM ai_billing_deliveries
+      WHERE conversation_id = $1 AND enqueued_at IS NOT NULL
+      ORDER BY enqueued_at DESC, claimed_at DESC
+      LIMIT 1`,
+    [conversationId]
+  );
+  return paraRegistro(resultado.rows[0]);
+}
+
+module.exports = { claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery, findLatestEnqueuedDelivery };

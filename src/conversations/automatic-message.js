@@ -41,6 +41,12 @@ function metadataDoDisparoSgp({ integrationId, modo, template, campos = {}, refe
   });
 }
 
+const ROTULO_AUTORRESPOSTA = '[resposta automática provável do estabelecimento destinatário — não tratar como solicitação humana]';
+
+function ehAutorrespostaMarcada(message) {
+  return Boolean(message && message.direction === 'inbound' && message.metadata && message.metadata.autorrespostaProvavel === true);
+}
+
 function metadataDaCampanha({ campaignId, templateName }) {
   return semVazios({ origem: 'campanha', campanhaId: campaignId, template: templateName });
 }
@@ -59,6 +65,9 @@ const umaLinha = (texto) => String(texto || '').replace(/\s*\n+\s*/g, ' / ').tri
  * modelo — a proteção não depende de a campanha de hoje não ter dado do cliente.
  */
 function resumoParaModelo(message) {
+  // Fase 1C (25/09/2026): a autorresposta provável do destinatário (entrada marcada) vai como
+  // rótulo — a IA sabe que houve, não a trata como fala do cliente e não recebe o texto.
+  if (ehAutorrespostaMarcada(message)) return ROTULO_AUTORRESPOSTA;
   if (!ehMensagemAutomatica(message)) return null;
   const m = message.metadata;
   if (m.origem === 'campanha') {

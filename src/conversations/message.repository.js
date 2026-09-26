@@ -316,15 +316,72 @@ async function findLatestInboundMessageId(conversationId, { incluirAudioTranscri
     : incluirAudioTranscrito
       ? `AND (message_type = 'text' OR (message_type = 'audio' AND transcription_status = 'completed'))`
       : `AND message_type = 'text'`;
+  // Fase 1C: a autorresposta provável do destinatário não gera job; se contasse como "a mais
+  // nova", o job de uma mensagem humana ainda na fila desistiria sem responder.
   const result = await getPool().query(
     `SELECT id FROM messages
       WHERE conversation_id = $1 AND direction = 'inbound'
         ${filtroTipo}
+        AND COALESCE(metadata->>'autorrespostaProvavel', '') <> 'true'
       ORDER BY created_at DESC LIMIT 1`,
     [conversationId]
   );
   if (result.rowCount === 0) return null;
   return result.rows[0].id;
+}
+
+/**
+ * Fase 1C (25/09/2026): o contexto do classificador de autorresposta (probable-auto-reply.js).
+ * - disparo: o disparo automático MAIS RECENTE da conversa (metadata.origem sgp/campanha), ou null;
+ * - depoisDoDisparo: o que veio depois dele, só direção e marcas (sem conteúdo);
+ * - anteriores: as autorrespostas já marcadas deste contato, em qualquer conversa, com o texto
+ *   (para a repetição comprovada) e o motivo. Nada disso vai para a IA.
+ */
+async function findAutoReplyContext(conversationId, contactId) {
+  const disparo = (await getPool().query(
+    `SELECT created_at, metadata->>'origem' AS origem, metadata->>'modo' AS modo
+       FROM messages
+      WHERE conversation_id = $1 AND direction = 'outbound' AND metadata->>'origem' IN ('sgp', 'campanha')
+      ORDER BY created_at DESC LIMIT 1`,
+    [conversationId]
+  )).rows[0];
+  if (!disparo) return { disparo: null, depoisDoDisparo: [], anteriores: [] };
+
+  const depois = await getPool().query(
+    `SELECT direction,
+            COALESCE(metadata->>'autorrespostaProvavel', '') = 'true' AS autorresposta,
+            COALESCE(metadata->>'origem', '') IN ('sgp', 'campanha') AS automatica
+       FROM messages
+      WHERE conversation_id = $1 AND created_at > $2
+      ORDER BY created_at LIMIT 50`,
+    [conversationId, disparo.created_at]
+  );
+  const anteriores = await getPool().query(
+    `SELECT m.content, m.metadata->>'autorrespostaMotivo' AS motivo
+       FROM messages m JOIN conversations c ON c.id = m.conversation_id
+      WHERE c.contact_id = $1 AND m.direction = 'inbound' AND m.metadata->>'autorrespostaProvavel' = 'true'
+      ORDER BY m.created_at DESC LIMIT 20`,
+    [contactId]
+  );
+  return {
+    disparo: { origem: disparo.origem, modo: disparo.modo, criadoEm: disparo.created_at },
+    depoisDoDisparo: depois.rows.map((r) => ({ direcao: r.direction, autorresposta: r.autorresposta, automatica: r.automatica })),
+    anteriores: anteriores.rows.map((r) => ({ texto: r.content, autorresposta: true, motivo: r.motivo })),
+  };
+}
+
+/**
+ * Horário da mensagem mais recente da conversa, em QUALQUER direção (cliente ou IA/sistema),
+ * ou null se não houver mensagem. Só o horário: nada de conteúdo. Caso ER (25/09/2026): o
+ * timeout da triagem relê isto antes de agir, para um job antigo nunca fechar uma conversa
+ * que teve atividade depois dele.
+ */
+async function findLastMessageCreatedAt(conversationId) {
+  const result = await getPool().query(
+    'SELECT max(created_at) AS ultima FROM messages WHERE conversation_id = $1',
+    [conversationId]
+  );
+  return result.rows[0].ultima || null;
 }
 
 /**
@@ -503,6 +560,8 @@ module.exports = {
   findMessageById,
   findMessageByWhatsappMessageId,
   findLatestInboundMessageId,
+  findLastMessageCreatedAt,
+  findAutoReplyContext,
   findLatestInboundImage,
   markTranscriptionPending,
   markTranscriptionProcessing,

@@ -21,6 +21,13 @@ const conversationRepo = require('../conversations/conversation.repository');
 const contactRepo = require('../conversations/contact.repository');
 const { executeTool } = require('./tool-executor');
 
+// Regra financeira 0/1/2+ (25/09/2026): as ferramentas de cobrança leem os títulos do contrato
+// (listAllInvoices) ANTES da 2ª via. Sem títulos vencidos = o fluxo de sempre, que é o que estes
+// testes exercitam. Quem testa a regra em si é regra-financeira.test.js.
+beforeEach(() => {
+  sgpClient.listAllInvoices.mockResolvedValue({ faturas: [], total: 0, completo: true, motivo: null });
+});
+
 const CONTEXTO = {
   conversationId: 'c-1',
   contact: { id: 'ct-1', sgpDocument: '52998224725' },
@@ -256,6 +263,20 @@ describe('tool-executor — perfil com lista fixa e identidade', () => {
     expect(r.detalhe).toBe('consultar_plano');
   });
 
+  // Documento pendente (25/09/2026): com o CPF já pedido e ainda não informado, a recusa mandava
+  // "Peça o CPF ou CNPJ" de novo — o modelo repetia o pedido a cada tentativa de consulta. A ação
+  // continua bloqueada; só a instrução deixa de mandar repetir.
+  test('13. documento já pedido: a ação continua bloqueada e a recusa não manda pedir de novo', async () => {
+    const tool = toolFake({ exigeIdentidadeForte: true });
+    findTool.mockReturnValue(tool);
+    isToolEnabled.mockResolvedValue(true);
+    const documento = { alvo: 'principal', mudancaRelevante: false, irritado: false };
+    const r = await executeTool('consultar_plano', { contratoId: 17402 }, { ...CONTEXTO, identidade: { nivel: 'none' }, documento });
+    expect(r.motivo).toBe('identity_not_confirmed');
+    expect(tool.executar).not.toHaveBeenCalled();
+    expect(r.instrucao).toBe('Ainda não sei quem é o cliente, e o CPF ou CNPJ JÁ foi pedido: NÃO peça de novo agora. Responda ao que ele disse sem consultar nada; esta ferramenta só funciona depois de buscar_cliente com o documento.');
+  });
+
   test('as outras recusas não ganham instrução (detalhe delas é texto interno)', async () => {
     findTool.mockReturnValue(null);
     const r = await executeTool('consultar_ip', {}, CONTEXTO);
@@ -447,7 +468,8 @@ describe('tool-executor — minimização do retorno no contrato de terceiro', (
   };
 
   const BRUTO = {
-    faturas: [{ faturaId: 5, vencimentoAtualizado: '2026-09-10', status: 'aberta', valorOriginal: 135, pagador: 'MARIA SILVA' }],
+    // Regra 0/1/2+ (25/09/2026): a data exposta é a ORIGINAL; a atualizada (hoje, na vencida) não sai.
+    faturas: [{ faturaId: 5, vencimentoOriginal: '2026-09-10', vencimentoAtualizado: '2026-09-25', status: 'aberta', valorOriginal: 135, pagador: 'MARIA SILVA' }],
   };
 
   test('resultado de ferramenta permitida no contrato do terceiro chega minimizado ao modelo', async () => {
@@ -538,18 +560,45 @@ describe('tool-executor — contratoId dedutível com um contrato só (Task 10)'
     expect(r.motivo).toBe('invalid_args');
   });
 
-  // O preenchimento nunca pode alcançar um contrato de terceiro: ele exige
-  // escolha explícita do modelo. contracts (próprios) fica vazio de propósito —
-  // só o terceiro tem contrato aqui, e mesmo assim não é usado para preencher.
-  test('contratoId ausente nunca é preenchido com um contrato de terceiro', async () => {
+  // REGRA MUDADA (caso Fulana/Beltrana, 25/09/2026). Antes: "o preenchimento nunca alcança um
+  // contrato de terceiro". Era esse o furo: com pedido de terceiro em andamento, "manda o pix"
+  // sem contrato caía no contrato único de QUEM FALA. Agora a dedução segue o alvo financeiro:
+  // com pedido de terceiro, o contrato único DO TERCEIRO (nas ferramentas permitidas em
+  // terceiro) e nunca o de quem fala; com dois ou mais do terceiro, nada é deduzido.
+  test('com pedido de terceiro, contratoId ausente é preenchido com o contrato único DO TERCEIRO', async () => {
     const contexto = {
       ferramentasPermitidas: ['enviar_boleto'], contracts: [], contact: {},
       terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
       identidade: { nivel: 'forte' }, conversationId: 'c1',
     };
-    const r = await executeTool('enviar_boleto', {}, contexto);
-    expect(r.ok).toBe(false);
+    await executeTool('enviar_boleto', {}, contexto);
+    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(77);
+  });
+
+  test('com pedido de terceiro, contratoId ausente NUNCA é preenchido com o contrato único de quem fala', async () => {
+    const contexto = {
+      ferramentasPermitidas: ['enviar_boleto', 'consultar_status_conexao'], contracts: [{ id: 1 }], contact: {},
+      terceiro: { nome: 'Maria', contratos: [{ id: 77 }] },
+      identidade: { nivel: 'forte' }, conversationId: 'c1',
+    };
+    await executeTool('enviar_boleto', {}, contexto);
+    expect(sgpClient.getDuplicateInvoice).toHaveBeenCalledWith(77);
+    expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalledWith(1);
+    // Ferramenta fora da lista de terceiro: nada é deduzido (nem o do terceiro, nem o de quem fala).
+    const r = await executeTool('consultar_status_conexao', {}, contexto);
     expect(r.motivo).toBe('invalid_args');
+    expect(sgpClient.checkConnection).not.toHaveBeenCalled();
+  });
+
+  test('com pedido de terceiro de dois contratos, contratoId ausente não é deduzido', async () => {
+    const contexto = {
+      ferramentasPermitidas: ['enviar_boleto'], contracts: [{ id: 1 }], contact: {},
+      terceiro: { nome: 'Maria', contratos: [{ id: 77 }, { id: 78 }] },
+      identidade: { nivel: 'forte' }, conversationId: 'c1',
+    };
+    const r = await executeTool('enviar_boleto', {}, contexto);
+    expect(r.motivo).toBe('invalid_args');
+    expect(sgpClient.getDuplicateInvoice).not.toHaveBeenCalled();
   });
 });
 

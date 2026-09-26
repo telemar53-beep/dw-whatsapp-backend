@@ -73,6 +73,14 @@ describe('módulo suporte-geral', () => {
       expect(t).toMatch(/Nunca trate isso como dado de outra pessoa\./);
     });
 
+    // Contenções operacionais (25/09/2026): "como troco a senha?" era exemplo de DÚVIDA a responder
+    // direto — convite a ensinar o painel do roteador. A troca é da empresa, remotamente.
+    test('troca do nome ou da senha do Wi-Fi: feita pela empresa, nunca ensinada no roteador', () => {
+      const t = texto();
+      expect(t).not.toMatch(/"como troco a senha\?"/);
+      expect(t).toMatch(/A troca do nome ou da senha do Wi-Fi é feita pela empresa, remotamente: nunca ensine a entrar no roteador nem a mudar nada no equipamento\./);
+    });
+
     test('piora em horário certo: reconhece o padrão, não trata como falha geral', () => {
       const t = texto();
       expect(t).toMatch(/PIORA EM HORÁRIO CERTO/);

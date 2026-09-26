@@ -164,11 +164,35 @@ describe('módulo financeiro', () => {
       expect(t).toMatch(/Se ela devolver contratosComFatura, pergunte pelo endereço e entregue na resposta seguinte\./);
     });
 
-    test('cliente suspenso perguntando se a internet volta depois de pagar: confirma sem prometer prazo', () => {
+    // Ajuste de 25/09/2026 (decisão do dono, que substitui a frase-modelo de antes): "o acesso é
+    // liberado automaticamente" não é garantido — com duas ou mais vencidas, pagar uma não libera.
+    test('cliente suspenso perguntando se a internet volta depois de pagar: sem promessa de liberação nem prazo', () => {
       const t = texto();
-      expect(t).toMatch(/assim que o pagamento for confirmado, o acesso é liberado automaticamente/);
-      expect(t).toMatch(/NUNCA prometa prazo/);
-      expect(t).toMatch(/nunca diga que o pagamento foi confirmado/);
+      expect(t).toMatch(/NÃO prometa que ela volta sozinha nem dê prazo/);
+      expect(t).toMatch(/"Assim que o pagamento constar no sistema, vou verificar a situação do contrato\."/);
+      expect(t).toMatch(/Pagamento confirmado sozinho não é liberação, e comprovante válido também não/);
+      expect(t).not.toMatch(/liberad[oa] automaticamente|liberação é automática/);
+    });
+
+    // Regra 0/1/2+ (25/09/2026): a promessa de liberação automática vale só quando a cobrança pôde
+    // sair (0 ou 1 vencida). Com 2+ vencidas ou contrato cancelado, pagar uma fatura não libera.
+    test('a fatura que pode sair é decisão do sistema', () => {
+      const t = texto();
+      expect(t).toMatch(/Qual fatura pode ser enviada é decisão do sistema, não sua/);
+      expect(t).toMatch(/não escolha outra fatura, não negocie e não tente outro contrato por conta própria/);
+    });
+
+    test('pagamento só se confirma por conferir_pagamento; liberação só com contrato ativo ou desbloqueio', () => {
+      const t = texto();
+      expect(t).toMatch(/chame conferir_pagamento: só ela confirma um pagamento/);
+      expect(t).toMatch(/Comprovante, "já paguei" ou aviso do banco NÃO confirmam/);
+      expect(t).toMatch(/nem assim diga que ela está conectada ou online/);
+    });
+
+    test('comprovante válido com a baixa pendente: o desbloqueio não espera a baixa e não vira "pagamento confirmado"', () => {
+      const t = texto();
+      expect(t).toMatch(/o desbloqueio em confiança, quando disponível, segue as regras dele e não espera a baixa/);
+      expect(t).toMatch(/liberado em confiança enquanto o pagamento é processado — nunca que o pagamento foi confirmado/);
     });
 
     test('nunca nomeia um setor fixo (maiúsculo ou minúsculo) como Financeiro', () => {

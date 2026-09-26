@@ -99,3 +99,46 @@ describe('módulo reativacao', () => {
     });
   });
 });
+
+// Ajuste de 25/09/2026: a regra 0/1/2+ vem ANTES da regra dos 90 dias. Contrato cancelado, 2+
+// vencidas de dia e o fluxo noturno de 2+ (depois da única cobrança permitida) são da reativação —
+// o "até 90 dias continua sendo o financeiro" não pode mandá-los para o financeiro.
+describe('regra 0/1/2+ antes da regra dos 90 dias', () => {
+  const { montarContexto } = require('../montar');
+  const FORTE = { nivel: 'forte', origem: 'phone', primeiroNome: 'Ana', contracts: [{ id: 1, statusCode: 4 }], contestado: false };
+  const SETORES = [
+    { id: 's-fin', name: 'Financeiro', aiHint: 'boleto, PIX' },
+    { id: 's-reat', name: 'Reativação', aiHint: 'retorno de clientes' },
+  ];
+
+  test('sem marca: o "até 90 dias" cede à ferramenta de cobrança que indicar a reativação', () => {
+    const t = reativacao.linhas(estadoBase({ identidade: FORTE })).join('\n');
+    expect(t).toMatch(/Até 90 dias continua sendo o setor da lista acima que cuidar do financeiro, MENOS quando uma ferramenta de cobrança disser que há duas ou mais faturas vencidas ou que o contrato está cancelado, ou indicar o setor que cuida de reativação/);
+    expect(t).toMatch(/essa regra vem antes da dos 90 dias/);
+  });
+
+  test.each(['contrato_cancelado', 'multiplas_vencidas', 'multiplas_vencidas_noturno'])(
+    'conversa marcada (%s): nada manda para o financeiro por causa dos 90 dias', (motivo) => {
+      const t = reativacao.linhas(estadoBase({ identidade: FORTE, reativacao: motivo })).join('\n');
+      expect(t).not.toMatch(/Até 90 dias continua sendo/);
+      expect(t).toMatch(/Esta conversa já está marcada para o setor que cuida de reativação/);
+      expect(t).toMatch(/vêm antes da regra dos 90 dias/);
+      expect(t).toMatch(/nunca no que cuida de financeiro/);
+      expect(t).toMatch(/não envie outra cobrança/);
+    }
+  );
+
+  test('a marca entra mesmo sem identidade forte (terceiro pagando a cobrança de outra pessoa)', () => {
+    expect(reativacao.entra(estadoBase({ reativacao: 'multiplas_vencidas' }))).toBe(true);
+  });
+
+  test('no prompt montado inteiro, com a marca, a instrução de reativação vence as de financeiro', () => {
+    const t = montarContexto(estadoBase({
+      identidade: FORTE, contratos: [{ id: 1, status: 'suspenso', endereco: 'Rua A' }], setores: SETORES,
+      ferramentas: ['enviar_boleto', 'gerar_pix', 'conferir_pagamento', 'concluir_triagem'], reativacao: 'multiplas_vencidas_noturno',
+    }));
+    expect(t).not.toMatch(/Até 90 dias continua sendo/);
+    expect(t).toMatch(/Esta conversa já está marcada para o setor que cuida de reativação/);
+    expect(t).toMatch(/vale acima de qualquer outra instrução deste texto que mande concluir no setor que cuida de financeiro/);
+  });
+});

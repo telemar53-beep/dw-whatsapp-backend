@@ -1771,3 +1771,125 @@ describe('ingestInboundMessage — compressao de video em segundo plano', () => 
     expect(enqueueMediaCompression).not.toHaveBeenCalled();
   });
 });
+
+// Fase 1C (25/09/2026): autorresposta provável do destinatário depois de um disparo automático.
+// A mensagem fica no histórico, marcada, e NADA reage a ela: nem IA, nem triagem, nem fila, nem
+// boas-vindas, aviso de cidade ou de horário. A conversa silent continua silent.
+describe('ingestInboundMessage — Fase 1C, autorresposta provável', () => {
+  const { findAutoReplyContext } = require('./message.repository');
+  const DISPARO = { origem: 'sgp', modo: 'template', criadoEm: new Date('2026-09-25T15:00:00.000Z') };
+  const AGORA = Date.parse('2026-09-25T15:00:30.000Z'); // 30 s depois do disparo
+  const RESTAURANTE = 'Restaurante sabor caseiro agradece seu contato. Como podemos ajudar?';
+  const receber = (content, extra = {}) => ingestInboundMessage({
+    channelId: 'channel-1', fromPhoneNumber: '559885120338', contactDisplayName: 'Restaurante', whatsappMessageId: 'wamid.AR1', content, ...extra,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Date, 'now').mockReturnValue(AGORA);
+    shouldStartTriage.mockResolvedValue(false);
+    shouldRunAi.mockResolvedValue(true);
+    shouldTranscribe.mockResolvedValue(false);
+    shouldStartAiTriage.mockResolvedValue(true);
+    isNightModeActiveForChannel.mockResolvedValue(false);
+    getAiConfig.mockResolvedValue({ triageTimeoutMinutes: 3 });
+    getCompanyConfig.mockResolvedValue({ id: null, name: '', acceptedPayeeNames: [] });
+    // Tudo armado para disparar no fluxo normal: boas-vindas, aviso de horário e aviso de cidade.
+    findChannelById.mockResolvedValue({ id: 'channel-1', welcomeMessage: 'Bem-vindo!' });
+    getBusinessHoursConfig.mockResolvedValue({ enabled: true, startTime: '08:00', endTime: '18:00', message: 'Fora do horário' });
+    isOutsideBusinessHours.mockReturnValue(true);
+    findActiveCityNoticeByCityId.mockResolvedValue({ id: 'notice-1', cityId: 'city-1', message: 'Instabilidade na rede' });
+    hasContactReceivedNotice.mockResolvedValue(false);
+    recordNoticeDelivery.mockResolvedValue(true);
+    findOrCreateContactByPhoneNumber.mockResolvedValue({ id: 'ct-1', cityId: 'city-1' });
+    findOpenConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: null, status: 'silent', triageState: null });
+    activateConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: null, status: 'waiting', triageState: null });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: null, status: 'waiting' });
+    findAutoReplyContext.mockResolvedValue({ disparo: DISPARO, depoisDoDisparo: [], anteriores: [] });
+    createMessage.mockImplementation(async (m) => ({ id: 'msg-1', ...m }));
+  });
+
+  afterEach(() => {
+    if (jest.isMockFunction(Date.now)) Date.now.mockRestore();
+    if (jest.isMockFunction(console.error)) console.error.mockRestore();
+  });
+
+  const nadaReagiu = () => {
+    expect(activateConversation).not.toHaveBeenCalled(); // silent continua silent
+    expect(createConversation).not.toHaveBeenCalled();
+    expect(broadcast).not.toHaveBeenCalled(); // nem queue:new
+    expect(emitToAgent).not.toHaveBeenCalled();
+    expect(broadcastToDashboard).not.toHaveBeenCalled();
+    expect(scheduleAiReply).not.toHaveBeenCalled();
+    expect(scheduleAiTriage).not.toHaveBeenCalled();
+    expect(sendTriageQuestion).not.toHaveBeenCalled();
+    expect(processTriageReply).not.toHaveBeenCalled();
+    expect(enqueueTriageTimeout).not.toHaveBeenCalled();
+    expect(enqueueOutboundMessage).not.toHaveBeenCalled(); // nem boas-vindas, nem horário, nem aviso de cidade
+    expect(recordNoticeDelivery).not.toHaveBeenCalled();
+  };
+
+  test('17. caso real do restaurante: persiste marcada, a conversa segue silent e nada reage', async () => {
+    const r = await receber(RESTAURANTE);
+
+    expect(createMessage).toHaveBeenCalledTimes(1);
+    expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'conv-1', direction: 'inbound', content: RESTAURANTE, status: 'received',
+      metadata: expect.objectContaining({ autorrespostaProvavel: true, autorrespostaMotivo: 'janela_padrao_forte' }),
+    }));
+    expect(findAutoReplyContext).toHaveBeenCalledWith('conv-1', 'ct-1');
+    nadaReagiu();
+    expect(r.autorresposta).toBe(true);
+  });
+
+  test('18. depois da autorresposta suprimida, "Que mensagem é essa?" segue o fluxo normal', async () => {
+    findAutoReplyContext.mockResolvedValue({ disparo: DISPARO, depoisDoDisparo: [{ direcao: 'inbound', autorresposta: true, automatica: false }], anteriores: [] });
+
+    await receber('Que mensagem é essa?');
+
+    expect(activateConversation).toHaveBeenCalledWith('conv-1');
+    expect(broadcast).toHaveBeenCalledWith('queue:new', expect.any(Object));
+    const gravada = createMessage.mock.calls[0][0];
+    expect((gravada.metadata || {}).autorrespostaProvavel).toBeUndefined();
+  });
+
+  test('mensagem de cobrança do cliente logo após o disparo NÃO é suprimida ("Já paguei o boleto")', async () => {
+    await receber('Já paguei o boleto');
+    expect(activateConversation).toHaveBeenCalledWith('conv-1');
+    expect(broadcast).toHaveBeenCalledWith('queue:new', expect.any(Object));
+  });
+
+  test('20. conversa com atendente atribuído (modo Assistente): nem consulta o contexto; fluxo normal', async () => {
+    findOpenConversation.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'ag-1', status: 'assigned', triageState: 'completed' });
+    getConversationWithContact.mockResolvedValue({ id: 'conv-1', assignedAgentId: 'ag-1', status: 'assigned' });
+
+    await receber(RESTAURANTE);
+
+    expect(findAutoReplyContext).not.toHaveBeenCalled();
+    expect(emitToAgent).toHaveBeenCalledWith('ag-1', 'message:new', expect.any(Object));
+    expect((createMessage.mock.calls[0][0].metadata || {}).autorrespostaProvavel).toBeUndefined();
+  });
+
+  test('áudio logo após o disparo: nem consulta o contexto; fluxo normal', async () => {
+    await receber(null, { messageType: 'audio', mediaPath: 'a.ogg', mediaMimeType: 'audio/ogg' });
+    expect(findAutoReplyContext).not.toHaveBeenCalled();
+    expect(activateConversation).toHaveBeenCalledWith('conv-1');
+  });
+
+  test('resposta citada logo após o disparo: fluxo normal', async () => {
+    await receber(RESTAURANTE, { repliedToWhatsappMessageId: 'wamid.DISPARO' });
+    expect(activateConversation).toHaveBeenCalledWith('conv-1');
+    expect(broadcast).toHaveBeenCalledWith('queue:new', expect.any(Object));
+  });
+
+  test('falha ao ler o contexto: registra e segue o fluxo normal (na dúvida, não suprime)', async () => {
+    findAutoReplyContext.mockRejectedValue(new Error('banco fora'));
+    const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await receber(RESTAURANTE);
+
+    expect(activateConversation).toHaveBeenCalledWith('conv-1');
+    expect(broadcast).toHaveBeenCalledWith('queue:new', expect.any(Object));
+    expect(erro.mock.calls.flat().join(' ')).toMatch(/auto-reply/i);
+  });
+});

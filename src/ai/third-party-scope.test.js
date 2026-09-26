@@ -46,3 +46,19 @@ test('paraContexto devolve os contratos no formato da checagem de propriedade', 
     .toEqual({ nome: 'Maria', contratos: [{ id: 10 }, { id: 11 }] });
   expect(paraContexto(null)).toBeNull();
 });
+
+// Caso Fulana/Beltrana (25/09/2026): CPF de terceiro NÃO encontrado vira pedido de terceiro PENDENTE,
+// sem contrato nenhum — ele não autoriza nada e bloqueia a cobrança de quem fala nos turnos
+// seguintes (sem fallback silencioso), até a intenção explícita, um novo CPF ou o prazo.
+test('escopo pendente (documento não encontrado): sem contratos, marcado, válido até expirar', () => {
+  const pendente = montarEscopo(null, [], AGORA, { pendente: true });
+  expect(pendente).toEqual({ nome: null, contratos: [], expiraEm: '2026-09-17T20:30:00.000Z', pendente: true });
+  expect(escopoValido(pendente, AGORA)).toBe(true);
+  expect(escopoValido(pendente, new Date('2026-09-17T20:30:01.000Z'))).toBe(false);
+  expect(paraContexto(pendente)).toEqual({ nome: null, contratos: [], pendente: true });
+});
+
+test('lista vazia SEM a marca de pendente continua inválida (falha fechado)', () => {
+  expect(escopoValido({ nome: 'X', contratos: [], expiraEm: '2026-09-17T20:30:00.000Z' }, AGORA)).toBe(false);
+  expect(escopoValido({ nome: 'X', contratos: [], expiraEm: '2026-09-17T20:30:00.000Z', pendente: 'sim' }, AGORA)).toBe(false);
+});

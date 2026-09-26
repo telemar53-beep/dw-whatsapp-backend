@@ -46,10 +46,17 @@ const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
 const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('./billing-delivery.repository');
-const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
+const { enviarAvisoDeCidadeSePreciso, selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
 const { listarPlanosDisponiveis } = require('../plans/plan.repository');
 const { listPlaces, findCityById } = require('../cities/city.repository');
 const fs = require('fs');
+
+// Regra financeira 0/1/2+ (25/09/2026): as ferramentas de cobrança leem os títulos do contrato
+// (listAllInvoices) ANTES da 2ª via. Sem títulos vencidos = o fluxo de sempre, que é o que estes
+// testes exercitam. Quem testa a regra em si é regra-financeira.test.js.
+beforeEach(() => {
+  sgpClient.listAllInvoices.mockResolvedValue({ faturas: [], total: 0, completo: true, motivo: null });
+});
 // Não mockado de propósito: os testes de "composição real" (I3, fix round 1)
 // precisam do executor de verdade rodando por cima do registro de verdade.
 const { executeTool } = require('./tool-executor');
@@ -148,7 +155,7 @@ describe('tool-registry', () => {
   test('registers exactly the known tools, sensitive ones included', () => {
     const nomes = listTools().map((t) => t.nome).sort();
     expect(nomes).toEqual([
-      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'consultar_faturas',
+      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'conferir_pagamento', 'consultar_faturas',
       'consultar_faturas_todos_contratos', 'consultar_financeiro',
       'consultar_plano', 'consultar_planos', 'consultar_status_conexao', 'consultar_status_contrato',
       'consultar_status_todos_contratos',
@@ -192,7 +199,7 @@ describe('tool-registry', () => {
     }
   });
 
-  test('the ownership exemption list is exactly these eleven tools, by name', () => {
+  test('the ownership exemption list is exactly these twelve tools, by name', () => {
     // Adicionar uma isenção exige editar esta lista — a decisão passa por um
     // revisor em vez de escapar dentro da definição de uma ferramenta.
     // consultar_faturas_todos_contratos entrou porque não recebe id nenhum do
@@ -214,9 +221,12 @@ describe('tool-registry', () => {
     // consultar_planos e verificar_cobertura entraram porque são CATÁLOGO, não
     // dado de cliente: não recebem contrato nenhum e valem para quem ainda não
     // é cliente. Nada do que elas devolvem pertence a alguém.
+    // conferir_pagamento (regra 0/1/2+, 25/09/2026) não tem parâmetro: a fatura é a última
+    // cobrança que saiu NESTA conversa, e o contrato dela ainda precisa estar no atendimento
+    // (escopoDoContrato) — conferido dentro da ferramenta.
     const isentas = listTools().filter((t) => t.isentoDeProprietario === true).map((t) => t.nome).sort();
     expect(isentas).toEqual([
-      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem',
+      'analisar_comprovante', 'buscar_cliente', 'concluir_triagem', 'conferir_pagamento',
       'consultar_faturas_todos_contratos', 'consultar_planos',
       'consultar_status_todos_contratos', 'definir_motivo_atendimento', 'encerrar_atendimento',
       'esquecer_identificacao', 'transferir_atendimento', 'verificar_cobertura',
@@ -1084,7 +1094,8 @@ describe('desbloqueio_confianca — modo noturno', () => {
     const paraOCliente = r.instrucao.slice(abertura.length, r.instrucao.length - fecho.length);
     expect(paraOCliente).toBe(
       `Willemberg, recebi seu comprovante e ele já está registrado para a equipe conferir a partir das 08:00. `
-      + `Não consegui liberar o acesso em confiança agora: ${r.motivo} Assim que o pagamento for confirmado, a liberação é automática.`
+      // Ajuste de 25/09/2026: sem a promessa de liberação automática (não é garantida).
+      + `Não consegui liberar o acesso em confiança agora: ${r.motivo} Assim que o pagamento constar no sistema, a situação do contrato será verificada.`
     );
     // O que o cliente lê não pode conter o nome de uma ferramenta.
     expect(paraOCliente).not.toContain('concluir_triagem');
@@ -1093,7 +1104,7 @@ describe('desbloqueio_confianca — modo noturno', () => {
   test('motivo sem ponto final não emenda na frase seguinte', async () => {
     sgpClient.requestTrustUnlock.mockResolvedValue({ liberado: false, liberadoDias: null, protocolo: null, motivo: 'contrato com bloqueio judicial' });
     const r = await findTool('desbloqueio_confianca').executar({ contratoId: 26515 }, noturno());
-    expect(r.instrucao).toContain('contrato com bloqueio judicial. Assim que o pagamento for confirmado');
+    expect(r.instrucao).toContain('contrato com bloqueio judicial. Assim que o pagamento constar no sistema');
   });
 
   test('a recusa do SGP à noite também vem com acolhimento, mesmo sem motivo do SGP', async () => {
@@ -1373,6 +1384,56 @@ describe('escopo de terceiro', () => {
     expect(contexto.identidade.primeiroNome).toBe('João');     // quem fala continua sendo quem fala
     expect(setContactSgpLink).not.toHaveBeenCalled();          // o terceiro nao vira dono do contato
     expect(setThirdPartyScope).toHaveBeenCalledWith('c1', expect.objectContaining({ nome: 'Maria', contratos: [77] }));
+  });
+
+  // Documento pendente (25/09/2026): a confirmação do terceiro é FATO DO SISTEMA. Ela é o escopo que
+  // buscar_cliente grava — antes de a trava do turno ganhar contrato e antes de a ferramenta devolver —,
+  // sem documento nenhum, com a hora da localização recuperável. Resposta da IA não entra nisso.
+  describe('confirmação do terceiro persistida pelo buscar_cliente', () => {
+    const { localizacaoDoTerceiro, documentoConfirmadoNoTurno } = require('./documento-pendente');
+    const contextoDoTurno = () => ({
+      ferramentasPermitidas: ['buscar_cliente'], conversationId: 'c1',
+      contact: { id: 'ct1', sgpDocument: '11144477735' }, contracts: [{ id: 1 }],
+      identidade: { nivel: 'forte', primeiroNome: 'Fulana', origem: 'phone' },
+    });
+    beforeEach(() => {
+      sgpClient.lookupClientByCpf.mockResolvedValue({
+        client: { id: 99, name: 'BELTRANA SILVA', document: '52998224725' },
+        contracts: [{ id: 77, status: 1, address: 'Rua da Beltrana' }],
+      });
+    });
+
+    test('grava ANTES de a trava do turno ganhar contrato; o escopo não tem documento e diz quando localizou', async () => {
+      const contexto = contextoDoTurno();
+      let travaNaHoraDeGravar = null;
+      setThirdPartyScope.mockImplementation(async () => { travaNaHoraDeGravar = contexto.alvoTerceiro; });
+      const antes = Date.now();
+
+      const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+      expect(r.ok).toBe(true);
+      expect(setThirdPartyScope).toHaveBeenCalledTimes(1);
+      expect(travaNaHoraDeGravar).toEqual({ contratos: [] });
+      const escopo = setThirdPartyScope.mock.calls[0][1];
+      expect(JSON.stringify(escopo)).not.toMatch(/52998224725|529\.982/);
+      const localizou = localizacaoDoTerceiro(escopo);
+      expect(localizou.getTime()).toBeGreaterThanOrEqual(antes - 5);
+      expect(localizou.getTime()).toBeLessThanOrEqual(Date.now() + 5);
+      expect(documentoConfirmadoNoTurno(contexto)).toBe('terceiro');
+    });
+
+    test('falha ao gravar: nada fica confirmado (nem no turno), e o log não leva o documento', async () => {
+      const contexto = contextoDoTurno();
+      setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const r = await executeTool('buscar_cliente', { cpf: '52998224725', titularEOutraPessoa: true }, contexto);
+
+      expect(r.ok).toBe(false);
+      expect(documentoConfirmadoNoTurno(contexto)).toBeNull();
+      expect(erro.mock.calls.flat().join(' ')).not.toMatch(/52998224725|529\.982/);
+      erro.mockRestore();
+    });
   });
 
   // Digitar o CPF de outra pessoa nao pode promover ninguem. Ate 2026-09-17 este
@@ -2276,6 +2337,35 @@ describe('concluir_triagem', () => {
     expect(concludeAiTriage.mock.calls[0][1].summary).toContain('Ferramentas: enviar_boleto → enviado false, motivo Nenhuma fatura em aberto');
   });
 
+  // Contenções operacionais (25/09/2026): a troca do Wi-Fi é feita por gente, a partir do resumo.
+  // O código diz ali se quem pediu é o titular identificado — e nunca repete a senha nova.
+  describe('pedido de troca do Wi-Fi no resumo', () => {
+    const { sinaisOperacionais } = require('./contencoes-operacionais');
+    const sinais = (texto) => sinaisOperacionais([{ direction: 'inbound', messageType: 'text', content: texto }]);
+    const concluir = (c) => findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'Pediu troca da senha do Wi-Fi.', confianca: 0.9, pendenciasObrigatorias: [] }, c);
+
+    test('titular identificado: pedido registrado, sem a senha no resumo', async () => {
+      await concluir(ctx({ contencoes: sinais('quero mudar a senha do Wi-Fi para Casa@2025') }));
+      const resumo = concludeAiTriage.mock.calls[0][1].summary;
+      expect(resumo).toContain('Alteração do Wi-Fi (senha) pedida pelo titular identificado; os valores novos estão na conversa.');
+      expect(resumo).not.toContain('Casa@2025');
+    });
+
+    test('terceiro (sem identificação, com escopo de boleto/PIX): NÃO fazer a alteração', async () => {
+      await concluir(ctx({
+        identidade: { nivel: 'none', origem: 'none', primeiroNome: null },
+        terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }] },
+        contencoes: sinais('quero mudar a senha do wifi dela'),
+      }));
+      expect(concludeAiTriage.mock.calls[0][1].summary).toContain('Alteração do Wi-Fi (senha) pedida por quem NÃO é o titular identificado: NÃO fazer a alteração.');
+    });
+
+    test('sem pedido de Wi-Fi, o resumo não ganha linha nenhuma', async () => {
+      await concluir(ctx({ contencoes: sinais('quero o boleto') }));
+      expect(concludeAiTriage.mock.calls[0][1].summary).not.toContain('Wi-Fi (');
+    });
+  });
+
   test('setor desconhecido ou motivo inativo são recusados', async () => {
     listSectors.mockResolvedValue([]);
     expect((await findTool('concluir_triagem').executar({ setorId: SETOR, motivoId: null, resumo: 'r', confianca: 0.9, pendenciasObrigatorias: [] }, ctx())).ok).toBe(false);
@@ -2952,8 +3042,9 @@ describe('encerrar_atendimento', () => {
     expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', expect.objectContaining({
       conversation: expect.any(Object), closedAt: expect.any(String),
     }));
-    // A conversa nunca esteve visível na fila: não há nada para remover dela.
-    expect(broadcast).not.toHaveBeenCalled();
+    // E (caso ER, 25/09/2026): a conversa em triagem ESTÁ na fila do atendente (aba Automação).
+    // Encerrar sem queue:removed deixava o item fantasma até recarregar a página.
+    expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'c-1' });
     expect(c.atendimentoEncerrado).toBe(true);
     expect(r.encerrado).toBe(true);
     // Despedida no modelo pedido pelo dono: "Imagina, {nome}! 😊 … Tenha um ótimo dia!"
@@ -2967,6 +3058,7 @@ describe('encerrar_atendimento', () => {
     const r = await findTool('encerrar_atendimento').executar({}, c);
     expect(r).toEqual({ encerrado: false, motivo: 'A conversa já saiu da triagem.' });
     expect(broadcastToDashboard).not.toHaveBeenCalled();
+    expect(broadcast).not.toHaveBeenCalled();
     expect(c.atendimentoEncerrado).toBeUndefined();
   });
 
@@ -4292,5 +4384,204 @@ describe('consultar_planos — instrução neutra, sem ordem de listar', () => {
     expect(t.parametros.properties).toEqual({});
     expect(t.parametros.required).toEqual([]);
     expect(t.categoria).toBe('CONSULTA');
+  });
+});
+
+// Aviso de cidade como FATO operacional (25/09/2026). Caso auditado: o prompt do turno era
+// montado antes de buscar_cliente descobrir a cidade, e a ferramenta devolvia só "Cliente
+// identificado"; depois, a de status mandava "siga o roteiro daquele problema" (reiniciar,
+// teste de velocidade) — por cima de uma falha regional conhecida.
+describe('aviso de cidade como fato do turno', () => {
+  const AVISO_DO_BANCO = { id: 'n-1', message: 'Instabilidade na rede da cidade.', activatedAt: new Date('2026-09-25T12:00:00.000Z') };
+  const FATO = { cidade: 'Maracaçumé', mensagem: 'Instabilidade na rede da cidade.', desde: '2026-09-25T12:00:00.000Z', impacto: null };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '11122233344' }, contracts: [{ id: 5, statusCode: 1, address: 'RUA X, 10' }] });
+    setThirdPartyScope.mockResolvedValue(undefined);
+    findCityById.mockResolvedValue({ id: 'city-1', name: 'Maracaçumé' });
+  });
+
+  const ctx = () => ({ conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' }, ferramentasPermitidas: ['buscar_cliente'] });
+
+  test('2/9. buscar_cliente descobre a cidade com aviso ativo: identifica normalmente E devolve o aviso como fato do turno', async () => {
+    selecionarAvisoDoContato.mockResolvedValue({ aviso: AVISO_DO_BANCO, lugarId: 'city-1' });
+    const c = ctx();
+
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+
+    expect(r.cliente).toEqual({ nome: 'Maria' });
+    expect(r.contratos).toEqual([{ id: 5, status: 'ativo', endereco: 'RUA X, 10' }]);
+    expect(r.avisoAtivo).toEqual({ local: 'Maracaçumé', mensagem: 'Instabilidade na rede da cidade.', desde: '2026-09-25T12:00:00.000Z' });
+    expect(r.instrucao).toMatch(/AVISO ATIVO da empresa para Maracaçumé/);
+    expect(r.instrucao).toMatch(/NÃO peça reiniciar/);
+    expect(c.avisoCidade).toEqual(FATO);
+    expect(selecionarAvisoDoContato).toHaveBeenCalledWith(c.contact);
+  });
+
+  // Um aviso por turno (25/09/2026): se ESTA ferramenta acabou de mandar o aviso ao cliente, o fato
+  // leva a marca transitória — a resposta final não repete a ocorrência.
+  test('buscar_cliente que ENVIA o aviso agora: o fato leva a marca de enviado neste turno', async () => {
+    selecionarAvisoDoContato.mockResolvedValue({ aviso: AVISO_DO_BANCO, lugarId: 'city-1' });
+    enviarAvisoDeCidadeSePreciso.mockResolvedValue(AVISO_DO_BANCO);
+    const c = ctx();
+
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+
+    expect(c.avisoCidade).toEqual({ ...FATO, enviadoNesteTurno: true });
+    expect(r.avisoAtivo.jaEnviadoAoCliente).toBe(true);
+    expect(r.instrucao).toMatch(/JÁ FOI ENVIADO ao cliente/);
+  });
+
+  test('buscar_cliente com aviso já entregue antes (não enviado agora): sem a marca', async () => {
+    selecionarAvisoDoContato.mockResolvedValue({ aviso: AVISO_DO_BANCO, lugarId: 'city-1' });
+    enviarAvisoDeCidadeSePreciso.mockResolvedValue(null);
+    const c = ctx();
+    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(c.avisoCidade).toEqual(FATO);
+  });
+
+  test('a marca que o worker pôs no começo do turno não se perde quando buscar_cliente refaz o fato', async () => {
+    selecionarAvisoDoContato.mockResolvedValue({ aviso: AVISO_DO_BANCO, lugarId: 'city-1' });
+    enviarAvisoDeCidadeSePreciso.mockResolvedValue(null);
+    const c = { ...ctx(), avisoCidade: { cidade: 'Maracaçumé', mensagem: 'Instabilidade na rede da cidade.', enviadoNesteTurno: true } };
+    await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(c.avisoCidade.enviadoNesteTurno).toBe(true);
+  });
+
+  test('9. sem aviso ativo: o retorno é o de sempre, sem campo de aviso', async () => {
+    selecionarAvisoDoContato.mockResolvedValue(null);
+    const c = ctx();
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(r.avisoAtivo).toBeUndefined();
+    expect(r.instrucao).toBe('Cliente identificado. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.');
+    expect(c.avisoCidade).toBeUndefined();
+  });
+
+  test('7. falha ao consultar o aviso: identifica normalmente e NÃO inventa ocorrência', async () => {
+    selecionarAvisoDoContato.mockRejectedValue(new Error('banco fora'));
+    const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const c = ctx();
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(r.cliente).toEqual({ nome: 'Maria' });
+    expect(r.avisoAtivo).toBeUndefined();
+    expect(c.avisoCidade).toBeUndefined();
+    expect(erro.mock.calls.flat().join(' ')).not.toContain('11122233344');
+    erro.mockRestore();
+  });
+
+  describe('3/12. com aviso ativo, a ferramenta de status não manda seguir o roteiro individual', () => {
+    const TRIAGEM = (extra = {}) => ({ contracts: [{ id: 1, statusCode: 1, address: 'RUA X, 1' }], identidade: { nivel: 'forte' }, avisoCidade: FATO, ...extra });
+
+    test.each([
+      ['online', { status: 1 }],
+      ['offline', { status: 2 }],
+      ['sem resposta', null],
+    ])('consultar_status_todos_contratos (%s): a instrução é a do aviso', async (_nome, conexao) => {
+      if (conexao) sgpClient.checkConnection.mockResolvedValue(conexao);
+      else sgpClient.checkConnection.mockRejectedValue(new Error('SGP fora'));
+      const r = await findTool('consultar_status_todos_contratos').executar({}, TRIAGEM());
+      expect(r.instrucao).toMatch(/AVISO ATIVO da empresa para Maracaçumé/);
+      expect(r.instrucao).not.toMatch(/siga o roteiro|modelo da conexão offline|ativo e online/);
+      expect(r.avisoAtivo).toEqual({ local: 'Maracaçumé', mensagem: 'Instabilidade na rede da cidade.', desde: '2026-09-25T12:00:00.000Z' });
+    });
+
+    test('contrato SUSPENSO continua com a regra dele: o aviso não explica suspensão', async () => {
+      sgpClient.checkConnection.mockResolvedValue({ status: 2 });
+      const r = await findTool('consultar_status_todos_contratos').executar({}, TRIAGEM({ contracts: [{ id: 3, statusCode: 4, address: 'RUA Z, 3' }] }));
+      expect(r.instrucao).toMatch(/suspenso/);
+      expect(r.instrucao).not.toMatch(/AVISO ATIVO/);
+    });
+
+    test('4. sem aviso ativo: o roteiro normal continua disponível', async () => {
+      sgpClient.checkConnection.mockResolvedValue({ status: 1 });
+      const r = await findTool('consultar_status_todos_contratos').executar({}, TRIAGEM({ avisoCidade: null }));
+      expect(r.instrucao).toMatch(/siga o roteiro daquele problema/);
+      expect(r.avisoAtivo).toBeUndefined();
+    });
+
+    test('consultar_status_conexao na triagem com aviso ativo: devolve o status E a instrução do aviso', async () => {
+      sgpClient.checkConnection.mockResolvedValue({ status: 1 });
+      const r = await findTool('consultar_status_conexao').executar({ contratoId: 1 }, TRIAGEM());
+      expect(r.instrucao).toMatch(/AVISO ATIVO/);
+      expect(r.avisoAtivo).toBeDefined();
+    });
+
+    test('consultar_status_conexao sem aviso (ou fora da triagem): igual a antes', async () => {
+      sgpClient.checkConnection.mockResolvedValue({ status: 1 });
+      const semAviso = await findTool('consultar_status_conexao').executar({ contratoId: 1 }, TRIAGEM({ avisoCidade: null }));
+      const assistente = await findTool('consultar_status_conexao').executar({ contratoId: 1 }, { contracts: [{ id: 1 }], avisoCidade: FATO });
+      expect(semAviso.instrucao).toBeUndefined();
+      expect(assistente.instrucao).toBeUndefined();
+    });
+  });
+});
+
+
+// P1-1 da auditoria final (25/09/2026): o aviso de cidade NÃO explica suspensão — a mesma regra de
+// consultar_status_todos_contratos, agora também em buscar_cliente e consultar_status_conexao.
+// Contrato alvo determinado → vale o status dele; sem alvo determinado → qualquer contrato
+// suspenso impede o aviso de ser a causa (um ativo nunca mascara a suspensão de outro).
+describe('P1-1: contrato suspenso + aviso de cidade', () => {
+  const AVISO_DO_BANCO = { id: 'n-1', message: 'Instabilidade na rede da cidade.', activatedAt: new Date('2026-09-25T12:00:00.000Z') };
+  const FATO = { cidade: 'Maracaçumé', mensagem: 'Instabilidade na rede da cidade.', desde: '2026-09-25T12:00:00.000Z', impacto: null };
+  const SUSPENSO = { id: 3, statusCode: 4, address: 'RUA Z, 3' };
+  const ATIVO = { id: 5, statusCode: 1, address: 'RUA X, 10' };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    setThirdPartyScope.mockResolvedValue(undefined);
+    findCityById.mockResolvedValue({ id: 'city-1', name: 'Maracaçumé' });
+    selecionarAvisoDoContato.mockResolvedValue({ aviso: AVISO_DO_BANCO, lugarId: 'city-1' });
+    enviarAvisoDeCidadeSePreciso.mockResolvedValue(null);
+  });
+
+  const identificar = () => ({ conversationId: 'conv-1', channelId: 'ch-1', contact: { id: 'ct-1' }, identidade: { nivel: 'none', origem: 'none' }, ferramentasPermitidas: ['buscar_cliente'] });
+  const triagem = (contracts) => ({ contracts, identidade: { nivel: 'forte' }, avisoCidade: FATO, ferramentasPermitidas: ['consultar_status_conexao'] });
+
+  test('1. buscar_cliente com o contrato suspenso: não manda tratar a falta de acesso como falha regional', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '11122233344' }, contracts: [SUSPENSO] });
+    const c = identificar();
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, c);
+    expect(r.contratos).toEqual([{ id: 3, status: 'suspenso', endereco: 'RUA Z, 3' }]);
+    expect(r.instrucao).not.toMatch(/AVISO ATIVO|falha regional/);
+    expect(r.avisoAtivo).toBeUndefined();
+  });
+
+  test('1b. buscar_cliente com um suspenso e um ativo (alvo ainda indeterminado): nenhuma causa única', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '11122233344' }, contracts: [ATIVO, SUSPENSO] });
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, identificar());
+    expect(r.instrucao).not.toMatch(/AVISO ATIVO|falha regional/);
+  });
+
+  test('1c. buscar_cliente com o contrato ativo: o aviso continua como antes', async () => {
+    sgpClient.lookupClientByCpf.mockResolvedValue({ client: { id: 9, name: 'MARIA SOUZA', document: '11122233344' }, contracts: [ATIVO] });
+    const r = await findTool('buscar_cliente').executar({ cpf: '11122233344' }, identificar());
+    expect(r.instrucao).toMatch(/AVISO ATIVO da empresa para Maracaçumé/);
+    expect(r.avisoAtivo).toBeDefined();
+  });
+
+  test('2. consultar_status_conexao no contrato suspenso: devolve o status, sem o aviso como causa', async () => {
+    sgpClient.checkConnection.mockResolvedValue({ status: 2 });
+    const r = await findTool('consultar_status_conexao').executar({ contratoId: 3 }, triagem([SUSPENSO]));
+    expect(r.status).toBe('offline');
+    expect(r.instrucao || '').not.toMatch(/AVISO ATIVO|falha regional/);
+    expect(r.avisoAtivo).toBeUndefined();
+  });
+
+  test('2b. consultar_status_conexao no contrato ATIVO (alvo determinado) com outro suspenso: o aviso vale para ele', async () => {
+    sgpClient.checkConnection.mockResolvedValue({ status: 2 });
+    const c = triagem([ATIVO, SUSPENSO]);
+    const r = await findTool('consultar_status_conexao').executar({ contratoId: 5 }, c);
+    expect(r.instrucao).toMatch(/AVISO ATIVO/);
+    // O contrato da reclamação fica determinado para a troca final do orquestrador.
+    expect(c.contratoDaReclamacao).toBe(5);
+  });
+
+  test('a mesma regra em consultar_status_todos_contratos continua valendo (qualquer suspenso afasta o aviso)', async () => {
+    sgpClient.checkConnection.mockResolvedValue({ status: 2 });
+    const r = await findTool('consultar_status_todos_contratos').executar({}, { ...triagem([ATIVO, SUSPENSO]), ferramentasPermitidas: ['consultar_status_todos_contratos'] });
+    expect(r.instrucao).toMatch(/suspenso/);
+    expect(r.instrucao).not.toMatch(/AVISO ATIVO/);
   });
 });

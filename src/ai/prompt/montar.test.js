@@ -1,5 +1,8 @@
 const { montarContexto, MODULOS } = require('./montar');
 const { estadoBase } = require('./estado-de-teste');
+const { sinaisOperacionais } = require('../contencoes-operacionais');
+
+const sinaisDoCliente = (...textos) => sinaisOperacionais(textos.map((content) => ({ direction: 'inbound', messageType: 'text', content })));
 
 test('a ordem de montagem começa pelo prompt do sistema e põe os princípios em seguida', () => {
   const texto = montarContexto(estadoBase());
@@ -181,6 +184,35 @@ const ESTADOS_PARA_VARREDURA = [
     contratos: [{ id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço]', status: 'ativo' }],
     triagem: { noturno: { ativo: true, retornoAs: '[hora]' }, forcarConclusao: false },
   }),
+  // Contenções operacionais (25/09/2026): o módulo só entra com sinal da fala do cliente — sem
+  // estes estados, a varredura nunca leria as linhas dele.
+  estadoBase({
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: '[nome]', contracts: [{ id: 1 }], contestado: false },
+    contratos: [{ id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço]', status: 'ativo' }],
+    contencoes: sinaisDoCliente('meu roteador queimou', 'quero mudar a senha do wifi', 'teve proporcional?'),
+    avisoCidade: { cidade: '[cidade]', mensagem: '[mensagem]' },
+    triagem: { noturno: { ativo: true, retornoAs: '[hora]' }, forcarConclusao: false },
+  }),
+  estadoBase({ contencoes: sinaisDoCliente('a ONU não liga', 'quero trocar a senha do wifi') }),
+  estadoBase({ contencoes: sinaisDoCliente('quero mudar a senha do wifi dela'), terceiro: { titular: '[nome do titular]' } }),
+  estadoBase({
+    identidade: { nivel: 'forte', origem: 'phone', primeiroNome: '[nome]', contracts: [{ id: 1 }, { id: 2 }], contestado: false },
+    contratos: [
+      { id: 1, plano: '[plano]', velocidade: null, endereco: '[endereço 1]', status: 'ativo' },
+      { id: 2, plano: '[plano]', velocidade: null, endereco: '[endereço 2]', status: 'ativo' },
+    ],
+    contencoes: sinaisDoCliente('quero mudar o nome da rede para CASA e a senha para Casa@2025'),
+  }),
+  // Documento pendente (25/09/2026): o módulo só entra com a pendência — um estado por ramo.
+  ...[
+    { alvo: 'principal', mudouDeAssunto: false, retomou: false, mudancaRelevante: false, irritado: false, mandouOProprioDocumento: false },
+    { alvo: 'principal', mudouDeAssunto: true, retomou: false, mudancaRelevante: false, irritado: false, mandouOProprioDocumento: false },
+    { alvo: 'principal', mudouDeAssunto: false, retomou: true, mudancaRelevante: true, irritado: false, mandouOProprioDocumento: false },
+    { alvo: 'terceiro', mudouDeAssunto: false, retomou: false, mudancaRelevante: true, irritado: true, mandouOProprioDocumento: true },
+    { alvo: 'terceiro', mudouDeAssunto: false, retomou: false, mudancaRelevante: false, irritado: false, mandouOProprioDocumento: false },
+    { alvo: 'principal', mudouDeAssunto: false, retomou: false, mudancaRelevante: true, irritado: true, mandouOProprioDocumento: false, documentoRecebido: true },
+    { alvo: 'terceiro', mudouDeAssunto: false, retomou: false, mudancaRelevante: true, irritado: false, mandouOProprioDocumento: false, documentoRecebido: true },
+  ].map((documento) => estadoBase({ documento })),
 ];
 
 // painel.js fica de fora de propósito, não por afrouxamento: o trabalho DELE

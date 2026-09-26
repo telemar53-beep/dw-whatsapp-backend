@@ -16,11 +16,15 @@
 // não autoriza nada.
 const MINUTOS_DE_VIDA = 30;
 
-function montarEscopo(nome, contratos, agora = new Date()) {
+// `pendente` (caso Fulana/Beltrana, 25/09/2026): o documento do terceiro NÃO foi encontrado. O
+// pedido continua sendo de terceiro, sem contrato nenhum — não autoriza nada e segura a
+// cobrança de quem fala (sem fallback) até a intenção explícita, um novo CPF ou o prazo.
+function montarEscopo(nome, contratos, agora = new Date(), { pendente = false } = {}) {
   return {
     nome: nome || null,
     contratos: (contratos || []).map((c) => c.id),
     expiraEm: new Date(agora.getTime() + MINUTOS_DE_VIDA * 60 * 1000).toISOString(),
+    ...(pendente ? { pendente: true } : {}),
   };
 }
 
@@ -33,7 +37,10 @@ const ISO_COMPLETO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 function escopoValido(escopo, agora = new Date()) {
   if (!escopo || typeof escopo !== 'object') return false;
-  if (!Array.isArray(escopo.contratos) || escopo.contratos.length === 0) return false;
+  if (!Array.isArray(escopo.contratos)) return false;
+  // Lista vazia só com a marca de pendente, e só o booleano puro: um JSON corrompido não vira
+  // pedido de terceiro por acidente.
+  if (escopo.contratos.length === 0 && escopo.pendente !== true) return false;
   if (typeof escopo.expiraEm !== 'string' || !ISO_COMPLETO.test(escopo.expiraEm)) return false;
   const expira = Date.parse(escopo.expiraEm);
   if (Number.isNaN(expira)) return false;
@@ -43,7 +50,11 @@ function escopoValido(escopo, agora = new Date()) {
 /** O formato que a checagem de propriedade espera: uma lista de { id }. */
 function paraContexto(escopo) {
   if (!escopo) return null;
-  return { nome: escopo.nome, contratos: escopo.contratos.map((id) => ({ id })) };
+  return {
+    nome: escopo.nome,
+    contratos: escopo.contratos.map((id) => ({ id })),
+    ...(escopo.pendente === true ? { pendente: true } : {}),
+  };
 }
 
 module.exports = { montarEscopo, escopoValido, paraContexto, MINUTOS_DE_VIDA };

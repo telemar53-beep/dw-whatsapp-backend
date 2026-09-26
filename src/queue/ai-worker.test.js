@@ -14,6 +14,7 @@ jest.mock('../queue/outbound-queue');
 jest.mock('../city-notices/city-notice.service');
 jest.mock('../city-notices/city-notice.repository');
 jest.mock('../cities/city.repository');
+jest.mock('../sectors/reactivation-sector');
 
 const { runAiTurn } = require('../ai/ai-orchestrator');
 const { createSuggestion } = require('../ai/ai-suggestion.repository');
@@ -21,10 +22,12 @@ const { getAiConfig } = require('../ai/ai-config.repository');
 const { motivoDeEncerramentoAtivo } = require('../ai/triage-close-reason');
 const {
   getConversationWithContact, concludeAiTriage, incrementTriageAttempts, isPhoneContested,
-  closeConversationByAi, getThirdPartyScope, setThirdPartyScope,
+  closeConversationByAi, getThirdPartyScope, setThirdPartyScope, getTriageReactivation,
 } = require('../conversations/conversation.repository');
+const { setorDeReativacao } = require('../sectors/reactivation-sector');
 const { findContactById } = require('../conversations/contact.repository');
-const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation } = require('../conversations/message.repository');
+const { findLatestInboundMessageId, findMessageById, listRecentMessagesByConversation, findLastMessageCreatedAt } = require('../conversations/message.repository');
+const { enqueueTriageTimeout } = require('./ai-queue');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { resolverIdentidade } = require('../ai/identity-resolver');
 const { findChannelById } = require('../channels/channel.repository');
@@ -214,6 +217,9 @@ describe('ai-worker — triagem', () => {
     // um default benigno aqui evita que um mockRejectedValue esquecido em
     // teste futuro vaze pelo mesmo motivo.
     setThirdPartyScope.mockResolvedValue();
+    // Regra financeira 0/1/2+: a esmagadora maioria das conversas não está marcada para a reativação.
+    getTriageReactivation.mockReset().mockResolvedValue(null);
+    setorDeReativacao.mockReset().mockResolvedValue(null);
   });
 
   // Idempotência de enviar_boleto/gerar_pix: o turno precisa saber QUAL
@@ -221,6 +227,24 @@ describe('ai-worker — triagem', () => {
   // reenvio agora" de "o modelo chamou a ferramenta duas vezes na mesma
   // mensagem". O worker já o tem em mãos, e já conferiu (logo acima) que é a
   // mensagem inbound mais recente.
+  // Documento pendente (25/09/2026): o registro do pedido é a própria mensagem — a metadata diz de
+  // quem é o documento pedido (o de quem fala, ou o de outra pessoa). Nada além disso no banco.
+  describe('pedido de documento marcado na própria mensagem', () => {
+    test('a resposta que pede o documento sai com a marca de quem é o documento', async () => {
+      runAiTurn.mockResolvedValue({ texto: 'Para localizar seu cadastro, me informe seu CPF ou CNPJ, por favor.', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: { alvo: 'principal' } });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(enqueueOutboundMessage).toHaveBeenCalledWith(expect.objectContaining({
+        sentBy: 'ai', metadata: { pedidoDeDocumento: { alvo: 'principal' } },
+      }));
+    });
+
+    test('resposta que não pede documento sai sem metadata nenhuma', async () => {
+      runAiTurn.mockResolvedValue({ texto: 'Entendi, sem o cadastro não consigo ver a conexão.', toolsExecutadas: [], erro: null, triagemConcluida: null, pedidoDeDocumento: null });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(enqueueOutboundMessage.mock.calls[0][0]).not.toHaveProperty('metadata');
+    });
+  });
+
   describe('messageId repassado ao turno', () => {
     test('runAiTurn recebe o messageId do job', async () => {
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
@@ -408,6 +432,57 @@ describe('ai-worker — triagem', () => {
       expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
         avisoCidade: { cidade: 'Cândido Mendes', mensagem: 'Falha na fibra em Cândido Mendes.' },
       }));
+    });
+
+    // Um aviso por turno (25/09/2026): a marca transitória diz se o aviso saiu para o cliente
+    // NESTE turno — mandado agora pelo worker, ou pela entrada desta mesma mensagem.
+    describe('aviso enviado neste turno', () => {
+      const { findNoticeDeliverySentAt } = require('../city-notices/city-notice.repository');
+      beforeEach(() => {
+        findContactById.mockResolvedValue(CONTATO_COM_CIDADE);
+        selecionarAvisoDoContato.mockResolvedValue({ aviso: AVISO, lugarId: 'city-1' });
+        findCityById.mockResolvedValue({ id: 'city-1', name: 'Cândido Mendes' });
+        findNoticeDeliverySentAt.mockReset();
+      });
+
+      test('o worker acabou de mandar o aviso: o turno recebe o fato COM a marca', async () => {
+        enviarAvisoDeCidadeSePreciso.mockResolvedValue(AVISO);
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+          avisoCidade: { cidade: 'Cândido Mendes', mensagem: 'Falha na fibra em Cândido Mendes.', enviadoNesteTurno: true },
+        }));
+      });
+
+      test('a entrada DESTA mensagem mandou o aviso (entregue depois dela): também conta como deste turno', async () => {
+        enviarAvisoDeCidadeSePreciso.mockResolvedValue(null);
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', createdAt: new Date('2026-09-25T15:00:00.000Z') });
+        findNoticeDeliverySentAt.mockResolvedValue(new Date('2026-09-25T15:00:01.000Z'));
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        expect(findNoticeDeliverySentAt).toHaveBeenCalledWith('notice-1', 'ct-1');
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ avisoCidade: expect.objectContaining({ enviadoNesteTurno: true }) }));
+      });
+
+      test('aviso entregue em outro momento (bem antes desta mensagem): sem a marca — a resposta pode informar', async () => {
+        enviarAvisoDeCidadeSePreciso.mockResolvedValue(null);
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', createdAt: new Date('2026-09-25T15:00:00.000Z') });
+        findNoticeDeliverySentAt.mockResolvedValue(new Date('2026-09-25T09:00:00.000Z'));
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+          avisoCidade: { cidade: 'Cândido Mendes', mensagem: 'Falha na fibra em Cândido Mendes.' },
+        }));
+      });
+
+      test('falha ao ler a entrega: sem a marca (a resposta segura completa continua valendo)', async () => {
+        const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+        enviarAvisoDeCidadeSePreciso.mockResolvedValue(null);
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', createdAt: new Date('2026-09-25T15:00:00.000Z') });
+        findNoticeDeliverySentAt.mockRejectedValue(new Error('banco fora'));
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+          avisoCidade: { cidade: 'Cândido Mendes', mensagem: 'Falha na fibra em Cândido Mendes.' },
+        }));
+        erro.mockRestore();
+      });
     });
 
     test('contato sem cidade: nada de aviso no turno', async () => {
@@ -672,6 +747,56 @@ describe('ai-worker — triagem', () => {
     const FUTURO = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     const PASSADO = new Date(Date.now() - 60 * 1000).toISOString();
 
+    // Identidade confirmada é FATO DO SISTEMA (ajuste de 25/09/2026): buscar_cliente grava o escopo do
+    // terceiro localizado ANTES de devolver; o worker lê dele a hora da localização (expiraEm menos a
+    // vida do escopo) e passa ao turno — nada disso depende da resposta da IA ter sido enviada.
+    describe('hora da localização do terceiro, lida do escopo persistido', () => {
+      test('escopo com contrato: o turno recebe a hora em que o terceiro foi localizado', async () => {
+        const expiraEm = new Date(Date.now() + 20 * 60 * 1000);
+        getThirdPartyScope.mockResolvedValue({ nome: 'Maria', contratos: [77], expiraEm: expiraEm.toISOString() });
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({
+          terceiroLocalizadoEm: new Date(expiraEm.getTime() - 30 * 60 * 1000),
+        }));
+      });
+
+      test('escopo pendente (documento não localizado) ou nenhum escopo: sem hora de localização', async () => {
+        getThirdPartyScope.mockResolvedValue({ nome: null, contratos: [], pendente: true, expiraEm: FUTURO });
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        expect(runAiTurn).toHaveBeenLastCalledWith(expect.objectContaining({ terceiroLocalizadoEm: null }));
+        getThirdPartyScope.mockResolvedValue(null);
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        expect(runAiTurn).toHaveBeenLastCalledWith(expect.objectContaining({ terceiroLocalizadoEm: null }));
+      });
+
+      test('o cliente voltou à própria cobrança (escopo limpo): sem hora de localização', async () => {
+        getThirdPartyScope.mockResolvedValue({ nome: 'Maria', contratos: [77], expiraEm: FUTURO });
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'quero a minha fatura' });
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, terceiroLocalizadoEm: null }));
+      });
+
+      test('2. o turno que localizou teve a resposta DESCARTADA (anti-repetição): o turno seguinte ainda recebe a localização', async () => {
+        // Turno 1: buscar_cliente (dentro do turno) grava o escopo — aqui, o que a ferramenta faz de verdade.
+        let gravado = null;
+        getThirdPartyScope.mockImplementation(async () => gravado);
+        setThirdPartyScope.mockImplementation(async (_id, escopo) => { gravado = escopo; });
+        runAiTurn.mockImplementationOnce(async () => {
+          gravado = { nome: 'Maria', contratos: [77], expiraEm: new Date(Date.now() + 30 * 60 * 1000).toISOString() };
+          return { texto: 'Localizei o contrato no CPF informado.', toolsExecutadas: [{ nome: 'buscar_cliente' }], erro: null, triagemConcluida: null, pedidoDeDocumento: null };
+        });
+        listRecentMessagesByConversation.mockResolvedValue([{ direction: 'outbound', sentBy: 'ai', content: 'Localizei o contrato no CPF informado.' }]);
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        expect(enqueueOutboundMessage).not.toHaveBeenCalled();
+
+        // Turno 2: nenhuma resposta foi salva, e mesmo assim o fato está lá.
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+        const segundo = runAiTurn.mock.calls[1][0];
+        expect(segundo.terceiroLocalizadoEm).toBeInstanceOf(Date);
+        expect(segundo.terceiro).toEqual({ nome: 'Maria', contratos: [{ id: 77 }] });
+      });
+    });
+
     test('escopo válido: runAiTurn recebe terceiro preenchido, e nada é limpo', async () => {
       getThirdPartyScope.mockResolvedValue({ nome: 'Maria', contratos: [77], expiraEm: FUTURO });
 
@@ -711,6 +836,64 @@ describe('ai-worker — triagem', () => {
       expect(setThirdPartyScope).not.toHaveBeenCalled();
       errorSpy.mockRestore();
     });
+
+    // Caso Fulana/Beltrana (decisão do dono, 25/09/2026): o terceiro é GRUDENTO. O worker lê a
+    // intenção explícita na mensagem do cliente (financial-target.js) no começo do turno.
+    describe('alvo financeiro do turno', () => {
+      const ESCOPO = { nome: 'Beltrana', contratos: [77], expiraEm: FUTURO };
+
+      test('"manda o boleto também": continua o terceiro, nada é limpo', async () => {
+        getThirdPartyScope.mockResolvedValue(ESCOPO);
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o boleto também' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }] }, alvoAmbiguo: false }));
+        expect(setThirdPartyScope).not.toHaveBeenCalled();
+      });
+
+      test('"agora manda o meu pix": volta ao titular — limpa o escopo, sem pedir CPF', async () => {
+        getThirdPartyScope.mockResolvedValue(ESCOPO);
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'agora manda o meu pix' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(setThirdPartyScope).toHaveBeenCalledWith('c-1', null);
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null, alvoAmbiguo: false }));
+      });
+
+      test('áudio transcrito com a intenção própria também volta ao titular', async () => {
+        getThirdPartyScope.mockResolvedValue(ESCOPO);
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'audio', content: null, transcription: 'quero a minha fatura agora' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: null }));
+      });
+
+      test('"manda o meu e o dela": ambíguo — mantém o terceiro e trava a cobrança do turno', async () => {
+        getThirdPartyScope.mockResolvedValue(ESCOPO);
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'manda o meu e o dela' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }] }, alvoAmbiguo: true }));
+        expect(setThirdPartyScope).not.toHaveBeenCalled();
+      });
+
+      test('a limpeza falhou: segue no terceiro (o lado seguro) e registra', async () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        getThirdPartyScope.mockResolvedValue(ESCOPO);
+        setThirdPartyScope.mockRejectedValueOnce(new Error('banco fora'));
+        findMessageById.mockResolvedValue({ id: 'm-1', messageType: 'text', content: 'agora o meu' });
+
+        await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+
+        expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ terceiro: { nome: 'Beltrana', contratos: [{ id: 77 }] } }));
+        expect(errorSpy).toHaveBeenCalled();
+        errorSpy.mockRestore();
+      });
+    });
   });
 
   describe('encerramento pela própria IA', () => {
@@ -745,6 +928,9 @@ describe('ai-worker — triagem', () => {
       expect(concludeAiTriage).not.toHaveBeenCalled();
       expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', expect.objectContaining({ closedAt: expect.any(String) }));
       expect(broadcast).not.toHaveBeenCalledWith('queue:new', expect.any(Object));
+      // F (caso ER): a conversa em triagem ESTÁ na fila do atendente (aba Automação); encerrar
+      // sem queue:removed deixava o item fantasma até recarregar a página.
+      expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'c-1' });
     });
 
     test('timeout sem nada entregue conclui para a fila como hoje', async () => {
@@ -754,6 +940,9 @@ describe('ai-worker — triagem', () => {
 
       expect(closeConversationByAi).not.toHaveBeenCalled();
       expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ summary: expect.stringMatching(/IA indisponível/) }));
+      // H: vai para a fila (Espera) pelo queue:new; queue:removed a tiraria de onde ela tem de estar.
+      expect(broadcast).toHaveBeenCalledWith('queue:new', expect.objectContaining({ conversation: expect.any(Object) }));
+      expect(broadcast).not.toHaveBeenCalledWith('queue:removed', expect.anything());
     });
 
     test('timeout com entrega feita mas sem motivo configurado conclui para a fila como hoje', async () => {
@@ -786,7 +975,170 @@ describe('ai-worker — triagem', () => {
       await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
 
       expect(broadcastToDashboard).not.toHaveBeenCalled();
+      expect(broadcast).not.toHaveBeenCalled();
       expect(concludeAiTriage).not.toHaveBeenCalled();
+    });
+  });
+
+  // Caso ER (25/09/2026, produção): o job de segurança nasce UMA vez, com a conversa, e
+  // disparava T0 + prazo mesmo com cliente e IA conversando. Conversa 1: criada 13:08:35.922,
+  // cliente 13:13:18, IA 13:13:30, fechada 13:13:35.961 como "cliente não respondeu".
+  // Regra: um timeout antigo nunca fecha nem move uma conversa com atividade mais recente —
+  // relê a última mensagem (qualquer direção) e, se o prazo ainda não passou, reagenda.
+  describe('timeout da triagem e atividade recente (caso ER)', () => {
+    const MIN = 60000;
+    const T0 = Date.parse('2026-09-25T16:08:35.922Z'); // 13:08:35.922 em São Paulo
+    const agoraEm = (ms) => jest.spyOn(Date, 'now').mockReturnValue(ms);
+    const RESUMO_SEM_RESPOSTA = 'Resolvido pela IA (boleto/PIX entregue); cliente não respondeu e o atendimento foi encerrado sem atendente.';
+
+    beforeEach(() => {
+      getAiConfig.mockResolvedValue({ mode: 'assistant', apiKey: 'k', model: 'm', triageConfidenceThreshold: 0.8, triageMaxQuestions: 2, triageTimeoutMinutes: 5, transcriptionFeedAi: true });
+      motivoDeEncerramentoAtivo.mockResolvedValue('rr-1');
+      getConversationWithContact.mockResolvedValue({ ...PENDING, aiTriageResolvedByAi: true });
+      findLastMessageCreatedAt.mockReset();
+      enqueueTriageTimeout.mockReset().mockResolvedValue(undefined);
+    });
+
+    // Só os espiões deste bloco: os mocks de módulo do arquivo continuam como estão.
+    afterEach(() => {
+      if (jest.isMockFunction(Date.now)) Date.now.mockRestore();
+      if (jest.isMockFunction(console.error)) console.error.mockRestore();
+    });
+
+    const nadaAconteceu = () => {
+      expect(closeConversationByAi).not.toHaveBeenCalled();
+      expect(concludeAiTriage).not.toHaveBeenCalled();
+      expect(broadcast).not.toHaveBeenCalled();
+      expect(broadcastToDashboard).not.toHaveBeenCalled();
+    };
+
+    test('CASO ER: o job de T0+5 não fecha (cliente 13:13:18, IA 13:13:30) e reagenda para 13:18:30; depois do prazo inteiro de silêncio, encerra e tira da fila', async () => {
+      const respostaDaIa = new Date('2026-09-25T16:13:30.000Z');
+      findLastMessageCreatedAt.mockResolvedValue(respostaDaIa);
+      agoraEm(T0 + 5 * MIN);
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      nadaAconteceu();
+      expect(findLastMessageCreatedAt).toHaveBeenCalledWith('c-1');
+      expect(enqueueTriageTimeout).toHaveBeenCalledWith({ conversationId: 'c-1', delayMs: respostaDaIa.getTime() + 5 * MIN - (T0 + 5 * MIN) });
+
+      // O novo job, 5 minutos depois da última atividade, sem nenhuma mensagem nova.
+      jest.clearAllMocks();
+      findLastMessageCreatedAt.mockResolvedValue(respostaDaIa);
+      agoraEm(respostaDaIa.getTime() + 5 * MIN);
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      expect(closeConversationByAi).toHaveBeenCalledWith('c-1', { reasonId: 'rr-1', summary: RESUMO_SEM_RESPOSTA });
+      expect(broadcast).toHaveBeenCalledWith('queue:removed', { conversationId: 'c-1' });
+      expect(broadcastToDashboard).toHaveBeenCalledWith('dashboard:conversation', expect.objectContaining({ closedAt: expect.any(String) }));
+      expect(enqueueTriageTimeout).not.toHaveBeenCalled();
+    });
+
+    test('A — prazo inteiro de silêncio desde a última mensagem: age como hoje (sem entrega, conclui para a fila)', async () => {
+      getConversationWithContact.mockResolvedValue(PENDING);
+      agoraEm(T0 + 10 * MIN);
+      findLastMessageCreatedAt.mockResolvedValue(new Date(T0 + 5 * MIN - 1000));
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ summary: expect.stringMatching(/IA indisponível/) }));
+      expect(broadcast).toHaveBeenCalledWith('queue:new', expect.any(Object));
+      expect(enqueueTriageTimeout).not.toHaveBeenCalled();
+    });
+
+    test('B — cliente falou perto do prazo: o job antigo não fecha nem move, reagenda e não avisa ninguém (G)', async () => {
+      agoraEm(T0 + 5 * MIN);
+      findLastMessageCreatedAt.mockResolvedValue(new Date(T0 + 5 * MIN - 10000));
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      nadaAconteceu();
+      expect(enqueueTriageTimeout).toHaveBeenCalledWith({ conversationId: 'c-1', delayMs: 5 * MIN - 10000 });
+    });
+
+    // A consulta considera as duas direções (message.repository.test: findLastMessageCreatedAt);
+    // aqui, a última atividade é a resposta da IA numa conversa sem entrega.
+    test('C — a IA respondeu perto do prazo: o job antigo não manda para a fila, reagenda', async () => {
+      getConversationWithContact.mockResolvedValue(PENDING);
+      agoraEm(T0 + 5 * MIN);
+      findLastMessageCreatedAt.mockResolvedValue(new Date(T0 + 5 * MIN - 3000));
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      nadaAconteceu();
+      expect(enqueueTriageTimeout).toHaveBeenCalledWith({ conversationId: 'c-1', delayMs: 5 * MIN - 3000 });
+    });
+
+    test('D — boleto/Pix entregue e a conversa continua: nenhum job fecha enquanto não houver um prazo inteiro de silêncio', async () => {
+      // Três jobs seguidos, cada um encontrando atividade dentro do prazo.
+      for (const [agora, ultima] of [[T0 + 5 * MIN, T0 + 4 * MIN], [T0 + 9 * MIN, T0 + 8 * MIN], [T0 + 13 * MIN, T0 + 12 * MIN + 30000]]) {
+        agoraEm(agora);
+        findLastMessageCreatedAt.mockResolvedValue(new Date(ultima));
+        await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+      }
+      nadaAconteceu();
+      expect(enqueueTriageTimeout).toHaveBeenCalledTimes(3);
+    });
+
+    test('reagendamento nunca vira loop apertado: faltando milissegundos, espera o mínimo técnico', async () => {
+      agoraEm(T0 + 5 * MIN);
+      findLastMessageCreatedAt.mockResolvedValue(new Date(T0 + 200)); // faltam 200 ms
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      nadaAconteceu();
+      expect(enqueueTriageTimeout).toHaveBeenCalledWith({ conversationId: 'c-1', delayMs: 5000 });
+    });
+
+    test('horário de mensagem no futuro (relógio do provedor): reagenda no máximo um prazo à frente', async () => {
+      agoraEm(T0);
+      findLastMessageCreatedAt.mockResolvedValue(new Date(T0 + 60 * MIN));
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      nadaAconteceu();
+      expect(enqueueTriageTimeout).toHaveBeenCalledWith({ conversationId: 'c-1', delayMs: 5 * MIN });
+    });
+
+    test.each([
+      ['atribuída a atendente (modo Assistente)', { ...PENDING, status: 'assigned', assignedAgentId: 'a-1', triageState: 'completed' }],
+      ['na fila, triagem já concluída', { ...PENDING, triageState: 'completed' }],
+      ['encerrada', { ...PENDING, status: 'closed', triageState: 'completed' }],
+    ])('I — conversa %s: o timeout não interfere', async (_nome, conversa) => {
+      getConversationWithContact.mockResolvedValue(conversa);
+      agoraEm(T0 + 5 * MIN);
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      nadaAconteceu();
+      expect(findLastMessageCreatedAt).not.toHaveBeenCalled();
+      expect(enqueueTriageTimeout).not.toHaveBeenCalled();
+    });
+
+    test('J — reagendamento falhou: registra o erro e NÃO fecha nem move a conversa', async () => {
+      agoraEm(T0 + 5 * MIN);
+      findLastMessageCreatedAt.mockResolvedValue(new Date(T0 + 5 * MIN - 10000));
+      enqueueTriageTimeout.mockRejectedValue(new Error('redis fora'));
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      nadaAconteceu();
+      expect(erro.mock.calls.flat().join(' ')).toMatch(/reschedule triage timeout/i);
+    });
+
+    test('J — leitura da última atividade falhou: na dúvida preserva a conversa, tenta reagendar e registra', async () => {
+      agoraEm(T0 + 5 * MIN);
+      findLastMessageCreatedAt.mockRejectedValue(new Error('banco fora'));
+      const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+
+      nadaAconteceu();
+      expect(enqueueTriageTimeout).toHaveBeenCalledWith({ conversationId: 'c-1', delayMs: 5 * MIN });
+      expect(erro).toHaveBeenCalled();
     });
   });
 
@@ -888,6 +1240,75 @@ describe('ai-worker — triagem', () => {
       await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
       expect(broadcast).not.toHaveBeenCalledWith('queue:new', expect.any(Object));
       expect(broadcastToDashboard).not.toHaveBeenCalledWith('dashboard:conversation', expect.any(Object));
+    });
+  });
+
+  // Regra financeira 0/1/2+ (25/09/2026): a conversa marcada para a reativação (cancelado, 2+ de
+  // dia, 2+ à noite depois da mais antiga) nunca fecha como "resolvida pela IA" — nem no timeout,
+  // nem com o PIX entregue — e a conclusão em código vai para o setor de reativação.
+  describe('reativação (regra financeira 0/1/2+)', () => {
+    const SETOR_REAT = { id: 's-reat', name: 'Reativação' };
+    beforeEach(() => {
+      getTriageReactivation.mockResolvedValue('multiplas_vencidas_noturno');
+      setorDeReativacao.mockResolvedValue(SETOR_REAT);
+      // O bloco do caso ER deixa uma "última mensagem" recente mockada: aqui o prazo já passou.
+      findLastMessageCreatedAt.mockReset().mockResolvedValue(null);
+    });
+
+    test('20. timeout depois da entrega noturna de 2+: não encerra como resolvido, conclui na reativação', async () => {
+      motivoDeEncerramentoAtivo.mockResolvedValue('rr-1');
+      getConversationWithContact.mockResolvedValue({ ...PENDING, aiTriageResolvedByAi: true });
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+      expect(closeConversationByAi).not.toHaveBeenCalled();
+      expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({
+        sectorId: 's-reat', resolvedByAi: false, summary: expect.stringMatching(/reativação[\s\S]*mais antiga/i),
+      }));
+      expect(concludeAiTriage.mock.calls[0][1].summary).not.toMatch(/Resolvido pela IA/);
+    });
+
+    test('a leitura da marca falha no timeout: na dúvida, não encerra como resolvido', async () => {
+      motivoDeEncerramentoAtivo.mockResolvedValue('rr-1');
+      getTriageReactivation.mockRejectedValue(new Error('db fora'));
+      getConversationWithContact.mockResolvedValue({ ...PENDING, aiTriageResolvedByAi: true });
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+      expect(closeConversationByAi).not.toHaveBeenCalled();
+      expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ resolvedByAi: false }));
+    });
+
+    test('limite de perguntas com a reativação marcada: a conclusão em código vai para a reativação', async () => {
+      getTriageReactivation.mockResolvedValue('multiplas_vencidas');
+      getConversationWithContact.mockResolvedValue({ ...PENDING, triageAttempts: 2 });
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ sectorId: 's-reat', resolvedByAi: false }));
+    });
+
+    test('sem setor de reativação cadastrado: fila geral como antes, com o motivo no resumo', async () => {
+      setorDeReativacao.mockResolvedValue(null);
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+      expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({ sectorId: null, summary: expect.stringMatching(/reativação/i) }));
+    });
+
+    // Ajuste de 25/09/2026: a marca vai ao turno — o prompt não pode mandar para o financeiro (regra
+    // dos 90 dias) uma conversa que o gate mandou para a reativação.
+    test('o turno recebe a marca de reativação da conversa', async () => {
+      getTriageReactivation.mockResolvedValue('multiplas_vencidas');
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ reativacao: 'multiplas_vencidas' }));
+    });
+
+    test('a leitura da marca falha: o turno roda sem ela (as ferramentas ainda leem do banco)', async () => {
+      getTriageReactivation.mockRejectedValue(new Error('db fora'));
+      await handleAiJob({ conversationId: 'c-1', messageId: 'm-1' });
+      expect(runAiTurn).toHaveBeenCalledWith(expect.objectContaining({ reativacao: null }));
+    });
+
+    test('sem reativação marcada, nada muda (fila geral, mesmo resumo)', async () => {
+      getTriageReactivation.mockResolvedValue(null);
+      await handleAiJob({ conversationId: 'c-1', tipo: 'triage-timeout' });
+      expect(concludeAiTriage).toHaveBeenCalledWith('c-1', expect.objectContaining({
+        sectorId: null, summary: 'Triagem não concluída: IA indisponível. Atender normalmente.',
+      }));
+      expect(setorDeReativacao).not.toHaveBeenCalled();
     });
   });
 });

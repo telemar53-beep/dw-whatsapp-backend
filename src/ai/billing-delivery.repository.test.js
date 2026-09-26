@@ -1,5 +1,7 @@
 const { getPool, closePool } = require('../db/pool');
-const { claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery } = require('./billing-delivery.repository');
+const {
+  claimDelivery, markDeliveryEnqueued, releaseDelivery, findDelivery, findLatestEnqueuedDelivery,
+} = require('./billing-delivery.repository');
 
 const CONVERSA = '33333333-3333-3333-3333-333333333333';
 const OUTRA_CONVERSA = '44444444-4444-4444-4444-444444444444';
@@ -314,6 +316,26 @@ describe('billing delivery repository', () => {
       expect(definicao).toMatch(/\(conversation_id, tool, contract_id, invoice_id\)/);
       expect(definicao).toMatch(/WHERE \(is_resend = false\)/);
     });
+  });
+
+  // Regra financeira 0/1/2+ (25/09/2026): a conferência do pagamento relê no SGP a MESMA fatura
+  // que saiu. "Saiu" é enfileirada — um claim sem enqueued_at nunca chegou ao cliente.
+  test('findLatestEnqueuedDelivery devolve a última fatura enfileirada da conversa, nunca um claim pendente', async () => {
+    expect(await findLatestEnqueuedDelivery(CONVERSA)).toBeNull();
+
+    const antiga = await claimDelivery(pedido({ invoiceId: '101', messageId: 'msg-1' }));
+    await markDeliveryEnqueued(antiga.registro.id);
+    await getPool().query("UPDATE ai_billing_deliveries SET enqueued_at = now() - interval '1 hour' WHERE id = $1", [antiga.registro.id]);
+    const recente = await claimDelivery(pedido({ tool: 'gerar_pix', invoiceId: '102', messageId: 'msg-2' }));
+    await markDeliveryEnqueued(recente.registro.id);
+    // Um claim que nunca foi enfileirado (mais novo ainda) não conta.
+    await claimDelivery(pedido({ tool: 'gerar_segunda_via', invoiceId: '103', messageId: 'msg-3' }));
+    // Outra conversa não conta.
+    const alheia = await claimDelivery(pedido({ conversationId: OUTRA_CONVERSA, invoiceId: '999', messageId: 'msg-9' }));
+    await markDeliveryEnqueued(alheia.registro.id);
+
+    const ultima = await findLatestEnqueuedDelivery(CONVERSA);
+    expect(ultima).toMatchObject({ invoiceId: '102', tool: 'gerar_pix', contractId: 17402 });
   });
 
   // MINIMIZAÇÃO (Fase 3): a tabela guarda só ids. Nenhum valor, nenhuma linha

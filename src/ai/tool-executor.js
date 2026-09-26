@@ -1,4 +1,5 @@
 const { findTool, perfilTriagem, temEfeitoReal, FERRAMENTAS_PERMITIDAS_EM_TERCEIRO } = require('./tool-registry');
+const { FERRAMENTAS_DE_COBRANCA, alvoFinanceiro } = require('./financial-target');
 const { minimizarParaTerceiro } = require('./third-party-minimize');
 const { isToolEnabled } = require('./ai-config.repository');
 const { mensagemSegura } = require('./safe-error-log');
@@ -26,12 +27,36 @@ function recusa(motivo, detalhe, instrucao) {
 // prompt, que fazia a IA pedir um dado errado em produção: resultado de
 // ferramenta o modelo lê como fato apurado.
 const INSTRUCAO_IDENTIDADE = 'Ainda não sei quem é o cliente. Peça o CPF ou CNPJ e chame buscar_cliente; depois chame esta ferramenta de novo.';
+// Documento pendente (25/09/2026): com o documento de quem fala JÁ pedido e ainda não informado, a
+// instrução acima fazia o modelo pedir de novo a cada tentativa de consulta (caso real: três
+// pedidos seguidos). A ação continua recusada do mesmo jeito.
+const INSTRUCAO_IDENTIDADE_JA_PEDIDA = 'Ainda não sei quem é o cliente, e o CPF ou CNPJ JÁ foi pedido: NÃO peça de novo agora. Responda ao que ele disse sem consultar nada; esta ferramenta só funciona depois de buscar_cliente com o documento.';
 
 // Só entra em jogo quando o contrato pedido é o do terceiro (contexto.terceiro)
 // e a ferramenta NÃO está em FERRAMENTAS_PERMITIDAS_EM_TERCEIRO — as demais
 // recusas (contract_not_owned, identity_not_confirmed) já têm a própria
 // instrução, ou não precisam de uma.
 const INSTRUCAO_TERCEIRO = 'Este contrato é de outra pessoa. Nesse caso você só pode consultar a fatura e entregar o boleto ou o PIX. Plano, conexão, status e liberação não podem ser consultados nem executados no contrato de terceiro. Se o cliente pediu uma dessas coisas, explique que só o titular pode solicitar.';
+
+// Caso Fulana/Beltrana (25/09/2026): o pedido de cobrança em andamento é de OUTRA pessoa e a
+// ferramenta veio com um contrato que não é dela. Nada é enviado.
+const INSTRUCAO_ALVO_TERCEIRO = 'O pedido de cobrança em andamento é da OUTRA pessoa (a do CPF/CNPJ informado). Só os contratos dela podem ser usados; o contrato de quem está falando NÃO pode, e nada foi enviado. Se o CPF/CNPJ dela não foi localizado, peça para conferir o número. Se não estiver claro de quem é a cobrança, pergunte, curto: "Você quer a sua cobrança ou a da outra pessoa?". NÃO peça o CPF de quem está falando: ele já está identificado — quando ele disser que quer a própria cobrança, ela volta a ser dele.';
+
+// Decisão do dono (25/09/2026): intenção de alvo dos dois lados na mensagem do cliente (ou
+// menção a outra pessoa sem o CPF dela). Nenhuma cobrança sai até ele esclarecer.
+const INSTRUCAO_ALVO_AMBIGUO = 'Não está claro de quem é a cobrança. NÃO envie nada. Pergunte, curto: "Você quer a sua cobrança ou a da outra pessoa?". Se for de outra pessoa, peça o CPF ou CNPJ do titular dela.';
+
+const soDigitos = (valor) => String(valor || '').replace(/\D/g, '');
+
+// O documento do titular DA CONVERSA: o vínculo gravado no contato, ou o da identidade forte
+// resolvida neste turno (a identificação pelo telefone também traz o documento).
+function documentoDoTitularDaConversa(contexto) {
+  const doContato = soDigitos(contexto && contexto.contact && contexto.contact.sgpDocument);
+  if (doContato) return doContato;
+  const identidade = contexto && contexto.identidade;
+  if (identidade && identidade.nivel === 'forte' && identidade.client) return soDigitos(identidade.client.document);
+  return '';
+}
 
 function comTimeout(promise, ms) {
   let timer;
@@ -107,18 +132,29 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
 
     // Com um contrato só, o contratoId é dedutível — e obrigar o modelo a escolher
     // um número que ele não vê direito é de onde vinham escolhas erradas e
-    // perguntas desnecessárias ao cliente. Só os contratos PRÓPRIOS entram aqui: um
-    // contrato de terceiro sempre exige escolha explícita.
+    // perguntas desnecessárias ao cliente.
+    //
+    // Caso Fulana/Beltrana (25/09/2026): era AQUI que o PIX da Fulana saía no pedido da Beltrana —
+    // "manda o pix" sem contrato caía no contrato único DA FULANA. Agora a dedução segue o alvo
+    // financeiro: com pedido de terceiro em andamento, nunca o contrato de quem fala; nas
+    // ferramentas permitidas em terceiro, o contrato único DO TERCEIRO; nas demais, nada é
+    // deduzido (o modelo tem de dizer, explicitamente, qual contrato quer).
     const proprios = (contexto && contexto.contracts) || [];
+    const alvo = alvoFinanceiro(contexto);
     if (tool.chaveProprietario === 'contratoId'
-        && (!args || args.contratoId === undefined || args.contratoId === null)
-        && proprios.length === 1) {
-      args = { ...(args || {}), contratoId: proprios[0].id };
+        && (!args || args.contratoId === undefined || args.contratoId === null)) {
+      if (alvo.tipo === 'terceiro') {
+        if (FERRAMENTAS_PERMITIDAS_EM_TERCEIRO.includes(nome) && alvo.contratos.length === 1) {
+          args = { ...(args || {}), contratoId: alvo.contratos[0] };
+        }
+      } else if (proprios.length === 1) {
+        args = { ...(args || {}), contratoId: proprios[0].id };
+      }
     }
 
     const validacao = tool.validar(args);
     if (!validacao.ok) return recusa('invalid_args', validacao.erro);
-    const argsValidados = validacao.args;
+    let argsValidados = validacao.args;
 
     if (nome === 'buscar_cliente') {
       // Exceção deliberada, e só para esta ferramenta por nome: é o passo que
@@ -130,9 +166,21 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
       // recusando sem o modelo saber por quê. Consultar o CPF de OUTRA pessoa
       // (fatura do amigo, problema do vizinho) é pedido legítimo e não troca
       // o dono da conversa: com a marcação, buscar_cliente não persiste nada.
-      const jaIdentificado = contexto.contact && contexto.contact.sgpDocument;
-      if (jaIdentificado && jaIdentificado !== argsValidados.cpf && argsValidados.titularEOutraPessoa !== true) {
-        return recusa('client_already_identified', null);
+      //
+      // Caso Fulana/Beltrana (25/09/2026): na triagem, um CPF DIFERENTE do titular da conversa É
+      // um pedido de terceiro, com ou sem a marcação do modelo. Antes, sem a marcação, a busca
+      // era recusada e o modelo seguia com a cobrança de quem fala. Agora ela vira consulta de
+      // terceiro — que nunca troca a identidade, nem grava nada no contato.
+      if (perfilTriagem(contexto)) {
+        const titular = documentoDoTitularDaConversa(contexto);
+        if (titular && titular !== argsValidados.cpf && argsValidados.titularEOutraPessoa !== true) {
+          argsValidados = { ...argsValidados, titularEOutraPessoa: true };
+        }
+      } else {
+        const jaIdentificado = contexto.contact && contexto.contact.sgpDocument;
+        if (jaIdentificado && jaIdentificado !== argsValidados.cpf && argsValidados.titularEOutraPessoa !== true) {
+          return recusa('client_already_identified', null);
+        }
       }
     } else if (!tool.isentoDeProprietario) {
       // O padrão é fechado: uma ferramenta só escapa da checagem de propriedade
@@ -179,7 +227,21 @@ async function executeTool(nome, args, contexto, { timeoutMs = TIMEOUT_PADRAO_MS
     // dela.
     if (tool.exigeIdentidadeForte && perfilTriagem(contexto) && !emTerceiro
         && !(contexto.identidade && contexto.identidade.nivel === 'forte')) {
-      return recusa('identity_not_confirmed', nome, INSTRUCAO_IDENTIDADE);
+      const jaPedido = contexto.documento && contexto.documento.alvo === 'principal';
+      return recusa('identity_not_confirmed', nome, jaPedido ? INSTRUCAO_IDENTIDADE_JA_PEDIDA : INSTRUCAO_IDENTIDADE);
+    }
+
+    // GATE DO ALVO FINANCEIRO (caso Fulana/Beltrana): com pedido de terceiro em andamento, uma
+    // ferramenta que entrega cobrança só age num contrato DO TERCEIRO — o que o SGP devolveu
+    // para o documento informado. Contrato de quem fala, de um terceiro anterior, ou nenhum
+    // (documento não encontrado): recusa antes de tocar o SGP. Sem fallback nenhum. Fica depois das
+    // checagens de posse e de identidade (que continuam dando os motivos delas) e antes da execução.
+    if (FERRAMENTAS_DE_COBRANCA.includes(nome) && contexto.alvoAmbiguo) {
+      return recusa('financial_target_ambiguous', null, INSTRUCAO_ALVO_AMBIGUO);
+    }
+    if (FERRAMENTAS_DE_COBRANCA.includes(nome) && alvo.tipo === 'terceiro'
+        && !alvo.contratos.includes(argsValidados.contratoId)) {
+      return recusa('financial_target_mismatch', null, INSTRUCAO_ALVO_TERCEIRO);
     }
 
     // Uma ferramenta pode declarar o próprio orçamento (tool.timeoutMs): a

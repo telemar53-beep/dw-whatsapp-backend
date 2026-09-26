@@ -17,6 +17,8 @@ const MODULOS = [
   require('./fluxos/comercial-novo'),
   require('./fluxos/comercial-cliente'),
   require('./fluxos/comprovante'),
+  require('./fluxos/contencoes'),
+  require('./fluxos/documento-pendente'),
   require('./fluxos/limite-perguntas'),
   require('./formato'),
 ];

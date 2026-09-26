@@ -320,6 +320,58 @@ async function getThirdPartyScope(conversationId) {
   return result.rows[0].ai_triage_third_party || null;
 }
 
+/**
+ * Motivo de a triagem ir para a Reativação (regra financeira 0/1/2+): 'contrato_cancelado',
+ * 'multiplas_vencidas' ou 'multiplas_vencidas_noturno'. O PRIMEIRO motivo fica: um motivo gravado
+ * nunca é apagado nem trocado pela triagem. Lido e gravado à parte (como o escopo de terceiro), sem
+ * entrar nas listas de colunas de conversa.
+ */
+async function setTriageReactivation(conversationId, motivo) {
+  await getPool().query(
+    `UPDATE conversations SET ai_triage_reactivation = COALESCE(ai_triage_reactivation, $2) WHERE id = $1`,
+    [conversationId, motivo]
+  );
+}
+
+async function getTriageReactivation(conversationId) {
+  const result = await getPool().query('SELECT ai_triage_reactivation FROM conversations WHERE id = $1', [conversationId]);
+  if (result.rows.length === 0) return null;
+  return result.rows[0].ai_triage_reactivation || null;
+}
+
+/**
+ * A fatura do fluxo noturno de 2+ vencidas DE UM CONTRATO: a única dele que a IA trata
+ * automaticamente nesta conversa. A trava é por contrato (com o alvo financeiro de quando entrou):
+ * o fluxo de um contrato não bloqueia outro. Reserva atômica e sem troca — o UPDATE trava a linha,
+ * e a primeira fatura de cada contrato fica. Devolve a fatura gravada PARA ESSE CONTRATO: quem chamou
+ * só entrega se ela for a sua. Conversa inexistente → null.
+ */
+async function reserveTriageNightInvoice(conversationId, { contratoId, faturaId, alvo }) {
+  const result = await getPool().query(
+    `UPDATE conversations
+        SET ai_triage_night_invoices = CASE
+              WHEN ai_triage_night_invoices ? $2::text THEN ai_triage_night_invoices
+              ELSE COALESCE(ai_triage_night_invoices, '{}'::jsonb)
+                   || jsonb_build_object($2::text, jsonb_build_object('faturaId', $3::text, 'alvo', $4::text))
+            END
+      WHERE id = $1
+      RETURNING ai_triage_night_invoices -> $2::text ->> 'faturaId' AS fatura`,
+    [conversationId, String(contratoId), String(faturaId), alvo || null]
+  );
+  if (result.rows.length === 0) return null;
+  return result.rows[0].fatura || null;
+}
+
+/** A fatura reservada para ESTE contrato no fluxo noturno de 2+, ou null. */
+async function getTriageNightInvoice(conversationId, contratoId) {
+  const result = await getPool().query(
+    `SELECT ai_triage_night_invoices -> $2::text ->> 'faturaId' AS fatura FROM conversations WHERE id = $1`,
+    [conversationId, String(contratoId)]
+  );
+  if (result.rows.length === 0) return null;
+  return result.rows[0].fatura || null;
+}
+
 // Leitura minima, so pela chave primaria. Existe porque a rota de midia
 // precisa saber se a conversa esta silenciada e e chamada uma vez por bolha de
 // audio/video (o player faz preload); getConversationWithContact resolveria,
@@ -845,4 +897,8 @@ module.exports = {
   isPhoneContested,
   setThirdPartyScope,
   getThirdPartyScope,
+  setTriageReactivation,
+  reserveTriageNightInvoice,
+  getTriageNightInvoice,
+  getTriageReactivation,
 };

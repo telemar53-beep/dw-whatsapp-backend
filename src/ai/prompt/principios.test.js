@@ -44,6 +44,13 @@ describe('módulo principios', () => {
     expect(texto).toMatch(/NUNCA cite o funcionamento interno/);
   });
 
+  // Documento pendente (25/09/2026): a regra antiga só cobria pergunta JÁ RESPONDIDA — e a IA pediu
+  // o CPF três vezes seguidas a quem ainda não tinha respondido.
+  test('não repetir, na resposta seguinte, a pergunta feita e ainda sem resposta', () => {
+    const texto = principios.linhas(estadoBase()).join('\n');
+    expect(texto).toMatch(/Também não repita, na resposta seguinte, uma pergunta que você já fez e que ele ainda não respondeu/);
+  });
+
   // =====================================================================
   // Task 18 — asserts migrados de ai-orchestrator.test.js
   // =====================================================================

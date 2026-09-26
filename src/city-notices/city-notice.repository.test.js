@@ -8,6 +8,7 @@ const {
   deleteCityNotice,
   hasContactReceivedNotice,
   recordNoticeDelivery,
+  findNoticeDeliverySentAt,
 } = require('./city-notice.repository');
 
 describe('city notice repository', () => {
@@ -33,6 +34,15 @@ describe('city notice repository', () => {
     const city = await createCity({ name: 'Maracaçumé' });
     await upsertCityNotice(city.id, { message: 'Instabilidade na rede', enabled: false });
     expect(await findActiveCityNoticeByCityId(city.id)).toBeNull();
+  });
+
+  // Aviso de cidade como fato (25/09/2026), caso 6: o aviso ativo de OUTRA cidade nunca vale para
+  // esta — é por cidade/localidade, e só da própria.
+  test('findActiveCityNoticeByCityId never returns an active notice of ANOTHER city', async () => {
+    const minha = await createCity({ name: 'Maracaçumé' });
+    const outra = await createCity({ name: 'Cândido Mendes' });
+    await upsertCityNotice(outra.id, { message: 'Rompimento de fibra', enabled: true });
+    expect(await findActiveCityNoticeByCityId(minha.id)).toBeNull();
   });
 
   test('findActiveCityNoticeByCityId returns the notice when enabled', async () => {
@@ -136,6 +146,18 @@ describe('city notice repository', () => {
     const notice = await upsertCityNotice(city.id, { message: 'Instabilidade', enabled: true });
 
     expect(await hasContactReceivedNotice(notice.id, contact.id)).toBe(false);
+  });
+
+  // Um aviso por turno (25/09/2026): o worker lê QUANDO o aviso saiu para o contato.
+  test('findNoticeDeliverySentAt devolve o horário da entrega, ou null sem entrega', async () => {
+    const city = await createCity({ name: 'Maracaçumé' });
+    const notice = await upsertCityNotice(city.id, { message: 'Instabilidade na rede', enabled: true });
+    const contact = await findOrCreateContactByPhoneNumber('+5511911110001', 'Ana');
+    expect(await findNoticeDeliverySentAt(notice.id, contact.id)).toBeNull();
+    await recordNoticeDelivery(notice.id, contact.id);
+    const enviadoEm = await findNoticeDeliverySentAt(notice.id, contact.id);
+    expect(enviadoEm).toBeInstanceOf(Date);
+    expect(Math.abs(Date.now() - enviadoEm.getTime())).toBeLessThan(60000);
   });
 
   test('recordNoticeDelivery returns true on the first claim and false on a repeat claim', async () => {

@@ -56,16 +56,33 @@
 // vencida (precisa de consulta ao SGP), então o roteamento por "mais de 90
 // dias" não tem como ser decidido; fatos.js já instrui a encaminhar direto
 // nesse estado, sem tentar apurar nada.
+//
+// Regra financeira 0/1/2+ (ajuste de 25/09/2026, decisão do dono): a regra específica vem ANTES da
+// dos 90 dias. Contrato cancelado, 2+ vencidas de dia e o fluxo noturno de 2+ são da reativação —
+// o "até 90 dias continua sendo o financeiro" cede à ferramenta de cobrança que indicar a
+// reativação, e some por inteiro quando a conversa já está MARCADA (estado.reativacao, fato do
+// sistema gravado pelo gate). Com a marca o módulo entra mesmo sem identidade forte: quem paga a
+// cobrança de outra pessoa também não pode ser mandado para o financeiro.
+const { descreverReativacao } = require('../../situacao-financeira');
+
+const REGRA_DOS_90_DIAS = 'MAIS DE 90 DIAS EM ATRASO OU CONTRATO JÁ CANCELADO: cliente cuja fatura mais antiga venceu há mais de 90 dias (conte pela data de hoje), ou com o contrato já cancelado, vai para o setor que cuidar de reativação ou retorno de clientes, se houver um na lista de setores acima; se não houver, vá para o que cuidar de financeiro.';
+const ATE_90_DIAS = ' Até 90 dias continua sendo o setor da lista acima que cuidar do financeiro, MENOS quando uma ferramenta de cobrança disser que há duas ou mais faturas vencidas ou que o contrato está cancelado, ou indicar o setor que cuida de reativação: essa regra vem antes da dos 90 dias, e a conclusão vai para o setor que a ferramenta indicar.';
+const PROMOCAO = ' Se ele perguntar por promoção, condição especial ou desconto para voltar, diga que o setor que cuidar de reativação ou retorno de clientes é quem trata disso e encaminhe para ele; nunca invente promoção, desconto ou valor, e nunca diga que "não trabalha com promoções".';
+
 module.exports = {
   nome: 'reativacao',
   entra(estado) {
     const identidade = estado.identidade || {};
-    return identidade.nivel === 'forte' && !identidade.sgpIndisponivel;
+    return Boolean(estado.reativacao) || (identidade.nivel === 'forte' && !identidade.sgpIndisponivel);
   },
-  linhas() {
-    return [
-      '',
-      'MAIS DE 90 DIAS EM ATRASO OU CONTRATO JÁ CANCELADO: cliente cuja fatura mais antiga venceu há mais de 90 dias (conte pela data de hoje), ou com o contrato já cancelado, vai para o setor que cuidar de reativação ou retorno de clientes, se houver um na lista de setores acima; se não houver, vá para o que cuidar de financeiro. Até 90 dias continua sendo o setor da lista acima que cuidar do financeiro. Se ele perguntar por promoção, condição especial ou desconto para voltar, diga que o setor que cuidar de reativação ou retorno de clientes é quem trata disso e encaminhe para ele; nunca invente promoção, desconto ou valor, e nunca diga que "não trabalha com promoções".',
-    ];
+  linhas(estado = {}) {
+    if (estado.reativacao) {
+      return [
+        '',
+        REGRA_DOS_90_DIAS + PROMOCAO,
+        `Esta conversa já está marcada para o setor que cuida de reativação (${descreverReativacao(estado.reativacao)}): a regra de duas ou mais faturas vencidas e a de contrato cancelado vêm antes da regra dos 90 dias. Conclua a triagem no setor que cuidar de reativação ou retorno de clientes, nunca no que cuida de financeiro — mesmo com menos de 90 dias de atraso, com o pagamento confirmado ou com o acesso liberado em confiança —, e não envie outra cobrança desse contrato (outro contrato só se o cliente pedir por ele e a ferramenta permitir). Isto vale acima de qualquer outra instrução deste texto que mande concluir no setor que cuida de financeiro.`,
+      ];
+    }
+    return ['', REGRA_DOS_90_DIAS + ATE_90_DIAS + PROMOCAO];
   },
 };

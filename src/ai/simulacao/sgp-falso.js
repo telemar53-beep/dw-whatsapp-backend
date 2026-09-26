@@ -276,7 +276,7 @@ function prepararSgpFalso(perfil) {
   if (!perfil || !IDENTIDADES[perfil.nome]) {
     throw new Error(`Perfil desconhecido no SGP falso: ${perfil && perfil.nome}`);
   }
-  for (const nome of ['lookupClientByCpf', 'getDuplicateInvoice', 'downloadBoletoPdf', 'checkConnection', 'listInvoices', 'requestTrustUnlock', 'findClientRecord']) {
+  for (const nome of ['lookupClientByCpf', 'getDuplicateInvoice', 'downloadBoletoPdf', 'checkConnection', 'listInvoices', 'listAllInvoices', 'requestTrustUnlock', 'findClientRecord']) {
     if (!eMock(sgpClient[nome])) {
       throw new Error(`sgp-client não está mockado (${nome}). O arquivo de teste precisa de jest.mock('../integrations/sgp-client').`);
     }
@@ -295,23 +295,32 @@ function prepararSgpFalso(perfil) {
     return { hasOpenInvoice: true, duplicates: [faturaFalsa(contratoId, aberta.dias)] };
   });
 
+  // O título como o SGP da DW manda (auditado em 25/09/2026): não pago é statusid 1 + "Gerado", e
+  // o atrasado vem com o vencimento_atualizado trocado pela data de hoje.
+  const tituloFalso = (contratoId, aberta) => ({
+    id: 70000 + contratoId,
+    status: 'Gerado',
+    statusid: 1,
+    valor: 123.45,
+    valorcorrigido: 123.45,
+    vencimento: emDias(aberta.dias),
+    vencimento_atualizado: aberta.dias < 0 ? emDias(0) : emDias(aberta.dias),
+    data_pagamento: null,
+    gerapix: true,
+  });
+
   sgpClient.listInvoices.mockImplementation(async (contratoId) => {
     const aberta = FATURAS_EM_ABERTO[contratoId];
     if (!aberta) return { faturas: [], paginacao: { total: 0 } };
-    return {
-      faturas: [{
-        id: 70000 + contratoId,
-        status: 'Em aberto',
-        statusid: 1,
-        valor: 123.45,
-        valorcorrigido: 123.45,
-        vencimento: emDias(aberta.dias),
-        vencimento_atualizado: null,
-        data_pagamento: null,
-        gerapix: true,
-      }],
-      paginacao: { total: 1 },
-    };
+    return { faturas: [tituloFalso(contratoId, aberta)], paginacao: { total: 1 } };
+  });
+
+  // A listagem inteira (todas as páginas) que o gate da regra 0/1/2+ lê: uma vencida no máximo por
+  // contrato, então o fluxo dos roteiros continua o de sempre (0 ou 1 vencida).
+  sgpClient.listAllInvoices.mockImplementation(async (contratoId) => {
+    const aberta = FATURAS_EM_ABERTO[contratoId];
+    const faturas = aberta ? [tituloFalso(contratoId, aberta)] : [];
+    return { faturas, total: faturas.length, completo: true, motivo: null };
   });
 
   sgpClient.checkConnection.mockImplementation(async (contratoId) => conexaoFalsa(contratoId));

@@ -102,6 +102,25 @@ describe('useQueue', () => {
 
     expect(result.current.queue).toEqual([{ id: 'c2' }]);
   });
+
+  // Caso ER (25/09/2026): a IA encerrou a conversa em triagem e o cliente escreveu de novo.
+  // O item encerrado sai da Automação pelo queue:removed que o backend passou a emitir — sem
+  // recarregar a página — e só a conversa nova do mesmo cliente fica.
+  test('caso ER: conversa encerrada pela IA sai da fila com queue:removed; a nova do mesmo cliente fica', async () => {
+    api.getQueue.mockResolvedValue([{ id: 'e8dfaf50', contactId: 'ct-er', triageState: 'pending', status: 'waiting' }]);
+    const { result } = renderHook(() => useQueue());
+    await waitFor(() => expect(result.current.queue).toHaveLength(1));
+
+    act(() => {
+      fakeSocket.trigger('queue:new', { conversation: { id: '9907a142', contactId: 'ct-er', triageState: 'pending', status: 'waiting' } });
+    });
+    expect(result.current.queue.map((c) => c.id)).toEqual(['e8dfaf50', '9907a142']);
+
+    act(() => {
+      fakeSocket.trigger('queue:removed', { conversationId: 'e8dfaf50' });
+    });
+    expect(result.current.queue.map((c) => c.id)).toEqual(['9907a142']);
+  });
   // Print 2026-09-16: em Espera/Automação a prévia parava na mensagem do
   // cliente — a resposta da IA chega como message:new (broadcast, sem
   // atendente) e a fila não escutava.

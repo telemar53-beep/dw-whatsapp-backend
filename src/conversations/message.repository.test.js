@@ -24,6 +24,8 @@ const {
   listExpiredMedia,
   clearMessageMedia,
   recordMessageWaId,
+  findLastMessageCreatedAt,
+  findAutoReplyContext,
 } = require('./message.repository');
 
 describe('message repository', () => {
@@ -453,6 +455,77 @@ describe('message repository', () => {
 
   // Fase 1A (25/09/2026): o wa_id que a Meta devolve no envio fica registrado na própria
   // mensagem do disparo, sem apagar o que já estava na metadata.
+  // Caso ER (25/09/2026): o timeout da triagem relê a última atividade da conversa antes de
+  // agir. Atividade é QUALQUER mensagem — do cliente ou da IA.
+  // Fase 1C (25/09/2026): o contexto que o classificador de autorresposta precisa, lido numa
+  // passada: o disparo automático mais recente da conversa, o que veio depois dele e as
+  // autorrespostas já marcadas do contato.
+  describe('findAutoReplyContext', () => {
+    let contactId;
+    beforeEach(async () => {
+      contactId = (await findOrCreateContactByPhoneNumber('+5511966665555', null)).id;
+    });
+    const em = (iso) => new Date(iso);
+
+    test('sem disparo automático na conversa: disparo null e nada mais é lido', async () => {
+      await createMessage({ conversationId, direction: 'outbound', content: 'oi', status: 'sent', sentBy: 'human', sentAt: em('2026-09-25T15:00:00Z') });
+      expect(await findAutoReplyContext(conversationId, contactId)).toEqual({ disparo: null, depoisDoDisparo: [], anteriores: [] });
+    });
+
+    test('o disparo mais recente (sgp ou campanha) e o que veio depois dele, com as marcas', async () => {
+      await createMessage({ conversationId, direction: 'outbound', content: 'antigo', status: 'sent', metadata: { origem: 'campanha', campanhaId: 'c1' }, sentAt: em('2026-09-25T14:00:00Z') });
+      await createMessage({ conversationId, direction: 'inbound', content: 'antes', status: 'received', sentAt: em('2026-09-25T14:30:00Z') });
+      await createMessage({ conversationId, direction: 'outbound', content: 'Olá, Maria', status: 'sent', metadata: { origem: 'sgp', modo: 'template', template: 't' }, sentAt: em('2026-09-25T15:00:00Z') });
+      await createMessage({ conversationId, direction: 'inbound', content: 'Estamos fechados.', status: 'received', metadata: { autorrespostaProvavel: true, autorrespostaMotivo: 'janela_padrao_forte' }, sentAt: em('2026-09-25T15:00:20Z') });
+      await createMessage({ conversationId, direction: 'inbound', content: 'oi', status: 'received', sentAt: em('2026-09-25T15:01:00Z') });
+      await createMessage({ conversationId, direction: 'outbound', content: 'resposta', status: 'sent', sentBy: 'ai', sentAt: em('2026-09-25T15:01:10Z') });
+
+      const ctx = await findAutoReplyContext(conversationId, contactId);
+      expect(ctx.disparo).toEqual({ origem: 'sgp', modo: 'template', criadoEm: em('2026-09-25T15:00:00Z') });
+      expect(ctx.depoisDoDisparo).toEqual([
+        { direcao: 'inbound', autorresposta: true, automatica: false },
+        { direcao: 'inbound', autorresposta: false, automatica: false },
+        { direcao: 'outbound', autorresposta: false, automatica: false },
+      ]);
+    });
+
+    test('autorrespostas anteriores: só as marcadas, de qualquer conversa do contato, com o motivo', async () => {
+      await createMessage({ conversationId, direction: 'outbound', content: 'x', status: 'sent', metadata: { origem: 'sgp', modo: 'template' }, sentAt: em('2026-09-25T15:00:00Z') });
+      await createMessage({ conversationId, direction: 'inbound', content: 'Estamos fechados agora mesmo.', status: 'received', metadata: { autorrespostaProvavel: true, autorrespostaMotivo: 'janela_padrao_forte' }, sentAt: em('2026-09-25T15:00:20Z') });
+      await createMessage({ conversationId, direction: 'inbound', content: 'mensagem normal', status: 'received', sentAt: em('2026-09-25T15:02:00Z') });
+
+      const ctx = await findAutoReplyContext(conversationId, contactId);
+      expect(ctx.anteriores).toEqual([{ texto: 'Estamos fechados agora mesmo.', autorresposta: true, motivo: 'janela_padrao_forte' }]);
+    });
+  });
+
+  describe('findLastMessageCreatedAt', () => {
+    test('conversa sem mensagem: null', async () => {
+      expect(await findLastMessageCreatedAt(conversationId)).toBeNull();
+    });
+
+    test('a mais recente vence, em qualquer direção: resposta da IA depois do cliente', async () => {
+      await createMessage({ conversationId, direction: 'inbound', content: 'oi', status: 'received', sentAt: new Date('2026-09-25T16:13:18.000Z') });
+      await createMessage({ conversationId, direction: 'outbound', content: 'resposta', status: 'sent', sentBy: 'ai', sentAt: new Date('2026-09-25T16:13:30.000Z') });
+      expect((await findLastMessageCreatedAt(conversationId)).toISOString()).toBe('2026-09-25T16:13:30.000Z');
+    });
+
+    test('a mais recente vence, em qualquer direção: cliente depois da IA', async () => {
+      await createMessage({ conversationId, direction: 'outbound', content: 'resposta', status: 'sent', sentBy: 'ai', sentAt: new Date('2026-09-25T16:13:30.000Z') });
+      await createMessage({ conversationId, direction: 'inbound', content: 'oi de novo', status: 'received', sentAt: new Date('2026-09-25T16:15:00.000Z') });
+      expect((await findLastMessageCreatedAt(conversationId)).toISOString()).toBe('2026-09-25T16:15:00.000Z');
+    });
+
+    test('mensagem de outra conversa não conta', async () => {
+      await createMessage({ conversationId, direction: 'inbound', content: 'oi', status: 'received', sentAt: new Date('2026-09-25T16:00:00.000Z') });
+      const outroContato = await findOrCreateContactByPhoneNumber('+5511966664444', null);
+      const outroCanal = await createChannel({ type: 'meta_cloud', name: 'Outro', phoneNumber: '+5511999990011', config: {} });
+      const outra = await createConversation(outroContato.id, outroCanal.id);
+      await createMessage({ conversationId: outra.id, direction: 'inbound', content: 'oi', status: 'received', sentAt: new Date('2026-09-25T17:00:00.000Z') });
+      expect((await findLastMessageCreatedAt(conversationId)).toISOString()).toBe('2026-09-25T16:00:00.000Z');
+    });
+  });
+
   describe('recordMessageWaId', () => {
     test('grava o wa_id na metadata de uma mensagem sem metadata', async () => {
       const msg = await createMessage({ conversationId, direction: 'outbound', content: null, status: 'sent', messageType: 'text' });
@@ -623,6 +696,19 @@ describe('message repository', () => {
       const latestInboundId = await findLatestInboundMessageId(conversationId);
 
       expect(latestInboundId).toBe(newest.id);
+    });
+
+    // Fase 1C: a autorresposta provável do destinatário não gera job de IA. Se ela contasse como
+    // "a mais nova", o job de uma mensagem HUMANA ainda na fila desistiria sem responder.
+    test('ignora a autorresposta provável marcada (e segue achando a mensagem humana)', async () => {
+      const humana = await createMessage({ conversationId, direction: 'inbound', content: 'oi', status: 'received', sentAt: new Date('2026-09-25T15:00:00Z') });
+      await createMessage({
+        conversationId, direction: 'inbound', content: 'Estamos fechados.', status: 'received',
+        metadata: { autorrespostaProvavel: true, autorrespostaMotivo: 'janela_padrao_forte' }, sentAt: new Date('2026-09-25T15:00:03Z'),
+      });
+
+      expect(await findLatestInboundMessageId(conversationId)).toBe(humana.id);
+      expect(await findLatestInboundMessageId(conversationId, { tiposTriagem: true })).toBe(humana.id);
     });
 
     test('ignores an inbound photo that arrived after the text, so the text\'s job still proceeds', async () => {

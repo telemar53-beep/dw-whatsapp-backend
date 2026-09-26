@@ -10,11 +10,21 @@ const { linhasDoDisparoRecente } = require('./prompt/fluxos/disparo-recente');
 const { listActiveReasons } = require('../reasons/reason.repository');
 const { listSectors } = require('../sectors/sector.repository');
 const { hasRecentTrustUnlockByContact } = require('./trust-unlock.repository');
+const { violacoesDoPagamento, respostaSemAfirmacoes, correcaoDoPagamento } = require('./guarda-pagamento');
 const { getCompanyConfig } = require('../company/company-config.repository');
 const sgpClient = require('../integrations/sgp-client');
 const { mensagemSegura } = require('./safe-error-log');
 const { maskDocument, normalizeContract } = require('./sgp-normalizer');
 const { temAlfabetoEstranho, semAlfabetoEstranho } = require('./idioma');
+const {
+  avisoExplicaReclamacao, contradizAviso, respostaSeguraDoAviso, suspensaoAfastaOAviso,
+} = require('./regional-outage');
+const {
+  sinaisOperacionais, violacoesDaResposta, correcaoDaResposta, respostaSeguraDaContencao,
+} = require('./contencoes-operacionais');
+const {
+  estadoDoDocumento, violacoesDoDocumento, correcaoDoDocumento, respostaSemRepetirDocumento, pedeDocumento, alvoDoPedido,
+} = require('./documento-pendente');
 
 // A auditoria (ai_interactions.tools_requested) grava os argumentos como o
 // modelo os enviou, verbatim — inclui o CPF/CNPJ inteiro de buscar_cliente se
@@ -64,6 +74,29 @@ const AFIRMA_FILA = /deixei (seu |o )?(atendimento|caso|pedido) (na|em) fila|reg
 // cliente: ele volta na mesma madrugada, ou de manhã, para dizer se voltou.
 const LIBERACAO_RECENTE_MS = 24 * 60 * 60 * 1000;
 function afirmaLiberacao(texto) { return AFIRMA_LIBERACAO.test(String(texto || '')); }
+
+// Regra financeira 0/1/2+ (25/09/2026): pagamento confirmado, liberação e conexão só com FATO do
+// sistema no turno (guarda-pagamento.js). A liberação de um turno anterior (o cliente volta e
+// pergunta "foi liberado?") é VERDADE: o banco é a segunda fonte, consultado uma vez por turno.
+async function violacoesDoPagamentoNoTurno(texto, contexto) {
+  let violacoes = violacoesDoPagamento(texto, contexto);
+  if (violacoes.includes('liberacao_sem_fato') && !contexto.liberacaoConsultadaNoBanco) {
+    contexto.liberacaoConsultadaNoBanco = true;
+    // Falha FECHADO: sem conseguir ler o banco, a liberação continua sem fato (também roda depois
+    // do laço, fora do try do turno — uma exceção aqui não pode derrubar a resposta).
+    let jaLiberado = false;
+    try {
+      jaLiberado = await hasRecentTrustUnlockByContact(contexto.contact && contexto.contact.id, LIBERACAO_RECENTE_MS);
+    } catch (err) {
+      console.error(`Liberação recente não lida na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    }
+    if (jaLiberado) {
+      contexto.desbloqueioRealizado = true;
+      violacoes = violacoesDoPagamento(texto, contexto);
+    }
+  }
+  return violacoes;
+}
 function afirmaFila(texto) { return AFIRMA_FILA.test(String(texto || '')); }
 
 // Teste real 2026-09-14: identificado o cliente, o modelo escreveu "Perfeito.
@@ -151,6 +184,33 @@ function conteudoParaModelo(m, perfil) {
     if (m.messageType === 'audio') return '[cliente enviou um áudio que não pôde ser transcrito]';
   }
   return null;
+}
+
+// Aviso de cidade (25/09/2026): as falas recentes do CLIENTE — texto ou transcrição —, sem a
+// autorresposta provável marcada (Fase 1C). É por elas que o código decide se o aviso ativo
+// explica a reclamação (conexão) ou não (equipamento danificado, outro assunto).
+function textosRecentesDoCliente(historico) {
+  return (Array.isArray(historico) ? historico : [])
+    .filter((m) => m && m.direction === 'inbound' && !(m.metadata && m.metadata.autorrespostaProvavel === true))
+    .slice(-5)
+    .map((m) => (m.messageType === 'audio' ? m.transcription : m.content))
+    .filter(Boolean);
+}
+
+// Contenções operacionais (25/09/2026): a FONTE contra a qual um fato financeiro da resposta é
+// conferido — o que as ferramentas devolveram neste turno e o texto do painel. O prompt montado
+// NÃO entra (as regras dele citam "proporcional", "período"…), nem a `instrucao`/`proximoPasso`
+// das ferramentas: são texto nosso para o modelo, não dado do SGP.
+function fontesOficiaisDoTurno(messages, config) {
+  const dasFerramentas = messages.filter((m) => m.role === 'tool').map((m) => {
+    try {
+      const { instrucao, proximoPasso, ...dado } = JSON.parse(m.content);
+      return JSON.stringify(dado);
+    } catch (err) {
+      return '';
+    }
+  });
+  return [config.triageExtraInstructions, config.systemPrompt, ...dasFerramentas].filter(Boolean).join('\n');
 }
 
 async function montarContextoSistema(config, contact, contracts, habilitadas = [], disparoRecente = null) {
@@ -259,6 +319,9 @@ const FERRAMENTAS_TRIAGEM = [
   // sem nenhum envio. Quem entrega o boleto na triagem é enviar_boleto; a
   // segunda via continua no assistente, com um humano no comando.
   'gerar_pix', 'enviar_boleto', 'concluir_triagem', 'encerrar_atendimento',
+  // Regra financeira 0/1/2+ (25/09/2026): a ÚNICA fonte para dizer que um pagamento foi confirmado
+  // — relê no SGP a mesma fatura que saiu nesta conversa. Consulta, sem efeito; de dia e de noite.
+  'conferir_pagamento',
 ];
 
 // À noite não há atendente: a triagem precisa das ferramentas que resolvem
@@ -283,7 +346,7 @@ function ferramentasDaTriagem(triagem, config) {
   return lista;
 }
 
-async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, messageId = null }) {
+async function runAiTurn({ conversation, contact, perfil = 'assistente', identidade, triagem, origemMensagem, avisoCidade = null, terceiro = null, alvoAmbiguo = false, messageId = null, terceiroLocalizadoEm = null, reativacao = null }) {
   const iniciadoEm = Date.now();
   const config = await getAiConfig();
   // Uma leitura por turno: o nome da empresa é configuração, não constante —
@@ -293,6 +356,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   let tools;
   let contexto;
   let systemContent;
+  // O estado com que o prompt da triagem foi montado: guardado para a recomposição do meio do
+  // turno (aviso de cidade descoberto por uma ferramenta). null no assistente.
+  let estadoDoPrompt = null;
 
   // listRecentMessagesByConversation (não listMessagesByConversation): esta
   // pega as 20 mensagens mais NOVAS, já em ordem cronológica. A outra função
@@ -310,6 +376,18 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // sistema viu. O compositor (src/ai/prompt) tem o mesmo fallback por
     // dentro, mas a lista de contratos que vai para o prompt é montada aqui.
     const identidadeEfetiva = identidade || { nivel: 'none', origem: 'none', primeiroNome: null, contracts: [], contestado: false };
+    // Contenções operacionais: o que a fala recente do cliente pede (defeito físico, troca do
+    // Wi-Fi, explicação financeira), lido em código. Vai para o prompt e para as travas do turno.
+    const contencoes = sinaisOperacionais(historico);
+    // Documento pendente: o CPF/CNPJ já pedido (marcado na mensagem do pedido) e ainda não
+    // informado. O documento de quem fala é o que NÃO responde a um pedido de terceiro.
+    const documento = estadoDoDocumento(historico, {
+      identidade: identidadeEfetiva,
+      documentoDeQuemFala: (contact && contact.sgpDocument) || (identidadeEfetiva.client && identidadeEfetiva.client.document) || null,
+      // Fato do sistema: quando o terceiro foi localizado, lido pelo worker do escopo persistido.
+      terceiroLocalizadoEm,
+    });
+    const ultimaFala = textosRecentesDoCliente(historico).slice(-1)[0] || null;
     // Perfil fixo: os contratos vêm da identidade já resolvida (Task 2), não
     // de uma nova consulta ao SGP via carregarContratos — o cache do turno
     // (contexto.contracts) é o que tool-executor.js usa para a checagem de
@@ -318,7 +396,18 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
       perfil: 'triagem',
       conversationId: conversation.id, contact, contracts: identidadeEfetiva.contracts || [], sgpCache: {},
       identidade: identidadeEfetiva, terceiro, channelId: conversation.channelId, ferramentasPermitidas: ferramentasDaTriagem(triagem, config), registroFerramentas: [],
+      // Caso Fulana/Beltrana: a mensagem do cliente não deixou claro de quem é a cobrança (o worker
+      // decide, em financial-target.js). O executor trava as ferramentas de cobrança do turno.
+      alvoAmbiguo,
       triagem, origemMensagem, resolvidoPelaIa: false, triagemConcluida: null,
+      // Aviso de cidade como FATO do turno: as ferramentas de status e de identificação leem e
+      // gravam aqui (buscar_cliente pode descobri-lo no meio do turno).
+      avisoCidade,
+      contencoes,
+      documento, ultimaFala,
+      // Regra financeira 0/1/2+: a conversa já marcada para a reativação (fato gravado pelo gate,
+      // lido pelo worker). As ferramentas leem daqui antes de ir ao banco.
+      reativacao: reativacao || null,
       // A mensagem do cliente que abriu este turno. É a MESMA em todas as tool
       // calls do turno e em todas as voltas internas do laço — é isso que faz a
       // chave de reenvio de enviar_boleto/gerar_pix valer por pedido do
@@ -330,20 +419,25 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     const [setores, motivos] = await Promise.all([listSectors(), listActiveReasons()]);
     // montarContexto é SÍNCRONA — todo o I/O do prompt acontece aqui em cima,
     // no estado que ela recebe pronto.
-    systemContent = montarContexto({
+    estadoDoPrompt = {
       config,
       identidade: identidadeEfetiva,
       contratos: (identidadeEfetiva.contracts || []).map(normalizeContract),
       triagem: triagem || { noturno: { ativo: false }, forcarConclusao: false },
       avisoCidade,
+      contencoes,
+      documento,
       disparoRecente,
+      // A regra dos 90 dias não pode mandar para o financeiro uma conversa marcada para a reativação.
+      reativacao: reativacao || null,
       empresa: empresa.name,
       ferramentas: ferramentasDaTriagem(triagem, config),
       setores,
       motivos,
       terceiro,
       agora: new Date(),
-    });
+    };
+    systemContent = montarContexto(estadoDoPrompt);
   } else {
     const permissoes = await listToolPermissions();
     const habilitadas = permissoes.filter((p) => p.enabled).map((p) => p.toolName);
@@ -397,6 +491,14 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   // insistir em prometer sem entregar, o texto sai como está em vez de o laço
   // girar sem fim.
   let exigiuEntregaPorAnuncio = false;
+  // Contenções operacionais: UMA correção por turno. Se o modelo insistir, a troca final (depois
+  // do laço) põe a resposta segura no lugar.
+  let corrigiuContencao = false;
+  // Documento pendente: UMA correção por turno, com a mesma lógica (a troca final segura o resto).
+  let corrigiuDocumento = false;
+  // Pagamento/liberação/conexão sem fato (regra 0/1/2+): UMA correção por turno; a troca final
+  // (depois do laço) tira a frase se o modelo insistir.
+  let corrigiuPagamento = false;
   let proximoToolChoice;
 
   try {
@@ -423,9 +525,11 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
         // Antes da guarda de anúncio: uma liberação afirmada sem ter
         // acontecido é o erro mais caro da noite — o cliente vai testar a
         // internet e ela continua fora.
+        // P2-1 (auditoria final): a mesma régua da guarda de pagamento — o desbloqueio, a releitura
+        // do contrato e, para o ESTADO ("acesso liberado", "consta ativo"), o status 1 lido no turno.
         if (
-          perfil === 'triagem' && conteudo && !corrigiuLiberacao
-          && !contexto.desbloqueioRealizado && afirmaLiberacao(conteudo)
+          perfil === 'triagem' && conteudo && !corrigiuLiberacao && afirmaLiberacao(conteudo)
+          && violacoesDoPagamento(conteudo, contexto).includes('liberacao_sem_fato')
         ) {
           // contexto.desbloqueioRealizado só conhece ESTE turno. A liberação
           // pode ter acontecido no turno anterior — o cliente volta e pergunta
@@ -436,6 +540,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           const jaLiberado = await hasRecentTrustUnlockByContact(
             contexto.contact && contexto.contact.id, LIBERACAO_RECENTE_MS
           );
+          contexto.liberacaoConsultadaNoBanco = true;
           if (jaLiberado) {
             contexto.desbloqueioRealizado = true;
           } else {
@@ -443,7 +548,7 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
             messages.push({ role: 'assistant', content: conteudo });
             messages.push({
               role: 'system',
-              content: 'Você afirmou uma liberação que NÃO aconteceu neste atendimento. Responda de novo, sem afirmar liberação: diga que não conseguiu liberar o acesso agora, que o pedido/comprovante fica registrado para a equipe conferir no horário de retorno, e que a liberação é automática quando o pagamento for confirmado.',
+              content: 'Você afirmou uma liberação que NÃO aconteceu neste atendimento. Responda de novo, sem afirmar liberação: diga que não conseguiu liberar o acesso agora, que o pedido/comprovante fica registrado para a equipe conferir no horário de retorno, e que, assim que o pagamento constar no sistema, a situação do contrato será verificada — sem prometer liberação nem prazo.',
             });
             const final = await createChatCompletion({ apiKey: config.apiKey, model: config.model, messages, tools: [] });
             promptTokens += final.usage.promptTokens || 0;
@@ -474,6 +579,18 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
             break;
           }
         }
+        // Regra financeira 0/1/2+ (25/09/2026): "pagamento confirmado/compensado/já baixou",
+        // "internet liberada" e "está conectada" sem o fato do sistema neste turno. Comprovante,
+        // "paguei" e PIX enviado não são o fato. Uma correção; se insistir, a troca final tira a frase.
+        const violacoesPag = perfil === 'triagem' && conteudo && !corrigiuPagamento
+          ? await violacoesDoPagamentoNoTurno(conteudo, contexto)
+          : [];
+        if (violacoesPag.length > 0) {
+          corrigiuPagamento = true;
+          messages.push({ role: 'assistant', content: conteudo });
+          messages.push({ role: 'system', content: correcaoDoPagamento(violacoesPag) });
+          continue;
+        }
         // Antes da guarda de encaminhamento: o que o cliente pediu foi o Pix
         // (ou o boleto), e é ele que falta. A conclusão, se for o caso, ainda
         // cabe na volta seguinte — e o worker conclui em código de qualquer jeito.
@@ -488,6 +605,36 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
             content: 'Você disse que vai enviar, mas não chamou gerar_pix/enviar_boleto. Chame a ferramenta de entrega AGORA (o contrato único, ou o escolhido) e depois responda.',
           });
           proximoToolChoice = 'required';
+          continue;
+        }
+        // Contenções operacionais (25/09/2026): equipamento com defeito físico, troca do Wi-Fi e
+        // explicação financeira sem fonte. Antes da guarda de anúncio: a correção já exige a
+        // conclusão quando o próximo passo não depende de perguntar nada ao cliente, e marca
+        // exigiuConclusaoPorAnuncio para a volta forçada não cair no teto de ferramentas nem ser
+        // exigida duas vezes.
+        const violacoes = perfil === 'triagem' && conteudo && !corrigiuContencao
+          ? violacoesDaResposta(conteudo, { contexto, fontes: fontesOficiaisDoTurno(messages, config) })
+          : [];
+        if (violacoes.length > 0) {
+          corrigiuContencao = true;
+          const correcao = correcaoDaResposta(violacoes, contexto);
+          messages.push({ role: 'assistant', content: conteudo });
+          messages.push({ role: 'system', content: correcao.instrucao });
+          if (correcao.concluir && !contexto.triagemConcluida && !contexto.atendimentoEncerrado) {
+            exigiuConclusaoPorAnuncio = true;
+            proximoToolChoice = 'concluir_triagem';
+          }
+          continue;
+        }
+        // Documento pendente (25/09/2026): pedir de novo o CPF/CNPJ que já foi pedido e não veio,
+        // sem nada ter mudado (ou a quem já está identificado, ou depois de encaminhar) é repetição.
+        const violacoesDoc = perfil === 'triagem' && conteudo && !corrigiuDocumento
+          ? violacoesDoDocumento(conteudo, contexto)
+          : [];
+        if (violacoesDoc.length > 0) {
+          corrigiuDocumento = true;
+          messages.push({ role: 'assistant', content: conteudo });
+          messages.push({ role: 'system', content: correcaoDoDocumento(violacoesDoc, contexto) });
           continue;
         }
         if (
@@ -632,6 +779,22 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
           });
         }
       }
+
+      // Aviso de cidade descoberto NESTE turno (buscar_cliente achou a cidade no SGP): o prompt
+      // foi montado sem ele. Recompõe antes da próxima chamada — a resposta final já sai com o
+      // fato, e não só com o que a ferramenta devolveu.
+      // Mesma recomposição para a reativação marcada pelo gate NESTE turno: a resposta seguinte já
+      // sai sem a regra dos 90 dias mandando para o financeiro.
+      let recompor = false;
+      if (estadoDoPrompt && contexto.avisoCidade && !estadoDoPrompt.avisoCidade) {
+        estadoDoPrompt.avisoCidade = contexto.avisoCidade;
+        recompor = true;
+      }
+      if (estadoDoPrompt && contexto.reativacao && !estadoDoPrompt.reativacao) {
+        estadoDoPrompt.reativacao = contexto.reativacao;
+        recompor = true;
+      }
+      if (recompor) messages[0] = { role: 'system', content: montarContexto(estadoDoPrompt) };
     }
   } catch (err) {
     erro = err.message;
@@ -643,6 +806,49 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
   texto = portugues.texto;
   promptTokens += portugues.tokens.prompt;
   completionTokens += portugues.tokens.completion;
+
+  // Contenções operacionais: o modelo insistiu depois da correção (ou a resposta veio de um
+  // caminho sem correção, como o fim por limite de ferramentas). Só os códigos vão ao log.
+  const violacoesFinais = perfil === 'triagem' && texto
+    ? violacoesDaResposta(texto, { contexto, fontes: fontesOficiaisDoTurno(messages, config) })
+    : [];
+  if (violacoesFinais.length > 0) {
+    console.warn(`Resposta da IA violava contenção operacional (${violacoesFinais.join(', ')}) na conversa ${conversation.id}; trocada pela resposta segura`);
+    texto = respostaSeguraDaContencao(violacoesFinais, contexto);
+  }
+
+  // Documento pendente: o modelo insistiu em repetir o pedido — sai só a(s) frase(s) do pedido.
+  const violacoesDocFinais = perfil === 'triagem' && texto ? violacoesDoDocumento(texto, contexto) : [];
+  if (violacoesDocFinais.length > 0) {
+    console.warn(`Resposta da IA repetia o pedido de documento (${violacoesDocFinais.join(', ')}) na conversa ${conversation.id}; pedido retirado`);
+    texto = respostaSemRepetirDocumento(texto, violacoesDocFinais, contexto);
+  }
+
+  // Regra financeira 0/1/2+: o modelo insistiu em afirmar pagamento/liberação/conexão sem fato
+  // (ou a resposta veio de um caminho sem correção) — sai só a frase; se nada sobrar, a frase segura.
+  const violacoesPagFinais = perfil === 'triagem' && texto ? await violacoesDoPagamentoNoTurno(texto, contexto) : [];
+  if (violacoesPagFinais.length > 0) {
+    console.warn(`Resposta da IA afirmava sem fato do sistema (${violacoesPagFinais.join(', ')}) na conversa ${conversation.id}; frase retirada`);
+    texto = respostaSemAfirmacoes(texto, violacoesPagFinais, contexto);
+  }
+
+  // Aviso de cidade como FATO (25/09/2026): com falha regional ativa e o cliente reclamando de
+  // conexão, a resposta não pode mandar reiniciar/testar equipamento nem inventar prazo ou
+  // atuação que o aviso não traz — o código troca pela resposta segura. Só na triagem (no
+  // assistente quem decide é a atendente); equipamento danificado não entra (o aviso não explica).
+  // Defeito físico relatado (contenções operacionais): o fato específico do equipamento vence a
+  // generalização do aviso — "sem internet, a ONU não acende" não vira a resposta da ocorrência.
+  // P1-1 (auditoria final, 25/09/2026): o aviso não explica suspensão — com o contrato da
+  // reclamação suspenso (ou, sem alvo determinado, qualquer um suspenso), a resposta sobre a
+  // suspensão NUNCA é trocada pela ocorrência regional.
+  if (perfil === 'triagem' && texto && contexto.avisoCidade
+      && !(contexto.contencoes && contexto.contencoes.defeitoFisico)
+      && !suspensaoAfastaOAviso((contexto.contracts || []).map(normalizeContract), contexto.contratoDaReclamacao || null)
+      && avisoExplicaReclamacao(contexto.avisoCidade, textosRecentesDoCliente(historico))
+      && contradizAviso(texto, contexto.avisoCidade)) {
+    console.warn(`Resposta da IA contradizia o aviso de cidade na conversa ${conversation.id}; trocada pela resposta segura`);
+    texto = respostaSeguraDoAviso(contexto.avisoCidade);
+  }
 
   await recordAiInteraction({
     conversationId: conversation.id,
@@ -672,6 +878,9 @@ async function runAiTurn({ conversation, contact, perfil = 'assistente', identid
     // O harness de simulação encadeia roteiros e precisa do escopo de saída; o
     // worker ignora este campo, porque quem persiste é a própria ferramenta.
     terceiro: contexto.terceiro || null,
+    // Documento pendente: a resposta final pede o CPF/CNPJ? O worker grava isto na metadata da
+    // própria mensagem — é o registro do pedido, com DE QUEM é o documento pedido.
+    pedidoDeDocumento: perfil === 'triagem' && texto && pedeDocumento(texto) ? { alvo: alvoDoPedido(contexto, texto) } : null,
   };
 }
 

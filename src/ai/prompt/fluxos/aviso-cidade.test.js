@@ -31,6 +31,15 @@ describe('módulo aviso-cidade', () => {
       expect(t).toMatch(/AVISO ATIVO PARA Viseu: Rompimento de fibra na região, equipe já está a caminho\./);
     });
 
+    // Ajuste (25/09/2026): UM aviso por turno. Com o aviso já enviado ao cliente neste turno, o
+    // fato continua no prompt, mas o modelo é instruído a não repetir a ocorrência.
+    test('aviso já enviado neste turno: o fato continua, e a instrução é não repetir a ocorrência', () => {
+      const t = avisoCidade.linhas(estadoBase({ avisoCidade: { cidade: 'Viseu', mensagem: 'Falha na rede.', enviadoNesteTurno: true } })).join(' ');
+      expect(t).toMatch(/AVISO ATIVO PARA Viseu: Falha na rede\./);
+      expect(t).toMatch(/JÁ FOI ENVIADO ao cliente agora/);
+      expect(texto()).not.toMatch(/JÁ FOI ENVIADO/);
+    });
+
     test('suprime verificação de equipamento e promessa de previsão', () => {
       const t = texto();
       expect(t).toMatch(/NÃO peça verificações de equipamento, NÃO prometa previsão/);
@@ -66,5 +75,38 @@ describe('módulo aviso-cidade', () => {
       expect(t).not.toMatch(/R\$\s*\d/);
       expect(t).not.toMatch(/\d+\s*mega/i);
     });
+  });
+});
+
+// P1-1 da auditoria final (25/09/2026): o aviso NÃO explica suspensão — a mesma regra das
+// ferramentas de status. A exceção vai sempre (o cliente pode ser identificado no meio do turno);
+// com contrato suspenso já conhecido, a frase "sem acesso → falha regional" nem aparece.
+describe('aviso-cidade: o aviso não explica suspensão', () => {
+  const AVISO = { cidade: 'Cândido Mendes', mensagem: 'Falha regional em andamento.' };
+  const texto = (extra) => avisoCidade.linhas(estadoBase({ avisoCidade: AVISO, ...extra })).join('\n');
+
+  test('sem contrato conhecido: a exceção da suspensão vai junto da regra do aviso', () => {
+    const t = texto({});
+    expect(t).toMatch(/informe que há uma falha regional/);
+    expect(t).toMatch(/Contrato SUSPENSO não é falha regional/);
+  });
+
+  test('com o contrato suspenso: nada manda atribuir a falta de acesso ao aviso', () => {
+    const t = texto({ contratos: [{ id: 3, status: 'suspenso', endereco: 'RUA Z, 3' }] });
+    expect(t).not.toMatch(/informe que há uma falha regional/);
+    expect(t).toMatch(/consta SUSPENSO/);
+    expect(t).toMatch(/roteiro do contrato suspenso/);
+  });
+
+  test('um suspenso e um ativo: sem saber de qual contrato ele fala, não aponta causa única', () => {
+    const t = texto({ contratos: [{ id: 3, status: 'suspenso', endereco: 'RUA Z, 3' }, { id: 5, status: 'ativo', endereco: 'RUA X, 10' }] });
+    expect(t).toMatch(/RUA Z, 3/);
+    expect(t).toMatch(/pergunte de qual endereço/);
+    expect(t).not.toMatch(/\b(Financeiro|Comercial|Suporte|Reativação)\b/);
+  });
+
+  test('só contratos ativos: a regra do aviso de sempre', () => {
+    const t = texto({ contratos: [{ id: 5, status: 'ativo', endereco: 'RUA X, 10' }] });
+    expect(t).toMatch(/informe que há uma falha regional/);
   });
 });

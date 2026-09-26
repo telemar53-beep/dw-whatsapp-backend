@@ -177,6 +177,52 @@ async function listInvoices(contratoId) {
 }
 
 /**
+ * TODOS os títulos do contrato, página por página — leitura pura (`central/titulos` com
+ * nao_gerar_os=1, a mesma de listInvoices). A 1ª chamada é idêntica à de listInvoices; as seguintes
+ * acrescentam offset/limit. `completo` só é true quando o total informado pela API foi alcançado:
+ * sem total, com página repetida (a API ignorou o offset) ou no teto de páginas, a leitura sai
+ * INCOMPLETA e quem conta vencidas trata como indeterminado. Na DW os contratos auditados vieram
+ * inteiros numa página só (até 108 títulos) — a paginação existe para não depender disso.
+ */
+async function listAllInvoices(contratoId, { maxPaginas = 20 } = {}) {
+  const config = await requireConfig();
+  const faturas = [];
+  const vistos = new Set();
+  let offset = 0;
+  let limit = null;
+  let total = null;
+  let motivo = null;
+  for (let n = 1; n <= maxPaginas; n += 1) {
+    const params = { contrato: contratoId, nao_gerar_os: 1 };
+    if (n > 1) {
+      params.offset = offset;
+      if (limit) params.limit = limit;
+    }
+    const response = await postSgp(config, '/api/central/titulos', params);
+    const data = response.data;
+    if (!data || typeof data !== 'object') throw new SgpRequestError('Unexpected response from SGP');
+    const pagina = Array.isArray(data.faturas) ? data.faturas : [];
+    const paginacao = data.paginacao || {};
+    if (n === 1 && paginacao.total !== undefined && paginacao.total !== null && Number.isInteger(Number(paginacao.total))) {
+      total = Number(paginacao.total);
+    }
+    const novos = pagina.filter((f) => !vistos.has(String(f && f.id)));
+    for (const f of novos) {
+      vistos.add(String(f && f.id));
+      faturas.push(f);
+    }
+    if (!limit && Number(paginacao.limit) > 0) limit = Number(paginacao.limit);
+    offset += pagina.length;
+    if (total === null) { motivo = 'total_ausente'; break; }
+    if (pagina.length === 0 || faturas.length >= total) break;
+    if (n > 1 && novos.length === 0) { motivo = 'paginacao_repetida'; break; }
+    if (n === maxPaginas) motivo = 'teto_de_paginas';
+  }
+  if (!motivo && total !== null && faturas.length < total) motivo = 'leitura_incompleta';
+  return { faturas, total, completo: motivo === null, motivo };
+}
+
+/**
  * Desbloqueio em confiança (liberação por promessa de pagamento). Endpoint
  * documentado na coleção oficial da API do SGP: POST /api/ura/liberacaopromessa/.
  * Só `contrato` é enviado — `data_promessa` fica de fora de propósito: quem
@@ -247,6 +293,7 @@ module.exports = {
   downloadBoletoPdf,
   checkConnection,
   listInvoices,
+  listAllInvoices,
   requestTrustUnlock,
   findClientRecord,
   SgpNotConfiguredError,

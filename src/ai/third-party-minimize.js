@@ -7,12 +7,14 @@ const PROJECOES = {
   consultar_faturas: (r) => ({
     // normalizeInvoices (sgp-normalizer.js) devolve faturaId e
     // vencimentoOriginal/vencimentoAtualizado — nunca "id"/"vencimento"
-    // soltos. vencimentoAtualizado prevalece quando existe: é a data que
-    // vale de fato quando a fatura foi renegociada; sem ela, cai para a
-    // original.
+    // soltos. Regra financeira 0/1/2+ (25/09/2026, decisão do dono, que
+    // substitui a anterior "a atualizada prevalece"): o SGP troca o
+    // vencimento_atualizado da fatura ATRASADA pela data de hoje (auditado em
+    // produção), e a IA passava a ver a fatura vencida como "vence hoje". A
+    // data exposta é SEMPRE a original; a atualizada não sai.
     faturas: (r.faturas || []).map((f) => ({
       id: f.faturaId,
-      vencimento: f.vencimentoAtualizado || f.vencimentoOriginal,
+      vencimento: f.vencimentoOriginal,
       status: f.status,
     })),
   }),

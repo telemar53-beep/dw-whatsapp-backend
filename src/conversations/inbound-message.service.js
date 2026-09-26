@@ -14,7 +14,8 @@ const { getCompanyConfig } = require('../company/company-config.repository');
 // segura um pedido de verdade, que de qualquer jeito não passa no filtro.
 const JANELA_DE_CORTESIA_MS = 30 * 60 * 1000;
 const { enqueueMediaCompression } = require('../queue/media-compression-queue');
-const { createMessage, findMessageByWhatsappMessageId } = require('./message.repository');
+const { createMessage, findMessageByWhatsappMessageId, findAutoReplyContext } = require('./message.repository');
+const { classificarAutorresposta } = require('./probable-auto-reply');
 const { emitToAgent, broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { shouldStartTriage, sendTriageQuestion, processTriageReply } = require('../triage/triage.service');
 const { findChannelById } = require('../channels/channel.repository');
@@ -73,6 +74,29 @@ function metadataDoTimestamp({ base, sentAt, sentAtRaw, timestampSource }) {
   };
 }
 
+/**
+ * Fase 1C: lê o contexto e classifica (probable-auto-reply.js). O filtro barato antes da consulta
+ * — conversa aberta, sem atendente, texto — só evita ir ao banco à toa; a regra inteira está no
+ * classificador. Qualquer erro vira "não suprime": na dúvida, o fluxo normal.
+ */
+async function classificarSeAutorresposta({ conversation, contact, content, messageType, repliedToWhatsappMessageId }) {
+  const tipo = messageType || 'text'; // o mesmo padrão de createMessage
+  if (!conversation || conversation.assignedAgentId || tipo !== 'text') return { suprimir: false };
+  try {
+    const contexto = (await findAutoReplyContext(conversation.id, contact.id)) || {};
+    return classificarAutorresposta({
+      mensagem: { tipo, texto: content, citada: Boolean(repliedToWhatsappMessageId), recebidaEm: Date.now() },
+      atendenteId: conversation.assignedAgentId,
+      disparo: contexto.disparo || null,
+      depoisDoDisparo: contexto.depoisDoDisparo || [],
+      anteriores: contexto.anteriores || [],
+    });
+  } catch (err) {
+    console.error(`Failed to classify probable auto-reply for conversation ${conversation.id}: ${mensagemSegura(err)}`);
+    return { suprimir: false };
+  }
+}
+
 async function ingestInboundMessage({
   channelId,
   fromPhoneNumber,
@@ -108,6 +132,32 @@ async function ingestInboundMessage({
   }
 
   let conversation = await findOpenConversation(contact.id, channelId);
+
+  // Fase 1C (25/09/2026): autorresposta provável do destinatário depois de um disparo
+  // automático (caso real: "Restaurante sabor caseiro agradece seu contato. Como podemos
+  // ajudar?", e a IA respondia ao robô). Decidido ANTES de ativar a conversa: marcada, ela fica
+  // no histórico e nada reage — nem IA, nem triagem, nem fila, nem boas-vindas, aviso de cidade
+  // ou de horário; a conversa silent continua silent. Na dúvida (inclusive erro), fluxo normal.
+  const autorresposta = await classificarSeAutorresposta({ conversation, contact, content, messageType, repliedToWhatsappMessageId });
+  if (autorresposta.suprimir) {
+    let message = null;
+    try {
+      message = await createMessage({
+        conversationId: conversation.id,
+        direction: 'inbound',
+        content,
+        whatsappMessageId,
+        status: 'received',
+        messageType,
+        sentAt,
+        metadata: { ...(metadataDeTempo || {}), autorrespostaProvavel: true, autorrespostaMotivo: autorresposta.motivo },
+      });
+    } catch (err) {
+      if (err.code !== UNIQUE_VIOLATION) throw err;
+    }
+    return { contact, conversation, message, contactJustCreated, autorresposta: true };
+  }
+
   if (conversation && conversation.status === 'silent') {
     conversation = await activateConversation(conversation.id);
   }

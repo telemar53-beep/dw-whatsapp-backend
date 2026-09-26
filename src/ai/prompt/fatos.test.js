@@ -173,7 +173,12 @@ describe('módulo fatos', () => {
 
     test('permite dizer atraso em dias\\/meses e quantidade de faturas, mas nunca o valor', () => {
       const texto = fatos.linhas(estadoIdentificado()).join('\n');
-      expect(texto).toMatch(/Com identidade confirmada você pode dizer há quantos dias\/meses a fatura está vencida e quantas faturas estão em aberto/);
+      // Regra 0/1/2+ (25/09/2026): "em aberto" contava o carnê futuro inteiro. Atraso é só o que
+      // venceu pela data ORIGINAL, e a quantidade é o faturasVencidas da ferramenta.
+      expect(texto).toMatch(/Com identidade confirmada você pode dizer há quantos dias\/meses a fatura está vencida e quantas faturas estão vencidas/);
+      expect(texto).toMatch(/pelo vencimento ORIGINAL, nunca pelo atualizado/);
+      expect(texto).toMatch(/Fatura que vence hoje, fatura futura \(o carnê\) e fatura paga NÃO são atraso/);
+      expect(texto).not.toMatch(/quantas faturas estão em aberto/);
       expect(texto).toMatch(/Continua proibido dizer o VALOR\./);
       expect(texto).toMatch(/NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço/);
     });

@@ -6,8 +6,12 @@ const { listSectors } = require('../sectors/sector.repository');
 const {
   setSuggestedReason, setConversationSector, concludeAiTriage, getConversationWithContact,
   markPhoneContested, markTriageResolvedByAi, closeConversationByAi, setThirdPartyScope,
+  setTriageReactivation, getTriageReactivation, reserveTriageNightInvoice, getTriageNightInvoice,
 } = require('../conversations/conversation.repository');
 const { montarEscopo, paraContexto } = require('./third-party-scope');
+const {
+  alvoFinanceiro, ehAlvoTerceiro, contratoNoAlvo, fixarAlvoTerceiro, liberarAlvoTerceiro,
+} = require('./financial-target');
 const { motivoDeEncerramentoAtivo } = require('./triage-close-reason');
 const { recordTrustUnlock, listTrustUnlocksByContract } = require('./trust-unlock.repository');
 const { avaliarElegibilidade, MENSAGENS: MENSAGENS_DESBLOQUEIO, DIAS_ENTRE_LIBERACOES } = require('./trust-unlock-rules');
@@ -18,13 +22,21 @@ const { formatarData } = require('../payments/payment-card');
 const { broadcast, broadcastToDashboard } = require('../realtime/socket-server');
 const { primeiroNome } = require('./identity-resolver');
 const { preencherCidadePeloSgp } = require('../cities/contact-city.service');
-const { enviarAvisoDeCidadeSePreciso } = require('../city-notices/city-notice.service');
+const { enviarAvisoDeCidadeSePreciso, selecionarAvisoDoContato } = require('../city-notices/city-notice.service');
+const { instrucaoDoAvisoAtivo, avisoParaResultado, suspensaoAfastaOAviso } = require('./regional-outage');
+const { linhaDoWifiNoResumo } = require('./contencoes-operacionais');
 const { mensagemSegura } = require('./safe-error-log');
 const { findLatestInboundImage } = require('../conversations/message.repository');
 const { getAiConfig } = require('./ai-config.repository');
 const { analisarComprovante } = require('./receipt-analysis');
 const { claimReceipt, releaseReceipt, findReceiptUsage } = require('./receipt-usage.repository');
-const { claimDelivery, markDeliveryEnqueued, releaseDelivery } = require('./billing-delivery.repository');
+const {
+  claimDelivery, markDeliveryEnqueued, releaseDelivery, findLatestEnqueuedDelivery,
+} = require('./billing-delivery.repository');
+const {
+  hojeEmSaoPaulo, analisarSituacaoFinanceiraContrato, decidirCobranca, pagamentoConfirmadoDoTitulo, descreverReativacao,
+} = require('./situacao-financeira');
+const { ehSetorDeReativacao, setorDeReativacao } = require('../sectors/reactivation-sector');
 const { descreverUsoAnterior } = require('./receipt-usage-text');
 const { listarPlanosDisponiveis } = require('../plans/plan.repository');
 const { listPlaces, findCityById } = require('../cities/city.repository');
@@ -298,7 +310,327 @@ async function limparEscopoDeTerceiro(contexto) {
     return false;
   }
   contexto.terceiro = null;
+  liberarAlvoTerceiro(contexto);
   return true;
+}
+
+/**
+ * Aviso de cidade como FATO do turno (25/09/2026): o aviso ativo que vale para este contato —
+ * a MESMA seleção do envio automático e do worker (selecionarAvisoDoContato) — no formato que o
+ * prompt e as ferramentas usam. Falha na consulta = sem aviso: nunca inventa ocorrência.
+ * `impacto` fica null até existir tipo de aviso (Fase 5); null vale como geral.
+ */
+async function avisoAtivoDoContato(contact) {
+  try {
+    const escolha = await selecionarAvisoDoContato(contact);
+    if (!escolha || !escolha.aviso) return null;
+    const lugar = await findCityById(escolha.lugarId);
+    const desde = escolha.aviso.activatedAt ? new Date(escolha.aviso.activatedAt).toISOString() : null;
+    return { cidade: lugar ? lugar.name : null, mensagem: escolha.aviso.message, desde, impacto: null };
+  } catch (err) {
+    console.error(`City notice lookup failed for contact ${contact && contact.id}: ${mensagemSegura(err)}`);
+    return null;
+  }
+}
+
+/**
+ * CPF/CNPJ de terceiro não encontrado (caso Fulana/Beltrana): grava o pedido de terceiro PENDENTE,
+ * sem contrato. Ele não autoriza nada e segura a cobrança de quem fala nos turnos seguintes,
+ * até a intenção explícita da própria cobrança, um novo CPF ou o prazo. Se a gravação falhar,
+ * a trava do turno continua valendo neste turno.
+ */
+async function registrarTerceiroPendente(contexto) {
+  const escopo = montarEscopo(null, [], new Date(), { pendente: true });
+  contexto.terceiro = paraContexto(escopo);
+  try {
+    await setThirdPartyScope(contexto.conversationId, escopo);
+  } catch (err) {
+    console.error(`Failed to store the pending third party request for conversation ${contexto.conversationId}: ${mensagemSegura(err)}`);
+  }
+}
+
+/**
+ * Última conferência antes de entregar (caso Fulana/Beltrana): com pedido de terceiro, a fatura
+ * encontrada tem de ter saído de um contrato DO TERCEIRO — o que o SGP devolveu para o
+ * documento informado. O SGP não traz o documento no título; o vínculo com o documento é o
+ * contrato. Fora do alvo, nada é enviado.
+ */
+function faturaForaDoAlvo(contexto, busca) {
+  return ehAlvoTerceiro(contexto) && !contratoNoAlvo(contexto, busca.contratoId);
+}
+
+/**
+ * REGRA FINANCEIRA 0 / 1 / 2+ (25/09/2026) — o GATE antes de toda cobrança.
+ *
+ * Quem decide qual fatura pode sair é o CÓDIGO, a partir dos títulos do SGP (central/titulos,
+ * todas as páginas) do contrato que está sendo cobrado — nunca a 2ª via, nunca o modelo:
+ * - cancelado → reativação, nada sai;
+ * - indeterminado (leitura incompleta, status fora do provado, título estranho) → humano;
+ * - 0 vencidas → o fluxo de sempre;
+ * - 1 vencida → só ela;
+ * - 2+ vencidas → de dia nada sai (reativação); à noite, com o autoatendimento noturno, só a
+ *   MAIS ANTIGA pela data ORIGINAL, e a conversa fica marcada para a reativação.
+ * A 2ª via só é pedida DEPOIS da decisão, e dela só sai a fatura com o id autorizado. Se ela não
+ * vier, nada é improvisado: humano.
+ *
+ * Cada contrato tem a própria análise. O gate roda DEPOIS do alvo financeiro (o executor já
+ * garantiu que o contrato é de quem fala, ou do terceiro confirmado) e não troca de contrato: a
+ * troca que já existia (faturaEmAlgumContrato, só no caso de 0 vencidas) leva o outro contrato ao
+ * gate DELE.
+ */
+
+// Status do contrato como o gate lê: só os contratos de quem fala trazem status (o escopo de
+// terceiro guarda só o id — para ele vale só a regra dos títulos).
+function contratoParaAnalise(contexto, contratoId) {
+  const escopo = escopoDoContrato(contexto, contratoId);
+  const achado = escopo && !escopo.terceiro ? escopo.contratos.find((c) => c.id === contratoId) : null;
+  return { id: contratoId, statusCode: achado ? achado.statusCode : undefined };
+}
+
+/** Situação financeira DESTE contrato, lida agora do SGP. Falha de leitura = indeterminado. */
+async function situacaoFinanceira(contexto, contratoId) {
+  let leitura = null;
+  try {
+    leitura = await sgpClient.listAllInvoices(contratoId);
+  } catch (err) {
+    console.error(`Títulos do contrato ${contratoId} não lidos na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+  }
+  if (leitura && leitura.completo !== true) {
+    console.warn(`Leitura incompleta dos títulos do contrato ${contratoId} (${leitura.motivo}) na conversa ${contexto.conversationId}`);
+  }
+  return analisarSituacaoFinanceiraContrato({
+    contrato: contratoParaAnalise(contexto, contratoId),
+    titulos: leitura ? normalizeInvoices(leitura.faturas) : null,
+    hoje: hojeEmSaoPaulo(),
+    leituraCompleta: Boolean(leitura && leitura.completo === true),
+  });
+}
+
+// "Noite" é a janela E o autoatendimento noturno ligado (noturno.ativo, calculado no worker por
+// isNightModeActive). Qualquer outra combinação é o dia conservador.
+function decisaoDaCobranca(contexto, analise) {
+  return decidirCobranca(analise, { noturnoAutoatendimento: Boolean(noturnoDoContexto(contexto)) });
+}
+
+/**
+ * Marca a conversa para a reativação: no contexto (vale já neste turno) e no banco (vale nos
+ * próximos turnos e no timeout). O primeiro motivo fica. Falha ao gravar não é afirmada como
+ * gravada: o log diz, e o turno ainda segue marcado.
+ */
+async function registrarReativacao(contexto, motivo) {
+  if (!perfilTriagem(contexto)) return;
+  if (!contexto.reativacao) contexto.reativacao = motivo;
+  try {
+    await setTriageReactivation(contexto.conversationId, motivo);
+  } catch (err) {
+    console.error(`Falha ao gravar a reativação (${motivo}) na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+  }
+}
+
+/** A conversa está marcada para a reativação? O turno primeiro, depois o banco. */
+async function reativacaoDaConversa(contexto) {
+  if (contexto.reativacao) return contexto.reativacao;
+  return (await getTriageReactivation(contexto.conversationId)) || null;
+}
+
+async function setorDeReativacaoSeguro() {
+  try {
+    return await setorDeReativacao();
+  } catch (err) {
+    console.error(`Setor de reativação não lido: ${mensagemSegura(err)}`);
+    return null;
+  }
+}
+
+// Sem nome de setor no texto (Task 19): o setor é o do painel, pelo id.
+function concluirNaReativacao(setor) {
+  return setor
+    ? `chame concluir_triagem com o setor que cuida de reativação (setorId ${setor.id})`
+    : 'chame concluir_triagem para o setor que cuidar de financeiro';
+}
+
+// O que a ferramenta diz ao modelo (fato) e o que ele diz ao cliente, por motivo da reativação.
+const TEXTOS_DO_BLOQUEIO = {
+  contrato_cancelado: {
+    fato: 'este contrato não está ativo (consta como cancelado) e a cobrança dele não é feita pela IA',
+    paraOCliente: 'o cadastro dele precisa ser tratado pela equipe responsável',
+    motivo: 'Contrato cancelado: a cobrança fica com a equipe de reativação.',
+  },
+  multiplas_vencidas: {
+    fato: 'este contrato tem duas ou mais faturas vencidas e, nesse caso, a IA não envia boleto, PIX nem segunda via',
+    paraOCliente: 'há mais de uma fatura em atraso e a equipe responsável vai orientar a regularização',
+    motivo: 'Duas ou mais faturas vencidas: a cobrança fica com a equipe de reativação.',
+  },
+  multiplas_vencidas_noturno: {
+    fato: 'o contrato com a fatura em aberto entrou no modo noturno com duas ou mais faturas vencidas: dele a IA trata só a fatura vencida mais antiga, que já foi tratada, e nenhuma outra cobrança DESSE contrato sai automaticamente, mesmo que a primeira já tenha sido paga. Outro contrato só se o cliente pedir por ele',
+    paraOCliente: 'as demais faturas desse contrato ficam com a equipe responsável, que continua o atendimento',
+    motivo: 'Fluxo noturno de duas ou mais vencidas: só a mais antiga sai pela IA; o resto fica com a equipe de reativação.',
+  },
+};
+
+/** A resposta da ferramenta quando o gate NÃO deixa a cobrança sair. */
+async function bloqueioDaCobranca(decisao, contexto) {
+  const triagem = perfilTriagem(contexto);
+  if (decisao.acao === 'reativacao') {
+    await registrarReativacao(contexto, decisao.motivo);
+    const setor = await setorDeReativacaoSeguro();
+    const { fato, paraOCliente, motivo } = TEXTOS_DO_BLOQUEIO[decisao.motivo] || TEXTOS_DO_BLOQUEIO.multiplas_vencidas;
+    return {
+      cobrancaBloqueada: 'reativacao',
+      motivo,
+      ...(setor ? { setorReativacao: { setorId: setor.id } } : {}),
+      instrucao: triagem
+        ? `NÃO houve envio: ${fato}. Não escolha outra fatura, não negocie, não fale em desconto nem parcelamento, não invente motivo para a situação do contrato e não prometa reativar nem liberar a internet. Diga ao cliente, em uma frase e sem valores, que ${paraOCliente}, e ${concluirNaReativacao(setor)}.`
+        : `Pela regra da empresa, ${fato}: não gere a cobrança. Oriente o atendente a tratar como reativação.`,
+    };
+  }
+  return {
+    cobrancaBloqueada: 'humano',
+    motivo: 'Não foi possível confirmar com segurança a situação das faturas deste contrato.',
+    instrucao: triagem
+      ? 'NÃO houve envio: não foi possível confirmar com segurança a situação das faturas deste contrato agora. Não envie nada, não diga quantas faturas estão vencidas nem valores, e não tente outro contrato por conta própria. Diga ao cliente que vai encaminhar para um atendente conferir e chame concluir_triagem para o setor que cuidar de financeiro.'
+      : 'Não foi possível confirmar com segurança a situação das faturas deste contrato: não gere a cobrança pela IA; o atendente confere no SGP.',
+  };
+}
+
+/** Da 2ª via, só a fatura com o id AUTORIZADO. Sem ela, nada é improvisado. */
+async function casarFaturaAutorizada(busca, decisao, contexto) {
+  const duplicatas = (busca.resultado && busca.resultado.duplicates) || [];
+  const fatura = duplicatas.find((d) => d && String(d.id) === String(decisao.faturaPermitida));
+  if (!fatura) {
+    console.error(`A 2ª via do contrato ${busca.contratoId} não trouxe a fatura autorizada pela regra 0/1/2+ na conversa ${contexto.conversationId}; nada enviado.`);
+    return { bloqueio: await bloqueioDaCobranca({ acao: 'humano', motivo: 'segunda_via_incompativel' }, contexto) };
+  }
+  return { busca: { ...busca, resultado: { ...busca.resultado, duplicates: [fatura] } }, fatura, decisao };
+}
+
+/** A fatura do fluxo noturno de 2+ DESTE contrato nesta conversa, ou null se ele não entrou nele. */
+async function faturaNoturnaDoContrato(contexto, contratoId) {
+  const cache = contexto.faturasNoturnas || (contexto.faturasNoturnas = {});
+  if (cache[contratoId]) return cache[contratoId];
+  const gravada = await getTriageNightInvoice(contexto.conversationId, contratoId);
+  if (gravada) cache[contratoId] = gravada;
+  return gravada || null;
+}
+
+/**
+ * O fluxo noturno que COMEÇOU com 2+ é grudento POR CONTRATO (ajustes de 25/09/2026): do contrato
+ * que entrou nele sai SÓ a fatura vencida mais antiga escolhida ali. Depois disso — mesmo com ela
+ * paga, mesmo sobrando uma vencida, de noite ou de dia — nenhuma OUTRA fatura DESSE contrato sai
+ * automaticamente, e a conversa segue na reativação. O reenvio da MESMA fatura passa (a idempotência
+ * de sempre decide). Outro contrato é analisado separadamente: quando o cliente pede por ele, segue
+ * a regra dele (o alvo financeiro, no executor, já decidiu que ele pode ser cobrado).
+ *
+ * A entrada no fluxo é uma reserva ATÔMICA no banco, por contrato e com o alvo financeiro, antes de
+ * qualquer 2ª via: duas entregas paralelas do mesmo contrato disputam a mesma linha, e só a fatura
+ * reservada primeiro sai. Só na triagem: no assistente o humano está no comando.
+ */
+async function aplicarTravaNoturna(decisao, contexto, contratoId) {
+  if (!perfilTriagem(contexto)) return decisao;
+  if (decisao.acao === 'reativacao' || decisao.acao === 'humano') return decisao;
+  const bloqueada = { acao: 'reativacao', motivo: 'multiplas_vencidas_noturno' };
+  if (decisao.acao === 'entregar' && decisao.reativacaoDepois) {
+    const reservada = await reserveTriageNightInvoice(contexto.conversationId, {
+      contratoId, faturaId: String(decisao.faturaPermitida), alvo: alvoFinanceiro(contexto).tipo,
+    });
+    if (reservada) (contexto.faturasNoturnas || (contexto.faturasNoturnas = {}))[contratoId] = reservada;
+    return reservada && String(reservada) === String(decisao.faturaPermitida) ? decisao : bloqueada;
+  }
+  const travada = await faturaNoturnaDoContrato(contexto, contratoId);
+  if (!travada) return decisao;
+  if (decisao.acao === 'entregar' && String(decisao.faturaPermitida) === String(travada)) {
+    return { ...decisao, reativacaoDepois: true };
+  }
+  return bloqueada;
+}
+
+/**
+ * O gate. Devolve:
+ * - { bloqueio } — nada pode sair (reativação ou humano);
+ * - { busca, fatura, decisao } — a ferramenta segue com a `busca` de sempre (varios,
+ *   semFaturaEmNenhum e fora do alvo continuam respondidos por ela) e entrega `fatura`.
+ */
+async function cobrancaAutorizada(contratoPedido, contexto) {
+  const decisao = await aplicarTravaNoturna(decisaoDaCobranca(contexto, await situacaoFinanceira(contexto, contratoPedido)), contexto, contratoPedido);
+  if (decisao.acao === 'reativacao' || decisao.acao === 'humano') {
+    return { bloqueio: await bloqueioDaCobranca(decisao, contexto) };
+  }
+  if (decisao.acao === 'entregar') {
+    const resultado = await sgpClient.getDuplicateInvoice(contratoPedido);
+    return casarFaturaAutorizada({ resultado, contratoId: contratoPedido, trocouContrato: false }, decisao, contexto);
+  }
+  // 0 vencidas: o fluxo de sempre, inclusive a troca para outro contrato do MESMO dono.
+  const busca = await faturaEmAlgumContrato(contratoPedido, contexto);
+  const maisAntigaDaBusca = () => (busca.resultado ? daMaisAntiga(busca.resultado.duplicates)[0] : null);
+  if (busca.varios || busca.semFaturaEmNenhum || !busca.trocouContrato || faturaForaDoAlvo(contexto, busca)) {
+    return { busca, fatura: maisAntigaDaBusca(), decisao };
+  }
+  // Contrato do fluxo noturno de 2+ nunca é reserva de outro: a troca automática não cai nele (o
+  // pedido de B sem fatura não vira a cobrança de A). O caminho inverso não existe: o pedido em A
+  // é decidido pela trava de A antes de qualquer troca.
+  if (perfilTriagem(contexto) && await faturaNoturnaDoContrato(contexto, busca.contratoId)) {
+    return { bloqueio: await bloqueioDaCobranca({ acao: 'reativacao', motivo: 'multiplas_vencidas_noturno' }, contexto) };
+  }
+  // A troca achou fatura em OUTRO contrato: ele passa pelo PRÓPRIO gate, com os títulos dele.
+  const doOutro = await aplicarTravaNoturna(decisaoDaCobranca(contexto, await situacaoFinanceira(contexto, busca.contratoId)), contexto, busca.contratoId);
+  if (doOutro.acao === 'reativacao' || doOutro.acao === 'humano') {
+    return { bloqueio: await bloqueioDaCobranca(doOutro, contexto) };
+  }
+  if (doOutro.acao === 'entregar') return casarFaturaAutorizada(busca, doOutro, contexto);
+  return { busca, fatura: maisAntigaDaBusca(), decisao: doOutro };
+}
+
+/**
+ * Status do contrato RELIDO agora no SGP (consultacliente), como texto ('1', '3', '4'...), ou null
+ * quando não dá para saber. O documento nunca vai para log.
+ */
+async function statusRelidoDoContrato(contexto, contratoId) {
+  const documento = contexto.contact && contexto.contact.sgpDocument;
+  if (!documento) return null;
+  try {
+    const { contracts } = await sgpClient.lookupClientByCpf(documento);
+    const contrato = (contracts || []).find((c) => c.id === contratoId);
+    const codigo = contrato && contrato.statusCode;
+    return codigo === undefined || codigo === null || String(codigo).trim() === '' ? null : String(codigo).trim();
+  } catch (err) {
+    console.error(`Releitura do contrato ${contratoId} falhou na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+    return null;
+  }
+}
+
+/**
+ * Depois de uma entrega: 2+ à noite marca a reativação e NUNCA "resolvido pela IA"; o resto marca
+ * resolvido como sempre. contexto.resolvidoPelaIa fica true nos dois casos — ele diz "houve
+ * entrega neste turno" (é o que a guarda de anúncio de envio lê); a conclusão é que ignora a
+ * marca quando há reativação.
+ */
+async function marcarDepoisDaEntrega(gate, contexto) {
+  contexto.resolvidoPelaIa = true;
+  if (gate.decisao && gate.decisao.reativacaoDepois) {
+    await registrarReativacao(contexto, 'multiplas_vencidas_noturno');
+    return;
+  }
+  // Conversa já marcada para a reativação (outro contrato com 2+, cancelado...): a entrega não a
+  // torna "resolvida pela IA".
+  if (await reativacaoDaConversa(contexto)) return;
+  await markTriageResolvedByAi(contexto.conversationId);
+}
+
+/**
+ * Para onde as instruções do desbloqueio mandam concluir: a conversa marcada para a reativação
+ * (inclusive a que começou com 2+ à noite) vai para lá mesmo depois de uma liberação em confiança;
+ * o resto, como sempre, para o setor que cuidar de financeiro.
+ */
+async function destinoDaConclusaoFinanceira(contexto) {
+  if (await reativacaoDaConversa(contexto)) return concluirNaReativacao(await setorDeReativacaoSeguro());
+  return 'chame concluir_triagem para o setor que cuidar de financeiro';
+}
+
+// Fecho da frase de entrega no caso noturno de 2+: as demais faturas não somem, e nada é
+// prometido sobre a internet.
+function fraseDasDemaisVencidas(contexto) {
+  const noturno = noturnoDoContexto(contexto);
+  return ` As demais faturas em atraso ficam com a nossa equipe, que continua seu atendimento${noturno && noturno.retornoAs ? ` a partir das ${noturno.retornoAs}` : ' no próximo expediente'}.`;
 }
 
 /**
@@ -572,7 +904,28 @@ const TOOLS = [
         contexto.cpfsBuscados.add(args.cpf);
       }
 
-      const { client, contracts } = await sgpClient.lookupClientByCpf(args.cpf);
+      // Caso Fulana/Beltrana: o pedido passa a ser do terceiro ANTES da resposta do SGP. Se o
+      // documento não for encontrado (a consulta lança), a trava fica vazia e nenhuma cobrança
+      // sai neste turno — nem a de quem fala. Um novo terceiro substitui o anterior.
+      const pedidoDeTerceiro = perfilTriagem(contexto) && args.titularEOutraPessoa;
+      if (pedidoDeTerceiro) {
+        fixarAlvoTerceiro(contexto, []);
+        // O pedido anterior de terceiro não sobrevive a este: a persistência é sobrescrita logo
+        // abaixo — pelo escopo do novo terceiro, ou pelo pendente se o documento não existir.
+        contexto.terceiro = null;
+      }
+
+      let achado;
+      try {
+        achado = await sgpClient.lookupClientByCpf(args.cpf);
+      } catch (err) {
+        // Documento de terceiro não encontrado (ou o SGP falhou): o pedido CONTINUA sendo de
+        // terceiro, pendente e sem contrato — nos próximos turnos, "manda o pix" não vira o PIX
+        // de quem fala. O documento nunca vai a log.
+        if (pedidoDeTerceiro) await registrarTerceiroPendente(contexto);
+        throw err;
+      }
+      const { client, contracts } = achado;
 
       // No perfil de triagem, o CPF digitado já deixa a identidade forte,
       // com a cidade preenchida e o aviso de falha regional disparado aqui
@@ -604,6 +957,7 @@ const TOOLS = [
             return erro('third_party_scope_not_stored');
           }
           contexto.terceiro = paraContexto(escopo);
+          fixarAlvoTerceiro(contexto, contracts);
 
           return {
             titular: { nome },
@@ -628,9 +982,10 @@ const TOOLS = [
         contexto.contact.sgpDocument = args.cpf;
         // Try/catch: a identificação já está persistida e não pode virar
         // recusa por causa de um campo acessório. O CPF nunca vai a log.
+        let avisoEnviadoAgora = null;
         try {
           await preencherCidadePeloSgp(contexto.contact, contracts);
-          await enviarAvisoDeCidadeSePreciso({
+          avisoEnviadoAgora = await enviarAvisoDeCidadeSePreciso({
             contact: contexto.contact,
             conversationId: contexto.conversationId,
             channelId: contexto.channelId,
@@ -638,13 +993,32 @@ const TOOLS = [
         } catch (err) {
           console.error(`City autofill failed for contact ${contexto.contact.id}: ${mensagemSegura(err)}`);
         }
+        // Aviso de cidade (25/09/2026): a cidade acabou de ser descoberta aqui, e o prompt deste
+        // turno foi montado antes, sem ela. O aviso ativo volta NO RETORNO — e em
+        // contexto.avisoCidade, que o orquestrador usa para recompor o prompt antes da resposta
+        // final. Sem isso, "Cliente identificado" escondia a falha regional e a IA seguia o
+        // roteiro individual.
+        const aviso = await avisoAtivoDoContato(contexto.contact);
+        // Um aviso por turno: se ele saiu para o cliente NESTE turno — agora, por esta ferramenta,
+        // ou no começo do turno, pelo worker —, o fato leva a marca transitória (nada no banco) e
+        // a resposta final não repete a ocorrência.
+        const jaSaiuNesteTurno = Boolean(avisoEnviadoAgora)
+          || Boolean(contexto.avisoCidade && contexto.avisoCidade.enviadoNesteTurno === true);
+        if (aviso && jaSaiuNesteTurno) aviso.enviadoNesteTurno = true;
+        if (aviso) contexto.avisoCidade = aviso;
+        const instrucaoDeSempre = 'Cliente identificado. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.';
+        // P1-1 (auditoria final, 25/09/2026): o aviso não explica suspensão. Sem contrato alvo
+        // determinado ainda, qualquer contrato suspenso afasta o aviso como causa — o fato continua
+        // no contexto (o prompt traz a exceção), mas a instrução não manda tratar como falha regional.
+        const avisoComoCausa = aviso && !suspensaoAfastaOAviso(contracts.map(normalizeContract));
         return {
           cliente: { nome },
           contratos: contracts.map((c) => {
             const n = normalizeContract(c);
             return { id: c.id, status: n.status, endereco: n.endereco };
           }),
-          instrucao: 'Cliente identificado. Siga com o pedido. Com um contrato só, use-o sem perguntar; com vários, pergunte pelo endereço.',
+          ...(avisoComoCausa ? { avisoAtivo: avisoParaResultado(aviso) } : {}),
+          instrucao: avisoComoCausa ? `${instrucaoDeSempre} ${instrucaoDoAvisoAtivo(aviso)}` : instrucaoDeSempre,
         };
       }
 
@@ -696,9 +1070,23 @@ const TOOLS = [
       required: ['contratoId'],
     },
     validar: validarContratoId,
-    async executar(args) {
+    async executar(args, contexto) {
       const raw = await sgpClient.checkConnection(args.contratoId);
-      return normalizeConnection(raw);
+      const conexao = normalizeConnection(raw);
+      // Fato do turno para a guarda de linguagem (regra 0/1/2+): contrato ativo não é conexão
+      // online — só esta verificação autoriza dizer "está online/conectada".
+      if (contexto && conexao.status === 'online') contexto.conexaoOnline = true;
+      // Aviso de cidade: com falha regional conhecida, o status individual não pode virar roteiro
+      // de equipamento. Só na triagem — no assistente, quem decide é a atendente.
+      const aviso = contexto && perfilTriagem(contexto) ? contexto.avisoCidade : null;
+      // P1-1 (auditoria final): este contrato É o da reclamação — fica determinado para a troca final
+      // do orquestrador. Suspenso, o aviso não é a causa: sai só o status, como sem aviso.
+      if (contexto && perfilTriagem(contexto)) contexto.contratoDaReclamacao = args.contratoId;
+      const contratos = ((contexto && contexto.contracts) || []).map(normalizeContract);
+      if (aviso && !suspensaoAfastaOAviso(contratos, args.contratoId)) {
+        return { ...conexao, avisoAtivo: avisoParaResultado(aviso), instrucao: instrucaoDoAvisoAtivo(aviso) };
+      }
+      return conexao;
     },
   },
   {
@@ -827,7 +1215,21 @@ const TOOLS = [
           // O SGP pagina (50 por página). Uma lista parcial precisa dizer que é
           // parcial, senão o modelo afirma "não há outras faturas" sem saber.
           const listaParcial = total != null && total > faturas.length;
-          return { ...base, faturas, ...(listaParcial ? { listaParcial: true, totalFaturas: total } : {}) };
+          // Regra 0/1/2+ (25/09/2026): quantas estão VENCIDAS é fato do código, contrato a
+          // contrato, pela data ORIGINAL — "Gerado" inclui o carnê futuro inteiro. Sem a lista
+          // inteira (ou sem o total), a contagem não é afirmada.
+          const analise = analisarSituacaoFinanceiraContrato({
+            contrato: contratoParaAnalise(contexto, c.id),
+            titulos: faturas,
+            hoje: hojeEmSaoPaulo(),
+            leituraCompleta: total != null && !listaParcial,
+          });
+          const faturasVencidas = analise.indeterminado || analise.cancelado ? null : analise.quantidadeVencidas;
+          return {
+            ...base, faturas, faturasVencidas,
+            ...(analise.cancelado ? { contratoCancelado: true } : {}),
+            ...(listaParcial ? { listaParcial: true, totalFaturas: total } : {}),
+          };
         }),
       };
     },
@@ -879,9 +1281,16 @@ const TOOLS = [
       });
       const suspensos = linhas.filter((l) => l.status === 'suspenso');
       const offline = linhas.filter((l) => l.conexao === 'offline');
+      // P2-1 (auditoria final): fato de conexão para a guarda de frases — só com TODOS online (um
+      // offline ou sem resposta não autoriza "está online").
+      if (perfilTriagem(contexto) && linhas.every((l) => l.conexao === 'online')) contexto.conexaoOnline = true;
       const semResposta = linhas.filter((l) => l.conexao === null || l.conexao === 'desconhecido');
       const citar = (lista) => lista.map((l) => `${l.contratoId} (${l.endereco})`).join(', ');
       let instrucao;
+      // Aviso de cidade (25/09/2026): era esta instrução ("siga o roteiro daquele problema",
+      // "modelo da conexão offline") que atropelava a falha regional conhecida. Com aviso ativo,
+      // ela é a do aviso — menos na suspensão, que o aviso não explica.
+      const aviso = perfilTriagem(contexto) ? contexto.avisoCidade : null;
       if (perfilTriagem(contexto)) {
         if (suspensos.length > 0) {
           instrucao = `Contrato(s) suspenso(s): ${citar(suspensos)}. Use o modelo do contrato suspenso por falta de pagamento, citando o endereço se ele tiver mais de um contrato.`;
@@ -897,6 +1306,9 @@ const TOOLS = [
           // O modelo "ativo e online" é para quem AINDA não disse o problema.
           instrucao = 'Todos os contratos estão ativos e online. Se o cliente JÁ disse qual é o problema, NÃO pergunte de novo: siga o roteiro daquele problema. Se ele não disse, use o modelo "ativo e online". Se você já mandou esse modelo nesta conversa, NÃO repita: siga a partir do que ele respondeu. Se ele tiver mais de um contrato, pergunte também de qual endereço fala.';
         }
+      }
+      if (aviso && !suspensaoAfastaOAviso(linhas.map((l) => ({ id: l.contratoId, status: l.status })))) {
+        return { contratos: linhas, suspensos, offline, avisoAtivo: avisoParaResultado(aviso), instrucao: instrucaoDoAvisoAtivo(aviso) };
       }
       return {
         contratos: linhas,
@@ -1057,7 +1469,10 @@ const TOOLS = [
     },
     validar: validarContratoId,
     async executar(args, contexto) {
-      const busca = await faturaEmAlgumContrato(args.contratoId, contexto);
+      // Regra 0/1/2+: o gate decide ANTES de qualquer 2ª via, e dela só sai a fatura autorizada.
+      const gate = await cobrancaAutorizada(args.contratoId, contexto);
+      if (gate.bloqueio) return { temFaturaAberta: false, faturas: [], ...gate.bloqueio };
+      const busca = gate.busca;
       if (busca.varios) {
         return {
           temFaturaAberta: false,
@@ -1075,6 +1490,9 @@ const TOOLS = [
             ? 'Nenhuma fatura em aberto encontrada; a consulta de um dos contratos falhou.'
             : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
         };
+      }
+      if (faturaForaDoAlvo(contexto, busca)) {
+        return { temFaturaAberta: false, faturas: [], motivo: 'A fatura encontrada não é do titular pedido; nada foi gerado.' };
       }
       const result = busca.resultado;
       const resposta = {
@@ -1113,7 +1531,10 @@ const TOOLS = [
     async executar(args, contexto) {
       // Vale para os DOIS ramos (triagem e assistente): o atendente humano
       // também pedia o PIX do contrato errado e ouvia "não há fatura".
-      const busca = await faturaEmAlgumContrato(args.contratoId, contexto);
+      // Regra 0/1/2+: o gate decide ANTES de qualquer 2ª via, e dela só sai a fatura autorizada.
+      const gate = await cobrancaAutorizada(args.contratoId, contexto);
+      if (gate.bloqueio) return { sucesso: false, enviado: false, ...gate.bloqueio };
+      const busca = gate.busca;
       if (busca.varios) {
         return {
           sucesso: false,
@@ -1130,7 +1551,10 @@ const TOOLS = [
             : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
         };
       }
-      const primeira = daMaisAntiga(busca.resultado.duplicates)[0];
+      if (faturaForaDoAlvo(contexto, busca)) {
+        return { sucesso: false, motivo: 'A fatura encontrada não é do titular pedido; nada foi enviado.' };
+      }
+      const primeira = gate.fatura;
       const contratoUsado = busca.trocouContrato
         ? { contratoId: busca.contratoId, endereco: busca.endereco }
         : null;
@@ -1184,10 +1608,11 @@ const TOOLS = [
       await enviarPix({ conversationId: contexto.conversationId, channelId: contexto.channelId, fatura: primeira, sentBy: 'ai' });
       // ---- ZONA C: o efeito externo voltou. A entrega vira um fato gravado.
       await confirmarEntrega(claimId, contexto.conversationId);
-      contexto.resolvidoPelaIa = true;
       // Grava a entrega: contexto.resolvidoPelaIa nasce false a cada turno, e o
       // "nao preciso de mais nada" do cliente costuma vir no turno SEGUINTE.
-      await markTriageResolvedByAi(contexto.conversationId);
+      // 2+ à noite: reativação, nunca "resolvido pela IA".
+      await marcarDepoisDaEntrega(gate, contexto);
+      const reativacaoDepois = Boolean(gate.decisao && gate.decisao.reativacaoDepois);
       // O modelo de frase do dono sai DAQUI, e só depois do envio real: no
       // prompt, o modelo copiava a frase sem chamar a ferramenta (teste real
       // 2026-09-15, com o boleto).
@@ -1199,7 +1624,110 @@ const TOOLS = [
         ...(contratoUsado ? { contratoUsado } : {}),
         // Print 2026-09-17: entrega inteira sem chamar o cliente pelo nome,
         // logo depois de identificar pelo CPF — "está muito robô".
-        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão com botão de copiar). ${nomeParaTratar(contexto)} Responda EXATAMENTE no modelo: "Enviei acima o PIX${endereco ? ' referente ao seu contrato do endereço ' + endereco : ''}. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco. Se tiver alguma dificuldade, me avise que eu te ajudo!" NÃO repita o código nem o valor.`,
+        ...(reativacaoDepois ? { reativacaoDepois: true } : {}),
+        instrucao: `O PIX já foi enviado ao cliente nesta conversa (cartão com botão de copiar). ${nomeParaTratar(contexto)} Responda EXATAMENTE no modelo: "Enviei acima o PIX${reativacaoDepois ? ' da fatura vencida mais antiga' : ''}${endereco ? ' referente ao seu contrato do endereço ' + endereco : ''}. É só copiar o código e colar na opção "PIX Copia e Cola" do aplicativo do seu banco.${reativacaoDepois ? fraseDasDemaisVencidas(contexto) : ''} Se tiver alguma dificuldade, me avise que eu te ajudo!" NÃO repita o código nem o valor.${reativacaoDepois ? ' Não diga que a internet será liberada nem que ficou tudo regularizado.' : ''}`,
+      };
+    },
+  },
+  {
+    nome: 'conferir_pagamento',
+    categoria: 'CONSULTA',
+    descricao: 'Confere no sistema se a fatura enviada nesta conversa (boleto ou PIX) já consta como paga, relendo a MESMA fatura. Use quando o cliente disser que pagou ou perguntar se o pagamento caiu. É a única fonte para dizer que um pagamento foi confirmado: comprovante, "já paguei" ou aviso do banco não confirmam.',
+    // Sem argumento nenhum do modelo: a fatura é a última cobrança que SAIU nesta conversa
+    // (ai_billing_deliveries) e o contrato é o dela — que ainda precisa estar neste atendimento.
+    isentoDeProprietario: true,
+    exigeIdentidadeForte: true,
+    // Até 20 páginas de títulos + a releitura do contrato, 15 s de HTTP cada.
+    timeoutMs: 40000,
+    parametros: { type: 'object', properties: {} },
+    validar() {
+      return { ok: true, args: {} };
+    },
+    async executar(args, contexto) {
+      if (!perfilTriagem(contexto)) return erro('conferir_pagamento is only available during AI triage');
+      // Marca do turno para a guarda de linguagem: depois de conferir, "está conectado" sem a
+      // verificação da conexão é afirmação sem fato.
+      contexto.pagamentoConferido = true;
+      const naoConferiu = (motivo) => ({
+        pagamentoConfirmado: false,
+        motivo,
+        instrucao: 'Não foi possível conferir o pagamento agora. NÃO diga que o pagamento foi confirmado, compensado ou baixado, nem que a internet foi liberada. Diga que um atendente vai conferir e chame concluir_triagem para o setor que cuidar de financeiro.',
+      });
+
+      const entrega = await findLatestEnqueuedDelivery(contexto.conversationId);
+      if (!entrega) {
+        return {
+          pagamentoConfirmado: false,
+          motivo: 'Nenhum boleto ou PIX foi enviado nesta conversa.',
+          instrucao: 'Não há cobrança enviada nesta conversa para conferir. NÃO diga que o pagamento foi confirmado. Se o cliente pagou por outro meio, diga que a equipe vai conferir e chame concluir_triagem para o setor que cuidar de financeiro.',
+        };
+      }
+      const contratoId = entrega.contractId;
+      // O contrato da cobrança tem de estar NESTE atendimento (de quem fala, ou o do terceiro ainda
+      // autorizado). Escopo de terceiro expirado não é reaberto por aqui.
+      const escopo = escopoDoContrato(contexto, contratoId);
+      if (!escopo) return naoConferiu('A cobrança enviada é de um contrato que não está mais neste atendimento.');
+
+      let leitura = null;
+      try {
+        leitura = await sgpClient.listAllInvoices(contratoId);
+      } catch (err) {
+        console.error(`Conferência de pagamento: títulos do contrato ${contratoId} não lidos na conversa ${contexto.conversationId}: ${mensagemSegura(err)}`);
+      }
+      if (!leitura || leitura.completo !== true) return naoConferiu('Não foi possível ler todas as faturas do contrato agora.');
+
+      const titulos = normalizeInvoices(leitura.faturas);
+      // O MESMO título que saiu, pelo id. Sumir da listagem, outro título pago, comprovante ou
+      // "paguei" não confirmam nada.
+      const mesmo = titulos.find((t) => String(t.faturaId) === String(entrega.invoiceId));
+      if (!pagamentoConfirmadoDoTitulo(mesmo)) {
+        return {
+          pagamentoConfirmado: false,
+          motivo: mesmo ? 'A fatura enviada ainda não consta como paga.' : 'A fatura enviada não aparece na listagem; isso não confirma pagamento.',
+          instrucao: 'O pagamento desta fatura AINDA NÃO consta como confirmado no sistema. Diga isso de forma natural ("o pagamento ainda não consta como confirmado no sistema"), sem dizer que foi pago, compensado ou baixado e sem prometer liberação nem prazo. Comprovante, "já paguei" ou aviso do banco não mudam isso.',
+        };
+      }
+      contexto.pagamentoConfirmado = true;
+
+      // Pagou: RECONTA pela data original, na leitura de agora — a contagem de antes não vale.
+      const analise = analisarSituacaoFinanceiraContrato({
+        contrato: { id: contratoId }, titulos, hoje: hojeEmSaoPaulo(), leituraCompleta: true,
+      });
+      const restantes = analise.indeterminado ? null : analise.quantidadeVencidas;
+      // Internet liberada só com a RELEITURA do contrato em status 1 (ou com o desbloqueio em
+      // confiança). Só o contrato de quem fala tem releitura: o do terceiro não tem documento aqui.
+      const status = escopo.terceiro ? null : await statusRelidoDoContrato(contexto, contratoId);
+      const contratoAtivo = status === null ? null : status === '1';
+      if (contratoAtivo === true) contexto.contratoAtivoConfirmado = true;
+      // P2-1: a releitura que acha o contrato NÃO ativo vence o status lido no começo do turno.
+      if (contratoAtivo === false) contexto.contratoAtivoNegado = true;
+      if (status === '3') await registrarReativacao(contexto, 'contrato_cancelado');
+      if (restantes !== null && restantes >= 2) await registrarReativacao(contexto, 'multiplas_vencidas');
+
+      // A marca pode ser de um turno anterior (2+ à noite, depois da mais antiga): o banco também conta.
+      const reativacao = await reativacaoDaConversa(contexto);
+      const setor = reativacao ? await setorDeReativacaoSeguro() : null;
+      const semLiberacao = contratoAtivo === true ? '' : ' NÃO diga que a internet foi liberada.';
+      let instrucao;
+      if (restantes === null) {
+        instrucao = `O pagamento DESTA fatura foi confirmado no sistema, mas não foi possível conferir as demais faturas do contrato. Pode dizer que o pagamento foi confirmado; não diga que ficou tudo regularizado.${semLiberacao} Diga que um atendente vai conferir o restante e chame concluir_triagem para o setor que cuidar de financeiro.`;
+      } else if (reativacao) {
+        instrucao = `O pagamento DESTA fatura foi confirmado no sistema, mas o contrato não está regularizado${restantes > 0 ? ' (ainda há outras faturas vencidas)' : ''}. Pode dizer que o pagamento desta fatura foi confirmado; não diga que ficou tudo regularizado.${semLiberacao} Diga que a equipe responsável vai orientar sobre o restante e ${concluirNaReativacao(setor)}.`;
+      } else if (restantes === 1) {
+        instrucao = `O pagamento DESTA fatura foi confirmado no sistema, mas ainda há uma fatura vencida neste contrato. Pode dizer que o pagamento foi confirmado; não diga que ficou tudo regularizado.${semLiberacao} Se ele quiser, a fatura que falta pode ser enviada com gerar_pix ou enviar_boleto.`;
+      } else if (contratoAtivo === true) {
+        instrucao = 'O pagamento foi confirmado e, relido agora, o contrato consta ATIVO no sistema. Pode dizer que o pagamento foi confirmado e que o contrato está ativo/liberado. NÃO diga que a internet está conectada ou online: isso só a verificação da conexão mostra. Se ele disser que continua sem internet, siga o atendimento de suporte.';
+      } else if (contratoAtivo === false) {
+        instrucao = 'O pagamento foi confirmado, mas o contrato ainda NÃO consta ativo no sistema. NÃO diga que a internet foi liberada e não prometa prazo. Diga que o pagamento foi confirmado e que a equipe acompanha a liberação; se ele pedir a liberação, siga as regras de sempre.';
+      } else {
+        instrucao = 'O pagamento foi confirmado. Não foi possível confirmar agora o estado do contrato: NÃO diga que a internet foi liberada. Diga que o pagamento foi confirmado e que a equipe acompanha.';
+      }
+      return {
+        pagamentoConfirmado: true,
+        faturasVencidasRestantes: restantes,
+        regularizado: restantes === 0,
+        contratoAtivo,
+        instrucao,
       };
     },
   },
@@ -1234,6 +1762,9 @@ const TOOLS = [
       const noturno = noturnoDoContexto(contexto);
       const nome = (contexto.identidade && contexto.identidade.primeiroNome) || 'cliente';
       const comprovante = contexto.comprovante || null;
+      // Só o DESTINO da conclusão muda com a regra 0/1/2+ (reativação, se a conversa estiver
+      // marcada); as regras do desbloqueio (comprovante, elegibilidade, reserva, aviso) não.
+      const concluirPara = noturno ? await destinoDaConclusaoFinanceira(contexto) : null;
 
       // Com dois contratos, analisar_comprovante devolve o contrato da fatura
       // que bateu — e o modelo podia pedir a liberação do OUTRO. Seria uma
@@ -1277,7 +1808,7 @@ const TOOLS = [
         // provavelmente está com problema de conexão, e aí a conversa continua.
         if (noturno) {
           resposta.instrucao = comprovante && comprovante.valido === true
-            ? `Responda EXATAMENTE neste modelo: "Recebi seu comprovante, ${nome}! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das ${noturno.retornoAs}." — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.`
+            ? `Responda EXATAMENTE neste modelo: "Recebi seu comprovante, ${nome}! Seu contrato está ativo, então não há bloqueio para liberar. O pagamento fica registrado para a equipe conferir e dar baixa a partir das ${noturno.retornoAs}." — e ${concluirPara} NA MESMA resposta.`
             : `Responda EXATAMENTE neste modelo: "${nome}, seu contrato está ativo, então não há bloqueio para liberar. Se a internet não estiver funcionando, me conta o que está acontecendo." — não conclua ainda.`;
           registrarRecusa('contrato ativo, não há bloqueio para liberar');
         }
@@ -1308,8 +1839,8 @@ const TOOLS = [
         // O motivo vem de três fontes (regra da casa, SGP, comprovante) e nem
         // sempre termina em ponto: sem normalizar, "…judicial Assim que…".
         const motivoPontuado = String(motivo).replace(/[.\s]*$/, '.');
-        const paraOCliente = `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivoPontuado} Assim que o pagamento for confirmado, a liberação é automática.`;
-        return `Responda EXATAMENTE neste modelo: "${paraOCliente}" — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta.`;
+        const paraOCliente = `${nome}, ${comprovante ? 'recebi seu comprovante e ele já está registrado para a equipe conferir' : 'sua solicitação já está registrada para a equipe'} a partir das ${noturno.retornoAs}. ${frase}: ${motivoPontuado} Assim que o pagamento constar no sistema, a situação do contrato será verificada.`;
+        return `Responda EXATAMENTE neste modelo: "${paraOCliente}" — e ${concluirPara} NA MESMA resposta.`;
       };
       // Comprovante que a visão já reprovou (Task 3): não há o que avaliar nem
       // o que pedir ao SGP — a recusa sai daqui, sem nenhuma chamada externa.
@@ -1472,7 +2003,7 @@ const TOOLS = [
         // deixar a frase passar. E o resultado vai para o resumo da fila.
         contexto.desbloqueioRealizado = true;
         contexto.desbloqueioResultado = { liberado: true, dias: resposta.dias || null };
-        resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?" — e chame concluir_triagem para o setor que cuidar de financeiro NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
+        resposta.instrucao = `Responda EXATAMENTE neste modelo: "Prontinho, ${nome}! O desbloqueio em confiança foi realizado. Seu pagamento ainda será conferido por um dos meus colegas no horário comercial, a partir das ${noturno.retornoAs}. Já deixei seu atendimento na fila com o comprovante para acompanhamento. Você consegue testar se a internet voltou?" — e ${concluirPara} NA MESMA resposta (motivo "Desbloqueio em confiança" se existir).`;
       }
       return resposta;
     },
@@ -1597,7 +2128,10 @@ const TOOLS = [
       // humano-no-comando. perfilTriagem (não só contexto.identidade) para
       // não reabrir com um identidade: null bugado.
       if (!perfilTriagem(contexto)) return erro('enviar_boleto is only available during AI triage');
-      const busca = await faturaEmAlgumContrato(args.contratoId, contexto);
+      // Regra 0/1/2+: o gate decide ANTES de qualquer 2ª via, e dela só sai a fatura autorizada.
+      const gate = await cobrancaAutorizada(args.contratoId, contexto);
+      if (gate.bloqueio) return { enviado: false, ...gate.bloqueio };
+      const busca = gate.busca;
       if (busca.varios) {
         return {
           enviado: false,
@@ -1614,7 +2148,10 @@ const TOOLS = [
             : 'Nenhuma fatura em aberto em nenhum contrato do cliente.',
         };
       }
-      const primeira = daMaisAntiga(busca.resultado.duplicates)[0];
+      if (faturaForaDoAlvo(contexto, busca)) {
+        return { enviado: false, motivo: 'A fatura encontrada não é do titular pedido; nada foi enviado.' };
+      }
+      const primeira = gate.fatura;
       const contratoUsado = busca.trocouContrato
         ? { contratoId: busca.contratoId, endereco: busca.endereco }
         : null;
@@ -1680,23 +2217,24 @@ const TOOLS = [
       // gravado — antes de markTriageResolvedByAi, para que uma falha naquela
       // escrita não deixe esta entrega registrada como incerta.
       await confirmarEntrega(claimId, contexto.conversationId);
-      contexto.resolvidoPelaIa = true;
       // Mesma razão de gerar_pix: a flag persistida é o que autoriza
-      // encerrar_atendimento num turno posterior à entrega.
-      await markTriageResolvedByAi(contexto.conversationId);
+      // encerrar_atendimento num turno posterior à entrega. 2+ à noite: reativação.
+      await marcarDepoisDaEntrega(gate, contexto);
+      const reativacaoDepois = Boolean(gate.decisao && gate.decisao.reativacaoDepois);
       // contratoUsado só aparece quando a fatura veio de OUTRO contrato do
       // mesmo cliente. O modelo de frase do dono sai DAQUI, e só depois do
       // envio real (teste real 2026-09-15: no prompt, o modelo copiava a frase
       // sem chamar a ferramenta e o cliente não recebia nada).
       const endereco = enderecoParaCitar(busca, contexto);
-      const frase = `Enviei acima o boleto${endereco ? ' referente ao seu contrato do endereço ' + endereco + ',' : ''} em PDF${linhaDigitavelEnviada ? ' e com a linha digitável' : ''}. É só pagar pelo aplicativo do seu banco${linhaDigitavelEnviada ? ', copiando a linha digitável,' : ''} ou em qualquer lotérica. Se tiver alguma dificuldade, me avise que eu te ajudo!`;
+      const frase = `Enviei acima o boleto${reativacaoDepois ? ' da fatura vencida mais antiga' : ''}${endereco ? ' referente ao seu contrato do endereço ' + endereco + ',' : ''} em PDF${linhaDigitavelEnviada ? ' e com a linha digitável' : ''}. É só pagar pelo aplicativo do seu banco${linhaDigitavelEnviada ? ', copiando a linha digitável,' : ''} ou em qualquer lotérica.${reativacaoDepois ? fraseDasDemaisVencidas(contexto) : ''} Se tiver alguma dificuldade, me avise que eu te ajudo!`;
       return {
         enviado: true,
         valor: primeira.value,
         vencimento: primeira.dueDate,
         linhaDigitavelEnviada,
         ...(contratoUsado ? { contratoUsado } : {}),
-        instrucao: `O boleto já foi enviado ao cliente nesta conversa em PDF${linhaDigitavelEnviada ? ' e com a linha digitável em mensagem separada' : ''}. ${nomeParaTratar(contexto)} Responda EXATAMENTE no modelo, sem emoji: "${frase}" NÃO repita a linha digitável nem o valor.`,
+        ...(reativacaoDepois ? { reativacaoDepois: true } : {}),
+        instrucao: `O boleto já foi enviado ao cliente nesta conversa em PDF${linhaDigitavelEnviada ? ' e com a linha digitável em mensagem separada' : ''}. ${nomeParaTratar(contexto)} Responda EXATAMENTE no modelo, sem emoji: "${frase}" NÃO repita a linha digitável nem o valor.${reativacaoDepois ? ' Não diga que a internet será liberada nem que ficou tudo regularizado.' : ''}`,
       };
     },
   },
@@ -1793,9 +2331,25 @@ const TOOLS = [
       // propósito: a releitura que já existe aqui embaixo acontece DEPOIS do
       // UPDATE, tarde demais para entrar no resumo que vai junto com ele.
       const antes = await getConversationWithContact(contexto.conversationId);
-      const resolvidoPelaIa = Boolean(contexto.resolvidoPelaIa) || Boolean(antes && antes.aiTriageResolvedByAi);
-      const setor = (await listSectors()).find((s) => s.id === args.setorId);
+      // Regra 0/1/2+ (25/09/2026): conversa marcada para a reativação (cancelado, 2+ de dia, 2+ à
+      // noite depois da mais antiga) vai para o setor de reativação e NUNCA sai como "resolvida
+      // pela IA" — nem com o PIX enviado, nem com ele pago.
+      const reativacao = await reativacaoDaConversa(contexto);
+      const resolvidoPelaIa = !reativacao
+        && (Boolean(contexto.resolvidoPelaIa) || Boolean(antes && antes.aiTriageResolvedByAi));
+      const setores = await listSectors();
+      const setor = setores.find((s) => s.id === args.setorId);
       if (!setor) return erro('Unknown setorId');
+      // Sem setor de reativação cadastrado, a conclusão segue no setor escolhido (ainda sem
+      // "resolvido"): travar aqui deixaria a conversa sem destino nenhum.
+      const setorReativacao = reativacao ? setores.find(ehSetorDeReativacao) : null;
+      if (setorReativacao && setor.id !== setorReativacao.id) {
+        return {
+          concluido: false,
+          motivo: 'Este atendimento precisa ir para a equipe de reativação.',
+          instrucao: `NÃO conclua para outro setor: ${descreverReativacao(reativacao)}. Chame concluir_triagem de novo com o setor que cuida de reativação (setorId ${setorReativacao.id}), com o mesmo resumo.`,
+        };
+      }
       let motivo = null;
       if (args.motivoId) {
         motivo = await findReasonById(args.motivoId);
@@ -1825,6 +2379,11 @@ const TOOLS = [
       if (contexto.terceiro) {
         linhas.push(`Pedido de terceiro: titular ${contexto.terceiro.nome || 'não informado'}, contrato ${contexto.terceiro.contratos.map((c) => c.id).join(', ')}`);
       }
+      // Contenções operacionais (25/09/2026): a troca do Wi-Fi é feita pela equipe a partir deste
+      // resumo — o código diz se quem pediu é o titular identificado. A senha nova nunca entra aqui.
+      const pedidoDeWifi = linhaDoWifiNoResumo(contexto);
+      if (pedidoDeWifi) linhas.push(pedidoDeWifi);
+      if (reativacao) linhas.push(`Encaminhamento para reativação: ${descreverReativacao(reativacao)}.`);
       if (resolvidoPelaIa) linhas.push('Resolvido pela IA: boleto/PIX enviado — só confirmar.');
       if (Array.isArray(contexto.registroFerramentas) && contexto.registroFerramentas.length > 0) {
         linhas.push(`Ferramentas: ${contexto.registroFerramentas.map((r) => `${r.nome} → ${legivel(r.resultado)}`).join('; ')}`);
@@ -1915,6 +2474,15 @@ const TOOLS = [
       if (!atual || atual.status !== 'waiting' || atual.assignedAgentId || atual.triageState !== 'pending') {
         return { encerrado: false, motivo: 'A conversa saiu da triagem; não faça nada.' };
       }
+      // Regra 0/1/2+: a conversa marcada para a reativação nunca fecha como resolvida, mesmo que
+      // uma entrega (de outro contrato, ou a mais antiga à noite) tenha acontecido.
+      if (await reativacaoDaConversa(contexto)) {
+        return {
+          encerrado: false,
+          motivo: 'Este atendimento precisa seguir para a equipe de reativação; não pode ser encerrado como resolvido.',
+          instrucao: 'Não encerre: chame concluir_triagem com o setor que cuida de reativação.',
+        };
+      }
       // Trava dura: a IA nunca encerra um atendimento em que não resolveu
       // nada. A flag é persistida porque a entrega pode ter sido em outro turno.
       if (!atual.aiTriageResolvedByAi) {
@@ -1945,8 +2513,11 @@ const TOOLS = [
         reasonId, summary: linhas.join('\n'),
       });
       if (!conversa) return { encerrado: false, motivo: 'A conversa já saiu da triagem.' };
-      // Só o painel: a conversa nunca apareceu na fila (nasceu 'pending' e
-      // morreu 'closed'), então não há queue:removed a emitir.
+      // A conversa em triagem ESTÁ na fila de todo atendente — é a aba Automação (fila
+      // filtrada por triageState 'pending'). Sem o queue:removed, o item encerrado ficava lá,
+      // como "IA em triagem", até recarregar a página (caso ER, 25/09/2026). Mesmo evento do
+      // encerramento pelo atendente de uma conversa sem dono.
+      broadcast('queue:removed', { conversationId: contexto.conversationId });
       broadcastToDashboard('dashboard:conversation', {
         conversation: await getConversationWithContact(contexto.conversationId),
         closedAt: new Date().toISOString(),

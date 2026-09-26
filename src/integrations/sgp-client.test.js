@@ -8,6 +8,7 @@ const {
   downloadBoletoPdf,
   checkConnection,
   listInvoices,
+  listAllInvoices,
   requestTrustUnlock,
   findClientRecord,
   SgpNotConfiguredError,
@@ -314,6 +315,71 @@ describe('sgp-client', () => {
       getSgpQueryConfig.mockResolvedValue(CONFIG);
       axios.post.mockRejectedValue(new Error('timeout'));
       await expect(checkConnection(17402)).rejects.toBeInstanceOf(SgpRequestError);
+    });
+  });
+
+  // Regra financeira 0/1/2+ (25/09/2026): a contagem de vencidas precisa de TODOS os títulos do
+  // contrato. Leitura pura (central/titulos com nao_gerar_os=1); se não der para provar que leu
+  // tudo, a leitura sai incompleta — e quem conta trata como indeterminado.
+  describe('listAllInvoices', () => {
+    const pagina = (ids, { offset = 0, limit = 3, total } = {}) => ({
+      data: { paginacao: { offset, limit, parcial: ids.length, total }, faturas: ids.map((id) => ({ id, status: 'Gerado', statusid: 1 })) },
+    });
+    const corpo = (i) => new URLSearchParams(axios.post.mock.calls[i][1]);
+
+    test('tudo numa página (o que a DW devolve hoje): uma chamada, leitura completa', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValueOnce(pagina([1, 2], { limit: 200, total: 2 }));
+      const r = await listAllInvoices(17402);
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      expect(axios.post.mock.calls[0][0]).toBe('https://dwtelecom.sgp.tsmx.com.br/api/central/titulos');
+      expect(corpo(0).get('nao_gerar_os')).toBe('1');
+      expect(corpo(0).get('offset')).toBeNull();
+      expect(r).toMatchObject({ total: 2, completo: true, motivo: null });
+      expect(r.faturas.map((f) => f.id)).toEqual([1, 2]);
+    });
+
+    test('várias páginas: pede as seguintes por offset/limit até o total', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post
+        .mockResolvedValueOnce(pagina([1, 2, 3], { total: 7 }))
+        .mockResolvedValueOnce(pagina([4, 5, 6], { offset: 3, total: 7 }))
+        .mockResolvedValueOnce(pagina([7], { offset: 6, total: 7 }));
+      const r = await listAllInvoices(17402);
+      expect(axios.post).toHaveBeenCalledTimes(3);
+      expect([corpo(1).get('offset'), corpo(1).get('limit'), corpo(1).get('nao_gerar_os')]).toEqual(['3', '3', '1']);
+      expect(corpo(2).get('offset')).toBe('6');
+      expect(r).toMatchObject({ total: 7, completo: true });
+      expect(r.faturas).toHaveLength(7);
+    });
+
+    test('a API ignora o offset e repete a página: leitura INCOMPLETA, sem duplicar título', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValue(pagina([1, 2, 3], { total: 5 }));
+      const r = await listAllInvoices(17402);
+      expect(r).toMatchObject({ completo: false, motivo: 'paginacao_repetida' });
+      expect(r.faturas).toHaveLength(3);
+    });
+
+    test('sem total informado: não dá para provar que leu tudo — INCOMPLETA', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValueOnce({ data: { faturas: [{ id: 1 }] } });
+      expect(await listAllInvoices(17402)).toMatchObject({ completo: false, motivo: 'total_ausente' });
+    });
+
+    test('teto de páginas: INCOMPLETA', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      let n = 0;
+      axios.post.mockImplementation(async () => { n += 1; return pagina([n * 10, n * 10 + 1], { offset: (n - 1) * 2, limit: 2, total: 1000 }); });
+      const r = await listAllInvoices(17402, { maxPaginas: 3 });
+      expect(axios.post).toHaveBeenCalledTimes(3);
+      expect(r).toMatchObject({ completo: false, motivo: 'teto_de_paginas' });
+    });
+
+    test('resposta inesperada: falha (quem chama trata como indeterminado)', async () => {
+      getSgpQueryConfig.mockResolvedValue(CONFIG);
+      axios.post.mockResolvedValueOnce({ data: 'html' });
+      await expect(listAllInvoices(17402)).rejects.toBeInstanceOf(SgpRequestError);
     });
   });
 

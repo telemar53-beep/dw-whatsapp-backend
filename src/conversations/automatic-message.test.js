@@ -95,6 +95,21 @@ describe('resumoParaModelo — o texto montado NUNCA vai cru à IA', () => {
   test('mensagem que não é automática: null (quem chama segue a regra de sempre)', () => {
     expect(resumoParaModelo({ direction: 'outbound', content: 'oi', metadata: null })).toBeNull();
   });
+
+  // Fase 1C (25/09/2026): a autorresposta provável do destinatário vai ao modelo como rótulo
+  // seguro — a IA sabe que houve, mas não a trata como fala do cliente e não recebe o texto.
+  test('autorresposta provável (entrada marcada): rótulo seguro, sem o texto', () => {
+    const r = resumoParaModelo({
+      direction: 'inbound', content: 'Restaurante Sabor Caseiro agradece seu contato. Ligue 98 99999-0000',
+      metadata: { autorrespostaProvavel: true, autorrespostaMotivo: 'janela_padrao_forte' },
+    });
+    expect(r).toBe('[resposta automática provável do estabelecimento destinatário — não tratar como solicitação humana]');
+    expect(r).not.toMatch(/Sabor Caseiro|99999/);
+  });
+
+  test('entrada sem a marca segue a regra de sempre (null aqui)', () => {
+    expect(resumoParaModelo({ direction: 'inbound', content: 'oi', metadata: { providerTimestampRaw: 1 } })).toBeNull();
+  });
 });
 
 describe('encontrarDisparoRelacionado e fatoDoDisparo', () => {
@@ -104,6 +119,12 @@ describe('encontrarDisparoRelacionado e fatoDoDisparo', () => {
     metadata: { origem: 'sgp', modo: 'template', template, tipo: 'desconhecido', textoModelo: 'x {{1}}', ...extra },
   });
   const entrada = (id, repliedToMessageId = null) => ({ id, direction: 'inbound', messageType: 'text', content: 'oi', repliedToMessageId });
+
+  test('Fase 1C: a autorresposta marcada não é disparo — o disparo relacionado continua o de antes dela', () => {
+    const autorresposta = { id: 'ar', direction: 'inbound', messageType: 'text', content: 'Estamos fechados.', metadata: { autorrespostaProvavel: true } };
+    const historico = [auto('a', 'tpl_a'), autorresposta, entrada('i')];
+    expect(encontrarDisparoRelacionado(historico)).toEqual({ mensagem: historico[0], citado: false });
+  });
 
   test('o disparo citado pelo cliente tem prioridade sobre o último', () => {
     const historico = [auto('a', 'tpl_a'), auto('b', 'tpl_b'), entrada('i', 'a')];

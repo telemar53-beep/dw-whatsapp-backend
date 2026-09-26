@@ -48,6 +48,10 @@ const {
   isPhoneContested,
   setThirdPartyScope,
   getThirdPartyScope,
+  setTriageReactivation,
+  reserveTriageNightInvoice,
+  getTriageNightInvoice,
+  getTriageReactivation,
 } = require('./conversation.repository');
 
 describe('conversation repository', () => {
@@ -1395,6 +1399,56 @@ describe('conversation repository', () => {
 
     await setThirdPartyScope(conversation.id, null);
     expect(await getThirdPartyScope(conversation.id)).toBeNull();
+  });
+
+  // Regra financeira 0/1/2+ (25/09/2026): o motivo de ir para a Reativação é fato do sistema e
+  // vale nos turnos seguintes; o primeiro motivo gravado fica.
+  test('guarda e lê o motivo de Reativação; o primeiro motivo não é trocado', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    expect(await getTriageReactivation(conversation.id)).toBeNull();
+    await setTriageReactivation(conversation.id, 'multiplas_vencidas_noturno');
+    await setTriageReactivation(conversation.id, 'contrato_cancelado');
+    expect(await getTriageReactivation(conversation.id)).toBe('multiplas_vencidas_noturno');
+    expect(await getTriageReactivation('00000000-0000-0000-0000-000000000000')).toBeNull();
+  });
+
+  // Fluxo noturno de 2+ (ajuste final de 25/09/2026): a trava é POR CONTRATO. Em cada contrato, a
+  // primeira fatura reservada é a única — a segunda reserva devolve a primeira, e quem chamou não
+  // entrega. Outro contrato tem a sua, independente.
+  const reserva = (conversationId, contratoId, faturaId, alvo = 'principal') => reserveTriageNightInvoice(conversationId, { contratoId, faturaId, alvo });
+
+  test('reserva a fatura do fluxo noturno de 2+ por contrato: a primeira de cada contrato fica', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    expect(await getTriageNightInvoice(conversation.id, 100)).toBeNull();
+    expect(await reserva(conversation.id, 100, 900001)).toBe('900001');
+    expect(await reserva(conversation.id, 100, '900001')).toBe('900001');
+    expect(await reserva(conversation.id, 100, 900002)).toBe('900001');
+    // Outro contrato na mesma conversa: reserva PRÓPRIA, não a de A.
+    expect(await getTriageNightInvoice(conversation.id, 200)).toBeNull();
+    expect(await reserva(conversation.id, 200, 800001, 'terceiro')).toBe('800001');
+    expect(await getTriageNightInvoice(conversation.id, 100)).toBe('900001');
+    expect(await getTriageNightInvoice(conversation.id, 200)).toBe('800001');
+    const r = await getPool().query('SELECT ai_triage_night_invoices FROM conversations WHERE id = $1', [conversation.id]);
+    expect(r.rows[0].ai_triage_night_invoices).toEqual({
+      100: { faturaId: '900001', alvo: 'principal' },
+      200: { faturaId: '800001', alvo: 'terceiro' },
+    });
+    expect(await reserva('00000000-0000-0000-0000-000000000000', 100, 1)).toBeNull();
+  });
+
+  test('duas reservas concorrentes no MESMO contrato: as duas recebem a mesma fatura', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const [a, b] = await Promise.all([reserva(conversation.id, 100, 910001), reserva(conversation.id, 100, 910002)]);
+    expect(a).toBe(b);
+    expect(await getTriageNightInvoice(conversation.id, 100)).toBe(a);
+  });
+
+  test('reservas concorrentes em contratos DIFERENTES: cada um fica com a sua', async () => {
+    const conversation = await createConversation(contactId, channelId);
+    const [a, b] = await Promise.all([reserva(conversation.id, 100, 920001), reserva(conversation.id, 200, 930001)]);
+    expect([a, b]).toEqual(['920001', '930001']);
+    expect(await getTriageNightInvoice(conversation.id, 100)).toBe('920001');
+    expect(await getTriageNightInvoice(conversation.id, 200)).toBe('930001');
   });
 
   test('o escopo de terceiro de uma conversa inexistente é nulo', async () => {

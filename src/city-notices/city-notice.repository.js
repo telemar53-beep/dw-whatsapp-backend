@@ -70,6 +70,18 @@ async function hasContactReceivedNotice(cityNoticeId, contactId) {
   return result.rowCount > 0;
 }
 
+/**
+ * Quando o aviso saiu para este contato (ou null se não saiu). Só leitura: o worker usa para
+ * saber se o aviso foi mandado NESTE turno (na entrada da mesma mensagem) e não repeti-lo.
+ */
+async function findNoticeDeliverySentAt(cityNoticeId, contactId) {
+  const result = await getPool().query(
+    'SELECT sent_at FROM city_notice_deliveries WHERE city_notice_id = $1 AND contact_id = $2',
+    [cityNoticeId, contactId]
+  );
+  return result.rowCount > 0 ? result.rows[0].sent_at : null;
+}
+
 async function recordNoticeDelivery(cityNoticeId, contactId) {
   const result = await getPool().query(
     `INSERT INTO city_notice_deliveries (city_notice_id, contact_id)
@@ -88,4 +100,5 @@ module.exports = {
   deleteCityNotice,
   hasContactReceivedNotice,
   recordNoticeDelivery,
+  findNoticeDeliverySentAt,
 };

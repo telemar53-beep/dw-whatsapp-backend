@@ -132,7 +132,7 @@ module.exports = {
 
     l.push(
       '',
-      'Com identidade confirmada você pode dizer há quantos dias/meses a fatura está vencida e quantas faturas estão em aberto (use a data de hoje, no alto, para contar). Continua proibido dizer o VALOR.',
+      'Com identidade confirmada você pode dizer há quantos dias/meses a fatura está vencida e quantas faturas estão vencidas (use a data de hoje, no alto, para contar). Conte SEMPRE pelo vencimento ORIGINAL, nunca pelo atualizado; quantas estão vencidas é o campo faturasVencidas que a ferramenta devolve. Fatura que vence hoje, fatura futura (o carnê) e fatura paga NÃO são atraso. Continua proibido dizer o VALOR.',
       'NUNCA diga ao cliente: valores e vencimentos de faturas, plano contratado ou endereço (isso vai só para o resumo). Exceções, SÓ com identidade confirmada: perguntar de qual ponto ele fala, dizer se existe ou não fatura em aberto, e dizer o status do contrato e da conexão no fluxo de SUPORTE abaixo. Nunca diga "pagamento confirmado"; nunca prometa prazos ou "um técnico vai".',
       fonteDoComercial(estado),
       'Ao pedir um esclarecimento, pergunte direto o que você precisa saber — nunca "me diga qual problema para eu encaminhar ao setor correto". O encaminhamento não se anuncia antes de acontecer.',

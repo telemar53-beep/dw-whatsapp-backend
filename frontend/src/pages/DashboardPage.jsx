@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQueue } from '../hooks/useQueue';
@@ -20,6 +20,14 @@ import TeamPanel from '../components/TeamPanel';
 import { Tabs } from '../components/ui/Tabs';
 import { IconNewChat, IconSearch, IconLock, IconEmptyChat, IconChats, IconArrowLeft } from '../components/icons/WaIcons';
 import './dashboard.css';
+
+// A conversa aberta só redesenha com o que é dela. Evento de outra conversa,
+// busca, troca de aba ou aviso redesenham a página, mas a conversa aberta
+// continua com as mesmas props — `conversation` mantém a referência (os hooks
+// da lista trocam só o item afetado), os setters são estáveis e o `onBack` vem
+// de useCallback. Comparação rasa, de propósito: um comparador por campo
+// congelaria o cabeçalho no primeiro campo esquecido (BUG-004, achado A2).
+const ConversaAbertaDaMesa = memo(ConversationView);
 
 const TABS = [
   { value: 'inProgress', label: 'Atendimento' },
@@ -78,6 +86,10 @@ function DashboardPage() {
     // Escolher um atendimento devolve o espaço para a conversa.
     setListaAberta(false);
   }, [clearUnread]);
+
+  // Estável pelo mesmo motivo: recriada a cada render, derrubaria o memo da
+  // conversa aberta.
+  const voltarParaLista = useCallback(() => setSelectedId(null), []);
 
   // A conversa transferida cai em "Meus atendimentos", então abrir pelo aviso
   // também troca de aba — senão o atendente clica e não vê nada acontecer.
@@ -284,12 +296,12 @@ function DashboardPage() {
           } min-w-0 flex-1 overflow-clip`}
         >
           {selectedConversation ? (
-            <ConversationView
+            <ConversaAbertaDaMesa
               conversation={selectedConversation}
               painelModo={layout.painel}
               onPainelAbertoChange={setPainelAberto}
               onTransferClick={setTransferringId}
-              onBack={() => setSelectedId(null)}
+              onBack={voltarParaLista}
               workspace
             />
           ) : (

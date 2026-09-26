@@ -629,3 +629,61 @@ describe('aviso de transferência recebida', () => {
     expect(screen.getByTitle('5511999998888')).toHaveTextContent('Carlos');
   });
 });
+
+// A conversa aberta só redesenha com o que é dela (BUG-004, achado A2). Na
+// mesa, só a ConversationView chama useQuickReplies, uma vez por render: as
+// chamadas do mock contam os renders da conversa.
+describe('fronteira da conversa aberta', () => {
+  const ctx = { openProfile: vi.fn(), closeMobileNav: vi.fn(), profileVersion: 0, setConversationOpen: vi.fn() };
+  const mesa = () => (
+    <MemoryRouter>
+      <Routes>
+        <Route element={<Outlet context={ctx} />}>
+          <Route path="/" element={<DashboardPage />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>
+  );
+  const rendersDaConversa = () => useQuickReplies.mock.calls.length;
+
+  async function abrirNaEspera(nome) {
+    await userEvent.click(screen.getByRole('tab', { name: /espera/i }));
+    await userEvent.click(screen.getByText(nome));
+  }
+
+  test('mudança em outra conversa atualiza a lista sem redesenhar a conversa aberta', async () => {
+    const aberta = { id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null };
+    const outra = { id: 'c2', contactDisplayName: 'Bruna', status: 'waiting', assignedAgentId: null, lastMessageContent: 'primeira mensagem' };
+    useQueue.mockReturnValue({ queue: [aberta, outra], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+    const { rerender } = render(mesa());
+    await abrirNaEspera('Carlos');
+    expect(screen.getByRole('button', { name: 'Editar cliente: Carlos' })).toBeInTheDocument();
+    expect(screen.getByText('primeira mensagem')).toBeInTheDocument();
+    const antes = rendersDaConversa();
+
+    // Como o useQueue responde a um evento de outra conversa: array novo, só o
+    // item dela trocado, a conversa aberta com a mesma referência.
+    useQueue.mockReturnValue({ queue: [aberta, { ...outra, lastMessageContent: 'segunda mensagem' }], status: 'ready' });
+    rerender(mesa());
+
+    expect(screen.getByText('segunda mensagem')).toBeInTheDocument();
+    expect(rendersDaConversa()).toBe(antes);
+  });
+
+  test('objeto novo da conversa aberta redesenha a conversa e mostra o dado novo', async () => {
+    const aberta = { id: 'c1', contactDisplayName: 'Carlos', status: 'waiting', assignedAgentId: null };
+    useQueue.mockReturnValue({ queue: [aberta], status: 'ready' });
+    useMyConversations.mockReturnValue({ conversations: [], status: 'ready' });
+    const { rerender } = render(mesa());
+    await abrirNaEspera('Carlos');
+    expect(screen.getByRole('button', { name: 'Editar cliente: Carlos' })).toBeInTheDocument();
+    const antes = rendersDaConversa();
+
+    useQueue.mockReturnValue({ queue: [{ ...aberta, contactDisplayName: 'Carlos Pereira' }], status: 'ready' });
+    rerender(mesa());
+
+    expect(rendersDaConversa()).toBeGreaterThan(antes);
+    expect(screen.getByRole('button', { name: 'Editar cliente: Carlos Pereira' })).toBeInTheDocument();
+  });
+});

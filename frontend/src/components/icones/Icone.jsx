@@ -10,6 +10,11 @@ import { createElement } from 'react';
 // Decorativo por padrão — quem nomeia é o botão em volta, como no resto da
 // aplicação. Com `titulo`, vira imagem com nome acessível, para o ícone que
 // aparece sozinho.
+//
+// Um traço marcado 'cheio' no desenho (só a marca Pix, que é um sólido) sai
+// preenchido na cor do texto e sem contorno. A cor continua sendo da moldura.
+const CHEIO = { fill: 'currentColor', stroke: 'none' };
+
 export function Icone({ desenho, tamanho = 20, titulo, className, ...resto }) {
   const acessibilidade = titulo
     ? { role: 'img', 'aria-label': titulo }
@@ -28,7 +33,9 @@ export function Icone({ desenho, tamanho = 20, titulo, className, ...resto }) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {desenho.map(([elemento, geometria], indice) => createElement(elemento, { key: indice, ...geometria }))}
+      {desenho.map(([elemento, geometria, preenchimento], indice) =>
+        createElement(elemento, preenchimento === 'cheio' ? { key: indice, ...geometria, ...CHEIO } : { key: indice, ...geometria })
+      )}
     </svg>
   );
 }

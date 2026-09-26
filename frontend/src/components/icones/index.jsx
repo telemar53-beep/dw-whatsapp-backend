@@ -40,3 +40,10 @@ export function IconeSomDesativado(props) { return <Icone desenho={desenhos.somD
 export function IconeEncerrados(props) { return <Icone desenho={desenhos.encerrados} {...props} />; }
 export function IconeSair(props) { return <Icone desenho={desenhos.sair} {...props} />; }
 export function IconeMenu(props) { return <Icone desenho={desenhos.menu} {...props} />; }
+
+// Painel SGP
+export function IconeCodigoPix(props) { return <Icone desenho={desenhos.codigoPix} {...props} />; }
+export function IconeQrPix(props) { return <Icone desenho={desenhos.qrPix} {...props} />; }
+export function IconeCodigoBarras(props) { return <Icone desenho={desenhos.codigoBarras} {...props} />; }
+export function IconeLinkFatura(props) { return <Icone desenho={desenhos.linkFatura} {...props} />; }
+export function IconePdfFatura(props) { return <Icone desenho={desenhos.pdfFatura} {...props} />; }

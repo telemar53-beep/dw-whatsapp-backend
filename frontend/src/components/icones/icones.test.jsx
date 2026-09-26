@@ -4,8 +4,9 @@ import * as Icones from './index';
 import * as IconesAntigos from '../icons/WaIcons';
 import * as IconesAntigosSgp from '../icons/SgpIcons';
 
-// Os 25 das pranchas 1 e 2, mais Campanhas, Som desativado e Menu (mesa).
-// Qualquer ícone novo entra aqui junto, e passa pelas mesmas regras.
+// Os 25 das pranchas 1 e 2, mais Campanhas, Som desativado e Menu (mesa), e
+// os cinco do painel SGP (prancha da fatia 3). Qualquer ícone novo entra aqui
+// junto, e passa pelas mesmas regras.
 const NOMES = [
   'IconeAtendimento',
   'IconeFilas',
@@ -35,7 +36,20 @@ const NOMES = [
   'IconeEncerrados',
   'IconeSair',
   'IconeMenu',
+  'IconeCodigoPix',
+  'IconeQrPix',
+  'IconeCodigoBarras',
+  'IconeLinkFatura',
+  'IconePdfFatura',
 ];
+
+// Os do painel SGP, desenhados na fatia 3.
+const DO_SGP = ['IconeCodigoPix', 'IconeQrPix', 'IconeCodigoBarras', 'IconeLinkFatura', 'IconePdfFatura'];
+
+// A exceção da família: a marca Pix é um sólido. Só estes podem ter traço
+// preenchido, e só na cor do texto.
+const COM_MARCA_PIX = ['IconeCodigoPix', 'IconeQrPix'];
+const CHEIO = { fill: 'currentColor', stroke: 'none' };
 
 // Só geometria nos traços. Cor, espessura, terminação e preenchimento são da
 // moldura, iguais para a família inteira; qualquer atributo fora desta lista
@@ -55,7 +69,7 @@ function desenhar(Componente, props = {}) {
 }
 
 describe('família de ícones DW', () => {
-  test('exporta exatamente os 28 ícones da família', () => {
+  test('exporta exatamente os 33 ícones da família', () => {
     const exportados = Object.keys(Icones).filter((nome) => nome.startsWith('Icone') && nome !== 'Icone');
     expect(exportados.sort()).toEqual([...NOMES].sort());
   });
@@ -75,10 +89,13 @@ describe('família de ícones DW', () => {
     const tracos = [...svg.children];
     expect(tracos.length).toBeGreaterThan(0);
     tracos.forEach((traco) => {
-      const permitidos = GEOMETRIA[traco.localName];
-      expect(permitidos, `<${traco.localName}> não é traço da família`).toBeDefined();
-      [...traco.attributes].forEach(({ name }) => {
+      const geometria = GEOMETRIA[traco.localName];
+      expect(geometria, `<${traco.localName}> não é traço da família`).toBeDefined();
+      const cheio = traco.hasAttribute('fill');
+      const permitidos = cheio && COM_MARCA_PIX.includes(nome) ? [...geometria, ...Object.keys(CHEIO)] : geometria;
+      [...traco.attributes].forEach(({ name, value }) => {
         expect(permitidos, `atributo ${name} em <${traco.localName}>`).toContain(name);
+        if (name in CHEIO) expect(value, `${name} em ${nome}`).toBe(CHEIO[name]);
       });
     });
     expect(svg.outerHTML).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
@@ -97,6 +114,49 @@ describe('família de ícones DW', () => {
         });
       });
     });
+  });
+
+  test('só a marca Pix é preenchida, e na cor do texto', () => {
+    NOMES.forEach((nome) => {
+      const cheios = [...desenhar(Icones[nome]).children].filter((traco) => traco.hasAttribute('fill'));
+      if (COM_MARCA_PIX.includes(nome)) expect(cheios.length, nome).toBeGreaterThan(0);
+      else expect(cheios, nome).toEqual([]);
+      cheios.forEach((traco) => {
+        expect(traco.getAttribute('fill')).toBe('currentColor');
+        expect(traco.getAttribute('stroke')).toBe('none');
+      });
+    });
+  });
+
+  // Colisão acidental: dois ícones com o mesmo desenho inteiro. Repetir um
+  // traço é permitido de propósito (a moldura de conversa, o sino), mas os do
+  // painel SGP são desenhos novos e não herdam traço de ninguém.
+  test('nenhum ícone repete o desenho inteiro de outro', () => {
+    const vistos = new Map();
+    NOMES.forEach((nome) => {
+      const desenho = desenhar(Icones[nome]).innerHTML;
+      expect(vistos.get(desenho), `${nome} repete ${vistos.get(desenho)}`).toBeUndefined();
+      vistos.set(desenho, nome);
+    });
+  });
+
+  test('os ícones do painel SGP não reaproveitam traço de outro ícone', () => {
+    const deOutros = new Set();
+    NOMES.filter((nome) => !DO_SGP.includes(nome)).forEach((nome) => {
+      [...desenhar(Icones[nome]).children].forEach((traco) => deOutros.add(traco.outerHTML));
+    });
+    DO_SGP.forEach((nome) => {
+      [...desenhar(Icones[nome]).children].forEach((traco) => {
+        expect(deOutros.has(traco.outerHTML), nome).toBe(false);
+      });
+    });
+  });
+
+  test.each(DO_SGP)('%s: com título, vira imagem com nome acessível', (nome) => {
+    const Componente = Icones[nome];
+    render(<Componente titulo="Ação do painel" />);
+    const imagem = screen.getByRole('img', { name: 'Ação do painel' });
+    expect(imagem.getAttribute('viewBox')).toBe('0 0 24 24');
   });
 
   test('decorativo por padrão: fora da árvore de acessibilidade', () => {

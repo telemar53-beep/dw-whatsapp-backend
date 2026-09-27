@@ -53,7 +53,7 @@ describe('Atendimentos anteriores sob demanda', () => {
     mesa();
     await userEvent.click(screen.getByRole('button', { name: 'Dados do cliente' }));
     await userEvent.click(screen.getByRole('button', { name: 'Histórico' }));
-    expect(await screen.findByRole('dialog', { name: 'Atendimentos anteriores' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Histórico de atendimentos' })).toBeInTheDocument();
     expect(avaliados.has('historico')).toBe(true);
     expect(avaliados.has('editar')).toBe(false);
   });

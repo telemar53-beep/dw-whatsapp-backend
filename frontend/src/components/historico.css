@@ -1,0 +1,536 @@
+/* Histórico de atendimentos — a variante history do diálogo, clara (mockup
+   aprovado em 26/09). Chega junto com o modal, sob demanda.
+
+   Toda regra começa pela variante: os outros diálogos, que dividem o
+   ui/Dialog e o overlays.css, não mudam. As cores são as da conversa aprovada
+   (conversa-mesa.css) e do modal "Editar cliente".
+
+   Custo: fundo chapado, divisórias de 1px, uma sombra curta. Sem desfoque,
+   sem gradiente. */
+
+/* O fundo escurecido, sem desfoque. */
+.chat-theme:has(> [data-dialog='history']) {
+  background: rgba(22, 26, 38, 0.6);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+[data-dialog='history'].dw-dialog {
+  --hi-papel: #ffffff;
+  --hi-nevoa: #eef0f4;
+  --hi-suave: #f6f7f9;
+  --hi-linha: #e3e6ec;
+  --hi-borda: #cfd3dc;
+  --hi-texto: #161a26;
+  --hi-texto-2: #5b6272;
+  --hi-texto-3: #6b7180;
+  --hi-indigo: #4f46e5;
+  --hi-indigo-texto: #3f37c9;
+  --hi-selecao: #eef0fd;
+  --hi-enviada: #e6e4fb;
+  --hi-ia: #5b3fb3;
+  --hi-erro-fundo: #fdecea;
+  --hi-erro-texto: #b3261e;
+  /* O diálogo vive dentro de .chat-theme, onde estes tokens são os do tema
+     escuro (e o destaque é laranja). Os anexos da conversa leem estes nomes:
+     aqui eles voltam à paleta clara. */
+  --color-wa-text: var(--hi-texto);
+  --color-wa-muted: var(--hi-texto-2);
+  --color-wa-meta: var(--hi-texto-3);
+  --color-wa-icon: var(--hi-texto-2);
+  --color-wa-border: var(--hi-linha);
+  --color-wa-border-strong: var(--hi-borda);
+  --color-wa-panel: var(--hi-papel);
+  --color-wa-panel-header: var(--hi-suave);
+  --color-wa-in: var(--hi-papel);
+  --color-wa-out: var(--hi-enviada);
+  --color-wa-out-deep: var(--hi-suave);
+  --color-wa-hover: var(--hi-suave);
+  --color-wa-active: var(--hi-selecao);
+  --color-wa-surface: var(--hi-suave);
+  --color-wa-surface-soft: var(--hi-suave);
+  --color-wa-surface-line: var(--hi-linha);
+  --color-wa-field: var(--hi-papel);
+  --color-wa-link: var(--hi-indigo-texto);
+  --color-chat-text: var(--hi-texto);
+  --color-chat-muted: var(--hi-texto-2);
+  --color-chat-faint: var(--hi-texto-3);
+  --color-chat-icon: var(--hi-texto-2);
+  --color-accent: var(--hi-indigo);
+  --color-focus-ring: var(--hi-indigo);
+  color-scheme: light;
+  width: 100%;
+  max-width: 900px;
+  /* Altura fixa: trocar de atendimento troca o conteúdo, não a moldura. */
+  height: min(720px, calc(100dvh - 48px));
+  max-height: none;
+  background: var(--hi-papel);
+  color: var(--hi-texto);
+  border: 1px solid var(--hi-linha);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(22, 26, 38, 0.16);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* Vazio, erro ou sem permissão: uma frase só, sem a altura nem a largura do
+   mestre–detalhe. */
+[data-dialog='history'].dw-dialog:has(.hi-raiz.is-compacto) {
+  max-width: 560px;
+  height: auto;
+}
+
+/* Mestre–detalhe: a lista à esquerda, o atendimento à direita; cada um rola
+   sozinho. Estreito, uma tela de cada vez (o `hidden` alterna). */
+[data-dialog='history'] .hi-raiz {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+[data-dialog='history'] .hi-raiz.is-largo.tem-itens {
+  grid-template-columns: 340px minmax(0, 1fr);
+}
+[data-dialog='history'] .hi-lista {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+[data-dialog='history'] .hi-raiz.is-largo.tem-itens .hi-lista {
+  border-right: 1px solid var(--hi-linha);
+}
+[data-dialog='history'] .hi-cabeca {
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid var(--hi-linha);
+}
+[data-dialog='history'] .hi-titulo {
+  margin: 0;
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--hi-texto);
+}
+[data-dialog='history'] .hi-contagem {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 19px;
+  color: var(--hi-texto-2);
+}
+[data-dialog='history'] .hi-lista-corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+[data-dialog='history'] :is(.hi-lista-corpo, .hi-detalhe-corpo, .hi-mensagens):focus {
+  outline: none;
+}
+
+/* Um item: data, motivo, atendente e canal. */
+[data-dialog='history'] .hi-itens {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-dialog='history'] .hi-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 68px;
+  padding: 12px 16px 12px 20px;
+  border-bottom: 1px solid var(--hi-linha);
+  background: transparent;
+  color: var(--hi-texto);
+  text-align: left;
+}
+[data-dialog='history'] .hi-item[aria-current='true'] {
+  background: var(--hi-selecao);
+}
+[data-dialog='history'] .hi-item[aria-current='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--hi-indigo);
+}
+[data-dialog='history'] .hi-data {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  width: 46px;
+  padding: 5px 0 6px;
+  border: 1px solid var(--hi-linha);
+  border-radius: 8px;
+  background: var(--hi-papel);
+}
+[data-dialog='history'] .hi-data b {
+  font-size: 17px;
+  line-height: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--hi-texto);
+}
+[data-dialog='history'] .hi-data small {
+  font-size: 11px;
+  line-height: 14px;
+  text-transform: uppercase;
+  color: var(--hi-texto-2);
+}
+[data-dialog='history'] .hi-item-texto {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+[data-dialog='history'] :is(.hi-motivo, .hi-apoio) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-dialog='history'] .hi-motivo {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+[data-dialog='history'] .hi-apoio {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--hi-texto-2);
+}
+[data-dialog='history'] .hi-seta {
+  flex: none;
+  transform: rotate(-90deg);
+  color: var(--hi-texto-3);
+}
+
+/* O atendimento escolhido. */
+[data-dialog='history'] .hi-detalhe {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--hi-nevoa);
+}
+[data-dialog='history'] .hi-detalhe-cabeca {
+  flex: none;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid var(--hi-linha);
+  background: var(--hi-papel);
+}
+[data-dialog='history'] .hi-detalhe-titulo {
+  margin: 0;
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--hi-texto);
+}
+[data-dialog='history'] .hi-detalhe-meta {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 19px;
+  color: var(--hi-texto-2);
+}
+[data-dialog='history'] .hi-detalhe-corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+[data-dialog='history'] .hi-orientacao {
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--hi-texto-2);
+}
+
+/* A conversa: bolhas leves, como na mesa. */
+[data-dialog='history'] .hi-mensagens {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 24px 20px;
+}
+[data-dialog='history'] .hi-anteriores {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+[data-dialog='history'] .hi-anteriores-acao {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--hi-borda);
+  border-radius: 8px;
+  background: var(--hi-papel);
+  color: var(--hi-indigo-texto);
+  font-size: 13.5px;
+  line-height: 18px;
+  font-weight: 600;
+}
+[data-dialog='history'] .hi-anteriores-acao[aria-disabled='true'] {
+  color: var(--hi-texto-2);
+  cursor: progress;
+}
+[data-dialog='history'] .hi-anteriores-erro {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--hi-erro-texto);
+  text-align: center;
+}
+[data-dialog='history'] .hi-conversa {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-dialog='history'] .hi-msg {
+  align-self: flex-start;
+  max-width: min(78%, 520px);
+  padding: 7px 12px 6px;
+  border: 1px solid var(--hi-linha);
+  border-radius: 10px;
+  background: var(--hi-papel);
+  color: var(--hi-texto);
+  font-size: 14px;
+  line-height: 20px;
+}
+[data-dialog='history'] .hi-msg.is-saida {
+  align-self: flex-end;
+  border-color: transparent;
+  background: var(--hi-enviada);
+}
+[data-dialog='history'] .hi-msg.is-inicio:not(:first-child) {
+  margin-top: 10px;
+}
+[data-dialog='history'] .hi-msg.is-entrada.is-inicio {
+  border-top-left-radius: 3px;
+}
+[data-dialog='history'] .hi-msg.is-saida.is-inicio {
+  border-top-right-radius: 3px;
+}
+[data-dialog='history'] .hi-autor {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--hi-texto-2);
+}
+[data-dialog='history'] .hi-msg.is-ia .hi-autor {
+  color: var(--hi-ia);
+}
+/* A foto do anexo traz largura fixa no próprio elemento (330 px); na bolha
+   do celular (86% de 358 px) ela passava da borda. */
+[data-dialog='history'] .hi-msg img {
+  max-width: 100% !important;
+  height: auto;
+}
+/* O dia, quando muda: discreto, como na conversa da mesa. */
+[data-dialog='history'] .hi-dia {
+  align-self: center;
+  margin: 12px 0 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--hi-papel);
+  color: var(--hi-texto-2);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+[data-dialog='history'] .hi-dia:first-child {
+  margin-top: 0;
+}
+[data-dialog='history'] .hi-texto {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+[data-dialog='history'] .hi-hora {
+  display: block;
+  margin-top: 2px;
+  text-align: right;
+  font-size: 11.5px;
+  line-height: 14px;
+  color: var(--hi-texto-2);
+}
+
+/* Estados: carregando, vazio, erro. */
+[data-dialog='history'] .hi-estado {
+  margin: 0;
+  padding: 20px 24px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--hi-texto-2);
+}
+[data-dialog='history'] .hi-aviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 16px 24px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 8px;
+  background: var(--hi-erro-fundo);
+  color: var(--hi-erro-texto);
+  font-size: 14px;
+  line-height: 20px;
+}
+[data-dialog='history'] p.hi-aviso {
+  padding: 10px 14px;
+}
+[data-dialog='history'] .hi-aviso-acao {
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* Retorno à lista: só existe na tela estreita. */
+[data-dialog='history'] .hi-voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: -8px 0 6px -8px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--hi-indigo-texto);
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+/* Rodapé: "Somente leitura" e "Fechar". O overlays.css estiliza o último
+   bloco com botão de todo diálogo; estas regras passam dele. */
+[data-dialog='history'].dw-dialog .hi-rodape {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--hi-linha);
+}
+[data-dialog='history'].dw-dialog .hi-nota {
+  font-size: 13.5px;
+  line-height: 19px;
+  color: var(--hi-texto-2);
+}
+[data-dialog='history'].dw-dialog .hi-rodape .hi-fechar {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--hi-borda);
+  border-radius: 8px;
+  background: var(--hi-papel);
+  color: var(--hi-indigo-texto);
+  font-size: 14.5px;
+  line-height: 18px;
+  font-weight: 600;
+}
+[data-dialog='history'] :is(.hi-voltar, .hi-fechar, .hi-aviso-acao, .hi-anteriores-acao):focus-visible {
+  outline: 2px solid var(--hi-indigo);
+  outline-offset: 2px;
+}
+[data-dialog='history'] .hi-item:focus-visible {
+  outline: 2px solid var(--hi-indigo);
+  outline-offset: -2px;
+}
+
+/* Sobre (hover) só onde há ponteiro que paira: no toque ele gruda. */
+@media (hover: hover) {
+  [data-dialog='history'] .hi-item:not([aria-current='true']):hover {
+    background: var(--hi-suave);
+  }
+  [data-dialog='history'] :is(.hi-anteriores-acao:not([aria-disabled='true']), .hi-fechar):hover {
+    background: var(--hi-suave);
+  }
+}
+
+/* Toque em tela maior (tablet): alvos de 44 px e texto de 16 px onde se
+   toca. Vem antes do celular, que fica com os valores dele. */
+@media (pointer: coarse) {
+  [data-dialog='history'].dw-dialog .hi-rodape .hi-fechar,
+  [data-dialog='history'] :is(.hi-aviso-acao, .hi-anteriores-acao) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  [data-dialog='history'] .hi-motivo {
+    font-size: 16px;
+  }
+}
+
+/* Celular: folha quase em tela inteira, uma tela de cada vez; alvos de 44 px
+   ou mais, texto de 16 px onde se toca, e a área segura respeitada. */
+@media (max-width: 600px) {
+  .chat-theme:has(> [data-dialog='history']) {
+    align-items: flex-end;
+    padding: max(12px, env(safe-area-inset-top)) 0 0;
+  }
+  [data-dialog='history'].dw-dialog,
+  [data-dialog='history'].dw-dialog:has(.hi-raiz.is-compacto) {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    border-width: 1px 0 0;
+    border-radius: 16px 16px 0 0;
+  }
+  [data-dialog='history'] :is(.hi-cabeca, .hi-detalhe-cabeca) {
+    padding: 16px 16px 14px;
+  }
+  [data-dialog='history'] .hi-detalhe-cabeca {
+    padding-top: 8px;
+  }
+  [data-dialog='history'] .hi-item {
+    padding: 12px 16px;
+  }
+  [data-dialog='history'] .hi-motivo {
+    font-size: 16px;
+    line-height: 22px;
+  }
+  [data-dialog='history'] .hi-mensagens {
+    padding: 12px 16px 16px;
+  }
+  [data-dialog='history'] .hi-msg {
+    max-width: 86%;
+  }
+  [data-dialog='history'] :is(.hi-estado, .hi-orientacao) {
+    padding: 16px;
+  }
+  [data-dialog='history'] .hi-aviso {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    margin: 16px;
+  }
+  [data-dialog='history'] .hi-aviso-acao {
+    min-height: 44px;
+    margin-left: -8px;
+    font-size: 16px;
+  }
+  [data-dialog='history'] .hi-anteriores-acao {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  [data-dialog='history'].dw-dialog .hi-rodape {
+    padding: 10px 16px max(10px, env(safe-area-inset-bottom));
+  }
+  [data-dialog='history'].dw-dialog .hi-rodape .hi-fechar {
+    min-height: 48px;
+    font-size: 16px;
+  }
+}

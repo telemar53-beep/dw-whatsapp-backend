@@ -475,7 +475,7 @@ describe('ConversationView', () => {
     await userEvent.click(screen.getByRole('button', { name: /ver atendimentos anteriores/i }));
 
     await waitFor(() => expect(api.getConversationHistory).toHaveBeenCalledWith('contact-1', 'tok-123'));
-    expect(await screen.findByText('Atendimentos anteriores')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Histórico de atendimentos' })).toBeInTheDocument();
   });
 
   test('shows a back button that calls onBack when clicked', async () => {

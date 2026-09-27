@@ -18,6 +18,7 @@ vi.mock('../services/api', async (importOriginal) => ({
   updateContact: vi.fn(),
   listCities: vi.fn(() => new Promise(() => {})),
   listSectors: vi.fn(() => new Promise(() => {})),
+  getConversationHistory: vi.fn(() => new Promise(() => {})),
 }));
 
 beforeEach(() => {
@@ -280,5 +281,31 @@ describe('popup no celular: um controle só com o painel no lugar da conversa', 
     expect(screen.getByRole('button', { name: 'Fechar conversa' })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Supervisão e Encerrados abrem o Histórico por cima do popup da conversa: a
+// pilha de diálogos segura os dois, e o Escape fecha só o de cima.
+describe('Histórico por cima do popup (Supervisão e Encerrados)', () => {
+  const CONVERSA = { id: 'c1', contactId: 'contato-1', contactDisplayName: 'Contato Um', assignedAgentId: 'agent-1', status: 'assigned' };
+
+  test('abre sobre a conversa; o Escape fecha só o Histórico e o foco volta ao botão', async () => {
+    api.getConversationHistory.mockResolvedValue([
+      { id: 'at-1', status: 'closed', createdAt: '2026-09-21T14:30:00', closeReasonName: 'Sem conexão', channelName: 'Canal Exemplo' },
+    ]);
+    const onClose = vi.fn();
+    render(<ConversationModal conversation={CONVERSA} onClose={onClose} onTransferClick={vi.fn()} />);
+    const historico = within(screen.getByRole('complementary', { name: 'Dados do cliente' })).getByRole('button', { name: 'Histórico' });
+
+    await userEvent.click(historico);
+    expect(await screen.findByRole('dialog', { name: 'Histórico de atendimentos' })).toBeInTheDocument();
+    expect(await screen.findByText('1 atendimento anterior')).toBeInTheDocument();
+    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Histórico de atendimentos' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(historico).toHaveFocus();
   });
 });

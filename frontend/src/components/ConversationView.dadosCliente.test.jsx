@@ -103,7 +103,7 @@ describe('Dados do cliente na mesa', () => {
     await userEvent.click(within(edicao).getByRole('button', { name: 'Cancelar' }));
 
     await userEvent.click(within(painel()).getByRole('button', { name: 'Histórico' }));
-    expect(await screen.findByRole('dialog', { name: 'Atendimentos anteriores' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Histórico de atendimentos' })).toBeInTheDocument();
     expect(api.getConversationHistory).toHaveBeenCalled();
   });
 });

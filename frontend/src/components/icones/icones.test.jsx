@@ -2,12 +2,13 @@ import { describe, test, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import * as Icones from './index';
 import * as IconesSgp from './sgp';
+import * as IconesSupervisao from './supervisao';
 import * as IconesAntigos from '../icons/WaIcons';
 import * as IconesAntigosSgp from '../icons/SgpIcons';
 
-// Os 25 das pranchas 1 e 2, mais Campanhas, Som desativado e Menu (mesa), e
-// os cinco do painel SGP (prancha da fatia 3). Qualquer ícone novo entra aqui
-// junto, e passa pelas mesmas regras.
+// Os 25 das pranchas 1 e 2, mais Campanhas, Som desativado e Menu (mesa), os
+// cinco do painel SGP (prancha da fatia 3) e os cinco da visão geral da
+// Supervisão. Qualquer ícone novo entra aqui junto, e passa pelas mesmas regras.
 const NOMES = [
   'IconeAtendimento',
   'IconeFilas',
@@ -42,18 +43,30 @@ const NOMES = [
   'IconeCodigoBarras',
   'IconeLinkFatura',
   'IconePdfFatura',
+  'IconeFiltros',
+  'IconeRemoverFiltro',
+  'IconeEspera',
+  'IconeAutomacao',
+  'IconeSemResponsavel',
 ];
 
 // Os do painel SGP, desenhados na fatia 3.
 const DO_SGP = ['IconeCodigoPix', 'IconeQrPix', 'IconeCodigoBarras', 'IconeLinkFatura', 'IconePdfFatura'];
+
+// Os da visão geral da Supervisão, desenhados para aprovação antes da tela.
+const DA_SUPERVISAO = ['IconeFiltros', 'IconeRemoverFiltro', 'IconeEspera', 'IconeAutomacao', 'IconeSemResponsavel'];
+
+// Desenhados depois da família inicial: não herdam traço de ninguém.
+const NOVOS = [...DO_SGP, ...DA_SUPERVISAO];
 
 // A exceção da família: a marca Pix é um sólido. Só estes podem ter traço
 // preenchido, e só na cor do texto.
 const COM_MARCA_PIX = ['IconeCodigoPix', 'IconeQrPix'];
 const CHEIO = { fill: 'currentColor', stroke: 'none' };
 
-// A família inteira: o índice (mesa e demais telas) e o módulo do painel SGP.
-const FAMILIA = { ...Icones, ...IconesSgp };
+// A família inteira: o índice (mesa e demais telas) e os módulos do painel SGP
+// e da Supervisão.
+const FAMILIA = { ...Icones, ...IconesSgp, ...IconesSupervisao };
 
 // Só geometria nos traços. Cor, espessura, terminação e preenchimento são da
 // moldura, iguais para a família inteira; qualquer atributo fora desta lista
@@ -73,11 +86,13 @@ function desenhar(Componente, props = {}) {
 }
 
 describe('família de ícones DW', () => {
-  test('exporta exatamente os 33 ícones da família: 28 no índice e os 5 do painel SGP no módulo dele', () => {
+  test('exporta exatamente os 38 ícones da família: 28 no índice e os 5 do painel SGP e os 5 da Supervisão nos módulos deles', () => {
     const doIndice = Object.keys(Icones).filter((nome) => nome.startsWith('Icone') && nome !== 'Icone');
     const doSgp = Object.keys(IconesSgp).filter((nome) => nome.startsWith('Icone'));
-    expect(doIndice.sort()).toEqual(NOMES.filter((nome) => !DO_SGP.includes(nome)).sort());
+    const daSupervisao = Object.keys(IconesSupervisao).filter((nome) => nome.startsWith('Icone'));
+    expect(doIndice.sort()).toEqual(NOMES.filter((nome) => !NOVOS.includes(nome)).sort());
     expect(doSgp.sort()).toEqual([...DO_SGP].sort());
+    expect(daSupervisao.sort()).toEqual([...DA_SUPERVISAO].sort());
   });
 
   // O painel do SGP chega sob demanda; a mesa importa o índice em toda
@@ -85,6 +100,12 @@ describe('família de ícones DW', () => {
   test('o índice da família não leva os desenhos do painel SGP', () => {
     expect(FONTES['./index.jsx']).not.toMatch(/desenhosSgp|['"]\.\/sgp['"]/);
     expect(FONTES['./desenhos.js']).not.toMatch(/codigoPix|qrPix|codigoBarras|linkFatura|pdfFatura/);
+  });
+
+  // O mesmo para a Supervisão: os cinco desenhos só viajam com quem os importar.
+  test('o índice da família não leva os desenhos da Supervisão', () => {
+    expect(FONTES['./index.jsx']).not.toMatch(/desenhosSupervisao|['"]\.\/supervisao['"]/);
+    expect(FONTES['./desenhos.js']).not.toMatch(/filtros|removerFiltro|espera|automacao|semResponsavel/);
   });
 
   test.each(NOMES)('%s: moldura única da família', (nome) => {
@@ -153,19 +174,53 @@ describe('família de ícones DW', () => {
     });
   });
 
-  test('os ícones do painel SGP não reaproveitam traço de outro ícone', () => {
-    const deOutros = new Set();
-    NOMES.filter((nome) => !DO_SGP.includes(nome)).forEach((nome) => {
-      [...desenhar(FAMILIA[nome]).children].forEach((traco) => deOutros.add(traco.outerHTML));
-    });
-    DO_SGP.forEach((nome) => {
+  // Cada desenho novo (SGP e Supervisão) é inédito traço a traço: não herda
+  // traço de nenhum outro ícone da família, nem de outro desenho novo.
+  test('os ícones novos não reaproveitam traço de outro ícone', () => {
+    NOVOS.forEach((nome) => {
+      const deOutros = new Set();
+      NOMES.filter((outro) => outro !== nome).forEach((outro) => {
+        [...desenhar(FAMILIA[outro]).children].forEach((traco) => deOutros.add(traco.outerHTML));
+      });
       [...desenhar(FAMILIA[nome]).children].forEach((traco) => {
-        expect(deOutros.has(traco.outerHTML), nome).toBe(false);
+        expect(deOutros.has(traco.outerHTML), `${nome}: ${traco.outerHTML}`).toBe(false);
       });
     });
   });
 
-  test.each(DO_SGP)('%s: com título, vira imagem com nome acessível', (nome) => {
+  // Legibilidade mínima em 16 px, pela geometria: ponto com raio de pelo menos
+  // 0,75 e todo o desenho entre 2 e 22 com o traço de 1,75 (0,875 de cada lado).
+  // A leitura de fato se julga nos pixels reais da prancha.
+  test.each(DA_SUPERVISAO)('%s: pontos legíveis e desenho dentro da área útil', (nome) => {
+    const svg = desenhar(FAMILIA[nome]);
+    const MEIO_TRACO = 0.875;
+    [...svg.children].forEach((traco) => {
+      if (traco.localName === 'circle') {
+        const [cx, cy, r] = ['cx', 'cy', 'r'].map((a) => Number(traco.getAttribute(a)));
+        expect(r, `${nome}: ponto pequeno demais`).toBeGreaterThanOrEqual(0.75);
+        expect(Math.min(cx, cy) - r - MEIO_TRACO).toBeGreaterThanOrEqual(2);
+        expect(Math.max(cx, cy) + r + MEIO_TRACO).toBeLessThanOrEqual(22);
+      }
+      if (traco.localName === 'path') {
+        // Só os pontos de chegada de cada comando (os raios de arco e as
+        // bandeiras não são posição).
+        const d = traco.getAttribute('d');
+        const pontos = [];
+        for (const [, cmd, args] of d.matchAll(/([MLHVAZ])([^MLHVAZ]*)/g)) {
+          const n = (args.match(/-?\d*\.?\d+/g) || []).map(Number);
+          if (cmd === 'M' || cmd === 'L') pontos.push(...n);
+          if (cmd === 'H' || cmd === 'V') pontos.push(n[0]);
+          if (cmd === 'A') pontos.push(n[5], n[6]);
+        }
+        pontos.forEach((valor) => {
+          expect(valor - MEIO_TRACO, `${nome}: ${d}`).toBeGreaterThanOrEqual(2);
+          expect(valor + MEIO_TRACO, `${nome}: ${d}`).toBeLessThanOrEqual(22);
+        });
+      }
+    });
+  });
+
+  test.each(NOVOS)('%s: com título, vira imagem com nome acessível', (nome) => {
     const Componente = FAMILIA[nome];
     render(<Componente titulo="Ação do painel" />);
     const imagem = screen.getByRole('img', { name: 'Ação do painel' });
@@ -241,5 +296,27 @@ describe('família de ícones DW', () => {
     expect(FONTES['./desenhosSgp.js']).not.toMatch(/^\s*import\s/m);
     expect(FONTES['./desenhoRespostasRapidas.js']).not.toMatch(/^\s*import\s/m);
     expect(FONTES['./desenhosDaConversa.js']).not.toMatch(/^\s*import\s/m);
+    expect(FONTES['./desenhosSupervisao.js']).not.toMatch(/^\s*import\s/m);
+  });
+});
+
+// Os cinco da Supervisão existem só para aprovação visual nesta rodada: nenhuma
+// tela, componente ou página os importa ainda.
+const TELAS = import.meta.glob(['/src/**/*.{js,jsx}', '!/src/**/*.test.*', '!/src/components/icones/**'], {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+
+describe('ícones da Supervisão ainda fora das telas', () => {
+  test('a leitura das telas funciona (prova de que o glob enxerga os arquivos)', () => {
+    expect(Object.keys(TELAS)).toEqual(expect.arrayContaining(['/src/App.jsx', '/src/pages/SupervisionPage.jsx', '/src/components/TrilhoDaMesa.jsx']));
+  });
+
+  test('nenhum arquivo fora da família importa o módulo nem os desenhos da Supervisão', () => {
+    const importam = Object.entries(TELAS)
+      .filter(([, fonte]) => /icones\/supervisao|desenhosSupervisao/.test(fonte))
+      .map(([arquivo]) => arquivo);
+    expect(importam).toEqual([]);
   });
 });

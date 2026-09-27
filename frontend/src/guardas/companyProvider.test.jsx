@@ -42,7 +42,7 @@ describe('nome da empresa: uma requisição por sessão', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('Acesso restrito à equipe de atendimento da Provedor X.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Provedor X' })).toBeInTheDocument();
     await waitFor(() => expect(document.title).toBe('Provedor X · Atendimento'));
     expect(api.getPublicCompany).toHaveBeenCalledTimes(1);
   });
@@ -55,7 +55,7 @@ describe('nome da empresa: uma requisição por sessão', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('Acesso restrito à equipe de atendimento da Provedor X.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Provedor X' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/e-mail/i), 'a@dw.com');
     await userEvent.type(screen.getByLabelText(/senha/i), 'secret123');
     await userEvent.click(screen.getByRole('button', { name: /entrar/i }));

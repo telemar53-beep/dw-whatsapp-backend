@@ -1,0 +1,384 @@
+/* Página de entrada — mockup aprovado em 26/09.
+
+   Toda regra começa por `.login`: nada daqui vaza para o resto do sistema, e
+   nada do tema escuro (`.chat-theme`) entra aqui.
+
+   Custo: cores chapadas, uma sombra curta no módulo e mais nada. Sem desfoque,
+   sem backdrop-filter, sem gradiente, sem animação — o login antigo pintava
+   dois borrões de 110–120 px e um vidro no cartão, o efeito mais caro da tela
+   nos PCs fracos. Só a Inter: a Sora não é baixada nesta página. */
+
+.login {
+  --login-fundo: #eef0f5;
+  --login-papel: #ffffff;
+  --login-indigo: #4f46e5;
+  /* Hover e "Entrando…": texto branco a 7,9:1. */
+  --login-indigo-forte: #4338ca;
+  --login-texto: #161a26;
+  --login-texto-2: #5b6272;
+  --login-dica: #6b7180;
+  --login-borda: #cfd3dc;
+  --login-erro: #b3261e;
+  /* Altura de campo e botão; o círculo do ícone tem o mesmo diâmetro. */
+  --login-controle: 52px;
+  color-scheme: light;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: max(32px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: var(--login-fundo);
+  color: var(--login-texto);
+  font-family: var(--font-sans);
+}
+
+/* margin:auto centraliza sem cortar: se a altura não der, a página rola e o
+   topo do módulo continua alcançável (align-items:center cortaria o topo). */
+.login-modulo {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 432px;
+  margin: auto;
+  padding: 44px 40px 40px;
+  background: var(--login-papel);
+  border: 2px solid var(--login-indigo);
+  border-radius: 28px;
+  box-shadow: 0 10px 24px -16px rgba(22, 26, 38, 0.28);
+}
+
+/* ---------- Identidade ---------- */
+.login-marca {
+  text-align: center;
+}
+
+.login-empresa {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--login-texto);
+}
+
+/* Ocupa a linha do nome enquanto ele carrega: o módulo não pula quando o
+   nome chega. Parada de propósito. */
+.login-esqueleto {
+  display: inline-block;
+  width: 11ch;
+  max-width: 100%;
+  height: 0.9em;
+  vertical-align: -0.1em;
+  border-radius: 8px;
+  background: #e4e7ee;
+}
+
+.login-rotulo {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--login-texto-2);
+}
+
+.login-titulo {
+  margin: 28px 0 0;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--login-texto);
+}
+
+/* ---------- Formulário ---------- */
+.login-form {
+  margin-top: 24px;
+}
+
+.login-grupo + .login-grupo {
+  margin-top: 18px;
+}
+
+.login-label {
+  display: block;
+  margin: 0 0 8px 2px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--login-texto-2);
+}
+
+.login-campo {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  height: var(--login-controle);
+  padding-left: calc(var(--login-controle) + 14px);
+  border: 1.5px solid var(--login-borda);
+  border-radius: 999px;
+  background: var(--login-papel);
+}
+
+.login-campo:focus-within {
+  border-color: var(--login-indigo);
+  outline: 1.5px solid var(--login-indigo);
+  outline-offset: 0;
+}
+
+.login-campo[data-invalido] {
+  border-color: var(--login-erro);
+}
+
+.login-campo[data-invalido]:focus-within {
+  outline-color: var(--login-erro);
+}
+
+/* Cobre a borda da esquerda: o círculo é a ponta do campo, como no mockup. */
+.login-circulo {
+  position: absolute;
+  top: -1.5px;
+  bottom: -1.5px;
+  left: -1.5px;
+  width: var(--login-controle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--login-indigo);
+  color: #ffffff;
+}
+
+.login-circulo svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* 16 px em qualquer tela: abaixo disso o Safari do iPhone aproxima a página
+   no foco. A ponta direita arredondada acompanha a do campo — sem ela, o fundo
+   do preenchimento automático sairia quadrado para fora da pílula. */
+.login-campo input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 20px 0 0;
+  border: 0;
+  border-radius: 0 999px 999px 0;
+  background: none;
+  color: var(--login-texto);
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+
+.login-campo input::placeholder {
+  color: var(--login-dica);
+  opacity: 1;
+}
+
+.login-campo input:-webkit-autofill {
+  -webkit-text-fill-color: var(--login-texto);
+  box-shadow: 0 0 0 40px var(--login-papel) inset;
+}
+
+.login-mostrar {
+  position: relative;
+  flex: none;
+  height: 100%;
+  min-width: 44px;
+  margin: 0;
+  padding: 0 20px 0 16px;
+  border: 0;
+  border-radius: 0 999px 999px 0;
+  background: none;
+  color: var(--login-indigo);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* A divisória curta entre a senha e o "Mostrar". */
+.login-mostrar::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 24px;
+  margin-top: -12px;
+  border-left: 1px solid var(--login-borda);
+}
+
+.login-mostrar:focus-visible {
+  outline: 2px solid var(--login-indigo);
+  outline-offset: -6px;
+}
+
+.login-mostrar[aria-disabled='true'] {
+  color: var(--login-texto-2);
+  text-decoration: none;
+  cursor: not-allowed;
+}
+
+.login-erro-campo {
+  margin: 6px 0 0 2px;
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--login-erro);
+}
+
+.login-erro {
+  margin: 14px 0 0 2px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--login-erro);
+}
+
+.login-botao {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--login-controle);
+  margin: 28px 0 0;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--login-indigo);
+  color: #ffffff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-erro + .login-botao {
+  margin-top: 18px;
+}
+
+.login-botao:focus-visible {
+  outline: 2px solid var(--login-indigo);
+  outline-offset: 3px;
+}
+
+/* Só onde existe hover de verdade: no toque, o :hover gruda depois do toque e
+   o botão ficaria escuro como se estivesse enviando. */
+@media (hover: hover) {
+  .login-mostrar:hover {
+    color: var(--login-indigo-forte);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .login-botao:hover {
+    background: var(--login-indigo-forte);
+  }
+}
+
+/* Enviando: sólido e mais escuro, nunca apagado. */
+.login-botao[aria-disabled='true'] {
+  background: var(--login-indigo-forte);
+  cursor: progress;
+}
+
+/* ---------- Celular ---------- */
+@media (max-width: 480px) {
+  .login {
+    --login-controle: 50px;
+    padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+      max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  }
+
+  /* No terço de cima, como no mockup: os campos ficam longe do teclado. */
+  .login-modulo {
+    margin: min(10vh, 88px) auto auto;
+    padding: 32px 20px 24px;
+    border-width: 1.5px;
+    border-radius: 26px;
+  }
+
+  .login-empresa {
+    font-size: 24px;
+  }
+
+  .login-titulo {
+    margin-top: 22px;
+    font-size: 22px;
+  }
+
+  .login-form {
+    margin-top: 18px;
+  }
+
+  .login-grupo + .login-grupo {
+    margin-top: 14px;
+  }
+
+  .login-label {
+    margin-bottom: 6px;
+  }
+
+  .login-botao {
+    margin-top: 22px;
+  }
+}
+
+/* Altura curta (celular deitado, janela baixa): o botão continua visível sem
+   rolar em 390×430. */
+@media (max-height: 560px) {
+  .login {
+    --login-controle: 48px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .login-modulo {
+    margin-top: auto;
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
+  .login-empresa {
+    font-size: 22px;
+  }
+
+  .login-rotulo {
+    margin-top: 2px;
+  }
+
+  .login-titulo {
+    margin-top: 12px;
+    font-size: 20px;
+  }
+
+  .login-form {
+    margin-top: 12px;
+  }
+
+  .login-grupo + .login-grupo {
+    margin-top: 10px;
+  }
+
+  .login-label {
+    margin-bottom: 4px;
+  }
+
+  .login-botao {
+    margin-top: 16px;
+  }
+
+  .login-erro + .login-botao {
+    margin-top: 12px;
+  }
+}

@@ -391,7 +391,7 @@ describe('edição do contato: a resposta volta para a conversa de onde saiu', (
     const dialogoA = await abrirEdicao('Contato A');
     await escrever(dialogoA, 'Nome', 'Contato A editado');
     await escrever(dialogoA, 'Nota interna', 'Nota de A editada');
-    await userEvent.click(within(dialogoA).getByRole('button', { name: 'Salvar' }));
+    await userEvent.click(within(dialogoA).getByRole('button', { name: 'Salvar alterações' }));
     expect(api.updateContact).toHaveBeenCalledWith('contato-A', expect.objectContaining({ displayName: 'Contato A editado' }), 'tok-123');
 
     rerender(naMesa(B));
@@ -425,7 +425,7 @@ describe('edição do contato: a resposta volta para a conversa de onde saiu', (
     const dialogoB = await abrirEdicao('Contato B');
     await escrever(dialogoB, 'Nome', 'Contato B editado');
     await escrever(dialogoB, 'Nota interna', 'Nota de B editada');
-    await userEvent.click(within(dialogoB).getByRole('button', { name: 'Salvar' }));
+    await userEvent.click(within(dialogoB).getByRole('button', { name: 'Salvar alterações' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
     expect(within(painel()).getByText('Nota de B editada')).toBeInTheDocument();
 

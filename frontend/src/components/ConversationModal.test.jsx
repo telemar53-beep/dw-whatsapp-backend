@@ -113,7 +113,7 @@ describe('edição do contato dentro do modal', () => {
       await userEvent.clear(campo);
       await userEvent.type(campo, texto);
     }
-    await userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar' }));
+    await userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar alterações' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
   }
 

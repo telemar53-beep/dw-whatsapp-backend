@@ -189,7 +189,7 @@ describe('Encerrados: reabrir não traz a nota antiga', () => {
     const nota = within(edicao).getByLabelText('Nota interna');
     await userEvent.clear(nota);
     await userEvent.type(nota, 'Nota nova');
-    await userEvent.click(within(edicao).getByRole('button', { name: 'Salvar' }));
+    await userEvent.click(within(edicao).getByRole('button', { name: 'Salvar alterações' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: /voltar para a lista/i }));

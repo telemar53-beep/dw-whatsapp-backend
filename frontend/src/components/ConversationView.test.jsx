@@ -1676,7 +1676,7 @@ describe('edição do contato: o que foi salvo vale para esta conversa', () => {
     await userEvent.clear(campo);
     await userEvent.type(campo, texto);
   }
-  const salvar = () => userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar' }));
+  const salvar = () => userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar alterações' }));
 
   test('salvar uma nota nova troca a nota do painel na hora', async () => {
     api.updateContact.mockResolvedValue({ id: 'contato-1', displayName: 'Contato Um', cityId: 'mun-1', localityId: null, internalNote: 'Nota nova' });

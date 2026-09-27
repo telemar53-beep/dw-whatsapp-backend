@@ -860,7 +860,7 @@ describe('edição do contato na mesa: a lista guarda o que foi salvo', () => {
       await userEvent.clear(campo);
       await userEvent.type(campo, texto);
     }
-    await userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar' }));
+    await userEvent.click(within(edicao()).getByRole('button', { name: 'Salvar alterações' }));
   }
   const edicaoFechou = () => waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
 
@@ -898,10 +898,14 @@ describe('edição do contato na mesa: a lista guarda o que foi salvo', () => {
     renderDashboard();
     await abrir('Contato A');
     await editar('Contato A', [['Nome', 'Contato A editado']]);
-    // Esc com o "Salvar" ainda no caminho, e a conversa troca para B.
+    // Salvando, o Esc não abandona a edição pela metade.
     await userEvent.keyboard('{Escape}');
-    await edicaoFechou();
+    expect(edicao()).toBeInTheDocument();
+    // A conversa troca por baixo do modal com o "Salvar" no caminho. No
+    // navegador o fundo cobre a lista e isso só vem de causa externa; aqui o
+    // clique na linha faz a vez dela.
     await abrir('Contato B');
+    await edicaoFechou();
     const antes = rendersDaConversa();
 
     await act(async () => {

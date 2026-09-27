@@ -154,3 +154,17 @@ test('o encaixe tem 300 px para os dois painéis, igual à regra de larguras', (
   expect(larguras).toEqual([['.conv-raiz > .conv-painel-slot', '300px'], ['.conv-raiz.is-painel-alternado > .conv-painel-slot', '100%']]);
   expect(PAINEL).toBe(300);
 });
+
+// O modal de edição (sob demanda) abre com o foco no Nome e, ao sair, devolve o
+// foco ao botão que o abriu.
+test('Editar cliente: foco no Nome ao abrir e de volta no botão ao cancelar', async () => {
+  render(naMesa(A));
+  await userEvent.click(botaoDados());
+  const editar = within(painel()).getByRole('button', { name: 'Editar cliente' });
+  await userEvent.click(editar);
+  const edicao = await screen.findByRole('dialog', { name: 'Editar cliente' });
+  await waitFor(() => expect(within(edicao).getByLabelText('Nome')).toHaveFocus());
+  await userEvent.click(within(edicao).getByRole('button', { name: 'Cancelar' }));
+  expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument();
+  expect(editar).toHaveFocus();
+});

@@ -160,6 +160,9 @@ export function Dialog({
   closeOnBackdrop = false,
   closeOnEsc = true,
   dismissible = true,
+  // Desabilita o "×" sem tirá-lo do lugar — para um salvamento no caminho, que
+  // não pode ser abandonado pela metade. Desligado por padrão.
+  closeDisabled = false,
   initialFocus = 'auto',
   closeLabel = 'Fechar',
   className = '',
@@ -306,6 +309,7 @@ export function Dialog({
             type="button"
             data-dialog-close=""
             onClick={onClose}
+            disabled={closeDisabled}
             aria-label={closeLabel}
             title={closeLabel}
             className="dw-dialog-close"

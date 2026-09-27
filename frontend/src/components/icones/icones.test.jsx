@@ -300,23 +300,33 @@ describe('família de ícones DW', () => {
   });
 });
 
-// Os cinco da Supervisão existem só para aprovação visual nesta rodada: nenhuma
-// tela, componente ou página os importa ainda.
+// Os cinco da Supervisão moram num módulo à parte para que só a Supervisão os
+// leve: a página e os componentes dela podem importá-los; a mesa, a casca, o
+// menu e o trilho (que viajam com outras páginas) não.
 const TELAS = import.meta.glob(['/src/**/*.{js,jsx}', '!/src/**/*.test.*', '!/src/components/icones/**'], {
   query: '?raw',
   import: 'default',
   eager: true,
 });
+const DA_SUPERVISAO_PODE = /^\/src\/(pages\/SupervisionPage\.jsx|components\/supervisao\/)/;
 
-describe('ícones da Supervisão ainda fora das telas', () => {
+describe('ícones da Supervisão só na Supervisão', () => {
   test('a leitura das telas funciona (prova de que o glob enxerga os arquivos)', () => {
     expect(Object.keys(TELAS)).toEqual(expect.arrayContaining(['/src/App.jsx', '/src/pages/SupervisionPage.jsx', '/src/components/TrilhoDaMesa.jsx']));
   });
 
-  test('nenhum arquivo fora da família importa o módulo nem os desenhos da Supervisão', () => {
+  test('só a página da Supervisão e os componentes dela importam o módulo', () => {
     const importam = Object.entries(TELAS)
       .filter(([, fonte]) => /icones\/supervisao|desenhosSupervisao/.test(fonte))
       .map(([arquivo]) => arquivo);
-    expect(importam).toEqual([]);
+    expect(importam.length).toBeGreaterThan(0);
+    expect(importam.filter((arquivo) => !DA_SUPERVISAO_PODE.test(arquivo))).toEqual([]);
+  });
+
+  test('ninguém importa os desenhos direto: só pelo módulo dos componentes', () => {
+    const direto = Object.entries(TELAS)
+      .filter(([, fonte]) => /desenhosSupervisao/.test(fonte))
+      .map(([arquivo]) => arquivo);
+    expect(direto).toEqual([]);
   });
 });

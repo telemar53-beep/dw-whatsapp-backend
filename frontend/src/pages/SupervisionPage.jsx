@@ -1,316 +1,243 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAttendanceDashboard } from '../hooks/useAttendanceDashboard';
 import { useChannels } from '../hooks/useChannels';
 import { useAgents } from '../hooks/useAgents';
 import { useSectors } from '../hooks/useSectors';
+import { usePresence } from '../hooks/usePresence';
 import {
   getDashboardClosedToday,
   getDashboardConversationByProtocol,
   getDashboardConversationsByPhone,
-  closeConversation,
 } from '../services/api';
-import ConversationListItem from '../components/ConversationListItem';
-import { usePresence } from '../hooks/usePresence';
-import './supervision.css';
-import ConversationModal from '../components/ConversationModal';
-import TransferModal from '../components/TransferModal';
-import { PageHeader, Tabs } from '../components/ui';
+import TrilhoDaMesa, { IconeDoMenu } from '../components/TrilhoDaMesa';
+import { IconeBuscar } from '../components/icones';
+import ListaDaSupervisao from '../components/supervisao/ListaDaSupervisao';
+import IndicadoresDaSupervisao from '../components/supervisao/IndicadoresDaSupervisao';
+import FiltrosDaSupervisao, { ChipsDosFiltros } from '../components/supervisao/FiltrosDaSupervisao';
+import EncerradosDaSupervisao, { ResultadoDoTelefone } from '../components/supervisao/EncerradosDaSupervisao';
+import { EquipeLateral, BotaoDaEquipe, FolhaDaEquipe } from '../components/supervisao/EquipeDaSupervisao';
+import { RelogioDaSupervisao } from '../components/supervisao/Relogio';
+import {
+  AI_AGENT_FILTER,
+  isHandledByAi,
+  correspondeAosFiltros,
+  criarBusca,
+  tipoDaBusca,
+  ordenarEspera,
+} from '../components/supervisao/regras';
 import { descreverErro } from '../utils/errorMessages';
 import { aplicarContatoSalvo } from '../utils/contatoSalvo';
-import { shortenAgentNames, agentInitial } from '../utils/agentDisplayName';
-import { nomeDoLocal } from '../utils/place';
+import { shortenAgentNames } from '../utils/agentDisplayName';
+import './supervisao.css';
 
-// O estado é o sinal mais alto desta tela: cada um tem um tom próprio que
-// aparece no mesmo lugar em todo canto — ponto do sub-filtro, cabeçalho do
-// grupo, aresta da linha. Roxo é o tom que o produto já usa para IA.
-const TONS = { andamento: 'andamento', espera: 'espera', automacao: 'automacao', encerrado: 'encerrado' };
+// Mantidos para quem importava daqui.
+export { AI_AGENT_FILTER, isHandledByAi };
 
-function estadoDaConversa(conversation) {
-  if (conversation.status === 'closed') return { tom: TONS.encerrado, rotulo: 'Encerrado' };
-  if (conversation.status === 'assigned') return { tom: TONS.andamento, rotulo: 'Em atendimento' };
-  if (conversation.triageState === 'pending') return { tom: TONS.automacao, rotulo: 'Em automação' };
-  return { tom: TONS.espera, rotulo: 'Em espera' };
+// O popup de sempre e a transferência chegam quando são abertos: quem só olha
+// a fila não baixa nem avalia a conversa inteira (auditoria de 27/09).
+//
+// Sem React.lazy de propósito: o lazy suspende no primeiro render mesmo com
+// o módulo já em memória, e o React 18 segura a troca do fallback pelo
+// conteúdo por até 500 ms (FALLBACK_THROTTLE_MS) — medido em 27/09, a primeira
+// abertura com CPU 4× ficava ~130 ms (mediana) mais lenta que a da página
+// antiga mesmo com o trecho já baixado. Aqui, com o trecho em memória, o
+// popup abre no mesmo render do clique; se o trecho não baixar, a página
+// avisa em vez de a falha subir até a rota.
+function sobDemanda(carregar) {
+  const modulo = { componente: null, pedido: null };
+  modulo.carregar = () => {
+    if (!modulo.pedido) {
+      modulo.pedido = carregar()
+        .then((m) => { modulo.componente = m.default; return m.default; })
+        .catch((erro) => { modulo.pedido = null; throw erro; });
+    }
+    return modulo.pedido;
+  };
+  return modulo;
+}
+const POPUP = sobDemanda(() => import('../components/supervisao/PopupDaSupervisao'));
+const TRANSFERENCIA = sobDemanda(() => import('../components/TransferModal'));
+
+// Pré-carga por intenção: ponteiro ou foco entrando na lista já pede o trecho
+// da conversa, e o clique chega com ele em memória. Quem só olha a página sem
+// chegar perto da lista continua sem baixar nada.
+function precarregarPopup() {
+  POPUP.carregar().catch(() => {});
 }
 
-const CLOSED_PAGE_SIZE = 20;
-
-// Valor sintético no filtro de Atendentes: a IA não é um agente, mas o admin
-// precisa ver o que ela atendeu — encerrou sozinha (boleto/PIX entregue e
-// cliente satisfeito), concluiu para uma fila, ou ainda está triando.
-export const AI_AGENT_FILTER = 'ai';
-
-export function isHandledByAi(conversation) {
-  if (conversation.assignedAgentId) return false;
-  return Boolean(
-    conversation.aiTriageResolvedByAi
-    || conversation.aiTriageCompletedAt
-    || conversation.triageState === 'pending'
-  );
-}
-
-function matchesFilters(conversation, { channelIds, agentIds, sectorIds }) {
-  if (channelIds.length > 0 && !channelIds.includes(conversation.channelId)) return false;
-  if (agentIds.length > 0) {
-    const porAgente = agentIds.includes(conversation.assignedAgentId);
-    const porIa = agentIds.includes(AI_AGENT_FILTER) && isHandledByAi(conversation);
-    if (!porAgente && !porIa) return false;
-  }
-  if (sectorIds.length > 0 && !sectorIds.includes(conversation.sectorId)) return false;
-  return true;
-}
-
-function FilterDropdown({ label, options, selected, onToggle, open, onOpenChange }) {
-  const containerRef = useRef(null);
-  const gatilho = useRef(null);
-
+// O componente do módulo quando ele é preciso; enquanto o trecho baixa, null.
+function useSobDemanda(modulo, preciso, aoFalhar) {
+  const [, setCarregado] = useState(0);
   useEffect(() => {
-    if (!open) return undefined;
-    function onPointerDown(event) {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        onOpenChange(false);
-      }
-    }
-    // Só havia listener de `mousedown`: pelo teclado o painel abria e não havia
-    // NENHUMA forma de fechá-lo — ESC não fazia nada e o Tab saía deixando os
-    // filtros abertos por cima da lista.
-    function onKey(event) {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation();
-      onOpenChange(false);
-      gatilho.current?.focus();
-    }
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, onOpenChange]);
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <button
-        ref={gatilho}
-        type="button"
-        onClick={() => onOpenChange(!open)}
-        aria-expanded={open}
-        className="h-[38px] shrink-0 rounded-[10px] border border-white/[0.12] bg-ui-surface-field px-4 text-[14px] text-chat-muted transition hover:border-white/25 hover:bg-white/[0.10] hover:text-chat-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-      >
-        {label}
-        {selected.length > 0 && <span className="ml-1.5 font-medium text-chat-orange">{selected.length}</span>}
-        <svg className="supervision-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
-      </button>
-      {open && (
-        <div className="dialog-filter-options chat-scroll absolute z-[var(--z-popover)] mt-2 max-h-64 w-56 overflow-y-auto rounded-[16px] border border-white/[0.10] bg-wa-panel p-2 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
-          {options.length === 0 ? (
-            <p className="px-2 py-1 text-[13px] text-wa-muted">Nenhuma opção</p>
-          ) : (
-            options.map((option) => (
-              <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded-[10px] px-2 py-1.5 text-[13.5px] text-chat-muted hover:bg-white/[0.07] hover:text-chat-text">
-                <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} className="h-4 w-4 shrink-0 accent-chat-orange focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring" />
-                <span className="min-w-0 truncate">{option.label}</span>
-              </label>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
+    if (!preciso || modulo.componente) return undefined;
+    let valendo = true;
+    modulo.carregar().then(
+      () => { if (valendo) setCarregado((n) => n + 1); },
+      () => { if (valendo) aoFalhar(); }
+    );
+    return () => { valendo = false; };
+  }, [preciso, modulo, aoFalhar]);
+  return preciso ? modulo.componente : null;
 }
 
-function DashboardColumn({ title, count, conversations, onSelect, onQuickClose, emptyMessage, tom }) {
-  return <section className="supervision-group" data-tom={tom}>
-    {/* O cabeçalho gruda no topo ao rolar: numa lista longa o supervisor
-        perdia de vista em que fila estava. */}
-    <div className="supervision-group-heading"><h2>{title}</h2><span>{count}</span></div>
-    {conversations.length === 0 ? <p className="supervision-empty">{emptyMessage}</p> :
-      <ul>{conversations.map(conversation => <SupervisionRow key={conversation.id} conversation={conversation} onSelect={onSelect} onQuickClose={onQuickClose} stateLabel={title} tom={tom} />)}</ul>}
-  </section>;
+const TAMANHO_DA_PAGINA = 20;
+const NENHUM = Object.freeze([]);
+const ID_DO_CAMPO_DE_BUSCA = 'sv-busca-campo';
+const SEP_CAMPO = '\u0001';
+const SEP_ITEM = '\u0002';
+
+// A URL guarda os filtros (canal, atendente, setor, repetidos) e a aba. As
+// listas só trocam de referência quando o texto delas muda: outro parâmetro
+// na URL não refaz a lista nem o que depende dela.
+function useListaDaUrl(searchParams, chave) {
+  const texto = searchParams.getAll(chave).join('\n');
+  return useMemo(() => (texto ? texto.split('\n') : NENHUM), [texto]);
 }
 
-// Primeiro nome do responsável: a coluna compara dezenas de linhas e o nome
-// inteiro roubava a largura de tudo. O título preserva o nome completo.
-function primeiroNome(nome) {
-  const partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
-  if (partes.length === 0) return '';
-  if (partes[0].length <= 2 && partes[1]) return `${partes[0]} ${partes[1]}`;
-  return partes[0];
+// Nome do responsável para o popup, como antes: o atendente, ou "IA" no que a
+// própria IA encerrou.
+function comNomeDoAgente(conversa, rotulos) {
+  const agente = conversa.assignedAgentId ? rotulos.get(conversa.assignedAgentId) : null;
+  if (agente) return { ...conversa, assignedAgentName: agente.completo, assignedAgentShortName: agente.curto };
+  if (conversa.status === 'closed' && isHandledByAi(conversa)) return { ...conversa, assignedAgentName: 'IA' };
+  return conversa;
 }
 
-function SupervisionRow({ conversation, onSelect, onQuickClose, stateLabel, tom }) {
-  const date = conversation.closedAt || conversation.lastMessageAt || conversation.createdAt;
-  const estado = estadoDaConversa(conversation);
-  const dono = conversation.assignedAgentName;
-  // Mesmo desempate do painel lateral quando ele existe; fora dele (IA, busca
-  // por telefone) cai para o primeiro nome.
-  const donoCurto = conversation.assignedAgentShortName || primeiroNome(dono);
-  const origem = conversation.closedAt ? 'Encerramento' : conversation.lastMessageAt ? 'Última mensagem' : conversation.createdAt ? 'Abertura' : '';
-  return <li className="supervision-record" data-tom={tom || estado.tom}>
-    <div className="supervision-record-contact"><ul><ConversationListItem conversation={{ ...conversation, contactCityName: null, contactLocalityName: null, sectorName: null, assignedAgentName: null }} onSelect={onSelect} compact onQuickClose={onQuickClose} /></ul></div>
-    <div className="supervision-record-location">
-      <span className={nomeDoLocal(conversation.contactLocalityName, conversation.contactCityName) ? '' : 'is-ausente'}>
-        {nomeDoLocal(conversation.contactLocalityName, conversation.contactCityName) || 'Cidade não informada'}
-      </span>
-      <small className={conversation.sectorName ? '' : 'is-ausente'}>{conversation.sectorName || 'Sem setor'}</small>
-    </div>
-    <div className="supervision-record-owner">
-      {dono
-        ? <span className="supervision-owner" title={dono}><i aria-hidden="true">{agentInitial(donoCurto)}</i>{donoCurto}</span>
-        : <span className="supervision-owner is-ausente"><i aria-hidden="true" data-vazio="true" />Sem responsável</span>}
-    </div>
-    {/* Dentro de um grupo o estado já está no cabeçalho — repeti-lo em cada
-        linha era ruído. Fora dele (encerrados, busca por telefone) a linha é
-        a única a dizer o estado, então a pastilha aparece. */}
-    <div className="supervision-record-state">
-      {!stateLabel && <span className="supervision-state-pill"><i aria-hidden="true" />{estado.rotulo}</span>}
-      <time dateTime={date || undefined}>{date ? new Date(date).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : 'Horário não informado'}</time>
-      <small>{origem}</small>
-    </div>
-    <button type="button" className="supervision-open" onClick={() => onSelect(conversation.id)} aria-label={'Abrir conversa de ' + (conversation.contactDisplayName || conversation.contactPhoneNumber || 'cliente')}>Abrir</button>
-  </li>;
+// Campanha silenciosa só entra quando o cliente responde.
+function filtrarLista(lista, filtros) {
+  return lista.filter((c) => c.status !== 'silent' && correspondeAosFiltros(c, filtros));
+}
+
+function sufixoDoVazio(temFiltro, temBusca) {
+  if (temFiltro && temBusca) return ' com os filtros e a busca atuais.';
+  if (temFiltro) return ' com os filtros atuais.';
+  if (temBusca) return ' com a busca atual.';
+  return '.';
 }
 
 function SupervisionPage() {
   const { token } = useAuth();
-  // O hook já expunha `status` e `refresh`; a página ignorava os dois e, com a
-  // API fora do ar, as três colunas diziam "nenhum atendimento" — operação
-  // parada e backend caído ficavam idênticos na tela.
-  const { inProgress, waiting, inAutomation, closedTodayCount, status: dashboardStatus, refresh: refreshDashboard, aplicarContatoSalvo: aplicarNoPainel } = useAttendanceDashboard();
-  // Esconder os dados é a exceção, não a regra: só quando se sabe que está
-  // carregando ou que falhou. Assim um status ausente mostra a operação em vez
-  // de uma tela vazia — o erro que esta correção existe para acabar.
-  const dashboardDataVisible = dashboardStatus !== 'loading' && dashboardStatus !== 'error' && dashboardStatus !== 'forbidden';
-  // `0` significa "o sistema carregou e confirmou que nao ha nenhum".
-  // Quando a requisicao nao respondeu, o numero nao e confiavel e vira `—`:
-  // erro nao pode se passar por operacao vazia.
-  const numero = (valor) => (dashboardDataVisible ? valor : '—');
+  const contexto = useOutletContext() || {};
+  const { openProfile, closeMobileNav, profileVersion, mobileNavOpen, encaixeDoTrilho, encaixeDoIcone } = contexto;
+
+  // Painel ao vivo. Esconder os dados é a exceção: só quando se sabe que está
+  // carregando, que falhou ou que não há acesso — e aí os números viram "—".
+  const {
+    inProgress, waiting, inAutomation, closedTodayCount,
+    status: statusDoPainel, refresh: recarregarPainel, aplicarContatoSalvo: aplicarNoPainel,
+  } = useAttendanceDashboard();
+  const dadosVisiveis = statusDoPainel !== 'loading' && statusDoPainel !== 'error' && statusDoPainel !== 'forbidden';
+
   const { channels } = useChannels(true);
-  const { agents, status: agentsStatus } = useAgents();
+  const { agents, status: statusDaEquipe } = useAgents();
   const onlineIds = usePresence(agents);
-  const [operationView, setOperationView] = useState('all');
   const { sectors } = useSectors();
 
+  // ---------- URL: filtros e aba ----------
   const [searchParams, setSearchParams] = useSearchParams();
-  const channelFilter = searchParams.getAll('canal');
-  const agentFilter = searchParams.getAll('atendente');
-  const sectorFilter = searchParams.getAll('setor');
-  const activeTab = searchParams.get('aba') === 'encerrados' ? 'closed' : 'all';
+  // O setter do router muda de identidade a cada mudança da URL; pela ref, as
+  // ações abaixo ficam estáveis e não derrubam o memo de quem as recebe.
+  const setParamsRef = useRef(setSearchParams);
+  setParamsRef.current = setSearchParams;
+  const canais = useListaDaUrl(searchParams, 'canal');
+  const atendentes = useListaDaUrl(searchParams, 'atendente');
+  const setores = useListaDaUrl(searchParams, 'setor');
+  const aba = searchParams.get('aba') === 'encerrados' ? 'encerrados' : 'ao-vivo';
+  const temFiltro = canais.length > 0 || atendentes.length > 0 || setores.length > 0;
 
-  function setFilterParam(key, values) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete(key);
-      values.forEach((v) => next.append(key, v));
-      return next;
+  const mudarParams = useCallback((mudar) => {
+    setParamsRef.current((anterior) => {
+      const proximo = new URLSearchParams(anterior);
+      mudar(proximo);
+      return proximo;
     }, { replace: true });
-  }
-  function toggleFilterValue(key, current, value) {
-    setFilterParam(key, current.includes(value) ? current.filter((v) => v !== value) : [...current, value]);
-  }
-  // Limpa só os três filtros. A aba ativa e qualquer outro parâmetro da URL
-  // continuam onde estavam.
-  function limparFiltros() {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete('canal');
-      next.delete('atendente');
-      next.delete('setor');
-      return next;
-    }, { replace: true });
-  }
-  function setActiveTab(tab) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (tab === 'closed') next.set('aba', 'encerrados'); else next.delete('aba');
-      return next;
-    }, { replace: true });
-  }
+  }, []);
+  const alternarFiltro = useCallback((chave, valor) => mudarParams((p) => {
+    const atuais = p.getAll(chave);
+    p.delete(chave);
+    (atuais.includes(valor) ? atuais.filter((v) => v !== valor) : [...atuais, valor]).forEach((v) => p.append(chave, v));
+  }), [mudarParams]);
+  const removerFiltro = useCallback((chave, valor) => mudarParams((p) => {
+    const restantes = p.getAll(chave).filter((v) => v !== valor);
+    p.delete(chave);
+    restantes.forEach((v) => p.append(chave, v));
+  }), [mudarParams]);
+  // Só os três filtros: a aba e o resto da URL ficam onde estavam.
+  const limparFiltros = useCallback(() => mudarParams((p) => {
+    p.delete('canal');
+    p.delete('atendente');
+    p.delete('setor');
+  }), [mudarParams]);
+  const mudarAba = useCallback((proxima) => mudarParams((p) => {
+    if (proxima === 'encerrados') p.set('aba', 'encerrados');
+    else p.delete('aba');
+  }), [mudarParams]);
 
-  const [selectedConversationId, setSelectedConversationId] = useState(null);
-  const [transferringId, setTransferringId] = useState(null);
+  const filtros = useMemo(() => ({ channelIds: canais, agentIds: atendentes, sectorIds: setores }), [canais, atendentes, setores]);
+  const selecionados = useMemo(() => ({ canal: canais, atendente: atendentes, setor: setores }), [canais, atendentes, setores]);
 
-  const agentNameById = useMemo(
-    () => Object.fromEntries(agents.map((a) => [a.id, a.name || a.email])),
-    [agents]
+  // ---------- Nomes ----------
+  // A lista de atendentes volta do servidor a cada evento da fila (o botão
+  // "Equipe" do trilho a busca de novo para a carga acompanhar): objetos
+  // novos com os mesmos nomes. Os rótulos dependem só de id e nome — trocar
+  // a referência a cada busca redesenhava todas as linhas e o popup (medido
+  // em 27/09: 11 de 10 linhas por evento).
+  const chaveDosNomes = agents.map((a) => `${a.id}${SEP_CAMPO}${a.name || a.email}`).join(SEP_ITEM);
+  const nomes = useMemo(
+    () => (chaveDosNomes ? chaveDosNomes.split(SEP_ITEM).map((par) => par.split(SEP_CAMPO)) : NENHUM),
+    [chaveDosNomes]
   );
+  const rotulos = useMemo(() => {
+    const curtos = shortenAgentNames(nomes.map(([, nome]) => nome));
+    return new Map(nomes.map(([id, nome], i) => [id, { curto: curtos[i], completo: nome }]));
+  }, [nomes]);
+  const opcoes = useMemo(() => ({
+    canal: channels.map((c) => ({ value: c.id, label: c.name })),
+    atendente: [{ value: AI_AGENT_FILTER, label: 'IA' }, ...nomes.map(([id, nome]) => ({ value: id, label: nome }))],
+    setor: sectors.map((s) => ({ value: s.id, label: s.name })),
+  }), [channels, nomes, sectors]);
+  const chips = useMemo(() => {
+    const nomeDe = (lista, valor) => lista.find((o) => o.value === valor)?.label || 'indisponível';
+    return [
+      ...canais.map((valor) => ({ chave: 'canal', titulo: 'Canal', valor, rotulo: nomeDe(opcoes.canal, valor) })),
+      ...atendentes.map((valor) => ({ chave: 'atendente', titulo: 'Atendente', valor, rotulo: nomeDe(opcoes.atendente, valor) })),
+      ...setores.map((valor) => ({ chave: 'setor', titulo: 'Setor', valor, rotulo: nomeDe(opcoes.setor, valor) })),
+    ];
+  }, [canais, atendentes, setores, opcoes]);
 
-  const [openFilterMenu, setOpenFilterMenu] = useState(null);
+  // ---------- Busca única ----------
+  const [textoDaBusca, setTextoDaBusca] = useState('');
+  const [erroDaBusca, setErroDaBusca] = useState(null);
+  const [encontrada, setEncontrada] = useState(null);
+  const [resultadoTelefone, setResultadoTelefone] = useState(null);
+  const busca = useMemo(() => criarBusca(textoDaBusca), [textoDaBusca]);
+  const erroDaBuscaId = useId();
 
-  const [closedItems, setClosedItems] = useState([]);
-  const [closedOffset, setClosedOffset] = useState(0);
-  const [closedHasMore, setClosedHasMore] = useState(false);
-  const [loadingClosed, setLoadingClosed] = useState(false);
+  // ---------- Listas ao vivo ----------
+  // Cada lista é filtrada à parte: um evento na Espera não refaz as outras duas.
+  const esperaFiltrada = useMemo(() => ordenarEspera(filtrarLista(waiting, filtros)), [waiting, filtros]);
+  const atendimentoFiltrado = useMemo(() => filtrarLista(inProgress, filtros), [inProgress, filtros]);
+  const automacaoFiltrada = useMemo(() => filtrarLista(inAutomation, filtros), [inAutomation, filtros]);
+  const espera = useMemo(() => (busca ? esperaFiltrada.filter(busca) : esperaFiltrada), [esperaFiltrada, busca]);
+  const atendimento = useMemo(() => (busca ? atendimentoFiltrado.filter(busca) : atendimentoFiltrado), [atendimentoFiltrado, busca]);
+  const automacao = useMemo(() => (busca ? automacaoFiltrada.filter(busca) : automacaoFiltrada), [automacaoFiltrada, busca]);
+  const grupos = useMemo(() => ({ espera, atendimento, automacao }), [espera, atendimento, automacao]);
 
-  const [protocolQuery, setProtocolQuery] = useState('');
-  const [protocolError, setProtocolError] = useState(null);
-  const [foundConversation, setFoundConversation] = useState(null);
+  const [visao, setVisao] = useState('todos');
+  const alternarVisao = useCallback((chave) => setVisao((atual) => (atual === chave ? 'todos' : chave)), []);
+  const totalVisivel = (visao === 'todos' || visao === 'espera' ? espera.length : 0)
+    + (visao === 'todos' || visao === 'atendimento' ? atendimento.length : 0)
+    + (visao === 'todos' || visao === 'automacao' ? automacao.length : 0);
+  const estadoDaLista = statusDoPainel === 'loading' ? 'carregando'
+    : statusDoPainel === 'error' ? 'erro'
+      : statusDoPainel === 'forbidden' ? 'sem-acesso' : 'pronto';
 
-  const [phoneQuery, setPhoneQuery] = useState('');
-  const [phoneError, setPhoneError] = useState(null);
-  const [phoneSearchResult, setPhoneSearchResult] = useState(null);
-  const [closedError, setClosedError] = useState(null);
-  const [actionError, setActionError] = useState(null);
-  const [closedReloadToken, setClosedReloadToken] = useState(0);
-
-  useEffect(() => {
-    if (!token) return;
-    setClosedError(null);
-    getDashboardClosedToday({ offset: 0, limit: CLOSED_PAGE_SIZE }, token)
-      .then((data) => {
-        setClosedItems(data.items);
-        setClosedOffset(data.items.length);
-        setClosedHasMore(data.hasMore);
-      })
-      // O erro guarda o ESCOPO porque "Tentar de novo" precisa repetir a
-      // requisição certa: recarregar a primeira página joga fora o que já
-      // estava na tela, e isso não pode acontecer por causa de uma falha numa
-      // página adicional.
-      .catch(() => setClosedError({ mensagem: 'Não foi possível carregar os atendimentos encerrados hoje.', escopo: 'inicial' }));
-  }, [token, closedReloadToken]);
-
-  function loadMoreClosed() {
-    setLoadingClosed(true);
-    setClosedError(null);
-    getDashboardClosedToday({ offset: closedOffset, limit: CLOSED_PAGE_SIZE }, token)
-      .then((data) => {
-        setClosedItems((prev) => [...prev, ...data.items]);
-        setClosedOffset((prev) => prev + data.items.length);
-        setClosedHasMore(data.hasMore);
-        setLoadingClosed(false);
-      })
-      .catch(() => {
-        setLoadingClosed(false);
-        // A lista já carregada continua intacta de propósito: falhar a próxima
-        // página não invalida os encerrados que já estão na tela.
-        setClosedError({ mensagem: 'Não foi possível carregar mais atendimentos encerrados.', escopo: 'mais' });
-      });
-  }
-
-  function tentarEncerradosDeNovo() {
-    if (closedError && closedError.escopo === 'mais') {
-      loadMoreClosed();
-      return;
-    }
-    setClosedReloadToken((n) => n + 1);
-  }
-
-  const filters = useMemo(
-    () => ({ channelIds: channelFilter, agentIds: agentFilter, sectorIds: sectorFilter }),
-    [channelFilter, agentFilter, sectorFilter]
-  );
-
-  const hasActiveFilter = channelFilter.length > 0 || agentFilter.length > 0 || sectorFilter.length > 0;
-
-  const filteredInProgress = inProgress.filter((c) => matchesFilters(c, filters));
-  const filteredWaiting = waiting.filter((c) => matchesFilters(c, filters));
-  const filteredInAutomation = inAutomation.filter((c) => matchesFilters(c, filters));
-  const filteredClosed = closedItems.filter((c) => matchesFilters(c, filters));
-
-  // A carga da equipe vem do painel NÃO filtrado, de propósito: filtrar a tela
-  // não muda quantos atendimentos o atendente tem de verdade. Contado uma vez,
-  // em vez de varrer `inProgress` por atendente dentro do map.
+  // ---------- Equipe ----------
+  // A carga vem do painel NÃO filtrado: filtrar a tela não muda quantas
+  // conversas o atendente tem de verdade.
   const cargaPorAtendente = useMemo(() => {
     const mapa = new Map();
     for (const conversa of inProgress) {
@@ -319,401 +246,354 @@ function SupervisionPage() {
     }
     return mapa;
   }, [inProgress]);
-  const cargaMaxima = useMemo(
-    () => Math.max(1, ...agents.map((a) => cargaPorAtendente.get(a.id) || 0)),
-    [agents, cargaPorAtendente]
-  );
+  // Quem está online e com mais carga sobe; offline desce.
+  const equipe = useMemo(() => agents
+    .map((a) => ({
+      id: a.id,
+      rotulo: rotulos.get(a.id).curto,
+      completo: rotulos.get(a.id).completo,
+      online: onlineIds.has(a.id),
+      carga: cargaPorAtendente.get(a.id) || 0,
+    }))
+    .sort((a, b) => Number(b.online) - Number(a.online) || b.carga - a.carga || a.rotulo.localeCompare(b.rotulo, 'pt-BR')),
+  [agents, rotulos, onlineIds, cargaPorAtendente]);
+  const totalOnline = useMemo(() => equipe.filter((e) => e.online).length, [equipe]);
+  const [folhaAberta, setFolhaAberta] = useState(false);
+  const abrirFolha = useCallback(() => setFolhaAberta(true), []);
+  const fecharFolha = useCallback(() => setFolhaAberta(false), []);
+  const irParaEquipe = useCallback(() => document.getElementById('sv-equipe-busca')?.focus(), []);
 
-  // O painel é operacional: quem está com mais carga sobe, e quem está offline
-  // desce — é a ordem em que o supervisor precisa ler. Empate desempata pelo
-  // rótulo que está na tela, não pelo nome inteiro.
-  const equipe = useMemo(() => {
-    const rotulos = shortenAgentNames(agents.map((a) => a.name || a.email));
-    return agents
-      .map((agent, i) => ({
-        agent,
-        rotulo: rotulos[i],
-        carga: cargaPorAtendente.get(agent.id) || 0,
-        online: onlineIds.has(agent.id),
-      }))
-      .sort((a, b) => Number(b.online) - Number(a.online) || b.carga - a.carga || a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
-  }, [agents, cargaPorAtendente, onlineIds]);
-  const totalOnline = equipe.filter((e) => e.online).length;
-  const rotuloCurtoPorAgente = useMemo(
-    () => new Map(equipe.map(({ agent, rotulo }) => [agent.id, rotulo])),
-    [equipe]
-  );
+  // ---------- Últimas 24 h (só quando a aba abre) ----------
+  // Com canal, atendente ou setor, o servidor filtra e devolve o total. Com o
+  // atendente "IA", que o servidor não conhece, a busca vai sem filtro e o
+  // filtro roda no que já carregou — como antes.
+  const modoIa = atendentes.includes(AI_AGENT_FILTER);
+  const chaveDoServidor = modoIa ? '{}' : JSON.stringify({
+    ...(canais.length ? { channelIds: canais } : {}),
+    ...(atendentes.length ? { agentIds: atendentes } : {}),
+    ...(setores.length ? { sectorIds: setores } : {}),
+  });
+  const [encerrados, setEncerrados] = useState({ itens: NENHUM, offset: 0, temMais: false, carregado: false, total: null });
+  const [erroEncerrados, setErroEncerrados] = useState(null);
+  const [carregandoMais, setCarregandoMais] = useState(false);
+  const [recarga, setRecarga] = useState(0);
+  const encerradosRef = useRef(encerrados);
+  encerradosRef.current = encerrados;
+  // Cada busca da 1ª página abre uma geração nova. O "Carregar mais" só
+  // anexa se a geração dele ainda for a atual: página 2 de um filtro antigo
+  // não se mistura à lista do filtro novo.
+  const geracaoRef = useRef(0);
 
-  function withAgentName(conversation) {
-    const agentName = conversation.assignedAgentId ? agentNameById[conversation.assignedAgentId] : null;
-    if (agentName) return { ...conversation, assignedAgentName: agentName, assignedAgentShortName: rotuloCurtoPorAgente.get(conversation.assignedAgentId) };
-    // Encerrado pela própria IA: aparece como "IA" onde o atendente apareceria.
-    if (conversation.status === 'closed' && isHandledByAi(conversation)) return { ...conversation, assignedAgentName: 'IA' };
-    return conversation;
-  }
+  useEffect(() => {
+    if (aba !== 'encerrados' || !token) return undefined;
+    let valendo = true;
+    geracaoRef.current += 1;
+    setCarregandoMais(false);
+    setErroEncerrados(null);
+    setEncerrados({ itens: NENHUM, offset: 0, temMais: false, carregado: false, total: null });
+    getDashboardClosedToday({ offset: 0, limit: TAMANHO_DA_PAGINA, ...JSON.parse(chaveDoServidor) }, token)
+      .then((dados) => {
+        if (!valendo) return;
+        setEncerrados({ itens: dados.items, offset: dados.items.length, temMais: dados.hasMore, carregado: true, total: dados.total ?? null });
+      })
+      // O erro guarda o escopo: "Tentar de novo" repete a requisição certa, e
+      // falhar uma página a mais não joga fora o que já está na tela.
+      .catch(() => {
+        if (valendo) setErroEncerrados({ mensagem: 'Não foi possível carregar os encerrados das últimas 24 h.', escopo: 'inicial' });
+      });
+    return () => { valendo = false; };
+  }, [aba, token, chaveDoServidor, recarga]);
 
-  const displayInProgress = filteredInProgress.map(withAgentName);
-  const displayWaiting = filteredWaiting.map(withAgentName);
-  const displayInAutomation = filteredInAutomation.map(withAgentName);
-  const displayClosed = filteredClosed.map(withAgentName);
+  const carregarMais = useCallback(() => {
+    const geracao = geracaoRef.current;
+    setCarregandoMais(true);
+    setErroEncerrados(null);
+    getDashboardClosedToday({ offset: encerradosRef.current.offset, limit: TAMANHO_DA_PAGINA, ...JSON.parse(chaveDoServidor) }, token)
+      .then((dados) => {
+        if (geracao !== geracaoRef.current) return;
+        setEncerrados((e) => ({
+          ...e,
+          itens: [...e.itens, ...dados.items],
+          offset: e.offset + dados.items.length,
+          temMais: dados.hasMore,
+          total: dados.total ?? e.total,
+        }));
+        setCarregandoMais(false);
+      })
+      .catch(() => {
+        if (geracao !== geracaoRef.current) return;
+        setCarregandoMais(false);
+        setErroEncerrados({ mensagem: 'Não foi possível carregar mais encerrados.', escopo: 'mais' });
+      });
+  }, [chaveDoServidor, token]);
+  const escopoDoErro = erroEncerrados?.escopo;
+  const tentarEncerradosDeNovo = useCallback(() => {
+    if (escopoDoErro === 'mais') carregarMais();
+    else setRecarga((n) => n + 1);
+  }, [escopoDoErro, carregarMais]);
 
-  const totalActiveCount = filteredInProgress.length + filteredWaiting.length + filteredInAutomation.length;
-  const closedCount = hasActiveFilter ? filteredClosed.length : closedTodayCount;
-  // Com filtro, o número só pode sair da lista JÁ CARREGADA — o endpoint de
-  // encerrados não aceita filtro nem devolve total filtrado. Enquanto houver
-  // páginas por vir, esse número não é o total: 5 correspondências entre os 20
-  // primeiros não dizem nada sobre a existência de uma sexta. Então ele se
-  // apresenta como parcial em vez de se passar por total.
-  const contagemParcialDeEncerrados = hasActiveFilter && closedHasMore;
-
-
-  // Fila realmente vazia e fila escondida por filtro diziam a mesma frase.
-  const vazioDaColuna = (texto) => (hasActiveFilter ? `${texto} com os filtros atuais.` : `${texto}.`);
-
-  // Quantas linhas a visão atual realmente desenha — é o que decide se os
-  // rótulos de coluna têm o que rotular.
-  const linhasVisiveis = dashboardDataVisible
-    ? (operationView === 'all' || operationView === 'progress' ? filteredInProgress.length : 0)
-      + (operationView === 'all' || operationView === 'waiting' ? filteredWaiting.length : 0)
-      + (operationView === 'all' || operationView === 'automation' ? filteredInAutomation.length : 0)
-    : 0;
-
-  function contagemDaAbaEncerrados() {
-    if (!hasActiveFilter) return numero(closedCount);
-    if (closedError) return '—';
-    if (contagemParcialDeEncerrados) {
-      return <span className="supervision-contagem-parcial"><b>{closedCount}</b> carregados</span>;
+  const encerradosVisiveis = useMemo(() => {
+    const doFiltro = modoIa ? encerrados.itens.filter((c) => correspondeAosFiltros(c, filtros)) : encerrados.itens;
+    return busca ? doFiltro.filter(busca) : doFiltro;
+  }, [encerrados.itens, modoIa, filtros, busca]);
+  let contagemDeEncerrados = null;
+  let avisoDeEncerrados = null;
+  if (busca) {
+    // A busca roda só no que já carregou: o total do servidor não descreve
+    // o que está na tela, então sai, e o aviso diz sobre o que é o número.
+    if (encerrados.carregado) {
+      const n = encerradosVisiveis.length;
+      avisoDeEncerrados = `Busca nos ${encerrados.itens.length} encerrados carregados: ${n} ${n === 1 ? 'resultado' : 'resultados'}.`;
     }
-    // Sem mais páginas, tudo que existe já está na memória: o filtrado é total.
-    return closedCount;
-  }
-
-  function openConversation(conversationId) {
-    setSelectedConversationId(conversationId);
-  }
-
-  function quickCloseConversation(conversationId) {
-    setActionError(null);
-    // Antes falhava calado: o supervisor clicava em finalizar e nada acontecia.
-    closeConversation(conversationId, null, token).catch((err) =>
-      setActionError(descreverErro(err, 'Não foi possível finalizar este atendimento.'))
-    );
-  }
-
-  async function handleProtocolSearch(event) {
-    event.preventDefault();
-    setProtocolError(null);
-    const query = protocolQuery.trim();
-    if (!query) return;
-    try {
-      const conversation = await getDashboardConversationByProtocol(query, token);
-      setFoundConversation(conversation);
-      setSelectedConversationId(conversation.id);
-    } catch (err) {
-      setFoundConversation(null);
-      setProtocolError(descreverErro(err, 'Nenhum atendimento encontrado com esse protocolo'));
+  } else if (!temFiltro) {
+    contagemDeEncerrados = dadosVisiveis ? closedTodayCount : '—';
+  } else if (erroEncerrados && erroEncerrados.escopo === 'inicial') {
+    contagemDeEncerrados = '—';
+  } else if (!modoIa) {
+    contagemDeEncerrados = encerrados.carregado ? encerrados.total : null;
+  } else if (encerrados.carregado) {
+    const n = encerradosVisiveis.length;
+    if (encerrados.temMais) {
+      avisoDeEncerrados = `${n} ${n === 1 ? 'correspondência' : 'correspondências'} entre ${encerrados.itens.length} encerrados carregados. Há mais resultados: use "Carregar mais".`;
+    } else {
+      contagemDeEncerrados = n;
+      avisoDeEncerrados = `${n} de ${encerrados.itens.length} encerrados das últimas 24 h correspondem aos filtros.`;
     }
   }
 
-  async function handlePhoneSearch(event) {
-    event.preventDefault();
-    setPhoneError(null);
-    const query = phoneQuery.trim();
-    if (!query) return;
-    try {
-      const result = await getDashboardConversationsByPhone(query, token);
-      setPhoneSearchResult(result);
-    } catch (err) {
-      setPhoneSearchResult(null);
-      setPhoneError(descreverErro(err, 'Nenhum cliente encontrado com esse telefone'));
-    }
-  }
+  // ---------- Popup ----------
+  const [selecionadaId, setSelecionadaId] = useState(null);
+  const [transferindoId, setTransferindoId] = useState(null);
+  const [erroAoAbrir, setErroAoAbrir] = useState(null);
+  const abrirConversa = useCallback((id) => {
+    setErroAoAbrir(null);
+    setSelecionadaId(id);
+  }, []);
+  const fecharConversa = useCallback(() => setSelecionadaId(null), []);
+  const fecharTransferencia = useCallback(() => setTransferindoId(null), []);
+  const popupNaoBaixou = useCallback(() => {
+    setSelecionadaId(null);
+    setErroAoAbrir('Não foi possível abrir a conversa. Verifique a conexão e tente de novo.');
+  }, []);
+  const transferenciaNaoBaixou = useCallback(() => {
+    setTransferindoId(null);
+    setErroAoAbrir('Não foi possível abrir a transferência. Verifique a conexão e tente de novo.');
+  }, []);
 
-  function clearPhoneSearch() {
-    setPhoneSearchResult(null);
-    setPhoneQuery('');
-    setPhoneError(null);
-  }
+  // A conversa do popup sai destas fontes, nesta ordem. É o MESMO objeto
+  // enquanto o evento for de outra conversa — e o popup (memo) fica parado.
+  const selecionada = useMemo(() => {
+    if (!selecionadaId) return null;
+    const achar = (lista) => (lista ? lista.find((c) => c.id === selecionadaId) : undefined);
+    return achar(inProgress) || achar(waiting) || achar(inAutomation) || achar(encerrados.itens)
+      || (encontrada && encontrada.id === selecionadaId ? encontrada : null)
+      || achar(resultadoTelefone?.conversations) || null;
+  }, [selecionadaId, inProgress, waiting, inAutomation, encerrados.itens, encontrada, resultadoTelefone]);
+  const conversaDoPopup = useMemo(() => (selecionada ? comNomeDoAgente(selecionada, rotulos) : null), [selecionada, rotulos]);
+  const Popup = useSobDemanda(POPUP, Boolean(conversaDoPopup), popupNaoBaixou);
+  const Transferencia = useSobDemanda(TRANSFERENCIA, Boolean(transferindoId), transferenciaNaoBaixou);
 
-  // "Editar cliente" salvou no popup, e a rota não emite evento. O popup sai
-  // de uma destas quatro fontes (abaixo); todas guardam o que voltou do
-  // servidor, só nas conversas daquele contato — reabrir não traz o antigo.
-  function aoSalvarContato(salvo) {
+  // "Editar cliente" salvou no popup, e a rota não emite evento: todas as
+  // fontes do popup guardam o que voltou do servidor — reabrir não traz o antigo.
+  const aoSalvarContato = useCallback((salvo) => {
     aplicarNoPainel(salvo);
-    setClosedItems((anteriores) => aplicarContatoSalvo(anteriores, salvo));
-    setFoundConversation((anterior) => (anterior ? aplicarContatoSalvo([anterior], salvo)[0] : anterior));
-    setPhoneSearchResult((anterior) => {
+    setEncerrados((e) => {
+      const itens = aplicarContatoSalvo(e.itens, salvo);
+      return itens === e.itens ? e : { ...e, itens };
+    });
+    setEncontrada((anterior) => (anterior ? aplicarContatoSalvo([anterior], salvo)[0] : anterior));
+    setResultadoTelefone((anterior) => {
       if (!anterior) return anterior;
       const conversations = aplicarContatoSalvo(anterior.conversations, salvo);
       return conversations === anterior.conversations ? anterior : { ...anterior, conversations };
     });
+  }, [aplicarNoPainel]);
+
+  // ---------- Busca: Enter ----------
+  async function aoBuscar(evento) {
+    evento.preventDefault();
+    setErroDaBusca(null);
+    const texto = textoDaBusca.trim();
+    const tipo = tipoDaBusca(texto);
+    if (tipo === 'protocolo') {
+      try {
+        const conversa = await getDashboardConversationByProtocol(texto, token);
+        setEncontrada(conversa);
+        setSelecionadaId(conversa.id);
+      } catch (erro) {
+        setEncontrada(null);
+        setErroDaBusca(descreverErro(erro, 'Nenhum atendimento encontrado com esse protocolo.'));
+      }
+    } else if (tipo === 'telefone') {
+      try {
+        setResultadoTelefone(await getDashboardConversationsByPhone(texto, token));
+      } catch (erro) {
+        setResultadoTelefone(null);
+        setErroDaBusca(descreverErro(erro, 'Nenhum cliente encontrado com esse telefone.'));
+      }
+    }
+  }
+  // "Limpar busca" some no próprio clique: o foco volta ao campo, e não ao body.
+  const limparBusca = useCallback(() => {
+    setResultadoTelefone(null);
+    setTextoDaBusca('');
+    setErroDaBusca(null);
+    document.getElementById(ID_DO_CAMPO_DE_BUSCA)?.focus();
+  }, []);
+
+  // ---------- Abas ----------
+  const abaAoVivoId = useId();
+  const abaEncerradosId = useId();
+  const painelDaAbaId = useId();
+  function aoTeclarNaAba(evento) {
+    const destino = { ArrowLeft: 'outra', ArrowRight: 'outra', Home: 'ao-vivo', End: 'encerrados' }[evento.key];
+    if (!destino) return;
+    evento.preventDefault();
+    const proxima = destino === 'outra' ? (aba === 'ao-vivo' ? 'encerrados' : 'ao-vivo') : destino;
+    mudarAba(proxima);
+    document.getElementById(proxima === 'ao-vivo' ? abaAoVivoId : abaEncerradosId)?.focus();
   }
 
-  const selectedConversation =
-    [...inProgress, ...waiting, ...inAutomation, ...closedItems].find((c) => c.id === selectedConversationId) ||
-    (foundConversation && foundConversation.id === selectedConversationId ? foundConversation : null) ||
-    (phoneSearchResult && phoneSearchResult.conversations.find((c) => c.id === selectedConversationId)) ||
-    null;
+  const propsDaEquipe = {
+    equipe, online: totalOnline, dadosVisiveis, estado: statusDaEquipe, selecionados: atendentes, onAlternar: alternarFiltro,
+  };
 
   return (
-    <div className="supervision-workspace flex min-h-0 min-w-0 flex-1 flex-col">
-      <PageHeader title="Supervisão" description="Central de operação · equipe, carga e atendimentos" />
-
-      <div className="supervision-toolbar flex shrink-0 flex-col gap-3 border-y border-white/[0.07] bg-white/[0.025] px-4 py-3 xl:flex-row xl:items-center">
-        <Tabs
-          label="Atendimentos"
-          active={activeTab}
-          onChange={setActiveTab}
-          tabs={[
-            { key: 'all', label: 'Todos atendimentos', count: numero(totalActiveCount) },
-            // Com filtro o numero vem da lista de encerrados (outra requisicao);
-            // sem filtro vem do painel. Cada um responde pela propria falha.
-            { key: 'closed', label: 'Encerrados hoje', count: contagemDaAbaEncerrados() },
-          ]}
-        />
-        <div className="flex flex-wrap items-center gap-2 xl:ml-auto">
-        <FilterDropdown
-          label="Canais"
-          options={channels.map((c) => ({ value: c.id, label: c.name }))}
-          selected={channelFilter}
-          onToggle={(value) => toggleFilterValue('canal', channelFilter, value)}
-          open={openFilterMenu === 'channels'}
-          onOpenChange={(next) => setOpenFilterMenu(next ? 'channels' : null)}
-        />
-        <FilterDropdown
-          label="Atendentes"
-          options={[{ value: AI_AGENT_FILTER, label: 'IA' }, ...agents.map((a) => ({ value: a.id, label: a.name || a.email }))]}
-          selected={agentFilter}
-          onToggle={(value) => toggleFilterValue('atendente', agentFilter, value)}
-          open={openFilterMenu === 'agents'}
-          onOpenChange={(next) => setOpenFilterMenu(next ? 'agents' : null)}
-        />
-        <FilterDropdown
-          label="Setores"
-          options={sectors.map((s) => ({ value: s.id, label: s.name }))}
-          selected={sectorFilter}
-          onToggle={(value) => toggleFilterValue('setor', sectorFilter, value)}
-          open={openFilterMenu === 'sectors'}
-          onOpenChange={(next) => setOpenFilterMenu(next ? 'sectors' : null)}
-        />
-        {hasActiveFilter && (
-          <button
-            type="button"
-            onClick={limparFiltros}
-            className="h-[38px] shrink-0 rounded-[10px] px-3 text-[14px] font-medium text-chat-orange transition hover:bg-white/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          >
-            Limpar filtros
-          </button>
-        )}
-        <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-white/10 max-xl:hidden" />
-        <form onSubmit={handleProtocolSearch} className="min-w-0 max-w-full shrink-0">
-          <input
-            type="text"
-            value={protocolQuery}
-            onChange={(e) => setProtocolQuery(e.target.value)}
-            placeholder="Buscar por protocolo"
-            aria-label="Buscar por protocolo"
-            className="h-[38px] w-[205px] max-w-full rounded-[10px] border border-white/[0.12] bg-ui-surface-field px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25"
-          />
-        </form>
-        <form onSubmit={handlePhoneSearch} className="min-w-0 max-w-full shrink-0">
-          <input
-            type="text"
-            value={phoneQuery}
-            onChange={(e) => setPhoneQuery(e.target.value)}
-            placeholder="Buscar por telefone do cliente"
-            aria-label="Buscar por telefone do cliente"
-            className="h-[38px] w-[262px] max-w-full rounded-[10px] border border-white/[0.12] bg-ui-surface-field px-4 text-[14px] text-chat-text outline-none transition placeholder:text-chat-muted focus-visible:border-white/25"
-          />
-        </form>
-        </div>
-      </div>
-      {(protocolError || phoneError || actionError) && (
-        <p role="alert" className="px-2 pb-2 text-[13px] text-wa-error-text">{protocolError || phoneError || actionError}</p>
-      )}
-
-      <div className="supervision-central">
-        <aside className="supervision-team" aria-label="Equipe e carga">
-          <header>
-            <h2>Equipe e carga</h2>
-            <span className="supervision-online-chip"><i aria-hidden="true" />{numero(totalOnline)} online</span>
+    <RelogioDaSupervisao>
+      <div className="sv">
+        <div className="sv-conteudo">
+          <header className="sv-cabecalho">
+            <div className="sv-titulos">
+              <h1 className="sv-titulo">Supervisão</h1>
+              <p className="sv-subtitulo">Operação em tempo real</p>
+            </div>
+            <BotaoDaEquipe online={totalOnline} dadosVisiveis={dadosVisiveis} aberto={folhaAberta} onAbrir={abrirFolha} />
           </header>
-          <p>Atendimentos ativos por atendente · clique para filtrar</p>
-          {agentsStatus === 'loading' && <p role="status">Carregando equipe…</p>}
-          {agentsStatus === 'error' && <p role="alert">Não foi possível carregar a equipe.</p>}
-          <ul>{equipe.map(({ agent, rotulo, carga, online }) => (
-            <li key={agent.id}>
-              <button type="button" data-online={online ? 'true' : 'false'} aria-pressed={agentFilter.includes(agent.id)} onClick={() => toggleFilterValue('atendente', agentFilter, agent.id)}>
-                <span className="supervision-agent-avatar" aria-hidden="true">{agentInitial(rotulo)}</span>
-                <span className="supervision-agent-name" title={agent.name || agent.email}>{rotulo}</span>
-                {/* A carga vem da mesma requisicao do painel: sem ela, nao da
-                    para afirmar que o atendente esta sem atendimentos. */}
-                <strong title="Atendimentos ativos" data-zero={dashboardDataVisible && carga === 0 ? 'true' : undefined}>{numero(carga)}<small className="sr-only"> atendimentos ativos</small></strong>
-                {/* A presença é dita por extenso: o ponto verde é reforço, nunca o
-                    único canal — quem não distingue a cor precisa ler o estado. */}
-                <span className="supervision-presence">
-                  <i className={online ? 'is-online' : ''} />
-                  {online ? 'Online' : 'Offline'}
-                  {/* A atividade é o detalhe que cede primeiro quando o painel
-                      estreita; a presença em si nunca some. */}
-                  {online && dashboardDataVisible && <em>{carga ? 'Em atendimento' : 'Livre'}</em>}
-                </span>
-                <span className="supervision-load" data-zero={dashboardDataVisible && carga === 0 ? 'true' : undefined} aria-hidden="true"><span style={{width: (dashboardDataVisible && cargaMaxima ? carga / cargaMaxima * 100 : 0) + '%'}} /></span>
-              </button>
-            </li>
-          ))}</ul>
-          {agentsStatus === 'ready' && agents.length === 0 && <p>Nenhum atendente cadastrado.</p>}
-        </aside>
-        <main className="supervision-operation" aria-label="Operação">
-          {/* "Visão geral" repetia, encostado, o mesmo número da aba "Todos
-              atendimentos". Os outros três somam para ele, então esses ficam. */}
-          {!phoneSearchResult && activeTab === 'all' && <nav className="supervision-states" aria-label="Estados dos atendimentos">
-            {[['all','Visão geral',null,null],['progress','Andamento',filteredInProgress.length,TONS.andamento],['waiting','Espera',filteredWaiting.length,TONS.espera],['automation','Automação',filteredInAutomation.length,TONS.automacao]].map(([key,label,count,tom]) => <button type="button" key={key} data-tom={tom || undefined} aria-pressed={operationView === key} onClick={() => setOperationView(key)}>{tom && <i aria-hidden="true" />}{label}{count !== null && <strong>{numero(count)}</strong>}</button>)}
-          </nav>}
-      {phoneSearchResult ? (
-        <div role="tabpanel" className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-            <p className="text-[14px] text-chat-muted">
-              {phoneSearchResult.conversations.length} atendimento(s) de{' '}
-              {phoneSearchResult.contact.displayName || phoneSearchResult.contact.phoneNumber}
-            </p>
-            <button
-              type="button"
-              onClick={clearPhoneSearch}
-              className="shrink-0 rounded-[8px] text-[13px] font-medium text-chat-orange hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-            >
-              Limpar busca
-            </button>
-          </div>
-          {phoneSearchResult.conversations.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[13.5px] text-chat-muted">Esse cliente ainda não teve nenhum atendimento.</p>
-          ) : (
-            <ul>
-              {phoneSearchResult.conversations.map(withAgentName).map((conversation) => (
-                <SupervisionRow
-                  key={conversation.id}
-                  conversation={conversation}
-                  onSelect={openConversation}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : activeTab === 'all' ? (
-        <div id="tabpanel-all" role="tabpanel" aria-labelledby="tab-all" className="supervision-live chat-scroll">
-          {dashboardStatus === 'loading' && (
-            <p role="status" className="px-4 py-10 text-center text-[13.5px] text-chat-muted">Carregando atendimentos…</p>
-          )}
-          {dashboardStatus === 'forbidden' && (
-            <p role="alert" className="px-4 py-10 text-center text-[13.5px] text-wa-error-text">Você não tem acesso ao painel de atendimentos.</p>
-          )}
-          {dashboardStatus === 'error' && (
-            <div role="alert" className="flex flex-wrap items-center justify-center gap-3 px-4 py-10 text-center text-[13.5px] text-wa-error-text">
-              <span>Não foi possível carregar os atendimentos.</span>
+
+          <div className="sv-barra">
+            <form role="search" className="sv-busca" onSubmit={aoBuscar}>
+              <IconeBuscar tamanho={18} className="sv-busca-icone" />
+              <input
+                id={ID_DO_CAMPO_DE_BUSCA}
+                type="search"
+                value={textoDaBusca}
+                onChange={(e) => { setTextoDaBusca(e.target.value); setErroDaBusca(null); }}
+                placeholder="Buscar cliente, telefone ou protocolo"
+                aria-label="Buscar cliente, telefone ou protocolo"
+                aria-describedby={erroDaBusca ? erroDaBuscaId : undefined}
+                enterKeyHint="search"
+              />
+            </form>
+            <FiltrosDaSupervisao opcoes={opcoes} selecionados={selecionados} onAlternar={alternarFiltro} />
+            <div role="tablist" aria-label="Período" className="sv-abas">
               <button
+                id={abaAoVivoId}
                 type="button"
-                onClick={refreshDashboard}
-                className="rounded-[8px] border border-wa-error-text/40 px-2.5 py-1 text-[13px] font-medium transition hover:bg-wa-error-text/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+                role="tab"
+                className="sv-aba"
+                aria-selected={aba === 'ao-vivo'}
+                aria-controls={painelDaAbaId}
+                tabIndex={aba === 'ao-vivo' ? 0 : -1}
+                onClick={() => mudarAba('ao-vivo')}
+                onKeyDown={aoTeclarNaAba}
               >
-                Tentar de novo
+                Ao vivo
+              </button>
+              <button
+                id={abaEncerradosId}
+                type="button"
+                role="tab"
+                className="sv-aba"
+                aria-selected={aba === 'encerrados'}
+                aria-controls={painelDaAbaId}
+                tabIndex={aba === 'encerrados' ? 0 : -1}
+                onClick={() => mudarAba('encerrados')}
+                onKeyDown={aoTeclarNaAba}
+              >
+                Últimas 24 h
               </button>
             </div>
+          </div>
+          {erroDaBusca && <p id={erroDaBuscaId} role="alert" className="sv-erro-da-busca">{erroDaBusca}</p>}
+          {erroAoAbrir && <p role="alert" className="sv-erro-da-busca">{erroAoAbrir}</p>}
+          <ChipsDosFiltros chips={chips} onRemover={removerFiltro} onLimpar={limparFiltros} />
+
+          {aba === 'ao-vivo' && !resultadoTelefone && (
+            <IndicadoresDaSupervisao
+              espera={dadosVisiveis ? esperaFiltrada.length : null}
+              atendimento={dadosVisiveis ? atendimentoFiltrado.length : null}
+              automacao={dadosVisiveis ? automacaoFiltrada.length : null}
+              online={dadosVisiveis ? totalOnline : null}
+              visao={visao}
+              onVisao={alternarVisao}
+              onEquipe={irParaEquipe}
+            />
           )}
-          {/* Os rótulos descrevem as colunas das linhas: só existem quando há
-              linha. Antes pairavam sobre o carregando, o erro, a busca por
-              telefone, os encerrados e as listas vazias. */}
-          {linhasVisiveis > 0 && (
-            <div className="supervision-column-labels" aria-hidden="true"><span>Cliente / última mensagem</span><span>Cidade / setor</span><span>Responsável</span><span>Horário</span><span /></div>
-          )}
-          {dashboardDataVisible && (operationView === 'all' || operationView === 'progress') && (          <DashboardColumn
-            title="Em andamento"
-            tom={TONS.andamento}
-            count={filteredInProgress.length}
-            conversations={displayInProgress}
-            onSelect={openConversation}
-            emptyMessage={vazioDaColuna('Nenhum atendimento em andamento')}
-          />)}
-          {dashboardDataVisible && (operationView === 'all' || operationView === 'waiting') && (          <DashboardColumn
-            title="Em espera"
-            tom={TONS.espera}
-            count={filteredWaiting.length}
-            conversations={displayWaiting}
-            onSelect={openConversation}
-            onQuickClose={quickCloseConversation}
-            emptyMessage={vazioDaColuna('Nenhum atendimento em espera')}
-          />)}
-          {dashboardDataVisible && (operationView === 'all' || operationView === 'automation') && (          <DashboardColumn
-            title="Em automação"
-            tom={TONS.automacao}
-            count={filteredInAutomation.length}
-            conversations={displayInAutomation}
-            onSelect={openConversation}
-            onQuickClose={quickCloseConversation}
-            emptyMessage={vazioDaColuna('Nenhum atendimento em automação')}
-          />)}
-        </div>
-      ) : (
-        <div id="tabpanel-closed" role="tabpanel" aria-labelledby="tab-closed" className="supervision-live chat-scroll">
-          {/* Falha e fila vazia diziam a mesma coisa: "Nenhum atendimento
-              encerrado hoje.". O erro agora fala por si, e o que já estava
-              carregado continua na tela embaixo dele. */}
-          {closedError && (
-            <div role="alert" className="supervision-closed-error">
-              <span>{closedError.mensagem}</span>
-              <button type="button" onClick={tentarEncerradosDeNovo}>Tentar de novo</button>
-            </div>
-          )}
-          {hasActiveFilter && closedItems.length > 0 && (
-            <p className="supervision-parcial-aviso">
-              {contagemParcialDeEncerrados
-                ? `${filteredClosed.length} ${filteredClosed.length === 1 ? 'correspondência' : 'correspondências'} entre ${closedItems.length} encerrados carregados. Há mais resultados disponíveis — use “Carregar mais”.`
-                : `${filteredClosed.length} de ${closedItems.length} encerrados de hoje correspondem aos filtros.`}
-            </p>
-          )}
-          {displayClosed.length > 0 && (
-            <div className="supervision-column-labels" aria-hidden="true"><span>Cliente / última mensagem</span><span>Cidade / setor</span><span>Responsável</span><span>Estado / horário</span><span /></div>
-          )}
-          {displayClosed.length === 0 ? (
-            closedError ? null : (
-            <p className="supervision-vazio-central">
-              {hasActiveFilter ? 'Nenhum atendimento encerrado hoje com os filtros atuais.' : 'Nenhum atendimento encerrado hoje.'}
-            </p>
-            )
-          ) : (
-            <ul>
-              {displayClosed.map((conversation) => (
-                <SupervisionRow
-                  key={conversation.id}
-                  conversation={conversation}
-                  onSelect={openConversation}
-                />
-              ))}
-            </ul>
-          )}
-          {closedHasMore && (
-            <button
-              type="button"
-              onClick={loadMoreClosed}
-              disabled={loadingClosed}
-              className="supervision-carregar-mais"
+
+          <div className="sv-corpo">
+            <div
+              id={painelDaAbaId}
+              role="tabpanel"
+              aria-labelledby={aba === 'ao-vivo' ? abaAoVivoId : abaEncerradosId}
+              className="sv-principal"
+              onPointerEnter={precarregarPopup}
+              onFocus={precarregarPopup}
             >
-              {loadingClosed ? 'Carregando…' : 'Carregar mais'}
-            </button>
-          )}
+              {resultadoTelefone ? (
+                <ResultadoDoTelefone resultado={resultadoTelefone} rotulos={rotulos} onAbrir={abrirConversa} onLimpar={limparBusca} />
+              ) : aba === 'ao-vivo' ? (
+                <ListaDaSupervisao
+                  estado={estadoDaLista}
+                  grupos={grupos}
+                  visao={visao}
+                  total={totalVisivel}
+                  sufixoDoVazio={sufixoDoVazio(temFiltro, Boolean(busca))}
+                  rotulos={rotulos}
+                  onAbrir={abrirConversa}
+                  onTentarDeNovo={recarregarPainel}
+                />
+              ) : (
+                <EncerradosDaSupervisao
+                  visiveis={encerradosVisiveis}
+                  carregado={encerrados.carregado}
+                  erro={erroEncerrados}
+                  temMais={encerrados.temMais}
+                  carregandoMais={carregandoMais}
+                  contagem={contagemDeEncerrados}
+                  aviso={avisoDeEncerrados}
+                  vazio={`Nenhuma conversa encerrada nas últimas 24 h${sufixoDoVazio(temFiltro, Boolean(busca))}`}
+                  rotulos={rotulos}
+                  onAbrir={abrirConversa}
+                  onCarregarMais={carregarMais}
+                  onTentarDeNovo={tentarEncerradosDeNovo}
+                />
+              )}
+            </div>
+            <EquipeLateral {...propsDaEquipe} />
+          </div>
         </div>
-      )}
-        </main>
+
+        {folhaAberta && <FolhaDaEquipe {...propsDaEquipe} onFechar={fecharFolha} />}
+        {conversaDoPopup && Popup && (
+          <Popup
+            conversation={conversaDoPopup}
+            onClose={fecharConversa}
+            onTransferClick={setTransferindoId}
+            onContatoSalvo={aoSalvarContato}
+          />
+        )}
+        {transferindoId && Transferencia && <Transferencia conversationId={transferindoId} onClose={fecharTransferencia} />}
       </div>
-      {selectedConversation && (
-        <ConversationModal
-          conversation={withAgentName(selectedConversation)}
-          onClose={() => setSelectedConversationId(null)}
-          onTransferClick={setTransferringId}
-          onContatoSalvo={aoSalvarContato}
-        />
+
+      {/* Trilho e ícone do botão "Abrir menu" vão para os encaixes que a casca
+          reserva (AppShell.jsx), como na mesa. Fora da casca (testes), não há
+          encaixe. */}
+      {encaixeDoTrilho && createPortal(
+        <TrilhoDaMesa onProfileClick={openProfile} mobileOpen={mobileNavOpen} onMobileClose={closeMobileNav} profileVersion={profileVersion} />,
+        encaixeDoTrilho
       )}
-      {transferringId && <TransferModal conversationId={transferringId} onClose={() => setTransferringId(null)} />}
-    </div>
+      {encaixeDoIcone && createPortal(<IconeDoMenu />, encaixeDoIcone)}
+    </RelogioDaSupervisao>
   );
 }
 

@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAgents } from '../hooks/useAgents';
 import { usePresence } from '../hooks/usePresence';
-import { useSocket } from '../contexts/SocketContext';
 import { IconeEquipe } from './icones';
 import TeamModal from './TeamModal';
 
@@ -15,10 +14,6 @@ function sortAgents(agents, onlineIds) {
   });
 }
 
-// Eventos que mudam "quantos atendimentos cada um tem": a lista de agentes é
-// buscada de novo para a contagem acompanhar o que acontece na fila.
-const REFRESH_EVENTS = ['conversation:assigned', 'conversation:closed', 'queue:removed', 'dashboard:conversation'];
-
 // Botão "Equipe" do trilho da mesa. Clicar abre o popup "Nossa equipe" no
 // meio da tela (TeamModal); nada se expande aqui. Antes era uma barra no
 // rodapé da lista de conversas; o "N online" que ela mostrava agora está no
@@ -27,24 +22,19 @@ const REFRESH_EVENTS = ['conversation:assigned', 'conversation:closed', 'queue:r
 // O popup vai por portal para o body: um `position: fixed` dentro de um
 // ancestral com overflow ou transform fica preso a ele em vez de à tela. O
 // wrapper .chat-theme mantém os tokens escuros do popup.
+//
+// A carga de cada um só é buscada com o popup ABERTO (`carga: open`): fechado,
+// o botão usa a lista só para contar quem está online, e evento de conversa
+// não vira requisição. Quem ouve os eventos é o AgentsProvider.
 function TeamPanel() {
-  const { agents, status, refresh } = useAgents();
-  const onlineIds = usePresence(agents);
-  const socket = useSocket();
-  const sorted = sortAgents(agents, onlineIds);
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!socket || typeof refresh !== 'function') return undefined;
-    const handler = () => refresh();
-    REFRESH_EVENTS.forEach((event) => socket.on(event, handler));
-    return () => REFRESH_EVENTS.forEach((event) => socket.off(event, handler));
-  }, [socket, refresh]);
+  const { agents, status, refresh } = useAgents({ carga: open });
+  const onlineIds = usePresence(agents);
+  const sorted = sortAgents(agents, onlineIds);
 
   const onlineCount = sorted.filter((teammate) => onlineIds.has(teammate.id)).length;
 
   function openModal() {
-    if (typeof refresh === 'function') refresh();
     setOpen(true);
   }
 

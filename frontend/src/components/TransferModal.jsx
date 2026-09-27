@@ -135,7 +135,9 @@ function primeiroNomeDe(a) {
 
 function TransferModal({ conversationId, onClose }) {
   const { token, agent } = useAuth();
-  const { agents: allAgents, status } = useAgents();
+  // Mostra a carga de cada um e ordena por ela: a lista é conferida ao abrir,
+  // e até lá fica o "carregando" de sempre (ninguém escolhe com carga velha).
+  const { agents: allAgents, status } = useAgents({ carga: true });
   const onlineIds = usePresence(allAgents);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('load');

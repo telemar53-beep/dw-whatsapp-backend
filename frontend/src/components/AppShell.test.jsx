@@ -32,12 +32,13 @@ function PaginaComEncaixe() {
   </>;
 }
 
-function renderShell(rota = '/', paginaDaMesa = <p>conteúdo</p>) {
+function renderShell(rota = '/', paginaDaMesa = <p>conteúdo</p>, paginaDaSupervisao = <p>supervisão</p>) {
   return render(
     <MemoryRouter initialEntries={[rota]}>
       <Routes>
         <Route element={<AppShell />}>
           <Route path="/" element={paginaDaMesa} />
+          <Route path="/supervisao" element={paginaDaSupervisao} />
           <Route path="/relatorios" element={<p>relatórios</p>} />
         </Route>
       </Routes>
@@ -98,6 +99,35 @@ describe('AppShell', () => {
     const encaixe = screen.getByTestId('icone-da-pagina').parentElement;
     expect(screen.getByTestId('open-mobile-nav')).toContainElement(encaixe);
     expect(getComputedStyle(encaixe).pointerEvents).toBe('none');
+  });
+
+  // A Supervisão nova usa o mesmo trilho estreito da mesa (mockup de 27/09),
+  // pelo mesmo encaixe: a casca continua sem importar nada do trilho, e os
+  // brilhos de 150px saem também dali.
+  test('na Supervisão, a casca reserva o encaixe do trilho e tira os brilhos', () => {
+    useAuth.mockReturnValue({ agent: { role: 'admin' }, logout: vi.fn() });
+    const { container } = renderShell('/supervisao');
+    expect(screen.getByText('supervisão')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Navegação principal' })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-encaixe="trilho"]')).toBeInTheDocument();
+    expect(brilhos(container)).toHaveLength(0);
+    expect(screen.getByTestId('open-mobile-nav').querySelector('svg')).toBeNull();
+  });
+
+  test('a página da Supervisão desenha o trilho e o ícone do botão nos encaixes', async () => {
+    useAuth.mockReturnValue({ agent: { role: 'manager' }, logout: vi.fn() });
+    const { container } = renderShell('/supervisao', undefined, <PaginaComEncaixe />);
+    const trilho = await screen.findByRole('navigation', { name: 'Trilho de teste' });
+    expect(container.querySelector('[data-encaixe="trilho"]')).toContainElement(trilho);
+    expect(screen.getByTestId('open-mobile-nav')).toContainElement(screen.getByTestId('icone-da-pagina'));
+  });
+
+  // Quem não tem acesso vê a página de acesso negado, que não desenha trilho:
+  // com o encaixe reservado, ficaria sem menu nenhum.
+  test('atendente em /supervisao continua com o menu de sempre', () => {
+    const { container } = renderShell('/supervisao');
+    expect(menu()).toBeInTheDocument();
+    expect(container.querySelector('[data-encaixe="trilho"]')).toBeNull();
   });
 
   test('fora da mesa, o botão de abrir o menu continua com o ícone de antes', () => {

@@ -5,16 +5,22 @@ import { getDashboardConversations } from '../services/api';
 import { applyContactAvatarUpdate } from '../utils/contactAvatar';
 import { aplicarContatoSalvo } from '../utils/contatoSalvo';
 
+// As duas devolvem a MESMA lista quando nada muda nela. Um evento de uma
+// conversa passa pelas três listas; trocar a referência de uma lista em que a
+// conversa nem está faz a Supervisão refazer tudo que depende dela. As outras
+// conversas da lista também mantêm a referência — é o que deixa as linhas
+// delas (memo) sem redesenhar.
 function upsert(list, conversation) {
   const index = list.findIndex((c) => c.id === conversation.id);
   if (index === -1) return [...list, conversation];
+  if (list[index] === conversation) return list;
   const next = [...list];
   next[index] = conversation;
   return next;
 }
 
 function remove(list, id) {
-  return list.filter((c) => c.id !== id);
+  return list.some((c) => c.id === id) ? list.filter((c) => c.id !== id) : list;
 }
 
 export function useAttendanceDashboard() {

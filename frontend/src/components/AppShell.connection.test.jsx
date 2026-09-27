@@ -3,8 +3,12 @@ import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import AppShell from './AppShell';
 import { useSocketConnection } from '../contexts/SocketContext';
+import { useAuth } from '../contexts/AuthContext';
 
 vi.mock('../contexts/SocketContext');
+// A casca lê o nível de acesso (o encaixe do trilho na Supervisão é só para
+// quem pode vê-la).
+vi.mock('../contexts/AuthContext');
 // A casca so precisa existir em volta; quem interessa aqui e o aviso.
 vi.mock('./SideNav', () => ({ default: () => <nav data-testid="sidenav" /> }));
 vi.mock('./ProfileModal', () => ({ default: () => null }));
@@ -19,6 +23,7 @@ function renderShell() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useAuth.mockReturnValue({ agent: { role: 'agent' } });
   vi.useFakeTimers({ shouldAdvanceTime: true });
 });
 

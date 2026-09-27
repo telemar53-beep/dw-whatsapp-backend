@@ -38,11 +38,15 @@ describe('TeamPanel', () => {
     expect(screen.getByRole('button', { name: /^equipe/i })).toHaveAccessibleName('Equipe: 1 online');
   });
 
-  test('clicar em "Equipe" abre o painel e busca a lista de novo', async () => {
+  // A carga só é pedida com o popup aberto: fechado, o botão usa a lista só
+  // para contar quem está online. Buscar (ou não) é decisão do provedor, que
+  // sabe se a lista está atual (AgentsContext.carga.test.jsx).
+  test('clicar em "Equipe" abre o painel e passa a pedir a carga atual — fechado, não pede', async () => {
     const refresh = vi.fn();
     agentsReady([{ id: 'a1', name: 'Ana', avatarPath: null }], { refresh });
     usePresence.mockReturnValue(new Set(['a1']));
     render(<TeamPanel />);
+    expect(useAgents).toHaveBeenLastCalledWith({ carga: false });
 
     await openPanel();
 
@@ -50,7 +54,9 @@ describe('TeamPanel', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Nossa equipe' })).toBeInTheDocument();
     expect(screen.getByRole('listitem')).toBeInTheDocument();
-    expect(refresh).toHaveBeenCalled();
+    expect(useAgents).toHaveBeenLastCalledWith({ carga: true });
+    // Abrir não força busca: com a lista atual, nenhuma requisição.
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   test('shows a message when there are no agents', async () => {
@@ -220,23 +226,19 @@ describe('TeamPanel', () => {
     expect(screen.getByText('B')).toBeInTheDocument();
   });
 
-  test('busca a lista de novo quando um atendimento é assumido ou encerrado', () => {
+  // Antes, o botão assinava os eventos de conversa e buscava /api/agents a
+  // cada um, com o popup fechado. Agora quem ouve é o AgentsProvider, que só
+  // marca a lista como desatualizada.
+  test('o botão não assina eventos de conversa nem busca por causa deles', () => {
     const refresh = vi.fn();
-    const handlers = {};
-    useSocket.mockReturnValue({
-      on: vi.fn((event, handler) => {
-        handlers[event] = handler;
-      }),
-      off: vi.fn(),
-    });
+    const socket = { on: vi.fn(), off: vi.fn() };
+    useSocket.mockReturnValue(socket);
     agentsReady([{ id: 'a1', name: 'Ana', avatarPath: null }], { refresh });
     usePresence.mockReturnValue(new Set());
     render(<TeamPanel />);
 
-    handlers['conversation:assigned']();
-    handlers['conversation:closed']();
-
-    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(socket.on).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
 
@@ -251,7 +253,7 @@ describe('Nossa equipe: carregando, erro e busca vazia', () => {
     expect(screen.getByText('Não foi possível carregar a equipe.')).toBeInTheDocument();
     expect(screen.queryByText(/0 integrantes/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
-    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   test('carregando: "Carregando a equipe…", sem contagem (ATD-EQM-01)', async () => {

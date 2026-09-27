@@ -215,8 +215,15 @@ export function getDashboardConversations(token) {
   return apiFetch('/api/admin/dashboard/conversations', { token });
 }
 
-export function getDashboardClosedToday({ offset = 0, limit = 20 } = {}, token) {
-  return apiFetch(`/api/admin/dashboard/conversations/closed-today?offset=${offset}&limit=${limit}`, { token });
+// Encerrados das últimas 24 h. O servidor já filtra por canal, atendente e
+// setor (ids separados por vírgula) e devolve o total do recorte; lista vazia
+// não vira parâmetro. Sem filtro, a URL é a mesma de sempre.
+export function getDashboardClosedToday({ offset = 0, limit = 20, channelIds, agentIds, sectorIds } = {}, token) {
+  const filtros = [['channelId', channelIds], ['agentId', agentIds], ['sectorId', sectorIds]]
+    .filter(([, ids]) => ids && ids.length > 0)
+    .map(([nome, ids]) => `&${nome}=${ids.map(encodeURIComponent).join(',')}`)
+    .join('');
+  return apiFetch(`/api/admin/dashboard/conversations/closed-today?offset=${offset}&limit=${limit}${filtros}`, { token });
 }
 
 export function getDashboardConversationByProtocol(protocolNumber, token) {

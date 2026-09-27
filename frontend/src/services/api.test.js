@@ -44,6 +44,7 @@ import {
   createCampaign,
   listCampaigns,
   getCampaign,
+  getDashboardClosedToday,
 } from './api';
 
 beforeEach(() => {
@@ -772,5 +773,41 @@ describe('fetchChannelQrImage', () => {
     });
 
     await expect(fetchChannelQrImage('c1', 'tok-123')).rejects.toMatchObject({ motivo: 'formatoInesperado' });
+  });
+});
+
+// Os encerrados das últimas 24 h: o servidor já filtra por canal, atendente e
+// setor (listas separadas por vírgula) e devolve o total do recorte. Sem
+// filtro, a URL continua a mesma de antes.
+describe('getDashboardClosedToday', () => {
+  const ok = () => global.fetch.mockResolvedValue({ ok: true, text: () => Promise.resolve('{"items":[],"hasMore":false,"total":0}') });
+  const url = () => global.fetch.mock.calls[0][0];
+
+  test('sem filtro, só a página', async () => {
+    ok();
+    await getDashboardClosedToday({ offset: 20, limit: 20 }, 'tok-123');
+    expect(url()).toBe('http://localhost:3000/api/admin/dashboard/conversations/closed-today?offset=20&limit=20');
+  });
+
+  test('com filtros, cada lista vai separada por vírgula no parâmetro que o servidor lê', async () => {
+    ok();
+    await getDashboardClosedToday(
+      { offset: 0, limit: 20, channelIds: ['c-1', 'c-2'], agentIds: ['a-1'], sectorIds: ['s-1'] },
+      'tok-123'
+    );
+    const busca = new URL(url()).searchParams;
+    expect(busca.get('channelId')).toBe('c-1,c-2');
+    expect(busca.get('agentId')).toBe('a-1');
+    expect(busca.get('sectorId')).toBe('s-1');
+    expect(busca.get('offset')).toBe('0');
+  });
+
+  test('lista vazia não vira parâmetro vazio', async () => {
+    ok();
+    await getDashboardClosedToday({ offset: 0, limit: 20, channelIds: [], agentIds: ['a-1'] }, 'tok-123');
+    const busca = new URL(url()).searchParams;
+    expect(busca.has('channelId')).toBe(false);
+    expect(busca.has('sectorId')).toBe(false);
+    expect(busca.get('agentId')).toBe('a-1');
   });
 });

@@ -26,6 +26,13 @@ beforeEach(() => {
 });
 
 describe('TransferModal', () => {
+  // A transferência mostra a carga e ordena por ela: pede a lista conferida
+  // (AgentsContext.carga.test.jsx prova a busca, a espera e a ordem).
+  test('pede a carga atual dos atendentes', () => {
+    render(<TransferModal conversationId="conv-1" onClose={vi.fn()} />);
+    expect(useAgents).toHaveBeenCalledWith({ carga: true });
+  });
+
   test('lists every agent except myself', () => {
     render(<TransferModal conversationId="c1" onClose={vi.fn()} />);
     expect(screen.queryByText('me@dw.com')).not.toBeInTheDocument();

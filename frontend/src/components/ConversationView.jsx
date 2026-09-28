@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversationMessages } from '../hooks/useConversationMessages';
 import { useRolagemDaLinhaDoTempo } from '../hooks/useRolagemDaLinhaDoTempo';
@@ -11,7 +11,6 @@ import MessageAttachment from './MessageAttachment';
 import MessageStatusTicks from './MessageStatusTicks';
 import { descreverFalha } from '../utils/failureReasons';
 import { rotuloDoAutor } from '../utils/messageAuthor';
-import CloseReasonModal from './CloseReasonModal';
 import ContactAvatar from './ContactAvatar';
 import PainelDadosCliente from './PainelDadosCliente';
 import { IconeDadosCliente } from './icones/conversa';
@@ -146,6 +145,7 @@ import { formatPhone } from '../utils/phone';
 import { descreverErro } from '../utils/errorMessages';
 import { nomeDoLocal } from '../utils/place';
 import { contatoSalvoDe, comContatoSalvo } from '../utils/contatoSalvo';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
 import './conversa-painel.css';
 
 // O painel do SGP (e a biblioteca de QR que ele usa) só chega quando o
@@ -155,6 +155,11 @@ const SgpLookupPanel = lazy(() => import('./SgpLookupPanel'));
 // ação dele é pedida, e só ele (guardas/dadosClienteSobDemanda.test.jsx).
 const EditContactModal = lazy(() => import('./EditContactModal'));
 const ConversationHistoryModal = lazy(() => import('./ConversationHistoryModal'));
+// O Encerrar chega quando é pedido, e com ele — só com ele — o módulo dos
+// desenhos dos motivos: a conversa comum (mesa e Supervisão) não baixa nem
+// avalia nada dele (guardas/dialogosSobDemanda.test.jsx). Sem React.lazy: com
+// o trecho já em memória, o diálogo abre no mesmo render (utils/sobDemanda.js).
+const ENCERRAMENTO = sobDemanda(() => import('./CloseReasonModal'));
 
 // Enquanto o código do modal chega: nada que mude o lugar das coisas; só o
 // aviso para quem usa leitor de tela.
@@ -219,9 +224,10 @@ function HeaderIconButton({ label, onClick, children, expanded, controls, botaoR
 }
 
 // `variante`: o cabeçalho, a faixa de contexto e os ícones da mesa, passados
-// pela página (components/ConversaDaMesa.jsx). Sem ela, a conversa é a do
-// modal da Supervisão e dos Encerrados. Vem de fora para que nada disso viaje
-// no trecho que essas páginas também baixam.
+// pela página (components/ConversaDaMesa.jsx). A Supervisão passa a dela
+// (components/supervisao/ConversaDaSupervisao.jsx), com um `Rodape` para
+// quem só acompanha. Sem variante, a conversa é a do modal dos Encerrados. Vem
+// de fora para que nada disso viaje no trecho que essas páginas também baixam.
 // `onContatoSalvo`: quem monta a conversa ao lado de outro painel (o modal da
 // Supervisão e dos Encerrados) recebe o que o "Editar cliente" salvou, já
 // preso à conversa de onde saiu (utils/contatoSalvo.js).
@@ -233,6 +239,10 @@ function HeaderIconButton({ label, onClick, children, expanded, controls, botaoR
 // fechar dele, e o voltar do painel é o único controle na tela.
 function ConversationView({ conversation, onTransferClick, onBack, painelModo = 'coluna', onPainelAbertoChange, workspace = false, variante, onContatoSalvo, popup = false, onPainelNoLugarChange }) {
   const Cabecalho = variante && variante.Cabecalho;
+  // O que a página põe no lugar do compositor quando quem olha não é quem
+  // responde (a faixa de acompanhamento da Supervisão). Sem ele, nada — como
+  // sempre foi na mesa.
+  const Rodape = variante && variante.Rodape;
   const icones = variante && variante.icones;
   const IconeInfo = (icones && icones.Info) || IconInfo;
   const IconeResponder = (icones && icones.Responder) || IconChevronDown;
@@ -314,8 +324,10 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     ? typeof window === 'undefined' || window.innerWidth >= PAINEL + CONVERSA_MINIMA + MOLDURA_DO_POPUP
     : cabeAoLado;
   // Supervisão e Encerrados, com espaço: os dados do cliente ficam à vista o
-  // tempo todo, sem fechar; o SGP, quando aberto, ocupa o lugar deles.
-  const dadosPorPadrao = popup && cabeNoPopup;
+  // tempo todo, sem fechar; o SGP, quando aberto, ocupa o lugar deles. Se
+  // quem monta já decidiu alternar (o popup da Supervisão numa tela de
+  // celular), os dados só aparecem quando pedidos, no lugar da conversa.
+  const dadosPorPadrao = popup && cabeNoPopup && painelModo !== 'alternado';
   const dadosVisiveis = !sgpPanelOpen && (dadosAbertos || dadosPorPadrao);
   const painelAberto = sgpPanelOpen || dadosVisiveis;
   // Só o que o atendente abriu ele fecha (Escape, voltar, fechar).
@@ -409,6 +421,11 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
     setDadosAbertos(true);
   }
   const [closingReason, setClosingReason] = useState(false);
+  const encerramentoNaoBaixou = useCallback(() => {
+    setClosingReason(false);
+    avisar('Não foi possível abrir o encerramento. Verifique a conexão e tente de novo.');
+  }, [avisar]);
+  const Encerramento = useSobDemanda(ENCERRAMENTO, closingReason, encerramentoNaoBaixou);
   // A sugestão que o atendente escolheu editar: { id, content } enquanto o texto
   // está no campo de digitação, ou null. Enquanto ela existir, o próximo envio de
   // texto simples é atribuído a essa sugestão (rota de IA) em vez do envio comum.
@@ -643,6 +660,8 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
           onHistorico={() => setShowingHistory(true)}
           sgp={{ aberto: sgpPanelOpen, ref: gatilhoSgpRef, alternar: alternarSgp }}
           cliente={{ aberto: dadosVisiveis, ref: gatilhoClienteRef, alternar: alternarCliente }}
+          painelNoLugar={painelAlternado}
+          dadosAoLado={dadosPorPadrao}
         />
       ) : (
       <div className="chat-workspace-header @container z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/[0.07] px-2 py-2.5 md:px-5">
@@ -951,6 +970,7 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
         <div ref={bottomRef} />
       </div>
 
+      {!isMine && Rodape && <Rodape conversation={conversation} podeAssumir={isUnassigned} onAssumir={handleClaim} />}
       {isMine && (
         <>
           <AiSuggestionCard
@@ -1056,13 +1076,13 @@ function ConversationView({ conversation, onTransferClick, onBack, painelModo = 
         />
         </Suspense>
       )}
-      {closingReason && (
-        <CloseReasonModal
+      {closingReason && (Encerramento ? (
+        <Encerramento
           onConfirm={handleConfirmClose}
           onClose={() => setClosingReason(false)}
           suggestedReasonId={conversation.suggestedReasonId}
         />
-      )}
+      ) : ABRINDO)}
       </div>
       {alertDialog}
       {sgpPanelOpen ? (

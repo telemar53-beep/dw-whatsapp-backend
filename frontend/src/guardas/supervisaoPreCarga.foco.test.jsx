@@ -22,8 +22,8 @@ import { useAiSuggestion } from '../hooks/useAiSuggestion';
 // chegar perto da lista não baixa nada (supervisaoSobDemanda.test.jsx).
 
 const avaliados = vi.hoisted(() => new Set());
-vi.mock('../components/ConversationModal', async (original) => {
-  avaliados.add('ConversationModal');
+vi.mock('../components/ConversationView', async (original) => {
+  avaliados.add('ConversationView');
   return original();
 });
 vi.mock('../hooks/useAttendanceDashboard');
@@ -55,9 +55,9 @@ beforeEach(() => {
 describe('Supervisão: pré-carga da conversa por intenção', () => {
   test('o foco chegando a uma linha já pede a conversa, sem abrir nada', async () => {
     renderInShell(<SupervisionPage />, { path: '/supervisao' });
-    expect(avaliados.has('ConversationModal')).toBe(false);
+    expect(avaliados.has('ConversationView')).toBe(false);
     fireEvent.focus(within(screen.getByRole('tabpanel')).getByRole('button', { name: /Cliente 101/ }));
-    await waitFor(() => expect(avaliados.has('ConversationModal')).toBe(true));
+    await waitFor(() => expect(avaliados.has('ConversationView')).toBe(true));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

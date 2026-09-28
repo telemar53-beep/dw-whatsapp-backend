@@ -167,7 +167,7 @@ describe('evento de outra conversa não redesenha o popup aberto', () => {
     const antes = await montar();
     const user = userEvent.setup();
     await user.click(within(lista()).getByRole('button', { name: /Cliente 104/ }));
-    await screen.findByRole('dialog', { name: 'Conversa' });
+    await screen.findByRole('dialog', { name: /^Conversa com/ });
     const rendersDoPopup = await assentarPopup();
     expect(rendersDoPopup).toBeGreaterThan(0);
 
@@ -182,7 +182,7 @@ describe('evento de outra conversa não redesenha o popup aberto', () => {
     await montar();
     const user = userEvent.setup();
     await user.click(within(lista()).getByRole('button', { name: /Cliente 104/ }));
-    await screen.findByRole('dialog', { name: 'Conversa' });
+    await screen.findByRole('dialog', { name: /^Conversa com/ });
     const rendersDoPopup = await assentarPopup();
 
     useAgents.mockReturnValue({ agents: AGENTES_BUSCADOS_DE_NOVO(), status: 'ready' });
@@ -195,7 +195,7 @@ describe('evento de outra conversa não redesenha o popup aberto', () => {
     await montar();
     const user = userEvent.setup();
     await user.click(within(lista()).getByRole('button', { name: /Cliente 104/ }));
-    const dialogo = await screen.findByRole('dialog', { name: 'Conversa' });
+    const dialogo = await screen.findByRole('dialog', { name: /^Conversa com/ });
     const rendersDoPopup = await assentarPopup();
 
     act(() => socket.disparar('dashboard:conversation', { conversation: { ...ATENDIMENTO[0], contactDisplayName: 'Cliente 104 Renomeado' } }));

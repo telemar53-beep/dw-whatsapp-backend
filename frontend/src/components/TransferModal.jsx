@@ -1,18 +1,23 @@
-import { useState } from 'react';
+import { useId, useRef, useState, useSyncExternalStore } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAgents } from '../hooks/useAgents';
 import { usePresence } from '../hooks/usePresence';
 import { transferConversation } from '../services/api';
-import WaDialog, { waErrorClass, WaError } from './WaDialog';
+import { Dialog } from './ui/Dialog';
 import AgentAvatar from './AgentAvatar';
-import { AsyncState } from './ui';
-import { IconChats, IconChevronDown, IconInfo, IconSearch, IconTransfer } from './icons/WaIcons';
+import { IconeBuscar, IconeRecolher, IconeTransferir } from './icones';
 import { descreverErro } from '../utils/errorMessages';
+import './dialogo-transferir.css';
+
+// "Transferir atendimento", o mesmo diálogo na mesa e na Supervisão. Claro e
+// sólido (folha própria, dialogo-transferir.css): sem o desfoque, a animação e
+// a sombra da base, e sem o "×" dela — a saída é "Fechar" no desktop e a seta
+// de voltar no celular, nunca as duas. Chega sob demanda nas duas páginas.
 
 // Nível de carga pelo número de atendimentos abertos. Os limites são uma
 // escolha de produto (não vêm do backend): quem está offline nunca é sugerido
-// como "disponível", e a partir de 10 conversas o atendente é marcado em
-// vermelho para desencorajar mais uma transferência.
+// como "disponível", e a partir de 10 conversas o atendente é marcado para
+// desencorajar mais uma transferência.
 export function loadLevel({ online, active }) {
   if (!online) {
     return { key: 'offline', label: 'Offline', hint: 'Não está disponível no momento', tone: 'gray' };
@@ -29,120 +34,132 @@ export function loadLevel({ online, active }) {
   return { key: 'free', label: 'Disponível', hint: 'Atendendo normalmente', tone: 'green' };
 }
 
-const TONE_CLASSES = {
-  green: 'border-chat-online/45 bg-chat-online/15 text-chat-online',
-  yellow: 'border-[#f5c518]/45 bg-[#f5c518]/15 text-[#f5d35e]',
-  orange: 'border-chat-orange/45 bg-chat-orange/15 text-[#ff9a6e]',
-  red: 'border-[#ef4444]/50 bg-[#ef4444]/15 text-[#ff7b7b]',
-  gray: 'border-white/15 bg-white/[0.08] text-wa-muted',
-};
-
-const DOT_CLASSES = {
-  green: 'bg-chat-online',
-  yellow: 'bg-[#f5c518]',
-  orange: 'bg-chat-orange',
-  red: 'bg-[#ef4444]',
-  gray: 'bg-white/35',
-};
+// A cor da presença no diálogo claro: verde para quem pode receber, cinza para
+// movimentado e offline, vermelho só na carga alta. Laranja não entra aqui. A
+// cor nunca vai sozinha: o nível está escrito ao lado.
+const TOM_DA_PRESENCA = { green: 'verde', yellow: 'verde', orange: 'neutro', gray: 'neutro', red: 'alerta' };
 
 const SORTS = [
   { key: 'load', label: 'Menor carga' },
   { key: 'name', label: 'Nome' },
 ];
 
+// O mesmo corte de celular do popup da Supervisão (ConversaDaSupervisao.jsx).
+// Decidido aqui, e não pelo CSS: a saída é uma só (seta ou "Fechar") e o foco
+// inicial muda — no celular, o teclado não sobe sozinho por cima da lista.
+const CELULAR = '(max-width: 767px)';
+function assinarTela(aviso) {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+  const consulta = window.matchMedia(CELULAR);
+  consulta.addEventListener('change', aviso);
+  return () => consulta.removeEventListener('change', aviso);
+}
+function telaDeCelular() {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(CELULAR).matches;
+}
+function useCelular() {
+  return useSyncExternalStore(assinarTela, telaDeCelular, () => false);
+}
+
+const PARA_A_ESQUERDA = { transform: 'rotate(90deg)' };
+
 function normalize(text) {
   return String(text || '')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase();
 }
 
-function IconArrowRight({ size = 16 }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
-  );
-}
-
-function IconBars({ size = 14 }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="currentColor">
-      <rect x="4" y="13" width="4" height="7" rx="1" />
-      <rect x="10" y="8" width="4" height="12" rx="1" />
-      <rect x="16" y="3" width="4" height="17" rx="1" />
-    </svg>
-  );
-}
-
-function AgentRow({ agent, online, selecionado, onEscolher }) {
-  const active = agent.activeConversations || 0;
-  const level = loadLevel({ online, active });
-  const displayName = agent.name || agent.email;
-  return (
-    <li>
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selecionado}
-      onClick={onEscolher}
-      className={`dialog-transfer-linha flex w-full items-center gap-3 px-3.5 py-2.5 text-left ${selecionado ? 'is-escolhido' : ''}`}
-    >
-      <span className="relative shrink-0">
-        <AgentAvatar agentId={agent.id} avatarPath={agent.avatarPath} name={displayName} size={46} />
-        <span
-          title={online ? 'Online' : 'Offline'}
-          className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#30383d] ${DOT_CLASSES[level.tone]}`}
-        />
-      </span>
-      <span className="flex min-w-0 flex-1 basis-0 flex-col gap-1.5">
-        <span className="truncate text-[14.5px] font-semibold leading-[18px] text-wa-text">{displayName}</span>
-        <span className={`inline-flex w-fit items-center rounded-full border px-2.5 py-[3px] text-[12px] font-medium ${TONE_CLASSES[level.tone]}`}>
-          {level.label}
-        </span>
-      </span>
-      <span aria-hidden="true" className="hidden h-11 w-px shrink-0 bg-wa-border sm:block" />
-      <span className="hidden min-w-0 flex-1 basis-0 items-start gap-2.5 sm:flex">
-        <span className="mt-0.5 shrink-0 text-wa-muted">
-          <IconChats size={16} />
-        </span>
-        <span className="min-w-0">
-          <span className="block text-[14px] leading-[18px] text-wa-text">
-            <strong className="font-semibold">{active}</strong> {active === 1 ? 'atendimento' : 'atendimentos'}
-          </span>
-          {level.alert ? (
-            <span className={`mt-1 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-[3px] text-[12px] font-medium ${TONE_CLASSES.red}`}>
-              <IconBars size={13} />
-              {level.hint}
-            </span>
-          ) : (
-            <span className="block text-[12.5px] leading-[17px] text-wa-muted">{level.hint}</span>
-          )}
-        </span>
-      </span>
-      <span aria-hidden="true" className={`dialog-transfer-marca ${selecionado ? 'is-escolhido' : ''}`} />
-    </button>
-    </li>
-  );
-}
-
-// So o primeiro nome no botao: o nome inteiro estourava o rodape em telas
+// Só o primeiro nome no botão: o nome inteiro estourava o rodapé em telas
 // estreitas. O nome completo continua na linha escolhida.
 function primeiroNomeDe(a) {
   const partes = String(a.name || a.email || '').trim().split(/\s+/).filter(Boolean);
   return partes[0] || 'atendente';
 }
 
+function AgentRow({ agent, online, selecionado, tabulavel, onEscolher, tamanhoDoAvatar }) {
+  const id = useId();
+  const active = agent.activeConversations || 0;
+  const level = loadLevel({ online, active });
+  const displayName = agent.name || agent.email;
+  return (
+    <li>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={selecionado}
+        aria-labelledby={`${id}-nome`}
+        aria-describedby={`${id}-presenca ${id}-carga`}
+        tabIndex={tabulavel ? 0 : -1}
+        data-agente={agent.id}
+        onClick={onEscolher}
+        className="tr-linha"
+      >
+        <span className="tr-avatar" aria-hidden="true">
+          <AgentAvatar agentId={agent.id} avatarPath={agent.avatarPath} name={displayName} size={tamanhoDoAvatar} />
+        </span>
+        <span className="tr-quem">
+          <span id={`${id}-nome`} className="tr-nome">{displayName}</span>
+          <span id={`${id}-presenca`} className="tr-presenca" data-tom={TOM_DA_PRESENCA[level.tone]}>
+            <i aria-hidden="true" />
+            {level.label}
+          </span>
+        </span>
+        <span id={`${id}-carga`} className="tr-carga">
+          <span className="tr-carga-num"><strong>{active}</strong> {active === 1 ? 'atendimento' : 'atendimentos'}</span>
+          <span className="tr-carga-dica" data-alerta={level.alert ? 'true' : undefined}>{level.hint}</span>
+        </span>
+        <span className="tr-marca" aria-hidden="true" />
+      </button>
+    </li>
+  );
+}
+
+// Uma seção da lista (Disponíveis ou Offline): o título e a contagem são
+// vistos; o nome do grupo leva os dois para quem ouve.
+function Grupo({ titulo, online, children, total }) {
+  return (
+    <div role="group" aria-label={`${titulo}, ${total}`} className="tr-grupo">
+      <p className="tr-grupo-titulo" aria-hidden="true">
+        <i data-on={online ? 'true' : undefined} />
+        {titulo}
+        <b>{total}</b>
+      </p>
+      <ul className="tr-lista">{children}</ul>
+    </div>
+  );
+}
+
+// Enquanto a carga é conferida, a forma da lista sem nenhum número: ninguém
+// decide com carga velha. Parado — sem piscar.
+function Conferindo() {
+  return (
+    <div role="status" className="tr-carregando">
+      <span className="tr-carregando-texto">Conferindo a carga atual dos atendentes…</span>
+      <span className="tr-carregando-linhas" aria-hidden="true">
+        {[0, 1, 2, 3].map((i) => (
+          <span key={i} className="tr-carregando-linha"><i /><b /><b /></span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 function TransferModal({ conversationId, onClose }) {
   const { token, agent } = useAuth();
   // Mostra a carga de cada um e ordena por ela: a lista é conferida ao abrir,
-  // e até lá fica o "carregando" de sempre (ninguém escolhe com carga velha).
-  const { agents: allAgents, status } = useAgents({ carga: true });
+  // e até lá o status fica "loading" (ninguém escolhe com carga velha).
+  const { agents: allAgents, status, error: erroDaLista, refresh } = useAgents({ carga: true });
   const onlineIds = usePresence(allAgents);
+  const celular = useCelular();
+  const idBase = useId();
+  const tituloId = `${idBase}-titulo`;
+  const descricaoId = `${idBase}-descricao`;
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('load');
   const [error, setError] = useState(null);
-  const [busyId, setBusyId] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const enviandoRef = useRef(false);
   const [escolhido, setEscolhido] = useState(null);
 
   const isOnline = (a) => onlineIds.has(a.id);
@@ -159,133 +176,185 @@ function TransferModal({ conversationId, onClose }) {
       return loadOrder || nameOrder;
     });
 
-  // Agrupar por disponibilidade e a ordem de "menor carga". Pedir "Nome" e
-  // pedir uma lista alfabetica: agrupar ali quebraria a ordem que a pessoa
-  // acabou de escolher, e o proprio "Ordenar por" deixaria de fazer sentido.
+  // Agrupar por disponibilidade é a ordem de "menor carga". Pedir "Nome" é
+  // pedir uma lista alfabética: agrupar ali quebraria a ordem que a pessoa
+  // acabou de escolher.
   const agrupar = sort !== 'name';
   const disponiveis = agrupar ? agents.filter(isOnline) : agents;
   const offline = agrupar ? agents.filter((a) => !isOnline(a)) : [];
-  // A escolha vale sobre a lista INTEIRA: antes ela sumia com a busca e o
-  // botão desabilitava sem dizer por quê (A2-7).
+  const naOrdemDaTela = [...disponiveis, ...offline];
+  // A escolha vale sobre a lista INTEIRA: com a busca ela continua valendo, e
+  // a nota diz quem está escolhido (A2-7).
   const escolhidoAgora = allAgents.find((a) => a.id === escolhido && a.id !== agent.id) || null;
   const escolhidoForaDaBusca = Boolean(escolhidoAgora) && !agents.some((a) => a.id === escolhidoAgora.id);
+  // Um ponto de Tab só na lista: a linha escolhida, ou a primeira.
+  const tabulavel = naOrdemDaTela.some((a) => a.id === escolhido) ? escolhido : naOrdemDaTela[0]?.id;
 
-  async function handleSelect(toAgentId) {
+  async function transferir() {
+    // O ref barra o segundo clique antes mesmo de o botão desabilitar.
+    if (!escolhidoAgora || enviandoRef.current) return;
+    enviandoRef.current = true;
+    setEnviando(true);
     setError(null);
-    setBusyId(toAgentId);
     try {
-      await transferConversation(conversationId, toAgentId, token);
+      await transferConversation(conversationId, escolhidoAgora.id, token);
       onClose();
     } catch (err) {
       setError(descreverErro(err, 'Não foi possível transferir este atendimento.'));
-      setBusyId(null);
+      enviandoRef.current = false;
+      setEnviando(false);
     }
   }
 
+  // Grupo de rádio: setas andam e escolhem, Home e End vão às pontas. Enter e
+  // Espaço são do próprio botão da linha.
+  function aoTeclarNaLista(evento) {
+    const linhas = [...evento.currentTarget.querySelectorAll('[role=radio]')];
+    const i = linhas.indexOf(document.activeElement);
+    if (i < 0 || linhas.length === 0) return;
+    const alvos = {
+      ArrowDown: linhas[(i + 1) % linhas.length],
+      ArrowRight: linhas[(i + 1) % linhas.length],
+      ArrowUp: linhas[(i - 1 + linhas.length) % linhas.length],
+      ArrowLeft: linhas[(i - 1 + linhas.length) % linhas.length],
+      Home: linhas[0],
+      End: linhas[linhas.length - 1],
+    };
+    const alvo = alvos[evento.key];
+    if (!alvo) return;
+    evento.preventDefault();
+    alvo.focus();
+    setEscolhido(alvo.dataset.agente);
+  }
+
   const hasOthers = allAgents.some((a) => a.id !== agent.id);
+  const linha = (a) => (
+    <AgentRow
+      key={a.id}
+      agent={a}
+      online={isOnline(a)}
+      selecionado={escolhido === a.id}
+      tabulavel={tabulavel === a.id}
+      tamanhoDoAvatar={celular ? 36 : 40}
+      onEscolher={() => setEscolhido(a.id)}
+    />
+  );
+
+  let corpo;
+  if (status === 'loading') {
+    corpo = <Conferindo />;
+  } else if (status === 'forbidden') {
+    corpo = <p className="tr-aviso">Você não tem permissão para ver esta lista.</p>;
+  } else if (status === 'error') {
+    corpo = (
+      <div role="alert" className="tr-falha">
+        <span>{erroDaLista || 'Não foi possível carregar os atendentes.'}</span>
+        <button type="button" className="tr-botao" onClick={refresh}>Tentar de novo</button>
+      </div>
+    );
+  } else if (!hasOthers) {
+    corpo = <p className="tr-vazio">Nenhum outro atendente disponível.</p>;
+  } else {
+    corpo = (
+      <>
+        {erroDaLista && (
+          <div role="alert" className="tr-falha is-aviso">
+            <span>Não foi possível conferir a carga agora. Os números são da última atualização.</span>
+            <button type="button" className="tr-botao" onClick={refresh}>Tentar de novo</button>
+          </div>
+        )}
+        {agents.length > 0 ? (
+          <div role="radiogroup" aria-label="Atendente que vai receber" className="tr-escolha" onKeyDown={aoTeclarNaLista}>
+            {agrupar ? (
+              <>
+                {disponiveis.length > 0 && <Grupo titulo="Disponíveis" online total={disponiveis.length}>{disponiveis.map(linha)}</Grupo>}
+                {/* Offline no fim: quem está fora do turno não compete com quem pode receber agora. */}
+                {offline.length > 0 && <Grupo titulo="Offline" total={offline.length}>{offline.map(linha)}</Grupo>}
+              </>
+            ) : (
+              <ul className="tr-lista">{agents.map(linha)}</ul>
+            )}
+          </div>
+        ) : (
+          <p className="tr-vazio">Nenhum atendente encontrado com esse nome.</p>
+        )}
+      </>
+    );
+  }
 
   return (
-    <WaDialog
+    <Dialog
       variant="transfer"
+      size=""
+      labelledBy={tituloId}
+      describedBy={descricaoId}
       onClose={onClose}
-      title="Transferir atendimento"
-      description="Escolha um atendente para transferir esta conversa."
-      icon={<IconTransfer size={18} />}
-      size="max-w-[760px]"
+      dismissible={false}
+      initialFocus={celular ? 'dialog' : 'auto'}
+      className={`tr-dialogo${celular ? ' is-celular' : ''}`}
     >
+      <div className="tr-cab">
+        {celular ? (
+          <button type="button" className="tr-voltar" aria-label="Voltar" onClick={onClose}>
+            <IconeRecolher tamanho={22} style={PARA_A_ESQUERDA} />
+          </button>
+        ) : (
+          <span className="tr-cab-icone" aria-hidden="true"><IconeTransferir tamanho={22} /></span>
+        )}
+        <div className="tr-cab-texto">
+          <h2 id={tituloId}>Transferir atendimento</h2>
+          <p id={descricaoId}>Escolha o atendente que continuará esta conversa.</p>
+        </div>
+        {!celular && <button type="button" className="tr-fechar" onClick={onClose}>Fechar</button>}
+      </div>
 
-      <div className="flex shrink-0 flex-wrap gap-2.5 px-5">
-        <label className="flex h-[42px] min-w-0 flex-1 basis-[240px] items-center gap-2.5 rounded-[10px] border border-wa-border bg-white/[0.05] px-3 transition focus-within:border-white/25">
-          <span className="shrink-0 text-wa-muted">
-            <IconSearch size={18} />
-          </span>
+      <div className="tr-ferramentas">
+        <label className="tr-busca">
+          <IconeBuscar tamanho={18} />
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Buscar atendente por nome…"
             aria-label="Buscar atendente por nome"
-            className="min-w-0 flex-1 bg-transparent text-[13.5px] text-wa-text outline-none placeholder:text-wa-muted"
           />
         </label>
-        <label className="relative flex h-[42px] shrink-0 items-center rounded-[10px] border border-wa-border bg-white/[0.05] pl-3 pr-9 focus-within:border-white/25">
-          <span className="flex flex-col">
-            <span className="text-[11px] leading-[13px] text-wa-muted">Ordenar por</span>
-            <select
-              value={sort}
-              onChange={(event) => setSort(event.target.value)}
-              aria-label="Ordenar por"
-              className="cursor-pointer appearance-none bg-transparent pr-2 text-[13.5px] font-medium leading-[19px] text-wa-text outline-none"
-            >
-              {SORTS.map((item) => (
-                <option key={item.key} value={item.key} className="bg-[#30383d] text-white">
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </span>
-          <span aria-hidden="true" className="pointer-events-none absolute right-2.5 text-wa-icon">
-            <IconChevronDown size={18} />
-          </span>
+        <label className="tr-ordem">
+          <span className="tr-ordem-rotulo" aria-hidden="true">Ordenar por</span>
+          <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Ordenar por">
+            {SORTS.map((item) => (
+              <option key={item.key} value={item.key}>{item.label}</option>
+            ))}
+          </select>
+          <IconeRecolher tamanho={18} className="tr-ordem-seta" />
         </label>
       </div>
 
-      <div className="wa-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-3">
-        <AsyncState status={status} isEmpty={!hasOthers} emptyMessage="Nenhum outro atendente disponível.">
-          {agents.length > 0 ? (
-            <div role="radiogroup" aria-label="Atendente que vai receber">
-              {agrupar && disponiveis.length > 0 && <p className="dialog-transfer-grupo"><i aria-hidden="true" data-on="true" />Disponíveis<b>{disponiveis.length}</b></p>}
-              {disponiveis.length > 0 && (
-                <ul className="divide-y divide-wa-border overflow-hidden rounded-[12px] border border-wa-border bg-white/[0.03]">
-                  {disponiveis.map((a) => (
-                    <AgentRow key={a.id} agent={a} online={isOnline(a)} selecionado={escolhido === a.id} onEscolher={() => setEscolhido(a.id)} />
-                  ))}
-                </ul>
-              )}
-              {/* Offline no fim, e nao no meio da lista: quem esta fora do
-                  turno nao deve competir com quem pode receber agora. */}
-              {offline.length > 0 && <p className="dialog-transfer-grupo"><i aria-hidden="true" />Offline<b>{offline.length}</b></p>}
-              {offline.length > 0 && (
-                <ul className="divide-y divide-wa-border overflow-hidden rounded-[12px] border border-wa-border bg-white/[0.03]">
-                  {offline.map((a) => (
-                    <AgentRow key={a.id} agent={a} online={false} selecionado={escolhido === a.id} onEscolher={() => setEscolhido(a.id)} />
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : (
-            <p className="px-2 py-5 text-center text-[13px] text-wa-muted">Nenhum atendente encontrado com esse nome.</p>
-          )}
-        </AsyncState>
-        {error && <WaError className="mt-3">{error}</WaError>}
-      </div>
+      <div className="tr-corpo">{corpo}</div>
 
-      <div className="dw-dialog-footer">
-        <span className="dw-dialog-nota">
+      {error && <p role="alert" className="tr-erro">{error}</p>}
+      {enviando && <p role="status" className="sr-only">Transferindo o atendimento…</p>}
+
+      <div className="tr-rodape">
+        <p className="tr-nota">
           {escolhidoForaDaBusca
             ? `Escolhido: ${escolhidoAgora.name || escolhidoAgora.email} (fora da busca).`
             : 'A transferência será registrada no histórico da conversa.'}
-        </span>
-        <span className="dw-dialog-acoes">
+        </p>
+        <div className="tr-acoes">
+          <button type="button" className="tr-botao" onClick={onClose}>Cancelar</button>
           <button
             type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-[10px] border border-wa-border-strong bg-white/[0.06] px-5 py-2 text-[13.5px] font-medium text-wa-text transition-colors hover:bg-white/[0.10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            className="tr-botao is-principal"
+            onClick={transferir}
+            disabled={!escolhidoAgora || enviando}
           >
-            Cancelar
+            {/* No celular o botão tem meia largura: o nome quebrava a linha, e a escolha já está à vista. */}
+            {enviando ? 'Transferindo…' : escolhidoAgora && !celular ? `Transferir para ${primeiroNomeDe(escolhidoAgora)}` : 'Transferir'}
           </button>
-          <button
-            type="button"
-            onClick={() => escolhidoAgora && handleSelect(escolhidoAgora.id)}
-            disabled={!escolhidoAgora || busyId !== null}
-            className="flex shrink-0 items-center gap-2 rounded-[10px] bg-accent px-5 py-2 text-[13.5px] font-semibold text-on-accent transition-colors hover:bg-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:opacity-50"
-          >
-            <IconArrowRight size={15} />
-            {escolhidoAgora ? `Transferir para ${primeiroNomeDe(escolhidoAgora)}` : 'Transferir'}
-          </button>
-        </span>
+        </div>
       </div>
-    </WaDialog>
+    </Dialog>
   );
 }
 

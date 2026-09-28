@@ -1,8 +1,10 @@
 /* ---------- Conversa da mesa, clara (fatia 2 do novo atendimento) ----------
-   Só a mesa carrega este arquivo (vem com ConversaDaMesa.jsx). Tudo aqui mora
-   sob `.mesa-conversa` — o <main> da DashboardPage. O modal da Supervisão e
-   dos Encerrados também é `.chat-workspace`, mas nunca `.mesa-conversa`: nada
-   daqui o alcança.
+   Vem com ConversaDaMesa.jsx e, desde a 2ª fatia da Supervisão, também com o
+   popup de conversa dela (components/supervisao/PopupDaSupervisao.jsx), que
+   importa esta folha direto — é a mesma conversa clara. Por isso ela é um
+   arquivo à parte na rota da mesa. Tudo aqui mora sob `.mesa-conversa`: o
+   <main> da DashboardPage e o corpo daquele popup. O modal dos Encerrados
+   também é `.chat-workspace`, mas nunca `.mesa-conversa`: nada daqui o alcança.
 
    Os tokens claros valem na COLUNA da conversa (o primeiro filho de
    `.conv-raiz`), não no encaixe do painel lateral: o painel do SGP está

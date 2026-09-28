@@ -1,0 +1,358 @@
+/* ---------- Popup de conversa da Supervisão (2ª fatia) ----------
+   Chega junto com o popup, sob demanda; a página não carrega esta folha. A
+   conversa usa a folha clara da conversa aprovada da mesa (`.mesa-conversa`,
+   em conversa-mesa.css); os painéis, as folhas deles. Aqui fica só a moldura:
+   fundo, diálogo, cabeçalho, menu de opções e a faixa de quem acompanha.
+
+   Branco e cinza muito claro; índigo pontual (foco, ação principal, item
+   aberto); verde só para "Em atendimento"; vermelho só no Encerrar. Sem
+   desfoque, gradiente, animação ou sombra pesada. */
+
+[data-dialog='supervisao-conversa'] {
+  --sp-papel: #ffffff;
+  --sp-suave: #f6f7f9;
+  --sp-linha: #e3e6ec;
+  --sp-borda: #d4d8e0;
+  --sp-texto: #161a26;
+  --sp-texto-2: #5b6272;
+  --sp-texto-3: #6b7180;
+  --sp-indigo: #4f46e5;
+  --sp-indigo-forte: #4338ca;
+  --sp-indigo-texto: #3f37c9;
+  --sp-indigo-claro: #ecebfd;
+  --sp-indigo-linha: #c9c5fa;
+  --sp-verde-fundo: #e7f5ee;
+  --sp-verde-texto: #11704f;
+  --sp-ambar-fundo: #fff6e5;
+  --sp-ambar-texto: #7a4a00;
+  --sp-erro: #b3261e;
+  --sp-erro-fundo: #fdecea;
+  --color-focus-ring: #4f46e5;
+  color-scheme: light;
+}
+
+/* ---------- Fundo e diálogo ----------
+   O fundo é uma cor lisa sobre a página: sem o desfoque da base (caro em PC
+   fraco) e sem a animação de entrada. */
+.chat-theme:has(> [data-dialog='supervisao-conversa']) {
+  background: rgba(22, 26, 38, 0.44);
+  backdrop-filter: none;
+  padding: 24px;
+}
+[data-dialog='supervisao-conversa'].dw-dialog {
+  width: 100%;
+  max-width: 1180px;
+  height: min(880px, calc(100dvh - 48px));
+  min-height: 0;
+  max-height: none;
+  border: 1px solid #d9dde5;
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--sp-texto);
+  box-shadow: 0 18px 40px -18px rgba(20, 23, 40, 0.24);
+  animation: none;
+  backdrop-filter: none;
+}
+.sp-popup-topo { flex: none; }
+/* A conversa e o painel rolam cada um no seu eixo; o popup não rola. */
+.sp-popup-corpo { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; }
+
+/* ---------- A conversa, igual à da mesa ----------
+   O compositor e a linha do tempo são os da mesa (conversa-mesa.css). Duas
+   coisas mexiam neles aqui dentro, e são desfeitas com o prefixo (0,5,x):
+   1. o diálogo base (overlays.css): a regra de campos (0,4,1) encolhia a
+      fonte do campo, arredondava e deixava redimensionar; `.dw-dialog button`
+      punha os emojis em 12 px; e com um áudio gravado pendente a pílula vira
+      o último filho do formulário e ganhava `flex:none` e padding nos botões;
+   2. a base da conversa da mesa mora no dashboard.css, que só a mesa carrega:
+      sem ela aqui, o popup mudava conforme a mesa já tivesse sido aberta na
+      sessão. São os mesmos valores, só com escopo no popup. */
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-workspace-composer textarea {
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 14px;
+  line-height: 20px;
+  resize: none;
+}
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-workspace-composer textarea:focus { border: 0; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-workspace-composer form > div { flex: 1 1 0%; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-workspace-composer form > div > button { padding: 0; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .dialog-emoji-picker button { font-size: 20px; line-height: 1; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-workspace-system-note { background: none; border: 0; border-radius: 0; padding: 3px 0; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-workspace-bubble:has(.chat-workspace-message-text) { max-width: min(85%, 510px); }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-workspace-bubble:has(.chat-voice-note) { max-width: min(90%, 340px); padding: 9px 11px 7px; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-message-author { display: block; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-ai-suggestion { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; margin: 0; padding: 8px 14px; border: 0; border-radius: 0; border-top: 1px solid var(--color-ui-line); }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-ai-suggestion > p { margin: 0; font-size: 12px; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-ai-suggestion > p:first-child { grid-column: 1; margin: 0; font-size: 10px; color: var(--color-ui-ink-ai); }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-ai-suggestion > ul { grid-column: 1 / -1; margin: 0; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-ai-suggestion > div { grid-column: 2; grid-row: 1 / 4; align-self: center; flex-wrap: wrap; gap: 3px; max-width: 180px; }
+[data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-ai-suggestion button { padding: 4px 6px; border-radius: 5px; font-size: 11px; }
+@media (max-width: 700px) {
+  [data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-ai-suggestion { display: flex; flex-direction: column; }
+}
+
+/* ---------- Cabeçalho ----------
+   Uma linha no desktop: identidade à esquerda, ações à direita. A
+   identidade é uma grade — nome e estado na primeira linha, os dados da
+   conversa na segunda — para que no celular o estado desça e o nome fique
+   com a largura toda. */
+.sp-cab {
+  --color-wa-avatar: #e8e9f2;
+  --color-wa-avatar-text: #4a5063;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  background: var(--sp-papel);
+  border-bottom: 1px solid var(--sp-linha);
+}
+.sp-cab[hidden] { display: none; }
+.sp-cab-linha { display: flex; align-items: center; gap: 16px; min-height: 68px; padding: 12px 16px 12px 20px; }
+.sp-cab-id {
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content) auto minmax(0, 1fr);
+  grid-template-areas: 'avatar nome estado .' 'avatar dados dados dados';
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sp-cab-avatar { grid-area: avatar; display: flex; margin-right: 2px; }
+.sp-cab-nome {
+  grid-area: nome;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--sp-texto);
+}
+.sp-cab-estado {
+  grid-area: estado;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 9px 1px 8px;
+  border-radius: 999px;
+  background: var(--sp-suave);
+  color: var(--sp-texto-2);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sp-cab-estado::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.sp-cab-estado[data-estado='atendimento'] { background: var(--sp-verde-fundo); color: var(--sp-verde-texto); }
+.sp-cab-estado[data-estado='espera'] { background: var(--sp-ambar-fundo); color: var(--sp-ambar-texto); }
+.sp-cab-estado[data-estado='automacao'] { background: var(--sp-indigo-claro); color: var(--sp-indigo-texto); }
+
+/* Dados da conversa em pares rótulo/valor (como a faixa da mesa). Os itens
+   quebram linha e só a primeira aparece: quem não cabe inteiro sai inteiro,
+   do fim para o começo. O canal (primeiro) encolhe com reticências. */
+.sp-cab-dados {
+  grid-area: dados;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: baseline;
+  column-gap: 18px;
+  row-gap: 0;
+  min-width: 0;
+  height: 18px;
+  margin: 0;
+  overflow: hidden;
+}
+.sp-cab-dado { display: flex; align-items: baseline; gap: 6px; flex: none; min-width: 0; font-size: 12.5px; line-height: 18px; white-space: nowrap; }
+.sp-cab-dado:first-child { flex: 0 1 auto; }
+.sp-cab-dado dt { flex: none; color: var(--sp-texto-3); }
+.sp-cab-dado dd { min-width: 0; max-width: 240px; margin: 0; overflow: hidden; text-overflow: ellipsis; color: var(--sp-texto); font-weight: 500; }
+.sp-cab-dado:first-child dd { color: var(--sp-texto-2); font-weight: 400; }
+
+.sp-cab-acoes { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.sp-cab .sp-botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--sp-borda);
+  border-radius: 8px;
+  background: var(--sp-papel);
+  color: var(--sp-texto);
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.sp-cab .sp-botao svg { flex: none; color: var(--sp-texto-2); }
+.sp-cab .sp-botao:hover { background: var(--sp-suave); border-color: #c5cad4; }
+.sp-cab .sp-botao.is-icone { width: 36px; padding: 0; }
+.sp-cab .sp-botao[aria-expanded='true'] { background: var(--sp-indigo-claro); border-color: var(--sp-indigo-linha); }
+.sp-cab .sp-botao[aria-expanded='true'] svg { color: var(--sp-indigo-texto); }
+/* Fechar é o controle da janela, não uma ação do atendimento: sem moldura. */
+.sp-cab .sp-botao.is-fechar { padding: 0 10px; margin-right: -4px; border-color: transparent; color: var(--sp-texto-2); }
+.sp-cab .sp-botao.is-fechar:hover { background: var(--sp-suave); color: var(--sp-texto); }
+
+/* ---------- Menu de opções ---------- */
+.sp-menu-ancora { position: relative; }
+.sp-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 232px;
+  padding: 6px;
+  border: 1px solid var(--sp-linha);
+  border-radius: 10px;
+  background: var(--sp-papel);
+  box-shadow: 0 8px 24px -8px rgba(20, 23, 40, 0.18);
+}
+.sp-menu .sp-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--sp-texto);
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  transition: background-color 0.12s;
+}
+.sp-menu .sp-menu-item svg { flex: none; color: var(--sp-texto-2); }
+.sp-menu .sp-menu-item:hover,
+.sp-menu .sp-menu-item:focus-visible { background: var(--sp-suave); }
+/* Por dentro do item: a regra geral de foco do tema (index.css, 0,4,0) põe o
+   contorno 2 px para fora e ele invadia o item vizinho. */
+[data-dialog='supervisao-conversa'].dw-dialog .sp-menu .sp-menu-item:focus-visible { outline: 2px solid var(--sp-indigo); outline-offset: -2px; }
+.sp-menu .sp-menu-item.is-perigo,
+.sp-menu .sp-menu-item.is-perigo svg { color: var(--sp-erro); }
+.sp-menu .sp-menu-item.is-perigo:hover,
+.sp-menu .sp-menu-item.is-perigo:focus-visible { background: var(--sp-erro-fundo); }
+.sp-menu-divisor { height: 1px; margin: 6px 4px; background: var(--sp-linha); }
+
+/* ---------- Dados do cliente e Histórico à vista (sem lugar ao lado) ---------- */
+.sp-cab-atalhos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px 10px; }
+.sp-cab .sp-atalho {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--sp-indigo-linha);
+  border-radius: 8px;
+  background: var(--sp-papel);
+  color: var(--sp-indigo-texto);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.sp-cab .sp-atalho span { overflow: hidden; text-overflow: ellipsis; }
+.sp-cab .sp-atalho svg { flex: none; }
+.sp-cab .sp-atalho:hover { background: var(--sp-indigo-claro); }
+.sp-cab .sp-atalho[aria-expanded='true'] { background: var(--sp-indigo-claro); border-color: var(--sp-indigo-linha); }
+
+/* ---------- Faixa de quem só acompanha ----------
+   No lugar do compositor, na mesma posição: diz por que não há caixa de
+   mensagem. É um estado, não um controle desligado. */
+.sp-faixa {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  min-height: 56px;
+  padding: 8px 16px 8px 20px;
+  border-top: 1px solid var(--sp-linha);
+  background: var(--sp-suave);
+}
+.sp-faixa-texto { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 13.5px; line-height: 20px; color: var(--sp-texto-2); }
+.sp-faixa-texto strong { font-weight: 600; color: var(--sp-texto); }
+.sp-faixa .sp-faixa-assumir {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--sp-indigo);
+  color: #ffffff;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color 0.12s;
+}
+.sp-faixa .sp-faixa-assumir svg { flex: none; color: #ffffff; }
+.sp-faixa .sp-faixa-assumir:hover { background: var(--sp-indigo-forte); }
+
+/* ---------- Celular: tela cheia ----------
+   Um cabeçalho compacto (seta, identidade em duas linhas, menu) e as duas
+   consultas do cliente; a conversa fica com o resto da altura. */
+@media (max-width: 767px) {
+  .chat-theme:has(> [data-dialog='supervisao-conversa']) { padding: 0; }
+  [data-dialog='supervisao-conversa'].dw-dialog {
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .sp-faixa { padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); }
+}
+.sp-cab.is-celular .sp-cab-linha { gap: 4px; min-height: 60px; padding: 8px 6px 8px 4px; }
+.sp-cab .sp-cab-voltar { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 10px; color: var(--sp-texto-2); }
+.sp-cab .sp-cab-voltar:hover { background: var(--sp-suave); color: var(--sp-texto); }
+.sp-cab.is-celular .sp-cab-id {
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-areas: 'avatar nome nome' 'avatar estado dados';
+  column-gap: 8px;
+}
+.sp-cab.is-celular .sp-cab-nome { font-size: 16px; line-height: 22px; font-weight: 600; }
+.sp-cab.is-celular .sp-cab-estado { padding: 0 8px 0 7px; font-size: 12px; line-height: 18px; }
+.sp-cab.is-celular .sp-cab-dado { font-size: 12px; }
+.sp-cab.is-celular .sp-cab-dado:not(:first-child) { display: none; }
+.sp-cab.is-celular .sp-cab-dado:first-child { flex: 1 1 auto; }
+.sp-cab.is-celular .sp-cab-dado dd { max-width: none; }
+.sp-cab.is-celular .sp-botao.is-icone { border-color: transparent; }
+
+@media (max-width: 480px) {
+  [data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-workspace-composer textarea { padding: 10px 6px; }
+}
+
+/* Toque: alvos de 44 px; e o campo em 16 px, senão o Safari dá zoom. */
+@media (pointer: coarse) {
+  .sp-cab .sp-botao { min-height: 44px; }
+  .sp-cab .sp-botao.is-icone { width: 44px; }
+  .sp-cab .sp-cab-voltar { width: 44px; height: 44px; }
+  .sp-cab .sp-atalho { height: 44px; }
+  .sp-menu .sp-menu-item { height: 44px; }
+  .sp-faixa .sp-faixa-assumir { min-height: 44px; }
+  [data-dialog='supervisao-conversa'].dw-dialog.chat-workspace .mesa-conversa .chat-workspace-composer textarea { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-cab .sp-botao,
+  .sp-cab .sp-atalho,
+  .sp-menu .sp-menu-item,
+  .sp-faixa .sp-faixa-assumir { transition: none; }
+}

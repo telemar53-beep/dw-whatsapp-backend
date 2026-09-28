@@ -264,7 +264,8 @@ describe('ConversationView', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
-    expect(screen.getByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
+    // O Encerrar chega sob demanda (guardas/dialogosSobDemanda.test.jsx).
+    expect(await screen.findByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
     await userEvent.click(screen.getByLabelText('Troca de senha'));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i }));
 
@@ -861,7 +862,7 @@ describe('SGP lookup panel', () => {
     const CONVERSATION_B = { id: 'c2', status: 'waiting', assignedAgentId: null };
     const { rerender } = render(<ConversationView conversation={CONVERSATION_A} onTransferClick={vi.fn()} onBack={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
-    expect(screen.getByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
+    expect(await screen.findByRole('radiogroup', { name: 'Motivo do contato' })).toBeInTheDocument();
 
     rerender(<ConversationView conversation={CONVERSATION_B} onTransferClick={vi.fn()} onBack={vi.fn()} />);
     expect(screen.queryByRole('radiogroup', { name: 'Motivo do contato' })).not.toBeInTheDocument();
@@ -1010,7 +1011,7 @@ describe('AI suggestion card', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
-    expect(screen.getByLabelText('Sem conexão')).toBeChecked();
+    expect(await screen.findByLabelText('Sem conexão')).toBeChecked();
   });
 
   test('opens the close-reason popup with nothing pre-selected when there is no AI-suggested reason', async () => {
@@ -1023,7 +1024,7 @@ describe('AI suggestion card', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /encerrar atendimento/i }));
 
-    expect(screen.getByLabelText('Troca de senha')).not.toBeChecked();
+    expect(await screen.findByLabelText('Troca de senha')).not.toBeChecked();
     expect(within(screen.getByRole('dialog')).getByRole('button', { name: /encerrar atendimento/i })).toBeDisabled();
   });
 

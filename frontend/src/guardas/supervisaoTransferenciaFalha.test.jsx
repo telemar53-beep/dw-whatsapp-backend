@@ -50,9 +50,9 @@ describe('Supervisão: a transferência não baixou', () => {
     const user = userEvent.setup();
     renderInShell(<SupervisionPage />, { path: '/supervisao' });
     await user.click(within(screen.getByRole('tabpanel')).getByRole('button', { name: /Cliente 101/ }));
-    await screen.findByRole('dialog', { name: 'Conversa' });
+    await screen.findByRole('dialog', { name: /^Conversa com/ });
     await user.click(screen.getByRole('button', { name: /transferir atendimento/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível abrir a transferência. Verifique a conexão e tente de novo.');
-    expect(screen.getByRole('dialog', { name: 'Conversa' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /^Conversa com/ })).toBeInTheDocument();
   });
 });

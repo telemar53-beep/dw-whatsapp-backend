@@ -33,7 +33,7 @@ function importsEstaticos(relativo) {
     .replace(/^\s*\/\/.*$/gm, '');
   return [...fonte.matchAll(/^\s*import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/gm)].map((m) => m[1]);
 }
-const PESADOS = /ConversationModal|ConversationView|TransferModal|PopupDaSupervisao/;
+const PESADOS = /ConversationModal|ConversationView|TransferModal|PopupDaSupervisao|ConversaDaSupervisao|popup-da-supervisao/;
 
 const avaliados = vi.hoisted(() => new Set());
 vi.mock('../components/ConversationModal', async (original) => {
@@ -100,8 +100,9 @@ describe('Supervisão: a conversa e a transferência chegam sob demanda', () => 
 
     const lista = screen.getByRole('region', { name: /^Conversas/ });
     await user.click(within(lista).getByRole('button', { name: /Cliente 101/ }));
-    await screen.findByRole('dialog', { name: 'Conversa' });
-    expect(avaliados.has('ConversationModal')).toBe(true);
+    await screen.findByRole('dialog', { name: /^Conversa com/ });
+    // O popup novo não passa pelo modal antigo (que ficou só nos Encerrados).
+    expect(avaliados.has('ConversationModal')).toBe(false);
     expect(avaliados.has('ConversationView')).toBe(true);
     expect(avaliados.has('TransferModal')).toBe(false);
 

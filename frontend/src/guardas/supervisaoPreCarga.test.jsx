@@ -19,8 +19,8 @@ import { useAiSuggestion } from '../hooks/useAiSuggestion';
 // chegar perto da lista não baixa nada (supervisaoSobDemanda.test.jsx).
 
 const avaliados = vi.hoisted(() => new Set());
-vi.mock('../components/ConversationModal', async (original) => {
-  avaliados.add('ConversationModal');
+vi.mock('../components/ConversationView', async (original) => {
+  avaliados.add('ConversationView');
   return original();
 });
 vi.mock('../hooks/useAttendanceDashboard');
@@ -52,9 +52,9 @@ beforeEach(() => {
 describe('Supervisão: pré-carga da conversa por intenção', () => {
   test('o ponteiro entrando na lista já pede a conversa, sem abrir nada', async () => {
     renderInShell(<SupervisionPage />, { path: '/supervisao' });
-    expect(avaliados.has('ConversationModal')).toBe(false);
+    expect(avaliados.has('ConversationView')).toBe(false);
     fireEvent.pointerEnter(screen.getByRole('tabpanel'));
-    await waitFor(() => expect(avaliados.has('ConversationModal')).toBe(true));
+    await waitFor(() => expect(avaliados.has('ConversationView')).toBe(true));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -65,11 +65,11 @@ describe('Supervisão: pré-carga da conversa por intenção', () => {
   test('com a conversa já baixada, o clique abre o popup no mesmo render', async () => {
     renderInShell(<SupervisionPage />, { path: '/supervisao' });
     fireEvent.pointerEnter(screen.getByRole('tabpanel'));
-    await waitFor(() => expect(avaliados.has('ConversationModal')).toBe(true));
+    await waitFor(() => expect(avaliados.has('ConversationView')).toBe(true));
     // A mesma importação que a página pediu: resolve quando o trecho inteiro
     // terminou de avaliar; o act deixa a página registrar o componente.
     await act(async () => { await import('../components/supervisao/PopupDaSupervisao'); });
     fireEvent.click(within(screen.getByRole('tabpanel')).getByRole('button', { name: /Cliente 101/ }));
-    expect(screen.getByRole('dialog', { name: 'Conversa' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /^Conversa com/ })).toBeInTheDocument();
   });
 });

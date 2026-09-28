@@ -1,0 +1,341 @@
+/* ---------- Encerrar atendimento (mesa e Supervisão) ----------
+   Chega junto com o diálogo, sob demanda, com o módulo dos motivos. Claro e
+   sólido, no desenho do mockup aprovado: motivos em cartões, duas colunas no
+   desktop; o escolhido em vermelho muito suave; o vermelho cheio só na ação
+   destrutiva. Sem desfoque, gradiente, animação, filtro, sombra pesada, fundo
+   escuro ou laranja.
+
+   Toda regra começa em [data-dialog='close-reason']: a folha não alcança
+   outro diálogo. A base (overlays.css) não está em @layer; as regras daqui
+   vêm com o prefixo do diálogo para vencer sem !important. */
+
+[data-dialog='close-reason'] {
+  --en-papel: #ffffff;
+  --en-suave: #f6f7f9;
+  --en-linha: #e3e6ec;
+  --en-borda: #d4d8e0;
+  --en-texto: #161a26;
+  --en-texto-2: #5b6272;
+  --en-texto-3: #6b7180;
+  --en-indigo: #4f46e5;
+  --en-vermelho: #b3261e;
+  --en-vermelho-forte: #c5221f;
+  --en-vermelho-escuro: #a31b17;
+  --en-vermelho-claro: #fdecea;
+  --en-vermelho-icone: #fbd9d5;
+  --en-vermelho-borda: #f3b8b3;
+  --en-erro-texto: #8c1d18;
+  --color-focus-ring: #4f46e5;
+  color-scheme: light;
+}
+
+/* ---------- Fundo e moldura ---------- */
+.chat-theme:has(> [data-dialog='close-reason']) {
+  background: rgba(22, 26, 38, 0.44);
+  backdrop-filter: none;
+  padding: 24px;
+}
+[data-dialog='close-reason'].dw-dialog {
+  width: 100%;
+  max-width: 760px;
+  height: auto;
+  max-height: min(640px, calc(100dvh - 48px));
+  border: 1px solid #d9dde5;
+  border-radius: 12px;
+  background: var(--en-papel);
+  color: var(--en-texto);
+  box-shadow: 0 18px 40px -18px rgba(20, 23, 40, 0.24);
+  animation: none;
+  backdrop-filter: none;
+}
+/* O diálogo recebe o foco só enquanto os motivos chegam; o contorno útil é o
+   do cartão, não o da moldura inteira. */
+[data-dialog='close-reason'].dw-dialog:focus { outline: none; }
+
+/* ---------- Cabeçalho ---------- */
+[data-dialog='close-reason'].dw-dialog .en-cab {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--en-linha);
+}
+[data-dialog='close-reason'].dw-dialog .en-cab-icone {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--en-vermelho-claro);
+  color: var(--en-vermelho);
+}
+[data-dialog='close-reason'].dw-dialog .en-cab-texto { min-width: 0; flex: 1; }
+[data-dialog='close-reason'].dw-dialog .en-cab-texto h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--en-texto);
+}
+[data-dialog='close-reason'].dw-dialog .en-cab-texto p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--en-texto-2);
+}
+[data-dialog='close-reason'].dw-dialog .en-fechar {
+  flex: none;
+  align-self: flex-start;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--en-texto-2);
+  cursor: pointer;
+}
+[data-dialog='close-reason'].dw-dialog .en-fechar:hover { background: var(--en-suave); color: var(--en-texto); }
+[data-dialog='close-reason'].dw-dialog .en-voltar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--en-texto-2);
+  cursor: pointer;
+}
+
+/* ---------- Motivos ---------- */
+[data-dialog='close-reason'].dw-dialog .en-corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+[data-dialog='close-reason'].dw-dialog .en-grade {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+[data-dialog='close-reason'].dw-dialog .en-cartao {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 60px;
+  padding: 10px 12px 10px 10px;
+  border: 1px solid var(--en-linha);
+  border-radius: 10px;
+  background: var(--en-papel);
+  font-size: 14px;
+  color: var(--en-texto);
+  cursor: pointer;
+}
+[data-dialog='close-reason'].dw-dialog .en-cartao:hover { border-color: var(--en-borda); background: #fafbfc; }
+[data-dialog='close-reason'].dw-dialog .en-cartao.is-escolhido {
+  border-color: var(--en-vermelho-borda);
+  background: var(--en-vermelho-claro);
+}
+/* Um indicador de foco só, no cartão inteiro (o rádio é pequeno demais para
+   ser o único sinal). */
+[data-dialog='close-reason'].dw-dialog .en-cartao:has(.en-radio:focus-visible) {
+  outline: 2px solid var(--en-indigo);
+  outline-offset: 2px;
+}
+[data-dialog='close-reason'].dw-dialog .en-icone {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--en-suave);
+  color: var(--en-texto-2);
+}
+[data-dialog='close-reason'].dw-dialog .en-cartao.is-escolhido .en-icone {
+  background: var(--en-vermelho-icone);
+  color: var(--en-vermelho);
+}
+[data-dialog='close-reason'].dw-dialog .en-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+[data-dialog='close-reason'].dw-dialog .en-nome {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 600;
+  color: var(--en-texto);
+}
+[data-dialog='close-reason'].dw-dialog .en-dica {
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--en-texto-2);
+}
+/* O rádio nativo, desenhado: anel cinza; escolhido, anel grosso vermelho com
+   o miolo branco. */
+[data-dialog='close-reason'].dw-dialog .en-cartao .en-radio {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid #b3b9c4;
+  border-radius: 50%;
+  background: var(--en-papel);
+  appearance: none;
+  cursor: pointer;
+}
+[data-dialog='close-reason'].dw-dialog .en-cartao .en-radio:checked { border: 5px solid var(--en-vermelho-forte); }
+[data-dialog='close-reason'].dw-dialog .en-cartao .en-radio:focus-visible { outline: none; }
+
+/* ---------- Estados ---------- */
+[data-dialog='close-reason'].dw-dialog .en-carregando-texto {
+  display: block;
+  padding: 0 2px 10px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--en-texto-2);
+}
+[data-dialog='close-reason'].dw-dialog .en-carregando-cartao {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 60px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--en-linha);
+  border-radius: 10px;
+}
+[data-dialog='close-reason'].dw-dialog .en-carregando-cartao i {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #eef0f4;
+}
+[data-dialog='close-reason'].dw-dialog .en-carregando-cartao b {
+  width: 55%;
+  height: 12px;
+  border-radius: 6px;
+  background: #eef0f4;
+}
+[data-dialog='close-reason'].dw-dialog .en-aviso {
+  margin: 0;
+  padding: 6px 2px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--en-texto-2);
+}
+[data-dialog='close-reason'].dw-dialog .en-falha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--en-vermelho-claro);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--en-erro-texto);
+}
+[data-dialog='close-reason'].dw-dialog .en-erro {
+  flex: none;
+  margin: 0 20px 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: var(--en-vermelho-claro);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--en-erro-texto);
+}
+
+/* ---------- Rodapé ---------- */
+[data-dialog='close-reason'].dw-dialog .en-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex: none;
+  padding: 12px 20px;
+  border-top: 1px solid var(--en-linha);
+}
+[data-dialog='close-reason'].dw-dialog .en-nota {
+  min-width: 0;
+  max-width: 40ch;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--en-texto-2);
+}
+[data-dialog='close-reason'].dw-dialog .en-acoes { display: flex; flex: none; gap: 10px; }
+[data-dialog='close-reason'].dw-dialog .en-botao {
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--en-borda);
+  border-radius: 9px;
+  background: var(--en-papel);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--en-texto);
+  cursor: pointer;
+}
+[data-dialog='close-reason'].dw-dialog .en-botao:hover { background: var(--en-suave); }
+[data-dialog='close-reason'].dw-dialog .en-botao.is-perigo {
+  border-color: var(--en-vermelho-forte);
+  background: var(--en-vermelho-forte);
+  color: #ffffff;
+}
+[data-dialog='close-reason'].dw-dialog .en-botao.is-perigo:hover:not(:disabled) { background: var(--en-vermelho-escuro); }
+[data-dialog='close-reason'].dw-dialog .en-botao:disabled { cursor: default; }
+[data-dialog='close-reason'].dw-dialog .en-falha .en-botao { height: 34px; padding: 0 12px; font-size: 13px; }
+
+/* ---------- Tablet: o desenho do desktop, com margem menor ---------- */
+@media (max-width: 1023px) {
+  .chat-theme:has(> [data-dialog='close-reason']) { padding: 16px; }
+  [data-dialog='close-reason'].dw-dialog { max-height: calc(100dvh - 32px); }
+}
+
+/* ---------- Celular: tela cheia, uma coluna, rodapé fixo ----------
+   A classe vem do componente (o mesmo corte de 767 px do popup). */
+.chat-theme:has(> [data-dialog='close-reason'].is-celular) {
+  align-items: stretch;
+  padding: 0;
+}
+[data-dialog='close-reason'].dw-dialog.is-celular {
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+[data-dialog='close-reason'].dw-dialog.is-celular .en-cab { gap: 8px; padding: 8px 12px 10px 4px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-cab-texto h2 { font-size: 16.5px; line-height: 22px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-cab-texto p { font-size: 12.5px; line-height: 17px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-corpo { padding: 10px 12px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-grade { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-cartao { min-height: 52px; padding: 7px 12px 7px 8px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-icone { width: 32px; height: 32px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-nome { font-size: 13.5px; line-height: 18px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-dica { font-size: 12px; line-height: 16px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-erro { margin: 0 12px 8px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-rodape {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+}
+[data-dialog='close-reason'].dw-dialog.is-celular .en-nota { max-width: none; font-size: 12px; line-height: 16px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+[data-dialog='close-reason'].dw-dialog.is-celular .en-botao { height: 44px; }

@@ -276,7 +276,7 @@ describe('Supervisão: busca única', () => {
     renderPage();
     await user.type(busca(), '20260911-0001{Enter}');
     expect(getDashboardConversationByProtocol).toHaveBeenCalledWith('20260911-0001', 'tok-123');
-    expect(await screen.findByRole('dialog', { name: 'Conversa' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /^Conversa com/ })).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
@@ -338,8 +338,8 @@ describe('Supervisão: busca única', () => {
     await user.type(busca(), '5500000000099{Enter}');
     const resultado = await screen.findByRole('region', { name: /Atendimentos de Cliente Antiga/ });
     await user.click(within(resultado).getByRole('button', { name: /Cliente Antiga/ }));
-    expect(await screen.findByRole('dialog', { name: 'Conversa' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /voltar para a lista/i }));
+    expect(await screen.findByRole('dialog', { name: /^Conversa com/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Fechar conversa' }));
 
     await user.click(screen.getByRole('button', { name: 'Limpar busca' }));
     expect(screen.queryByRole('region', { name: /Atendimentos de/ })).not.toBeInTheDocument();
@@ -466,7 +466,7 @@ describe('Supervisão: filtros', () => {
     expect(screen.getByRole('dialog', { name: 'Filtros' })).toBeInTheDocument();
     await user.click(fundo);
     expect(screen.queryByRole('dialog', { name: 'Filtros' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: 'Conversa' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /^Conversa com/ })).not.toBeInTheDocument();
   });
 
   test('clique fora fecha o popover', async () => {
@@ -697,7 +697,7 @@ describe('Supervisão: Últimas 24 h', () => {
     const user = userEvent.setup();
     renderPage(['/supervisao?aba=encerrados']);
     await user.click(await screen.findByRole('button', { name: /Rita/ }));
-    expect(await screen.findByRole('dialog', { name: 'Conversa' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /^Conversa com/ })).toBeInTheDocument();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
@@ -748,25 +748,45 @@ describe('Supervisão: carregando, vazio, erro e contadores', () => {
   });
 });
 
-describe('Supervisão: o popup de antes continua abrindo', () => {
+describe('Supervisão: o popup da conversa', () => {
   test('clicar na linha abre a conversa no popup, sem navegar; fechar volta à lista', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(linha('Carlos'));
-    const dialogo = await screen.findByRole('dialog', { name: 'Conversa' });
+    const dialogo = await screen.findByRole('dialog', { name: 'Conversa com Carlos' });
     expect(within(dialogo).getAllByText('Carlos').length).toBeGreaterThan(0);
     expect(mockNavigate).not.toHaveBeenCalled();
-    await user.click(within(dialogo).getByRole('button', { name: /voltar para a lista/i }));
+    await user.click(within(dialogo).getByRole('button', { name: 'Fechar conversa' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  test('transferir dentro do popup abre a transferência', async () => {
+  test('fechar (pelo botão ou pelo Escape) devolve o foco à linha que abriu', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(linha('Carlos'));
-    await screen.findByRole('dialog', { name: 'Conversa' });
+    await screen.findByRole('dialog', { name: 'Conversa com Carlos' });
+    await user.click(screen.getByRole('button', { name: 'Fechar conversa' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(linha('Carlos')).toHaveFocus();
+
+    await user.click(linha('Maria'));
+    await screen.findByRole('dialog', { name: 'Conversa com Maria' });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(linha('Maria')).toHaveFocus();
+  });
+
+  // A transferência de sempre, com a carga ATUAL dos atendentes: ela pede a
+  // lista conferida (useAgents com carga), e não a que a página já tinha.
+  test('transferir dentro do popup abre a transferência, com a carga atual', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(linha('Carlos'));
+    await screen.findByRole('dialog', { name: 'Conversa com Carlos' });
+    expect(useAgents).not.toHaveBeenCalledWith({ carga: true });
     await user.click(screen.getByRole('button', { name: /transferir atendimento/i }));
     expect(await screen.findByRole('heading', { name: 'Transferir atendimento' })).toBeInTheDocument();
+    expect(useAgents).toHaveBeenCalledWith({ carga: true });
   });
 });
 
@@ -792,8 +812,8 @@ describe('edição do contato na Supervisão: reabrir traz o que foi salvo', () 
     const user = userEvent.setup();
     renderPage();
     await user.click(await screen.findByRole('button', { name: /Carlos/ }));
-    const conversa1 = await screen.findByRole('dialog', { name: 'Conversa' });
-    await user.click(within(conversa1).getByRole('button', { name: /^Editar cliente:/ }));
+    const conversa1 = await screen.findByRole('dialog', { name: /^Conversa com/ });
+    await user.click(within(within(conversa1).getByRole('complementary', { name: 'Dados do cliente' })).getByRole('button', { name: 'Editar cliente' }));
     const edicao = await screen.findByRole('dialog', { name: 'Editar cliente' });
     const nota = within(edicao).getByLabelText('Nota interna');
     await user.clear(nota);
@@ -801,11 +821,11 @@ describe('edição do contato na Supervisão: reabrir traz o que foi salvo', () 
     await user.click(within(edicao).getByRole('button', { name: 'Salvar alterações' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /voltar para a lista/i }));
+    await user.click(screen.getByRole('button', { name: 'Fechar conversa' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: /Carlos/ }));
-    const conversa = await screen.findByRole('dialog', { name: 'Conversa' });
+    const conversa = await screen.findByRole('dialog', { name: /^Conversa com/ });
     expect(within(within(conversa).getByRole('complementary')).getByText('Nota nova')).toBeInTheDocument();
   });
 });
@@ -834,19 +854,19 @@ describe('edição do contato a partir das Últimas 24 h', () => {
     const user = userEvent.setup();
     renderPage(['/supervisao?aba=encerrados']);
     await user.click(await screen.findByRole('button', { name: /Rita/ }));
-    const conversa1 = await screen.findByRole('dialog', { name: 'Conversa' });
-    await user.click(within(conversa1).getByRole('button', { name: /^Editar cliente:/ }));
+    const conversa1 = await screen.findByRole('dialog', { name: /^Conversa com/ });
+    await user.click(within(within(conversa1).getByRole('complementary', { name: 'Dados do cliente' })).getByRole('button', { name: 'Editar cliente' }));
     const edicao = await screen.findByRole('dialog', { name: 'Editar cliente' });
     const nota = within(edicao).getByLabelText('Nota interna');
     await user.clear(nota);
     await user.type(nota, 'Nota nova');
     await user.click(within(edicao).getByRole('button', { name: 'Salvar alterações' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar cliente' })).not.toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /voltar para a lista/i }));
+    await user.click(screen.getByRole('button', { name: 'Fechar conversa' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: /Rita/ }));
-    const conversa = await screen.findByRole('dialog', { name: 'Conversa' });
+    const conversa = await screen.findByRole('dialog', { name: /^Conversa com/ });
     expect(within(within(conversa).getByRole('complementary')).getByText('Nota nova')).toBeInTheDocument();
   });
 });

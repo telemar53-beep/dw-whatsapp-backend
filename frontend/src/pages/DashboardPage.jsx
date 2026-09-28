@@ -14,13 +14,14 @@ import { closeConversation } from '../services/api';
 import QueueList from '../components/QueueList';
 import MyConversationsList from '../components/MyConversationsList';
 import ConversationView from '../components/ConversationView';
-import TransferModal from '../components/TransferModal';
 import ChannelStatusBanner from '../components/ChannelStatusBanner';
 import StartConversationModal from '../components/StartConversationModal';
 import TrilhoDaMesa, { IconeDoMenu, iniciais } from '../components/TrilhoDaMesa';
 import { VARIANTE_DA_MESA } from '../components/ConversaDaMesa';
 import { marcaDaInstalacao } from '../branding';
 import { aplicarContatoSalvo } from '../utils/contatoSalvo';
+import { sobDemanda, useSobDemanda } from '../utils/sobDemanda';
+import { useAlert } from '../hooks/useAlert';
 import { Tabs } from '../components/ui/Tabs';
 import { IconLock } from '../components/icons/WaIcons';
 import { IconeNovaConversa, IconeBuscar, IconeRecolher } from '../components/icones';
@@ -34,6 +35,10 @@ import './mesa.css';
 // de useCallback. Comparação rasa, de propósito: um comparador por campo
 // congelaria o cabeçalho no primeiro campo esquecido (BUG-004, achado A2).
 const ConversaAbertaDaMesa = memo(ConversationView);
+
+// A transferência chega quando é aberta: a mesa não baixa nem avalia o diálogo
+// (nem a folha dele) antes de alguém pedir (guardas/dialogosSobDemanda.test.jsx).
+const TRANSFERENCIA = sobDemanda(() => import('../components/TransferModal'));
 
 // O chevron de recolher/expandir da família DW, girado: para a direita abre a
 // lista estreita, para a esquerda volta à conversa.
@@ -115,6 +120,13 @@ function DashboardPage() {
   }, [token]);
 
   const [transferringId, setTransferringId] = useState(null);
+  const { avisar, alertDialog } = useAlert();
+  const fecharTransferencia = useCallback(() => setTransferringId(null), []);
+  const transferenciaNaoBaixou = useCallback(() => {
+    setTransferringId(null);
+    avisar('Não foi possível abrir a transferência. Verifique a conexão e tente de novo.');
+  }, [avisar]);
+  const Transferencia = useSobDemanda(TRANSFERENCIA, Boolean(transferringId), transferenciaNaoBaixou);
   const [startingConversation, setStartingConversation] = useState(false);
   const [pendingConversation, setPendingConversation] = useState(null);
 
@@ -348,7 +360,10 @@ function DashboardPage() {
         </main>
       </div>
 
-      {transferringId && <TransferModal conversationId={transferringId} onClose={() => setTransferringId(null)} />}
+      {transferringId && (Transferencia
+        ? <Transferencia conversationId={transferringId} onClose={fecharTransferencia} />
+        : <p role="status" className="sr-only">Abrindo a transferência…</p>)}
+      {alertDialog}
       {startingConversation && (
         <StartConversationModal
           onClose={() => setStartingConversation(false)}
